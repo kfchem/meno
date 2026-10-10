@@ -854,7 +854,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -866,7 +866,7 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || selTexts.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
@@ -878,7 +878,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || selPictures.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -886,9 +886,13 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
-    // likewise a PDF (docs/PDF.md)
-    const { hoveredPdf, pdfs } = store.getState();
-    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf)) {
+    // likewise a PDF, unless it is selected with more (docs/PDF.md)
+    const { hoveredPdf, pdfs, selPdfs } = store.getState();
+    const pdfWithMore = (() => {
+      const s = store.getState();
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+    })();
+    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -1344,7 +1348,8 @@ function WorkspaceContent({
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
           canvas={canvasCommands(menu.at)}
-          onExport={menu.selection === "here" ? () => {
+          // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
+          onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
             const taken = clip.part();
             if (taken) startExport(taken);
           } : undefined}

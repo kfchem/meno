@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
+import { centredAt, readRecord, recordText } from "../utils/copyPaste";
+import { dragSelection } from "../utils/dragSelection";
 import {
   ICON_HEIGHT,
   ICON_NAME_PT,
@@ -198,6 +200,120 @@ describe("PDFs on the page", () => {
       { name: "ok.pdf", sha256: SHA, pages: [A4], x: 0, y: 0, page: 0 },
       { name: "placed.pdf", sha256: SHA, pages: [A4, A4], x: 0, y: 0, page: 0, spread: true, placed: [{ page: 1, x: 7, y: 8 }] },
     ]);
+  });
+});
+
+describe("PDFs selected with the rest", () => {
+  const two = [
+    { name: "paper.pdf", sha256: SHA, pages: [A4, A4] },
+    { name: "si.pdf", sha256: SHA2, pages: [A4] },
+  ];
+
+  it("are selected, toggled, all and none, and kept to those still there", () => {
+    const { state } = editor();
+    state().addPdfs(two, { x: 0, y: 0 });
+    const [a, b] = state().pdfs;
+    state().selectPdfs([a.id]);
+    expect([...state().selPdfs]).toEqual([a.id]);
+    state().togglePdfSel(b.id);
+    state().togglePdfSel(a.id);
+    expect([...state().selPdfs]).toEqual([b.id]);
+    state().clearSel();
+    expect(state().selPdfs.size).toBe(0);
+    state().selectAll();
+    expect(state().selPdfs.size).toBe(2);
+    state().removePdf(a.id);
+    expect([...state().selPdfs]).toEqual([b.id]);
+  });
+
+  it("let words selected in a PDF go, and are let go by them: one selection", () => {
+    const { state } = editor();
+    state().addPdfs(two, { x: 0, y: 0 });
+    const [a] = state().pdfs;
+    state().setPdfSel({ id: a.id, anchor: { page: 0, at: 0 }, focus: { page: 0, at: 3 } });
+    state().selectPdfs([a.id]);
+    expect(state().pdfSel).toBeNull();
+    state().setPdfSel({ id: a.id, anchor: { page: 0, at: 0 }, focus: { page: 0, at: 3 } });
+    expect(state().selPdfs.size).toBe(0);
+  });
+
+  it("are deleted with the rest of the selection, one step", () => {
+    const { doc, state } = editor();
+    state().addPdfs(two, { x: 0, y: 0 });
+    state().addTexts([{ name: "a.txt", text: "hello" }], { x: 100, y: 0 });
+    const [a] = state().pdfs;
+    state().clearSel();
+    state().selectPdfs([a.id]);
+    state().selectTexts([state().texts[0].id], true);
+    const depth = doc.history().undoDepth;
+    state().deleteSelection();
+    expect(state().pdfs.map((p) => p.name)).toEqual(["si.pdf"]);
+    expect(state().texts).toEqual([]);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(state().pdfs).toHaveLength(2);
+  });
+
+  it("are moved with the rest of the selection, one step", () => {
+    const { doc, state } = editor();
+    state().addPdfs(two, { x: 0, y: 0 });
+    const [a, b] = state().pdfs;
+    state().selectPdfs([a.id, b.id]);
+    const was = state().pdfs.map((p) => ({ x: p.x, y: p.y }));
+    const depth = doc.history().undoDepth;
+    // (a drag of the selection: as far as the pointer goes, the page one to one with the screen here)
+    const listeners = new Map<string, (e: { clientX: number; clientY: number; pointerId: number }) => void>();
+    const win = globalThis as unknown as { window?: unknown };
+    const had = win.window;
+    win.window = {
+      addEventListener: (k: string, f: never) => listeners.set(k, f),
+      removeEventListener: () => {},
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+    };
+    try {
+      dragSelection({ getState: state } as never, (x, y) => ({ x, y }), { x: 0, y: 0 }, () => {});
+      listeners.get("pointermove")!({ clientX: 10, clientY: -5, pointerId: 1 });
+      listeners.get("pointerup")!({ clientX: 10, clientY: -5, pointerId: 1 });
+    } finally {
+      win.window = had;
+    }
+    expect(state().pdfs.map((p) => ({ x: p.x, y: p.y }))).toEqual(was.map((w) => ({ x: w.x + 10, y: w.y - 5 })));
+    expect(doc.history().undoDepth).toBe(depth + 1);
+  });
+
+  it("are copied and pasted with the rest - as they lay, spread and placed, not where they were read - moved as far, selected", () => {
+    const { state } = editor();
+    state().addPdfs(two, { x: 0, y: 0 });
+    const [a] = state().pdfs;
+    state().spreadPdf(a.id, true);
+    state().placePdfPage(a.id, 1, 500, 0);
+    state().readPdf(a.id);
+    const p = state().pdfs[0];
+    const record = readRecord(recordText({ atoms: [], bonds: [], pdfs: [p] }))!;
+    expect(record.pdfs?.[0]).toMatchObject({ name: "paper.pdf", spread: true, placed: [{ page: 1, x: 500, y: 0 }] });
+    expect(record.pdfs?.[0].reading).toBeUndefined();
+    const moved = centredAt(record, { x: 1000, y: 1000 });
+    state().clearSel();
+    state().pasteModel(moved);
+    expect(state().pdfs).toHaveLength(3);
+    const pasted = state().pdfs[2];
+    expect(pasted).toMatchObject({ name: "paper.pdf", spread: true });
+    expect(pasted.x - p.x).toBeCloseTo(moved.pdfs![0].x - p.x);
+    expect([...state().selPdfs]).toEqual([pasted.id]);
+  });
+
+  it("and texts' sheets: copied whole, pasted as sheets of their own - not read - selected", () => {
+    const { state } = editor();
+    state().addTexts([{ name: "notes.md", text: "# Hi" }], { x: 0, y: 0 });
+    const t = state().texts[0];
+    const record = readRecord(recordText({ atoms: [], bonds: [], sheets: [t] }))!;
+    expect(record.sheets?.[0]).toMatchObject({ name: "notes.md", text: "# Hi", at: t.at, icon: true });
+    state().clearSel();
+    state().pasteModel(centredAt(record, { x: 300, y: 300 }));
+    expect(state().texts).toHaveLength(2);
+    expect(state().texts[1]).toMatchObject({ name: "notes.md", text: "# Hi", reading: false, icon: true });
+    expect([...state().selTexts]).toEqual([state().texts[1].id]);
   });
 });
 

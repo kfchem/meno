@@ -118,6 +118,7 @@ export function connectStoreToDocument(
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
+        selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         // (sheets selected kept to those still on the page - and the one under the pointer, if it still is)
         selTexts: picturesHeld(prev.selTexts, (mirrored.texts ?? []).filter((t) => t.at)),
@@ -165,6 +166,7 @@ export function createEditorStore(
     pdfBox: null,
     hoveredText: null,
     selTexts: new Set<number>(),
+    selPdfs: new Set<number>(),
     textFlight: null,
     pdfPicture: null,
 
