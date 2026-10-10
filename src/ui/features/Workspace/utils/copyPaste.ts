@@ -3,6 +3,7 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
@@ -329,6 +330,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
       ? (m.drawnFrom as (number | null)[])
       : undefined;
   const stereo = readStereo(m.stereo, n, bonds.length);
+  const biopolymer = readBiopolymer(m.biopolymer, n);
   const calc = readCalc(m.calc, n, 1 + frames.length);
   return {
     atoms: atoms as Carried3D["atoms"],
@@ -345,6 +347,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(biopolymer ? { biopolymer } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),

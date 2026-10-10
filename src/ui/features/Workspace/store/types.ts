@@ -6,6 +6,7 @@ import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { Role3D } from "../../../../lib/chem/style3d";
+import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -207,6 +208,8 @@ export type Molecule3D = {
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
+  /** Its atoms' names and residues and its secondary structure, where it is a PDB entry's chains: drawn as ribbons (lib/chem/biopolymer). */
+  biopolymer?: Biopolymer;
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
