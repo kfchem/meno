@@ -211,6 +211,16 @@ export type Molecule3D = {
   /** Its atoms' names and residues and its secondary structure, where it is a PDB entry's chains: drawn as ribbons (lib/chem/biopolymer). */
   biopolymer?: Biopolymer;
   /**
+   * Its bonds' orders, where its file gives none - coordinates alone: an
+   * XYZ file, a calculation's output, a PDB entry (its ligands; its chains'
+   * own are not known): "unknown" until they are found from its shape by
+   * the RDKit plugin ("perceived") or given from a SMILES ("assigned").
+   * Unset, its file gave them (utils/completeness).
+   */
+  bondOrders?: "unknown" | "perceived" | "assigned";
+  /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
+  unknownOrders?: number[];
+  /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
    */
@@ -639,6 +649,10 @@ export type EditorState = {
   removeMolecule3d: (id: number) => void;
   /** Molecules in 3D drawn in the primary look or the secondary, in one step. */
   setLook3d: (ids: number[], look: Look3D) => void;
+  /** What is learnt of a molecule in 3D - its bond orders found from its shape - with no undo step of its own (doc.amend). */
+  learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
+  /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */
+  changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */
   switchLook3d: (id: number) => void;
   /** A measurement of the atoms and bonds chosen, which are then let go. */

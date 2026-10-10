@@ -348,6 +348,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
     ...(biopolymer ? { biopolymer } : {}),
+    ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" ? { bondOrders: m.bondOrders } : {}),
+    ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),

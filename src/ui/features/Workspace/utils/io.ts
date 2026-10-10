@@ -162,6 +162,7 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
         atoms: first.atoms,
         bonds: first.bonds,
         bondsFrom: "distance" as const,
+        bondOrders: "unknown" as const,
         ...(frames.length ? { frames, frame: frames.length } : {}),
         ...(energies ? { energies } : {}),
         ...(filename ? { name: filename } : {}),

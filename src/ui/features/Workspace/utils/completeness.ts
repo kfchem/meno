@@ -1,0 +1,221 @@
+/**
+ * What a molecule in 3D's file leaves out (docs/WORKSPACE.md, *Hydrogens and
+ * bond orders*): a file of coordinates - XYZ, PDB, a calculation's output -
+ * gives no bond orders, and an X-ray entry no hydrogens. A picture drawn as
+ * if they were known misleads as one with its hydrogens hidden does, so a
+ * molecule says what is missing, and what can be found is found by the
+ * RDKit plugin (its worker: bond orders from where the atoms stand, from a
+ * SMILES, hydrogens where the atoms' geometry puts them). Pure: over the
+ * molecule, and the MOL blocks the worker answers with.
+ */
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
+import { writeMolfile3d } from "../../../../lib/chem/molWriter";
+import { readMolfile } from "../../../../lib/chem/ctfile";
+import { chainRuns, isWater } from "../../../../lib/chem/biopolymer";
+import type { Molecule3D } from "../store/types";
+
+/** What a molecule says of what its file leaves out, on the canvas and in a picture of it. */
+export const NO_H_MARK = "No H in file";
+export const ORDERS_MARK = "Bond orders unknown";
+
+/** The most atoms a molecule's bond orders are sought for from its shape, at once: more, and they are left unknown. */
+export const MOST_PERCEIVED = 400;
+
+/**
+ * A PDB entry's ligands: each group of bonded atoms bound to its chains -
+ * residues in no run (`chainRuns`), water left out - by atom index; two
+ * atoms at least (a lone ion has no bonds to order). For a molecule that
+ * is no biopolymer, none.
+ */
+export function ligandGroups(m: Pick<Molecule3D, "atoms" | "bonds" | "biopolymer">): number[][] {
+  const bp = m.biopolymer;
+  if (!bp) return [];
+  const inRun = new Uint8Array(bp.residues.length);
+  for (const run of chainRuns(bp, m.atoms)) for (const r of run.residues) inRun[r] = 1;
+  const bound = (i: number) => !inRun[bp.residueOf[i]] && !isWater(bp.residues[bp.residueOf[i]]);
+  const near: number[][] = m.atoms.map(() => []);
+  for (const b of m.bonds) {
+    if (bound(b.a1) && bound(b.a2)) {
+      near[b.a1].push(b.a2);
+      near[b.a2].push(b.a1);
+    }
+  }
+  const seen = new Uint8Array(m.atoms.length);
+  const groups: number[][] = [];
+  m.atoms.forEach((_, i) => {
+    if (seen[i] || !bound(i) || !near[i].length) return;
+    const group: number[] = [];
+    const edge = [i];
+    seen[i] = 1;
+    while (edge.length) {
+      const a = edge.pop()!;
+      group.push(a);
+      for (const b of near[a]) {
+        if (seen[b]) continue;
+        seen[b] = 1;
+        edge.push(b);
+      }
+    }
+    groups.push(group.sort((p, q) => p - q));
+  });
+  return groups;
+}
+
+/**
+ * What an action on a molecule acts on (its bond orders found or given,
+ * its hydrogens added): the ligand `atom` is part of, for a PDB entry -
+ * its chains' own are not Meno's to complete (protonating a protein is not
+ * done) - or else, the molecule's every atom. Null where `atom` is in a
+ * chain.
+ */
+export function partOf(m: Pick<Molecule3D, "atoms" | "bonds" | "biopolymer">, atom: number | null): number[] | null {
+  if (!m.biopolymer) return m.atoms.map((_, i) => i);
+  const groups = ligandGroups(m);
+  if (atom != null) return groups.find((g) => g.includes(atom)) ?? null;
+  return groups.length === 1 ? groups[0] : null;
+}
+
+type Known = Pick<Molecule3D, "atoms" | "bonds" | "biopolymer" | "bondOrders" | "unknownOrders">;
+
+/** The atoms whose bond orders are unknown: a PDB entry's ligands' that are - all its ligands', before any were sought - or else, unknown, all of it. */
+export function stillUnknown(m: Known): number[] {
+  if (m.bondOrders !== "unknown") return [];
+  if (!m.biopolymer) return m.atoms.map((_, i) => i);
+  return m.unknownOrders ?? ligandGroups(m).flat();
+}
+
+/** Whether a molecule's bond orders are unknown as a look draws it: its file gave none and none were found or given - for a PDB entry, a ligand's - or its chains are drawn as atoms, whose own are not known. */
+export function ordersUnknown(m: Known, chainsAsAtoms: boolean): boolean {
+  return stillUnknown(m).length > 0 || (!!m.biopolymer && chainsAsAtoms);
+}
+
+/**
+ * Whether a molecule's file leaves out its hydrogens, as a look draws it:
+ * some of it has none - all of it; for a PDB entry, its chains, where they
+ * are drawn as atoms, or a ligand - and either its bond orders are unknown
+ * and it has carbon, which all but never stands without them, or, its
+ * orders known, an atom of it takes hydrogens its valence leaves room for.
+ */
+export function noHydrogensInFile(m: Known, chainsAsAtoms = true): boolean {
+  const bp = m.biopolymer;
+  if (!bp) return lacksHydrogens(m, m.atoms.map((_, i) => i), m.bondOrders === "unknown");
+  const open = new Set(stillUnknown(m));
+  const chains = m.atoms.flatMap((_, i) => (bp.residues[bp.residueOf[i]]?.standard ? [i] : []));
+  if (chainsAsAtoms && chains.length && lacksHydrogens(m, chains, true)) return true;
+  return ligandGroups(m).some((g) => lacksHydrogens(m, g, open.has(g[0])));
+}
+
+/** Whether some atoms of a molecule have no hydrogens among them and would: carbon among them, their orders unknown (`unknown`); else an atom with room for some. */
+function lacksHydrogens(m: Pick<Molecule3D, "atoms" | "bonds">, atoms: readonly number[], unknown: boolean): boolean {
+  if (atoms.some((i) => m.atoms[i].el === "H")) return false;
+  if (unknown) return atoms.some((i) => m.atoms[i].el === "C");
+  const sum = new Float64Array(m.atoms.length);
+  for (const b of m.bonds) {
+    const order = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
+    sum[b.a1] += order;
+    sum[b.a2] += order;
+  }
+  return atoms.some((i) => implicitHydrogens(m.atoms[i].el, Math.round(sum[i]), m.atoms[i].charge ?? 0, m.atoms[i].radical) > 0);
+}
+
+/** Whether some of the molecule, or of `atoms`, has hydrogens: bond orders are sought from its shape only then. */
+export function hasHydrogens(m: Pick<Molecule3D, "atoms">, atoms?: readonly number[]): boolean {
+  return (atoms ?? m.atoms.map((_, i) => i)).some((i) => m.atoms[i]?.el === "H");
+}
+
+/**
+ * Some of a molecule's atoms - all of them, unset - as a MOL block in 3D for
+ * the worker, as its first frame has them, with the bonds among them; and
+ * which of the molecule's atoms each of the block's is.
+ */
+export function blockOf(m: Pick<Molecule3D, "atoms" | "bonds">, atoms?: readonly number[]): { molblock: string; atoms: number[] } {
+  const which = atoms ? [...atoms] : m.atoms.map((_, i) => i);
+  const at = new Map(which.map((a, k) => [a, k]));
+  const bonds = m.bonds.flatMap((b) => {
+    const a1 = at.get(b.a1);
+    const a2 = at.get(b.a2);
+    return a1 != null && a2 != null ? [{ a1, a2, order: b.order >= 1 && b.order <= 3 ? b.order : 1 }] : [];
+  });
+  const block = writeMolfile3d(
+    which.map((i) => ({ el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}) })),
+    bonds,
+  );
+  return { molblock: block, atoms: which };
+}
+
+/**
+ * A molecule given the bond orders, and the charges, the worker found or
+ * was given for some of its atoms (`atoms`, the block's in their order;
+ * hydrogens it left out come after the heavy ones, as `drawing_of` gives
+ * them back, or not at all): each bond between two of them the block's,
+ * the rest as they were.
+ */
+export function withOrders(m: Molecule3D, atoms: readonly number[], molblock: string, heavyOnly = false): Molecule3D | null {
+  const ct = readMolfile(molblock);
+  if (!ct) return null;
+  // (the block's atoms in their order - or its heavy ones, where it left the hydrogens out)
+  const which = heavyOnly ? atoms.filter((i) => m.atoms[i].el !== "H") : [...atoms];
+  if (ct.atoms.length !== which.length) return null;
+  const order = new Map<string, number>();
+  for (const b of ct.bonds) {
+    const p = which[b.a1];
+    const q = which[b.a2];
+    if (p == null || q == null) continue;
+    order.set(p < q ? `${p} ${q}` : `${q} ${p}`, b.type >= 1 && b.type <= 3 ? b.type : 1);
+  }
+  const bonds = m.bonds.map((b) => {
+    const o = order.get(b.a1 < b.a2 ? `${b.a1} ${b.a2}` : `${b.a2} ${b.a1}`);
+    return o != null && o !== b.order ? { ...b, order: o } : b;
+  });
+  const charged = new Map(which.map((i, k) => [i, ct.atoms[k].charge ?? 0]));
+  const atomsNow = m.atoms.map((a, i) => {
+    const c = charged.get(i);
+    if (c == null || c === (a.charge ?? 0)) return a;
+    const { charge: _was, ...rest } = a;
+    return c ? { ...rest, charge: c } : rest;
+  });
+  return { ...m, atoms: atomsNow, bonds };
+}
+
+/**
+ * A molecule given the hydrogens the worker added to some of its atoms
+ * (`atoms`, the block's first ones in their order; its new hydrogens after
+ * them): each put after the molecule's atoms, bonded to its atom - in the
+ * same residue, for a biopolymer; tied to no atom of a drawing. Null where
+ * the block is not those atoms and hydrogens, or the molecule has other
+ * frames, which would have none.
+ */
+export function withHydrogens(m: Molecule3D, atoms: readonly number[], molblock: string): Molecule3D | null {
+  const ct = readMolfile(molblock);
+  if (!ct || m.frames?.length || ct.atoms.length < atoms.length) return null;
+  const added = ct.atoms.slice(atoms.length);
+  if (!added.every((a) => a.symbol === "H")) return null;
+  const n = m.atoms.length;
+  const indexOf = (k: number) => (k < atoms.length ? atoms[k] : n + (k - atoms.length));
+  const newAtoms = added.map((a) => ({ el: "H", x: a.x, y: a.y, z: a.z }));
+  const newBonds = ct.bonds.filter((b) => b.a1 >= atoms.length || b.a2 >= atoms.length).map((b) => ({ a1: indexOf(b.a1), a2: indexOf(b.a2), order: 1 }));
+  const bp = m.biopolymer;
+  const partner = (h: number) => newBonds.find((b) => b.a1 === h || b.a2 === h);
+  return {
+    ...m,
+    atoms: [...m.atoms, ...newAtoms],
+    bonds: [...m.bonds, ...newBonds],
+    ...(m.drawnFrom ? { drawnFrom: [...m.drawnFrom, ...newAtoms.map(() => null)] } : {}),
+    ...(bp
+      ? {
+          biopolymer: {
+            ...bp,
+            names: [...bp.names, ...newAtoms.map(() => "H")],
+            residueOf: [
+              ...bp.residueOf,
+              ...newAtoms.map((_, k) => {
+                const b = partner(n + k);
+                const heavy = b ? (b.a1 === n + k ? b.a2 : b.a1) : atoms[0];
+                return bp.residueOf[heavy] ?? bp.residueOf[atoms[0]];
+              }),
+            ],
+          },
+        }
+      : {}),
+  };
+}

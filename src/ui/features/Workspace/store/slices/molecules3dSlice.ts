@@ -203,6 +203,12 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     setLook3d: (ids: number[], look: Look3D) => {
       doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) => ops.setLook3d(d, ids, look));
     },
+    learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => {
+      doc.amend((d) => ops.changeMolecule3d(d, id, change));
+    },
+    changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => {
+      doc.edit(label, (d) => ops.changeMolecule3d(d, id, change));
+    },
     switchLook3d: (id: number) => {
       const { molecules3d, sel3d } = get();
       const m = molecules3d.find((x) => x.id === id);

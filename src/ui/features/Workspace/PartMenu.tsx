@@ -19,6 +19,8 @@ export type MenuTarget = {
   id: number | null;
   /** A measurement's own id. */
   measure?: number;
+  /** A molecule in 3D's atom under the pointer as it was right-clicked, by index: which of its ligands the menu is about. */
+  atom?: number;
   /**
    * Whether there is a selection, and whether the menu is its: right-clicked
    * on something selected, or on nothing.
@@ -94,6 +96,10 @@ export type MenuMolecule3D = {
   onRemake?: () => void;
   /** Drawn as a formula beside it, by Meno's engine: unset, where it has a drawing already. */
   onDrawFormula?: () => void;
+  /** Its bond orders - its ligand's - given from a SMILES: unset, where they are known (utils/completeness). */
+  onOrdersFromSmiles?: () => void;
+  /** The hydrogens its file leaves out - its ligand's - added: unset, where it has them or its bond orders are not known. */
+  onAddHydrogens?: () => void;
   /** Its frames all shown at once, or one: unset, where it has one only; `conformers`, whether they are a conformer set's. */
   overlay?: { on: boolean; conformers: boolean; set: (on: boolean) => void };
   /** Its calculation's lists - its vibrations, its orbitals - each opened under it by name: none, where it gave none. */
@@ -289,6 +295,8 @@ export default function PartMenu({
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),
         ...(molecule3d.onRemake ? [{ name: "Make again from the drawing", keys: "", run: molecule3d.onRemake, divider: true }] : []),
         ...(molecule3d.onDrawFormula ? [{ name: "Draw as formula", keys: "", run: molecule3d.onDrawFormula }] : []),
+        ...(molecule3d.onOrdersFromSmiles ? [{ name: "Bond orders from SMILES…", keys: "", run: molecule3d.onOrdersFromSmiles, divider: true }] : []),
+        ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens", keys: "", run: molecule3d.onAddHydrogens, divider: !molecule3d.onOrdersFromSmiles }] : []),
       ]
     : [];
   // What each target's menu has: the frequent, as icons along its top -
