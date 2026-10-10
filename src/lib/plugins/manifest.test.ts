@@ -29,7 +29,7 @@ describe("a plugin's manifest", () => {
     const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["cclib", "crest", "gaussian", "getting-started", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["cclib", "crest", "gaussian", "getting-started", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
   });
 
   it("knows each kind of file in one list: those it reads told by their marks, those it only colours by their names and lines", () => {
@@ -122,6 +122,9 @@ describe("a plugin's manifest", () => {
     ]);
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
     expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
+    // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
+    const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
+    expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
   });
 
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {

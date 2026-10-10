@@ -1,0 +1,165 @@
+"""Tests for the NCIPLOT and Multiwfn interfaces' workers (src-tauri/resources/plugins/nciplot, multiwfn).
+
+The workers need Python alone - NCIPLOT and Multiwfn are run by Meno, not
+by them - so these run anywhere; CI runs them:
+
+    python3 -m unittest scripts/calc/test_plugin_nci.py
+
+What the programs are given is checked against their own manuals
+(NCIPLOT-4.2's NCIPLOT_MANUAL.pdf; the Multiwfn 2026.10.1 manual). Where
+a program is installed and named - NCIPLOT_BIN with NCIPLOT_HOME, or
+MULTIWFN_BIN, with MULTIWFN_WFN a wavefunction to read - a job is run too,
+and its cube files looked for; elsewhere those tests are skipped. No output
+of a real run is kept.
+"""
+
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(f"plugin_{name}", ROOT / f"src-tauri/resources/plugins/{name}/worker.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+nciplot = load("nciplot")
+multiwfn = load("multiwfn")
+
+# the water dimer, two molecules bonded within themselves
+DIMER = {
+    "name": "water dimer",
+    "atoms": [
+        {"el": "O", "x": -1.551007, "y": -0.114520, "z": 0.0},
+        {"el": "H", "x": -1.934259, "y": 0.762503, "z": 0.0},
+        {"el": "H", "x": -0.599677, "y": 0.040712, "z": 0.0},
+        {"el": "O", "x": 1.350625, "y": 0.111469, "z": 0.0},
+        {"el": "H", "x": 1.680398, "y": -0.373741, "z": -0.758561},
+        {"el": "H", "x": 1.680398, "y": -0.373741, "z": 0.758561},
+    ],
+    "bonds": [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}, {"a1": 3, "a2": 4, "order": 1}, {"a1": 3, "a2": 5, "order": 1}],
+    "charge": 0,
+    "multiplicity": 1,
+}
+
+
+def ask(worker, op, **m):
+    return worker.answer(json.dumps({"id": 1, "op": op, "step": "nci", **m}))
+
+
+def run(job, program, env):
+    with tempfile.TemporaryDirectory() as d:
+        for f in job["files"]:
+            pathlib.Path(d, f["name"]).write_text(f["text"], encoding="utf-8")
+        stdin = open(pathlib.Path(d, job["stdin"]), encoding="utf-8") if job.get("stdin") else subprocess.DEVNULL
+        done = subprocess.run([program, *job["args"]], cwd=d, env={**os.environ, **env}, stdin=stdin, capture_output=True, text=True, timeout=900)
+        return done, sorted(os.listdir(d))
+
+
+class Nciplot(unittest.TestCase):
+    def test_writes_the_geometry_and_its_input_as_the_manual_has_them(self):
+        said = ask(nciplot, "prepare", entries=[DIMER], options={})
+        self.assertTrue(said["ok"], said)
+        [job] = said["result"]["jobs"]
+        self.assertEqual((job["program"], job["args"], job["reads"]), ("nciplot", ["input.nci"], []))
+        files = {f["name"]: f["text"] for f in job["files"]}
+        # (the number of files, each's name; its outputs' name; the cubes alone; the density cut and the surface's RDG)
+        self.assertEqual(files["input.nci"].splitlines(), ["1", "molecule.xyz", "ONAME NCI", "OUTPUT 2", "CUTPLOT 0.07 0.3"])
+        xyz = files["molecule.xyz"].splitlines()
+        self.assertEqual(xyz[0], "6")
+        self.assertEqual(xyz[2].split()[0], "O")
+
+    def test_puts_each_molecule_in_a_file_of_its_own_for_interactions_between_them_alone(self):
+        said = ask(nciplot, "prepare", entries=[DIMER], options={"between": True, "grid": "fine", "isovalue": 0.4})
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertEqual(files["input.nci"].splitlines(), ["2", "molecule1.xyz", "molecule2.xyz", "ONAME NCI", "OUTPUT 2", "FINE", "INTERMOLECULAR", "CUTPLOT 0.07 0.4"])
+        self.assertEqual(files["molecule1.xyz"].splitlines()[0], "3")
+        # (one molecule has none to be between)
+        one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2]}
+        self.assertFalse(ask(nciplot, "prepare", entries=[one], options={"between": True})["ok"])
+
+    def test_says_which_cube_is_the_surface_and_which_colours_it(self):
+        said = ask(nciplot, "collect", entries=[DIMER], options={"range": 0.05}, files={}, log="", ended="done")
+        [s] = said["result"]["surfaces"]
+        [row] = s["rows"]
+        self.assertEqual((row["file"], row["iso"], row["colour"]["file"]), ("NCI-grad.cube", 0.3, "NCI-dens.cube"))
+        # (sign(λ2)ρ as NCIPLOT writes it, × 100)
+        self.assertAlmostEqual(row["colour"]["from"], -5)
+        self.assertAlmostEqual(row["colour"]["to"], 5)
+        failed = ask(nciplot, "collect", entries=[DIMER], options={}, files={}, log="reading\n ERROR: no atoms\n", ended="failed")
+        self.assertEqual(failed["result"], {"why": "ERROR: no atoms"})
+
+    def test_refuses_what_it_cannot_do(self):
+        for options in [{"grid": "huge"}, {"isovalue": 0}, {"between": "yes"}]:
+            self.assertFalse(ask(nciplot, "prepare", entries=[DIMER], options=options)["ok"], options)
+        self.assertFalse(ask(nciplot, "prepare", entries=[{**DIMER, "atoms": [{"el": "x1", "x": 0, "y": 0, "z": 0}]}], options={})["ok"])
+        self.assertFalse(nciplot.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [DIMER]}))["ok"])
+
+    @unittest.skipUnless(os.environ.get("NCIPLOT_BIN") and os.environ.get("NCIPLOT_HOME"), "NCIPLOT is not named here")
+    def test_nciplot_writes_the_cubes_it_says(self):
+        job = ask(nciplot, "prepare", entries=[DIMER], options={"between": True})["result"]["jobs"][0]
+        done, files = run(job, os.environ["NCIPLOT_BIN"], {"OMP_NUM_THREADS": "2"})
+        self.assertEqual(done.returncode, 0, done.stdout[-2000:])
+        self.assertIn("NCI-grad.cube", files)
+        self.assertIn("NCI-dens.cube", files)
+
+
+class Multiwfn(unittest.TestCase):
+    WFN = {**DIMER, "files": [{"kind": "molden", "name": "water.molden", "text": "[Molden Format]\n"}]}
+
+    def test_writes_the_wavefunction_and_what_multiwfn_is_told_as_its_manual_has_them(self):
+        said = ask(multiwfn, "prepare", entries=[self.WFN], options={"grid": "high"}, cores=4)
+        self.assertTrue(said["ok"], said)
+        [job] = said["result"]["jobs"]
+        self.assertEqual((job["program"], job["args"], job["stdin"]), ("multiwfn", ["wavefunction.molden", "-nt", "4", "-silent"], "nci.txt"))
+        files = {f["name"]: f["text"] for f in job["files"]}
+        self.assertEqual(files["wavefunction.molden"], "[Molden Format]\n")
+        # (weak interaction, NCI, the grid, the cubes, back, back, quit)
+        self.assertEqual(files["nci.txt"].splitlines(), ["20", "1", "3", "3", "0", "0", "q"])
+        # (each kind under the extension Multiwfn tells it by)
+        for kind, ext in [("gaussian-fchk", ".fch"), ("wfn", ".wfn"), ("wfx", ".wfx")]:
+            entry = {**DIMER, "files": [{"kind": kind, "name": "x", "text": "x"}]}
+            self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "wavefunction" + ext)
+
+    def test_needs_a_wavefunction(self):
+        said = ask(multiwfn, "prepare", entries=[DIMER], options={})
+        self.assertFalse(said["ok"])
+        self.assertIn("wavefunction", said["error"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}], options={})["ok"])
+
+    def test_says_which_cube_is_the_surface_and_which_colours_it(self):
+        said = ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log="", ended="done")
+        [row] = said["result"]["surfaces"][0]["rows"]
+        self.assertEqual((row["file"], row["iso"], row["colour"]["file"], row["colour"]["from"], row["colour"]["to"]), ("func2.cub", 0.5, "func1.cub", -0.035, 0.02))
+        self.assertIn("why", ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log=" Error: cannot read\n", ended="failed")["result"])
+        self.assertFalse(ask(multiwfn, "collect", entries=[self.WFN], options={"from": 0.01, "to": 0.0}, files={}, log="", ended="done")["ok"])
+
+    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN") and os.environ.get("MULTIWFN_WFN"), "Multiwfn is not named here")
+    def test_multiwfn_writes_the_cubes_it_says(self):
+        text = pathlib.Path(os.environ["MULTIWFN_WFN"]).read_text(encoding="utf-8")
+        entry = {**DIMER, "files": [{"kind": "wfn", "name": "x.wfn", "text": text}]}
+        job = ask(multiwfn, "prepare", entries=[entry], options={"grid": "low"}, cores=2)["result"]["jobs"][0]
+        done, files = run(job, os.environ["MULTIWFN_BIN"], {"Multiwfnpath": str(pathlib.Path(os.environ["MULTIWFN_BIN"]).parent)})
+        self.assertEqual(done.returncode, 0, done.stdout[-2000:])
+        self.assertIn("func1.cub", files)
+        self.assertIn("func2.cub", files)
+
+
+class Manifests(unittest.TestCase):
+    def test_declare_what_the_workers_read(self):
+        for name, ids in [("nciplot", {"grid", "between", "isovalue", "range"}), ("multiwfn", {"grid", "isovalue", "from", "to"})]:
+            m = json.loads((ROOT / f"src-tauri/resources/plugins/{name}/manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual({o["id"] for o in m["steps"][0]["options"]}, ids, name)
+            self.assertEqual(m["steps"][0]["kinds"], ["nci"])
+
+
+if __name__ == "__main__":
+    unittest.main()
