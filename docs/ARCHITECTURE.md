@@ -742,6 +742,10 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   drawn as two meshes, the positive one was laid over the other wherever
   they crossed on the screen, whichever was in front. The atoms are drawn
   before it and keep their depth, so one inside a lobe shows through it.
+  A picture (`render3d`) draws the surface a carried molecule shows - its
+  open list's chosen row's, given (`utils/surfaceMesh.ts` `shownSurface`) -
+  the same way, worked out at once and kept (`surfaces.ts` `surfaceNow`),
+  and keeps room for where it reaches (`pictureSurface`).
   The value is
   set by a slider under the list (from 0.0001 to 0.5, by its logarithm),
   kept in `lists3d` as `iso`.
