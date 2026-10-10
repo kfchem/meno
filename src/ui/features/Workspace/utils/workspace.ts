@@ -53,6 +53,7 @@ type Saved = Pick<
   EditorState,
   "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "lists3d" | "docStyle" | "aromaticEnabled" | "aromaticRings"
 > &
+  Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures">>;
 
 /**
@@ -100,6 +101,7 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       version: WORKSPACE_VERSION,
       atoms: state.model.atoms,
       bonds: state.model.bonds,
+      ...(state.pushes?.length ? { pushes: state.pushes } : {}),
       arrows: state.arrows,
       pluses: state.pluses,
       ...(state.captions.length ? { captions: state.captions } : {}),

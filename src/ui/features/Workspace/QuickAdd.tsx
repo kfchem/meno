@@ -8,7 +8,7 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push";
 
 /** What opens below Quick Add's row: nothing, the calculations, or the field a SMILES is typed in. */
 type QuickPanel = "none" | "calculations" | "smiles";
@@ -23,7 +23,8 @@ const SMILES_H = 32 + 9;
 
 /**
  * The row's icons, in order: what draws a structure - a bond, a chain, a
- * SMILES - then what a reaction scheme has besides - words, an arrow, a "+".
+ * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
+ * - and an electron-pushing arrow, begun at the first atom or bond pressed.
  */
 const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactNode }[] = [
   {
@@ -66,6 +67,17 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactN
     id: "plus",
     name: "Plus",
     icon: <path d="M10 4 V16 M4 10 H16" />,
+  },
+  {
+    id: "push",
+    name: "Electron-pushing arrow",
+    // (a curved arrow, as the menus show one)
+    icon: (
+      <>
+        <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
+        <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+      </>
+    ),
   },
 ];
 

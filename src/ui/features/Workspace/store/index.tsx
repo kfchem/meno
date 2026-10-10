@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PdfItem, PictureItem, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -38,6 +38,7 @@ function mirrorOf(doc: WorkspaceDocument) {
     model: doc.model,
     arrows: doc.arrows,
     pluses: doc.pluses ?? [],
+    pushes: doc.pushes ?? NO_PUSHES,
     aromaticEnabled: doc.aromaticEnabled,
     aromaticRings: doc.aromaticRings,
     nextId: doc.nextId,
@@ -90,6 +91,7 @@ function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Se
   return [...sel].every((id) => ids.has(id)) ? sel : new Set([...sel].filter((id) => ids.has(id)));
 }
 const NO_CAPTIONS: Caption[] = [];
+const NO_PUSHES: PushArrow[] = [];
 const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
@@ -186,6 +188,8 @@ export function createEditorStore(
     hoveredMeasure3d: null,
     measureEdit3d: null,
     hoveredArrow: null,
+    hoveredPush: null,
+    pushDraw: null,
     hoveredPlus: null,
     hoveredCaption: null,
     hoveredPdf: null,

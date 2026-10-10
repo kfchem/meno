@@ -163,8 +163,9 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D; Delete | unpaired electron, expand an abbreviation, select its structure |
-| A bond | clean up, 3D; Delete | select its structure |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it; Delete | unpaired electron, expand an abbreviation, select its structure |
+| A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it; Delete | select its structure |
+| An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), clean up, 3D; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
 | Empty space | paste, select all | open, save as, new text, fit, R and S, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
@@ -214,7 +215,8 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow and a "+". A choice puts it down where the
+SMILES, text, a reaction arrow, a "+" and an electron-pushing arrow (from
+the first atom or bond pressed, *Electron-pushing arrows* below). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
@@ -548,6 +550,48 @@ All hover-based, as above.
   anew; undo brings them back. A label's charge put by hand leaves the
   label, set beside it where it was put (`Atom.chargeAt`, `stereoAt`;
   `Bond.stereoAt`; `MarkHold2D`).
+- **Electron-pushing arrows** (the maintainer, 2026-10-10: arrows for how
+  electrons move; their drawing settled 2026-10-11). A curved arrow from a
+  lone pair, a bond or an atom to an atom, a bond, or the gap between two
+  atoms where a bond forms - its head full, for a pair of electrons, or
+  half, a fishhook, for one, the barb on the outside of the curve.
+  - Begun from the menu of the atom or bond it leaves - *Electron-pushing
+    arrow* or *Fishhook arrow*, icons in its row - or from Quick Add,
+    where the first atom or bond pressed is where it leaves. It then
+    follows the pointer, the button up, and comes to the atom or the bond
+    under it, or to the gap between two atoms not bonded whose middle the
+    pointer is near; a click there puts it down, one step - and so does
+    letting go there, of a press that began on the menu's icon. A click on
+    nothing, Escape or a right press lets it go. Being drawn, it is in the
+    highlight's colour until it has an end. No key draws one (drawing by
+    extension, 2026-09-27).
+  - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
+    by where it was drawn, so it goes with them as they are moved, turned,
+    turned over (bent to its other side, as a mirror shows it) and cleaned
+    up (bent as Meno bends it again, as marks put by hand are put back), and
+    goes when they go.
+  - Drawn as a chemist draws one: a curve standing off the line between
+    its ends by about a third of it - no less than nearly half a bond - on
+    the side away from its structures, so that it runs round them; from an
+    atom beyond its label, and from a lone pair's two dots where the atom
+    has one to give (N, O, S, P, Se, the halogens, or a negative charge),
+    which its menu can leave off; to an atom short of its label; on a bond
+    a little off its line, on the side it comes from; cut where it leaves
+    and enters an atom's room along itself, so that it comes in as it was
+    heading, its head along its last stretch. Its line is a bond's; its
+    head is the drawing style's (*Electron-pushing arrows*, head length and
+    width).
+  - Under the pointer it is lit from behind, is the one a right-click's
+    menu is for, and shows a handle at its middle and at each end: its line
+    or its middle dragged bends it through the pointer; an end dragged onto
+    an atom, a bond or a gap takes it there; each one step. Two clicks on
+    it bend it as Meno does again. Delete or Backspace under the pointer
+    deletes it.
+  - Saved with the workspace, carried by a copy that holds both its ends
+    (on their new ids where it is pasted), and drawn in an exported SVG and
+    in a copy's pictures, as on the canvas; a MOL, SD or RXN file has no
+    place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
+    `PushDraw2D`; `PushArrow`, `pushes`).
 - Everything a molfile, SDfile or Rxnfile can hold, read after CTfile Formats
   and drawn after IUPAC's recommendations: docs/CTFILE.md, step by step.
 - Abbreviations: Meno's own, those put together by rule (OTBS, 2,6-diMeBz)

@@ -19,6 +19,8 @@ import {
   Pluses2D,
   AromaticCircles2D,
   Wedges2D,
+  PushArrows2D,
+  PushDraw2D,
   Labels2D,
   LabelTyping2D,
   HoverOverlay2D,
@@ -54,6 +56,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { hasLonePair } from "./utils/pushes";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
@@ -583,6 +586,9 @@ function WorkspaceContent({
       } else if (isDeleteKey(e) && kind && id != null) {
         e.preventDefault();
         deletePart(kind, id);
+      } else if (isDeleteKey(e) && !busy && st.hoveredPush != null && st.pushes.some((p) => p.id === st.hoveredPush)) {
+        e.preventDefault();
+        st.removePush(st.hoveredPush);
       } else if (isDeleteKey(e) && !busy && st.hoveredArrow != null && st.arrows.some((a) => a.id === st.hoveredArrow)) {
         // a reaction arrow under the pointer, and nothing else
         e.preventDefault();
@@ -836,6 +842,12 @@ function WorkspaceContent({
         drawing,
         ...place,
       });
+      return;
+    }
+    // on an electron-pushing arrow, and nothing else: its menu
+    const { hoveredPush, pushes } = store.getState();
+    if (!kind && hoveredPush != null && pushes.some((p) => p.id === hoveredPush)) {
+      open({ kind: "push", id: hoveredPush, selection: "none", ...place });
       return;
     }
     // on a reaction arrow, and nothing else: the arrow's menu
@@ -1163,6 +1175,8 @@ function WorkspaceContent({
                 st.addBondedPair({ x: at.x - dx, y: at.y - dy }, { x: at.x + dx, y: at.y + dy });
               } else if (what === "text") st.setCaptionEdit({ id: null, at });
               else if (what === "arrow") st.addArrow(at.x, at.y);
+              // (from the first atom or bond pressed, then on as from a menu)
+              else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -1211,6 +1225,7 @@ function WorkspaceContent({
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
             else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
             else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
+            else if (menu.kind === "push" && menu.id != null) st.removePush(menu.id);
             else if (menu.kind === "measure3d" && menu.id != null && menu.measure != null) st.removeMeasure3d(menu.id, menu.measure);
             else if (menu.selection === "here") st.deleteSelection();
             else if (menu.kind === "molecule3d" && menu.id != null) st.removeMolecule3d(menu.id);
@@ -1348,6 +1363,24 @@ function WorkspaceContent({
             const taken = clip.part();
             if (taken) startExport(taken);
           } : undefined}
+          onPush={(menu.kind === "atom" || menu.kind === "bond") && menu.id != null && menu.selection !== "here" ? (half, press) => {
+            const st = store.getState();
+            const from = menu.kind === "atom" ? { atom: menu.id! } : { bond: menu.id! };
+            st.setPushDraw({ from, half, pointer: press ? clientToWorld(press.clientX, press.clientY) ?? menu.at : menu.at, to: null });
+          } : undefined}
+          push={(() => {
+            if (menu.kind !== "push" || menu.id == null) return undefined;
+            const st = store.getState();
+            const p = st.pushes.find((x) => x.id === menu.id);
+            if (!p) return undefined;
+            const tail = "atom" in p.from ? st.model.atoms.find((a) => "atom" in p.from && a.id === p.from.atom) : undefined;
+            return {
+              half: !!p.half,
+              setHalf: (half: boolean) => st.updatePush(p.id, { half }),
+              ...(tail && hasLonePair(tail) ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
+              ...(p.bend ? { onUnbend: () => st.updatePush(p.id, { bend: null }) } : {}),
+            };
+          })()}
           clipboard={{
             onCut: () => void clip.cut(),
             onCopy: () => void clip.copy(),
@@ -1410,6 +1443,9 @@ function WorkspaceContent({
           {/* Shapes and labels */}
           <AromaticCircles2D />
           <Wedges2D />
+          {/* Electron-pushing arrows, and one being drawn */}
+          <PushArrows2D />
+          <PushDraw2D />
           {/* Atom hover rings */}
           <AtomsHoverRings2D />
           {/* what is selected, the box or lasso selecting, the handle turning it */}

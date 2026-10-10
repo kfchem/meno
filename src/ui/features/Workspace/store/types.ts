@@ -79,6 +79,20 @@ export type Arrow = {
 };
 /** A "+" between two structures of a reaction scheme: where its middle is. */
 export type Plus = { id: number; x: number; y: number };
+/**
+ * Where an electron-pushing arrow starts or ends (docs/EDITOR-2D.md,
+ * *Electron-pushing arrows*), by id: an atom - from its lone pair, where
+ * one is drawn there - a bond, or two atoms with a gap between them, where
+ * a bond forms.
+ */
+export type PushEnd = { atom: number } | { bond: number } | { gap: [number, number] };
+/**
+ * An electron-pushing arrow: from where to where, its head half - a
+ * fishhook, one electron - or full, its bend (lib/chem/pushArrow
+ * `PushBend`; unset, as Meno bends it), and a lone pair's dots left off its
+ * tail (`noPair`).
+ */
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -395,7 +409,7 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
 export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
-export type Drawn = Model & { arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
+export type Drawn = Model & { pushes?: PushArrow[]; arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
 
 export type EditorState = {
   model: Model;
@@ -641,6 +655,23 @@ export type EditorState = {
   /** A measurement of the atoms and bonds chosen, which are then let go. */
   measureChosen3d: () => void;
   removeMeasure3d: (id: number, measure: number) => void;
+  /** The electron-pushing arrows. */
+  pushes: PushArrow[];
+  /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
+  hoveredPush: number | null;
+  setHoveredPush: (id: number | null) => void;
+  /**
+   * An electron-pushing arrow being drawn: from where - none yet, begun from
+   * Quick Add, until an atom or a bond is pressed - with a half head or a
+   * full one, to where the pointer is, or the end under it (`to`).
+   */
+  pushDraw: { from: PushEnd | null; half: boolean; pointer: { x: number; y: number } | null; to: PushEnd | null } | null;
+  setPushDraw: (draw: EditorState["pushDraw"]) => void;
+  /** An electron-pushing arrow added, as one step; its id. */
+  addPush: (from: PushEnd, to: PushEnd, half: boolean) => number;
+  /** An electron-pushing arrow changed - its head, its bend (null: as Meno bends it), its ends, its lone pair - a run of changes in one gesture one step. */
+  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean }, gesture?: string) => void;
+  removePush: (id: number) => void;
   /** The reaction arrow under the pointer: its menu is the one a right-click opens. */
   hoveredArrow: number | null;
   /** The "+" under the pointer, likewise. */

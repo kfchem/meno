@@ -258,6 +258,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         labelEdit: { active: false, atomId: null, value: "" },
         captionEdit: null,
         captionLeft: null,
+        pushDraw: null,
         quickAdd: null,
         workflowMenu: null,
         pdfWords: null,

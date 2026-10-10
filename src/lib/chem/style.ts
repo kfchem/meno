@@ -186,6 +186,15 @@ export type DrawingStyle = {
    * fraction of the head's length: none draws a triangle, more a barbed head.
    */
   reactionArrowHeadInset: number;
+
+  // --- Electron-pushing arrows ---------------------------------------------
+  /**
+   * An electron-pushing arrow's head: how long, from its point to its back
+   * corners, and how wide across them - a half head, a fishhook, being the
+   * one side of it. Its line is a bond's.
+   */
+  electronArrowHeadLength: Length;
+  electronArrowHeadWidth: Length;
 };
 
 /**
@@ -244,6 +253,8 @@ export const ACS_1996: DrawingStyle = {
   arrowheadWidth: pt(2.0),
   reactionArrowHeadLength: pt(5.0),
   reactionArrowHeadWidth: pt(3.6),
+  electronArrowHeadLength: pt(4.0),
+  electronArrowHeadWidth: pt(3.0),
   waveAmplitude: pt(0.94),
   wavelength: pt(3.76),
   fontFamily: "Arial",
@@ -263,6 +274,8 @@ const ACS_PROPORTIONS = {
   arrowheadWidth: ofBond(2.0 / 14.4),
   reactionArrowHeadLength: ofBond(5.0 / 14.4),
   reactionArrowHeadWidth: ofBond(3.6 / 14.4),
+  electronArrowHeadLength: ofBond(4.0 / 14.4),
+  electronArrowHeadWidth: ofBond(3.0 / 14.4),
   waveAmplitude: ofBond(0.94 / 14.4),
   wavelength: ofBond(3.76 / 14.4),
 } satisfies Partial<DrawingStyle>;

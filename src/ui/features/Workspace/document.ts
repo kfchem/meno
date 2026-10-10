@@ -13,7 +13,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { printedSize } from "../../../lib/picture/image";
@@ -27,6 +27,9 @@ export type WorkspaceDocument = {
   arrows: Arrow[];
   /** The "+" signs of a reaction scheme. */
   pluses: Plus[];
+  /** The electron-pushing arrows, each from and to atoms and bonds by id. */
+  pushes?: PushArrow[];
+  nextPushId?: number;
   /** Words on the page: a reaction's reagents and conditions, or anything else. */
   captions?: Caption[];
   nextCaptionId?: number;
@@ -357,7 +360,7 @@ export function deleteParts(
   }
   const kept = atoms.filter((a) => !atomsGone.has(a.id));
   if (kept.length === atoms.length && left.length === bonds.length) return doc;
-  return { ...doc, model: { atoms: kept, bonds: left } };
+  return withPushesOn({ ...doc, model: { atoms: kept, bonds: left } });
 }
 
 /**
@@ -431,7 +434,13 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
     bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
   }
-  return { ...doc, nextId, model: { atoms, bonds } };
+  // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
+  const pushes = (doc.pushes ?? []).map((p) => {
+    if (!p.bend || !pushAtoms(doc, p).every((id) => to.has(id))) return p;
+    const { bend: _bend, ...rest } = p;
+    return rest;
+  });
+  return withPushesOn({ ...doc, nextId, model: { atoms, bonds }, ...(doc.pushes ? { pushes } : {}) });
 }
 
 /**
@@ -541,7 +550,7 @@ export function writtenAsLabels(doc: WorkspaceDocument, groups: readonly Written
     bonds = bonds.filter((b) => !(ids.has(b.a) && ids.has(b.b)));
   }
   if (atoms === doc.model.atoms) return doc;
-  return { ...doc, model: { atoms, bonds } };
+  return withPushesOn({ ...doc, model: { atoms, bonds } });
 }
 
 /**
@@ -585,7 +594,7 @@ export function contractToAbbreviation(
     .filter((a) => !ids.has(a.id) || a.id === attachId)
     .map((a) => (a.id === attachId ? { id: a.id, x: a.x, y: a.y, r: a.r, el: label, abbrev } : a));
   const bonds = doc.model.bonds.filter((b) => !(ids.has(b.a) && ids.has(b.b)));
-  return { ...doc, model: { atoms, bonds } };
+  return withPushesOn({ ...doc, model: { atoms, bonds } });
 }
 
 /**
@@ -705,7 +714,7 @@ export function replaceDraggedAtomWith(
 /** Replaces the content, e.g. opening a file: one undo step for the import. */
 export function replaceModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { pushes?: readonly PushArrow[] },
 ): WorkspaceDocument {
   const maxId = Math.max(
     0,
@@ -719,6 +728,7 @@ export function replaceModel(
     nextArrowId: 1,
     pluses: [],
     nextPlusId: 1,
+    ...pushesOf(next.pushes, next),
     captions: [],
     nextCaptionId: 1,
     molecules3d: [],
@@ -736,7 +746,7 @@ export function replaceModel(
 /** Adds another structure alongside the current one, renumbering its ids. */
 export function appendModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { pushes?: readonly PushArrow[] },
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
   const idMap = new Map<number, number>();
@@ -761,13 +771,30 @@ export function appendModel(
         }
       : {}),
   }));
-  const bonds = next.bonds.map((b) => ({
-    ...b,
-    id: cursor++,
-    a: idMap.get(b.a) ?? b.a,
-    b: idMap.get(b.b) ?? b.b,
-    ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
-  }));
+  const bondMap = new Map<number, number>();
+  const bonds = next.bonds.map((b) => {
+    const id = cursor++;
+    bondMap.set(b.id, id);
+    return {
+      ...b,
+      id,
+      a: idMap.get(b.a) ?? b.a,
+      b: idMap.get(b.b) ?? b.b,
+      ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
+    };
+  });
+  // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
+  const moved = (e: PushEnd): PushEnd | null => {
+    if ("atom" in e) return idMap.has(e.atom) ? { atom: idMap.get(e.atom)! } : null;
+    if ("bond" in e) return bondMap.has(e.bond) ? { bond: bondMap.get(e.bond)! } : null;
+    return idMap.has(e.gap[0]) && idMap.has(e.gap[1]) ? { gap: [idMap.get(e.gap[0])!, idMap.get(e.gap[1])!] } : null;
+  };
+  let pushId = doc.nextPushId ?? 1;
+  const pushes = (next.pushes ?? []).flatMap((p) => {
+    const from = moved(p.from);
+    const to = moved(p.to);
+    return from && to ? [{ ...p, id: pushId++, from, to }] : [];
+  });
   return {
     ...doc,
     nextId: cursor,
@@ -775,6 +802,7 @@ export function appendModel(
       atoms: [...doc.model.atoms, ...atoms],
       bonds: [...doc.model.bonds, ...bonds],
     },
+    ...(pushes.length ? { pushes: [...(doc.pushes ?? []), ...pushes], nextPushId: pushId } : {}),
   };
 }
 
@@ -1030,6 +1058,85 @@ export function removeArrow(
 ): WorkspaceDocument {
   const arrows = doc.arrows.filter((a) => a.id !== id);
   return arrows.length === doc.arrows.length ? doc : withoutArrowsOf({ ...doc, arrows }, new Set([id]));
+}
+
+// --- electron-pushing arrows -----------------------------------------------
+
+/** The atoms an end stands on, by id: an atom, a bond's two, a gap's two. */
+export function endAtoms(doc: Pick<WorkspaceDocument, "model">, e: PushEnd): number[] {
+  if ("atom" in e) return [e.atom];
+  if ("gap" in e) return [...e.gap];
+  const b = doc.model.bonds.find((x) => x.id === e.bond);
+  return b ? [b.a, b.b] : [];
+}
+
+/** The atoms an electron-pushing arrow stands on, at either end. */
+export function pushAtoms(doc: Pick<WorkspaceDocument, "model">, p: PushArrow): number[] {
+  return [...endAtoms(doc, p.from), ...endAtoms(doc, p.to)];
+}
+
+/** Whether an end is still drawn: its atom, its bond, its gap's two atoms - not bonded to each other. */
+function endIsThere(doc: Pick<WorkspaceDocument, "model">, e: PushEnd): boolean {
+  const has = (id: number) => doc.model.atoms.some((a) => a.id === id);
+  if ("atom" in e) return has(e.atom);
+  if ("bond" in e) return doc.model.bonds.some((b) => b.id === e.bond);
+  return e.gap[0] !== e.gap[1] && has(e.gap[0]) && has(e.gap[1]);
+}
+
+/** `doc` without the electron-pushing arrows whose ends are gone. */
+function withPushesOn(doc: WorkspaceDocument): WorkspaceDocument {
+  const pushes = doc.pushes ?? [];
+  const kept = pushes.filter((p) => endIsThere(doc, p.from) && endIsThere(doc, p.to));
+  return kept.length === pushes.length ? doc : { ...doc, pushes: kept };
+}
+
+/** The electron-pushing arrows a file or a record brings, those whose ends are in `model`, numbered from one. */
+function pushesOf(pushes: readonly PushArrow[] | undefined, model: Model): Pick<WorkspaceDocument, "pushes" | "nextPushId"> {
+  const kept = (pushes ?? []).filter((p) => endIsThere({ model }, p.from) && endIsThere({ model }, p.to)).map((p, i) => ({ ...p, id: i + 1 }));
+  return { pushes: kept, nextPushId: kept.length + 1 };
+}
+
+/** `doc` with an electron-pushing arrow from `from` to `to`, numbered `nextPushId`. */
+export function addPush(doc: WorkspaceDocument, from: PushEnd, to: PushEnd, half: boolean): WorkspaceDocument {
+  if (!endIsThere(doc, from) || !endIsThere(doc, to) || JSON.stringify(from) === JSON.stringify(to)) return doc;
+  const id = doc.nextPushId ?? 1;
+  return { ...doc, nextPushId: id + 1, pushes: [...(doc.pushes ?? []), { id, from, to, ...(half ? { half: true as const } : {}) }] };
+}
+
+/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots. */
+export function updatePush(
+  doc: WorkspaceDocument,
+  id: number,
+  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean },
+): WorkspaceDocument {
+  const pushes = doc.pushes ?? [];
+  const i = pushes.findIndex((p) => p.id === id);
+  if (i < 0) return doc;
+  const was = pushes[i];
+  const { half: _h, bend: _b, noPair: _n, ...rest } = was;
+  const half = patch.half ?? !!was.half;
+  const bend = patch.bend === undefined ? was.bend : (patch.bend ?? undefined);
+  const noPair = patch.noPair ?? !!was.noPair;
+  const next: PushArrow = { ...rest, from: patch.from ?? was.from, to: patch.to ?? was.to, ...(half ? { half: true } : {}), ...(bend ? { bend } : {}), ...(noPair ? { noPair: true } : {}) };
+  if (!endIsThere(doc, next.from) || !endIsThere(doc, next.to) || JSON.stringify(next.from) === JSON.stringify(next.to)) return doc;
+  if (JSON.stringify(next) === JSON.stringify(was)) return doc;
+  const out = pushes.slice();
+  out[i] = next;
+  return { ...doc, pushes: out };
+}
+
+export function removePush(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+  const pushes = (doc.pushes ?? []).filter((p) => p.id !== id);
+  return pushes.length === (doc.pushes ?? []).length ? doc : { ...doc, pushes };
+}
+
+/** `doc` with the electron-pushing arrows on the atoms `ids` alone turned over with them: each bent to its other side. */
+export function turnPushesOver(doc: WorkspaceDocument, ids: ReadonlySet<number>): WorkspaceDocument {
+  if (!doc.pushes?.some((p) => p.bend)) return doc;
+  return {
+    ...doc,
+    pushes: doc.pushes.map((p) => (p.bend && pushAtoms(doc, p).every((id) => ids.has(id)) ? { ...p, bend: { along: p.bend.along, out: -p.bend.out } } : p)),
+  };
 }
 
 export function addPlus(doc: WorkspaceDocument, x: number, y: number): WorkspaceDocument {

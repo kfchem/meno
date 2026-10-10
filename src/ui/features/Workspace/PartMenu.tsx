@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | null;
   /** Its id: for a measurement, its molecule's. */
   id: number | null;
   /** A measurement's own id. */
@@ -65,7 +65,7 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean };
+type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
 export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
@@ -137,6 +137,8 @@ export default function PartMenu({
   onUseAsInput,
   onSaveAbbreviation,
   onExport,
+  onPush,
+  push,
   canvas = [],
   clipboard,
   molecule3d,
@@ -205,6 +207,10 @@ export default function PartMenu({
   onSaveAbbreviation: () => void;
   /** The selection exported - written as a file of another kind - where the menu is the selection's. */
   onExport?: () => void;
+  /** An electron-pushing arrow begun from the atom or bond right-clicked, its head full or (`half`) a fishhook's. */
+  onPush?: (half: boolean, press?: React.PointerEvent) => void;
+  /** What an electron-pushing arrow right-clicked can do: its head made full or half, its lone pair's dots shown or left off (where it leaves one), bent as Meno bends it. */
+  push?: { half: boolean; setHalf: (half: boolean) => void; pair?: { shown: boolean; set: (shown: boolean) => void }; onUnbend?: () => void };
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -258,6 +264,13 @@ export default function PartMenu({
   const keys = target.selection === "none";
   const drawing = target.drawing !== false;
   const del = (name: string, withKey = true): Item => ({ name, keys: withKey ? deleteKey : "", run: onDelete, icon: MENU_ICONS.delete, del: true });
+  // (an electron-pushing arrow from the atom or bond right-clicked: a pair's, or one electron's)
+  const pushFrom: Item[] = onPush
+    ? [
+        { name: "Electron-pushing arrow", keys: "", run: () => onPush(false), press: (e) => onPush(false, e), icon: MENU_ICONS.pushArrow },
+        { name: "Fishhook arrow", keys: "", run: () => onPush(true), press: (e) => onPush(true, e), icon: MENU_ICONS.fishhook },
+      ]
+    : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -405,6 +418,14 @@ export default function PartMenu({
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
+      : target.kind === "push" && push
+        ? [
+            { name: "Full head", keys: "", run: () => push.setHalf(false), icon: MENU_ICONS.pushArrow, checked: !push.half },
+            { name: "Fishhook (half head)", keys: "", run: () => push.setHalf(true), icon: MENU_ICONS.fishhook, checked: push.half },
+            del("Delete arrow", keys),
+            ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
+            ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),
+          ]
       : target.kind == null
         ? [
             { name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste },
@@ -421,6 +442,7 @@ export default function PartMenu({
             : []),
           { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
           { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+          ...pushFrom,
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -473,6 +495,8 @@ export default function PartMenu({
                     ? "Molecule"
                     : target.kind === "measure3d"
                       ? "Measurement"
+                    : target.kind === "push"
+                      ? "Electron-pushing arrow"
                       : "Canvas"
       }
       tabIndex={-1}
@@ -501,7 +525,19 @@ export default function PartMenu({
               aria-pressed={item.checked}
               title={item.keys ? `${item.name} (${item.keys})` : item.name}
               disabled={item.disabled}
-              onClick={run(item)}
+              // (one begun by its press is not begun again by its click - but by a key, it is)
+              onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
+              onPointerDown={
+                item.press
+                  ? (e) => {
+                      if (e.button !== 0) return;
+                      // (a drag from it, let go where it is put down: begun at once, the menu gone)
+                      e.preventDefault();
+                      onClose();
+                      item.press!(e);
+                    }
+                  : undefined
+              }
               className={`${item.del ? "ml-auto " : ""}shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >

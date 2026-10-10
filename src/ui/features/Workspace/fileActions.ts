@@ -1,4 +1,6 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { pushMeasures, pushOutlines } from "../../../lib/chem/pushArrow";
+import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -233,6 +235,18 @@ export function drawingLayout(
     };
     drawn = true;
   };
+  // (the electron-pushing arrows, drawn as the canvas draws them, with their lone pairs' dots)
+  const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout.texts, opts, opts.fontPx, pushMeasures(style, NOMINAL_BOND_LENGTH));
+  for (const { push, shape } of pushed) {
+    const polys = pushOutlines(shape, !!push.half, pushMeasures(style, NOMINAL_BOND_LENGTH));
+    layout.polys.push(...polys.map((points) => ({ points })));
+    layout.fills.push(...shape.dots);
+    const pts = [...polys.flat(), ...shape.dots.flatMap((d) => [{ x: d.c.x - d.r, y: d.c.y - d.r }, { x: d.c.x + d.r, y: d.c.y + d.r }])];
+    take(
+      pts.map((p) => p.x),
+      pts.map((p) => p.y),
+    );
+  }
   const outlines = schemeOutlines(model, style, NOMINAL_BOND_LENGTH);
   if (outlines.length) {
     const points = outlines.flat();
@@ -427,7 +441,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
-/** Everything the canvas draws: its structures, arrows and "+" signs. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions">): Drawn {
-  return { ...state.model, arrows: state.arrows, pluses: state.pluses, captions: state.captions };
+/** Everything the canvas draws: its structures - their electron-pushing arrows with them - arrows and "+" signs. */
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes">>): Drawn {
+  return { ...state.model, ...(state.pushes?.length ? { pushes: state.pushes } : {}), arrows: state.arrows, pluses: state.pluses, captions: state.captions };
 }
