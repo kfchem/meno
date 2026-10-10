@@ -4,7 +4,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import { anyKindById, pluginById, type PythonPlugin } from "../../../../../lib/calc/catalog";
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
-import { rememberOutput } from "../../../../../lib/calc/asks";
+import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
 import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
@@ -19,7 +19,9 @@ import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/en
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { cubeGrid } from "../../../../../lib/calc/cube";
+import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import type { EditorState, JobSeen, StepJob, StepRan, Turn3D } from "../types";
 
@@ -127,6 +129,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
     atTheirEnds(before);
     turnNew(before, turns);
+    listsShown(before);
+  }
+
+  /** Molecules new on the page with a list to be opened at once - NCI's surfaces - shown with it open, its row chosen. */
+  function listsShown(before: ReadonlySet<number>) {
+    const open: EditorState["lists3d"] = {};
+    for (const m of doc.getState().molecules3d ?? []) {
+      if (before.has(m.id)) continue;
+      const list = resultsOn(m.calc?.results, "list").find((r) => r.shown != null);
+      if (list?.shown != null) open[m.id] = { list: resultKey(list), row: list.shown, pointed: null };
+    }
+    if (Object.keys(open).length) set((prev) => ({ ...prev, lists3d: { ...prev.lists3d, ...open } }));
   }
 
   /** Molecules new on the page that are an optimisation's path, shown at their ends. */
@@ -306,10 +320,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!where) return void fail(id, notFound(decl.label), at, key);
       paths.set(decl.name, where);
     }
+    // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)
+    const kinds = plugin.steps.find((s) => s.kind === step.kind)?.files ?? [];
+    const sourceOf = (id: number | undefined) => input.molecules.find((m) => m.id === id)?.calc?.source;
+    const given = await Promise.all(entries.map((e) => entryFiles(e, sourceOf(e.from), kinds, heldOutput)));
     let prepared;
     try {
       const client = await pluginClient(plugin);
-      prepared = readPrepared(await client.prepare(step.kind, entries.map(pluginEntry), options, cores), entries.length);
+      const sent = entries.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
+      prepared = readPrepared(await client.prepare(step.kind, sent, options, cores), entries.length);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -454,6 +473,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (its log kept with the workspace, as an output it was read from)
         const { kind: _kind, ...source } = await rememberOutput(`${kindInfo(kind).name} ${k + 1}.log`, log, "");
+        // (surfaces in cube files, which Meno reads itself: the molecule as it went, with them)
+        if ("surfaces" in said) {
+          const there = new Set(await jobFiles(j.id).catch(() => []));
+          for (const [i, s] of said.surfaces.entries()) {
+            const out = await surfacesRead(j.id, mine[i], s, there);
+            if (typeof out === "string") {
+              whys.push(out);
+              continue;
+            }
+            const made = workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined);
+            if (typeof made === "string") whys.push(made);
+            else worked.push(made);
+          }
+          continue;
+        }
         for (const [i, out] of said.entries()) {
           // (by the version its worker said it runs, as a reader's is kept)
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
@@ -473,6 +507,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       close();
     } finally {
       finishing.delete(id);
+    }
+  }
+
+  /**
+   * Surfaces a job wrote for an entry, read from its cube files by Meno's
+   * own reader (lib/calc/cube): the entry's molecule as it went, with a list
+   * of them - opened at once, its first shown - each its grid at the value
+   * said, coloured by the other grid where it says so. Why not, where a file
+   * is not there or not a cube.
+   */
+  async function surfacesRead(job: string, entry: SetEntry, s: ToSurfaces, there: ReadonlySet<string>): Promise<ReaderOutput | string> {
+    const grid = async (file: string, iso?: number) => {
+      if (!there.has(file)) throw new Error(`It wrote no ${file}`);
+      const g = cubeGrid(file, await readJobFile(job, file), "grid:0");
+      return iso != null ? { ...g, iso } : g;
+    };
+    try {
+      const rows = [];
+      for (const r of s.rows) {
+        const surface = await grid(r.file, r.iso);
+        const colour = r.colour ? { by: await grid(r.colour.file), from: r.colour.from, to: r.colour.to, ...(r.colour.label ? { label: r.colour.label } : {}) } : undefined;
+        rows.push({ cells: [r.label], frame: 0, surface: colour ? { ...surface, signed: undefined } : surface, ...(colour ? { colour } : {}) });
+      }
+      return {
+        schema: 1,
+        atoms: entry.atoms.map((a) => a.el),
+        frames: [[...entry.xyz]],
+        results: [{ id: "surfaces", on: "list", group: s.name, label: s.name, columns: [{ label: "Surface" }], rows, shown: 0 }],
+      };
+    } catch (e) {
+      return message(e);
     }
   }
 

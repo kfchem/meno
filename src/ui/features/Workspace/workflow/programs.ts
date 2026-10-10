@@ -18,7 +18,27 @@ import type { StepKind } from "./kinds";
  * their orders; its name - and its charge and spin multiplicity, as Export
  * reads them (lib/io/writers `knownOf`).
  */
-export type PluginEntry = WrittenMolecule & { charge: number; multiplicity: number };
+export type PluginEntry = WrittenMolecule & { charge: number; multiplicity: number; files?: EntryFile[] };
+
+/** A file an entry is given besides its geometry (a step's `files`): its kind, by id, its name and its text - the output its molecule was read from. */
+export type EntryFile = { kind: string; name: string; text: string };
+
+/**
+ * The file an entry's molecule was read from, where it is of one of
+ * `kinds` (a step's `files`) - and the entry is that molecule's last frame,
+ * the geometry an output ends on - its text held this session (`held`).
+ * None, where it is not.
+ */
+export async function entryFiles(
+  e: Pick<SetEntry, "last">,
+  source: { name: string; sha256: string; kind?: string } | undefined,
+  kinds: readonly string[],
+  held: (sha256: string) => Promise<{ name: string; text: string } | undefined>,
+): Promise<EntryFile[]> {
+  if (!kinds.length || !source?.kind || !kinds.includes(source.kind) || e.last === false) return [];
+  const got = await held(source.sha256);
+  return got ? [{ kind: source.kind, name: source.name, text: got.text }] : [];
+}
 
 export function pluginEntry(e: SetEntry): PluginEntry {
   const molecule: WrittenMolecule = {
@@ -92,14 +112,54 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
 export type ToRead = { kind: string; name: string } & ({ file: string } | { log: true });
 
 /**
+ * Surfaces a job wrote for an entry, as grids in cube files Meno reads
+ * itself (lib/calc/cube): a list of them, by what it is called, each row
+ * its file, the value it is drawn at, and - where another grid colours it
+ * (lib/calc/results `SurfaceColour`) - that grid's file and the values its
+ * scale runs between, and what they are. NCI's: an RDG surface coloured by
+ * sign(λ2)ρ.
+ */
+export type ToSurfaces = {
+  name: string;
+  rows: { label: string; file: string; iso?: number; colour?: { file: string; from: number; to: number; label?: string } }[];
+};
+
+function surfacesOf(v: unknown): ToSurfaces | null {
+  const s = v as { name?: unknown; rows?: unknown } | null;
+  const name = typeof s?.name === "string" && s.name.trim() ? s.name.trim().slice(0, 80) : null;
+  if (!name || !Array.isArray(s?.rows) || !s.rows.length || s.rows.length > 20) return null;
+  const rows: ToSurfaces["rows"] = [];
+  for (const x of s.rows as Record<string, unknown>[]) {
+    const label = typeof x?.label === "string" && x.label.trim() ? x.label.trim().slice(0, 80) : null;
+    const file = typeof x?.file === "string" && inside(x.file) ? x.file : null;
+    const iso = typeof x?.iso === "number" && Number.isFinite(x.iso) && x.iso > 0 ? x.iso : undefined;
+    const c = x?.colour as Record<string, unknown> | undefined;
+    const colour =
+      c === undefined
+        ? undefined
+        : typeof c?.file === "string" && inside(c.file) && typeof c.from === "number" && typeof c.to === "number" && Number.isFinite(c.from) && Number.isFinite(c.to) && c.from < c.to
+          ? { file: c.file, from: c.from, to: c.to, ...(typeof c.label === "string" && c.label.trim() ? { label: c.label.trim().slice(0, 80) } : {}) }
+          : null;
+    if (!label || !file || colour === null) return null;
+    rows.push({ label, file, ...(iso != null ? { iso } : {}), ...(colour ? { colour } : {}) });
+  }
+  return { name, rows };
+}
+
+/**
  * What a plugin read back of a job: an output for each of its entries, in
  * Meno's own form - or, for each, an output for Meno's readers to read
- * (ORCA's, Gaussian's: a program installed separately); or why the job did
- * not give one.
+ * (ORCA's, Gaussian's: a program installed separately), or surfaces in
+ * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
  */
-export function readCollected(raw: unknown, count: number): ReaderOutput[] | { read: ToRead[] } | { why: string } {
-  const r = raw as { outputs?: unknown; read?: unknown; why?: unknown } | null;
+export function readCollected(raw: unknown, count: number): ReaderOutput[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string } {
+  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown } | null;
   if (typeof r?.why === "string") return { why: r.why.trim().slice(0, 300) || "It did not say why" };
+  if (r?.surfaces !== undefined) {
+    if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
+    const surfaces = r.surfaces.map(surfacesOf);
+    return surfaces.every((s): s is ToSurfaces => s != null) ? { surfaces } : { why: "It said to read what Meno cannot" };
+  }
   if (r?.read !== undefined) {
     if (!Array.isArray(r.read) || r.read.length !== count) return { why: "It read back nothing for it" };
     const read: ToRead[] = [];
