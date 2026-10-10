@@ -190,7 +190,11 @@ lie level either way round - the drawing takes the one that reads best
   fused to it go below: quinoline's N, indole's NH, coumarin's O at the
   bottom, and so morphine's ether O and strychnine's indoline N, as IUPAC
   draws morphinan and strychnidine. Which way up a ring system is comes
-  before how the rest of its rings lie.
+  before how the rest of its rings lie. A flavonoid is the exception (the
+  maintainer, 2026-10-11): the ring O of a chromane or chromene with an
+  aryl ring on the atom next to it, or the one after - a flavone's, a
+  flavanone's, a catechin's, an isoflavone's - stands at the top, its B
+  ring to the right, as they are always drawn.
 - **Seen from the face its angular groups are on.** A ring system has two
   faces, and a drawing from one is the mirror image of a drawing from the
   other, every wedge a hash. It is drawn from the face its angular groups

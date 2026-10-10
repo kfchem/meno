@@ -1324,15 +1324,35 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     // of the two: quinoline's N, indole's NH, coumarin's O at the bottom,
     // morphine's ether O and strychnine's indoline N - which way up comes
     // before how the rest of its rings lie
+    // - but a flavonoid's: the ring O of a chromane or chromene carrying an
+    // aryl ring on the atom next to it or the one after (flavones,
+    // flavanones, catechins, isoflavones) stands at the top, as every
+    // drawing of one has it (the maintainer, 2026-10-11)
     const hetero = new Map<number, number>();
+    const above = new Map<number, number>();
+    const elOf = (a: number) => g.elements?.[a] ?? "C";
     for (const r of rest) {
       const b = aromatic.find((q) => q.filter((a) => r.includes(a)).length === 2);
       if (!b) continue;
       const both = [...new Set([...r, ...b])];
       const cy = both.reduce((sum, a) => sum + y[a], 0) / both.length;
-      for (const a of r) if ((g.elements?.[a] ?? "C") !== "C") hetero.set(a, Math.max(hetero.get(a) ?? -Infinity, cy));
+      const ringO = r.filter((a) => elOf(a) !== "C");
+      const o = ringO.length === 1 && elOf(ringO[0]) === "O" && r.length === 6 ? ringO[0] : -1;
+      const k = r.indexOf(o);
+      const fusedAtO = o >= 0 && [r[(k + 1) % 6], r[(k + 5) % 6]].some((a) => b.includes(a));
+      // (the atoms next to the O but one away from the benzene ring, and the one after: C2, C3)
+      const c2 = o >= 0 ? [r[(k + 1) % 6], r[(k + 5) % 6]].find((a) => !b.includes(a)) : undefined;
+      const c3 = c2 != null ? r[(r.indexOf(c2) + (r[(r.indexOf(c2) + 1) % 6] === o ? 5 : 1)) % 6] : undefined;
+      const aryl = (a: number | undefined) =>
+        a != null && neighbours[a].some((nb) => !r.includes(nb) && rings.some((q) => q.includes(nb) && !q.includes(a) && benzene(q)));
+      if (fusedAtO && (aryl(c2) || aryl(c3))) {
+        above.set(o, Math.min(above.get(o) ?? Infinity, cy));
+        continue;
+      }
+      for (const a of r) if (elOf(a) !== "C") hetero.set(a, Math.max(hetero.get(a) ?? -Infinity, cy));
     }
     for (const [a, cy] of hetero) if (y[a] > cy + 0.1 * L) ringOrder += 1.5;
+    for (const [a, cy] of above) if (y[a] < cy - 0.1 * L) ringOrder += 1.5;
   }
 
   // the face: an angular group - the one bond out of the rings at an atom

@@ -252,15 +252,14 @@ and the held-out list takes new ones. What it showed, by kind:
 - large molecules of two parts, or a macrocycle round an aromatic system
   (vinblastine, rifampicin), crammed;
 - orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
-  drawn everywhere), berberine, colchicine, lovastatin.
+  drawn everywhere - done, by the 2- or 3-aryl chromane it is), berberine,
+  colchicine, lovastatin.
 
 ## Open
 
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.
-- **Flavonoids** have their ring O at the top, against the rule for a
-  ring fused to a benzene (none is on the sheet).
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).

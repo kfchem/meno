@@ -97,6 +97,22 @@ describe("layout2D", () => {
     for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) if (!bonded.has(`${i}-${j}`)) expect(d(i, j)).toBeGreaterThan(0.55);
   });
 
+  it("draws a flavone with its ring O at the top, as flavonoids always are", () => {
+    // flavone: O=C1C=C(Oc2ccccc12)c1ccccc1
+    const el = ["O", "C", "C", "C", "O", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C"];
+    const bonds: [number, number, number][] = [
+      [0, 1, 2], [1, 2, 1], [2, 3, 2], [3, 4, 1], [4, 5, 1],
+      [5, 6, 2], [6, 7, 1], [7, 8, 2], [8, 9, 1], [9, 10, 2], [10, 5, 1], [10, 1, 1],
+      [3, 11, 1], [11, 12, 2], [12, 13, 1], [13, 14, 2], [14, 15, 1], [15, 16, 2], [16, 11, 1],
+    ];
+    const input: LayoutInput = { atoms: el.map((e) => ({ el: e })), bonds: bonds.map(([a, b, order]) => ({ a, b, order })) };
+    const { y } = layout2D(input);
+    const fused = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const middle = fused.reduce((sum, a) => sum + y[a], 0) / fused.length;
+    expect(y[4]).toBeGreaterThan(middle);
+    expect(y[0]).toBeLessThan(middle);
+  });
+
   it("fuses rings on a shared side", () => {
     const naphthalene = carbons(10, [...ring(0, 6), [1, 6], [6, 7], [7, 8], [8, 9], [9, 2]]);
     for (const l of bondLengths(naphthalene)) expect(l).toBeCloseTo(1, 6);
