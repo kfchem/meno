@@ -23,10 +23,10 @@ import {
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, layoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
-import { orderOf, perceive, type LayoutInput, type Molecule } from "./perceive";
-import { misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
+import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
+import { extendRingSystem, misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { flatCost, isCage, projectCage, type CageView } from "./cage";
+import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, type CageView } from "./cage";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
@@ -99,9 +99,9 @@ export function layout2D(input: LayoutInput): Layout2D {
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
     laid.hints?.forEach((m, a) => hints.set(a, m));
-    if (laid.solid) {
+    if (laid.solid || laid.solidAtoms) {
       upright.add(i);
-      for (const a of sys.atoms) solid[a] = true;
+      for (const a of laid.solidAtoms ?? sys.atoms) solid[a] = true;
       if (laid.other) others.set(i, laid.other);
     }
   });
@@ -473,20 +473,74 @@ function standUp(mol: Molecule, piece: number[], pos: Grown): void {
  * lie flat - a bridge crowding or crossing the ring it spans, the faces of
  * cubane - as the cage it is, in perspective: whichever reads better.
  */
-function layoutSystem(
-  mol: Molecule,
-  i: number,
-): {
+type SystemLayout = {
   pos: Map<number, Point>;
   depth?: Map<number, number>;
   hints?: Map<number, Map<number, Point>>;
   solid?: boolean;
+  /** Drawn in perspective, these alone: a cage's core, the rings fused to it flat. */
+  solidAtoms?: number[];
   other?: Omit<CageView, "other">;
-} {
+};
+
+function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const sys = mol.systems[i];
   // a cage - norbornane, tropane, quinuclidine, adamantane - is drawn in
   // perspective, the way it always is; anything else flat
   if (isCage(mol, sys)) return { ...projectCage(mol, sys), solid: true };
+  const flat = layoutFlat(mol, sys);
+  const flatFaults = flatCost(mol, sys, flat.pos, flat.depth);
+  if (flatFaults < 1) return flat;
+  // Where it will not lie flat without a fault, it is drawn as the solid it
+  // is, by the cage's own way - its atoms set in space by how far apart the
+  // bonds put them, seen from the side that reads best (cage.ts) - however
+  // its rings are joined: bridged across one another, or fused round a
+  // middle they close off (ginkgolide B, gibberellic acid, paeoniflorin's
+  // cage), up to twenty atoms. Or, it having a cage in it with rings fused
+  // to the cage on a side - an indole joined to ibogaine's isoquinuclidine
+  // by a seven-membered ring, tetrodotoxin's guanidine ring - the cage so,
+  // and the rings fused to it flat onto it. Whichever has the fewest faults,
+  // where that is clearly fewer than flat.
+  const rings = sys.rings.map((r) => mol.rings[r]);
+  const wholeFits = sys.atoms.length <= 20 && rings.every((r) => r.length <= 8) && !sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]));
+  // (and only a solid with every stereocentre in it as given)
+  const projected = wholeFits ? projectCage(mol, sys) : null;
+  const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) ? projected : null;
+  const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth) : Infinity;
+  const core = cageCore(mol, sys);
+  if (!core) return whole && wholeFaults < flatFaults - 1 ? { ...whole, solid: true } : flat;
+  const view = projectCage(mol, core);
+  const onto = (v: Omit<CageView, "other">) => {
+    const pos = new Map(v.pos);
+    extendRingSystem(mol, sys, pos);
+    // (the rings fused flat at the depth of the cage's atoms they are fused to)
+    const depth = new Map(v.depth);
+    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++)
+      for (const a of sys.atoms) {
+        if (depth.has(a)) continue;
+        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
+        if (near.length) depth.set(a, near.reduce((s, d) => s + d, 0) / near.length);
+      }
+    return { pos, depth, hints: v.hints, cost: v.cost };
+  };
+  const persp = onto(view);
+  const perspFaults =
+    sys.atoms.every((a) => persp.pos.has(a)) && keepsConfigurations(mol, core.atoms, view.pos, view.depth) ? flatCost(mol, sys, persp.pos, persp.depth) : Infinity;
+  // (the cage alone in perspective before the whole, its fused rings flat
+  // and wedged as a chemist draws them, unless the whole reads far better)
+  if (whole && wholeFaults < flatFaults - 1 && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
+  if (perspFaults >= flatFaults - 1) return flat;
+  // (an atom of the cage bonded to a ring fused flat onto it shows its
+  // configuration by a wedge, as a flat ring's atoms do: its bond into that
+  // ring lies where the flat ring puts it, not where the solid would)
+  const inSys = new Set(sys.atoms);
+  const coreAtoms = new Set(core.atoms);
+  const solidAtoms = core.atoms.filter((a) => mol.neighbours[a].every((b) => !inSys.has(b) || coreAtoms.has(b)));
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(view.other ? { other: onto(view.other) } : {}) };
+}
+
+/** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
+function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
   let flat = placeRingSystem(mol, sys);
   const rings = sys.rings.map((r) => mol.rings[r]);
   const bridged = rings.some((r, j) =>

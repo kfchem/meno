@@ -131,6 +131,24 @@ they hang from.
   one the lower; each three-atom bridge a chair's lower half to one side,
   its middle atom the foot. Seen from above it would have that bridge
   between the rings, hemmed in.
+- **A system that will not lie flat** (2026-10-11, from natural products
+  outside the benchmark): where every flat drawing of it has a fault - an
+  atom on another or on a bond, a bond crossing one not behind it - it is
+  drawn as the solid it is, as a cage is, if it has twenty atoms or fewer:
+  its atoms set in space by how far apart its bonds put them, and seen
+  from the side that reads best (paeoniflorin's cage, rings fused round a
+  middle they close off). Where it has a cage in it with rings fused to the
+  cage on a side - ibogaine's isoquinuclidine, joined to its indole by a
+  seven-membered ring; gelsemine's, its oxindole spiro to it; tetrodotoxin's,
+  its guanidine ring fused to it - the cage is drawn so and the rings
+  fused to it flat onto it, the cage's atoms bonded to them showing their
+  configuration by a wedge. Of these and the flat drawing, the one with the
+  fewest faults, where that is clearly fewer than flat; the cage alone
+  before the whole, unless the whole reads far better. A solid is taken
+  only with every stereocentre in it as given: a ring fusion is cis or
+  trans with the same bonds between the same atoms, so a solid found from
+  how far apart the bonds put its atoms may have one the wrong way - and
+  morphine, flat with its bridge across, stays as it was.
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds

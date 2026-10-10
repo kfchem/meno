@@ -179,6 +179,34 @@ export function placeRingSystem(
 }
 
 /**
+ * The rings of a system not yet placed, placed onto those that are - fused
+ * on a side first, then bridged, then touching at an atom - as
+ * `placeRingSystem` places them all: the rings fused to a cage's core once
+ * the core is drawn in perspective (engine `layoutSystem`).
+ */
+export function extendRingSystem(mol: Molecule, sys: RingSystem, pos: Map<number, Point>): void {
+  const rings = sys.rings.map((i) => mol.rings[i]);
+  const placed = new Set(rings.flatMap((r, i) => (r.every((a) => pos.has(a)) ? [i] : [])));
+  while (placed.size < rings.length) {
+    let next = -1;
+    let nextRank = -Infinity;
+    rings.forEach((r, i) => {
+      if (placed.has(i)) return;
+      const shared = r.filter((a) => pos.has(a)).length;
+      if (!shared) return;
+      const rank = (shared === 2 ? 1000 : shared > 2 ? 500 : 0) + (r.length === 6 ? 50 : 0) + (r.length < MACROCYCLE ? 20 : 0) - r.length;
+      if (rank > nextRank) {
+        nextRank = rank;
+        next = i;
+      }
+    });
+    if (next < 0) break;
+    placeRing(rings[next], pos, rings);
+    placed.add(next);
+  }
+}
+
+/**
  * Whether the rings a macrocycle runs through are each linked to the next
  * by no more than two atoms - a porphyrin's meso carbons, a cyclodextrin's
  * glycosidic oxygens - so that it is rings strung together, and nothing

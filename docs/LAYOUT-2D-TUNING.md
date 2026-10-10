@@ -245,7 +245,14 @@ change; a molecule that comes to be tuned for moves to `molecules.json`,
 and the held-out list takes new ones. What it showed, by kind:
 
 - cages and bridged systems beyond the chair and the boat (tetrodotoxin,
-  ginkgolide B, gelsemine, paeoniflorin, picrotoxinin, aconitine);
+  ginkgolide B, gelsemine, paeoniflorin, picrotoxinin, aconitine) - in
+  part: a system that will not lie flat is drawn as a solid, or its cage
+  so and the rest flat onto it (`cageCore`, `keepsConfigurations`); a
+  solid is taken only with its stereocentres as given. Gelsemine,
+  paeoniflorin and galantamine now read as their references; tetrodotoxin
+  and ibogaine are whole but small and close; ginkgolide B, aconitine,
+  picrotoxinin and gibberellic acid still flat, their solids failing the
+  stereo test or not clearly better;
 - two rings fused on neighbouring sides of a third, squeezed flat
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
