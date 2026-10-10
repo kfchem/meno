@@ -28,7 +28,7 @@ export default function OrdersCard({ onGive, onCancel }: { onGive: (smiles: stri
     try {
       await onGive(smiles);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(`No bond orders could be given: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
