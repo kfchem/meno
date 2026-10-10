@@ -86,6 +86,8 @@ The outlines Meno places Arial labels by before the system's own Arial has been 
 
 Meno reads and draws PDFs with PDFium, © The PDFium Authors, licensed under the BSD 3-Clause License (some files under the Apache License 2.0), as built by [`bblanchon/pdfium-binaries`](https://github.com/bblanchon/pdfium-binaries) (MIT). The app carries PDFium's library unchanged, and its licences and those of what it is built with - FreeType, HarfBuzz, ICU, libjpeg-turbo, OpenJPEG, libpng, zlib, Little CMS, Abseil, Anti-Grain Geometry, dragonbox, fast_float, simdutf and LLVM's libc - as `src-tauri/resources/licenses/PDFium-*`. This software is based in part on the work of the Independent JPEG Group. Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
 
+The Blender interface plugin (`src-tauri/resources/plugins/blender/`), which renders pictures and films of molecules with Blender, is licensed under the **GNU General Public License, version 3 or later**, as a script using Blender's Python API must be; see [`src-tauri/resources/plugins/blender/LICENSE`](./src-tauri/resources/plugins/blender/LICENSE). It stands apart from the rest of Meno, which takes nothing from it and speaks to it only through files and arguments. Blender itself is installed separately, under its own licence, and never shipped or downloaded by Meno.
+
 ## Acknowledgments
 
 Thanks to all contributors and users who provided feedback and ideas from related communities.

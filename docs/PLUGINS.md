@@ -62,6 +62,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D | RDKit (`drawing_of`) |
+| Molecules in 3D | pictures and films of them, rendered (RENDER.md) | the Blender interface (a job: Blender, installed separately) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |
@@ -141,9 +142,9 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own files and refused where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
 | `reads` | ids | The kinds it reads: its own, or Meno's. |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
-| `roles` | list of `{role, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; options only for a role that takes them (*Structures in 3D, and their conformers*). |
+| `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. |
-| `installed` | list of `{name, label, files, path?, env?}` | The programs installed separately its steps run: its name as the steps name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it. Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step runs. |
+| `installed` | list of `{name, label, files, path?, env?, places?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first. Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -234,7 +235,10 @@ Meno in companies make that worthwhile):
   speaks to Meno only through files and arguments - a separate program,
   not a part of Meno;
 - it is listed with its licence wherever Meno lists the licences of what
-  it carries.
+  it carries: README, and Settings, *Plugins*.
+
+The Blender interface (`resources/plugins/blender`, RENDER.md) is the
+first such plugin.
 
 A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
@@ -245,17 +249,10 @@ became the Gaussian interface.
 
 What lane L7 brings fits this spec as it is; the rest comes with it:
 
-- **Blender** (real pictures and films of molecules in 3D): a role and a
-  kind of step Meno defines, *Render*, given the scene as Meno writes it -
-  glTF 2.0, from the Khronos specification: the molecules in view in
-  their looks (the primary and secondary looks, the scene's light), their
-  surfaces, the camera, and for a film its frames - and giving pictures or
-  a film, which Meno saves or puts on the page. Its plugin runs as the
-  interfaces do: a worker that writes the job, and Blender, installed
-  separately and located (`installed`), running a script of the plugin's
-  in Blender's own Python. A render may leave out the mark Meno puts on a
-  picture of molecules shown without their hydrogens (the maintainer,
-  2026-10-10). Its licence: *Licences*.
+- **Blender** (real pictures and films of molecules in 3D): built
+  (2026-10-11) - the role *Render*, the glTF 2.0 scene Meno writes, the
+  Blender interface, and pictures and films on the page:
+  [`RENDER.md`](./RENDER.md). *Render* as a workflow's step comes later.
 - **NCI** (NCIPLOT, or an interface to Multiwfn): a kind of step, *NCI*,
   whose result is a general form - one grid's surface coloured by another
   grid's values, with a scale - not one for NCI alone. NCIPLOT can work
@@ -397,6 +394,12 @@ The same for every plugin and for Meno's own parts:
     `{"read": [{"kind": "orca", "log": true, "name": "water.out"}]}` - or
     a file it read back, for them to read as an opened one is (ORCA's and
     Gaussian's: what each printed);
+  - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
+    role, and its contract*): given the scene Meno wrote, put into the
+    job's folder by Meno, and answered with the picture or film the job
+    made (`{made: [{entry, file, media}]}`);
+  - a job may say how far it is, in lines of its log of their own -
+    `progress <done>/<all>` - which Meno shows as it runs;
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
     place (RDKit's *Duplicates*). `holds` says whether they came as a

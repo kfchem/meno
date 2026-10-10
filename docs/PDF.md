@@ -209,7 +209,8 @@ stops being part of the work.
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
   JPEG) opened or dropped, or a picture pasted from the clipboard, such
-  as a screenshot.
+  as a screenshot - or a render of molecules in 3D, a picture or a film
+  that plays where it lies ([`RENDER.md`](./RENDER.md)).
 - **Drawn as a structure is**: in the drawing, in the order things were
   put there. A picture is never drawn over a molecule in 3D.
 - **Moved, scaled and turned.** It is selected as a structure is, and
