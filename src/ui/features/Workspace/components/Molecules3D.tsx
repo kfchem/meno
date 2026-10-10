@@ -591,7 +591,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
               )
             : undefined;
         const surface = list && row?.surface ? held(m.calc, list, row.surface, asks, wantAsked.current, readGrid) : undefined;
-        const asking = [motion, surface].find((h) => h?.state && h.state !== "given")?.state;
+        // (and what colours it, where another grid does)
+        const colourBy = list && row?.colour ? held(m.calc, list, row.colour.by, asks, wantAsked.current, readGrid) : undefined;
+        const asking = [motion, surface, colourBy].find((h) => h?.state && h.state !== "given")?.state;
         return (
           <Molecule3DView
             key={m.id}
@@ -620,6 +622,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
+            surfaceColour={colourBy?.value && row?.colour ? { grid: colourBy.value, from: row.colour.from, to: row.colour.to } : null}
             marked={settingMoves?.id === m.id ? settingMoves.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
             editingMeasure={measureEdit?.id === m.id ? measureEdit.measure : null}
             onSetMeasure={(measure, value) => {
@@ -649,6 +652,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                   }
                   iso={surface?.value ? (open.iso ?? surface.value.iso ?? DEFAULT_ISO) : undefined}
                   onIso={(iso) => store.getState().setIso3d(m.id, iso)}
+                  scale={colourBy?.value && row?.colour ? { from: row.colour.from, to: row.colour.to, ...(row.colour.label ? { label: row.colour.label } : {}) } : undefined}
                   onClose={() => store.getState().closeList3d(m.id)}
                   onRoom={(bottom) => makeRoom(m, bottom)}
                   area={dom}
