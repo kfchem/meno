@@ -201,6 +201,8 @@ footer .wrap { display: grid; gap: 14px; }
 footer p { margin: 0; max-width: 72ch; }
 footer a { color: inherit; }
 .foot-mark { height: 18px; width: auto; aspect-ratio: 2464 / 399; color: var(--ink); }
+.disclaimer { display: grid; gap: 8px; margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; }
+.disclaimer h2 { margin: 0; font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-stage .window, .honeycomb, .mol { transform: none !important; }

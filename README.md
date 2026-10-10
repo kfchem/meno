@@ -177,6 +177,23 @@ is structured, Tauri commands, supported file formats) and
   with CREST is not available on Windows, where *Conformers* uses RDKit alone
   ([`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)).
 
+## Disclaimer
+
+Meno is provided "as is", without warranty of any kind, express or implied,
+and its authors accept no liability for any loss or damage arising from its
+use, as sections 7 and 8 of the Apache License 2.0 set out.
+
+Meno is pre-alpha research software. The structures, 3D structures,
+conformers, energies and other results it makes or reads may be wrong: check
+them before relying on them. It is not meant for clinical, diagnostic,
+regulatory or safety-critical use.
+
+Plugins, and the calculation programs they run, are their own authors' work
+under their own licences and terms; whether to install and use them is yours
+to decide. Names of other software, systems and companies that appear here or
+in Meno belong to their owners, and do not mean that they are affiliated with
+Meno or endorse it.
+
 ## License
 
 This repository is licensed under the **Apache License 2.0**. See [`LICENSE`](./LICENSE).
