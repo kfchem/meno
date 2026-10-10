@@ -236,13 +236,50 @@ export function placeStereo(
       }
       hPos = { x: at.x + Math.cos(bestT), y: at.y + Math.sin(bestT) };
     }
-    for (const choice of choices) {
-      const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
+    // A wedge that says the configuration only as the bonds round it fall
+    // exactly - two of them in a line, or all of them on one side of the
+    // centre (a bridgehead drawn flat, ibogaine's) - reads by luck: a
+    // reader, RDKit among them, may take it the other way. So each choice
+    // is first taken only where it reads the same with any one of the bonds
+    // in the page turned a little either way; failing every one of them,
+    // as it reads.
+    const reads = (drawn: (Point | null)[], lift: number[]) => drawnVolume(at, drawn, lift) === t.volume;
+    // (and never with every bond on one side of the centre: four bonds in a
+    // half of the page - bilobalide's carbons between its lactones - say
+    // nothing a reader agrees on, however they are wedged)
+    const spread = (drawn: (Point | null)[]) => {
+      const t = drawn.flatMap((p) => (p ? [Math.atan2(p.y - at.y, p.x - at.x)] : [])).sort((a, b) => a - b);
+      if (t.length < 3) return true;
+      const widest = Math.max(...t.map((a, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - a));
+      return widest < Math.PI - TURN_TEST;
+    };
+    const surely = (drawn: (Point | null)[], lift: number[]) =>
+      reads(drawn, lift) &&
+      (drawn.filter(Boolean).length < 4 || spread(drawn)) &&
+      drawn.every((p, i) =>
+        !p || lift[i] !== 0 ||
+        [-TURN_TEST, TURN_TEST].every((d) => reads(drawn.map((q, j) => (j === i && q ? turnAbout(q, at, d) : q)), lift)),
+      );
+    let pick: { choice: Choice; stereo: "up" | "down" } | null = null;
+    for (const strict of [true, false]) {
+      for (const choice of choices) {
+        const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
+        for (const stereo of ["up", "down"] as const) {
+          const lift = t.neighbours.map((n) => (n === choice.to ? (stereo === "up" ? 1 : -1) : 0));
+          const drawn = t.neighbours.map((n) => (n === -1 && choice.to !== -1 ? null : place(n)));
+          if (strict ? surely(drawn, lift) : reads(drawn, lift)) {
+            pick = { choice, stereo };
+            break;
+          }
+        }
+        if (pick) break;
+      }
+      if (pick) break;
+    }
+    for (const choice of pick ? [pick.choice] : []) {
       let done = false;
-      for (const stereo of ["up", "down"] as const) {
-        const lift = t.neighbours.map((n) => (n === choice.to ? (stereo === "up" ? 1 : -1) : 0));
-        const drawn = t.neighbours.map((n) => (n === -1 && choice.to !== -1 ? null : place(n)));
-        if (drawnVolume(at, drawn, lift) === t.volume) {
+      for (const stereo of [pick!.stereo]) {
+        {
           wedges.push({ from: c, to: choice.to, stereo });
           narrowEnds.add(c);
           if (choice.to === -1) hydrogens.push({ on: c, at: hPos! });
@@ -269,6 +306,16 @@ export function placeStereo(
     }
   }
   return { wedges, hydrogens };
+}
+
+/** How far each bond in the page round a centre is turned, either way, to ask whether a wedge reads the same. */
+const TURN_TEST = (12 * Math.PI) / 180;
+
+/** `p` turned about `c` by `t`. */
+function turnAbout(p: Point, c: Point, t: number): Point {
+  const x = p.x - c.x;
+  const y = p.y - c.y;
+  return { x: c.x + x * Math.cos(t) - y * Math.sin(t), y: c.y + x * Math.sin(t) + y * Math.cos(t) };
 }
 
 /** How far `p` is from the segment `u`-`v`. */

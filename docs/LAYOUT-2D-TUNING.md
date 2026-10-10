@@ -154,6 +154,16 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   engine (WebKit's) came to another view from the last bits of the same
   sums. Such a bond now goes along its corner. A test turns every bond
   out of a cage 15 degrees each way and asks for the same reading.
+- **A wedge that reads by luck.** At a centre with two of its bonds in a
+  line, or every bond in one half of the page, a wedge says the
+  configuration only as the bonds happen to fall, and RDKit read two
+  held-out natural products the other way (ibogaine's bridgehead,
+  bilobalide's carbon between its lactones). A wedge is now first taken
+  only where it reads the same with any bond in the page turned 12 degrees
+  either way, and with the bonds spread round the centre; an H drawn and
+  wedged, or another bond, before that. Bilobalide is still read the other
+  way: no choice is sure there, its four bonds all in half the page - a
+  cage's drawing, not a wedge, is its answer.
 - **Speed.** One measure takes 0.1 to 0.3 ms; the calls multiply by frames,
   shapes and passes. The sheet takes about 8 s; ciclosporin, at about 1 s,
   is the slowest.

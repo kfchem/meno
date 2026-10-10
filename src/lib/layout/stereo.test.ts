@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
-import { drawnVolume } from "./stereo";
+import { drawnVolume, placeStereo } from "./stereo";
+import { perceive } from "./perceive";
 
 /** Reads a centre's configuration back off the drawing, the way the drawing shows it. */
 function readBack(input: LayoutInput, centre: number): number {
@@ -134,5 +135,44 @@ describe("stereo", () => {
       // on no ring bond
       expect(out.wedges.every((w) => w.to === -1)).toBe(true);
     }
+  });
+});
+
+describe("a wedge that says nothing for sure", () => {
+  // a centre with an H and three bonds in the page, two of them in a line:
+  // a wedge on the third says the configuration only by luck
+  const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+  const input: LayoutInput = {
+    atoms: [{ el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: 1 } }, { el: "C" }, { el: "C" }, { el: "O" }],
+    bonds: [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+    ],
+  };
+  const mol = perceive(input);
+  const pos = new Map([
+    [0, { x: 0, y: 0 }],
+    [1, at(-90)],
+    [2, at(0)],
+    [3, at(180)],
+  ]);
+
+  it("is not drawn: the centre is shown so that it reads the same with any bond turned a little", () => {
+    const { wedges, hydrogens } = placeStereo(mol, pos, mol.tetra);
+    const lift = [1, 2, 3, -1].map((n) => {
+      const w = wedges.find((x) => x.from === 0 && x.to === n);
+      return w ? (w.stereo === "up" ? 1 : -1) : 0;
+    });
+    const h = hydrogens.find((x) => x.on === 0)?.at ?? null;
+    const drawn = (turn: number, which: number) =>
+      [1, 2, 3, -1].map((n, i) => {
+        const p = n === -1 ? h : pos.get(n)!;
+        if (!p || i !== which) return p;
+        const t = (turn * Math.PI) / 180;
+        return { x: p.x * Math.cos(t) - p.y * Math.sin(t), y: p.x * Math.sin(t) + p.y * Math.cos(t) };
+      });
+    expect(drawnVolume({ x: 0, y: 0 }, drawn(0, -1), lift)).toBe(1);
+    for (const which of [0, 1, 2]) for (const turn of [-12, 12]) expect(drawnVolume({ x: 0, y: 0 }, drawn(turn, which), lift)).toBe(1);
   });
 });
