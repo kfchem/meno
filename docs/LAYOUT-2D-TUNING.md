@@ -195,6 +195,9 @@ now kept by a rule in `LAYOUT-2D.md`:
   - no run of wedges (an H instead);
   - a steroid's fusion H drawn clear of the rings;
   - an H hemmed in by rings goes where there is room;
+  - (2026-10-11) an H pointing into a ring's middle reads badly
+    (lovastatin's, yohimbine's), but a steroid's straight up or down
+    stays as it is;
   - both of a ring atom's two groups marked.
 - **Chains**: gem-dimethyls drawn close together; symmetry kept. Lipids
   are straight, a cis double bond a step; prostaglandins drawn as their

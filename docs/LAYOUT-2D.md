@@ -321,7 +321,12 @@ last, when room is made for them as for an H, by the same small moves
   Where that spot is taken - the middle of morphine or strychnine, hemmed
   in by rings - the H goes wherever round its atom there is most room,
   clear of atoms and bonds and crossing none; its wedge says the same
-  whichever way it points.
+  whichever way it points. It goes into one of its own rings only as a
+  steroid's does: straight up or down, into a ring with no double bond of
+  its own (one no other ring shares, whose second line is drawn inside
+  it). Aslant into a ring, or into lovastatin's ring with its double bond,
+  it reads as pointing into the ring; it goes outside where there is room.
+  An H with three rings or more round its atom keeps to the most room.
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.

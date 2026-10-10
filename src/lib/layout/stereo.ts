@@ -12,7 +12,7 @@
  * hashes behind it, the rest in it; the wedge's sense is whichever gives
  * that sign back.
  */
-import { angleOf, centroid, drawnVolume, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
+import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
 import { hydrogenSpot } from "./metrics";
 import { key, type Molecule } from "./perceive";
 
@@ -188,6 +188,20 @@ export function placeStereo(
         .filter(([a, b]) => a !== c && b !== c && pos.has(a) && pos.has(b))
         .map(([a, b]) => [pos.get(a)!, pos.get(b)!] as const);
       const own = mol.neighbours[c].map((n) => angleOf(sub(pos.get(n)!, at)));
+      // (its own rings, and whether each has a double bond of its own - one
+      // no other ring shares, whose second line is drawn inside it)
+      const ownRings = mol.ringsOf[c].filter((i) => mol.rings[i].length <= 8 && mol.rings[i].every((v) => pos.has(v)));
+      const insides = ownRings.map((i) => {
+        const r = mol.rings[i];
+        return {
+          polygon: r.map((v) => pos.get(v)!),
+          unsaturated: r.some((v, k) => {
+            const w = r[(k + 1) % r.length];
+            const b = mol.bonds[mol.bondIndex.get(key(v, w))!];
+            return !!b && b.order >= 2 && !mol.ringsOf[v].some((j) => j !== i && mol.ringsOf[w].includes(j));
+          }),
+        };
+      });
       const room = (angle: number) => {
         const p = { x: at.x + Math.cos(angle), y: at.y + Math.sin(angle) };
         let r = Infinity;
@@ -201,8 +215,16 @@ export function placeStereo(
           const d = Math.abs(Math.atan2(Math.sin(o - angle), Math.cos(o - angle)));
           if (d < (35 * Math.PI) / 180) r = Math.min(r, d);
         }
+        // (into one of its own rings only as a steroid's are: straight up or
+        // down, into a ring with no double bond's second line inside it -
+        // else it reads as pointing into the ring, as lovastatin's and
+        // yohimbine's did; the maintainer, 2026-10-11. An H hemmed in by
+        // three rings or more goes where there is room, as before:
+        // strychnine's)
+        const upright = Math.abs(Math.sin(angle)) > 0.97;
+        const into = insides.length <= 2 && insides.some((s) => (s.unsaturated || !upright) && insidePolygon(p, s.polygon));
         // (room enough is room enough: then the way it ought to point)
-        return Math.min(r, 0.85);
+        return Math.min(r, 0.85) - (into ? 0.3 : 0);
       };
       const [t0] =
         mol.systemOf[c] >= 0
