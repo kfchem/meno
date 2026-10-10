@@ -200,6 +200,7 @@ function WorkspaceContent({
     handleWrapperMouseLeave,
     handleWrapperClick,
     dropZone,
+    openFilesAt,
     importError,
     dismissImportError,
     handleMouseDownCapture,
@@ -540,7 +541,7 @@ function WorkspaceContent({
   /** A flow being saved as a procedure: its parts, asking for its name. */
   const [naming, setNaming] = useState<FlowParts | null>(null);
   // Copy, cut and paste, by the keys and from the menu
-  const clip = useClipboardActions(store, setChemError);
+  const clip = useClipboardActions(store, setChemError, openFilesAt);
   const chargeAtom = useCallback(
     (id: number, step: 1 | -1) => {
       const st = store.getState();
