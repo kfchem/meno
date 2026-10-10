@@ -20,6 +20,8 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     stereoOrient: b.stereoOrient ?? "principle",
     ...(b.display ? { display: b.display } : {}),
     ...(b.dative ? { dative: true } : {}),
+    ...(b.color ? { color: b.color } : {}),
+    ...(b.highlight ? { highlight: b.highlight } : {}),
     ...bondChem(b),
   };
 }

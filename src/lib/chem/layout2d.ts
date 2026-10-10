@@ -40,6 +40,10 @@ export type Atom = AtomChem & {
    * puts them: after the label, or beside it, or beside a bare vertex.
    */
   chargeAt?: Vec2;
+  /** The colour its label is drawn in - its charge with it - where it is given one (as CSS: "#d55e00"). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is: drawn as a light tint of it (`highlightTint`). */
+  highlight?: string;
 };
 export type Bond = BondChem & {
   a1: number;
@@ -58,6 +62,10 @@ export type Bond = BondChem & {
   display?: BondDisplay;
   /** A dative bond, drawn as an arrow from `a1`, the donor, to `a2`. */
   dative?: boolean;
+  /** The colour it is drawn in, where it is given one (as CSS). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing (`Atom.highlight`). */
+  highlight?: string;
 };
 export type Vec2 = { x: number; y: number };
 
@@ -169,6 +177,12 @@ export type LayoutOptions = {
   // boolean: all rings ON, undefined/false: OFF
   // { enabled: Set<string> }: enable only rings with ringKey (ascending concat of 6 atom ids)
   aromaticCircle?: boolean | { enabled: Set<string> };
+  /**
+   * The rings filled with a colour, behind the drawing: the colour (as CSS)
+   * by the ring's key - its atoms' ids, ascending, joined by "-" - drawn as
+   * a light tint of it (`ringTint`).
+   */
+  ringFills?: Readonly<Record<string, string>>;
 };
 
 export type LineSeg = {
@@ -177,8 +191,12 @@ export type LineSeg = {
   x2: number;
   y2: number;
   widthPx: number;
+  /** Its colour, where it is not the bonds' (as CSS). */
+  color?: string;
 };
-export type Poly = { points: Vec2[] };
+export type Poly = { points: Vec2[]; color?: string };
+/** What is drawn behind the drawing, filled flat, its edge sharp: a ring's fill, a part's highlight. */
+export type Under = { points: Vec2[]; color: string };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
 /** A corner within one stroke - a wavy bond's - and the ways its two pieces leave it. */
@@ -316,6 +334,8 @@ export type TextItem = {
   beside?: boolean;
   /** Set beside: the atom, by index, whose charge it is. */
   markOf?: number;
+  /** Its colour, where it is not the labels' (as CSS). */
+  color?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -350,7 +370,7 @@ export type PlacedRun = {
  * `r` its long half-axis along `angle` and `squash` its short one's share
  * of that.
  */
-export type Circle = { c: Vec2; r: number; key?: string; squash?: number; angle?: number };
+export type Circle = { c: Vec2; r: number; key?: string; squash?: number; angle?: number; color?: string };
 
 /** The points round a circle or an ellipse, `n` of them, closed. */
 export function circlePoints(c: Circle, n = 64): Vec2[] {
@@ -503,6 +523,8 @@ export function shadeOf(hex: string, t: number): string {
 }
 
 export type Layout = {
+  /** What is drawn behind all of it, from the back: the rings' fills, then the parts' highlights. */
+  under?: Under[];
   lines: LineSeg[];
   polys: Poly[];
   texts: TextItem[];
@@ -771,10 +793,12 @@ function labelMarks(
     for (const run of placeLabel(t, fontSize, set)) {
       if (!run.mark) continue;
       const { c, r } = markCircle(run);
+      // (in its label's colour, where it has one)
+      const color = t.color ? { color: t.color } : {};
       if (run.mark === "radical") {
         const dot = Math.max(lineWorld * 1.25, run.size * 0.075);
         const two = [...run.text].length > 1;
-        for (const dx of two ? [-r * 0.55, r * 0.55] : [0]) fills.push({ c: { x: c.x + dx, y: c.y }, r: dot });
+        for (const dx of two ? [-r * 0.55, r * 0.55] : [0]) fills.push({ c: { x: c.x + dx, y: c.y }, r: dot, ...color });
         continue;
       }
       // the circle, as a ring of thin pieces
@@ -783,11 +807,11 @@ function labelMarks(
         const a0 = (k * 2 * Math.PI) / n;
         const a1 = ((k + 1) * 2 * Math.PI) / n;
         const at = (a: number, rr: number) => ({ x: c.x + rr * Math.cos(a), y: c.y + rr * Math.sin(a) });
-        polys.push({ points: [at(a0, r - w / 2), at(a0, r + w / 2), at(a1, r + w / 2), at(a1, r - w / 2)] });
+        polys.push({ points: [at(a0, r - w / 2), at(a0, r + w / 2), at(a1, r + w / 2), at(a1, r - w / 2)], ...color });
       }
       const arm = r * 0.58;
-      lines.push({ x1: c.x - arm, y1: c.y, x2: c.x + arm, y2: c.y, widthPx: lwPx * 0.8 });
-      if (run.text === "+") lines.push({ x1: c.x, y1: c.y - arm, x2: c.x, y2: c.y + arm, widthPx: lwPx * 0.8 });
+      lines.push({ x1: c.x - arm, y1: c.y, x2: c.x + arm, y2: c.y, widthPx: lwPx * 0.8, ...color });
+      if (run.text === "+") lines.push({ x1: c.x, y1: c.y - arm, x2: c.x, y2: c.y + arm, widthPx: lwPx * 0.8, ...color });
     }
   }
   return { lines, polys, fills };
@@ -3355,9 +3379,13 @@ export function buildAllPrimitives(
   }
   // bonds at each atom
   const adjBonds = bondsByAtom(bonds);
-  // the rings' circles, and the bonds they stand in for
+  // the rings' circles, and the bonds they stand in for - in the colour of
+  // the ring's bonds where they are all given one
   const ringed = ringCircles(atoms, bonds, opts, adjBonds);
-  for (const c of ringed.circles) circles.push(c);
+  for (const c of ringed.circles) {
+    const color = c.key ? sameColor(bonds.filter((b) => c.key!.split("-").includes(String(atoms[b.a1].id)) && c.key!.split("-").includes(String(atoms[b.a2].id)))) : undefined;
+    circles.push(color ? { ...c, color } : c);
+  }
   const aromaticEdges = ringed.edges;
   // join fill caps for degree==2 to avoid wedge gaps at ~120°
   const widthPx =
@@ -3371,20 +3399,25 @@ export function buildAllPrimitives(
   // the same degree. Sharp: a flat end, and a mitre where two bonds meet.
   const roundJoins = (opts.joinStyle ?? "round") === "round";
   const joins = joinsAtAtoms(atoms, bonds, opts, deg, doubleSides);
+  // (a join in the colour its bonds share, where they share one)
+  const joinColor = (i: number) => sameColor(adjBonds.get(i) ?? []);
   for (const i of roundJoins ? joins.caps : []) {
-    fills.push({ c: { x: atoms[i].x, y: atoms[i].y }, r: rWorld });
+    const color = joinColor(i);
+    fills.push({ c: { x: atoms[i].x, y: atoms[i].y }, r: rWorld, ...(color ? { color } : {}) });
   }
   if (!roundJoins) {
     for (const [i, dirs] of joins.mitres) {
+      const color = joinColor(i);
       polys.push(
-        ...mitreJoinPolys({ x: atoms[i].x, y: atoms[i].y }, dirs, rWorld),
+        ...mitreJoinPolys({ x: atoms[i].x, y: atoms[i].y }, dirs, rWorld).map((p) => (color ? { ...p, color } : p)),
       );
     }
   }
-  // build lines/polys
-  const meets: Meet[] = [];
-  const freeEnds: Vec2[] = [];
-  const bends: Bend[] = [];
+  // build lines/polys - each in its bond's colour, where it has one, the
+  // ends and corners it leaves to be finished too
+  const meets: (Meet & { color?: string })[] = [];
+  const freeEnds: (Vec2 & { color?: string })[] = [];
+  const bends: (Bend & { color?: string })[] = [];
   const reach: BondReach[] = [];
   for (const b of bonds) {
     const u = atoms[b.a1].id,
@@ -3408,11 +3441,12 @@ export function buildAllPrimitives(
     );
     reach.push(bondReach(beff, opts, zoom, deg, doubleSides));
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
-    lines.push(...behind.lines);
-    polys.push(...r.polys);
-    meets.push(...(r.meets ?? []));
-    freeEnds.push(...(r.ends ?? []), ...behind.ends);
-    bends.push(...(r.bends ?? []));
+    const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
+    lines.push(...behind.lines.map(tint));
+    polys.push(...r.polys.map(tint));
+    meets.push(...(r.meets ?? []).map(tint));
+    freeEnds.push(...[...(r.ends ?? []), ...behind.ends].map(tint));
+    bends.push(...(r.bends ?? []).map(tint));
   }
   // a ring in perspective: where its bold edges and wedges meet, the outer
   // corner filled to a point
@@ -3422,23 +3456,30 @@ export function buildAllPrimitives(
   // on to the same point, but a point is all they share, so the corner they
   // turn needs finishing as much as a wave's does. A free end needs nothing
   // when ends are square: a line already stops flat.
+  const colored = (color?: string) => (color ? { color } : {});
   if (roundJoins) {
-    for (const m of meets) fills.push({ c: m.at, r: rWorld });
-    for (const e of freeEnds) fills.push({ c: e, r: rWorld });
-    for (const b of bends) fills.push({ c: b.at, r: rWorld });
+    for (const m of meets) fills.push({ c: m.at, r: rWorld, ...colored(m.color) });
+    for (const e of freeEnds) fills.push({ c: { x: e.x, y: e.y }, r: rWorld, ...colored(e.color) });
+    for (const b of bends) fills.push({ c: b.at, r: rWorld, ...colored(b.color) });
   } else {
-    const byPoint = new Map<string, { at: Vec2; dirs: Vec2[] }>();
+    const byPoint = new Map<string, { at: Vec2; dirs: Vec2[]; color?: string }>();
     for (const m of meets) {
       const key = `${m.at.x.toFixed(6)},${m.at.y.toFixed(6)}`;
-      const g = byPoint.get(key) ?? { at: m.at, dirs: [] };
+      const g = byPoint.get(key) ?? { at: m.at, dirs: [], ...colored(m.color) };
       g.dirs.push(m.dir);
       byPoint.set(key, g);
     }
     for (const g of [...byPoint.values(), ...bends]) {
-      polys.push(...mitreJoinPolys(g.at, g.dirs, rWorld));
+      polys.push(...mitreJoinPolys(g.at, g.dirs, rWorld).map((p) => ({ ...p, ...colored(g.color) })));
     }
   }
   return { lines, polys, circles, fills, reach };
+}
+
+/** The colour every one of `bonds` is drawn in, where they all have the same; none, else. */
+function sameColor(bonds: readonly Bond[]): string | undefined {
+  const c = bonds[0]?.color;
+  return c && bonds.every((b) => b.color === c) ? c : undefined;
 }
 
 /** A ring's bond in perspective: bold, or a wedge toward the viewer (display, not stereo). */
@@ -4058,7 +4099,12 @@ export function layoutMolecule(
 ): Layout {
   const bonds = unspecifiedDoubles(drawn, given);
   const atoms = cumulatedShown(chargesAsDrawn(drawn, bonds), bonds);
-  const labels = buildTextLabels(atoms, opts, bonds);
+  // (each label in its atom's colour, where it has one - a charge set
+  // beside a bare vertex too)
+  const labels = buildTextLabels(atoms, opts, bonds).map((t) => {
+    const color = atoms[t.atom ?? t.markOf ?? -1]?.color;
+    return color ? { ...t, color } : t;
+  });
   const prim = buildAllPrimitives(atoms, bonds, opts, zoom, labels);
   // what is said about bonds, atoms and whole structures (IUPAC GR-11)
   const groups = centresLabelled(atoms, bonds);
@@ -4080,20 +4126,26 @@ export function layoutMolecule(
   prim.lines.push(...marks.lines);
   prim.polys.push(...marks.polys);
   prim.fills.push(...marks.fills);
+  // behind it all, the rings' fills and the parts' highlights
+  const under = underOf(atoms, bonds, labels, opts, zoom);
   // A label hangs off its atom, so the drawing is wider than the atoms are:
   // leave it out and a label at the edge is cut off, on the canvas as in an
   // export.
-  const bounds = expandBoundsForBonds(
-    expandBoundsForLabels(
-      computeBounds(atoms),
-      texts,
-      toWorld(opts.fontPx, zoom, opts.units),
-      labelSetOf(opts),
+  const bounds = expandBoundsForUnder(
+    expandBoundsForBonds(
+      expandBoundsForLabels(
+        computeBounds(atoms),
+        texts,
+        toWorld(opts.fontPx, zoom, opts.units),
+        labelSetOf(opts),
+      ),
+      prim,
+      zoom,
     ),
-    prim,
-    zoom,
+    under,
   );
   return {
+    ...(under.length ? { under } : {}),
     lines: prim.lines,
     polys: prim.polys,
     texts,
@@ -4103,6 +4155,145 @@ export function layoutMolecule(
     zoom,
     reach: prim.reach,
   };
+}
+
+/** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
+const HIGHLIGHT_REACH = 0.4;
+/** How much of white a highlight, and a ring's fill, is mixed with: light enough to read the drawing over. */
+const HIGHLIGHT_WHITE = 0.7;
+const RING_WHITE = 0.78;
+
+/** `css` (#rrggbb) mixed with white by `share`; as it is, if it is not one this reads. */
+function towardWhite(css: string, share: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(css.trim());
+  if (!m) return css;
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0");
+  return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
+}
+
+/** The light tint a part highlighted in `css` is drawn in, flat, its edge sharp. */
+export function highlightTint(css: string): string {
+  return towardWhite(css, HIGHLIGHT_WHITE);
+}
+
+/** The light tint a ring filled with `css` is drawn in. */
+export function ringTint(css: string): string {
+  return towardWhite(css, RING_WHITE);
+}
+
+/** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
+export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
+  const ids = key.split("-").map(Number);
+  const index = new Map(atoms.map((a, i) => [a.id, i]));
+  const ring = ids.map((id) => index.get(id));
+  if (ring.length < 3 || ring.some((i) => i == null)) return null;
+  const inRing = new Set(ring as number[]);
+  const next = new Map<number, number[]>();
+  for (const b of bonds) {
+    if (b.endpoints?.length || !inRing.has(b.a1) || !inRing.has(b.a2) || b.a1 === b.a2) continue;
+    next.set(b.a1, [...(next.get(b.a1) ?? []), b.a2]);
+    next.set(b.a2, [...(next.get(b.a2) ?? []), b.a1]);
+  }
+  if ([...inRing].some((i) => new Set(next.get(i) ?? []).size !== 2)) return null;
+  const order = [ring[0] as number];
+  for (let prev = -1; order.length < inRing.size; ) {
+    const here = order[order.length - 1];
+    const on = next.get(here)!.find((j) => j !== prev && !order.includes(j));
+    if (on == null) return null;
+    prev = here;
+    order.push(on);
+  }
+  return next.get(order[order.length - 1])!.includes(order[0]) ? order : null;
+}
+
+/** Points round `c` at radius `r`. */
+function roundOf(c: Vec2, r: number, n = 32): Vec2[] {
+  return Array.from({ length: n }, (_, k) => ({ x: c.x + r * Math.cos((2 * Math.PI * k) / n), y: c.y + r * Math.sin((2 * Math.PI * k) / n) }));
+}
+
+/** A band from `p` to `q`, `h` either side of its line, its ends round. */
+function bandOf(p: Vec2, q: Vec2, h: number, n = 12): Vec2[] {
+  const a = Math.atan2(q.y - p.y, q.x - p.x);
+  const out: Vec2[] = [];
+  for (let k = 0; k <= n; k++) {
+    const t = a - Math.PI / 2 - (Math.PI * k) / n;
+    out.push({ x: p.x + h * Math.cos(t), y: p.y + h * Math.sin(t) });
+  }
+  for (let k = 0; k <= n; k++) {
+    const t = a + Math.PI / 2 - (Math.PI * k) / n;
+    out.push({ x: q.x + h * Math.cos(t), y: q.y + h * Math.sin(t) });
+  }
+  return out;
+}
+
+/** A box `left` to `right`, `bottom` to `top`, its corners rounded by `r`. */
+function roundedBox(left: number, bottom: number, right: number, top: number, r: number, n = 6): Vec2[] {
+  const rr = Math.max(0, Math.min(r, (right - left) / 2, (top - bottom) / 2));
+  const corners: [number, number, number][] = [
+    [right - rr, top - rr, 0],
+    [left + rr, top - rr, Math.PI / 2],
+    [left + rr, bottom + rr, Math.PI],
+    [right - rr, bottom + rr, (3 * Math.PI) / 2],
+  ];
+  return corners.flatMap(([cx, cy, from]) =>
+    Array.from({ length: n + 1 }, (_, k) => ({ x: cx + rr * Math.cos(from + (Math.PI / 2) * (k / n)), y: cy + rr * Math.sin(from + (Math.PI / 2) * (k / n)) })),
+  );
+}
+
+/**
+ * What is drawn behind the drawing: each ring filled (`LayoutOptions.ringFills`),
+ * then each part highlighted - a band along each bond, round each atom, or
+ * round its label where it has one - in a flat light tint of its colour, so
+ * that one colour's pieces run together into one shape with a sharp edge.
+ */
+function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
+  const out: Under[] = [];
+  for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
+    const ring = ringOfKey(atoms, bonds, key);
+    if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color: ringTint(color) });
+  }
+  if (!atoms.some((a) => a.highlight) && !bonds.some((b) => b.highlight)) return out;
+  const font = toWorld(opts.fontPx, zoom, opts.units);
+  const h = HIGHLIGHT_REACH * font;
+  const set = labelSetOf(opts);
+  for (const b of bonds) {
+    if (!b.highlight || b.endpoints?.length || b.a1 === b.a2) continue;
+    out.push({ points: bandOf(atoms[b.a1], atoms[b.a2], h), color: highlightTint(b.highlight) });
+  }
+  const labelOf = new Map(labels.filter((t) => t.atom != null).map((t) => [t.atom!, t]));
+  atoms.forEach((a, i) => {
+    if (!a.highlight) return;
+    const t = labelOf.get(i);
+    const color = highlightTint(a.highlight);
+    if (!t) {
+      out.push({ points: roundOf(a, h), color });
+      return;
+    }
+    // (round its label, as far past its ink as a band reaches past a bond's line, but no smaller than round a bare atom)
+    const box = labelBox(t, font, set);
+    const pad = 0.2 * font;
+    out.push({
+      points: roundedBox(a.x - Math.max(box.left + pad, h), a.y - Math.max(box.bottom + pad, h), a.x + Math.max(box.right + pad, h), a.y + Math.max(box.top + pad, h), h),
+      color,
+    });
+  });
+  return out;
+}
+
+/** `bounds` taking in what is drawn behind the drawing. */
+function expandBoundsForUnder(bounds: { min: Vec2; max: Vec2 }, under: readonly Under[]): { min: Vec2; max: Vec2 } {
+  if (!under.length) return bounds;
+  const min = { ...bounds.min };
+  const max = { ...bounds.max };
+  for (const u of under)
+    for (const p of u.points) {
+      min.x = Math.min(min.x, p.x);
+      min.y = Math.min(min.y, p.y);
+      max.x = Math.max(max.x, p.x);
+      max.y = Math.max(max.y, p.y);
+    }
+  return { min, max };
 }
 
 function toSvgPath(poly: Poly): string {
@@ -4191,30 +4382,34 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   let s = "";
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
+  // behind it all: the rings' fills and the parts' highlights
+  for (const u of layout.under ?? []) {
+    s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
+  }
   // filled join caps
   for (const c of layout.fills || []) {
     s += `<circle cx="${c.c.x}" cy="${-c.c
-      .y}" r="${c.r}" fill="${stroke}" stroke="none" />`;
+      .y}" r="${c.r}" fill="${svgColor(c.color, stroke)}" stroke="none" />`;
   }
   for (const p of layout.polys) {
-    s += `<path d="${toSvgPath(p)}" fill="${stroke}" stroke="none" />`;
+    s += `<path d="${toSvgPath(p)}" fill="${svgColor(p.color, stroke)}" stroke="none" />`;
   }
   for (const c of layout.circles || []) {
     s +=
       c.squash != null && c.squash < 1
         ? `<ellipse cx="${c.c.x}" cy="${-c.c.y}" rx="${c.r}" ry="${c.r * c.squash}"` +
           ` transform="rotate(${(-(c.angle ?? 0) * 180) / Math.PI} ${c.c.x} ${-c.c.y})"` +
-          ` fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" />`
-        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
+          ` fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`
+        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`;
   }
   for (const l of layout.lines) {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${stroke}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${svgColor(l.color, stroke)}" stroke-width="${w}" stroke-linecap="butt"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, fontSize, set, fill);
+    s += svgLabel(t, fontSize, set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img
@@ -4226,6 +4421,11 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const m of layout.measures ?? []) s += svgMeasure(m, set.fontFamily, !img);
   s += `</svg>`;
   return s;
+}
+
+/** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
+function svgColor(css: string | undefined, otherwise = "black"): string {
+  return css && /^#[0-9a-f]{6}$/i.test(css) ? css : otherwise;
 }
 
 /** A measurement as an SVG draws it: its fan, its lines, and its value on its white ground. */
