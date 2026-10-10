@@ -680,6 +680,8 @@ export type EditorState = {
   togglePictureSel: (id: number) => void;
   /** Pictures held put on the page, as one step: the first's middle where `at` is, the others beside it in a row - clear of what lies there, unless `just` there - selected; their ids. */
   addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just?: boolean) => number[];
+  /** A picture made for a place on the page - a render's - put there, clear of the pictures there, as one step: its id; none where nothing changed. */
+  putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;

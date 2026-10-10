@@ -16,7 +16,7 @@ import type { ArrowLook } from "../../../lib/chem/reactionArrow";
 import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
-import { printedSize } from "../../../lib/picture/image";
+import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
 import { newTextName } from "./utils/texts";
@@ -1301,7 +1301,7 @@ export function picturesInRow(held: readonly PictureToAdd[], at: { x: number; y:
   let x = at.x;
   for (const h of held) {
     if (typeof h?.name !== "string" || typeof h.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(h.sha256)) continue;
-    if ((h.media !== "image/png" && h.media !== "image/jpeg") || !(h.width > 0) || !(h.height > 0)) continue;
+    if (!PICTURE_MEDIA.includes(h.media) || !(h.width > 0) || !(h.height > 0)) continue;
     const size = printedSize(h);
     const w = size.w * POINT;
     if (out.length) x += w / 2;
