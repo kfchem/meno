@@ -451,13 +451,19 @@ def op_drawing_of(m):
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("not a MOL block RDKit can read")
-    if m.get("perceive"):
+    # (whether its bonds' orders were found: they cannot be where it has no
+    # hydrogens - DetermineBondOrders counts each atom's electrons from what
+    # is bonded to it, hydrogens and all)
+    perceived = False
+    # (and none are sought without them: found anyway, they may be wrong)
+    if m.get("perceive") and any(a.GetAtomicNum() == 1 for a in mol.GetAtoms()):
         from rdkit.Chem import rdDetermineBonds
 
         try:
             found = Chem.Mol(mol)
             rdDetermineBonds.DetermineBondOrders(found, charge=int(m.get("charge", 0)))
             mol = found
+            perceived = True
         except Exception:
             pass  # (as the file has them, then)
     problem = Chem.SanitizeMol(mol, catchErrors=True)
@@ -467,7 +473,59 @@ def op_drawing_of(m):
     heavy = Chem.RemoveHs(mol)
     heavy.RemoveAllConformers()
     rdDepictor.Compute2DCoords(heavy)
-    return {"molblock": Chem.MolToV3KMolBlock(heavy)}
+    return {"molblock": Chem.MolToV3KMolBlock(heavy), "perceived": perceived}
+
+
+def op_orders_from_smiles(m):
+    """A molecule in 3D whose bonds' orders its file does not give - a PDB
+    entry's ligand, its hydrogens left out - given them from a SMILES of the
+    same molecule: RDKit's AssignBondOrdersFromTemplate, matching the
+    SMILES's heavy atoms to its own. Back with its atoms in their order, its
+    bonds' orders (kekulized) and charges as the SMILES has them."""
+    from rdkit.Chem import AllChem
+
+    mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
+    if mol is None:
+        raise ValueError("not a MOL block RDKit can read")
+    template = Chem.MolFromSmiles(m["smiles"])
+    if template is None:
+        raise ValueError("not a SMILES RDKit can read")
+    # (the whole of it, not a part: as many heavy atoms either way)
+    heavy = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() != 1)
+    if template.GetNumHeavyAtoms() != heavy:
+        raise ValueError("the SMILES is not this molecule's: its atoms and bonds do not match")
+    try:
+        given = AllChem.AssignBondOrdersFromTemplate(template, mol)
+    except Exception as e:
+        raise ValueError("the SMILES is not this molecule's: its atoms and bonds do not match") from e
+    implicit(given)
+    Chem.Kekulize(given, clearAromaticFlags=True)
+    return {"molblock": Chem.MolToV3KMolBlock(given, kekulize=True)}
+
+
+def implicit(mol):
+    """Each atom left to carry the hydrogens its valence leaves it, none
+    taken as an unpaired electron: a file of coordinates that leaves its
+    hydrogens out says nothing either way."""
+    for a in mol.GetAtoms():
+        a.SetNoImplicit(False)
+        a.SetNumRadicalElectrons(0)
+    problem = Chem.SanitizeMol(mol, catchErrors=True)
+    if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+        raise ValueError(f"cannot make sense of the structure ({problem})")
+
+
+def op_add_hydrogens(m):
+    """A molecule in 3D with its bonds' orders known, given the hydrogens its
+    file leaves out: RDKit's AddHs, each placed where its atom's geometry
+    puts it (addCoords). Back with its atoms in their order and the
+    hydrogens after them."""
+    mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
+    if mol is None:
+        raise ValueError("not a MOL block RDKit can read")
+    implicit(mol)
+    with_h = Chem.AddHs(mol, addCoords=True)
+    return {"molblock": Chem.MolToV3KMolBlock(with_h, kekulize=True)}
 
 
 # --- a workflow's steps --------------------------------------------------------
@@ -599,6 +657,8 @@ OPS = {
     "open_stereo": op_open_stereo,
     "conformers": op_conformers,
     "drawing_of": op_drawing_of,
+    "orders_from_smiles": op_orders_from_smiles,
+    "add_hydrogens": op_add_hydrogens,
 }
 
 

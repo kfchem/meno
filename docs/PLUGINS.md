@@ -61,7 +61,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
-| Molecules in 3D (core) | a drawing of a structure in 3D | RDKit (`drawing_of`) |
+| Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |
@@ -380,7 +380,10 @@ The same for every plugin and for Meno's own parts:
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
-    `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D).
+    `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
+    answered with whether it found the bond orders, `perceived`),
+    `orders_from_smiles {molblock, smiles}` and `add_hydrogens
+    {molblock}` (its bond orders from a SMILES, its hydrogens added).
     (A general `run {role, input, options}`, planned at first, was never
     needed: a new role comes with Meno, and with it its requests);
   - `prepare {step, entries, options, cores}` and `collect {step,

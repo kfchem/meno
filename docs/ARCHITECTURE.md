@@ -557,7 +557,8 @@ like any plugin (`resources/plugins/rdkit/`, its environment
 (`chemWorker(role)`: the plugin chosen for the role in Settings, else the
 first that fills it) and asked through `lib/roles/client.ts`: JSON lines, a
 fixed set of requests (to_smiles, from_smiles, analyse, and for 3D
-open_stereo, conformers and drawing_of; the worker says its version in its
+open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
+the worker says its version in its
 first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
 blocks or coordinates out. It is set up the first time a role it fills is
@@ -766,7 +767,12 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 `utils/drawnLink`), so that hover is shared and a changed drawing is seen.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
-coordinates gave none, for Meno's engine to draw. These take as long as
+coordinates gave none - and it has its hydrogens, without which they are
+not found (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
+engine to draw; it says whether it found them (`perceived`), which the
+3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
+`add_hydrogens` complete a ligand there: its orders from a SMILES, its
+hydrogens added. These take as long as
 they take (`CONFORMERS_MS`, five minutes at most).
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
