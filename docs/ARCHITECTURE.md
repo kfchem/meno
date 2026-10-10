@@ -735,7 +735,14 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   the value as often as it changes, one at a time, the last value asked
   for winning. Placed about the shown frame's centre, as the atoms are; in
   the 3D style's two colours (`surfacePlus`, `surfaceMinus`; at first a
-  muted blue and orange), seen through, fading in and out. The value is
+  muted blue and orange), seen through, fading in and out. Both phases
+  are one mesh, each point coloured by its phase, its triangles drawn in
+  one go from the farthest to the nearest as seen (`utils/backToFront.ts`,
+  a counting sort by depth), put in order again only as the molecule turns:
+  drawn as two meshes, the positive one was laid over the other wherever
+  they crossed on the screen, whichever was in front. The atoms are drawn
+  before it and keep their depth, so one inside a lobe shows through it.
+  The value is
   set by a slider under the list (from 0.0001 to 0.5, by its logarithm),
   kept in `lists3d` as `iso`.
 
