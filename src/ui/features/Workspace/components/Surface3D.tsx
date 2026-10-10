@@ -3,46 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Grid } from "../../../../lib/calc/results";
 import { backToFront } from "../utils/backToFront";
-import type { Mesh, Vec3 } from "../utils/isosurface";
+import type { Vec3 } from "../utils/isosurface";
+import { colourSurface, SURFACE_FINISH, SURFACE_OPACITY, surfaceGeometry } from "../utils/surfaceMesh";
 import { surfaceOf } from "../utils/surfaces";
 
-/** How far a surface is seen through - its opacity - and how quickly it comes and goes, in seconds. */
-const OPACITY = 0.6;
+/** How quickly a surface comes and goes, in seconds. */
 const FADE_TAU = 0.08;
 /** How far the way it is seen may turn before its triangles are put in order again: about a fifth of a degree. */
 const RESORT_COS = Math.cos((0.2 * Math.PI) / 180);
-
-/**
- * A surface's two phases as one mesh - the positive's triangles, then the
- * negative's - each point coloured by its phase (`colour`, done again as
- * the colours change), drawn in the order its index gives.
- */
-function geometryOf(plus: Mesh, minus: Mesh | null): { geometry: THREE.BufferGeometry; split: number } {
-  const n = plus.positions.length + (minus?.positions.length ?? 0);
-  const positions = new Float32Array(n);
-  const normals = new Float32Array(n);
-  positions.set(plus.positions);
-  normals.set(plus.normals);
-  if (minus) {
-    positions.set(minus.positions, plus.positions.length);
-    normals.set(minus.normals, plus.positions.length);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  g.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n), 3));
-  g.setIndex(new THREE.BufferAttribute(new Uint32Array(n / 3), 1));
-  return { geometry: g, split: plus.positions.length / 3 };
-}
-
-/** Each point its phase's colour: the first `split` points the positive's. */
-function colour(g: THREE.BufferGeometry, split: number, plus: string, minus: string) {
-  const attr = g.getAttribute("color") as THREE.BufferAttribute;
-  const a = new THREE.Color(plus);
-  const b = new THREE.Color(minus);
-  for (let i = 0; i < attr.count; i++) (i < split ? a : b).toArray(attr.array, 3 * i);
-  attr.needsUpdate = true;
-}
 
 // (where it is looked at from, turned into the surface's own axes)
 const inverse = new THREE.Matrix4();
@@ -79,7 +47,7 @@ export default function Surface3D({
   renderOrder: number;
 }) {
   const { invalidate, camera } = useThree();
-  const [meshes, setMeshes] = useState<{ geometry: THREE.BufferGeometry; split: number } | null>(null);
+  const [meshes, setMeshes] = useState<ReturnType<typeof surfaceGeometry> | null>(null);
   const level = useRef(0);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const mesh = useRef<THREE.Mesh>(null);
@@ -106,7 +74,7 @@ export default function Surface3D({
         if (!mounted.current || showing.current !== want.grid) continue;
         setMeshes((was) => {
           was?.geometry.dispose();
-          return geometryOf(m.plus, m.minus);
+          return surfaceGeometry(m.plus, m.minus);
         });
         sortedFor.current = null;
         invalidate();
@@ -138,12 +106,12 @@ export default function Surface3D({
   // (coloured as it comes, and again as the colours change)
   useEffect(() => {
     if (!meshes) return;
-    colour(meshes.geometry, meshes.split, plus, minus);
+    colourSurface(meshes.geometry, meshes.split, plus, minus);
     invalidate();
   }, [meshes, plus, minus, invalidate]);
 
   useFrame((_, dt) => {
-    const to = grid && meshes ? OPACITY : 0;
+    const to = grid && meshes ? SURFACE_OPACITY : 0;
     const v = to + (level.current - to) * Math.exp(-Math.min(dt, 1 / 30) / FADE_TAU);
     level.current = Math.abs(v - to) < 0.005 ? to : v;
     if (mat.current) {
@@ -195,8 +163,7 @@ export default function Surface3D({
         side={THREE.DoubleSide}
         // (in one go, in the order its index gives: not its back faces first)
         forceSinglePass
-        roughness={0.55}
-        metalness={0}
+        {...SURFACE_FINISH}
       />
     </mesh>
   );

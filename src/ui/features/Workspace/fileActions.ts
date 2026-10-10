@@ -18,6 +18,7 @@ import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
 import { currentStyle3D } from "./style3d";
 import { withSolidsImage } from "./render3d";
+import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemeOutlines } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
@@ -267,6 +268,14 @@ export function drawingLayout(
       } else {
         xs.push(m.a.x, m.b.x);
         ys.push(m.a.y, m.b.y);
+      }
+    }
+    // (and as far as the surface each shows reaches - a lobe past its atoms)
+    for (const m of model.molecules3d ?? []) {
+      const b = pictureSurface(m, currentStyle3D())?.bounds;
+      if (b) {
+        xs.push(b.min.x, b.max.x);
+        ys.push(b.min.y, b.max.y);
       }
     }
     take(xs, ys);
