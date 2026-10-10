@@ -225,6 +225,25 @@ Licences: a reference image (Wikipedia, IUPAC) is linked, never copied or
 traced into the repository, and no code is taken from RDKit, CoordGen or
 CDK.
 
+## Held out
+
+`scripts/layout/heldout.json` lists natural products nothing is tuned for
+(2026-10-11), drawn with `--list=heldout` (the bench's README). The
+maintainer found the engine much worse on them than on the benchmark:
+3.4 against 16.0 on main 2fde77d. Run it beside the benchmark after each
+change; a molecule that comes to be tuned for moves to `molecules.json`,
+and the held-out list takes new ones. What it showed, by kind:
+
+- cages and bridged systems beyond the chair and the boat (tetrodotoxin,
+  ginkgolide B, gelsemine, paeoniflorin, picrotoxinin, aconitine);
+- two rings fused on neighbouring sides of a third, squeezed flat
+  (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
+  fused system eased once it has a fault;
+- large molecules of two parts, or a macrocycle round an aromatic system
+  (vinblastine, rifampicin), crammed;
+- orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
+  drawn everywhere), berberine, colchicine, lovastatin.
+
 ## Open
 
 - **How a ring system is turned once its face is right**: morphinan is

@@ -533,7 +533,11 @@ function regularFit(
  */
 export function regularize(mol: Molecule, sys: RingSystem, pos: Map<number, Point>): void {
   const { shaped, misfit } = shapesOf(mol, sys, pos);
-  if (!shaped.some((r) => misfit(r) > 0.002)) return;
+  // (regular rings, but two atoms on each other, as two rings meeting at an atom put them: eased as well)
+  const crowded = sys.atoms.some((a, i) =>
+    sys.atoms.slice(i + 1).some((b) => !mol.neighbours[a].includes(b) && dist(pos.get(a)!, pos.get(b)!) < 0.6),
+  );
+  if (!crowded && !shaped.some((r) => misfit(r) > 0.002)) return;
   easeRings(mol, sys, pos, shaped, misfit);
 }
 
@@ -933,13 +937,20 @@ function placeRun(from: number, to: number, run: number[], n: number, pos: Map<n
       for (let k = 1; k < steps; k++) pts.push(add(c, scale(dir(ta + (way * sweep * k) / steps), r)));
       const step = 2 * r * Math.sin(sweep / steps / 2);
       let cost = 40 * Math.abs(step - 1);
-      for (const p of pts) {
+      pts.forEach((p, i) => {
+        // (beside a neighbour of an end it leaves from - two rings fused on
+        // neighbouring sides of a third, meeting at that end, as saxitoxin's
+        // two five-membered rings meet at their shared carbon - it comes
+        // close by the rings' own angles: the gap between them is opened
+        // later, not the ring squeezed flat)
+        const end = i === 0 ? a : i === pts.length - 1 ? b : null;
         for (const o of others) {
           const dd = dist(p, o);
-          if (dd < 0.55) cost += 100;
+          const besideEnd = !!end && Math.abs(dist(end, o) - 1) < 0.15;
+          if (dd < (besideEnd ? 0.3 : 0.55)) cost += 100;
           else if (dd < 0.9) cost += 5 * (0.9 - dd);
         }
-      }
+      });
       // outward, away from the middle of what is placed
       const bulge = centroid(pts);
       cost -= 0.5 * len(sub(bulge, middle));

@@ -58,7 +58,12 @@ they hang from.
   before its bond lengths: the rest of it goes where the regular polygon
   best fitted to what is fixed puts it, a little larger than the others
   if it must be. A ring system whose rings still come out bent (strychnine)
-  is eased toward rings of their own shape, its bonds giving first.
+  is eased toward rings of their own shape, its bonds giving first. Two
+  rings fused on neighbouring sides of a third meet at the atom the three
+  share, closer than their own angles leave room for - saxitoxin's two
+  five-membered rings beside its six: each is drawn whole, on its own side,
+  and the gap between them opened by the same easing, never one of them
+  squeezed flat against the other's side.
 - **Macrocycles** (nine and more): a chain closed on itself, drawn as one:
   two zigzags, one above the other, joined at their ends, every angle 120
   or 240 degrees - never round. At every corner a substituent takes the

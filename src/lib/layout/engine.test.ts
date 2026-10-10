@@ -87,6 +87,16 @@ describe("layout2D", () => {
     }
   });
 
+  it("fuses two five-membered rings on neighbouring sides of a six, as saxitoxin's are, both whole and clear of each other", () => {
+    // a hexagon 0-5; a pentagon on its side 0-1, another on its side 1-2: three rings meeting at atom 1
+    const input = carbons(12, [...ring(0, 6), [0, 6], [6, 7], [7, 8], [8, 1], [1, 9], [9, 10], [10, 11], [11, 2]]);
+    const { x, y } = layout2D(input);
+    const d = (i: number, j: number) => Math.hypot(x[i] - x[j], y[i] - y[j]);
+    for (const { a, b } of input.bonds) expect(d(a, b)).toBeGreaterThan(0.8);
+    const bonded = new Set(input.bonds.map(({ a, b }) => `${Math.min(a, b)}-${Math.max(a, b)}`));
+    for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) if (!bonded.has(`${i}-${j}`)) expect(d(i, j)).toBeGreaterThan(0.55);
+  });
+
   it("fuses rings on a shared side", () => {
     const naphthalene = carbons(10, [...ring(0, 6), [1, 6], [6, 7], [7, 8], [8, 9], [9, 2]]);
     for (const l of bondLengths(naphthalene)) expect(l).toBeCloseTo(1, 6);

@@ -17,7 +17,9 @@ import { wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../src/lib/lay
 import { layout2D, type LayoutInput } from "../../src/lib/layout/engine";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const out = resolve(here, "../../.layout");
+// --list=heldout: another list beside molecules.json, in .layout/heldout/
+const listName = process.argv.find((a) => a.startsWith("--list="))?.slice(7) ?? "molecules";
+const out = listName === "molecules" ? resolve(here, "../../.layout") : resolve(here, "../../.layout", listName);
 const basePath = resolve(out, "baselines.json");
 if (!existsSync(basePath)) {
   console.error("No baselines: run scripts/layout/baselines.py in the chem environment first.");
@@ -25,7 +27,7 @@ if (!existsSync(basePath)) {
 }
 const graphs: { name: string; graph: LayoutInput }[] = JSON.parse(readFileSync(basePath, "utf8")).molecules;
 const listed: { name: string; smiles: string }[] = JSON.parse(
-  readFileSync(resolve(here, "molecules.json"), "utf8"),
+  readFileSync(resolve(here, `${listName}.json`), "utf8"),
 ).molecules;
 const only = process.argv
   .find((a) => a.startsWith("--only="))
@@ -91,4 +93,4 @@ for (const { name, graph } of graphs) {
   written.push({ name, smiles, molblock: molblock(atoms, bonds) });
 }
 writeFileSync(resolve(out, "stereo.json"), JSON.stringify({ molecules: written }));
-console.log(`${written.length} molecules written to .layout/stereo.json`);
+console.log(`${written.length} molecules written to ${resolve(out, "stereo.json")}`);

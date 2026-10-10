@@ -492,19 +492,23 @@ function layoutSystem(
   const bridged = rings.some((r, j) =>
     rings.some((q, k) => k > j && q.filter((a) => r.includes(a)).length >= 3 && q.length < 9 && r.length < 9),
   );
+  // how it reads, flat - its rings' shapes counted as well as its faults -
+  // and, with a fault in it (a crowded atom, a stretched bond), tried eased
+  // toward rings of their own shape, atoms kept clear, where that is better
+  const cost = (pos: Map<number, Point>) => flatCost(mol, sys, pos) + 20 * misshapen(mol, sys, pos);
+  const eased = (pos: Map<number, Point>) => {
+    if (flatCost(mol, sys, pos) < 1) return pos;
+    const trial = new Map(pos);
+    regularize(mol, sys, trial);
+    return cost(trial) < cost(pos) - 1e-9 ? trial : pos;
+  };
+  // a fused system too (two rings fused on neighbouring sides of a third,
+  // meeting at their shared atom closer than their own angles allow -
+  // saxitoxin's five-membered rings - the gap between them opened)
+  if (!bridged && rings.every((r) => r.length < 9)) flat = eased(flat);
   // a bridged system laid flat from each of its rings in turn: which ring
   // stays regular and which arcs round it decides whether it reads
   if (bridged && !rings.some((r) => r.length >= 9)) {
-    // how it reads, flat - its rings' shapes counted as well as its faults -
-    // and each with a fault in it (a crowded atom, a stretched bond) tried
-    // eased toward rings of their own shape, where that is better
-    const cost = (pos: Map<number, Point>) => flatCost(mol, sys, pos) + 20 * misshapen(mol, sys, pos);
-    const eased = (pos: Map<number, Point>) => {
-      if (flatCost(mol, sys, pos) < 1) return pos;
-      const trial = new Map(pos);
-      regularize(mol, sys, trial);
-      return cost(trial) < cost(pos) - 1e-9 ? trial : pos;
-    };
     flat = eased(flat);
     let least = cost(flat);
     for (const r of sys.rings) {
