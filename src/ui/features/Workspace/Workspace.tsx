@@ -27,7 +27,7 @@ import {
   Selection2D,
 } from "./components";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -54,6 +54,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { unsureOf } from "./chem/drawing";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
@@ -256,6 +257,8 @@ function WorkspaceContent({
   }, [store, sources]);
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
+  // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
+  const unsure = useMemo(() => unsureOf(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
   const setChemistry = useAppSettings((s) => s.setChemistry);
@@ -1424,7 +1427,7 @@ function WorkspaceContent({
             <Labels2D />
           </Suspense>
           {/* the plugin's marks: valence problems, R/S and E/Z */}
-          <ChemMarks2D marks={marks} />
+          <ChemMarks2D marks={marks} unsure={unsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
           <ChargeHolds2D />
           {/* the atom a molecule in 3D under the pointer was made from */}

@@ -506,6 +506,17 @@ All hover-based, as above.
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas; both in Settings › Chemistry, and
   never in an exported picture.)
+  - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
+    stereocentre whose wedge says its configuration only as its bonds
+    happen to fall - two of them in a line, or all of them in one half of
+    the page - and a double bond with a group almost in line with it, which
+    a reader may take either way, are marked as a valence problem is, the
+    ring dashed: "This stereocentre can be read either way as drawn", "This
+    double bond can be read as cis or trans as drawn". Worked out by Meno
+    itself, with or without the plugin, whatever made the drawing - a
+    Clean-up, a SMILES, a hand - and never in an exported picture
+    (`unsureStereo`, `unsureOf`). The engine draws none so where it can
+    help it (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
   - How R, S, E and Z are written (2026-10-05, the maintainer: the
     parentheses looked clumsy, and a drawing's needs no colour; Meno's own
     style without parentheses, the journals' after IUPAC or their own

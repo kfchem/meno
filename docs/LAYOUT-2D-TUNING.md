@@ -163,7 +163,9 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   either way, and with the bonds spread round the centre; an H drawn and
   wedged, or another bond, before that. Bilobalide is still read the other
   way: no choice is sure there, its four bonds all in half the page - a
-  cage's drawing, not a wedge, is its answer.
+  cage's drawing, not a wedge, is its answer. Until it has one, the canvas
+  marks such a centre (EDITOR-2D.md, *Stereochemistry drawn by luck*);
+  checking every centre of the bench's 700 takes about 5 ms.
 - **Speed.** One measure takes 0.1 to 0.3 ms; the calls multiply by frames,
   shapes and passes. The sheet takes about 8 s; ciclosporin, at about 1 s,
   is the slowest.
