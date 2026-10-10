@@ -598,6 +598,16 @@ All hover-based, as above.
     its middle and half an em clear of it, beyond any words already there;
     and go where the arrow goes, moved or drawn out, until they are dragged
     off it. Put down elsewhere, they stay where they are put.
+  - An arrow is as long as its words need (the maintainer, 2026-10-11):
+    where the words over it or under it would run past it, it is drawn out
+    about its middle - nothing else moves - to reach three quarters of an
+    em past the longest at either end, and as they get shorter it goes back
+    to the length it was made, never shorter. It follows them as they are
+    written - new words near it as well, which will go over it - going over
+    to each length gently, and is drawn so in a copy's pictures and an
+    exported SVG. What is saved is the length it was made; drawn out by an
+    end, it is no shorter than its words need, the other end staying where
+    it is (`lib/chem/captions` `wordsNeed`, `components/drawnArrows`).
   - Lit from behind under the pointer. Held still a moment (a long press,
     as on a structure), they are taken hold of - lit from the pointer out -
     and selected, as one thing, with the selection's shade; a drag on from

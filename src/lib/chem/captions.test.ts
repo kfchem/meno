@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE } from "./captions";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, wordsNeed } from "./captions";
 import { labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
@@ -221,3 +221,40 @@ describe("where a caret stands in a caption", () => {
   });
 });
 
+
+describe("an arrow and its words", () => {
+  const fs = 10;
+  const arrow = { id: 1, x: 0, y: 0, angle: 0, length: 40 };
+
+  it("is as long as it was made while its words are shorter", () => {
+    const [a] = arrowsWithWords([arrow], [{ arrow: 1, x: 0, y: 8, text: "THF" }], fs);
+    expect(a.length).toBe(40);
+  });
+
+  it("grows about its middle to reach past its longest words at either end", () => {
+    const text = "Pd(PPh3)4, K2CO3, dioxane, 100 °C";
+    const { halfW } = captionSet(text, 0, 8, fs);
+    const [a] = arrowsWithWords([arrow], [{ arrow: 1, x: 0, y: 8, text }, { arrow: 1, x: 0, y: -8, text: "12 h" }], fs);
+    expect(a.length).toBeCloseTo(2 * (halfW + ARROW_PAST_WORDS * fs), 6);
+    expect(a.x).toBe(0);
+    expect(a.y).toBe(0);
+  });
+
+  it("goes back to the length it was made as its words get shorter", () => {
+    const long = arrowsWithWords([arrow], [{ arrow: 1, x: 0, y: 8, text: "Pd(PPh3)4, K2CO3, dioxane, 100 °C" }], fs)[0];
+    const short = arrowsWithWords([arrow], [{ arrow: 1, x: 0, y: 8, text: "THF" }], fs)[0];
+    expect(long.length).toBeGreaterThan(40);
+    expect(short.length).toBe(40);
+  });
+
+  it("takes words beside it, going up the page, by their height", () => {
+    const up = { id: 2, x: 0, y: 0, angle: Math.PI / 2, length: 10 };
+    const need = wordsNeed([up], [{ arrow: 2, x: 12, y: 0, halfW: 30, halfH: 9 }], fs);
+    expect(need.get(2)).toBeCloseTo(2 * (9 + ARROW_PAST_WORDS * fs), 6);
+  });
+
+  it("takes no words that are another arrow's, or none's", () => {
+    const need = wordsNeed([arrow], [{ arrow: 3, x: 0, y: 8, halfW: 90, halfH: 5 }, { x: 0, y: 8, halfW: 90, halfH: 5 }], fs);
+    expect(need.has(1)).toBe(false);
+  });
+});
