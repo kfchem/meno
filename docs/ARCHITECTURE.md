@@ -381,6 +381,19 @@ What is left before the editor counts as finished, and in what order, is in
     reads it through `Workspace/style3d.ts`. `solidOf` works out each
     atom's radius in both looks (none for an atom a look leaves out), and
     the view eases between them (docs/WORKSPACE.md, *Styles in 3D*). A 1.5 Å bond is as long as a drawn one.
+    Its depth (docs/WORKSPACE.md, *Depth in 3D*): each atom's ambient
+    occlusion as nine spherical-harmonic terms and each bond line's two
+    ends (`utils/occlusion3d.ts`), worked out for the frame shown in both
+    looks by a worker and kept by what they were worked out from
+    (`utils/occlusions.ts`, `occlusionWorker.ts`), read by the atoms' and
+    bonds' material (`utils/occlusionMaterial.ts`) from instance
+    attributes that `components/shading3d.ts` eases; and the key light's
+    shadow (`components/KeyLight3D.tsx`, one for the canvas, as the
+    settings' preview has its own), cast by coarse instanced balls and
+    sticks sharing the drawn ones' instance matrices and drawn as none on
+    the canvas (`utils/shadows3d.ts`), the shadow map cast again only when
+    they move or the box it is fitted to changes. `render3d` draws a
+    picture's the same way, instanced, with every ball and stick casting.
   - The pointer: hovered, its outline lights up faintly and the atom under
     the pointer swells on a spring. A drag on it - its atoms, bonds or
     within its rings - turns it, with inertia; on one selected, it moves
