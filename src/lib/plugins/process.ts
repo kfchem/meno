@@ -7,6 +7,9 @@
  * away or Meno quits, and started again if it stops. The plugin must be set
  * up: setting it up - asking first for the network - is for whoever asks
  * to do. A worker has no business on the network; the app keeps it off it.
+ * A worker held on a question past its time - the one it was on, none
+ * asked before it still waiting (./queue) - is stopped, and started afresh
+ * when next asked: what else was waiting on it fails, saying so.
  *
  * It says it is ready, and its version - that of what it brings, as it
  * runs - in its first line: `{"event": "ready", "version": ...}`. A plugin
@@ -19,6 +22,7 @@ import { resolveResource } from "@tauri-apps/api/path";
 import { ensurePyEnv, pluginFilesFolder, pyEnvReady } from "../pyEnv";
 import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
+import { workerQueue } from "./queue";
 import { ChemClient } from "../roles/client";
 
 /** A plugin's worker, running: its clients - for files and steps, and for the roles it fills - its process, and its version. */
@@ -52,15 +56,15 @@ export function workerOf(p: PythonPlugin): Promise<PluginWorker> {
   return worker;
 }
 
-/** Stops a plugin's worker, where it runs: as the plugin is taken away. */
-export async function stopWorker(plugin: string): Promise<void> {
+/** Stops a plugin's worker, where it runs: as the plugin is taken away - or, held on a question past its time, to be started afresh (`reason` says which to what was waiting on it). */
+export async function stopWorker(plugin: string, reason = `${plugin} was taken away`): Promise<void> {
   const worker = running.get(plugin);
   if (!worker) return;
   running.delete(plugin);
   const w = await worker.catch(() => null);
   if (!w) return;
-  w.reader.close(`${plugin} was taken away`);
-  w.chem.close(`${plugin} was taken away`);
+  w.reader.close(reason);
+  w.chem.close(reason);
   await invoke("ext_kill", { id: w.id }).catch(() => undefined);
   whenStopped.forEach((f) => f(plugin));
 }
@@ -91,8 +95,10 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
     },
   };
   const ids = counter();
-  const reader = new ReaderClient(p.name, transport, undefined, ids);
-  const chem = new ChemClient(transport, undefined, p.name, ids);
+  // (held on a question past its time: stopped, and started afresh when next asked)
+  const queue = workerQueue(() => void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`));
+  const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
+  const chem = new ChemClient(transport, undefined, p.name, ids, queue);
   const stopOut = await listen<string>("ext:stdout", (e) => hear(JSON.parse(e.payload)));
   const stopExit = await listen<string>("ext:exit", (e) => {
     if (JSON.parse(e.payload).id !== id) return;

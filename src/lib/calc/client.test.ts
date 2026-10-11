@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ReaderClient } from "./client";
 
 /** A worker's two ends, by hand: what the client sent, and a way to answer. */
@@ -77,5 +77,25 @@ describe("a reader's worker, asked", () => {
     const maybe = client.probe("nbo-out", "x.47", "else");
     w.say({ id: 2, ok: true, result: { yes: "perhaps" } });
     expect(await maybe).toBe(false);
+  });
+
+  it("tells its worker's queue what it asks, what is answered and what it gives up on", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWorker();
+      const heard: string[] = [];
+      const watch = { sent: (id: number) => heard.push(`sent ${id}`), settled: (id: number) => heard.push(`settled ${id}`), overdue: (id: number) => heard.push(`overdue ${id}`) };
+      const client = new ReaderClient("cclib", w.transport, 1000, undefined, watch);
+      const read = client.read("orca-output", "a.out", "text");
+      w.say({ id: w.sent[0].id, ok: true, result: { molecules: [] } });
+      await read.catch(() => undefined);
+      const late = client.read("orca-output", "b.out", "text").catch((e: Error) => e.message);
+      vi.advanceTimersByTime(1001);
+      expect(await late).toMatch(/did not finish reading b\.out in time/);
+      const [a, b] = w.sent.map((m) => m.id);
+      expect(heard).toEqual([`sent ${a}`, `settled ${a}`, `sent ${b}`, `overdue ${b}`]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

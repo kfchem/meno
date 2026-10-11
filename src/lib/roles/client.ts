@@ -9,7 +9,7 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
-import { counter } from "../calc/client";
+import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
@@ -152,6 +152,8 @@ export class ChemClient {
     private name = "The plugin",
     /** Where its questions' ids come from: shared with the other clients of the same worker (lib/calc/client `counter`). */
     private ids: () => number = counter(),
+    /** The worker's queue, which hears each question asked, answered and given up on (lib/plugins/queue). */
+    private watch?: Watch,
   ) {
     let markReady!: (v: string) => void;
     this.ready = new Promise((resolve) => (markReady = resolve));
@@ -181,6 +183,7 @@ export class ChemClient {
     if (!p) return;
     this.pending.delete(m.id!);
     clearTimeout(p.timer);
+    this.watch?.settled(m.id!);
     if (m.ok) p.resolve(m.result);
     else p.reject(new ChemError(m.error ?? `${this.name} could not answer`));
   }
@@ -199,12 +202,14 @@ export class ChemClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new ChemError(`${this.name} did not answer ${op} in time`));
+        this.watch?.overdue(id);
       }, timeoutMs);
       this.pending.set(id, {
         resolve: resolve as (v: unknown) => void,
         reject,
         timer,
       });
+      this.watch?.sent(id);
       this.transport.send(JSON.stringify({ id, op, ...args }));
     });
   }
@@ -216,6 +221,7 @@ export class ChemClient {
       clearTimeout(p.timer);
       p.reject(new ChemError(reason));
       this.pending.delete(id);
+      this.watch?.settled(id);
     }
   }
 }
