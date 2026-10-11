@@ -455,6 +455,22 @@ export const createModelSlice = (
     }));
   },
 
+  putRead: (next: Model) => {
+    const start = doc.getState().nextId;
+    if (!doc.edit("read structure", (d) => ops.appendModel(d, next))) return;
+    // (selected, as what is pasted is, to be moved or put right straight on)
+    set((prev: EditorState) => ({
+      ...prev,
+      sel: added(start, doc.getState().model),
+      sel3d: new Set(),
+      selPictures: new Set(),
+      selAnchor: null,
+      hovered: { atomId: null, bondId: null },
+    }));
+  },
+
+  setFigureLit: (atom: number | null) => set((prev: EditorState) => (prev.figureLit === atom ? prev : { ...prev, figureLit: atom })),
+
   appendModel: (next: Model, scheme?: ImportedScheme) => {
     const start = doc.getState().nextId;
     const start3d = doc.getState().nextMolecule3dId ?? 1;

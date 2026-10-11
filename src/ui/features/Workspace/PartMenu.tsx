@@ -144,6 +144,7 @@ export default function PartMenu({
   step,
   pdf,
   onCopyPicture,
+  onReadStructure,
   text,
   onSaveProcedure,
   onUseAsInput,
@@ -214,6 +215,8 @@ export default function PartMenu({
   };
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
+  /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
+  onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
   text?: { icon: boolean; onRead: () => void; onIcon: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
@@ -227,7 +230,14 @@ export default function PartMenu({
   /** An electron-pushing arrow begun from the atom or bond right-clicked, its head full or (`half`) a fishhook's. */
   onPush?: (half: boolean, press?: React.PointerEvent) => void;
   /** What an electron-pushing arrow right-clicked can do: its head made full or half, its lone pair's dots shown or left off (where it leaves one), bent as Meno bends it. */
-  push?: { half: boolean; setHalf: (half: boolean) => void; pair?: { shown: boolean; set: (shown: boolean) => void }; onUnbend?: () => void };
+  push?: {
+    half: boolean;
+    setHalf: (half: boolean) => void;
+    /** From an atom with a negative charge: whether it leaves from a lone pair rather than the charge's mark. */
+    source?: { fromPair: boolean; set: (fromPair: boolean) => void };
+    pair?: { shown: boolean; set: (shown: boolean) => void };
+    onUnbend?: () => void;
+  };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
   /** The molecules in 3D right-clicked - or selected - rendered as a picture or a film (docs/RENDER.md); unset, where no plugin added renders. */
@@ -400,6 +410,7 @@ export default function PartMenu({
           ...(pdf?.onCopy ? [{ name: "Copy", keys: shortcut("C"), run: pdf.onCopy }] : []),
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
+          ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
         ]
@@ -418,6 +429,7 @@ export default function PartMenu({
           ...(onCopyPicture ? [{ name: "Copy picture", keys: "", run: onCopyPicture, icon: MENU_ICONS.picture }] : []),
           del("Delete picture"),
           ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
+          ...(onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           // (saved as a file; a film, played or paused where it lies)
           ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
           ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
@@ -484,6 +496,12 @@ export default function PartMenu({
             { name: "Fishhook (half head)", keys: "", run: () => push.setHalf(true), icon: MENU_ICONS.fishhook, checked: push.half },
             ...colour,
             del("Delete arrow", keys),
+            ...(push.source
+              ? [
+                  { name: "From the charge", keys: "", run: () => push.source!.set(false), checked: !push.source.fromPair, divider: true },
+                  { name: "From a lone pair", keys: "", run: () => push.source!.set(true), checked: push.source.fromPair },
+                ]
+              : []),
             ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
             ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),
           ]

@@ -234,6 +234,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         hovered: { atomId: null, bondId: null },
         hovered3d: null,
         hoveredAtom3d: null,
+        figureLit: null,
         hoveredMeasure3d: null,
         hoveredArrow: null,
         hoveredPlus: null,

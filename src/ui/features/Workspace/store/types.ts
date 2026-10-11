@@ -42,7 +42,19 @@ export type Atom = EditorAtom & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
   highlight?: string;
+  /** Where it was drawn in a PDF's figure it was read from (docs/PDF.md, *Stage 5*): lit there while it is under the pointer, and it while that place is. */
+  seen?: FigureSpot;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
+/**
+ * A place on a PDF's page: the PDF, by its SHA-256, the page, and the
+ * point, in points from its top left - and how long the bonds of the figure
+ * there are drawn, in points, which says how near is near.
+ */
+export type FigureSpot = { sha256: string; page: number; x: number; y: number; bond: number };
+/** What Meno said was unsure of a part as it read it from a figure, and what the part was then (utils/figures `partAs`): marked while it is still that. */
+export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
 export type Bond = BondChem & {
@@ -69,6 +81,8 @@ export type Bond = BondChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
   highlight?: string;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -102,10 +116,11 @@ export type PushEnd = { atom: number } | { bond: number } | { gap: [number, numb
  * An electron-pushing arrow: from where to where, its head half - a
  * fishhook, one electron - or full, its bend (lib/chem/pushArrow
  * `PushBend`; unset, as Meno bends it), a lone pair's dots left off its
- * tail (`noPair`), and the colour it is drawn in, where it is given one
- * (#rrggbb; else the bonds' ink).
+ * tail (`noPair`), from an atom with a negative charge, from a lone pair
+ * rather than its charge's mark (`fromPair`), and the colour it is drawn
+ * in, where it is given one (#rrggbb; else the bonds' ink).
  */
-export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; color?: string };
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; fromPair?: true; color?: string };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -482,6 +497,8 @@ export type EditorState = {
   hovered3d: { id: number } | null;
   /** The atom of a molecule in 3D under the pointer, by index: lit in its drawing too. */
   hoveredAtom3d: { id: number; atom: number } | null;
+  /** The drawing's atom read from a figure whose place there is under the pointer, by id: lit in the drawing too. */
+  figureLit: number | null;
   /** The molecules in 3D on the page. */
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
@@ -651,6 +668,9 @@ export type EditorState = {
   setHovered3d: (h: { id: number } | null) => void;
   /** The atom of molecule `id` under the pointer; null, none of its atoms. */
   setHoveredAtom3d: (id: number, atom: number | null) => void;
+  setFigureLit: (atom: number | null) => void;
+  /** A structure read from a figure put on the page - selected - as one step. */
+  putRead: (model: Model) => void;
   setTurn3d: (id: number, turn: Turn3D) => void;
   /**
    * Molecules in 3D made from a drawing, as one undo step: each where it is
@@ -730,7 +750,7 @@ export type EditorState = {
   /** An electron-pushing arrow added, as one step; its id. */
   addPush: (from: PushEnd, to: PushEnd, half: boolean) => number;
   /** An electron-pushing arrow changed - its head, its bend (null: as Meno bends it), its ends, its lone pair - a run of changes in one gesture one step. */
-  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean }, gesture?: string) => void;
+  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean; fromPair?: boolean }, gesture?: string) => void;
   removePush: (id: number) => void;
   /** The reaction arrow under the pointer: its menu is the one a right-click opens. */
   hoveredArrow: number | null;
@@ -768,6 +788,8 @@ export type EditorState = {
   pictures: PictureItem[];
   /** The picture under the pointer: its menu is the one a right-click opens. */
   hoveredPicture: number | null;
+  /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
+  picturesLaid: ReadonlySet<number>;
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;

@@ -1122,21 +1122,30 @@ export function addPush(doc: WorkspaceDocument, from: PushEnd, to: PushEnd, half
   return { ...doc, nextPushId: id + 1, pushes: [...(doc.pushes ?? []), { id, from, to, ...(half ? { half: true as const } : {}) }] };
 }
 
-/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots. */
+/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots, whether an anion's arrow leaves from a lone pair. */
 export function updatePush(
   doc: WorkspaceDocument,
   id: number,
-  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean },
+  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean; fromPair?: boolean },
 ): WorkspaceDocument {
   const pushes = doc.pushes ?? [];
   const i = pushes.findIndex((p) => p.id === id);
   if (i < 0) return doc;
   const was = pushes[i];
-  const { half: _h, bend: _b, noPair: _n, ...rest } = was;
+  const { half: _h, bend: _b, noPair: _n, fromPair: _f, ...rest } = was;
   const half = patch.half ?? !!was.half;
   const bend = patch.bend === undefined ? was.bend : (patch.bend ?? undefined);
   const noPair = patch.noPair ?? !!was.noPair;
-  const next: PushArrow = { ...rest, from: patch.from ?? was.from, to: patch.to ?? was.to, ...(half ? { half: true } : {}), ...(bend ? { bend } : {}), ...(noPair ? { noPair: true } : {}) };
+  const fromPair = patch.fromPair ?? !!was.fromPair;
+  const next: PushArrow = {
+    ...rest,
+    from: patch.from ?? was.from,
+    to: patch.to ?? was.to,
+    ...(half ? { half: true } : {}),
+    ...(bend ? { bend } : {}),
+    ...(noPair ? { noPair: true } : {}),
+    ...(fromPair ? { fromPair: true } : {}),
+  };
   if (!endIsThere(doc, next.from) || !endIsThere(doc, next.to) || JSON.stringify(next.from) === JSON.stringify(next.to)) return doc;
   if (JSON.stringify(next) === JSON.stringify(was)) return doc;
   const out = pushes.slice();

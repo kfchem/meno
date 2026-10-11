@@ -13,6 +13,7 @@ import type { Carried3D, Drawn } from "./store/types";
 import { centredAt, clipItems, hasFlow, partToCopy, recordText } from "./utils/copyPaste";
 import { pictureOnClipboard, picturePng, pictureToAdd } from "./utils/pictures";
 import { bondsAmong } from "./utils/selection";
+import { carriedOf } from "./utils/workspace";
 import { setMembers } from "./workflow/entries";
 import { partsOf } from "./workflow/parts";
 
@@ -50,7 +51,7 @@ export function useClipboardActions(
   // (`only`: one molecule in 3D, alone - what its own menu was opened on)
   const part = useCallback((only?: number): { part: Drawn; ids3d: number[] } | null => {
     const state = store.getState();
-    const { model, hovered, hovered3d, molecules3d, turns3d, frames3d, selFlow } = state;
+    const { model, hovered, hovered3d, molecules3d, selFlow } = state;
     // (the pictures selected go with it, and the words)
     const pictures = only != null ? [] : state.pictures.filter((p) => state.selPictures.has(p.id));
     const words = only != null ? [] : state.captions.filter((c) => state.selCaptions.has(c.id));
@@ -74,9 +75,7 @@ export function useClipboardActions(
     const nothingSelected = !sel.atoms.size && !sel.bonds.size && !sel3d.size && !flow && !others;
     const ids3d =
       only != null ? [only] : sel3d.size ? [...sel3d] : nothingSelected && hovered3d && !drawn ? [hovered3d.id] : [];
-    const carried: Carried3D[] = molecules3d
-      .filter((m) => ids3d.includes(m.id))
-      .map(({ id, ...m }) => ({ ...m, ...(turns3d[id] ? { turn: turns3d[id] } : {}), ...(frames3d[id] ? { frame: frames3d[id] } : {}) }));
+    const carried = copiedMolecules(state, ids3d);
     if (!drawn && !carried.length && !flow && !others) return null;
     const amongWords = drawn?.captions ?? [];
     const allWords = [...amongWords, ...words.filter((c) => !amongWords.some((a) => a.id === c.id))];
@@ -200,4 +199,16 @@ export function useClipboardActions(
 
   // (what a copy would take - the selection, as it is seen - for Export to write)
   return useMemo(() => ({ copy, cut, paste, copySmiles, copyPicture, part }), [copy, cut, paste, copySmiles, copyPicture, part]);
+}
+
+/**
+ * The molecules in 3D with these ids as a copy takes them: as they are
+ * shown - turned, at the frame shown, and with the list open under each
+ * and the row chosen in it, its surface or motion given - as a saved
+ * workspace carries them (utils/workspace `carriedOf`), so that the
+ * pictures a copy puts on the clipboard show the surface the canvas
+ * shows, as an export's do.
+ */
+export function copiedMolecules(state: Parameters<typeof carriedOf>[0], ids: readonly number[]): Carried3D[] {
+  return carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
 }

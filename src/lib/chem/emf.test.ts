@@ -334,3 +334,33 @@ describe("measurements in a picture", () => {
     expect(polygons(plusOnly)).toBeGreaterThan(polygons(bitmap));
   });
 });
+
+describe("an electron-pushing arrow in a picture", () => {
+  // HO- and bromomethane, an SN2's two arrows
+  const sn2: Model = {
+    atoms: [
+      { id: 1, x: -2 * L, y: 0, r: 0.9, el: "O", charge: -1 },
+      { id: 2, x: 0, y: 0, r: 0.9, el: "C" },
+      { id: 3, x: L, y: 0, r: 0.9, el: "Br" },
+    ],
+    bonds: [{ id: 10, a: 2, b: 3, order: 1 }],
+  };
+  const drawn = { ...sn2, pushes: [{ id: 1, from: { atom: 1 }, to: { atom: 2 } }, { id: 2, from: { bond: 10 }, to: { atom: 3 } }] };
+  const { layout, opts } = drawingLayout(drawn, aromatic, ACS_1996);
+
+  it("is its line as a curve - the start, then three points for each segment - and its head filled", () => {
+    expect(layout.curves).toHaveLength(2);
+    for (const c of layout.curves!) expect((c.points.length - 1) % 3).toBe(0);
+  });
+
+  it("is written in an SVG as the curve it is", () => {
+    const svg = createSVG(layout, opts);
+    expect(svg).toMatch(/<path d="M[^"]*C[^"]*" fill="none"[^>]*stroke-linecap/);
+  });
+
+  it("is written in an EMF as Bezier curves, for EMF+ and for GDI alike", () => {
+    const { emf } = layoutEmf(layout, opts);
+    expect(emfRecords(emf)!.filter((r) => r.type === 2)).toHaveLength(2); // EMR_POLYBEZIER
+    expect(emfPlusRecords(emf).filter((r) => r.type === 0x4019)).toHaveLength(2); // EmfPlusDrawBeziers
+  });
+});

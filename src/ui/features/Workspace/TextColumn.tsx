@@ -26,6 +26,7 @@ import { figureAt, figuresHad, type Box } from "../../../lib/pdf/figures";
 import { linkAt, linksOf, type PdfLink } from "../../../lib/pdf/reader";
 import { followLink, goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
 import { DOUBLE_CLICK_MS } from "./constants";
+import { atomAtSpot } from "./utils/figures";
 
 /** How far a pinch's step zooms the column, by ratio, per px of it, and how far a notch of the wheel with Ctrl or ⌘ does: as on the canvas (PanZoom2D). */
 const PINCH_PER_PX = 0.01;
@@ -575,6 +576,10 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         store.getState().setPdfSel({ id, anchor: placeBefore(place, a) ? b : a, focus: place });
         return;
       }
+      // (over where an atom read from a figure was drawn: that atom lit in the drawing)
+      const st = store.getState();
+      const sha = st.pdfs.find((x) => x.id === id)?.sha256;
+      st.setFigureLit(q.on && sha ? atomAtSpot(st.model, sha, q.page, q.x, q.y) : null);
       // (over a link, the system's hand, and where it goes; over words, the text cursor)
       const link = linkUnder(e);
       const t = q.on ? lettersOf(q.page) : null;
@@ -585,6 +590,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       over = false;
       setOver(false);
       lit(false);
+      store.getState().setFigureLit(null);
     };
     let press: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
