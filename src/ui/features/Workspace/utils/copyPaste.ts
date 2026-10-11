@@ -318,7 +318,7 @@ export function readDrawn(data: unknown): Drawn | null {
   const withRead = <T extends { seen?: unknown; unsure?: unknown }>(x: T): T => {
     const out = { ...x };
     const s = x.seen as Partial<FigureSpot> | undefined;
-    if (!s || typeof s.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(s.sha256) || !Number.isInteger(s.page) || (s.page as number) < 0 || !isNum(s.x) || !isNum(s.y) || !isNum(s.bond) || s.bond <= 0) delete out.seen;
+    if (!s || typeof s.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(s.sha256) || (s.page !== undefined && (!Number.isInteger(s.page) || (s.page as number) < 0)) || !isNum(s.x) || !isNum(s.y) || !isNum(s.bond) || s.bond <= 0) delete out.seen;
     const u = x.unsure as Partial<Unsure> | undefined;
     if (!u || !Array.isArray(u.said) || !u.said.length || u.said.length > 8 || !u.said.every((t) => typeof t === "string" && t.length <= 400) || typeof u.as !== "string" || u.as.length > 4000) delete out.unsure;
     return out;

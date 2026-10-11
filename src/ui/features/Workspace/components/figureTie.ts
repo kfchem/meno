@@ -1,9 +1,9 @@
 /**
- * The place in a PDF's figure lit for an atom read from it (docs/PDF.md,
- * *Stage 5*): the atom under the pointer in the drawing, or the one whose
- * place in the figure is - ringed there as it is in the drawing, on the
- * PDF's stack, in the column and on a picture cut out of it alike, coming
- * and going as the drawing's ring does.
+ * The place in a figure lit for an atom read from it (docs/PDF.md, *Stage
+ * 5*): the atom under the pointer in the drawing, or the one whose place
+ * in the figure is - ringed there as it is in the drawing: on a PDF's
+ * stack, in the column and on a picture cut out of it alike, or on the
+ * picture it was read from; coming and going as the drawing's ring does.
  */
 import { ALPHA, COLORS } from "../../../theme/colors";
 import type { FigureSpot, Model } from "../store/types";
@@ -43,8 +43,8 @@ export function spotMoving(now = performance.now()): boolean {
   return !!shown && now - shown.start < FADE_MS + 40;
 }
 
-/** The ring lit on a PDF's page, if any: where, how large, in points from the page's top left, and how strong. */
-export function spotOn(sha256: string, page: number, now = performance.now()): { x: number; y: number; r: number; level: number } | null {
+/** The ring lit on a PDF's page - or in a picture, its pixels (`page` none) - if any: where, how large, in points from the page's top left, and how strong. */
+export function spotOn(sha256: string, page: number | undefined, now = performance.now()): { x: number; y: number; r: number; level: number } | null {
   if (!shown || shown.spot.sha256 !== sha256 || shown.spot.page !== page) return null;
   const level = levelOf(shown, now);
   if (level <= 0) return null;

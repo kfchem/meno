@@ -1,21 +1,28 @@
 /**
- * Structures read from PDFs' figures (docs/PDF.md, *Stage 5*): a figure in
- * a box of a page read as a structure drawn as the figure draws it - where
- * its atoms lie, as long as Meno draws a bond - each atom tied to the place
- * in the figure it was drawn at; what Meno was unsure of, marked while the
- * part is as it was read; and where the structure goes on the page: beside
- * what it was read from, clear of what lies there.
+ * Structures read from figures (docs/PDF.md, *Stage 5*): a figure in a box
+ * of a PDF's page - its lines read by Meno; or, where it is a picture, the
+ * picture read by the plugin that reads structures from pictures - or a
+ * picture on the page, read as a structure drawn as the figure draws it:
+ * where its atoms lie, as long as Meno draws a bond, each atom tied to the
+ * place in the figure it was drawn at; what Meno or the plugin was unsure
+ * of, marked while the part is as it was read; and where the structure goes
+ * on the page: beside what it was read from, clear of what lies there.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
-import { readFigure } from "../../../../lib/figure/read";
+import { readFigure, type FigureRead } from "../../../../lib/figure/read";
+import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
+import { boxPicture } from "../../../../lib/pdf/reader";
+import { chemWorker } from "../../../../lib/roles/worker";
+import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
-import type { Atom, Bond, FigureSpot, Model } from "../store/types";
+import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
+import { picturePng } from "./pictures";
 
 /** A label as drawn read as one typed is: an element with its charge, or a group's name - or nothing. */
 export const figureLabels: LabelReader = (label) => {
@@ -56,10 +63,49 @@ export type Unread = { none: string };
  * where the figure has them - its middle at naught, a bond as long as Meno
  * draws one - each tied to where it was drawn; or why it gave none.
  */
-export async function readBox(sha256: string, page: number, box: Box): Promise<Model | Unread> {
+export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void): Promise<Model | Unread> {
   if (!isTauri()) return { none: "Figures are read in the app." };
   const drawn = await invoke<FigureDrawn>("pdf_figure", { sha: sha256, page, box });
-  return structureFrom(drawn, sha256, page);
+  const read = structureFrom(drawn, sha256, page);
+  // (a figure that is a picture: the picture read, by the plugin that reads them)
+  if ("none" in read && drawn.pictures.length) {
+    working?.("Reading the picture…");
+    return readBoxPicture(sha256, page, box);
+  }
+  return read;
+}
+
+/** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
+const READ_DPI = 200;
+/** How long a picture's reading may take: the first loads the plugin's model - a minute or more, the first time a computer loads it. */
+const READ_MS = 300_000;
+
+/** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
+async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
+  const worker = await chemWorker("pictures");
+  const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, READ_MS);
+  return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+}
+
+/** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
+async function readBoxPicture(sha256: string, page: number, box: Box): Promise<Model | Unread> {
+  const shot = await boxPicture(sha256, page, box, READ_DPI);
+  const read = await readByPlugin(shot.png);
+  if ("none" in read) return read;
+  // (its pixels made the page's points: a pixel is 72/dpi of a point, from the box's top left)
+  const k = 72 / shot.dpi;
+  const onPage = scaledFigure(read, k, box[0], box[1]);
+  return modelOf(onPage, (x, y) => ({ sha256, page, x, y, bond: onPage.bond }));
+}
+
+/** A picture on the page read by the plugin that reads pictures, each atom tied to its place in the picture, in its pixels. */
+export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">): Promise<Model | Unread> {
+  if (!isTauri()) return { none: "Pictures are read in the app." };
+  const png = await picturePng(picture);
+  if (!png) return { none: "A film is not read as a structure." };
+  const read = await readByPlugin(png);
+  if ("none" in read) return read;
+  return modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond }));
 }
 
 /** What a figure as drawn reads as, tied to its PDF's page (`readBox`). */
@@ -70,6 +116,11 @@ export function structureFrom(drawn: FigureDrawn, sha256: string, page: number, 
   if (!read.atoms.length || !read.bonds.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
+  return modelOf(read, (x, y) => ({ sha256, page, x, y, bond: read.bond }));
+}
+
+/** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`). */
+function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot): Model {
   const s = structureOf(read, figureLabels);
   const degree = new Map<number, number>();
   for (const b of s.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
@@ -80,7 +131,7 @@ export function structureFrom(drawn: FigureDrawn, sha256: string, page: number, 
     r: 0.9,
     el: a.el,
     ...(a.charge ? { charge: a.charge } : {}),
-    seen: { sha256, page, x: read.atoms[i].x, y: read.atoms[i].y, bond: read.bond },
+    seen: spot(read.atoms[i].x, read.atoms[i].y),
   }));
   const bonds: Bond[] = s.bonds.map((b, i) => ({
     id: atoms.length + i + 1,
@@ -136,8 +187,8 @@ export function spotOf(model: Model, id: number | null): FigureSpot | null {
   return model.atoms.find((a) => a.id === id)?.seen ?? null;
 }
 
-/** The atom read from a figure whose place there is nearest a point of a PDF's page - in points from its top left - near enough to be it: within a third of the figure's bond. */
-export function atomAtSpot(model: Model, sha256: string, page: number, x: number, y: number): number | null {
+/** The atom read from a figure whose place there is nearest a point of a PDF's page - in points from its top left - or of a picture, in its pixels (`page` none), near enough to be it: within a third of the figure's bond. */
+export function atomAtSpot(model: Model, sha256: string, page: number | undefined, x: number, y: number): number | null {
   let best: number | null = null;
   let bestD = Infinity;
   for (const a of model.atoms) {

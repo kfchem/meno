@@ -46,8 +46,29 @@ export type ChemRequests = {
    * atoms in their order, its bonds' orders and charges the SMILES's.
    */
   orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
+  /**
+   * A picture - a PNG or a JPEG, in base64 - read as the structure drawn in
+   * it (docs/PDF.md, *Stage 5*): see `PictureRead`.
+   */
+  read_picture: { args: { picture: string }; result: PictureRead };
   /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
   add_hydrogens: { args: { molblock: string }; result: { molblock: string } };
+};
+
+/**
+ * The structure drawn in a picture, as the plugin that reads pictures reads
+ * it: its atoms where the picture has them, in its pixels from its top
+ * left - each an element, with its charge, or a label as it is drawn (a
+ * group's: OTBS); its bonds, by index; and what the plugin is unsure of, by
+ * no number. A wedge or a hash says which end lies nearer - `up`, `b`
+ * nearer than `a`; `down`, farther - and, where the plugin can tell, which
+ * end the picture draws narrow (`narrow`): a picture's reader may know
+ * only the first, a wedge narrow at one end being a hash narrow at the
+ * other. No structure found: no atoms.
+ */
+export type PictureRead = {
+  atoms: { x: number; y: number; el?: string; charge?: number; label?: string; unsure?: true }[];
+  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
 };
 
 export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };

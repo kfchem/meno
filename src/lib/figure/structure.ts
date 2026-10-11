@@ -54,6 +54,7 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
   const labels = read.atoms.map((a) => {
+    if (a.el) return { el: a.el, ...(a.charge ? { charge: a.charge } : {}), read: true };
     if (!a.label) return null;
     const first = readDrawnLabel(a.label, reads);
     if (first.read || !a.alts) return first;
@@ -70,7 +71,7 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
     ? kekuleOrders(
         read.atoms.map((a, i) => {
           const l = labels[i];
-          const h = a.label ? drawnHydrogens(l && "as" in l && l.as ? l.as : a.label) : null;
+          const h = a.label && !a.el ? drawnHydrogens(l && "as" in l && l.as ? l.as : a.label) : null;
           return { el: els[i], charge: charges[i], ...(h != null ? { hs: h } : {}) };
         }),
         read.bonds.map((b) => ({ a1: b.a, a2: b.b, order: b.aromatic ? AROMATIC_BOND : b.order })),
@@ -89,7 +90,7 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
   const atoms = read.atoms.map((a, i): StructureAtom => {
     const unsure = [...(a.unsure ?? [])];
     const label = labels[i];
-    if (a.label && label) {
+    if (a.label && !a.el && label) {
       const as = "as" in label && label.as ? label.as : a.label;
       if (!label.read) unsure.push(`"${a.label}" was not read as an element or a group.`);
       else if (as !== a.label) unsure.splice(0, unsure.length, `Its letters are drawn as shapes: read as "${as}".`);
@@ -98,7 +99,7 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
         const left = implicitHydrogens(els[i], valence[i], charges[i]);
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
-    } else if (valence[i] > 4) {
+    } else if (els[i] === "C" && valence[i] > 4) {
       unsure.push("More bonds meet here than a carbon has.");
     }
     return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(unsure.length ? { unsure } : {}) };
@@ -113,6 +114,13 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
       const [ca, cb] = [centre(b.a), centre(b.b)];
       if (cb && !ca) [out.a, out.b] = [b.b, b.a];
       else if (ca === cb) (out.unsure ??= []).push("Its hashes are even: which end is the stereocentre is not drawn.");
+    }
+    // a wedge or hash of which only the nearer end is known: narrow at the
+    // end that can be a stereocentre - a wedge up from it, or a hash down
+    // from the other - as it is given where both can or neither
+    if (b.facing && (b.stereo === "up" || b.stereo === "down") && centre(b.b) && !centre(b.a)) {
+      [out.a, out.b] = [b.b, b.a];
+      out.stereo = b.stereo === "up" ? "down" : "up";
     }
     return out;
   });
