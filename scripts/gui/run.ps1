@@ -258,11 +258,11 @@ function Find-MenoQuickAdd {
             $mid = $top + 44
             for ($x = $cx; $x -gt 0; $x--) {
                 if (-not (Test-ShotHairline $px $x $mid)) { continue }
-                # (as wide as its row as it opens - nine icons and Calculations, with their gaps, some 397 CSS px - or not Quick Add)
+                # (as wide as its row as it opens - nine icons and Calculations, with their gaps, some 397 CSS px - or not
+                # its left edge: the rule before Calculations, say, walked on past)
                 for ($r = $x + 720; $r -le [Math]::Min($x + 860, $px.Width - 1); $r++) {
                     if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top } }
                 }
-                break
             }
         }
     }
