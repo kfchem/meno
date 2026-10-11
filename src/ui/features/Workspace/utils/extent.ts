@@ -98,7 +98,7 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
 /**
  * Boxes round what is on the page and not selected, each as it is drawn -
  * each structure, each reaction arrow and "+" and words, each molecule in
- * 3D, picture, PDF, text's sheet and slide: what something moved lines up
+ * 3D, picture, PDF, text's sheet, slide and shape: what something moved lines up
  * with (presenting/guides). A structure's box is its atoms', and half a
  * label more round those that show one.
  */
@@ -159,5 +159,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
     if (r) out.push(r);
   }
   for (const s of st.slides) if (!st.selSlides.has(s.id)) out.push(boxOf(s));
+  // and the shapes, all each draws (docs/PRESENTING.md, *Shapes*)
+  for (const s of st.shapes) if (!st.selShapes.has(s.id)) out.push(shapeBounds(s, opts.pointPx ?? 0));
   return out;
 }
