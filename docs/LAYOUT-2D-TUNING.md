@@ -279,7 +279,7 @@ and the held-out list takes new ones. What it showed, by kind:
   it: paclitaxel worsened). Scopolamine and tetrodotoxin are flat: their
   cages with a ring fused flat onto them showed another isomer (*What has
   gone wrong before*), scopolamine's on its epoxide's face (the
-  maintainer, 2026-10-11);
+  maintainer, 2026-10-11). Tetrodotoxin is carried over (*Open*);
 - two rings fused on neighbouring sides of a third, squeezed flat
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
@@ -294,6 +294,14 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
+- **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11):
+  it is drawn flat, its cage in perspective with the guanidine ring laid
+  flat onto it having shown C4a the other way. The maintainer noted two
+  things: the perspective drawing read better than the flat one, and
+  both face the wrong way - their orientation. Wanted: a perspective
+  drawing that shows the molecule as given, in the right orientation: its
+  cage seen from above, as cages are drawn (`LAYOUT-2D.md` section 2), and
+  from its front face (section 4).
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.
