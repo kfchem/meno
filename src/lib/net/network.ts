@@ -199,12 +199,32 @@ async function grant(purpose: string): Promise<void> {
   );
 }
 
+/** The questions waiting their turn: the last's answer, the next asked after it - and each purpose's, while it is asked or waits. */
+let questions: Promise<unknown> = Promise.resolve();
+const waiting = new Map<string, Promise<boolean>>();
+
 /**
  * Whether `request.purpose` may use the network: yes when it has been
  * allowed before; otherwise the user is asked, and a yes is remembered. No
- * in offline mode, without asking.
+ * in offline mode, without asking. One question at a time: one asked while
+ * another is up waits its turn - never taken as a no - and one for a
+ * purpose already being asked shares that answer.
  */
 export function askToConnect(request: ConsentRequest): Promise<boolean> {
+  const s = useNetwork.getState();
+  if (s.offline) return Promise.resolve(false);
+  if (s.granted.includes(request.purpose)) return Promise.resolve(true);
+  const same = waiting.get(request.purpose);
+  if (same) return same;
+  const asked = questions.then(() => askNow(request));
+  waiting.set(request.purpose, asked);
+  void asked.finally(() => waiting.delete(request.purpose));
+  questions = asked.catch(() => undefined);
+  return asked;
+}
+
+/** A question, its turn come: asked - unless meanwhile Meno went offline, or the purpose was allowed. */
+function askNow(request: ConsentRequest): Promise<boolean> {
   const s = useNetwork.getState();
   if (s.offline) return Promise.resolve(false);
   if (s.granted.includes(request.purpose)) return Promise.resolve(true);
@@ -214,8 +234,6 @@ export function askToConnect(request: ConsentRequest): Promise<boolean> {
       if (yes) void grant(request.purpose);
       resolve(yes);
     };
-    // one question at a time: an earlier one still open is taken as a no
-    s.asking?.answer(false);
     useNetwork.setState({ asking: { ...request, answer } });
   });
 }
