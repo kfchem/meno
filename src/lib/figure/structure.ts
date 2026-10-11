@@ -52,14 +52,25 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
   const ys = read.atoms.map((a) => a.y);
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const labels = read.atoms.map((a) => (a.label ? readDrawnLabel(a.label, reads) : null));
+  // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
+  const labels = read.atoms.map((a) => {
+    if (!a.label) return null;
+    const first = readDrawnLabel(a.label, reads);
+    if (first.read || !a.alts) return first;
+    for (const alt of a.alts) {
+      const r = readDrawnLabel(alt, reads);
+      if (r.read) return { ...r, as: alt };
+    }
+    return first;
+  });
   const els = labels.map((l) => l?.el ?? "C");
   const charges = labels.map((l) => l?.charge ?? 0);
   // (a ring drawn with its circle: its double bonds as the ring's atoms need them)
   const orders = read.bonds.some((b) => b.aromatic)
     ? kekuleOrders(
         read.atoms.map((a, i) => {
-          const h = a.label ? drawnHydrogens(a.label) : null;
+          const l = labels[i];
+          const h = a.label ? drawnHydrogens(l && "as" in l && l.as ? l.as : a.label) : null;
           return { el: els[i], charge: charges[i], ...(h != null ? { hs: h } : {}) };
         }),
         read.bonds.map((b) => ({ a1: b.a, a2: b.b, order: b.aromatic ? AROMATIC_BOND : b.order })),
@@ -79,11 +90,13 @@ export function structureOf(read: FigureRead, reads: LabelReader): { atoms: Stru
     const unsure = [...(a.unsure ?? [])];
     const label = labels[i];
     if (a.label && label) {
+      const as = "as" in label && label.as ? label.as : a.label;
       if (!label.read) unsure.push(`"${a.label}" was not read as an element or a group.`);
-      const drawn = drawnHydrogens(a.label);
+      else if (as !== a.label) unsure.splice(0, unsure.length, `Its letters are drawn as shapes: read as "${as}".`);
+      const drawn = drawnHydrogens(as);
       if (label.read && drawn != null && els[i] !== "H") {
         const left = implicitHydrogens(els[i], valence[i], charges[i]);
-        if (left !== drawn) unsure.push(`Drawn as ${a.label}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
+        if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
     } else if (valence[i] > 4) {
       unsure.push("More bonds meet here than a carbon has.");

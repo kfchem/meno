@@ -934,7 +934,9 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   *Stage 5*): what a figure within a box is drawn with - its paths' steps,
   filled or stroked and how thick, and its letters with where their lines
   start and their sizes, read through forms under their matrices - read in
-  the window as bonds and labels (`lib/figure/read.ts`), then as a
+  the window as bonds and labels (`lib/figure/read.ts`) - letters drawn as
+  outlines matched against the system's own letters, drawn once on a
+  canvas (`lib/figure/glyphs.ts`, `utils/glyphShapes.ts`) - then as a
   structure in Meno's units (`lib/figure/structure.ts`), its labels read
   as typed ones are (`utils/figures.ts` `figureLabels`). Each atom keeps
   where it was drawn (`Atom.seen`), and what was unsure of a part keeps
