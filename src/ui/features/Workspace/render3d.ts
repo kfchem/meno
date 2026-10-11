@@ -123,6 +123,8 @@ export function rendered3d(
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = style.shadows > 0;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // (cast once for each molecule, not again for each of its tiles: every tile the same shadow)
+  renderer.shadowMap.autoUpdate = false;
   const made: { dispose(): void }[] = [];
   // (a measurement's lines and fan as the canvas's: unlit, in its blue)
   const measureLine = new THREE.MeshBasicMaterial({ color: COLORS.highlight, toneMapped: false });
@@ -272,6 +274,7 @@ export function rendered3d(
           key.shadow.mapSize.set(PICTURE_SHADOW_MAP, PICTURE_SHADOW_MAP);
           key.shadow.intensity = style.shadows;
           fitShadow(key, box);
+          renderer.shadowMap.needsUpdate = true;
           made.push(key);
         }
       }
