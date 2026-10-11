@@ -10,10 +10,14 @@
  * version, are kept here for a step's card and Settings to say at once.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { arch } from "@tauri-apps/plugin-os";
 import { create } from "zustand";
+import { askToConnect } from "../net/network";
+import { hostOf, sizeOf } from "../pyEnv";
 import { useAppSettings } from "../settings/appSettings";
-import type { InstalledDecl } from "./manifest";
+import type { DownloadDecl, InstalledDecl } from "./manifest";
 import { systemHere } from "./here";
 
 /** A program installed separately, as it is known: by its plugin and its name there. */
@@ -102,4 +106,55 @@ export async function locate(
   settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [key]: where } });
   useInstalled.setState((s) => ({ where: { ...s.where, [key]: where }, chosen: { ...s.chosen, [key]: chosen } }));
   return where;
+}
+
+/**
+ * The copy of a program installed separately that Meno can fetch for its
+ * own use on this computer, where its plugin offers one (a download that
+ * `installs` it, for this system and processor: Blender's official build);
+ * none, where it offers none.
+ */
+export function copyFor(plugin: { downloads: readonly DownloadDecl[] }, decl: Pick<InstalledDecl, "name">, system = systemHere(), processor: string = arch()): DownloadDecl | undefined {
+  return plugin.downloads.find((d) => d.installs === decl.name && d.system === system && (!d.arch || d.arch === processor));
+}
+
+/** What fetching a program's copy uses the network for: a leave of its own, never the one setting its plugin up gives. */
+export const copyPurpose = (plugin: string, name: string) => `program:plugin-${plugin}:${name}`;
+
+/** How far each copy being fetched has come, by key: a share, naught to one. */
+export const useFetching = create<Record<string, number>>(() => ({}));
+
+/**
+ * Meno's own copy of a program installed separately fetched, for its own
+ * use - the user asked first, told what it is, its licence, its size and
+ * where it comes from - unpacked into its plugin's data folder (src-tauri/
+ * src/plugfiles.rs `program_fetch`), and then looked for as any copy is:
+ * where it is; null, where the user said no.
+ */
+export async function fetchCopy(plugin: { id: string; name: string; downloads: readonly DownloadDecl[] }, decl: InstalledDecl, ask: typeof invoke = invoke): Promise<string | null> {
+  const d = copyFor(plugin, decl);
+  if (!d) throw new Error(`Meno fetches no ${decl.label} for this computer.`);
+  const allowed = await askToConnect({
+    purpose: copyPurpose(plugin.id, decl.name),
+    title: `Fetch ${decl.label} for Meno?`,
+    detail:
+      `${d.name} - its official build for this computer, under its own licence (${d.licence}), ${sizeOf(d.bytes)} - ` +
+      `for Meno's own use: unpacked into the ${plugin.name}'s data folder, nothing installed on the system, ` +
+      `and taken away with the plugin. It is checked against the fingerprint Meno carries for it:`,
+    sources: [`${d.name}, from ${hostOf(d.url)}`],
+  });
+  if (!allowed) return null;
+  const key = programKey(plugin.id, decl.name);
+  const stop = await listen<{ plugin: string; done: number; total: number }>("plugin-files:progress", (e) => {
+    if (e.payload.plugin === plugin.id && e.payload.total > 0) useFetching.setState({ [key]: e.payload.done / e.payload.total });
+  }).catch(() => () => {});
+  useFetching.setState({ [key]: 0 });
+  try {
+    await ask<string>("program_fetch", { plugin: plugin.id, name: decl.name });
+  } finally {
+    stop();
+    // (replaced, not merged: a merge would keep the key it leaves out)
+    useFetching.setState((s) => Object.fromEntries(Object.entries(s).filter(([k]) => k !== key)), true);
+  }
+  return lookFor(plugin.id, decl.name, ask);
 }

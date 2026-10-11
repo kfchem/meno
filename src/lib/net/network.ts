@@ -82,6 +82,10 @@ export function purposeName(purpose: string): string {
   if (purpose === "python-env:node") return "Setting up Python for workflows";
   const plugin = PLUGINS.find((p) => purpose === `python-env:${p.profile}`);
   if (plugin) return `Setting up ${plugin.name}`;
+  // (a copy of a program installed separately, fetched for Meno's own use: lib/plugins/installed `copyPurpose`)
+  const copy = /^program:plugin-([a-z0-9-]+):(.+)$/.exec(purpose);
+  const program = copy && PLUGINS.find((p) => p.id === copy[1])?.installed.find((d) => d.name === copy[2]);
+  if (program) return `Fetching ${program.label} for Meno`;
   if (purpose.startsWith("python-env:"))
     return `Setting up Python (${purpose.slice("python-env:".length)})`;
   return purpose;

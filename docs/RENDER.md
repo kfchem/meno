@@ -149,6 +149,16 @@ uv, no package), and the script Blender runs, `render.py`.
   *Plugins* is shown, so a Blender installed or updated meanwhile is taken
   without starting Meno again; a copy is asked once, and again only once
   its file has changed.
+- **Fetched by Meno, where none is found** (2026-10-11): where no Blender
+  fit to run is found, Settings, *Plugins*, offers *Fetch for Meno* -
+  Blender's official build for this computer, 5.2.2 LTS, from
+  download.blender.org (macOS on Apple silicon, 346 MB; Windows x64,
+  404 MB; Windows arm64, 274 MB), asked for first under a leave of its
+  own, checked against the SHA-256 Blender publishes for it, and unpacked
+  into the Blender interface's data folder for Meno's own use - nothing
+  installed on the system; on macOS the app copied out of the disk image
+  as it is, its signature whole - and taken away with the plugin.
+  PLUGINS.md, *A program Meno fetches*, says when Meno does this at all.
 - **Its job** runs Blender as its manual says (docs.blender.org, Blender
   5.2, "Command Line Arguments"): `blender -b --factory-startup -noaudio
   --offline-mode -t <cores> --python-exit-code 1 -P render.py --
@@ -205,6 +215,8 @@ By the maintainer, 2026-10-10 and 2026-10-11:
    taken, its version shown in Settings.
 8. **The view moves once**, as a render is begun; not again as what it
    makes lands.
+9. **Blender fetched by Meno** where none fit to run is found, on asking -
+   under the rule PLUGINS.md, *A program Meno fetches*, sets out.
 
 ## Not yet
 

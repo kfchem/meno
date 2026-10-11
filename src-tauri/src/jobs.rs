@@ -686,11 +686,14 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
 
 
 /// Where a usual place starts, as Meno has it: the home folder, and the
-/// folder programs are installed in (Windows' Program Files).
+/// folder programs are installed in (Windows' Program Files) - and Meno's
+/// own copies of the program, fetched for its use (plugfiles.rs `copies`),
+/// each the program itself, looked at last.
 #[derive(Debug, Clone, Default)]
 pub struct Bases {
     pub home: Option<PathBuf>,
     pub programs: Option<PathBuf>,
+    pub copies: Vec<PathBuf>,
 }
 
 impl Bases {
@@ -698,7 +701,7 @@ impl Bases {
     pub fn here() -> Bases {
         let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
         let programs = if cfg!(windows) { std::env::var_os("ProgramFiles").map(PathBuf::from) } else { None };
-        Bases { home: home.filter(|p| p.is_absolute()), programs: programs.filter(|p| p.is_absolute()) }
+        Bases { home: home.filter(|p| p.is_absolute()), programs: programs.filter(|p| p.is_absolute()), copies: Vec::new() }
     }
 }
 
@@ -948,7 +951,9 @@ pub fn installed_found(decl: &Installed, located: Option<&str>, path_var: Option
     }
     let on_path = path_var.into_iter().flat_map(std::env::split_paths).filter(|d| d.is_absolute()).map(|d| d.join(&decl.file));
     let usual = decl.places.iter().flat_map(|t| usual_folders(t, bases)).map(|d| d.join(&decl.file));
-    for p in on_path.chain(usual) {
+    // (Meno's own copies, last: the program itself, of its file's name)
+    let copies = bases.copies.iter().filter(|p| is_it(p)).cloned();
+    for p in on_path.chain(usual).chain(copies) {
         if runnable(&p) && !out.iter().any(|q| same_file(q, &p)) {
             out.push(p);
         }
@@ -1049,7 +1054,7 @@ fn manifest_of(plugin_dir: &Path, id: &str) -> Result<serde_json::Value, String>
 /// manifest declares it so, and one of its steps names it: found where the
 /// chemist located it (`located`) or where the system finds programs, with
 /// what it is given. None, where the manifest declares no such program.
-pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Option<&str>) -> Result<Option<Found>, String> {
+pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Option<&str>, data: Option<&Path>) -> Result<Option<Found>, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
@@ -1061,7 +1066,9 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
         return Err(format!("{id} names no program {name}"));
     }
     let path_var = std::env::var_os("PATH");
-    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
+    // (with Meno's own copies, where it fetched any, in its data folder)
+    let bases = Bases { copies: data.map(|d| crate::plugfiles::copies(d, &manifest, id, name)).unwrap_or_default(), ..Bases::here() };
+    let chosen = installed_choice(&decl, located, path_var.as_deref(), &bases, false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
     // (one too old for Meno: said, not run)
     if let Some(why) = chosen.why {
         return Err(why);
@@ -1240,7 +1247,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         return Err(format!("a job reads only a file written for it: {name}"));
     }
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&payload.plugin))?;
-    let found = match installed_program(&plugin_dir, &payload.plugin, &payload.program, payload.path.as_deref())? {
+    let found = match installed_program(&plugin_dir, &payload.plugin, &payload.program, payload.path.as_deref(), Some(&data))? {
         Some(found) => found,
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };
@@ -1297,11 +1304,15 @@ pub async fn program_where(app: AppHandle, plugin: String, name: String, located
         return Err(format!("not a plugin: {plugin}"));
     }
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&plugin))?;
-    let decl = installed_named(&manifest_of(&plugin_dir, &plugin)?, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
+    let manifest = manifest_of(&plugin_dir, &plugin)?;
+    let decl = installed_named(&manifest, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
+    // (with Meno's own copies, where it fetched any)
+    let data = crate::app_data_dir(&app)?;
+    let bases = Bases { copies: crate::plugfiles::copies(&data, &manifest, &plugin, &name), ..Bases::here() };
     // (a program asked its version runs a moment: not on the async runtime's own threads)
     tauri::async_runtime::spawn_blocking(move || {
         let path_var = std::env::var_os("PATH");
-        installed_choice(&decl, located.as_deref(), path_var.as_deref(), &Bases::here(), exact.unwrap_or(false), &version_of)
+        installed_choice(&decl, located.as_deref(), path_var.as_deref(), &bases, exact.unwrap_or(false), &version_of)
     })
     .await
     .map_err(|e| e.to_string())
@@ -1879,14 +1890,14 @@ mod tests {
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), exe);
-        let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
+        let found = installed_program(&plugin, "demo", "orca", orca.to_str(), None).unwrap().unwrap();
         assert_eq!(found.program, orca);
         assert!(found.activation.is_none());
         assert_eq!(found.env[0].0, "PATH");
         // not declared installed: the plugin's environment's, as before; declared but named by no step; not found
-        assert!(installed_program(&plugin, "demo", "xtb", None).unwrap().is_none());
-        assert!(installed_program(&plugin, "demo", "unused", None).unwrap_err().contains("names no program"));
-        assert!(installed_program(&plugin, "demo", "nowhere", None).unwrap_err().contains("not found"));
+        assert!(installed_program(&plugin, "demo", "xtb", None, None).unwrap().is_none());
+        assert!(installed_program(&plugin, "demo", "unused", None, None).unwrap_err().contains("names no program"));
+        assert!(installed_program(&plugin, "demo", "nowhere", None, None).unwrap_err().contains("not found"));
         let _ = fs::remove_dir_all(base);
     }
 
@@ -1923,7 +1934,7 @@ mod tests {
         let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
         let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
         let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![] };
-        let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
+        let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()), copies: vec![] };
         assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
         assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
         // a base this computer has none of; a folder that is not there
@@ -1977,6 +1988,30 @@ mod tests {
         assert!(version_cmp("10.0", "5.2").is_gt());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn looks_at_meno_s_own_copies_last() {
+        let root = temp();
+        let make = |p: &Path| {
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, "#!/bin/sh\n").unwrap();
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let usual = root.join("usual/blender");
+        let mine = root.join("meno/blender-x/blender");
+        let other = root.join("meno/other/notblender");
+        for p in [&usual, &mine, &other] {
+            make(p);
+        }
+        let decl = Installed { name: "blender".into(), file: "blender".into(), path: vec![], env: vec![], places: vec![root.join("usual").to_string_lossy().into_owned()], label: "Blender".into(), version: None, beside: vec![] };
+        let bases = Bases { copies: vec![mine.clone(), other.clone()], ..Bases::default() };
+        assert_eq!(installed_found(&decl, None, None, &bases, false), vec![usual.clone(), mine.clone()]);
+        // (located alone, asked of what was picked: not Meno's)
+        assert_eq!(installed_found(&decl, usual.to_str(), None, &bases, true), vec![usual]);
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn chooses_the_newest_copy_new_enough_and_says_why_an_old_one_is_not() {
         let base = temp();
@@ -1999,7 +2034,7 @@ mod tests {
             version: Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }),
             beside: vec![],
         };
-        let bases = Bases { home: None, programs: Some(base.clone()) };
+        let bases = Bases { home: None, programs: Some(base.clone()), copies: vec![] };
         let everywhere = decl(vec!["{programs}/Blender Foundation/Blender *".into()]);
         // the newest new enough, of those found
         let c = installed_choice(&everywhere, None, None, &bases, false, &said).unwrap();

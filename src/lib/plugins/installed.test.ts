@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppSettings } from "../settings/appSettings";
-import { locate, lookFor, lookForAll, tooOld, useInstalled, whereIs } from "./installed";
+import { copyFor, copyPurpose, fetchCopy, useFetching, locate, lookFor, lookForAll, tooOld, useInstalled, whereIs } from "./installed";
+import { useNetwork, purposeName } from "../net/network";
+import { setUpFiles } from "../pyEnv";
 
 vi.mock("./here", () => ({ systemHere: () => "macos" }));
+vi.mock("@tauri-apps/plugin-os", () => ({ arch: () => "aarch64", platform: () => "macos" }));
 
 const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" }, path: [], env: {}, places: {} };
 const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" }, path: [], env: {}, places: {} };
@@ -88,5 +91,55 @@ describe("a program installed separately", () => {
     const now = (async () => ({ path: "/Applications/Blender.app/Contents/MacOS/Blender", version: "5.2.2" })) as never;
     expect(await lookFor("blender", "blender", now)).toBe("/Applications/Blender.app/Contents/MacOS/Blender");
     expect(tooOld("blender", "blender")).toBeUndefined();
+  });
+});
+
+describe("a copy of a program Meno fetches for its own use", () => {
+  const build = (system: "macos" | "windows", arch: "aarch64" | "x86_64", file: string) => ({
+    file,
+    name: "Blender 5.2.2 LTS",
+    licence: "GPL-3.0-or-later",
+    url: `https://download.blender.org/release/Blender5.2/${file}`,
+    sha256: "ab".repeat(32),
+    bytes: 346_286_611,
+    system,
+    arch,
+    unpack: file.endsWith(".dmg") ? ("dmg" as const) : ("zip" as const),
+    program: file.endsWith(".dmg") ? "Blender.app/Contents/MacOS/Blender" : "*/blender.exe",
+    installs: "blender",
+  });
+  const plugin = { id: "blender", name: "Blender interface", downloads: [build("windows", "x86_64", "w.zip"), build("macos", "aarch64", "m.dmg")] };
+
+  it("is the build its plugin offers for this system and processor - none where it offers none", () => {
+    expect(copyFor(plugin, BLENDER)?.file).toBe("m.dmg");
+    expect(copyFor(plugin, BLENDER, "windows", "x86_64")?.file).toBe("w.zip");
+    expect(copyFor(plugin, BLENDER, "windows", "aarch64")).toBeUndefined();
+    expect(copyFor(plugin, { name: "g16" })).toBeUndefined();
+  });
+
+  it("is never fetched as its plugin is set up: that takes only the files it needs, for this computer", () => {
+    const weights = { file: "model.pth", name: "Weights", licence: "MIT", url: "https://h/m", sha256: "ab".repeat(32), bytes: 10 };
+    const elsewhere = { ...weights, file: "other.pth", system: "windows" as const };
+    expect(setUpFiles({ downloads: [...plugin.downloads, weights, elsewhere] }, "macos", "aarch64")).toEqual([weights]);
+  });
+
+  it("is fetched only once the user allows it, under a leave of its own - then looked for as any copy is", async () => {
+    const asked: [string, unknown][] = [];
+    const inside = "/data/uv/plugin-blender/files/m/Blender.app/Contents/MacOS/Blender";
+    const ask = (async (cmd: string, a?: unknown) => (asked.push([cmd, a]), cmd === "program_fetch" ? inside : { path: inside, version: "5.2.2" })) as never;
+    // (said no: nothing fetched)
+    useNetwork.setState({ offline: true, granted: [] });
+    expect(await fetchCopy(plugin, BLENDER, ask)).toBeNull();
+    expect(asked).toEqual([]);
+    // (allowed: fetched, and looked for again)
+    useNetwork.setState({ offline: false, granted: [copyPurpose("blender", "blender")] });
+    expect(await fetchCopy(plugin, BLENDER, ask)).toBe(inside);
+    expect(asked.map(([cmd]) => cmd)).toEqual(["program_fetch", "program_where"]);
+    expect(whereIs("blender", "blender")).toBe(inside);
+    // (no longer said to be under way)
+    expect(useFetching.getState()).toEqual({});
+    // (the leave is its own, said as what it is for)
+    expect(copyPurpose("blender", "blender")).toBe("program:plugin-blender:blender");
+    expect(purposeName("program:plugin-blender:blender")).toBe("Fetching Blender for Meno");
   });
 });

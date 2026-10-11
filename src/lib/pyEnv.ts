@@ -12,6 +12,7 @@ import { arch, platform } from "@tauri-apps/plugin-os";
 import { pixiDownload, pixiPlatform } from "./pixiLock";
 import { askToConnect } from "./net/network";
 import { PLUGINS, type PythonPlugin } from "./calc/catalog";
+import { systemHere } from "./plugins/here";
 
 async function sha256(s: string) {
   const buf = await crypto.subtle.digest(
@@ -38,18 +39,28 @@ const filesOf = (plugin: PythonPlugin, fetch: boolean) => invoke<FilesState>("pl
 /** How far each plugin's files have come as they download, by the plugin's id: a share, naught to one. */
 export const useDownloads = create<Record<string, number>>(() => ({}));
 
+/**
+ * What a plugin downloads as it is set up, for this computer: never a copy
+ * of a program it runs (`installs`: Blender), which is fetched only when
+ * asked (lib/plugins/installed `fetchCopy`); the backend takes the same
+ * (src-tauri/src/plugfiles.rs `needed`).
+ */
+export function setUpFiles(plugin: Pick<PythonPlugin, "downloads"> | undefined, system = systemHere(), processor: string = arch()): PythonPlugin["downloads"] {
+  return (plugin?.downloads ?? []).filter((d) => !d.installs && (!d.system || d.system === system) && (!d.arch || d.arch === processor));
+}
+
 /** The folder a plugin's files are kept in, given to its worker; none, where it downloads none. */
 export async function pluginFilesFolder(plugin: PythonPlugin): Promise<string | null> {
-  return plugin.downloads.length ? (await filesOf(plugin, false)).folder : null;
+  return setUpFiles(plugin).length ? (await filesOf(plugin, false)).folder : null;
 }
 
 /** A size, for people: gigabytes to a tenth, else megabytes. */
-const sizeOf = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
-const hostOf = (url: string) => new URL(url).host;
+export const sizeOf = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
+export const hostOf = (url: string) => new URL(url).host;
 
 /** What a plugin downloads besides its packages, as asking to set it up says it - each file, under its licence, and its size - and where from. */
 function besides(plugin: PythonPlugin | undefined): { need: string; sources: string[] } {
-  const files = plugin?.downloads ?? [];
+  const files = setUpFiles(plugin);
   if (!files.length) return { need: "", sources: [] };
   return {
     need: `; and it needs ${files.map((f) => `${f.name} (${f.licence} licence, ${sizeOf(f.bytes)})`).join(" and ")} beside them`,
@@ -196,7 +207,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     stamp.lockSha !== lockSha ||
     stamp.py !== info.pythonVersion;
   // (a plugin's files besides, each there whole)
-  const needFiles = !!plugin?.downloads.length && (await filesOf(plugin, false)).missing.length > 0;
+  const needFiles = !!plugin && setUpFiles(plugin).length > 0 && (await filesOf(plugin, false)).missing.length > 0;
 
   return { info, lockText, lockSha, venvPy, needSetup, needFiles };
 }

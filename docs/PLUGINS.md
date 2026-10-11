@@ -152,7 +152,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one "Meno needs Blender 5.0 or later; this one is 4.1". And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
-| `downloads` | list of `{file, name, licence, url, sha256, bytes}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). |
+| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, installs?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). One may instead be a copy of a program the plugin runs, for Meno's own use (`installs`: its name in `installed`) - never fetched as the plugin is set up: *A program Meno fetches*, below. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -251,6 +251,53 @@ A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
 `NSIS_HOOK_PREINSTALL`), as was done for the Gaussian input plugin once it
 became the Gaussian interface.
+
+## A program Meno fetches
+
+Meno may download a program a plugin runs itself only where all of these
+hold (the maintainer, 2026-10-11):
+
+1. Its licence lets anyone obtain and use it, with no registration and no
+   terms each user is asked to accept.
+2. It is an official prebuilt build, from its makers' own host; Meno never
+   hosts it again.
+3. It needs nothing installed on the system - no administrator's rights,
+   no installer, no change to the system: it is unpacked into the plugin's
+   data folder (never inside Meno.app) and taken away with the plugin.
+4. Its version is pinned, and checked by its SHA-256.
+5. The user is asked first, told the program, its licence, its size and
+   where it comes from.
+
+How (`downloads`, `src-tauri/src/plugfiles.rs`): a download that
+`installs` one of the plugin's programs installed separately is an
+archive for one system - and processor, where it says one (`system`,
+`arch`: `aarch64`, `x86_64`) - with how it is opened (`unpack`: `dmg`,
+`zip` or `tar.xz`) and where the program is in it (`program`, `*` for the
+one folder there is). It is offered only where no copy fit to run is
+found - located, where the system finds programs, or where it is usually
+installed, of a version Meno takes - and only for a plugin that is added:
+Settings, *Plugins*, *Fetch for Meno…*. It is fetched under a leave of
+its own (`program:plugin-<id>:<name>`, "Fetching Blender for Meno" in
+Settings, *Network*), never the one setting the plugin up gives; checked
+against its SHA-256; unpacked by what the system has - a disk image
+mounted read-only and the app copied out of it as it is, its signature
+kept (macOS: `hdiutil`, `ditto`); a zip or a tar.xz opened by the
+system's own `tar` - into `files/<archive's name>` in the plugin's data
+folder, a stamp beside it saying it is whole; and the archive thrown
+away. The copy is then one more place the program is looked for, the
+last, under the same rule of versions; *Locate…* stays.
+
+As the programs stand (2026-10-11):
+
+- **Blender** is fetched: GPL-3.0-or-later, official builds from
+  download.blender.org - 5.2.2 LTS for macOS on Apple silicon and for
+  Windows on x64 and arm64 (RENDER.md).
+- **ORCA** and **Gaussian** are not fetched: each is obtained under its
+  makers' own terms, which each user accepts.
+- **Multiwfn** is not fetched: its licence asks each user to agree to its
+  terms, and there is no official macOS build.
+- **NCIPLOT** is not fetched: it is published as its source, with no
+  official build.
 
 ## Room for what comes next
 

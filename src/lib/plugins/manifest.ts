@@ -156,10 +156,34 @@ export type InstalledDecl = {
  * SHA-256 and size in bytes, which it is checked against before it is
  * kept; and its name in the plugin's `files` folder, which the worker is
  * given. Fetched as the plugin is set up, under the same leave - the user
- * told of it and its size first. Meno's backend reads and checks the same
- * (src-tauri/src/plugfiles.rs).
+ * told of it and its size first. Or a copy of a program installed
+ * separately, for Meno's own use (`installs`: Blender): an archive for one
+ * system - and processor, where it says one - unpacked (`unpack`), the
+ * program at `program` in it (`*` for the one folder there is); fetched
+ * only when the user asks, where no copy fit to run is found, under a
+ * leave of its own (docs/PLUGINS.md, *A program Meno fetches*). Meno's
+ * backend reads and checks the same (src-tauri/src/plugfiles.rs).
  */
-export type DownloadDecl = { file: string; name: string; licence: string; url: string; sha256: string; bytes: number };
+export type DownloadDecl = {
+  file: string;
+  name: string;
+  licence: string;
+  url: string;
+  sha256: string;
+  bytes: number;
+  system?: System;
+  arch?: Arch;
+  unpack?: Unpack;
+  program?: string;
+  installs?: string;
+};
+
+/** The processors a copy of a program is built for, as the system names them. */
+export type Arch = "aarch64" | "x86_64";
+const ARCHES: readonly Arch[] = ["aarch64", "x86_64"];
+/** How an archive is opened, by its ending. */
+export type Unpack = "dmg" | "zip" | "tar.xz";
+const UNPACKS: readonly Unpack[] = ["dmg", "zip", "tar.xz"];
 
 /** How a program installed separately says its version, and the least Meno takes. */
 export type VersionRule = { args: string[]; after: string; least: string };
@@ -405,7 +429,32 @@ function downloadOf(v: unknown): DownloadDecl | null {
   const licence = text(d?.licence, 60);
   const sha256 = typeof d?.sha256 === "string" && /^[0-9a-f]{64}$/.test(d.sha256) ? d.sha256 : null;
   const bytes = typeof d?.bytes === "number" && Number.isInteger(d.bytes) && d.bytes > 0 && d.bytes <= DOWNLOAD_MOST ? d.bytes : null;
-  return file && name && licence && downloadUrlOk(d?.url) && sha256 && bytes ? { file, name, licence, url: d!.url as string, sha256, bytes } : null;
+  if (!file || !name || !licence || !downloadUrlOk(d?.url) || !sha256 || !bytes) return null;
+  const decl: DownloadDecl = { file, name, licence, url: d!.url as string, sha256, bytes };
+  // (a copy of a program: an archive for one system, the program in it said - as the backend takes it)
+  const given = (k: string) => (d![k] === undefined ? undefined : typeof d![k] === "string" ? (d![k] as string) : null);
+  const said = ["system", "arch", "unpack", "program", "installs"].map(given);
+  if (said.some((v) => v === null)) return null;
+  const [system, arch, unpack, program, installs] = said as (string | undefined)[];
+  if (system !== undefined && !SYSTEMS.includes(system as System)) return null;
+  if (arch !== undefined && !ARCHES.includes(arch as Arch)) return null;
+  if (unpack !== undefined && (!UNPACKS.includes(unpack as Unpack) || !file.endsWith(`.${unpack}`) || file === `.${unpack}`)) return null;
+  if (program !== undefined && (!unpack || !programPathOk(program) || (unpack === "dmg" && program.startsWith("*")))) return null;
+  if (installs !== undefined && (!PROGRAM.test(installs) || !program || !system)) return null;
+  return {
+    ...decl,
+    ...(system ? { system: system as System } : {}),
+    ...(arch ? { arch: arch as Arch } : {}),
+    ...(unpack ? { unpack: unpack as Unpack } : {}),
+    ...(program ? { program } : {}),
+    ...(installs ? { installs } : {}),
+  };
+}
+
+/** Whether `p` is a path inside an unpacked archive: names, or `*` for the one folder there is, never above it. */
+function programPathOk(p: string): boolean {
+  const parts = p.split("/");
+  return p.length <= 200 && parts.length >= 1 && parts.length <= 8 && parts.every((x) => x === "*" || (!!x && x !== "." && x !== ".." && !/[\\:*]/.test(x) && /^[\x20-\x7e]+$/.test(x)));
 }
 
 /** How long a guide's words may be: a title, a step's text. */
