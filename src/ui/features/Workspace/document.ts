@@ -1208,7 +1208,8 @@ export type MarkPlaces = {
   pictures?: { id: number; x: number; y: number; turn?: number }[];
   pdfs?: { id: number; x: number; y: number }[];
   texts?: { id: number; x: number; y: number }[];
-  arrows?: { id: number; x: number; y: number }[];
+  /** Arrows moved with the rest: where each one's middle now is - and, carried round or turned over with it, which way it points and its corners. */
+  arrows?: { id: number; x: number; y: number; angle?: number; corners?: readonly { along: number; across: number }[] }[];
   pluses?: { id: number; x: number; y: number }[];
   captions?: { id: number; x: number; y: number }[];
   /** Molecules in 3D moved with the rest: where each now stands. */
@@ -1299,7 +1300,10 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
   }
   const moved = {
     ...doc,
-    arrows: doc.arrows.map((a) => at(a, arrowAt)),
+    arrows: doc.arrows.map((a) => {
+      const p = arrowAt.get(a.id);
+      return p ? { ...a, x: p.x, y: p.y, ...(p.angle != null ? { angle: p.angle } : {}), ...(p.corners ? { corners: p.corners.map((c) => ({ ...c })) } : {}) } : a;
+    }),
     pluses: (doc.pluses ?? []).map((p) => at(p, plusAt)),
     ...(doc.captions ? { captions: doc.captions.map((c) => at(c, captionAt)) } : {}),
   };
