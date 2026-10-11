@@ -215,7 +215,12 @@ lie level either way round - the drawing takes the one that reads best
   fused to it go below: quinoline's N, indole's NH, coumarin's O at the
   bottom, and so morphine's ether O and strychnine's indoline N, as IUPAC
   draws morphinan and strychnidine. Which way up a ring system is comes
-  before how the rest of its rings lie. A flavonoid is the exception (the
+  before how the rest of its rings lie. It is counted by the ring, not by
+  its atoms: a methylenedioxy's two O are one ring the wrong way up, and
+  berberine's N, in two rings fused to benzene rings, goes to the bottom
+  before them (the maintainer, 2026-10-11). A benzene ring is six carbons
+  each with a double bond in the rings, however its Kekule structure is
+  written. A flavonoid is the exception (the
   maintainer, 2026-10-11): the ring O of a chromane or chromene with an
   aryl ring on the atom next to it, or the one after - a flavone's, a
   flavanone's, a catechin's, an isoflavone's - stands at the top, its B

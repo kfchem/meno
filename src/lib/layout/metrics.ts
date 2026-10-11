@@ -1401,10 +1401,13 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   for (const sys of live) {
     const own = rings.filter((r) => r.length <= 8 && r.every((a) => sys.has(a)));
     if (own.length < 2 || rings.some((r) => r.length > 8 && r.every((a) => sys.has(a)))) continue;
+    // (six carbons each with a double bond in the rings - to its own ring
+    // or a fused one, whichever way the Kekule structure was written:
+    // berberine's A ring as PubChem writes it has two of its own)
     const benzene = (r: readonly number[]) =>
       r.length === 6 &&
       r.every((a) => (g.elements?.[a] ?? "C") === "C") &&
-      edges.filter(([a, b], e) => r.includes(a) && r.includes(b) && (g.orders?.[e] ?? 1) === 2).length === 3;
+      r.every((a) => neighbours[a].some((b) => (orderOf.get(pair(a, b)) ?? 1) >= 2 && ringBonds.has(pair(a, b))));
     const midX = (list: readonly (readonly number[])[]) =>
       list.reduce((sum, r) => sum + r.reduce((t, a) => t + x[a], 0) / r.length, 0) / list.length;
     const aromatic = own.filter(benzene);
@@ -1418,7 +1421,10 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     // aryl ring on the atom next to it or the one after (flavones,
     // flavanones, catechins, isoflavones) stands at the top, as every
     // drawing of one has it (the maintainer, 2026-10-11)
-    const hetero = new Map<number, number>();
+    // (counted by the ring, not by its atoms: a methylenedioxy's two O are
+    // one ring the wrong way up, as berberine's ring N is - and the
+    // maintainer has berberine's N at the bottom, 2026-10-11)
+    const hetero: { atoms: number[]; cy: number }[] = [];
     const above = new Map<number, number>();
     const elOf = (a: number) => g.elements?.[a] ?? "C";
     for (const r of rest) {
@@ -1439,9 +1445,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         above.set(o, Math.min(above.get(o) ?? Infinity, cy));
         continue;
       }
-      for (const a of r) if (elOf(a) !== "C") hetero.set(a, Math.max(hetero.get(a) ?? -Infinity, cy));
+      // (a metal in a metallacycle is not one of them)
+      const atoms = r.filter((a) => elOf(a) !== "C" && !isMetal(elOf(a)));
+      if (atoms.length) hetero.push({ atoms, cy });
     }
-    for (const [a, cy] of hetero) if (y[a] > cy + 0.1 * L) ringOrder += 1.5;
+    for (const { atoms, cy } of hetero) if (atoms.reduce((sum, a) => sum + y[a], 0) / atoms.length > cy + 0.1 * L) ringOrder += 1.5;
     for (const [a, cy] of above) if (y[a] < cy - 0.1 * L) ringOrder += 1.5;
   }
 

@@ -216,7 +216,11 @@ now kept by a rule in `LAYOUT-2D.md`:
   - morphinan turned 60 degrees from its reference is acceptable;
   - penicillin as its reference;
   - griseofulvin's aromatic ring on the left;
-  - diazepam fine as it is.
+  - diazepam fine as it is;
+  - (2026-10-11) berberine's ring N at the bottom, as its reference, before
+    the O's of its methylenedioxy; colchicine fine as it is, its
+    trimethoxyphenyl ring on the left (its reference has the tropolone
+    there).
 - **Phosphates** drawn in a straight line, by a general rule.
 - **Labels**: no H is ever hidden. The layout makes room by moving bonds
   a little, never by writing the H under its symbol, and the drawing code
@@ -267,7 +271,8 @@ and the held-out list takes new ones. What it showed, by kind:
   drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
   (done: the turn is chosen counting the fusion H it will carry, which
   `layoutMetrics` places as `placeStereo` will before it is drawn);
-  berberine, colchicine.
+  berberine (done: heteroatoms below counted by the ring); colchicine as
+  it is.
 
 ## Open
 
