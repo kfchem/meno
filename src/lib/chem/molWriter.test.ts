@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type WriterModel } from "./molWriter";
-import { readRxnfile } from "./ctfile";
+import { writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel } from "./molWriter";
+import { readMolfile, readRxnfile } from "./ctfile";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import {
   moleculesToEditorModel,
@@ -318,6 +318,30 @@ describe("a molecule in 3D as a molfile", () => {
     bonds: [1, 2, 3, 4].map((i) => ({ a1: 0, a2: i, order: 1 })),
   };
 
+  it("is written as before, in V2000, where V2000 holds it", () => {
+    expect(writeMolfile3d(ammonium.atoms, ammonium.bonds, { title: "ammonium" })).toBe(
+      [
+        "ammonium",
+        "  Meno              3D",
+        "",
+        "  5  4  0  0  0  0  0  0  0  0999 V2000",
+        "    0.0000    0.0000    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0",
+        "    1.0200    0.0000    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+        "   -0.3400    0.9600    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+        "   -0.3400   -0.4800    0.8300 H   0  0  0  0  0  0  0  0  0  0  0  0",
+        "   -0.3400   -0.4800   -0.8300 H   0  0  0  0  0  0  0  0  0  0  0  0",
+        "  1  2  1  0  0  0  0",
+        "  1  3  1  0  0  0  0",
+        "  1  4  1  0  0  0  0",
+        "  1  5  1  0  0  0  0",
+        "M  CHG  1   1   1",
+        "M  ISO  1   1  15",
+        "M  END",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("says it is 3D, and is read back where its atoms were, in depth", () => {
     const text = writeMolfile3d(ammonium.atoms, ammonium.bonds, { title: "ammonium" });
     const lines = text.split("\n");
@@ -329,5 +353,133 @@ describe("a molecule in 3D as a molfile", () => {
     expect(m.atoms[3].z).toBeCloseTo(0.83, 4);
     expect(m.atoms[0]).toMatchObject({ el: "N", charge: 1, isotope: 15 });
     expect(m.bonds).toHaveLength(4);
+  });
+});
+
+describe("past what V2000 holds", () => {
+  /**
+   * A zigzag chain of `n` atoms in 3D, every tenth an N, the sixth charged
+   * and the eighth a 13C, a bond between each and the next - every fourth a
+   * double one.
+   */
+  const chain3d = (n: number): { atoms: Atom3D[]; bonds: Bond3D[] } => ({
+    atoms: Array.from({ length: n }, (_, i) => ({
+      el: i % 10 === 9 ? "N" : "C",
+      x: 1.26 * i,
+      y: i % 2 ? 0.44 : -0.44,
+      z: (i % 3) * 0.1,
+      ...(i === 5 ? { charge: -1 } : {}),
+      ...(i === 7 ? { isotope: 13 } : {}),
+    })),
+    bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: i % 4 === 0 ? 2 : 1 })),
+  });
+  /** The same chain drawn flat, in the editor's units. */
+  const chain2d = (n: number): WriterModel => ({
+    atoms: Array.from({ length: n }, (_, i) => ({ id: i + 1, el: i % 10 === 9 ? "N" : "C", x: 0.866 * L * i, y: i % 2 ? L / 2 : 0 })),
+    bonds: Array.from({ length: n - 1 }, (_, i) => ({ a: i + 1, b: i + 2, order: i % 4 === 0 ? 2 : 1 })),
+  });
+
+  it("writes a molecule in 3D in V2000 up to 999 atoms, and in V3000 past them", () => {
+    const at999 = writeMolfile3d(chain3d(999).atoms, chain3d(999).bonds).split("\n");
+    expect(at999[3]).toBe("999998  0  0  0  0  0  0  0  0999 V2000");
+    for (const n of [1000, 1001]) {
+      const { atoms, bonds } = chain3d(n);
+      const lines = writeMolfile3d(atoms, bonds, { title: `C${n}` }).split("\n");
+      expect(lines.slice(0, 6)).toEqual([
+        `C${n}`,
+        "  Meno              3D",
+        "",
+        "  0  0  0     0  0  0  0  0  0999 V3000",
+        "M  V30 BEGIN CTAB",
+        `M  V30 COUNTS ${n} ${n - 1} 0 0 0`,
+      ]);
+      expect(lines).toContain("M  V30 6 C 6.3000 0.4400 0.2000 0 CHG=-1");
+      expect(lines).toContain("M  V30 8 C 8.8200 0.4400 0.1000 0 MASS=13");
+      expect(lines).toContain(`M  V30 ${n - 1} 1 ${n - 1} ${n}`);
+      expect(lines.slice(-4)).toEqual(["M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]);
+    }
+  });
+
+  it("writes V3000 past 999 bonds, though the atoms are fewer", () => {
+    const ring = chain3d(999);
+    ring.bonds.push({ a1: 998, a2: 0, order: 1 });
+    expect(writeMolfile3d(ring.atoms, ring.bonds)).toContain("999999  0  0  0  0  0  0  0  0999 V2000");
+    ring.bonds.push({ a1: 0, a2: 500, order: 1 });
+    expect(writeMolfile3d(ring.atoms, ring.bonds)).toContain("M  V30 COUNTS 999 1000 0 0 0");
+  });
+
+  it("writes V3000 for a coordinate wider than V2000's field, a coordination or hydrogen bond, or where asked", () => {
+    const pair = (x: number, order = 1): [Atom3D[], Bond3D[]] => [
+      [
+        { el: "Cu", x, y: 0, z: 0 },
+        { el: "N", x: x + 2, y: 0, z: 0 },
+      ],
+      [{ a1: 0, a2: 1, order }],
+    ];
+    expect(writeMolfile3d(...pair(-9999.9))).toContain(" V2000\n");
+    expect(writeMolfile3d(...pair(99997))).toContain(" V2000\n");
+    expect(writeMolfile3d(...pair(-10000))).toContain("M  V30 1 Cu -10000.0000 0.0000 0.0000 0\n");
+    expect(writeMolfile3d(...pair(99998))).toContain("M  V30 2 N 100000.0000 0.0000 0.0000 0\n");
+    expect(writeMolfile3d(...pair(0, 9))).toContain("M  V30 1 9 1 2\n");
+    expect(writeMolfile3d(...pair(0, 10))).toContain("M  V30 1 10 1 2\n");
+    expect(writeMolfile3d(...pair(0), { version: "V3000" })).toContain("M  V30 1 1 1 2\n");
+    expect(writeMolfile3d(...pair(0, 9), { version: "V2000" })).toContain(" V2000\n");
+  });
+
+  it("reads a molecule in 3D past 999 atoms back as it was written, in 3D", () => {
+    const { atoms, bonds } = chain3d(1001);
+    const text = writeMolfile3d(atoms, bonds, { title: "chain" });
+    const ct = readMolfile(text)!;
+    expect(ct.version).toBe("V3000");
+    expect(ct.name).toBe("chain");
+    // (to the four decimals written)
+    const at = (v: number) => Math.round(v * 1e4);
+    expect(ct.atoms.map((a) => [a.symbol, at(a.x), at(a.y), at(a.z)])).toEqual(atoms.map((a) => [a.el, at(a.x), at(a.y), at(a.z)]));
+    expect(ct.bonds.map((b) => [b.a1, b.a2, b.type])).toEqual(bonds.map((b) => [b.a1, b.a2, b.order]));
+    const [m] = readMoleculesFromText(text, "mol");
+    expect(m.atoms[5]).toMatchObject({ el: "C", charge: -1 });
+    expect(m.atoms[7]).toMatchObject({ el: "C", isotope: 13 });
+    expect(m.atoms.filter((a) => a.charge || a.isotope)).toHaveLength(2);
+    // (the header's second line says it is 3D, as V2000's does)
+    expect(text.split("\n")[1].substring(20, 22)).toBe("3D");
+  });
+
+  it("writes a drawing in V2000 up to 999 atoms, and in V3000 past them, and reads it back", () => {
+    expect(writeMolfile(chain2d(999)).split("\n")[3]).toBe("999998  0  0  0  0  0  0  0  0999 V2000");
+    for (const n of [1000, 1001]) {
+      const text = writeMolfile(chain2d(n));
+      expect(text.split("\n")[3]).toBe("  0  0  0     0  0  0  0  0  0999 V3000");
+      expect(text).toContain(`M  V30 COUNTS ${n} ${n - 1} 0 0 0`);
+      const back = reread(text);
+      expect(back.atoms).toHaveLength(n);
+      expect(back.bonds).toHaveLength(n - 1);
+      expect(back.atoms[9].el).toBe("N");
+      expect(back.bonds.filter((b) => b.order === 2)).toHaveLength(Math.ceil((n - 1) / 4));
+    }
+  });
+
+  it("writes a drawing in V3000 where a coordinate or a mapping number is wider than V2000's field", () => {
+    const far = chain2d(3);
+    far.atoms[2].x = (-10000 * L) / MOL_BOND_LENGTH;
+    expect(writeMolfile(far)).toContain("M  V30 3 C -10000.0000 ");
+    const mapped = chain2d(3);
+    mapped.atoms[0].map = 999;
+    expect(writeMolfile(mapped)).toContain(" V2000\n");
+    mapped.atoms[0].map = 1000;
+    expect(writeMolfile(mapped)).toContain("M  V30 1 C 0.0000 0.0000 0 1000\n");
+    expect(readMolfile(writeMolfile(mapped))!.atoms[0].map).toBe(1000);
+  });
+
+  it("quotes a V3000 string holding a quote, as the format has it", () => {
+    const labelled: WriterModel = {
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0 },
+        { id: 2, el: "R'", x: L, y: 0 },
+      ],
+      bonds: [{ a: 1, b: 2, order: 1 }],
+    };
+    const text = writeMolfile(labelled, { version: "V3000" });
+    expect(text).toContain(`LABEL="R'"`);
+    expect(readMolfile(text)!.sgroups[0].label).toBe("R'");
   });
 });
