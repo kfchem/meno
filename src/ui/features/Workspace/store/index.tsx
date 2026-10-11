@@ -12,7 +12,7 @@ import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, Ring
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
-import { createInteractionSlice } from "./slices/interactionSlice";
+import { createInteractionSlice, ended as noStroke, noMoveDrag } from "./slices/interactionSlice";
 import { createUiSlice } from "./slices/uiSlice";
 import { createMolecules3dSlice, heldOf } from "./slices/molecules3dSlice";
 import { createTextsSlice } from "./slices/textsSlice";
@@ -158,6 +158,10 @@ export function connectStoreToDocument(
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
         ...hoversHeld(prev, mirrored),
+        // (a bond or a chain being drawn out of an atom, or an atom being dragged, that an undo
+        // took away: let go - drawn on, it was a bond from nowhere, its new atom a lone CH4)
+        extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,
+        moveDrag: prev.moveDrag.active && !mirrored.model.atoms.some((a) => a.id === prev.moveDrag.atomId) ? noMoveDrag : prev.moveDrag,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),

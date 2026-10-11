@@ -70,6 +70,29 @@ describe("a stroke's nodes", () => {
   });
 });
 
+describe("a gesture whose atom an undo takes away", () => {
+  it("is let go: a bond being drawn out of it, or the atom being dragged", () => {
+    const { doc, st } = editor();
+    const a = st().addAtom(0, 0, "C");
+    st().startExtend(a, "bond");
+    st().updateExtend(L, 0.3);
+    doc.undo();
+    // (drawn on, it was a bond from nowhere, its new atom a lone CH4)
+    expect(st().extend.active).toBe(false);
+    doc.redo();
+    st().beginMoveDrag(a, { x: 0, y: 0 });
+    doc.undo();
+    expect(st().moveDrag.active).toBe(false);
+    // what is still there goes on
+    doc.redo();
+    const b = st().addAtom(5, 5, "N");
+    st().startExtend(a, "chain");
+    doc.undo();
+    expect(st().model.atoms.some((x) => x.id === b)).toBe(false);
+    expect(st().extend.active).toBe(true);
+  });
+});
+
 describe("a drag held still a while on the way", () => {
   afterEach(() => vi.useRealTimers());
 
