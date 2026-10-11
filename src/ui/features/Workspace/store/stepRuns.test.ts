@@ -402,6 +402,25 @@ describe("a step that runs a plugin's program", () => {
     expect(asked.stopped).toEqual([idOf(1)]);
   });
 
+  it("run again straight after it was stopped, runs anew once the stop has come through", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    st().stopStep(step);
+    Object.assign(jobs.get(idOf(1))!, { state: "stopped", started: 1000, ended: 2000 });
+    const again = st().runStep(step);
+    await st().lookAtJobs();
+    await first;
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 3000, ended: 4000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await again;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);

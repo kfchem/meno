@@ -224,9 +224,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           } else if (prior?.running) await ended(prior.id);
           const step = stepOf(doc.getState(), id);
           if (!step) return false;
-          if (begun.has(id)) await begun.get(id);
-          else if (step.running) await ended(id);
-          else await runOnce(id);
+          if (begun.has(id) || step.running) {
+            // (a run already under way, waited for - and, where it ended stopped, run anew: Run pressed after Stop)
+            await (begun.get(id) ?? ended(id));
+            if (stepOf(doc.getState(), id)?.ran?.stopped) await runOnce(id);
+          } else await runOnce(id);
           return !!stepOf(doc.getState(), id)?.ran?.ok;
         })();
         runs.set(id, going);
