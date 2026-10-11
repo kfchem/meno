@@ -37,6 +37,7 @@ import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { WordsEditor } from "../utils/wordsEditor";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { arrowsBeside, useWordsWriting } from "./drawnArrows";
 import { WholeTexts2D } from "./Labels2D";
 import { usePressAmong, useWriting, writingMarks, measured, type WritingDrawn } from "./writing";
 import type { TypingField } from "../../TextEditor/typingField";
@@ -103,6 +104,12 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, set, width, align) : places;
   const halfW = Math.max(laid.halfW, fs / 2);
   const halfH = Math.max(laid.halfH, fs / 2);
+  // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
+  const arrows = useEditor((s) => s.arrows);
+  const captions = useEditor((s) => s.captions);
+  const beside = useMemo(() => arrowsBeside({ arrows, captions }, fs, set, edit.id), [arrows, captions, fs, set, edit.id]);
+  const goes = left || !text.trim() ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
+  useWordsWriting(goes?.arrow != null ? { arrow: goes.arrow, x: goes.x, y: goes.y, halfW: laid.halfW, halfH: laid.halfH } : null, n);
   // what is drawn: the caret, what is selected and the light round them as the words drawn have them - those last given, until they are drawn
   const latest = useRef<WritingDrawn | null>(null);
   const drawnNow = useRef<WritingDrawn | null>(null);
@@ -149,7 +156,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         });
       if (edit.id == null) {
         if (text.trim()) {
-          const placed = captionPlace(edit.at, half(text), s.arrows, fs, others);
+          const placed = captionPlace(edit.at, half(text), arrowsBeside(s, fs, set, edit.id), fs, others);
           kept = s.addCaption(text, placed.x, placed.y, placed.arrow);
         }
       } else if (!text.trim()) {
@@ -157,7 +164,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         kept = null;
       } else if (caption && text !== caption.text) {
         // (over an arrow: kept clear of it as it grows or shrinks)
-        const arrow = caption.arrow != null ? s.arrows.find((a) => a.id === caption.arrow) : undefined;
+        const arrow = caption.arrow != null ? arrowsBeside(s, fs, set, edit.id).find((a) => a.id === caption.arrow) : undefined;
         const placed = arrow ? captionPlace({ x: caption.x, y: caption.y }, half(text), [arrow], fs, others) : null;
         s.updateCaption(edit.id, placed ? { text, x: placed.x, y: placed.y, arrow: placed.arrow ?? null } : { text });
       }

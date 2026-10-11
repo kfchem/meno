@@ -2,6 +2,7 @@ import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } fro
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
+import type { ArrowWords } from "../../../../lib/chem/captions";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -722,6 +723,14 @@ export type EditorState = {
    */
   leaveCaptionEdit: (n: number, id: number | null) => void;
   captionLeft: { id: number; n: number; at: { x: number; y: number } } | null;
+  /**
+   * Words being written over an arrow, or to go over one as they are kept -
+   * where they stand and how far they reach, the writing's `n` - so that the
+   * arrow is drawn as long as they need as they are written.
+   */
+  wordsWriting: (ArrowWords & { arrow: number; n: number }) | null;
+  /** The words being written over an arrow, or (null) none - those of writing `n` gone. */
+  setWordsWriting: (words: EditorState["wordsWriting"], n?: number) => void;
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */

@@ -195,6 +195,7 @@ export function createEditorStore(
     hoveredMark: null,
     captionEdit: null,
     captionLeft: null,
+    wordsWriting: null,
     quickAdd: null,
     hoveredSet: null,
     chosenSet: null,
