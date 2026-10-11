@@ -158,7 +158,8 @@ charge, multiplicity or name, for a writer's).
 A step's `files` (built 2026-10-11, NCI.md): `{"kinds": ["nci"],
 "programs": ["multiwfn"], "files": ["molden", "gaussian-fchk", "wfn",
 "wfx"]}` - a wavefunction another plugin read is given to Multiwfn's step,
-the two joined by a kind's id and sharing no code.
+the two joined by a kind's id and sharing no code; an entry given none is
+worked out from its geometry.
 
 ## A plugin's guide
 
