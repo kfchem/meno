@@ -925,7 +925,7 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   (`lib/chem/ordersFromGeometry.ts`). It weighs three things. A bond's
   length is read as an order between one and three against the sums of
   its atoms' single-, double- and triple-bond covalent radii
-  (`lib/chem/covalentRadii.ts`: Pyykkö's, as collected in J. Phys. Chem.
+  (`lib/chem/elements.ts`: Pyykkö's, as collected in J. Phys. Chem.
   A 2015, 119, 2326, from Pyykkö and Atsumi, Chem. Eur. J. 2009, 15, 186
   and 12770, and Pyykkö, Riedel and Patzschke, Chem. Eur. J. 2005, 11,
   3511). An atom's shape says how many double bonds it can have: a carbon

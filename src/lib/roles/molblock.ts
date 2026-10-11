@@ -1,8 +1,8 @@
 import { writeMolfile, type WriterModel } from "../chem/molWriter";
 import { abbreviationOf } from "../chem/abbreviations";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "../chem/elements";
 
-const SYMBOLS = new Set(elements.map((e) => e.symbol));
+const SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /** Whether a label is an element's symbol, as written: C, Cl - not cl, Me or R. */
 export function isElementSymbol(label: string): boolean {

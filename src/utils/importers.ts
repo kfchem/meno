@@ -24,7 +24,7 @@ import {
 } from "./structureParsers";
 import { readRxnfile } from "../lib/chem/ctfile";
 import { ARROW_LENGTH_BONDS } from "../lib/chem/reactionScheme";
-import { elements } from "./atomUtils";
+import { ELEMENTS } from "../lib/chem/elements";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), and where it is. */
 export type EditorAtom = AtomChem & {
@@ -631,7 +631,7 @@ function normalizeEl(el: string): string {
   return ELEMENT_SYMBOLS.has(symbol) ? symbol : s;
 }
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /**
  * Which wedges a file draws with their narrow end on the atom with fewer
