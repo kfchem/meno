@@ -1,27 +1,116 @@
-# Meno
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/assets/wordmark-dark.svg">
+    <img src="site/assets/wordmark-light.svg" alt="Meno" height="44">
+  </picture>
+</h1>
 
-A lightweight, cross‑platform desktop app for chemical structure editing and viewing with a prototype workflow canvas. Built with Tauri v2 (Rust) and React/TypeScript.
+A workspace for chemists. Draw a molecule, see it in three dimensions, look
+through its conformers, run calculations on it, and keep the paper you are
+reading beside it, all on one page. Meno is meant to make these one continuous
+line of thought rather than separate tasks in separate tools - see
+[what Meno is for](docs/PURPOSE.md).
 
-Meno is meant to let a chemist draw a molecule, understand its three-dimensional
-structure, test a hypothesis by calculation and take the next idea from the result
-as one continuous line of thought — see [what Meno is for](docs/PURPOSE.md).
+Website: <https://kfchem.github.io/meno/>
 
-— Status: Pre‑alpha. Interfaces and file formats may change without notice.
+**Status: pre-alpha.** The interface and the files Meno saves may change from
+one version to the next.
 
-## Features
+## Download
 
-- 2D Structure Editor (subset, work in progress)
-- 3D Molecule Viewer (ball‑and‑stick/CPK, basic measurements)
-- Experimental Workflow/Graph Editor (early node set)
-- Strict TypeScript + Vite + Tailwind v4
-- Desktop app via Tauri v2
+Download Meno from the [latest release](https://github.com/kfchem/meno/releases/latest),
+under *Assets*. Pick the file for your computer:
 
-## Architecture (at a glance)
+| Computer | File | Needs |
+| --- | --- | --- |
+| Windows | `Meno_<version>_x64-setup.exe` | Windows 10 or 11, 64-bit (x64) |
+| Mac | `Meno_<version>_aarch64.dmg` | A Mac with Apple silicon (M1 or later), macOS 13 or later |
 
-- App shell: Tauri v2 (Rust)
-- UI: React + TypeScript
-- Graphics: react‑three‑fiber / Three.js
-- State and core types: `src/lib/core/`
+The other files in a release (`latest.json`, `Meno_aarch64.app.tar.gz` and the
+`.sig` files) are what Meno downloads when it updates itself; you do not need
+them. There is no build for Intel Macs or Linux yet.
+
+### Windows
+
+1. Download `Meno_<version>_x64-setup.exe` and open it.
+2. If Windows says it protected your PC, choose *More info*, then *Run anyway*.
+   Windows says this because Meno's installer is not yet signed with a
+   certificate it knows.
+3. Follow the installer. It installs Meno for your user account alone, so it
+   needs no administrator's password.
+4. Open Meno from the Start menu.
+
+### Mac
+
+1. Download `Meno_<version>_aarch64.dmg` and open it.
+2. Drag Meno into the Applications folder.
+3. Open Meno from Applications. The first time, macOS says it could not verify
+   that Meno is free of malware. Choose *Done*.
+4. Open System Settings, then Privacy & Security. Under Security, choose
+   *Open Anyway* beside the line about Meno, and give your password when
+   asked.
+5. Open Meno again. If macOS asks once more, choose *Open Anyway*. It
+   remembers this, so you do it once.
+
+macOS asks because Meno is not yet notarised by Apple. Open Meno from
+Applications rather than from the disk image: a Meno opened from the disk
+image cannot update itself.
+
+### Updates
+
+The first time it starts, Meno asks whether it may keep itself up to date. If
+you agree, it looks for a new version as it starts and every few hours,
+downloads it in the background and installs it when you quit. *Restart now*
+in the notice installs it at once. You can turn this on or off at any time in
+Settings, Network, under *Keep Meno up to date*.
+
+Meno connects to nothing without asking first, and shows every connection as
+it is made. Click the globe at the top of the window to work offline: then
+nothing goes out at all.
+
+On a Mac, if Meno is in a folder your account cannot change (Applications, for
+an account that is not an administrator), macOS asks for an administrator's
+name and password as Meno quits with an update. If you cancel, Meno stays as it
+was.
+
+### Plugins and calculation programs
+
+Some of Meno's work is done by plugins: chemistry from SMILES and 3D structures,
+conformer searches, optimisations and energies, reading the outputs of
+calculation programs. A plugin sets itself up the first time it is needed,
+after Meno asks, by downloading what it needs into Meno's own folder. Settings,
+Plugins lists them, and adds or removes them. Calculation programs you have
+installed yourself are used where they are; Meno never downloads them.
+
+### Uninstalling
+
+- **Windows**: Settings, Apps, Installed apps, Meno, *Uninstall*. The
+  uninstaller offers to delete Meno's data as well.
+- **Mac**: drag Meno from Applications to the Bin.
+
+Meno keeps its settings, plugins and calculation jobs in its own folder:
+`%APPDATA%\com.kfchem.meno` on Windows and
+`~/Library/Application Support/com.kfchem.meno` on a Mac. Delete that folder to
+remove them too. Your own files are wherever you saved them.
+
+## What Meno does
+
+- **Drawing**: structures in the ACS 1996 style, drawn by pulling bonds out of
+  atoms; chains across a honeycomb; labels and abbreviations, charges, R and S;
+  Clean-up; reactions with arrows, "+" signs and their conditions written on
+  the page.
+- **Molecules in 3D**: a drawing raised into a 3D model beside it, turned under
+  the pointer and measured; conformers with their energies; trajectories frame
+  by frame.
+- **Calculations**: workflows drawn on the page around the structures they work
+  on, run as jobs on your computer, each step keeping its runs.
+- **PDFs, pictures and texts** on the page beside the drawing: read a PDF in a
+  column, take its words and figures out onto the page.
+- **Files**: a workspace saves as one `.meno` file. Meno opens MOL, SD, RXN,
+  XYZ and PDB files and SMILES, exports all but XYZ, and reads the outputs of
+  many calculation programs through plugins
+  ([the whole list](docs/ARCHITECTURE.md#file-format-support)). Structures
+  copy into other programs as pictures that Meno can open again.
 
 ## Development
 
@@ -40,14 +129,16 @@ npm run dev          # run the Vite dev server only (frontend, in a browser)
 npm run tauri dev    # run the full desktop app (Rust + WebView)
 npm run typecheck    # TypeScript typecheck only
 npm run lint         # ESLint
-npm test             # Vitest unit tests (parsers, tab reducer, editor store)
+npm test             # Vitest unit tests
 npm run check:tauri  # Tauri crate/npm versions must match (tauri build fails otherwise)
 npm run build        # tsc typecheck + production frontend build
 npm run tauri build  # produce a desktop app bundle
 ```
 
 Unit tests live next to the code as `*.test.ts(x)` and run in Node; they cover
-pure logic only, so GUI changes still need a manual check in `npm run tauri dev`.
+pure logic only. The built app is checked with real pointer and keyboard input
+by the harness in [`scripts/gui/`](scripts/gui/README.md), run by hand on
+Windows and macOS.
 
 Rust-side checks (run from `src-tauri/`):
 
@@ -65,16 +156,43 @@ to it, so git stores LF whatever an editor writes.
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every pull request:
 typecheck, lint, tests and build on Ubuntu, and `cargo check` / `clippy` /
-`test` on Windows.
+`test` on Windows. Releases are built by `.github/workflows/release.yml`
+([`docs/RELEASING.md`](docs/RELEASING.md)). The website is in [`site/`](site/)
+and is published to GitHub Pages by `.github/workflows/pages.yml`.
 
 Further reading: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (how the app
 is structured, Tauri commands, supported file formats) and
 [`docs/AUDIT-2026-09.md`](./docs/AUDIT-2026-09.md) (known issues and backlog).
 
-Known limitations (pre-alpha):
+## Known limitations
 
-- The Python sidecars of plugins and workflows (`src/lib/pyEnv.ts`, the `py_env_setup_uv` / `ext_spawn_sidecar` Tauri commands) depends on a bundled `uv` binary at `src-tauri/resources/py/`. Only the Windows binary (`uv.exe`) is currently checked in, so this feature does not work on macOS/Linux builds yet.
-- Unit tests cover parsing and state logic only; there are no rendering or end-to-end tests yet.
+- Pre-alpha: a workspace saved by one version may not open the same way in a
+  later one; the release notes say when that happens.
+- Releases are built for Windows (x64) and Macs with Apple silicon only.
+- The Windows installer is not code-signed, and the Mac app is signed ad hoc
+  and not notarised, so each system asks once before opening it (see
+  [Download](#download)). On a Mac, a permission given to Meno (to a protected
+  folder, say) may be asked for again after an update.
+- Some calculation plugins run only on some systems: the conformer search
+  with CREST is not available on Windows, where *Conformers* uses RDKit alone
+  ([`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)).
+
+## Disclaimer
+
+Meno is provided "as is", without warranty of any kind, express or implied,
+and its authors accept no liability for any loss or damage arising from its
+use, as sections 7 and 8 of the Apache License 2.0 set out.
+
+Meno is pre-alpha research software. The structures, 3D structures,
+conformers, energies and other results it makes or reads may be wrong: check
+them before relying on them. It is not meant for clinical, diagnostic,
+regulatory or safety-critical use.
+
+Plugins, and the calculation programs they run, are their own authors' work
+under their own licences and terms; whether to install and use them is yours
+to decide. Names of other software, systems and companies that appear here or
+in Meno belong to their owners, and do not mean that they are affiliated with
+Meno or endorse it.
 
 ## License
 
@@ -84,7 +202,11 @@ Meno's typefaces, IBM Plex Sans (upright and italic), IBM Plex Sans JP and IBM P
 
 The outlines Meno places Arial labels by before the system's own Arial has been read (`src/lib/chem/arial.ts`) are worked out from Arimo, © The Arimo Project Authors, licensed under the SIL Open Font License 1.1; see [`src-tauri/resources/licenses/Arimo-OFL.txt`](./src-tauri/resources/licenses/Arimo-OFL.txt). No font file is taken from Arial.
 
+The wordmark's letters (`site/assets/wordmark*.svg`) are drawn from Orbitron, © The Orbitron Project Authors, licensed under the SIL Open Font License 1.1; see [`site/assets/fonts/Orbitron-OFL.txt`](./site/assets/fonts/Orbitron-OFL.txt). The website carries IBM Plex as the app does.
+
 Meno reads and draws PDFs with PDFium, © The PDFium Authors, licensed under the BSD 3-Clause License (some files under the Apache License 2.0), as built by [`bblanchon/pdfium-binaries`](https://github.com/bblanchon/pdfium-binaries) (MIT). The app carries PDFium's library unchanged, and its licences and those of what it is built with - FreeType, HarfBuzz, ICU, libjpeg-turbo, OpenJPEG, libpng, zlib, Little CMS, Abseil, Anti-Grain Geometry, dragonbox, fast_float, simdutf and LLVM's libc - as `src-tauri/resources/licenses/PDFium-*`. This software is based in part on the work of the Independent JPEG Group. Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
+
+The Blender interface plugin (`src-tauri/resources/plugins/blender/`), which renders pictures and films of molecules with Blender, is licensed under the **GNU General Public License, version 3 or later**, as a script using Blender's Python API must be; see [`src-tauri/resources/plugins/blender/LICENSE`](./src-tauri/resources/plugins/blender/LICENSE). It stands apart from the rest of Meno, which takes nothing from it and speaks to it only through files and arguments. Blender itself is installed separately, under its own licence, and never shipped or downloaded by Meno.
 
 ## Acknowledgments
 

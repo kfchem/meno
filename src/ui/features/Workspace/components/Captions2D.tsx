@@ -222,7 +222,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);

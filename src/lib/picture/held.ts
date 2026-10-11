@@ -6,7 +6,7 @@
  * read from it only when first wanted.
  */
 import type { MenoFile } from "../doc/menoFile";
-import { imageInfo, type ImageInfo } from "./image";
+import { imageInfo, isMp4, PICTURE_MEDIA, type ImageInfo, type PictureMedia } from "./image";
 
 /** A picture held: what it is known by, and what it is. */
 export type HeldPicture = ImageInfo & { sha256: string };
@@ -28,6 +28,14 @@ export async function holdPicture(bytes: Uint8Array): Promise<HeldPicture | null
   return { ...info, sha256 };
 }
 
+/** A film's bytes held for the session - an MP4 a render made, its size in pixels as it said - and what they are known by; none, where they are no MP4. */
+export async function holdFilm(bytes: Uint8Array): Promise<{ sha256: string } | null> {
+  if (!isMp4(bytes)) return null;
+  const sha256 = await sha256OfBytes(bytes);
+  if (!held.get(sha256)?.bytes) held.set(sha256, { bytes });
+  return { sha256 };
+}
+
 /** A picture's bytes, held this session; read from its workspace's file the first time; none where it is held nowhere. */
 export function pictureBytes(sha256: string): Uint8Array | null {
   const h = held.get(sha256);
@@ -44,7 +52,7 @@ export function pictureBytes(sha256: string): Uint8Array | null {
 /** Each picture a workspace's file keeps, held - its bytes read from the file when first wanted. */
 export function holdPicturesOf(file: Pick<MenoFile, "files" | "data">): void {
   for (const f of file.files) {
-    if ((f.media !== "image/png" && f.media !== "image/jpeg") || held.has(f.sha256)) continue;
+    if (!PICTURE_MEDIA.includes(f.media as PictureMedia) || held.has(f.sha256)) continue;
     held.set(f.sha256, { read: () => file.data(f.sha256) });
   }
 }

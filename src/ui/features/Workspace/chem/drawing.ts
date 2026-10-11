@@ -12,7 +12,7 @@
 import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
-import { wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
 
@@ -127,4 +127,20 @@ export function forFlatReaders(model: Model): WriterModel {
     outBonds[k] = { ...b, stereo: w.stereo, stereoOrient: orientFor(b, from, degree) };
   }
   return { atoms: outAtoms, bonds: outBonds };
+}
+
+/**
+ * The stereocentres and double bonds the drawing shows only by luck, by id
+ * (lib/layout/drawn `unsureStereo`): marked on the canvas, as a valence
+ * problem is, so that none is shown as if it were certain (the maintainer,
+ * 2026-10-11).
+ */
+export function unsureOf(model: Model): { atoms: Set<number>; bonds: Set<number> } {
+  if (!model.bonds.some((b) => b.stereo === "up" || b.stereo === "down" || b.order === 2)) return { atoms: new Set(), bonds: new Set() };
+  const { atoms, bonds } = drawingOf(model);
+  const found = unsureStereo(atoms, bonds);
+  // (the bonds as drawingOf takes them: those between atoms there are)
+  const ids = new Set(model.atoms.map((a) => a.id));
+  const kept = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
+  return { atoms: new Set(found.atoms.map((i) => model.atoms[i].id)), bonds: new Set(found.bonds.map((i) => kept[i].id)) };
 }

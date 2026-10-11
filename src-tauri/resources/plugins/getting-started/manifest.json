@@ -20,7 +20,8 @@
     {"plugin": "xtb", "for": "Optimises molecules, and works out their energies and vibrations, quickly"},
     {"plugin": "crest", "for": "Searches for a molecule's conformers"},
     {"plugin": "orca", "for": "Runs ORCA, installed separately"},
-    {"plugin": "gaussian", "for": "Runs Gaussian 16, installed separately"}
+    {"plugin": "gaussian", "for": "Runs Gaussian 16, installed separately"},
+    {"plugin": "blender", "for": "Renders pictures and films of molecules in 3D with Blender, installed separately"}
   ],
   "files": [
     {"id": "adf", "name": "ADF output", "extensions": [".out", ".log"], "marks": [{"text": "Amsterdam Density Functional", "anyCase": true}], "suggest": ["cclib"]},

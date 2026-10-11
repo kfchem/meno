@@ -12,7 +12,7 @@
  * hashes behind it, the rest in it; the wedge's sense is whichever gives
  * that sign back.
  */
-import { angleOf, centroid, drawnVolume, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
+import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
 import { hydrogenSpot } from "./metrics";
 import { key, type Molecule } from "./perceive";
 
@@ -188,6 +188,20 @@ export function placeStereo(
         .filter(([a, b]) => a !== c && b !== c && pos.has(a) && pos.has(b))
         .map(([a, b]) => [pos.get(a)!, pos.get(b)!] as const);
       const own = mol.neighbours[c].map((n) => angleOf(sub(pos.get(n)!, at)));
+      // (its own rings, and whether each has a double bond of its own - one
+      // no other ring shares, whose second line is drawn inside it)
+      const ownRings = mol.ringsOf[c].filter((i) => mol.rings[i].length <= 8 && mol.rings[i].every((v) => pos.has(v)));
+      const insides = ownRings.map((i) => {
+        const r = mol.rings[i];
+        return {
+          polygon: r.map((v) => pos.get(v)!),
+          unsaturated: r.some((v, k) => {
+            const w = r[(k + 1) % r.length];
+            const b = mol.bonds[mol.bondIndex.get(key(v, w))!];
+            return !!b && b.order >= 2 && !mol.ringsOf[v].some((j) => j !== i && mol.ringsOf[w].includes(j));
+          }),
+        };
+      });
       const room = (angle: number) => {
         const p = { x: at.x + Math.cos(angle), y: at.y + Math.sin(angle) };
         let r = Infinity;
@@ -201,8 +215,16 @@ export function placeStereo(
           const d = Math.abs(Math.atan2(Math.sin(o - angle), Math.cos(o - angle)));
           if (d < (35 * Math.PI) / 180) r = Math.min(r, d);
         }
+        // (into one of its own rings only as a steroid's are: straight up or
+        // down, into a ring with no double bond's second line inside it -
+        // else it reads as pointing into the ring, as lovastatin's and
+        // yohimbine's did; the maintainer, 2026-10-11. An H hemmed in by
+        // three rings or more goes where there is room, as before:
+        // strychnine's)
+        const upright = Math.abs(Math.sin(angle)) > 0.97;
+        const into = insides.length <= 2 && insides.some((s) => (s.unsaturated || !upright) && insidePolygon(p, s.polygon));
         // (room enough is room enough: then the way it ought to point)
-        return Math.min(r, 0.85);
+        return Math.min(r, 0.85) - (into ? 0.3 : 0);
       };
       const [t0] =
         mol.systemOf[c] >= 0
@@ -236,13 +258,50 @@ export function placeStereo(
       }
       hPos = { x: at.x + Math.cos(bestT), y: at.y + Math.sin(bestT) };
     }
-    for (const choice of choices) {
-      const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
+    // A wedge that says the configuration only as the bonds round it fall
+    // exactly - two of them in a line, or all of them on one side of the
+    // centre (a bridgehead drawn flat, ibogaine's) - reads by luck: a
+    // reader, RDKit among them, may take it the other way. So each choice
+    // is first taken only where it reads the same with any one of the bonds
+    // in the page turned a little either way; failing every one of them,
+    // as it reads.
+    const reads = (drawn: (Point | null)[], lift: number[]) => drawnVolume(at, drawn, lift) === t.volume;
+    // (and never with every bond on one side of the centre: four bonds in a
+    // half of the page - bilobalide's carbons between its lactones - say
+    // nothing a reader agrees on, however they are wedged)
+    const spread = (drawn: (Point | null)[]) => {
+      const t = drawn.flatMap((p) => (p ? [Math.atan2(p.y - at.y, p.x - at.x)] : [])).sort((a, b) => a - b);
+      if (t.length < 3) return true;
+      const widest = Math.max(...t.map((a, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - a));
+      return widest < Math.PI - TURN_TEST;
+    };
+    const surely = (drawn: (Point | null)[], lift: number[]) =>
+      reads(drawn, lift) &&
+      (drawn.filter(Boolean).length < 4 || spread(drawn)) &&
+      drawn.every((p, i) =>
+        !p || lift[i] !== 0 ||
+        [-TURN_TEST, TURN_TEST].every((d) => reads(drawn.map((q, j) => (j === i && q ? turnAbout(q, at, d) : q)), lift)),
+      );
+    let pick: { choice: Choice; stereo: "up" | "down" } | null = null;
+    for (const strict of [true, false]) {
+      for (const choice of choices) {
+        const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
+        for (const stereo of ["up", "down"] as const) {
+          const lift = t.neighbours.map((n) => (n === choice.to ? (stereo === "up" ? 1 : -1) : 0));
+          const drawn = t.neighbours.map((n) => (n === -1 && choice.to !== -1 ? null : place(n)));
+          if (strict ? surely(drawn, lift) : reads(drawn, lift)) {
+            pick = { choice, stereo };
+            break;
+          }
+        }
+        if (pick) break;
+      }
+      if (pick) break;
+    }
+    for (const choice of pick ? [pick.choice] : []) {
       let done = false;
-      for (const stereo of ["up", "down"] as const) {
-        const lift = t.neighbours.map((n) => (n === choice.to ? (stereo === "up" ? 1 : -1) : 0));
-        const drawn = t.neighbours.map((n) => (n === -1 && choice.to !== -1 ? null : place(n)));
-        if (drawnVolume(at, drawn, lift) === t.volume) {
+      for (const stereo of [pick!.stereo]) {
+        {
           wedges.push({ from: c, to: choice.to, stereo });
           narrowEnds.add(c);
           if (choice.to === -1) hydrogens.push({ on: c, at: hPos! });
@@ -269,6 +328,16 @@ export function placeStereo(
     }
   }
   return { wedges, hydrogens };
+}
+
+/** How far each bond in the page round a centre is turned, either way, to ask whether a wedge reads the same. */
+const TURN_TEST = (12 * Math.PI) / 180;
+
+/** `p` turned about `c` by `t`. */
+function turnAbout(p: Point, c: Point, t: number): Point {
+  const x = p.x - c.x;
+  const y = p.y - c.y;
+  return { x: c.x + x * Math.cos(t) - y * Math.sin(t), y: c.y + x * Math.sin(t) + y * Math.cos(t) };
 }
 
 /** How far `p` is from the segment `u`-`v`. */

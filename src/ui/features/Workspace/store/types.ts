@@ -424,7 +424,20 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
 export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
-export type Drawn = Model & { pushes?: PushArrow[]; ringFills?: RingFills; arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
+export type Drawn = Model & {
+  pushes?: PushArrow[];
+  ringFills?: RingFills;
+  arrows?: Arrow[];
+  pluses?: Plus[];
+  captions?: Caption[];
+  molecules3d?: Carried3D[];
+  flow?: FlowParts;
+  pictures?: PictureItem[];
+  /** PDFs carried: each as it lies - its file by its SHA-256, held in Meno's cache - not where it is read. */
+  pdfs?: PdfItem[];
+  /** Texts' sheets carried: each text whole, where its sheet lies. */
+  sheets?: WorkspaceText[];
+};
 
 export type EditorState = {
   model: Model;
@@ -704,6 +717,12 @@ export type EditorState = {
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
   turnPdf: (id: number, page: number) => void;
+  /** The PDFs selected, by id: moved, copied and deleted with the rest of the selection (docs/PDF.md). */
+  selPdfs: Set<number>;
+  /** These PDFs selected: alone, or (`add`) besides what is already. */
+  selectPdfs: (ids: Iterable<number>, add?: boolean) => void;
+  /** A PDF added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  togglePdfSel: (id: number) => void;
   /** A PDF's pages spread out, or gathered again. */
   spreadPdf: (id: number, spread: boolean) => void;
   /** A page of a PDF spread put in a place of its own, its middle at (x, y) on the page, on top of the others: one step for a drag (`gesture`). */
@@ -726,6 +745,8 @@ export type EditorState = {
   togglePictureSel: (id: number) => void;
   /** Pictures held put on the page, as one step: the first's middle where `at` is, the others beside it in a row - clear of what lies there, unless `just` there - selected; their ids. */
   addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just?: boolean) => number[];
+  /** A picture made for a place on the page - a render's - put there, clear of the pictures there, as one step: its id; none where nothing changed. */
+  putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;
