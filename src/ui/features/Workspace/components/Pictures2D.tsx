@@ -19,11 +19,11 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
-import type { PictureItem } from "../store/types";
+import type { PictureFrom, PictureItem } from "../store/types";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { isFilm } from "../../../../lib/picture/image";
 import { filmTexture, textures, type Shared } from "./pictureTextures";
-import { COLORS } from "../../../theme/colors";
+import { ALPHA, COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { setCursor } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -34,6 +34,8 @@ import { setViewGoal } from "./viewGoal";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
+import { spotMoving, spotOn } from "./figureTie";
+import { atomAtSpot } from "../utils/figures";
 
 /** Where pictures lie: under the drawing and its selection's shade, over the PDFs (Pdfs2D's -0.4); each put there later a little over the one before - far enough apart for the depth buffer to tell them apart. */
 const Z = -0.3;
@@ -294,6 +296,17 @@ function Picture({
         onPointerOver={() => store.getState().setHoveredPicture(p.id)}
         onPointerOut={() => {
           if (store.getState().hoveredPicture === p.id) store.getState().setHoveredPicture(null);
+          if (p.from) store.getState().setFigureLit(null);
+        }}
+        onPointerMove={(e) => {
+          // (cut out of a PDF: over where an atom read from that figure was drawn, that atom lit in the drawing)
+          const f = p.from;
+          if (!f) return;
+          const q = local(e.point);
+          const st = store.getState();
+          const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
+          const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
+          st.setFigureLit(atomAtSpot(st.model, f.sha256, f.page, x, y));
         }}
         onPointerDown={onDown}
       >
@@ -302,9 +315,40 @@ function Picture({
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
+      {p.from && <SpotRing p={p} from={p.from} />}
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
       {selected && <Frame p={p} px={px} toWorld={toWorld} />}
     </group>
+  );
+}
+
+/**
+ * Where an atom read from the figure a picture was cut out of was drawn,
+ * ringed on the picture while it is lit (components/figureTie), as the
+ * drawing rings it.
+ */
+function SpotRing({ p, from }: { p: PictureItem; from: PictureFrom }) {
+  const { invalidate } = useThree();
+  const mesh = useRef<THREE.Mesh>(null!);
+  useFrame(() => {
+    const now = performance.now();
+    const s = spotOn(from.sha256, from.page, now);
+    const [x0, y0, x1, y1] = from.box;
+    const inside = s && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
+    mesh.current.visible = !!inside;
+    if (s && inside) {
+      const k = p.w / (x1 - x0);
+      mesh.current.position.set(((s.x - x0) / (x1 - x0) - 0.5) * p.w, (0.5 - (s.y - y0) / (y1 - y0)) * p.h, Z_STEP / 4);
+      mesh.current.scale.set(s.r * k, s.r * k, 1);
+      (mesh.current.material as THREE.MeshBasicMaterial).opacity = ALPHA.highlight * s.level;
+    }
+    if (spotMoving(now)) invalidate();
+  });
+  return (
+    <mesh ref={mesh} visible={false}>
+      <ringGeometry args={[0.82, 1, 48]} />
+      <meshBasicMaterial color={COLORS.highlight} transparent opacity={0} depthWrite={false} toneMapped={false} />
+    </mesh>
   );
 }
 

@@ -14,7 +14,7 @@ import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Turn3D, WordsFrom } from "../store/types";
+import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -290,6 +290,15 @@ export function readDrawn(data: unknown): Drawn | null {
     for (const k of ["color", "highlight"] as const) if (!isColour(x[k])) delete out[k];
     return out;
   };
+  // (where it was read from a figure, and what was unsure of it then, only where they read as such)
+  const withRead = <T extends { seen?: unknown; unsure?: unknown }>(x: T): T => {
+    const out = { ...x };
+    const s = x.seen as Partial<FigureSpot> | undefined;
+    if (!s || typeof s.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(s.sha256) || !Number.isInteger(s.page) || (s.page as number) < 0 || !isNum(s.x) || !isNum(s.y) || !isNum(s.bond) || s.bond <= 0) delete out.seen;
+    const u = x.unsure as Partial<Unsure> | undefined;
+    if (!u || !Array.isArray(u.said) || !u.said.length || u.said.length > 8 || !u.said.every((t) => typeof t === "string" && t.length <= 400) || typeof u.as !== "string" || u.as.length > 4000) delete out.unsure;
+    return out;
+  };
   // (a ring's fill where its key and its colour read)
   const ringFills = Object.fromEntries(
     Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
@@ -297,8 +306,8 @@ export function readDrawn(data: unknown): Drawn | null {
     ),
   ) as Record<string, string>;
   return {
-    atoms: atoms.map((a) => withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])) as Atom),
-    bonds: bonds.map((b) => withColours(withMarks(b, ["stereoAt"]))) as Bond[],
+    atoms: atoms.map((a) => withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]))) as Atom),
+    bonds: bonds.map((b) => withRead(withColours(withMarks(b, ["stereoAt"])))) as Bond[],
     ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),

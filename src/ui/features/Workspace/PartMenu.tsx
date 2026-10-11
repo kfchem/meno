@@ -144,6 +144,7 @@ export default function PartMenu({
   step,
   pdf,
   onCopyPicture,
+  onReadStructure,
   text,
   onSaveProcedure,
   onUseAsInput,
@@ -212,6 +213,8 @@ export default function PartMenu({
   };
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
+  /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
+  onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
   text?: { icon: boolean; onRead: () => void; onIcon: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
@@ -396,6 +399,7 @@ export default function PartMenu({
           ...(pdf?.onCopy ? [{ name: "Copy", keys: shortcut("C"), run: pdf.onCopy }] : []),
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
+          ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
         ]
@@ -414,6 +418,7 @@ export default function PartMenu({
           ...(onCopyPicture ? [{ name: "Copy picture", keys: "", run: onCopyPicture, icon: MENU_ICONS.picture }] : []),
           del("Delete picture"),
           ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
+          ...(onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           // (saved as a file; a film, played or paused where it lies)
           ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
           ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
