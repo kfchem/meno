@@ -81,4 +81,27 @@ describe("the chemistry client", () => {
     await expect(r).rejects.toThrow("the chemistry worker stopped");
     expect(w.stopped()).toBe(true);
   });
+
+  it("tells its worker's queue what it asks, what is answered, what it gives up on, and what it lets go of", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWorker();
+      const heard: string[] = [];
+      const watch = { sent: (id: number) => heard.push(`sent ${id}`), settled: (id: number) => heard.push(`settled ${id}`), overdue: (id: number) => heard.push(`overdue ${id}`) };
+      const c = new ChemClient(w.transport, 1000, "RDKit", undefined, watch);
+      const answered = c.request("to_smiles", { molblock: "A" });
+      w.say({ id: w.sent[0].id, ok: true, result: { smiles: "C" } });
+      await answered;
+      const late = c.request("from_smiles", { smiles: "CC" }).catch((e: Error) => e.message);
+      vi.advanceTimersByTime(1001);
+      expect(await late).toMatch(/did not answer from_smiles in time/);
+      const waiting = c.request("to_smiles", { molblock: "B" }).catch((e: Error) => e.message);
+      c.close("RDKit was started again");
+      expect(await waiting).toBe("RDKit was started again");
+      const [a, b, d] = w.sent.map((m) => m.id);
+      expect(heard).toEqual([`sent ${a}`, `settled ${a}`, `sent ${b}`, `overdue ${b}`, `sent ${d}`, `settled ${d}`]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

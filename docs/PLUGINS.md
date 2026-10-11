@@ -312,6 +312,16 @@ fills.
   take a while; up to 90 s is allowed.
 - **Keeping it.** It is then kept for the session. If it stops, the next
   request starts it again.
+- **Held on a request.** A worker answers one request at a time, in the
+  order asked. If the request it is on is not answered in that request's
+  time, the worker is stopped, and the next request starts it afresh
+  (`lib/plugins/queue.ts`). A request asked after another that is still
+  within its own time stops nothing: the worker is busy with the one
+  before it, such as a picture plugin loading its model for its first
+  picture, which has five minutes. What else was waiting on the stopped
+  worker fails with *... was started again: it did not finish what it was
+  asked before in time*, which the part that asked shows as its own error
+  (the formula banner, a file's reading, a step's log).
 - **In Settings.** *Plugins* lists it with the others, to add or take
   away. *Chemistry* says whether it is running, set up and to start when
   a structure is drawn, not set up, or taken away; it and *Molecules in
