@@ -5,7 +5,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver } from "../../utils/selection";
 import { schemeAmong } from "../../utils/copyPaste";
 import { relinked } from "../../utils/drawnLink";
@@ -522,6 +522,18 @@ export const createModelSlice = (
   removePush: (id: number) => {
     if (doc.edit("delete electron arrow", (d) => ops.removePush(d, id)))
       set((prev: EditorState) => (prev.hoveredPush === id ? { ...prev, hoveredPush: null } : prev));
+  },
+
+  addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const id = doc.getState().nextArrowId;
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    doc.edit("add arrow", (d) => ops.addArrow(d, (from.x + to.x) / 2, (from.y + to.y) / 2, angle, length));
+    return id;
+  },
+
+  setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => {
+    doc.edit("arrow", (d) => ops.setArrowForm(d, ids, patch), gesture ? { coalesceKey: `arrow-form:${gesture}` } : undefined);
   },
 
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {

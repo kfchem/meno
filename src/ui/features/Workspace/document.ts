@@ -13,7 +13,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
@@ -869,10 +869,7 @@ export function withImportedScheme(
   let next = doc;
   // (the words over an arrow it brings are over that arrow, as it is numbered here)
   const firstArrow = doc.nextArrowId;
-  for (const a of scheme?.arrows ?? []) {
-    next = addArrow(next, a.x, a.y, a.angle, a.length);
-    if (a.look) next = setArrowLook(next, next.nextArrowId - 1, a.look);
-  }
+  for (const { x, y, angle, length, ...rest } of scheme?.arrows ?? []) next = addArrow(next, x, y, angle, length, rest);
   for (const p of scheme?.pluses ?? []) next = addPlus(next, p.x, p.y);
   // (and the words in a shape it brings, in that shape)
   const firstShape = next.nextShapeId ?? 1;
@@ -1050,8 +1047,10 @@ export function addArrow(
   y: number,
   angle: number,
   length: number,
+  /** What else it is: its look, form and colour, as a file or a copy brings them. */
+  rest: Omit<Arrow, "id" | "x" | "y" | "angle" | "length"> = {},
 ): WorkspaceDocument {
-  const arrow: Arrow = { id: doc.nextArrowId, x, y, angle, length };
+  const arrow: Arrow = { ...rest, id: doc.nextArrowId, x, y, angle, length };
   return {
     ...doc,
     nextArrowId: doc.nextArrowId + 1,
@@ -1071,6 +1070,34 @@ export function updateArrow(
   next[index] = { ...was, ...patch };
   // (the words over it, or under it, go where its middle goes)
   return withCaptionsBy({ ...doc, arrows: next }, new Map([[id, { x: next[index].x - was.x, y: next[index].y - was.y }]]));
+}
+
+/**
+ * `doc` with the arrows `ids` given what `patch` says - a kind, heads, an
+ * equilibrium's full heads, dashes, a weight, corners, a colour - each set
+ * as it says, or (null, "regular", 1 head, false) taken away.
+ */
+export function setArrowForm(doc: WorkspaceDocument, ids: readonly number[], patch: ArrowFormPatch): WorkspaceDocument {
+  const want = new Set(ids);
+  let changed = false;
+  const arrows = doc.arrows.map((a) => {
+    if (!want.has(a.id)) return a;
+    const next: Arrow = { ...a };
+    const put = <K extends keyof Arrow>(k: K, v: Arrow[K] | undefined) => {
+      if (v === undefined) delete next[k];
+      else next[k] = v;
+    };
+    if (patch.kind !== undefined) put("kind", patch.kind ?? undefined);
+    if (patch.heads !== undefined) put("heads", patch.heads === 2 ? 2 : undefined);
+    if (patch.full !== undefined) put("full", patch.full ? true : undefined);
+    if (patch.dash !== undefined) put("dash", patch.dash ? true : undefined);
+    if (patch.weight !== undefined) put("weight", patch.weight === "regular" ? undefined : patch.weight);
+    if (patch.corners !== undefined) put("corners", patch.corners?.length ? patch.corners : undefined);
+    if (patch.color !== undefined) put("color", patch.color ?? undefined);
+    changed ||= JSON.stringify(next) !== JSON.stringify(a);
+    return next;
+  });
+  return changed ? { ...doc, arrows } : doc;
 }
 
 /** `doc` with the arrow setting `look` for itself, in place of what it set. */

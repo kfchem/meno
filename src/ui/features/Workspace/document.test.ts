@@ -246,6 +246,18 @@ describe("structure document operations", () => {
     expect(ops.setArrowLook(d, 9, { reactionArrowHeadInset: 0.5 })).toBe(d);
   });
 
+  it("gives arrows a kind, heads, dashes, a weight, corners and a colour - and takes each away again", () => {
+    let d = ops.addArrow(ops.addArrow(ethane(), 1, 2, 0, 3), 5, 2, 0, 3);
+    d = ops.setArrowForm(d, [1, 2], { kind: "equilibrium", full: true, dash: true, weight: "thick", corners: [{ along: 0.5, across: 1 }], color: "#c44848" });
+    for (const a of d.arrows) expect(a).toMatchObject({ kind: "equilibrium", full: true, dash: true, weight: "thick", corners: [{ along: 0.5, across: 1 }], color: "#c44848" });
+    d = ops.setArrowForm(d, [1], { kind: null, full: false, dash: false, weight: "regular", corners: null, color: null, heads: 2 });
+    expect(d.arrows[0]).toEqual({ id: 1, x: 1, y: 2, angle: 0, length: 3, heads: 2 });
+    expect(ops.setArrowForm(d, [1], { heads: 2 })).toBe(d);
+    // (brought with a paste: as it was, each new id)
+    const pasted = ops.withImportedScheme(ethane(), ops.schemeOf({ ...ethane().model, arrows: d.arrows }));
+    expect(pasted.arrows[1]).toMatchObject({ kind: "equilibrium", corners: [{ along: 0.5, across: 1 }], color: "#c44848" });
+  });
+
   it("toggles aromatic circles", () => {
     let d = ops.setAromaticEnabled(doc(), true);
     expect(d.aromaticEnabled).toBe(true);

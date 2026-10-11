@@ -6,6 +6,7 @@
  * (docs/WORKSPACE.md, stage 2).
  */
 import * as THREE from "three";
+import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
@@ -317,9 +318,11 @@ export function takenOnPage(
   }
   const pad = 0.4 * NOMINAL_BOND_LENGTH;
   for (const r of page.arrows) {
-    const dx = (Math.cos(r.angle) * r.length) / 2;
-    const dy = (Math.sin(r.angle) * r.length) / 2;
-    boxes.push({ x0: r.x - Math.abs(dx) - pad, x1: r.x + Math.abs(dx) + pad, y0: r.y - Math.abs(dy) - pad, y1: r.y + Math.abs(dy) + pad });
+    // (its ends and the corners it turns at)
+    const pts = arrowPoints(r);
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    boxes.push({ x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad, y0: Math.min(...ys) - pad, y1: Math.max(...ys) + pad });
   }
   for (const p of page.pluses) boxes.push({ x0: p.x - 2 * pad, x1: p.x + 2 * pad, y0: p.y - 2 * pad, y1: p.y + 2 * pad });
   return [...boxes, ...solids];
