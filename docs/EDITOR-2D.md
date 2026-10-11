@@ -394,7 +394,10 @@ Both go together, because both touch every layer.
 - **Defaults.** ACS 1996, exactly, as a preset. The default is Meno's own
   style built on it: ACS 1996's proportions with round ends and joins and
   labels in IBM Plex Sans, which is also the app's own typeface - its
-  capital I has serifs and its l a tail, so Cl never reads as CI. (PR #47)
+  capital I has serifs and its l a tail, so Cl never reads as CI (PR #47) -
+  and drawn in the black of Meno's palette, #141414, a little softer than
+  the pure black the journals' styles keep for print (the maintainer,
+  2026-10-11).
 - **Typefaces.** Any typeface on the computer: a label is placed and
   cleared by that typeface's own letter shapes, read from its file when it
   is first used (the app hands over one face of a collection, with its
@@ -576,9 +579,15 @@ All hover-based, as above.
   its label, where it has one - flat, so that the pieces of one colour run
   together into one shape with a sharp edge; and *Fill ring*, a lighter
   tint over the inside of each ring it holds whole, or of the ring
-  right-clicked. Each row has none, Okabe and Ito's colours but black -
-  told apart by those who see colours otherwise - and any other, from the
-  system's chooser; the one given now is ringed. A swatch is given at
+  right-clicked. Each row has none, the palette's colours and any other,
+  from the system's chooser; the one given now is ringed. The palette is
+  the user's, set in Settings, General (*Colours*: a swatch pressed is
+  changed, dragged is moved along, its cross takes it out, the plus adds
+  one): Meno's four to begin with - its base #317689, its accent #cd4560,
+  a black #141414 and a gray #c0c0c0, a few that look right as they are,
+  as colour makes a drawing look cheap easily (the maintainer,
+  2026-10-11) - and Okabe and Ito's, told apart by those who see colours
+  otherwise, in their place in one press. A swatch is given at
   once, one step each (as long as the chooser is open, one step in all),
   and the card stays open for the next; Escape, a press elsewhere or the
   wheel closes it. A selection's colour goes to its atoms and the bonds

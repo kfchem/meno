@@ -11,6 +11,7 @@ import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../chem/style";
 import { acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
+import { acceptPalette, MENO_PALETTE } from "../chem/palette";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
 import type { OptionValues } from "../options";
 import { isRole } from "../plugins/roles";
@@ -48,6 +49,8 @@ export type AppSettings = {
   calculations: CalculationSettings;
   /** The procedures saved (docs/WORKFLOWS.md, *Procedures*): put down again from Quick Add. */
   procedures: SavedProcedure[];
+  /** The colours a part of a structure can be given from its colour card, in order (lib/chem/palette). */
+  palette: string[];
 };
 
 /**
@@ -161,6 +164,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   words: { smart: true },
   calculations: {},
   procedures: [],
+  palette: [...MENO_PALETTE],
 };
 
 /** The file's layout; bumped when it changes in a way old files need reading round. */
@@ -186,6 +190,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
     procedures: acceptProcedures(r.procedures),
+    palette: acceptPalette(r.palette),
   };
 }
 
@@ -389,6 +394,7 @@ type SettingsState = AppSettings & {
   setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
   setProcedures: (procedures: SavedProcedure[]) => void;
+  setPalette: (palette: string[]) => void;
 };
 
 /** How long after the last change the file is written. */
@@ -399,9 +405,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures } = get();
+      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, palette } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures }),
+        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, palette }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -458,6 +464,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setProcedures: (procedures) => {
       set({ procedures });
+      scheduleSave();
+    },
+    setPalette: (palette) => {
+      set({ palette: acceptPalette(palette) });
       scheduleSave();
     },
     setUpdates: (updates) => {
