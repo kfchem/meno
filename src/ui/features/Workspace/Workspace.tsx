@@ -777,6 +777,12 @@ function WorkspaceContent({
   useEffect(() => {
     if (talking) setMenu(null);
   }, [talking]);
+  // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
+  // being written, and the menu would stay open over it, its keys and the label's at odds)
+  const labelBegun = useEditor((s) => s.labelEdit.active);
+  useEffect(() => {
+    if (labelBegun) setMenu(null);
+  }, [labelBegun]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);

@@ -12,6 +12,8 @@
 # - "push-right-press": an electron-pushing arrow begun from C1's menu, led to
 #   the O and let go by a right press there. The arrow goes, and no menu
 #   opens (the O's did).
+# - "menu-then-letter": C1's menu open, a letter typed: the label begins
+#   with it and the menu shuts (it stayed open over the label).
 #
 # (A right press in the middle of a drag, the fourth, opens no menu either:
 # its press needs a chorded button the shared verbs do not post, and was
@@ -61,3 +63,11 @@ Move-MenoPointerAlong -Path @(@(1460, 1040), @(1360, 1040), @(1260, 1040), @(118
 Invoke-MenoClick -X 1128 -Y 1038 -Right
 Start-Sleep -Milliseconds 400
 Save-Step "push-right-press"
+
+# C1's menu open, then a letter typed (Enter keeps it: C1 is N)
+Invoke-MenoClick -X 1216 -Y 988 -Right
+Start-Sleep -Milliseconds 400
+Send-MenoText "N"
+Start-Sleep -Milliseconds 400
+Save-Step "menu-then-letter"
+Send-MenoKey Enter
