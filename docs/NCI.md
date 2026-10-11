@@ -21,7 +21,8 @@ the methods' authors do, as one more thing a molecule in 3D can be asked.
 
 A step of a workflow (WORKFLOWS.md): **NCI**, in Quick Add's calculations,
 taking molecules in 3D or conformer sets and giving the same molecules,
-each with its surfaces. Two plugins fill it:
+each with its surfaces. Two plugins fill it; either alone does for any
+molecule in 3D, from its geometry:
 
 - **The NCIPLOT interface** - from the geometry alone: NCIPLOT 4 sums
   atoms' densities (the promolecular density), so it needs no calculation
@@ -29,13 +30,20 @@ each with its surfaces. Two plugins fill it:
   0.15 Å; standard, 0.1 Å; fine, 0.05 Å), interactions only between
   molecules not bonded to each other, the RDG the surface is drawn at
   (0.3), and how far the colour scale reaches (± 0.07 a.u.).
-- **The Multiwfn interface** - from a calculation's wavefunction: a
-  Molden file, a Gaussian formatted checkpoint, a WFN or a WFX, the one
-  the molecule was read from - opened (read by cclib or PySCF), or
-  written by another plugin's step. Its options: the grid (low, medium,
-  high: about 125 000, 512 000 or 1 728 000 points over the whole system),
-  the RDG the surface is drawn at (0.5), and the colour scale's ends
-  (-0.035 to 0.02 a.u., as Multiwfn's own plotting script has them).
+- **The Multiwfn interface** - from a calculation's wavefunction where
+  the molecule has one: a Molden file, a Gaussian formatted checkpoint, a
+  WFN or a WFX, the one the molecule was read from - opened (read by cclib
+  or PySCF), or written by another plugin's step; and otherwise from its
+  geometry alone, by the promolecular density Multiwfn builds from its own
+  atoms' densities (its manual, 3.23.2) - so that NCI needs no other
+  program. Its options: the density (the wavefunction's where there is
+  one, else promolecular; or promolecular for every molecule), the grid
+  (low, medium, high: about 125 000, 512 000 or 1 728 000 points over the
+  whole system), the RDG the surface is drawn at - 0.5 from a
+  wavefunction, 0.3 promolecular, as Multiwfn's manual has it (4.20.2) -
+  and the colour scale's ends (-0.035 to 0.02 a.u., as Multiwfn's own
+  plotting script has them). The list's row says which density a surface
+  is of.
 
 The results come in as the molecules, each with a list, *Non-covalent
 interactions*, open at once, its surface shown: the RDG surface, coloured
@@ -76,11 +84,16 @@ for either grid. Saved with the workspace as any surface is.
   0.07 r`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
   (sign(λ2)ρ × 100, as the scale's label says). `NCIPLOT_HOME` is the
   folder above the program's (where its `dat` is, as built).
-- **Multiwfn** is run as its manual has it (2.2, 3.23.1, 5.2):
+- **Multiwfn** is run as its manual has it (2.2, 3.23.1, 3.23.2, 5.2):
   `multiwfn wavefunction.<ext> -nt <cores> -silent` reading `20 1 <grid> 3
-  0 0 q` from its standard input, writing `func1.cub` (sign(λ2)ρ) and
-  `func2.cub` (the RDG); `Multiwfnpath` is its folder, where its
-  settings.ini is.
+  0 0 q` from its standard input - or, from the geometry,
+  `multiwfn molecule.xyz ...` reading `20 2 <grid> 3 0 0 q`, the
+  promolecular NCI, its steps the same - writing `func1.cub` (sign(λ2)ρ)
+  and `func2.cub` (the RDG); `Multiwfnpath` is its folder, where its
+  settings.ini is. The job reads back what Multiwfn was told (`reads`), so
+  that `collect` says which density each surface is of. Promolecular, it
+  leaves out where the density is above 0.1 a.u. (its settings.ini's
+  `RDGprodens_maxrho`).
 
 ## Licences
 
@@ -101,16 +114,26 @@ By the maintainer, 2026-10-10 and 2026-10-11:
    scale - not one for NCI alone.
 3. **Multiwfn takes a wavefunction from upstream** through a step's
    `files`, joined by the kind's id alone.
+4. **Either plugin alone does NCI from a geometry** (2026-10-11): Multiwfn
+   by its promolecular NCI, NCIPLOT as before; each is installed apart and
+   used as the chemist has it.
 
 ## Not yet
 
 - **A wavefunction written by a step**: ORCA's and Gaussian's steps do
   not keep one yet (ORCA writes one with its own utilities, orca_2mkl or
   orca_2aim, after its run; Gaussian with `Output=WFX`) - so Multiwfn's NCI
-  takes a molecule read from a wavefunction file opened, for now.
+  from a wavefunction takes a molecule read from a wavefunction file
+  opened, for now; others are worked out from their geometry.
 - No reader of WFN or WFX files yet: those kinds are named for when one
   comes.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).
 - Renders (RENDER.md) of coloured surfaces: the glTF scene carries a
   surface's own colours, not yet another grid's.
 - Integrated NCI properties, and the RDG against sign(λ2)ρ plot.
+- Interactions between molecules alone by Multiwfn (NCIPLOT's
+  `INTERMOLECULAR`): Multiwfn's IGM analyses (its manual, 3.23.5) part
+  them by fragments, and would be a step of their own.
+- Meno's own promolecular NCI, needing no program installed: being looked
+  into (the method's paper, and the licences of the atoms' densities it
+  needs).

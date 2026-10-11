@@ -99,7 +99,7 @@ describe("the readers Meno knows of", () => {
     expect(pluginsFilling("render").map((p) => p.id)).toEqual(["blender"]);
     expect(blender.installed[0]).toMatchObject({ name: "blender", files: { macos: "Blender", windows: "blender.exe", linux: "blender" } });
     expect(blender.installed[0].places.macos).toContain("/Applications/Blender.app/Contents/MacOS");
-    // (and those that fill NCI: NCIPLOT from a geometry; Multiwfn from a wavefunction another plugin read - by the kinds' ids alone)
+    // (and those that fill NCI: NCIPLOT from a geometry; Multiwfn from a wavefunction another plugin read - by the kinds' ids alone - or a geometry)
     const nciplot = PLUGINS.find((p) => p.id === "nciplot")!;
     expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);
     expect(nciplot.installed[0]).toMatchObject({ name: "nciplot", env: { NCIPLOT_HOME: ["{parent}"] } });
