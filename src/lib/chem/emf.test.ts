@@ -272,8 +272,8 @@ describe("measurements in a picture", () => {
     const m = layout.measures![0];
     expect(m.text).toBe(text);
     expect(m.lines.length).toBeGreaterThan(3);
-    // (written about where the two atoms meet, the molecule placed at x 6)
-    expect(m.label.x).toBeCloseTo(6, 1);
+    // (written about where the two atoms meet - beside it, where it would cover a hydrogen's ball - the molecule placed at x 6)
+    expect(Math.abs(m.label.x - 6)).toBeLessThan(1);
     expect(layout.bounds.max.x).toBeGreaterThan(m.label.x);
   });
 

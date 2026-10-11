@@ -48,11 +48,11 @@ describe("a molecule in 3D as it is drawn", () => {
   it("is laid about its centre, a bond of 1.5 Å as long as a drawn one", () => {
     const s = solidOf(ethane(), STYLE_3D);
     expect(Array.from(s.frames[0])).toEqual([-0.75 * WORLD_PER_ANGSTROM, 0, 0, 0.75 * WORLD_PER_ANGSTROM, 0, 0].map((v) => expect.closeTo(v, 6)));
-    // a carbon's ball: a fifth of its van der Waals radius (1.7 Å); space-filling, all of it
-    expect(s.radii.primary[0]).toBeCloseTo(0.34 * WORLD_PER_ANGSTROM, 6);
-    expect(s.radii.secondary[0]).toBeCloseTo(1.7 * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.primary).toBeCloseTo((0.75 + 0.34) * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.secondary).toBeCloseTo((0.75 + 1.7) * WORLD_PER_ANGSTROM, 6);
+    // a carbon's ball: a fifth of its van der Waals radius (1.77 Å); space-filling, all of it
+    expect(s.radii.primary[0]).toBeCloseTo(0.354 * WORLD_PER_ANGSTROM, 6);
+    expect(s.radii.secondary[0]).toBeCloseTo(1.77 * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.primary).toBeCloseTo((0.75 + 0.354) * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.secondary).toBeCloseTo((0.75 + 1.77) * WORLD_PER_ANGSTROM, 6);
   });
 
   it("stands as high as it reaches, so that no turn takes it behind the page", () => {
@@ -116,7 +116,7 @@ describe("a molecule in 3D as it is drawn", () => {
     const s = solidOf(m, STYLE_3D);
     expect(s.frames).toHaveLength(2);
     expect(s.frames[1][0]).toBeCloseTo(-1.5 * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.primary).toBeCloseTo((1.5 + 0.34) * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.primary).toBeCloseTo((1.5 + 0.354) * WORLD_PER_ANGSTROM, 6);
     expect([frameOf(s, undefined), frameOf(s, 1), frameOf(s, 7), frameOf(s, -1)]).toEqual([0, 1, 1, 0]);
   });
 });
