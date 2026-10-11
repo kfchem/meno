@@ -33,7 +33,8 @@ molecule in 3D, from its geometry:
 - **The Multiwfn interface** - from a calculation's wavefunction where
   the molecule has one: a Molden file, a Gaussian formatted checkpoint, a
   WFN or a WFX, the one the molecule was read from - opened (read by cclib
-  or PySCF), or written by another plugin's step; and otherwise from its
+  or PySCF), or kept by another plugin's step (ORCA's and Gaussian's keep
+  theirs: WORKFLOWS.md, *The wavefunction is kept*); and otherwise from its
   geometry alone, by the promolecular density Multiwfn builds from its own
   atoms' densities (its manual, 3.23.2) - so that NCI needs no other
   program. Its options: the density (the wavefunction's where there is
@@ -120,11 +121,6 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 
 ## Not yet
 
-- **A wavefunction written by a step**: ORCA's and Gaussian's steps do
-  not keep one yet (ORCA writes one with its own utilities, orca_2mkl or
-  orca_2aim, after its run; Gaussian with `Output=WFX`) - so Multiwfn's NCI
-  from a wavefunction takes a molecule read from a wavefunction file
-  opened, for now; others are worked out from their geometry.
 - No reader of WFN or WFX files yet: those kinds are named for when one
   comes.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).

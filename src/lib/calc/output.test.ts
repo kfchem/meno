@@ -57,6 +57,10 @@ describe("what a reader hands back", () => {
     const kept = calcOf(water, ["cclib 1.9rc1"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);
     expect(readCalc({ program: "ORCA" }, 3, 2)).toBeUndefined();
+    // (the wavefunction kept with it, as Meno holds it: never a place to find it again)
+    const wavefunction = { name: "water.molden", sha256: "a".repeat(64), kind: "molden" };
+    expect(readCalc({ ...kept, wavefunction: { ...wavefunction, path: "/tmp/water.molden" } }, 3, 2)?.wavefunction).toEqual(wavefunction);
+    expect(readCalc({ ...kept, wavefunction: { name: "x", sha256: "nope" } }, 3, 2)).not.toHaveProperty("wavefunction");
     expect(readCalc("ORCA", 3, 2)).toBeUndefined();
     // (what belongs to another molecule's atoms is not this one's: its
     // charges, and its vibrations' motions - their frequencies stay)

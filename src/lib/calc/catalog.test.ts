@@ -76,7 +76,17 @@ describe("the readers Meno knows of", () => {
       ["energy", ["orca"]],
       ["frequencies", ["orca"]],
     ]);
-    expect(orca.installed).toEqual([{ name: "orca", label: "ORCA", files: { macos: "orca", windows: "orca.exe", linux: "orca" }, path: ["{folder}"], env: {}, places: {} }]);
+    expect(orca.installed).toEqual([
+      {
+        name: "orca",
+        label: "ORCA",
+        files: { macos: "orca", windows: "orca.exe", linux: "orca" },
+        path: ["{folder}"],
+        env: {},
+        places: {},
+        beside: { orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } },
+      },
+    ]);
     expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] }, places: {} }]);
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     // (and those that fill kinds of step: xTB, made by pixi - and RDKit, a 3D structure besides its roles)

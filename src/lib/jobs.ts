@@ -43,6 +43,8 @@ export type JobAsk = {
   cores?: number;
   /** Where its program is, where it is one installed separately (lib/plugins/installed). */
   path?: string;
+  /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
+  then?: { program: string; args: string[] }[];
 };
 
 /** Whether a job is over - and will say nothing more. */

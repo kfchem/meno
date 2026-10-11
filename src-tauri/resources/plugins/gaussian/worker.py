@@ -15,13 +15,14 @@ line on stdin, one per line back on stdout, as every plugin's:
     {"id": 4, "op": "prepare", "step": "optimise", "entries": [...], "options": {...}, "cores": 4}
     {"id": 4, "ok": true, "result": {"jobs": [{"entries": [0], "program": "g16", "args": [], "stdin": "input.gjf", ...}]}}
     {"id": 5, "op": "collect", "step": "optimise", "entries": [...], "files": {}, "log": "...", "ended": "done"}
-    {"id": 5, "ok": true, "result": {"read": [{"kind": "gaussian", "log": true, "name": "water.log"}]}}
+    {"id": 5, "ok": true, "result": {"read": [{"kind": "gaussian", "log": true, "name": "water.log",
+        "wavefunction": {"kind": "wfx", "file": "wavefunction.wfx", "name": "water.wfx"}}]}}
     {"id": 3, "ok": false, "error": "..."}
 
 It writes what it is given and nothing else - no file of its own choosing,
 no network - runs nothing itself, and says when it is ready:
 
-    {"event": "ready", "version": "0.2.0"}
+    {"event": "ready", "version": "0.3.0"}
 
 Its steps - Optimise, Energy, Frequencies - each make a job for an entry:
 its input written as below, run as Gaussian's "Running Gaussian" page has
@@ -30,8 +31,10 @@ input from standard input and writes its output to standard output, which
 is the job's log, followed by Meno as it runs; the scratch files where it
 runs; its folder `g16root` the one above Gaussian's own and GAUSS_EXEDIR
 Gaussian's own. `collect` reads nothing: it says that the log is
-Gaussian's output, for Meno's readers to read as one opened is - or,
-where the job failed, why, as the output says.
+Gaussian's output, for Meno's readers to read as one opened is - and,
+where Gaussian wrote one, that its wavefunction is kept with the molecule,
+for a step that takes one (Multiwfn's NCI) - or, where the job failed,
+why, as the output says.
 
 The input is laid out as Gaussian's own reference has it (gaussian.com,
 "About Gaussian 16 Input", "Link 0 Commands", "Molecule Specifications"),
@@ -49,13 +52,17 @@ and from nothing else:
 - The molecule specification, ended by a blank line: the charge and spin
   multiplicity on its first line, then each atom's element and its
   Cartesian coordinates, an isotope as "(Iso=n)" after the element.
+- For a step's job keeping the wavefunction, "Output=WFX" in the route
+  section, and the name of the file it writes, which Gaussian "read[s]
+  from the input stream, on a separate line" (gaussian.com, "Output"),
+  after the molecule specification, ended by a blank line.
 """
 
 import json
 import re
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # The elements by atomic number, from 1: what an atom's element may be.
 SYMBOLS = (
@@ -191,6 +198,9 @@ PROGRAM = "g16"
 INPUT = "input.gjf"
 # what Gaussian's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "gaussian"
+# the wavefunction a step's job keeps, and what kind of file it is (as Multiwfn's step names it)
+WAVEFUNCTION = "wavefunction.wfx"
+WAVEFUNCTION_KIND = "wfx"
 # each kind of step, as its job's keyword says it
 STEP_JOBS = {"optimise": "opt", "energy": "sp", "frequencies": "freq"}
 SOLVATIONS = {"none", "PCM", "SMD"}
@@ -215,17 +225,27 @@ def step_input(step, entry, options, cores):
         raise Refused(f"no solvent is called {solvent!r}")
     more = one_line(options.get("keywords", ""), "The keywords")
     scrf = f"SCRF=({solvation},Solvent={solvent})" if solvation != "none" else ""
+    keep = keeps_wavefunction(options)
     given = {
         **options,
         "job": job,
-        "keywords": " ".join(p for p in (scrf, more) if p),
+        "keywords": " ".join(p for p in (scrf, more, "Output=WFX" if keep else "") if p),
         "charge": entry.get("charge", 0),
         "multiplicity": entry.get("multiplicity", 1),
         "title": entry.get("name") or "",
         "checkpoint": False,
         "processors": whole(cores, "The cores", 1) if cores else 0,
     }
-    return gaussian_input(INPUT, entry, given)
+    text = gaussian_input(INPUT, entry, given)
+    # (the wavefunction's file, named on a line of its own after the molecule)
+    return text + f"{WAVEFUNCTION}\n\n" if keep else text
+
+
+def keeps_wavefunction(options):
+    keep = options.get("wavefunction", True)
+    if not isinstance(keep, bool):
+        raise Refused("Whether to keep the wavefunction is neither on nor off")
+    return keep
 
 
 def op_prepare(m):
@@ -238,7 +258,7 @@ def op_prepare(m):
             "args": [],
             "files": [{"name": INPUT, "text": step_input(m.get("step"), entry, options, m.get("cores"))}],
             "stdin": INPUT,
-            "reads": [],
+            "reads": [WAVEFUNCTION] if keeps_wavefunction(options) else [],
         })
     if not jobs:
         raise Refused("nothing came in")
@@ -270,7 +290,14 @@ def op_collect(m):
     output = m.get("log") or ""
     if m.get("ended") != "done" or not output.strip():
         return {"why": why_of(output)}
-    return {"read": [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []]}
+    # (its wavefunction, where it wrote one: read back by Meno, kept with the molecule)
+    wrote = WAVEFUNCTION in (m.get("files") or {})
+    return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
+
+
+def wavefunction_of(entry):
+    """The wavefunction an entry's job wrote, as Meno keeps it: its kind, its file, and the name it goes by, after the entry."""
+    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".log")] + ".wfx"}
 
 
 def op_write(m):
