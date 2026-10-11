@@ -220,8 +220,9 @@ words, a width they break into lines at, and how their lines lie.
   drives the view (`viewGoal.ts` `setViewDriven`), and takes it up again
   from where the talk left it.
 - `ui/presenting.ts`: the title bar's way made (App), and the window full
-  screen through Tauri - which needs the window permission
-  `core:window:allow-set-fullscreen` (`src-tauri/capabilities/default.json`).
+  screen by the app's own command `present_window` (`src-tauri/src/present.rs`:
+  macOS's simple full screen, the keys given back to the page), which needs
+  no window permission.
 - Chips that work a molecule (`meno-control-chip`: its frames, *Make
   again*) are hidden while a talk is given (`[data-presenting]` on the
   page's HTML layer).
@@ -230,6 +231,50 @@ words, a width they break into lines at, and how their lines lie.
   cards of what ran during it, `ui/notices.ts` holds notices given
   meanwhile, ConsentDialog and UpdateNotice wait.
 
-Not yet, and where it comes: everything under *Text boxes*, *Shapes*,
-*Guides* and *Handwriting* (their own pull requests, in that order); a
-slide's notes, with the presenter's view.
+### Text boxes (lane L8, second part, 2026-10-11)
+
+As built, in docs/EDITOR-2D.md, *Text*: a size of their own, letters
+marked, lists and a box's top. A list's next item is started by
+Shift+Enter, since Enter keeps the words, as it did before.
+
+### Shapes (lane L8, third part, 2026-10-11)
+
+- `lib/chem/shapes.ts`, the same for the canvas, SVG and EMF: the line a
+  shape follows (a rounded box's corners at most 9 points round, a callout's
+  tail from the side its tip lies beyond, an arrow's line stopping short of
+  its heads), its dashes, its heads, the area it fills, where a press takes
+  it, how far it reaches, where its words go, and how it is drawn, made
+  larger or smaller, moved and turned. Lines are 0.6, 1.2 or 2.4 points
+  (thin as a bond's, regular, thick); a dash is 3.5 widths and 2 points
+  long, a gap 2 widths and 1.5 points.
+- `store/types.ts` `Shape` (its kind, two corners or two ends, a callout's
+  tail, its weight, dashed, an arrow's second head, its line's colour - or
+  `"none"` - and its fill) and `Caption.shape`, the shape words are in;
+  `document.ts` `addShape`, `updateShape`, `restyleShapes`, `orderShapes`,
+  `removeShapes` (their words with them), `withShapeWords` (words about the
+  shape's middle, as wide as it is inside, less a third of a bond either
+  side - the rectangle within an ellipse) and `MarkPlaces.shapes`;
+  `store/slices/shapesSlice.ts`; `selShapes`, `hoveredShape` and
+  `shapeDraft` beside the other kinds'; the clipboard's record, a cut, a
+  paste and the workspace's file, words in a shape kept in it as it is
+  numbered anew.
+- `components/Shapes2D.tsx`, between the pictures (-0.3) and the
+  drawing's fills: each shape and one being drawn; a press on its line or,
+  filled, inside it - none through what is drawn over it; a hold, a click,
+  a second click to write in it; the handles. `components/shapeFrom.ts`:
+  drawn from Quick Add, led by a drag or traced with the button up.
+- Quick Add's *Shapes* opens a row of the six; the shape's menu (`PartMenu`
+  kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin, regular or
+  thick line, dashed, an arrow's *Head at both ends*, *Bring to front*,
+  *Send to back*. The selection's menu has *Box around these*: a rounded
+  rectangle a third of a bond clear of it. The colour card's rows for
+  shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
+  quarter of the way from white). The reaction arrow is now *Reaction
+  arrow* in its menu.
+- Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
+  pens, under everything else, from the back.
+
+Not yet, and where it comes: everything under *Guides* and *Handwriting*
+(their own pull requests, in that order); a slide's notes, with the
+presenter's view. Words in a shape do not make it taller: words longer
+than it has room for run past its edge.
