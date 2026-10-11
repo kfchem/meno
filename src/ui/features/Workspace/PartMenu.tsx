@@ -98,6 +98,8 @@ export type MenuMolecule3D = {
   onRemake?: () => void;
   /** Drawn as a formula beside it, by Meno's engine: unset, where it has a drawing already. */
   onDrawFormula?: () => void;
+  /** A PDB entry's residues' bond orders given from the wwPDB's Chemical Component Dictionary: unset, where it is none, or they are known. */
+  onOrdersFromDictionary?: () => void;
   /** Its bond orders - its ligand's - given from a SMILES: unset, where they are known (utils/completeness). */
   onOrdersFromSmiles?: () => void;
   /** The hydrogens its file leaves out - its ligand's - added: unset, where it has them or its bond orders are not known. */
@@ -302,8 +304,12 @@ export default function PartMenu({
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),
         ...(molecule3d.onRemake ? [{ name: "Make again from the drawing", keys: "", run: molecule3d.onRemake, divider: true }] : []),
         ...(molecule3d.onDrawFormula ? [{ name: "Draw as formula", keys: "", run: molecule3d.onDrawFormula }] : []),
-        ...(molecule3d.onOrdersFromSmiles ? [{ name: "Bond orders from SMILES…", keys: "", run: molecule3d.onOrdersFromSmiles, divider: true }] : []),
-        ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens", keys: "", run: molecule3d.onAddHydrogens, divider: !molecule3d.onOrdersFromSmiles }] : []),
+        // (what its file leaves out, completed: one group, a line above it)
+        ...[
+          ...(molecule3d.onOrdersFromDictionary ? [{ name: "Bond orders from the CCD", keys: "", run: molecule3d.onOrdersFromDictionary }] : []),
+          ...(molecule3d.onOrdersFromSmiles ? [{ name: "Bond orders from SMILES…", keys: "", run: molecule3d.onOrdersFromSmiles }] : []),
+          ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens", keys: "", run: molecule3d.onAddHydrogens }] : []),
+        ].map((item, k) => (k === 0 ? { ...item, divider: true } : item)),
       ]
     : [];
   // What each target's menu has: the frequent, as icons along its top -

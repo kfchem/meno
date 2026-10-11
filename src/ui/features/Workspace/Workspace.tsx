@@ -39,7 +39,7 @@ import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard, { type Offered3D } from "./ExportCard";
 import OrdersCard from "./OrdersCard";
-import { addHydrogens, canAddHydrogens, canGiveOrders, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
@@ -314,6 +314,22 @@ function WorkspaceContent({
         await addHydrogens(store, id, atom);
       } catch (e: unknown) {
         setChemError(`The hydrogens could not be added: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setWorking3d(null);
+      }
+    },
+    [store],
+  );
+  // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
+  const lookUpComponents = useCallback(
+    async (id: number) => {
+      setWorking3d("Looking up chemical components…");
+      setChemError(null);
+      try {
+        const r = await ordersFromDictionary(store, id);
+        if (r && !r.given) setChemError("No residue of this entry is in the CCD as the entry draws it.");
+      } catch (e: unknown) {
+        setChemError(`The CCD could not be looked up: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         setWorking3d(null);
       }
@@ -749,6 +765,7 @@ function WorkspaceContent({
         ...(menuLink === "changed" ? { onRemake: () => remake3d(menuMolecule.id) } : {}),
         ...(menuLink == null || menuLink === "gone" ? { onDrawFormula: () => void drawFormula(menuMolecule.id) } : {}),
         // (its bond orders given, its hydrogens added: its ligand's, for a PDB entry - utils/completeness)
+        ...(canAskDictionary(menuMolecule) ? { onOrdersFromDictionary: () => void lookUpComponents(menuMolecule.id) } : {}),
         ...(canGiveOrders(menuMolecule, menuPart) ? { onOrdersFromSmiles: () => setGivingOrders({ id: menuMolecule.id, atom: menu?.atom ?? null }) } : {}),
         ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length

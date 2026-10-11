@@ -5,7 +5,8 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { stillUnknown } from "../utils/completeness";
-import { addHydrogens, canAddHydrogens, canGiveOrders, ordersFromSmiles, perceiveOrders } from "./bondOrders";
+import type { Component } from "../../../../lib/chem/ccd";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, ordersFromDictionary, ordersFromSmiles, perceiveOrders } from "./bondOrders";
 
 /** The worker, as these tests have it answer: each request's answer by its name. */
 const answers: Record<string, (args: Record<string, unknown>) => unknown> = {};
@@ -17,6 +18,9 @@ const fake = {
   },
 } as unknown as ChemClient;
 vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: async () => fake, chemAtHand: async () => true }));
+/** The dictionary, as these tests have it answer: the components found, or null - the chemist said no. */
+let looked: { components: Map<string, Component>; absent: string[] } | null = null;
+vi.mock("../../../../lib/chem/ccd", () => ({ componentsNamed: async () => looked }));
 
 /** Acetic acid with its hydrogens, every bond single, as an XYZ file gives it. */
 const acetic: Omit<Molecule3D, "id"> = {
@@ -135,5 +139,26 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
     expect(molecule().bondOrders).toBe("unknown");
     // (a chain's atom: none of Meno's to give)
     await expect(ordersFromSmiles(store, molecule().id, 0, "C")).rejects.toThrow(/Point at the ligand/);
+  });
+
+  it("from the dictionary: every residue it has, as one undo step - and nothing where the chemist says no to the network", async () => {
+    const { doc, store, molecule } = editor(entry);
+    expect(canAskDictionary(molecule())).toBe(true);
+    looked = null;
+    expect(await ordersFromDictionary(store, molecule().id)).toBeNull();
+    expect(doc.history().undoLabel).toBe("add");
+
+    const ala: Component = { id: "ALA", atoms: [{ name: "CA", element: "C", charge: 0 }], bonds: [] };
+    const lig: Component = { id: "LIG", atoms: [{ name: "C1", element: "C", charge: 0 }, { name: "O1", element: "O", charge: 0 }], bonds: [{ a: "C1", b: "O1", order: 2 }] };
+    looked = { components: new Map([["ALA", ala], ["LIG", lig]]), absent: [] };
+    expect(await ordersFromDictionary(store, molecule().id)).toEqual({ given: 3, of: 3, absent: [] });
+    expect(molecule().bonds[0].order).toBe(2);
+    expect(molecule()).toMatchObject({ bondOrders: "dictionary", chainOrders: "dictionary" });
+    expect(doc.history().undoLabel).toBe("bond orders");
+    // (all known: not offered again; its ligand's hydrogens are)
+    expect(canAskDictionary(molecule())).toBe(false);
+    expect(canAddHydrogens(molecule(), [2, 3])).toBe(true);
+    doc.undo();
+    expect(molecule().bondOrders).toBe("unknown");
   });
 });

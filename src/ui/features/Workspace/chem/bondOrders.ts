@@ -9,14 +9,17 @@
  * Found from its shape, the orders are learnt of the molecule rather than
  * done to it: no undo step of their own, and only where the plugin is at
  * hand already - nothing is set up because a file was opened. Given from a
- * SMILES, or hydrogens added, they are the chemist's edits, and undone.
+ * SMILES or from the wwPDB's Chemical Component Dictionary, or hydrogens
+ * added, they are the chemist's edits, and undone.
  */
 import { useEffect, useRef } from "react";
 import { chemAtHand, chemWorker } from "../../../../lib/roles/worker";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { useEditor, useEditorStore, type EditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
-import { blockOf, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withHydrogens, withOrders } from "../utils/completeness";
+import { blockOf, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withHydrogens, withOrders } from "../utils/completeness";
+import { componentsNamed } from "../../../../lib/chem/ccd";
+import { isWater } from "../../../../lib/chem/biopolymer";
 
 /** What is asked of the plugin, and how long it may take, in ms. */
 const ORDERS_MS = 30_000;
@@ -134,4 +137,34 @@ export function canGiveOrders(m: Molecule3D, atoms: readonly number[] | null): b
 export function canAddHydrogens(m: Molecule3D, atoms: readonly number[] | null): boolean {
   if (!atoms?.length || m.frames?.length || hasHydrogens(m, atoms)) return false;
   return !stillUnknown(m).includes(atoms[0]);
+}
+
+/**
+ * A PDB entry's residues - its chains' and its ligands' - given their bond
+ * orders and charges from the wwPDB's Chemical Component Dictionary, as
+ * one undo step: each component fetched once, asking first the first time
+ * (lib/chem/ccd). Null where the chemist said no to the network; else how
+ * many residues were given, of how many it has, and the names the
+ * dictionary has no component for.
+ */
+export async function ordersFromDictionary(store: EditorStore, id: number): Promise<{ given: number; of: number; absent: string[] } | null> {
+  const m = store.getState().molecules3d.find((x) => x.id === id);
+  if (!m?.biopolymer) throw new Error("Only a PDB entry's residues are in the dictionary.");
+  const residues = m.biopolymer.residues.filter((r) => !isWater(r));
+  const looked = await componentsNamed(residues.map((r) => r.name));
+  if (!looked) return null;
+  let given = 0;
+  store.getState().changeMolecule3d("bond orders", id, (cur) => {
+    const r = withComponents(cur, looked.components);
+    if (!r?.given.length) return cur;
+    given = r.given.length;
+    return r.molecule;
+  });
+  return { given, of: residues.length, absent: looked.absent };
+}
+
+/** Whether a molecule's bond orders can be given from the dictionary: a PDB entry whose ligands' are unknown, or its chains' not given from it. */
+export function canAskDictionary(m: Molecule3D): boolean {
+  if (!m.biopolymer?.residues.some((r) => !isWater(r))) return false;
+  return stillUnknown(m).length > 0 || m.chainOrders !== "dictionary";
 }

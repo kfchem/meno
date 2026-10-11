@@ -12,6 +12,7 @@ import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { chainRuns, isWater } from "../../../../lib/chem/biopolymer";
+import type { Component } from "../../../../lib/chem/ccd";
 import type { Molecule3D } from "../store/types";
 
 /** What a molecule says of what its file leaves out, on the canvas and in a picture of it. */
@@ -75,7 +76,7 @@ export function partOf(m: Pick<Molecule3D, "atoms" | "bonds" | "biopolymer">, at
   return groups.length === 1 ? groups[0] : null;
 }
 
-type Known = Pick<Molecule3D, "atoms" | "bonds" | "biopolymer" | "bondOrders" | "unknownOrders">;
+type Known = Pick<Molecule3D, "atoms" | "bonds" | "biopolymer" | "bondOrders" | "unknownOrders" | "chainOrders">;
 
 /** The atoms whose bond orders are unknown: a PDB entry's ligands' that are - all its ligands', before any were sought - or else, unknown, all of it. */
 export function stillUnknown(m: Known): number[] {
@@ -84,9 +85,9 @@ export function stillUnknown(m: Known): number[] {
   return m.unknownOrders ?? ligandGroups(m).flat();
 }
 
-/** Whether a molecule's bond orders are unknown as a look draws it: its file gave none and none were found or given - for a PDB entry, a ligand's - or its chains are drawn as atoms, whose own are not known. */
+/** Whether a molecule's bond orders are unknown as a look draws it: its file gave none and none were found or given - for a PDB entry, a ligand's - or its chains are drawn as atoms, whose own were not given from the dictionary. */
 export function ordersUnknown(m: Known, chainsAsAtoms: boolean): boolean {
-  return stillUnknown(m).length > 0 || (!!m.biopolymer && chainsAsAtoms);
+  return stillUnknown(m).length > 0 || (!!m.biopolymer && chainsAsAtoms && m.chainOrders !== "dictionary");
 }
 
 /**
@@ -218,4 +219,73 @@ export function withHydrogens(m: Molecule3D, atoms: readonly number[], molblock:
         }
       : {}),
   };
+}
+
+const pairOf = (a: string, b: string) => (a < b ? `${a}\n${b}` : `${b}\n${a}`);
+
+/**
+ * A PDB entry given its residues' bond orders and formal charges as the
+ * Chemical Component Dictionary defines each residue (`components`, by
+ * residue name): a residue whose every atom the component names, with its
+ * element, and whose every bond within it the component has - single,
+ * double or triple - takes the component's; any other is left as it was.
+ * Bonds between residues (a peptide's, a disulfide, a ligand's link) stay
+ * as they are. Its ligands so given are known; its chains, where every
+ * residue of them was given. Null where it is no PDB entry; `given`, the
+ * residues given, by place.
+ */
+export function withComponents(m: Molecule3D, components: ReadonlyMap<string, Component>): { molecule: Molecule3D; given: number[] } | null {
+  const bp = m.biopolymer;
+  if (!bp) return null;
+  const members: number[][] = bp.residues.map(() => []);
+  m.atoms.forEach((_, i) => members[bp.residueOf[i]].push(i));
+  const inside: number[][] = bp.residues.map(() => []);
+  m.bonds.forEach((b, k) => {
+    if (bp.residueOf[b.a1] === bp.residueOf[b.a2]) inside[bp.residueOf[b.a1]].push(k);
+  });
+  const orders = new Map<number, number>();
+  const charges = new Map<number, number>();
+  const given: number[] = [];
+  bp.residues.forEach((residue, r) => {
+    const c = components.get(residue.name);
+    if (!c || isWater(residue) || !members[r].length) return;
+    const atomOf = new Map(c.atoms.map((a) => [a.name, a]));
+    const named = members[r].map((i) => atomOf.get(bp.names[i]));
+    if (named.some((a, k) => !a || a.element.toUpperCase() !== m.atoms[members[r][k]].el.toUpperCase())) return;
+    const orderOf = new Map(c.bonds.map((b) => [pairOf(b.a, b.b), b.order]));
+    const found: [number, number][] = [];
+    for (const k of inside[r]) {
+      const order = orderOf.get(pairOf(bp.names[m.bonds[k].a1], bp.names[m.bonds[k].a2]));
+      // (a bond the component has not, or not as single, double or triple: the residue is not the component's as drawn)
+      if (order == null) return;
+      found.push([k, order]);
+    }
+    for (const [k, order] of found) orders.set(k, order);
+    members[r].forEach((i, k) => charges.set(i, named[k]!.charge));
+    given.push(r);
+  });
+  const bonds = m.bonds.map((b, k) => {
+    const order = orders.get(k);
+    return order != null && order !== b.order ? { ...b, order } : b;
+  });
+  const atoms = m.atoms.map((a, i) => {
+    const c = charges.get(i);
+    if (c == null || c === (a.charge ?? 0)) return a;
+    const { charge: _was, ...rest } = a;
+    return c ? { ...rest, charge: c } : rest;
+  });
+  const done = new Set(given);
+  const left = stillUnknown(m).filter((i) => !done.has(bp.residueOf[i]));
+  const inRun = new Uint8Array(bp.residues.length);
+  for (const run of chainRuns(bp, m.atoms)) for (const r of run.residues) inRun[r] = 1;
+  const chains = bp.residues.flatMap((residue, r) => ((residue.standard || inRun[r]) && !isWater(residue) ? [r] : []));
+  const { unknownOrders: _was, ...rest } = m;
+  const molecule: Molecule3D = {
+    ...rest,
+    atoms,
+    bonds,
+    ...(m.bondOrders === "unknown" ? (left.length ? { bondOrders: "unknown" as const, unknownOrders: left } : { bondOrders: "dictionary" as const }) : {}),
+    ...(chains.length && chains.every((r) => done.has(r)) ? { chainOrders: "dictionary" as const } : {}),
+  };
+  return { molecule, given };
 }

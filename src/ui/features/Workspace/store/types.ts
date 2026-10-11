@@ -225,12 +225,15 @@ export type Molecule3D = {
    * Its bonds' orders, where its file gives none - coordinates alone: an
    * XYZ file, a calculation's output, a PDB entry (its ligands; its chains'
    * own are not known): "unknown" until they are found from its shape by
-   * the RDKit plugin ("perceived") or given from a SMILES ("assigned").
-   * Unset, its file gave them (utils/completeness).
+   * the RDKit plugin ("perceived"), given from a SMILES ("assigned") or
+   * from the wwPDB's Chemical Component Dictionary ("dictionary"). Unset,
+   * its file gave them (utils/completeness).
    */
-  bondOrders?: "unknown" | "perceived" | "assigned";
+  bondOrders?: "unknown" | "perceived" | "assigned" | "dictionary";
   /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
   unknownOrders?: number[];
+  /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
+  chainOrders?: "dictionary";
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.

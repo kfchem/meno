@@ -867,9 +867,30 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   near - which is a calculation of its own, not a completion of the file.
   Only ligands are given hydrogens; a plugin for proteins could come
   later.
-- **Later.** The wwPDB's Chemical Component Dictionary (CC0) gives every
-  ligand's bond orders by its residue name; read, with the chemist's
-  consent to fetch it, it could give them without a SMILES. Not built.
+- **From the Chemical Component Dictionary** (the maintainer's ruling,
+  2026-10-11: asked for, from the menu, not on opening; standard residues
+  too). A PDB entry's right-click menu has *Bond orders from the CCD*:
+  each residue name it uses - amino acids, nucleotides, ligands, ions,
+  water left out - is looked up in the wwPDB's dictionary (CC0), whose
+  component files give each component's atoms by name, its bonds' orders
+  and its atoms' formal charges (`lib/chem/ccd.ts`, read by the CIF 1.1
+  syntax, `lib/chem/cif.ts`, and the PDBx/mmCIF dictionary's definitions
+  of `_chem_comp_atom` and `_chem_comp_bond`). A residue takes the
+  component's orders and charges where every atom of it is one of the
+  component's, by name and element, and every bond within it is one of
+  the component's, single, double or triple; any other residue is left as
+  it was, and says so. Bonds between residues - a peptide's, a
+  disulfide, a ligand's link - stay as they are. A ligand so given can be
+  given its hydrogens; chains whose every residue was given no longer say
+  their orders are unknown, drawn as atoms. The charges are the
+  dictionary's, as its components are drawn, not a protonation worked out
+  for the entry. One undo step. The files come from files.wwpdb.org
+  (`refdata/chem_comp/<last character>/<id>/<id>.cif`), fetched by the app
+  as a task of its own on Meno's network (`src-tauri/src/ccd.rs`, purpose
+  `ccd`, asked for the first time it is used) and kept in Meno's cache, so
+  each is fetched once; only the components' names leave Meno. A PDB file
+  with no chain (a ligand on its own) keeps no residue names, and is not
+  looked up.
 
 ## Risks
 

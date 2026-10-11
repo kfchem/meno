@@ -1078,6 +1078,15 @@ to be able to work with nothing going out at all.
   is some minutes old (`tidy_after_updates`). Releases:
   `docs/RELEASING.md`.
 
+- **Chemical components** (`src-tauri/src/ccd.rs`, `lib/chem/ccd.ts`):
+  a PDB entry's residues looked up in the wwPDB's Chemical Component
+  Dictionary, asked for from its menu (docs/WORKSPACE.md, *Hydrogens and
+  bond orders*). Each component's file is fetched from files.wwpdb.org
+  by the app itself (reqwest, through the proxy with the task's token),
+  under the purpose `ccd`, and kept in the app's cache (`ccd/<id>.cif`),
+  so that each is fetched once; the window asks for those kept first, and
+  for the network only when some are not.
+
 Anything new that needs the network begins a task in `net.rs` and routes
 its process, or its own requests, through the proxy; nothing may reach the
 network another way.

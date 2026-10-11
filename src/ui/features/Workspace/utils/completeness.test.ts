@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Molecule3D } from "../store/types";
-import { blockOf, ligandGroups, noHydrogensInFile, ordersUnknown, partOf, withHydrogens, withOrders } from "./completeness";
+import type { Component } from "../../../../lib/chem/ccd";
+import { blockOf, ligandGroups, noHydrogensInFile, ordersUnknown, partOf, withComponents, withHydrogens, withOrders } from "./completeness";
 
 /** Acetic acid's heavy atoms, all bonds single, as a file of coordinates gives them. */
 const acetic = (extra: Partial<Molecule3D> = {}): Molecule3D => ({
@@ -119,5 +120,34 @@ describe("what a molecule's file leaves out", () => {
     expect(next.biopolymer!.names.slice(6)).toEqual(["H", "H"]);
     // (a molecule with other frames: they would have none - not added)
     expect(withHydrogens({ ...m, frames: [[]] }, [3, 4], answer)).toBeNull();
+  });
+
+  it("is given its residues' orders and charges from the dictionary, where each residue is the component as drawn", () => {
+    const m = withLigand();
+    const ala: Component = { id: "ALA", atoms: ["N", "CA", "C", "O", "CB"].map((name) => ({ name, element: name[0], charge: 0 })), bonds: [] };
+    const lig: Component = { id: "LIG", atoms: [{ name: "C1", element: "C", charge: 0 }, { name: "O1", element: "O", charge: 0 }], bonds: [{ a: "O1", b: "C1", order: 2 }] };
+    const all = withComponents(m, new Map([["ALA", ala], ["LIG", lig]]))!;
+    expect(all.given).toEqual([0, 1, 2, 3]);
+    expect(all.molecule.bonds).toEqual([{ a1: 3, a2: 4, order: 2 }]);
+    expect(all.molecule).toMatchObject({ bondOrders: "dictionary", chainOrders: "dictionary" });
+    expect(all.molecule.unknownOrders).toBeUndefined();
+    // (its chains' orders now known: drawn as atoms, it says nothing of them)
+    expect(ordersUnknown(all.molecule, true)).toBe(false);
+
+    // the chains' residues not in the dictionary: its ligand's known, its chains' not
+    const ligandOnly = withComponents(m, new Map([["LIG", lig]]))!.molecule;
+    expect(ligandOnly.bondOrders).toBe("dictionary");
+    expect(ligandOnly.chainOrders).toBeUndefined();
+    expect(ordersUnknown(ligandOnly, true)).toBe(true);
+
+    // a component whose atoms are not the residue's: nothing given
+    const other = withComponents(m, new Map([["LIG", { ...lig, atoms: [lig.atoms[0], { name: "O1", element: "N", charge: 0 }] }]]))!;
+    expect(other.given).toEqual([]);
+    expect(other.molecule).toMatchObject({ bondOrders: "unknown", unknownOrders: [3, 4] });
+    expect(other.molecule.bonds).toEqual(m.bonds);
+    // nor where the residue has a bond the component has not as single, double or triple
+    expect(withComponents(m, new Map([["LIG", { ...lig, bonds: [{ a: "C1", b: "O1", order: null }] }]]))!.given).toEqual([]);
+    // (no PDB entry: none)
+    expect(withComponents(acetic(), new Map())).toBeNull();
   });
 });
