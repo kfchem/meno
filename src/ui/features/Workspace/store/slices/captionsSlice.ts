@@ -39,7 +39,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         return { ...prev, wordsWriting: words };
       }),
     setQuickAdd: (q: EditorState["quickAdd"]) => set({ quickAdd: q }),
-    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => {
+    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number }) => {
       const id = doc.getState().nextCaptionId ?? 1;
       doc.edit("add text", (d) =>
         ops.addCaption(d, {
@@ -52,6 +52,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           ...(align ? { align } : {}),
           ...(more?.size ? { size: more.size } : {}),
           ...(more?.marks?.length ? { marks: more.marks } : {}),
+          ...(more?.shape != null ? { shape: more.shape } : {}),
         }),
       );
       return id;

@@ -165,6 +165,10 @@ import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
+import Shapes2D from "./components/Shapes2D";
+import { shapeFrom } from "./components/shapeFrom";
+import { isBox, wordsRoom } from "../../../lib/chem/shapes";
+import { SHAPE_PAD } from "./document";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -718,6 +722,10 @@ function WorkspaceContent({
         // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
         e.preventDefault();
         st.removeSlide(st.hoveredSlide);
+      } else if (isDeleteKey(e) && !busy && st.hoveredShape != null && st.shapes.some((x) => x.id === st.hoveredShape)) {
+        // a shape under the pointer, likewise (docs/PRESENTING.md, *Shapes*)
+        e.preventDefault();
+        st.removeShape(st.hoveredShape);
       } else if (isDeleteKey(e) && !busy && st.hoveredPicture != null && st.pictures.some((p) => p.id === st.hoveredPicture)) {
         // a picture under the pointer, likewise
         e.preventDefault();
@@ -1002,6 +1010,18 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
+    // likewise a shape, unless it is selected with more (docs/PRESENTING.md, *Shapes*)
+    const { hoveredShape, shapes, selShapes } = store.getState();
+    const shapeWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selShapes: new Set() }).any || selShapes.size > 1;
+    })();
+    if (!kind && hoveredShape != null && shapes.some((x) => x.id === hoveredShape) && !(selShapes.has(hoveredShape) && shapeWithMore)) {
+      const target: MenuTarget = { kind: "shape", id: hoveredShape, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
     // likewise a picture, unless it is selected with more (docs/PDF.md, *A picture*)
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
@@ -1099,7 +1119,7 @@ function WorkspaceContent({
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
   const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
   const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
-    if (!c.width || c.arrow != null) return {};
+    if (!c.width || c.arrow != null || c.shape != null) return {};
     const set = labelSetOf(layoutOpts);
     const top = c.y + wordsSet(c, layoutOpts, set).halfH;
     const after = { ...c, ...next };
@@ -1358,6 +1378,11 @@ function WorkspaceContent({
               store.getState().setQuickAdd(null);
               chainFrom(store, press, at, clientToWorld);
             }}
+            onShape={(kind, press) => {
+              const { at } = quickAdd;
+              store.getState().setQuickAdd(null);
+              shapeFrom(store, press, at, kind, clientToWorld);
+            }}
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
               const drawn = await structureFromSmiles(smiles);
@@ -1446,6 +1471,7 @@ function WorkspaceContent({
             else if (menu.kind === "caption" && menu.id != null) st.removeCaption(menu.id);
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
+            else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
@@ -1555,7 +1581,7 @@ function WorkspaceContent({
           })()}
           onFitWords={(() => {
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
-            return c?.width ? () => store.getState().updateCaption(c.id, { width: null }) : undefined;
+            return c?.width && c.shape == null ? () => store.getState().updateCaption(c.id, { width: null }) : undefined;
           })()}
           onEditText={() => {
             const c = store.getState().captions.find((x) => x.id === menu.id);
@@ -1592,6 +1618,35 @@ function WorkspaceContent({
               onSelectOn: () => st.selectOnSlide(s.id),
             };
           })()}
+          shape={(() => {
+            const st = store.getState();
+            const sh = menu.kind === "shape" ? st.shapes.find((x) => x.id === menu.id) : undefined;
+            if (!sh) return undefined;
+            const words = st.captions.find((c) => c.shape === sh.id);
+            const room = wordsRoom(sh, SHAPE_PAD);
+            return {
+              ...(isBox(sh.kind) && room
+                ? { onWrite: () => st.setCaptionEdit(words ? { id: words.id, at: { x: words.x, y: words.y } } : { id: null, at: { x: room.x, y: room.y }, shape: sh.id }) }
+                : {}),
+              weight: sh.weight ?? "regular",
+              onWeight: (weight) => st.styleShapes([sh.id], { weight }),
+              dash: !!sh.dash,
+              onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
+              ...(sh.kind === "arrow" ? { heads: { both: sh.heads === 2, onBoth: () => st.styleShapes([sh.id], { heads: sh.heads === 2 ? 1 : 2 }) } } : {}),
+              onFront: () => st.orderShapes([sh.id], true),
+              onBack: () => st.orderShapes([sh.id], false),
+            };
+          })()}
+          onBoxAround={
+            menu.selection === "here"
+              ? () => {
+                  const st = store.getState();
+                  const cam = camRef.current;
+                  const b = selectedBox(st, style, (cam as { zoom?: number } | null)?.zoom ?? 1, cam ? eyeOf(cam)?.z : undefined);
+                  if (b) st.addShape({ kind: "rounded", x0: b.x0 - SHAPE_PAD, y0: b.y0 - SHAPE_PAD, x1: b.x1 + SHAPE_PAD, y1: b.y1 + SHAPE_PAD });
+                }
+              : undefined
+          }
           onSlideAround={
             menu.selection === "here"
               ? () => {
@@ -1700,11 +1755,13 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
+                : menu.kind === "shape" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], shapes: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
@@ -1771,6 +1828,8 @@ function WorkspaceContent({
           <TextSheets2D />
           {/* Pictures, over the PDFs and under the drawing (docs/PDF.md, *A picture*) */}
           <Pictures2D />
+          {/* Shapes, over the pictures and under the drawing (docs/PRESENTING.md, *Shapes*) */}
+          <Shapes2D />
           {/* Rings filled and parts highlighted with a colour, behind the drawing */}
           <Fills2D />
           {/* where renders under way will put what they make (docs/RENDER.md) */}

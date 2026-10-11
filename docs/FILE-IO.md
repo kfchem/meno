@@ -474,7 +474,10 @@ work.meno (zip)
   (`pictures[].from`: the PDF's SHA-256, its page and the box on it;
   step 4b). Slides are listed in `slides`, in the order a talk shows
   them, each by its middle and its size, `around: true` where the page
-  about it is shown while it is (docs/PRESENTING.md).
+  about it is shown while it is (docs/PRESENTING.md). Shapes are listed in
+  `shapes`, from the back, each with its kind, its corners or ends and
+  what of its look is not as a shape is made; words in one say which
+  (`captions[].shape`; docs/PRESENTING.md, *Shapes*).
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.

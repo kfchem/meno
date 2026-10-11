@@ -3,6 +3,7 @@ import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
+import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -145,6 +146,8 @@ export type Caption = {
   size?: number;
   /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
   marks?: WordsMark[];
+  /** The shape it is written in, by id: kept about its middle, as wide as it is inside, going where it goes (docs/PRESENTING.md, *Shapes*). */
+  shape?: number;
 };
 /**
  * A change to words on the page: written anew, moved, put over an arrow or
@@ -231,6 +234,30 @@ export type PictureFrom = { sha256: string; page: number; box: [number, number, 
  * shown, the page about it is seen too, not veiled.
  */
 export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
+
+/**
+ * A shape on the page (docs/PRESENTING.md, *Shapes*): a rectangle, a
+ * rounded one, an ellipse, a line, an arrow or a callout, where and how
+ * lib/chem/shapes says - and its line's colour (none of its own, the
+ * drawing's ink; "none", no line) and its fill (none of its own, none).
+ * Words in it are words on the page that say so (`Caption.shape`). Each
+ * lies over those before it.
+ */
+export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
+/**
+ * A change to a shape: where it lies, its tail, its line's weight, dashed
+ * or not, an arrow's heads (1 or 2), its line's colour and its fill (null,
+ * none of its own).
+ */
+export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
+  weight?: ShapeWeight;
+  dash?: boolean;
+  heads?: 1 | 2;
+  stroke?: string | null;
+  fill?: string | null;
+};
+/** A shape being drawn from Quick Add: its kind, where it was begun, where the pointer is, and whether Shift keeps it even. */
+export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: { x: number; y: number }; even: boolean };
 
 /** A talk being given from the slides: the slide shown, by its place in their order. */
 export type Presenting = { at: number };
@@ -512,6 +539,8 @@ export type Drawn = Model & {
   sheets?: WorkspaceText[];
   /** Slides carried, in their order (docs/PRESENTING.md). */
   slides?: Slide[];
+  /** Shapes carried, from the back (docs/PRESENTING.md, *Shapes*). */
+  shapes?: Shape[];
 };
 
 export type EditorState = {
@@ -852,6 +881,26 @@ export type EditorState = {
   removeSlide: (id: number) => void;
   /** What is on a slide selected, the slide with it: all of it whose middle lies in it, as a box selects. */
   selectOnSlide: (id: number) => void;
+  /** The shapes on the page, from the back (docs/PRESENTING.md, *Shapes*); which are selected, which is under the pointer, and one being drawn - the view's. */
+  shapes: Shape[];
+  selShapes: Set<number>;
+  hoveredShape: number | null;
+  shapeDraft: ShapeDraft | null;
+  setHoveredShape: (id: number | null) => void;
+  setShapeDraft: (draft: ShapeDraft | null) => void;
+  selectShapes: (ids: Iterable<number>, add?: boolean) => void;
+  toggleShapeSel: (id: number) => void;
+  /** A shape put on the page, over the others; its id. */
+  addShape: (shape: Omit<Shape, "id">) => number | null;
+  /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
+  /** The shapes `ids` given the same look - their lines' weight, dashed or not, an arrow's heads - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => void;
+  /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
+  colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
+  /** The shapes `ids` brought over all the others, or put under them. */
+  orderShapes: (ids: readonly number[], front: boolean) => void;
+  removeShape: (id: number) => void;
   /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
   presenting: Presenting | null;
   present: (from: number) => void;
@@ -882,7 +931,7 @@ export type EditorState = {
    * words opened it: the caret put there - and a drag (`drag`) selecting on
    * from there - as if it had pressed there among them.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; shape?: number } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -904,7 +953,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words

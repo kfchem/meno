@@ -193,7 +193,12 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
     // (one press, one thing: not the arrow under the words as well)
     e.stopPropagation();
     const st = store.getState();
-    // (Ctrl, or ⌘: added to the selection, or taken out of it)
+    // (Ctrl, or ⌘: added to the selection, or taken out of it - words in a shape, the shape)
+    if (addsToSelection(ev) && c.shape != null) {
+      st.toggleShapeSel(c.shape);
+      st.suppressDoubleClick(DOUBLE_CLICK_MS);
+      return;
+    }
     if (addsToSelection(ev)) {
       const now = new Set(st.selCaptions);
       if (now.has(c.id)) now.delete(c.id);
@@ -223,7 +228,21 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selSlides.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      // (words in a shape: the shape taken hold of - selected, if it is not - and moved, its words with it)
+      if (c.shape != null) {
+        if (!s.selShapes.has(c.shape)) {
+          s.clearSel();
+          s.selectShapes([c.shape]);
+        }
+        dragSelection(store, toWorld, from, (u) => {
+          const s2 = store.getState();
+          s2.endPanHold(u.pointerId);
+          s2.suppressDoubleClick(DOUBLE_CLICK_MS);
+          letGo();
+        });
+        return;
+      }
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selSlides.size || s.selShapes.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);
@@ -289,7 +308,8 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
         <meshBasicMaterial ref={light} color={COLORS.highlight} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
       </mesh>
       {held && heldShows(held, now) && <HeldLight b={box} at={held} held={held} now={now} z={0.005} />}
-      {(hovered || resizing) && (
+      {/* (words in a shape are as wide as it is: made wider with it) */}
+      {(hovered || resizing) && c.shape == null && (
         <>
           <CaptionEdge side={-1} laid={laid} margin={margin} onResizing={setResizing} />
           <CaptionEdge side={1} laid={laid} margin={margin} onResizing={setResizing} />

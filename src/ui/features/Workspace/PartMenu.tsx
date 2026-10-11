@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -158,6 +158,8 @@ export default function PartMenu({
   words,
   slide,
   onSlideAround,
+  shape,
+  onBoxAround,
   canvas = [],
   clipboard,
   molecule3d,
@@ -271,6 +273,24 @@ export default function PartMenu({
   slide?: { onPresent: () => void; onEarlier?: () => void; onLater?: () => void; around: boolean; onAround: () => void; standard: boolean; onShape: () => void; onSelectOn: () => void };
   /** A slide made round what is selected, last in the talk. */
   onSlideAround?: () => void;
+  /**
+   * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*):
+   * words written in it (a box); its line thin, regular or thick, dashed or
+   * not; an arrow's heads at one end or both; and brought over the other
+   * shapes or put under them.
+   */
+  shape?: {
+    onWrite?: () => void;
+    weight: "thin" | "regular" | "thick";
+    onWeight: (weight: "thin" | "regular" | "thick") => void;
+    dash: boolean;
+    onDash: () => void;
+    heads?: { both: boolean; onBoth: () => void };
+    onFront: () => void;
+    onBack: () => void;
+  };
+  /** A rounded rectangle made round what is selected. */
+  onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -389,7 +409,7 @@ export default function PartMenu({
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
         ]
       : target.kind === "arrow"
-      ? [del("Delete arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
+      ? [del("Delete reaction arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
       : target.kind === "plus"
       ? [del("Delete plus")]
       : target.kind === "caption"
@@ -478,6 +498,24 @@ export default function PartMenu({
           { name: slide.standard ? "Make it 16:9" : "Make it 4:3", keys: "", run: slide.onShape },
           { name: "Select what is on it", keys: "", run: slide.onSelectOn },
         ]
+      : target.kind === "shape" && shape
+      ? [
+          ...(shape.onWrite ? [{ name: "Edit text", keys: "", run: shape.onWrite, icon: MENU_ICONS.edit }] : []),
+          ...colour,
+          del("Delete shape"),
+          // (its line's weight, ticked as it is; dashed or not; an arrow's heads)
+          ...(
+            [
+              ["thin", "Thin line"],
+              ["regular", "Regular line"],
+              ["thick", "Thick line"],
+            ] as const
+          ).map(([w, name]) => ({ name, keys: "", run: () => shape.onWeight(w), checked: shape.weight === w })),
+          { name: "Dashed line", keys: "", run: shape.onDash, checked: shape.dash },
+          ...(shape.heads ? [{ name: "Head at both ends", keys: "", run: shape.heads.onBoth, checked: shape.heads.both }] : []),
+          { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
+          { name: "Send to back", keys: "", run: shape.onBack },
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -521,6 +559,7 @@ export default function PartMenu({
               ]
             : []),
           ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
+          ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
@@ -590,7 +629,7 @@ export default function PartMenu({
             : target.kind === "bond"
               ? "Bond"
               : target.kind === "arrow"
-                ? "Arrow"
+                ? "Reaction arrow"
                 : target.kind === "plus"
                   ? "Plus"
                   : target.kind === "caption"
@@ -617,6 +656,8 @@ export default function PartMenu({
                       ? "Ring"
                     : target.kind === "slide"
                       ? "Slide"
+                    : target.kind === "shape"
+                      ? "Shape"
                       : "Canvas"
       }
       tabIndex={-1}
