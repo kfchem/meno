@@ -198,6 +198,7 @@ export function createEditorStore(
     hoveredCaption: null,
     hoveredPdf: null,
     hoveredPicture: null,
+    picturesLaid: new Set<number>(),
     selPictures: new Set<number>(),
     selCaptions: new Set<number>(),
     hoveredMark: null,

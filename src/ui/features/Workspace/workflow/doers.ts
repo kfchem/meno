@@ -10,7 +10,7 @@ import { pluginById, PLUGINS } from "../../../../lib/calc/catalog";
 import { useReaders } from "../../../../lib/calc/workers";
 import type { Option } from "../../../../lib/options";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
-import { whereIs } from "../../../../lib/plugins/installed";
+import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowStep } from "../store/types";
 import { KINDS, kindInfo, MENO_DOES, takes, type SetKind, type StepKind } from "./kinds";
@@ -101,8 +101,9 @@ export function installedFor(kind: StepKind, by: string): readonly InstalledDecl
   return pluginById(by)?.installed.filter((d) => programs.includes(d.name)) ?? [];
 }
 
-/** What a step cannot run without: the first program installed separately it runs that Meno looked for and found nowhere, by what it is called. */
+/** What a step cannot run without, said: the first program installed separately it runs that Meno looked for and found nowhere ("ORCA not found"), or only too old ("Blender too old"). */
 export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | undefined {
   const by = byOf(step);
-  return installedFor(step.kind, by).find((d) => whereIs(by, d.name) === null)?.label;
+  const d = installedFor(step.kind, by).find((d) => whereIs(by, d.name) === null);
+  return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
 }

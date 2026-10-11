@@ -90,8 +90,8 @@ function stateLine(
   now: number,
   missing?: string,
 ): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere: said where Ready would be)
-  if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: `${missing} not found`, tone: "text-gh-gray" };
+  // (a program installed separately that is found nowhere, or too old: said where Ready would be)
+  if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
   switch (state) {
     case "no-input":
       return { text: "No input", tone: "text-gh-gray" };
@@ -133,7 +133,7 @@ export type StepCardProps = {
   ports: { take: PortLook; give: PortLook };
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
-  /** A program installed separately it runs, found nowhere, by what it is called: its *Run* opens Settings, Plugins, to locate it. */
+  /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
   missing?: string;
   /** The options it takes, as who does it declares them; and their values. */
   optionList: readonly Option[];
