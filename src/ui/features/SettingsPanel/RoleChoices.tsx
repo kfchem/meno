@@ -2,6 +2,7 @@ import { pluginsFilling } from "../../../lib/calc/catalog";
 import { ROLES, roleOptionsRole, type Role, type RoleId } from "../../../lib/plugins/roles";
 import { rolePlugin } from "../../../lib/roles/worker";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { useReaders } from "../../../lib/calc/workers";
 import { valuesOf } from "../../../lib/options";
 import OptionRows from "../../options/OptionRows";
 import clsx from "clsx";
@@ -19,6 +20,8 @@ export default function RoleChoices({ where, heading }: { where: Role["where"]; 
   const setPlugins = useAppSettings((s) => s.setPlugins);
   const remembered = useAppSettings((s) => s.options);
   const rememberOptions = useAppSettings((s) => s.rememberOptions);
+  // (who fills a role nobody chose follows what is added)
+  useReaders((s) => s.state);
   const roles = (Object.keys(ROLES) as RoleId[]).filter((r) => ROLES[r].where === where);
   const card = (
     <div className={clsx("rounded-lg border border-gh-line bg-white divide-y divide-gh-line", heading && "mt-2")}>

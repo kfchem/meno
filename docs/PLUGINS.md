@@ -266,7 +266,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 ## Several plugins, one role
 
 - **One plugin fills a role at a time**: the one assigned. The others that
-  could are offered in the same place.
+  could are offered in the same place. Where none is assigned, the first
+  that is added fills it - the one the chemist added, of MolScribe and
+  MolNexTR - else the first in Meno's order, set up when it is first
+  needed, asking first.
 - **For reading a file, others may add to it.** The assigned reader reads
   the file. Others the chemist adds for that kind read it as well, and
   their results join under their names, as an NBO plugin's would join

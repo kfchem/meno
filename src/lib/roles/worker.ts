@@ -4,6 +4,7 @@ import { pluginById, pluginsFilling, type PythonPlugin } from "../calc/catalog";
 import { ROLES, type RoleId } from "../plugins/roles";
 import { useAppSettings } from "../settings/appSettings";
 import { onWorkerStopped, workerOf, workerRunning } from "../plugins/process";
+import { useReaders } from "../calc/workers";
 import type { ChemClient } from "./client";
 
 /**
@@ -25,11 +26,12 @@ export type ChemState =
 
 export const useChem = create<ChemState>(() => ({ state: "idle" }));
 
-/** The plugin that fills a role: the one chosen, where it fills it; else the first that does. */
+/** The plugin that fills a role: the one chosen, where it fills it; else the first added that does - the one the chemist added, of two that read pictures; else the first that does. */
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   const can = pluginsFilling(role);
   const chosen = useAppSettings.getState().plugins.roles[role];
-  return can.find((p) => p.id === chosen) ?? can[0];
+  const state = useReaders.getState().state;
+  return can.find((p) => p.id === chosen) ?? can.find((p) => state[p.id] === "added") ?? can[0];
 }
 
 /** A role asked of a plugin the chemist took away: not a failure of it - it says to add it. */
