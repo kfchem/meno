@@ -49,12 +49,26 @@ from rdkit.Chem.EnumerateStereoisomers import (
 
 # RDKit's own warnings go to stderr, not into the answers.
 RDLogger.DisableLog("rdApp.*")
-# Structures laid out in 2D by RDKit's own depictor, not CoordGen: CoordGen
-# ran for minutes, and gigabytes, on a long chain of para-linked rings
-# (some 35 of them) or a large ring (60 atoms). Meno lays out what comes
-# back with its own engine (from_smiles, drawing_of): these coordinates
-# need only be quick, and right for the wedges read off them.
-rdDepictor.SetPreferCoordGen(False)
+rdDepictor.SetPreferCoordGen(True)
+
+# 2D coordinates come from CoordGen, except for a ring of LARGEST_RING atoms
+# or more, or MOST_RINGS rings or more: for these, Compute2DCoords with
+# CoordGen took from seconds to over 20 s here (RDKit 2026.03.6: a chain of
+# 32 para-linked benzene rings 2.2 s, of 35 over 8 s; a ring of 34 carbons
+# 2.5 s, of 37 over 20 s), so RDKit's own depictor lays them out. Meno lays
+# both of the worker's drawings out again with its own engine (from_smiles,
+# drawing_of); only their stereochemistry and scale come from here.
+LARGEST_RING = 34
+MOST_RINGS = 25
+
+
+def lay_out_2d(mol):
+    """A molecule's 2D coordinates: CoordGen's, but for a ring of
+    LARGEST_RING atoms or more, or MOST_RINGS rings or more, RDKit's own
+    depictor's."""
+    rings = [len(r) for r in Chem.GetSymmSSSR(mol)]
+    plain = len(rings) >= MOST_RINGS or max(rings, default=0) >= LARGEST_RING
+    rdDepictor.Compute2DCoords(mol, forceRDKit=plain)
 
 
 def read(molblock, sanitize=True):
@@ -81,7 +95,7 @@ def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
         raise ValueError("not a SMILES RDKit can read")
-    rdDepictor.Compute2DCoords(mol)
+    lay_out_2d(mol)
     return {"molblock": Chem.MolToV3KMolBlock(mol)}
 
 
@@ -477,7 +491,7 @@ def op_drawing_of(m):
     Chem.AssignStereochemistryFrom3D(mol)
     heavy = Chem.RemoveHs(mol)
     heavy.RemoveAllConformers()
-    rdDepictor.Compute2DCoords(heavy)
+    lay_out_2d(heavy)
     return {"molblock": Chem.MolToV3KMolBlock(heavy), "perceived": perceived}
 
 
