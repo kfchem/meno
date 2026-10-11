@@ -23,21 +23,48 @@ export type Resting = { clientX: number; clientY: number; pointerId: number };
 
 export type View = { x: number; y: number; zoom: number };
 
-/** A watch on one view's pointer: what it has heard, and where the pointer rests. */
+/**
+ * A watch on one view's pointer: what it has heard, where the pointer rests,
+ * and whether something has moved under it since it was last found.
+ */
 export function stillPointer() {
   let at: (Resting & { buttons: number }) | null = null;
+  let due = false;
+  const resting = (): Resting | null =>
+    at && at.buttons === 0 ? { clientX: at.clientX, clientY: at.clientY, pointerId: at.pointerId } : null;
   return {
-    /** A pointer event heard on the view (pointermove, -down, -up, -leave, -cancel). */
-    heard(e: PointerLike) {
+    /**
+     * A pointer event heard on the view (pointermove, -down, -up, -leave,
+     * -cancel). True where the pointer has come to rest with something
+     * moved under it: a frame is wanted, to find again what is under it.
+     */
+    heard(e: PointerLike): boolean {
       if (e.type === "pointerleave" || e.type === "pointercancel" || e.pointerType !== "mouse") {
         at = null;
-        return;
+        due = false;
+        return false;
       }
       at = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId, buttons: e.buttons };
+      // (a move finds for itself)
+      if (e.type === "pointermove" && e.buttons === 0) due = false;
+      return due && e.type === "pointerup" && e.buttons === 0;
     },
     /** Where the pointer rests over the view, with no button held; or null. */
-    resting(): Resting | null {
-      return at && at.buttons === 0 ? { clientX: at.clientX, clientY: at.clientY, pointerId: at.pointerId } : null;
+    resting,
+    /** Something has moved under the pointer: the view, or what is on it. */
+    moved() {
+      due = true;
+    },
+    /**
+     * Where to move the pointer by no distance, once, to find again what is
+     * under it: when something has moved under it, and it rests - a move
+     * made with a button held waits until the button is let go.
+     */
+    findAgain(): Resting | null {
+      if (!due) return null;
+      const r = resting();
+      if (r) due = false;
+      return r;
     },
   };
 }

@@ -43,6 +43,43 @@ describe("a pointer resting over a view", () => {
   });
 });
 
+describe("what is under a resting pointer, found again", () => {
+  it("is found once something has moved under it, and once only", () => {
+    const p = stillPointer();
+    p.heard(ev("pointermove", 500, 313));
+    expect(p.findAgain()).toBeNull();
+    p.moved();
+    expect(p.findAgain()).toEqual({ clientX: 500, clientY: 313, pointerId: 1 });
+    expect(p.findAgain()).toBeNull();
+  });
+
+  it("waits, when the view was moved with a button held, until the button is let go", () => {
+    const p = stillPointer();
+    p.heard(ev("pointermove", 500, 313));
+    expect(p.heard(ev("pointerdown", 500, 313, { buttons: 1 }))).toBe(false);
+    // (two fingers move the view while the press is held)
+    p.moved();
+    expect(p.findAgain()).toBeNull();
+    p.moved();
+    // (let go: a frame is wanted, which finds what has come under the pointer)
+    expect(p.heard(ev("pointerup", 500, 313))).toBe(true);
+    expect(p.findAgain()).toEqual({ clientX: 500, clientY: 313, pointerId: 1 });
+    expect(p.heard(ev("pointerup", 500, 313))).toBe(false);
+  });
+
+  it("is left to a move, which finds for itself, and to nothing once the pointer has left", () => {
+    const p = stillPointer();
+    p.heard(ev("pointermove", 500, 313));
+    p.moved();
+    p.heard(ev("pointermove", 504, 313));
+    expect(p.findAgain()).toBeNull();
+    p.moved();
+    p.heard(ev("pointerleave", 999, 313));
+    p.heard(ev("pointermove", 500, 313));
+    expect(p.findAgain()).toBeNull();
+  });
+});
+
 describe("a view moved", () => {
   it("is moved when two fingers move it, the wheel zooms it, or it is fitted - not when it is first drawn", () => {
     const was = { x: 0, y: 0, zoom: 40 };

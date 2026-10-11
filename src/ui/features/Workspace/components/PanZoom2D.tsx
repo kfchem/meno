@@ -81,12 +81,10 @@ export function PanZoom2D() {
   const zoomGlide = useRef(0);
   const pinchSteps = useRef<Move[]>([]);
   const anchor = useRef({ cx: 0, cy: 0 });
-  // where the pointer rests over the canvas; the view as last drawn; and
-  // whether what is under the pointer is to be found again, the view having
-  // moved under it
+  // where the pointer rests over the canvas, and whether something has moved
+  // under it; and the view as last drawn
   const pointer = useRef(stillPointer());
   const seenView = useRef<View | null>(null);
-  const findAgain = useRef(false);
   // (the camera's zoom: CSS pixels per world unit on the page, whether it is
   // orthographic - the canvas's - or in perspective, as PageCamera keeps it)
   useEffect(() => {
@@ -186,7 +184,7 @@ export function PanZoom2D() {
         }
         recent.current = [];
         // (what the drag brought under the pointer is found once it is let go)
-        findAgain.current = true;
+        pointer.current.moved();
         invalidate();
       }
       dragging.current = false;
@@ -298,7 +296,7 @@ export function PanZoom2D() {
 
     // (heard first, so the pointer is known to rest before a frame finds again)
     const heard = (e: PointerEvent) => {
-      if (e.isTrusted) pointer.current.heard(e);
+      if (e.isTrusted && pointer.current.heard(e)) invalidate();
     };
     const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
     for (const name of HEARD) dom.addEventListener(name, heard);
@@ -375,12 +373,9 @@ export function PanZoom2D() {
     // did on it (viewGoal): what is under the pointer now is lit, and taken
     // hold of by a press, as a move of no distance finds it - drawn as it
     // was moved to, so the hit areas are too.
-    const askedToFind = tookMovedUnderPointer(camera);
-    if (findAgain.current || askedToFind) {
-      findAgain.current = false;
-      const at = pointer.current.resting();
-      if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, pointerType: "mouse", bubbles: true, cancelable: true }));
-    }
+    if (tookMovedUnderPointer(camera)) pointer.current.moved();
+    const at = pointer.current.findAgain();
+    if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, pointerType: "mouse", bubbles: true, cancelable: true }));
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one
     const goal = viewGoalOf(camera);
@@ -450,7 +445,7 @@ export function PanZoom2D() {
 
     const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
     if (viewMoved(seenView.current, view)) {
-      findAgain.current = true;
+      pointer.current.moved();
       invalidate();
     }
     seenView.current = view;
