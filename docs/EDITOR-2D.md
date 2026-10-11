@@ -598,6 +598,14 @@ All hover-based, as above.
       bond from beside the middle of its line as drawn (shortened where a
       label stands at an end), clear of its lines by a little, a double
       bond's second line too;
+    - from an atom with a negative charge - O-, N-, a carbanion, a halide,
+      HO- - it leaves from the charge's mark, out of its circle and away
+      from the label, with no lone pair's dots, wherever the charge is
+      written or was put by hand (the maintainer, 2026-10-11, as their
+      handwriting does at an oxyanion); its menu sets it to leave from a
+      lone pair instead, *From a lone pair*, its dots then shown or left
+      off. A fishhook from an atom with a radical leaves from the
+      radical's dot. A neutral atom's arrow leaves a lone pair, as before;
     - it comes onto an atom from the side its new bond forms, short of its
       label - and straight from behind a bond the atom loses as it gains
       one, another arrow taking that bond's electrons: an SN2's attack

@@ -1,4 +1,4 @@
-import { labelBox, labelSetOf, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, markCircle, markExtent, placeLabel, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import { pointAt, pushShape, type PushEndAt, type PushMeasures, type PushScene, type PushShape } from "../../../../lib/chem/pushArrow";
 import type { Bond, PushArrow, PushEnd } from "../store/types";
 
@@ -14,7 +14,7 @@ const unit = (a: P): P => {
   const l = Math.hypot(a.x, a.y);
   return l > 1e-12 ? { x: a.x / l, y: a.y / l } : { x: 1, y: 0 };
 };
-type AtomAt = { id: number; x: number; y: number; el: string; charge?: number };
+type AtomAt = { id: number; x: number; y: number; el: string; charge?: number; radical?: unknown };
 
 /** The elements an arrow leaves from a lone pair of: those that have one to give in a neutral structure. */
 const PAIRED = new Set(["N", "O", "S", "P", "Se", "F", "Cl", "Br", "I"]);
@@ -22,6 +22,18 @@ const PAIRED = new Set(["N", "O", "S", "P", "Se", "F", "Cl", "Br", "I"]);
 /** Whether an atom has a lone pair an arrow is drawn from: a lone pair's element, or one with a negative charge. */
 export function hasLonePair(a: Pick<AtomAt, "el" | "charge">): boolean {
   return PAIRED.has(a.el) || (a.charge ?? 0) < 0;
+}
+
+/**
+ * What an arrow leaves its atom from (the maintainer, 2026-10-11): a
+ * fishhook from a radical's dot; else, from an atom with a negative charge,
+ * its charge's mark - unless the arrow is set to leave from a lone pair; else
+ * a lone pair.
+ */
+export function tailOf(a: Pick<AtomAt, "el" | "charge" | "radical">, push: Pick<PushArrow, "half" | "fromPair">): "radical" | "charge" | "pair" {
+  if (push.half && a.radical) return "radical";
+  if ((a.charge ?? 0) < 0 && !push.fromPair) return "charge";
+  return "pair";
 }
 
 /** How far round a bare vertex an arrow keeps, in bonds. */
@@ -95,7 +107,24 @@ export function pushShapes(
   };
   // (the bonds the arrows take electrons from, and so break)
   const broken = pushes.flatMap((q) => ("bond" in q.from && bondOf.get(q.from.bond) ? [bondOf.get(q.from.bond)!] : []));
-  const endAt = (e: PushEnd, tail: boolean, noPair: boolean): PushEndAt | null => {
+  // an atom's marks as the drawing has them: its negative charge's and its radical's, each a middle and how far it reaches
+  const marksOf = (i: number) => {
+    const out: { charge?: { c: P; r: number }; radical?: { c: P; r: number } } = {};
+    for (const t of labels) {
+      if (t.atom !== i && t.markOf !== i) continue;
+      for (const run of placeLabel(t, fontSize, set)) {
+        if (run.mark === "radical") out.radical = markCircle(run);
+        else if (run.mark === "charge" && run.text !== "+") out.charge = markCircle(run);
+        // (a charge of more than one, written small beside its symbol: 2\u2212)
+        else if (!run.mark && !run.sub && run.size < fontSize && /^\d*[\u2212-]$/.test(run.text)) {
+          const m = markExtent([run], set);
+          out.charge = { c: { x: m.x, y: m.y }, r: Math.max(m.halfW, m.halfH) };
+        }
+      }
+    }
+    return out;
+  };
+  const endAt = (e: PushEnd, tail: boolean, push: Pick<PushArrow, "half" | "fromPair" | "noPair">): PushEndAt | null => {
     if ("atom" in e) {
       const a = atomAt(e.atom);
       if (!a) return null;
@@ -113,10 +142,15 @@ export function pushShapes(
       }
       // (at its head, the bonds another arrow breaks there: it comes in from behind them)
       const losing = tail ? [] : broken.flatMap((b) => (b.a === e.atom || b.b === e.atom ? out.filter((w) => w.to === (b.a === e.atom ? b.b : b.a)).map((w) => w.u) : []));
+      // (its tail: a radical's dot, a negative charge's mark, or a lone pair)
+      const leaves = tail ? tailOf(a, push) : "pair";
+      const marks = leaves === "pair" ? {} : marksOf(index.get(e.atom)!);
+      const mark = leaves === "radical" ? marks.radical : leaves === "charge" ? marks.charge : undefined;
       return {
         atom: a,
         clear: clearOf(labelOf.get(index.get(e.atom)!), fontSize, opts, m.bondLength),
-        pair: tail && !noPair && hasLonePair(a),
+        pair: tail && !mark && !push.noPair && hasLonePair(a),
+        ...(mark ? { mark } : {}),
         bonds: [...out.map((w) => w.u), ...written],
         ...(losing.length ? { losing } : {}),
       };
@@ -165,8 +199,8 @@ export function pushShapes(
   const laid: (readonly [P, P])[] = [];
   const marks: P[] = [];
   return pushes.flatMap((push) => {
-    const from = pointer?.of === push.id && pointer.end === "from" ? free(pointer.at) : endAt(push.from, true, !!push.noPair);
-    const to = pointer?.of === push.id && pointer.end === "to" ? free(pointer.at) : endAt(push.to, false, true);
+    const from = pointer?.of === push.id && pointer.end === "from" ? free(pointer.at) : endAt(push.from, true, push);
+    const to = pointer?.of === push.id && pointer.end === "to" ? free(pointer.at) : endAt(push.to, false, { noPair: true });
     if (!from || !to) return [];
     const shape = pushShape(from, to, push.bend, { ...scene, segments: [...scene.segments, ...laid], arrows: marks }, m);
     if (!shape) return [];
