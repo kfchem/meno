@@ -1,4 +1,4 @@
-import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } from "../document";
+import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
@@ -1272,8 +1272,14 @@ export type EditorState = {
    * being saved nowhere since.
    */
   openedName: string | null;
-  /** The document has just been written to `path`: it is saved there. */
-  markSavedAs: (path: string) => void;
+  /**
+   * The document has just been written to `path`: it is saved there - as
+   * it was when its writing began (`written`, from `writing`), where it may
+   * have changed since.
+   */
+  markSavedAs: (path: string, written?: WorkspaceDocument) => void;
+  /** The document as it is: what is about to be written, for `markSavedAs` once it is. */
+  writing: () => WorkspaceDocument;
   /**
    * A file - where it is, or its name - has been opened on the canvas, as
    * what it starts with: it is saved nowhere yet, and Save asks where,

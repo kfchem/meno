@@ -67,8 +67,12 @@ export interface DocumentStore<T> {
    * under way, say, which undo still does not take back.
    */
   amend(updater: (state: T) => T, meta?: { unsaved?: boolean }): void;
-  /** Marks the current state as the saved one. */
-  markSaved(): void;
+  /**
+   * Marks the current state as the saved one - or `state`, the one that
+   * was written, where the document may have changed while it was: what
+   * changed meanwhile is then still unsaved.
+   */
+  markSaved(state?: T): void;
   history(): HistoryInfo;
 }
 
@@ -191,8 +195,8 @@ export function createDocument<T>(
       if (!Object.is(present.state, was)) notify();
     },
 
-    markSaved() {
-      savedState = present.state;
+    markSaved(state) {
+      savedState = state ?? present.state;
       notify();
     },
 
