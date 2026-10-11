@@ -45,10 +45,11 @@ const MARKS_APART = 0.6;
  * so. They are the editor's, laid over the drawing where it stands this
  * frame; they are not part of it, and no picture of it has them.
  */
-export default function ChemMarks2D({ marks }: { marks: ChemMarks | null }) {
+export default function ChemMarks2D({ marks, unsure }: { marks: ChemMarks | null; unsure?: { atoms: Set<number>; bonds: Set<number> } }) {
   const { atoms, layout, opts, zoom } = useDrawnLayout();
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
+  const hoveredBond = useEditor((s) => s.hovered.bondId);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => invalidate(), [marks, invalidate]);
 
@@ -139,7 +140,7 @@ export default function ChemMarks2D({ marks }: { marks: ChemMarks | null }) {
   // Each mark where it goes: a valence problem's box round its atom's label
   // (or a ring round its atom), and the stereodescriptors.
   const at = useMemo(() => new Map(drawn.atoms.map((a) => [a.id, a])), [drawn]);
-  const boxesOf: { key: string; id: number; x: number; y: number; w: number; h: number; round: boolean; message: string }[] = [];
+  const boxesOf: { key: string; id: number; x: number; y: number; w: number; h: number; round: boolean; message: string; bond?: boolean; dashed?: boolean }[] = [];
   for (const [id, problem] of marks ? [...marks.valence] : []) {
     const a = at.get(id);
     if (!a) continue;
@@ -157,6 +158,48 @@ export default function ChemMarks2D({ marks }: { marks: ChemMarks | null }) {
       h: (r.top + r.bottom) * z,
       round: !box,
       message: valenceMessage(a.el, problem),
+    });
+  }
+  // and, dashed, what the drawing says of its stereochemistry only by luck:
+  // a centre - its box as a valence problem's - or a double bond, a ring
+  // at its middle (the maintainer, 2026-10-11: never shown as if certain)
+  for (const id of unsure?.atoms ?? []) {
+    const a = at.get(id);
+    if (!a || marks?.valence.has(id)) continue;
+    const box = boxes.get(id);
+    const pad = 0.12 * labelFont;
+    const r = box
+      ? { left: box.left + pad, right: box.right + pad, top: box.top + pad, bottom: box.bottom + pad }
+      : { left: 0.3 * labelFont, right: 0.3 * labelFont, top: 0.3 * labelFont, bottom: 0.3 * labelFont };
+    boxesOf.push({
+      key: `unsure-${id}`,
+      id,
+      x: a.x + (r.right - r.left) / 2,
+      y: a.y + (r.top - r.bottom) / 2,
+      w: (r.left + r.right) * z,
+      h: (r.top + r.bottom) * z,
+      round: !box,
+      message: "This stereocentre can be read either way as drawn.",
+      dashed: true,
+    });
+  }
+  for (const id of unsure?.bonds ?? []) {
+    const b = drawn.bonds.find((x) => x.id === id);
+    const p = b && at.get(b.a);
+    const q = b && at.get(b.b);
+    if (!p || !q) continue;
+    const d = 0.6 * labelFont * z;
+    boxesOf.push({
+      key: `unsure-bond-${id}`,
+      id,
+      x: (p.x + q.x) / 2,
+      y: (p.y + q.y) / 2,
+      w: d,
+      h: d,
+      round: true,
+      message: "This double bond can be read as cis or trans as drawn.",
+      bond: true,
+      dashed: true,
     });
   }
   // (each comes into view and goes out of it, rather than appearing and
@@ -228,10 +271,10 @@ export default function ChemMarks2D({ marks }: { marks: ChemMarks | null }) {
           <div
             role="img"
             aria-label={m.message}
-            className={"relative border-[1.5px] border-accel-accent bg-accel-accent/10 " + (leaving ? "meno-fade-out" : "meno-fade-in")}
+            className={"relative border-[1.5px] border-accel-accent " + (m.dashed ? "border-dashed " : "bg-accel-accent/10 ") + (leaving ? "meno-fade-out" : "meno-fade-in")}
             style={{ width: m.w, height: m.h, borderRadius: m.round ? "50%" : 3 }}
           >
-            {hoveredAtom === m.id && !leaving && (
+            {(m.bond ? hoveredBond === m.id : hoveredAtom === m.id) && !leaving && (
               <div className="meno-fade-in absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm">
                 {m.message}
               </div>
