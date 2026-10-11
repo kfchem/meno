@@ -6,28 +6,46 @@ import { placeQuickAdd } from "./quickAddPlace";
 import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
+import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
 
-/** What opens below Quick Add's row: nothing, the calculations, or the field a SMILES is typed in. */
-type QuickPanel = "none" | "calculations" | "smiles";
-const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles"];
+/** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
+type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
+const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "shapes"];
 
 /** Each icon's size, in px. */
 const SIZE = 36;
 /** How wide the name of who does a row of steps stands, beside its kinds: "Gaussian 16" and "Procedures" whole. */
 const LABEL_W = 84;
-/** How tall the SMILES field stands below the row, its rule above it, in px. */
+/** How tall the SMILES field stands below the row, its rule above it, in px; and the row of shapes. */
 const SMILES_H = 32 + 9;
+const SHAPES_H = 36 + 9;
+
+/** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). */
+const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
+  rect: <rect x="3" y="5" width="14" height="10" />,
+  rounded: <rect x="3" y="5" width="14" height="10" rx="3" />,
+  ellipse: <ellipse cx="10" cy="10" rx="7.5" ry="5.2" />,
+  line: <path d="M3.5 15.5 L16.5 4.5" />,
+  arrow: (
+    <>
+      <path d="M3.5 15.5 L13.6 6.9" />
+      <path d="M17 4 L14.5 8.8 L11.9 5.7 Z" fill="currentColor" />
+    </>
+  ),
+  callout: <path d="M5 4 H15 Q17 4 17 6 V10.5 Q17 12.5 15 12.5 H9 L5.5 16.5 L6.3 12.5 H5 Q3 12.5 3 10.5 V6 Q3 4 5 4 Z" />,
+};
 
 /**
  * The row's icons, in order: what draws a structure - a bond, a chain, a
  * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
  * - and an electron-pushing arrow, begun at the first atom or bond pressed;
- * then a slide of what is seen (docs/PRESENTING.md).
+ * then a slide of what is seen (docs/PRESENTING.md), and the shapes, which
+ * open a row of their own below it.
  */
-const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactNode }[] = [
+const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; icon: ReactNode }[] = [
   {
     id: "bond",
     name: "Bond",
@@ -91,6 +109,17 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactN
       </>
     ),
   },
+  {
+    id: "shapes",
+    name: "Shapes",
+    // (a square and a circle, one over the other)
+    icon: (
+      <>
+        <rect x="2.5" y="7.5" width="9" height="9" rx="1" />
+        <circle cx="13" cy="7.5" r="4.5" />
+      </>
+    ),
+  },
 ];
 
 /**
@@ -118,6 +147,7 @@ export default function QuickAdd({
   procedures = [],
   onChoose,
   onChain,
+  onShape,
   onSmiles,
   onStep,
   onProcedure,
@@ -135,6 +165,8 @@ export default function QuickAdd({
   onChoose: (what: QuickAddChoice) => void;
   /** A chain begun where Quick Add was opened, by a press on its icon. */
   onChain: (press: React.PointerEvent) => void;
+  /** A shape begun where Quick Add was opened, by a press on its icon (docs/PRESENTING.md, *Shapes*). */
+  onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
   onSmiles: (smiles: string) => Promise<void>;
   onStep: (kind: StepKind, by: string) => void;
@@ -183,6 +215,8 @@ export default function QuickAdd({
         return { width: Math.max(rowWidth, calcWidth), height: SIZE + 8 + rows * SIZE + 9 };
       case "smiles":
         return { width: rowWidth, height: SIZE + 8 + SMILES_H };
+      case "shapes":
+        return { width: rowWidth, height: SIZE + 8 + SHAPES_H };
     }
   };
   const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
@@ -203,16 +237,16 @@ export default function QuickAdd({
               key={c.id}
               aria-label={c.name}
               title={c.name}
-              aria-expanded={c.id === "smiles" ? open === "smiles" : undefined}
+              aria-expanded={c.id === "smiles" || c.id === "shapes" ? open === c.id : undefined}
               onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : undefined}
               onClick={
                 c.id === "chain"
                   ? undefined
-                  : c.id === "smiles"
-                    ? () => setOpen((o) => (o === "smiles" ? "none" : "smiles"))
+                  : c.id === "smiles" || c.id === "shapes"
+                    ? () => setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
                     : () => onChoose(c.id as QuickAddChoice)
               }
-              className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${c.id === "smiles" && open === "smiles" ? "bg-gh-base" : "hover:bg-gh-base"}`}
+              className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${(c.id === "smiles" || c.id === "shapes") && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
               style={{ width: SIZE, height: SIZE }}
             >
               <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -239,6 +273,29 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           <div className="overflow-hidden" inert={open !== "smiles"}>
             <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} />
+          </div>
+        </div>
+      )}
+      {/* (the shapes, likewise: each drawn from where Quick Add was opened, by a drag from its icon or traced with the button up) */}
+      {!wired && (
+        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "shapes" ? "1fr" : "0fr", opacity: open === "shapes" ? 1 : 0 }}>
+          <div className="overflow-hidden" inert={open !== "shapes"}>
+            <div role="group" aria-label="Shapes" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
+              {SHAPE_KINDS.map((k) => (
+                <button
+                  key={k}
+                  aria-label={SHAPE_NAMES[k]}
+                  title={SHAPE_NAMES[k]}
+                  onPointerDown={(e) => e.button === 0 && onShape?.(k, e)}
+                  className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
+                  style={{ width: SIZE, height: SIZE }}
+                >
+                  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    {SHAPE_ICONS[k]}
+                  </svg>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -313,6 +313,26 @@ export function layoutEmf(
       v.setUint32(28, argb(color), true);
     });
 
+  // a pen for each width and colour (selected for GDI; EMF+ names its own in each record)
+  const pens = new Map<string, number>();
+  const penFor = (widthPx: number, color = stroke) => {
+    const width = Math.round(widthPx * S);
+    let h = pens.get(`${width} ${color}`);
+    if (h == null) {
+      h = pen(width, color);
+      pens.set(`${width} ${color}`, h);
+    }
+    select(h);
+    return plusPen(width, color);
+  };
+  const drawLines = (id: number, pts: readonly (readonly [number, number])[]) => {
+    w.plus(PLUS.DRAW_LINES, id, 4 + 8 * pts.length, (v) => {
+      v.setUint32(0, pts.length, true);
+      plusPoints(v, 4, pts);
+    });
+    poly(EMR.POLYLINE, pts);
+  };
+
   // filled: what lies behind the drawing (rings' fills, parts' highlights),
   // then join caps, then wedges and the like - each in its own colour, a
   // brush for each
@@ -334,6 +354,26 @@ export function layoutEmf(
     });
     poly(EMR.POLYGON, pts);
   };
+  // under it all, the shapes on the page, one after another: each filled,
+  // its line over its fill - a corner where it closes - and an arrow's heads over that
+  for (const m of layout.shapes ?? []) {
+    if (m.fill && m.fill.points.length >= 3) {
+      select(NULL_PEN);
+      fillPolygon(points(m.fill.points), colorRef(m.fill.color));
+    }
+    if (m.lines.length) {
+      select(NULL_BRUSH);
+      for (const l of m.lines) {
+        if (l.points.length < 2) continue;
+        const id = penFor(l.width * zoom, colorRef(l.color));
+        drawLines(id, points(l.closed ? [...l.points, l.points[0], l.points[1]] : l.points));
+      }
+    }
+    if (m.heads.length) {
+      select(NULL_PEN);
+      for (const h of m.heads) fillPolygon(points(h.points), colorRef(h.color));
+    }
+  }
   const fills = (layout.under ?? []).length + (layout.fills ?? []).length + layout.polys.length;
   if (fills) {
     select(NULL_PEN);
@@ -351,22 +391,12 @@ export function layoutEmf(
       if (p.points.length < 3) continue;
       fillPolygon(points(p.points), p.color ? colorRef(p.color) : stroke);
     }
+  }
+  if (brushes.size) {
     select(NULL_BRUSH);
     for (const h of brushes.values()) remove(h);
   }
-  // stroked: aromatic circles, then lines, a pen for each width (selected
-  // for GDI; EMF+ names its own in each record)
-  const pens = new Map<string, number>();
-  const penFor = (widthPx: number, color = stroke) => {
-    const width = Math.round(widthPx * S);
-    let h = pens.get(`${width} ${color}`);
-    if (h == null) {
-      h = pen(width, color);
-      pens.set(`${width} ${color}`, h);
-    }
-    select(h);
-    return plusPen(width, color);
-  };
+  // stroked: aromatic circles, then lines
   if ((layout.circles ?? []).length) {
     select(NULL_BRUSH);
     for (const c of layout.circles) {
@@ -387,12 +417,7 @@ export function layoutEmf(
   }
   for (const l of layout.lines) {
     const id = penFor(l.widthPx > 0 ? l.widthPx : 1, l.color ? colorRef(l.color) : stroke);
-    const pts = points([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]);
-    w.plus(PLUS.DRAW_LINES, id, 4 + 8 * pts.length, (v) => {
-      v.setUint32(0, pts.length, true);
-      plusPoints(v, 4, pts);
-    });
-    poly(EMR.POLYLINE, pts);
+    drawLines(id, points([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]));
   }
   if (pens.size) {
     select(NULL_PEN);

@@ -55,7 +55,7 @@ type Saved = Pick<
 > &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -124,6 +124,8 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.pictures?.length ? { pictures: state.pictures } : {}),
       // (the slides, in the talk's order: docs/PRESENTING.md)
       ...(state.slides?.length ? { slides: state.slides } : {}),
+      // (the shapes, from the back: docs/PRESENTING.md, *Shapes*)
+      ...(state.shapes?.length ? { shapes: state.shapes } : {}),
     }) + "\n"
   );
 }

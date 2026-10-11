@@ -21,6 +21,7 @@ import { pdfRoom } from "../../../../lib/pdf/layout";
 import { cornersOf } from "../utils/selection";
 import { sheetRoom } from "../utils/textSheets";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { shapeBounds } from "../../../../lib/chem/shapes";
 
 export default function FitToContent2D({
   paddingPx = 48,
@@ -35,6 +36,7 @@ export default function FitToContent2D({
   const pdfs = useEditor((s) => s.pdfs);
   const pictures = useEditor((s) => s.pictures);
   const slides = useEditor((s) => s.slides);
+  const shapes = useEditor((s) => s.shapes);
   const texts = useEditor((s) => s.texts);
   const store = useEditorStore();
   const style = useDrawingStyle();
@@ -58,7 +60,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -107,6 +109,12 @@ export default function FitToContent2D({
     for (const sl of slides) {
       bounds.min = { x: Math.min(bounds.min.x, sl.x - sl.w / 2), y: Math.min(bounds.min.y, sl.y - sl.h / 2) };
       bounds.max = { x: Math.max(bounds.max.x, sl.x + sl.w / 2), y: Math.max(bounds.max.y, sl.y + sl.h / 2) };
+    }
+    // and the shapes, all they draw (docs/PRESENTING.md, *Shapes*)
+    for (const sh of shapes) {
+      const b = shapeBounds(sh, opts.pointPx ?? 0);
+      bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
     // and the texts' sheets, and their names under them (an icon's room holds its name)
     for (const t of texts) {
@@ -175,6 +183,7 @@ export default function FitToContent2D({
     pdfs,
     pictures,
     slides,
+    shapes,
     texts,
     style,
     camera,
