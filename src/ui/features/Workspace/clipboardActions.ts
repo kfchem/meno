@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { styleOf } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
@@ -10,7 +10,7 @@ import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
 import type { Carried3D, Drawn } from "./store/types";
-import { centredAt, clipItems, hasFlow, partToCopy, recordText } from "./utils/copyPaste";
+import { centredAt, clipItems, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
 import { pictureOnClipboard, picturePng, pictureToAdd } from "./utils/pictures";
 import { bondsAmong } from "./utils/selection";
 import { carriedOf } from "./utils/workspace";
@@ -146,13 +146,17 @@ export function useClipboardActions(
     store.getState().deleteDrawn(taken.part, taken.ids3d);
   }, [part, copy, store]);
 
+  // (the pastes asked for at one place: a paste there again lands a step on - utils/copyPaste#pastePlace)
+  const pastes = useRef<PastesAt | null>(null);
   const paste = useCallback(
-    async (at: Pt) => {
+    async (asked: Pt) => {
       if (busy()) return;
+      const { place: at, pastes: now } = pastePlace(pastes.current, asked);
       try {
         // (files copied in the Finder or Explorer: as they would come dropped there)
         const files = openFiles ? await clipboardFiles() : [];
         if (files.length && openFiles) {
+          pastes.current = now;
           await openFiles(files, at);
           return;
         }
@@ -162,12 +166,14 @@ export function useClipboardActions(
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;
           if (picture) {
+            pastes.current = now;
             store.getState().addPictures([picture], at);
             return;
           }
           onError("There is nothing on the clipboard that reads as a structure or a picture.");
           return;
         }
+        pastes.current = now;
         store.getState().pasteModel(centredAt(found, at));
       } catch (e) {
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);

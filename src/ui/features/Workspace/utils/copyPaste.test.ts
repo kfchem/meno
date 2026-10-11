@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
-import { centredAt, clipItems, looksLikeSmiles, partToCopy, readRecord, recordText } from "./copyPaste";
+import { centredAt, clipItems, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
 import { kindOf } from "../../../../lib/io/kinds";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
@@ -194,5 +194,26 @@ describe("molecules in 3D on the clipboard", () => {
       { x: -2, y: 0 },
       { x: 2, y: 0 },
     ]);
+  });
+});
+
+// A second Cmd+V at the same place put the copy exactly over the first: it
+// could not be seen (the maintainer, 2026-10-12: a fixed step on, diagonally).
+describe("pastePlace", () => {
+  it("lands a paste asked for where the last one was a step down and to the right, and the next one a step further", () => {
+    const at = { x: 3, y: 4 };
+    const first = pastePlace(null, at);
+    expect(first.place).toEqual(at);
+    const second = pastePlace(first.pastes, at);
+    expect(second.place).toEqual({ x: 3 + PASTE_STEP, y: 4 - PASTE_STEP });
+    const third = pastePlace(second.pastes, at);
+    expect(third.place).toEqual({ x: 3 + 2 * PASTE_STEP, y: 4 - 2 * PASTE_STEP });
+  });
+
+  it("lands a paste asked for anywhere else where it is asked for, and begins again from there", () => {
+    const first = pastePlace(null, { x: 0, y: 0 });
+    const elsewhere = pastePlace(first.pastes, { x: 5, y: 0 });
+    expect(elsewhere.place).toEqual({ x: 5, y: 0 });
+    expect(pastePlace(elsewhere.pastes, { x: 5, y: 0 }).place).toEqual({ x: 5 + PASTE_STEP, y: -PASTE_STEP });
   });
 });
