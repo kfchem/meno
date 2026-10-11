@@ -153,7 +153,7 @@ def read_data(m):
     finally:
         os.remove(path)
     if data is None or not has(data, "atomnos"):
-        raise ValueError(f"cclib found no molecule in {name}")
+        raise ValueError(f"No molecule was found in {name}.")
     return data
 
 

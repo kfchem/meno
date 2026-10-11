@@ -250,7 +250,7 @@ def op_read(m):
     finally:
         os.remove(path)
     if data is None or not has(data, "atomnos"):
-        raise ValueError(f"cclib found no molecule in {name}")
+        raise ValueError(f"No molecule was found in {name}.")
     meta = getattr(data, "metadata", {}) or {}
     atoms = [ELEMENTS[int(z)] for z in data.atomnos]
     frames = []
