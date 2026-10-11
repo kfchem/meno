@@ -7,7 +7,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
-import { clickClock, doubleClickedSince } from "../utils/clickCount";
+import { clickClock, clickStillEdits } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { commitInstanceMatrices } from "./instances";
 
@@ -445,10 +445,12 @@ export function Atoms2D() {
           cancelPendingEdit();
           pendingEdit.current.atomId = a.id;
           // (unless it turns out to be the second click of a double-click,
-          // as the system reckons one, which draws a bond instead)
+          // as the system reckons one, which draws a bond instead - or
+          // something else is begun before then: a press elsewhere, to move
+          // the view, say)
           const since = clickClock();
           pendingEdit.current.tid = window.setTimeout(() => {
-            if (pendingEdit.current.atomId === a.id && !doubleClickedSince(since)) beginLabelEdit(a.id);
+            if (pendingEdit.current.atomId === a.id && clickStillEdits(since)) beginLabelEdit(a.id);
             cancelPendingEdit();
           }, EDIT_DELAY_MS) as unknown as number;
         };

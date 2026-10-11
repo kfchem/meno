@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickClock, doubleClickedSince, noteClick, pressOnEmpty } from "./clickCount";
+import { clickClock, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnEmpty } from "./clickCount";
 
 describe("clickCount", () => {
   it("tells a double-click's second click that came after a moment", () => {
@@ -14,6 +14,24 @@ describe("clickCount", () => {
     noteClick(2);
     const since = clickClock() + 1;
     expect(doubleClickedSince(since)).toBe(false);
+  });
+});
+
+describe("a click on an atom, waiting to edit its label", () => {
+  it("edits nothing once a press has come since: the view moved, say, or a bond clicked", async () => {
+    notePress();
+    await new Promise((r) => setTimeout(r, 2));
+    const since = clickClock();
+    expect(clickStillEdits(since)).toBe(true);
+    await new Promise((r) => setTimeout(r, 2));
+    notePress();
+    expect(clickStillEdits(since)).toBe(false);
+  });
+
+  it("edits nothing after the second click of a double-click", () => {
+    const since = clickClock();
+    noteClick(2);
+    expect(clickStillEdits(since)).toBe(false);
   });
 });
 

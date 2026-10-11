@@ -20,6 +20,23 @@ export function doubleClickedSince(since: number): boolean {
   return last.detail >= 2 && last.at >= since;
 }
 
+let pressed = Number.NEGATIVE_INFINITY;
+
+/** Notes a press of the button on the drawing, wherever it is. */
+export function notePress(): void {
+  pressed = now();
+}
+
+/**
+ * Whether a click at `since` (a `performance.now()`) still edits its atom's
+ * label: no second click of a double-click has come since, and no press
+ * either - a press elsewhere, to move the view or on a bond, begins
+ * something else, which the edit would break into half a second later.
+ */
+export function clickStillEdits(since: number): boolean {
+  return !doubleClickedSince(since) && pressed < since;
+}
+
 /** Now, as `doubleClickedSince` takes it. */
 export function clickClock(): number {
   return now();
