@@ -601,6 +601,14 @@ All hover-based, as above.
       bond from beside the middle of its line as drawn (shortened where a
       label stands at an end), clear of its lines by a little, a double
       bond's second line too;
+    - from an atom with a negative charge - O-, N-, a carbanion, a halide,
+      HO- - it leaves from the charge's mark, out of its circle and away
+      from the label, with no lone pair's dots, wherever the charge is
+      written or was put by hand (the maintainer, 2026-10-11, as their
+      handwriting does at an oxyanion); its menu sets it to leave from a
+      lone pair instead, *From a lone pair*, its dots then shown or left
+      off. A fishhook from an atom with a radical leaves from the
+      radical's dot. A neutral atom's arrow leaves a lone pair, as before;
     - it comes onto an atom from the side its new bond forms, short of its
       label - and straight from behind a bond the atom loses as it gains
       one, another arrow taking that bond's electrons: an SN2's attack
@@ -626,7 +634,10 @@ All hover-based, as above.
     deletes it.
   - Saved with the workspace, carried by a copy that holds both its ends
     (on their new ids where it is pasted), and drawn in an exported SVG and
-    in a copy's pictures, as on the canvas; a MOL, SD or RXN file has no
+    in a copy's pictures, as on the canvas - its line there as the curve it
+    is (an SVG path, EMF+'s Bezier curves and GDI's PolyBezier), smooth
+    however far a picture is enlarged (a Windows check found PowerPoint
+    showing corners at 17 times); a MOL, SD or RXN file has no
     place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
     `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;

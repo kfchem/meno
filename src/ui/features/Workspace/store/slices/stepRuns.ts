@@ -8,7 +8,7 @@ import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
 import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
-import { lookFor } from "../../../../../lib/plugins/installed";
+import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { pluginWorker } from "../../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -317,7 +317,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
       const where = await lookFor(plugin.id, decl.name);
-      if (!where) return void fail(id, notFound(decl.label), at, key);
+      if (!where) return void fail(id, tooOld(plugin.id, decl.name) ?? notFound(decl.label), at, key);
       paths.set(decl.name, where);
     }
     // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)

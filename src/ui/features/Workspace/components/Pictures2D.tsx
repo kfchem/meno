@@ -126,9 +126,9 @@ export default function Pictures2D() {
       newest.current = Math.max(newest.current ?? 0, top);
       return;
     }
-    // (one let go where the chemist put it - a box carried out of a PDF - stays as the view is)
-    const landing = store.getState().pdfPicture?.landing;
-    const added = pictures.filter((p) => p.id > newest.current! && p.id !== landing);
+    // (one let go where the chemist put it - a box carried out of a PDF - or a render's, the view eased to as it was begun, stays as the view is)
+    const { pdfPicture, picturesLaid } = store.getState();
+    const added = pictures.filter((p) => p.id > newest.current! && p.id !== pdfPicture?.landing && !picturesLaid.has(p.id));
     newest.current = top;
     if (!added.length) return;
     const pts = added.flatMap(cornersOf);

@@ -60,7 +60,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
-import { hasLonePair } from "./utils/pushes";
+import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
@@ -1553,7 +1553,9 @@ function WorkspaceContent({
             return {
               half: !!p.half,
               setHalf: (half: boolean) => st.updatePush(p.id, { half }),
-              ...(tail && hasLonePair(tail) ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
+              // (from an anion: from its charge, or from a lone pair - its dots then shown or not; a fishhook from a radical, from its dot)
+              ...(tail && (tail.charge ?? 0) < 0 && tailOf(tail, p) !== "radical" ? { source: { fromPair: !!p.fromPair, set: (fromPair: boolean) => st.updatePush(p.id, { fromPair }) } } : {}),
+              ...(tail && hasLonePair(tail) && tailOf(tail, p) === "pair" ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
               ...(p.bend ? { onUnbend: () => st.updatePush(p.id, { bend: null }) } : {}),
             };
           })()}

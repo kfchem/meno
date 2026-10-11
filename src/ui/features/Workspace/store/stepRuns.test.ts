@@ -86,6 +86,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 import { connectStoreToDocument, createEditorStore } from ".";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
 import { readWorkspace, workspaceText } from "../utils/workspace";
@@ -249,6 +250,20 @@ describe("a step that runs a plugin's program", () => {
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "ORCA is not found: locate it in Settings, Plugins" });
     expect(asked.started).toEqual([]);
+  });
+
+  it("says why a program installed separately found only too old will not do - and starts nothing", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = null;
+    const why = "Meno needs ORCA 6.0 or later; this one is 5.0.4";
+    useInstalled.setState({ chosen: { "orca:orca": { path: "/opt/orca_5/orca", version: "5.0.4", why } } });
+    const { st } = editor();
+    const step = st().addStep("energy", "orca", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: why });
+    expect(asked.started).toEqual([]);
+    useInstalled.setState({ chosen: {} });
   });
 
   it("says it was stopped, and brings nothing in", async () => {

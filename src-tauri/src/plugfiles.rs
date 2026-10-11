@@ -1,7 +1,7 @@
 //! Files a plugin needs besides its environment, as its manifest lists
-//! them (`downloads`; docs/PLUGINS.md, *Files a plugin downloads*): a
-//! model's trained weights, say - too large for Meno to carry, and not a
-//! package uv or pixi installs. Each is fetched once, from where the
+//! them (`downloads`; docs/PLUGINS.md, *The manifest*): a model's trained
+//! weights, say - too large for Meno to carry, and not a package uv or
+//! pixi installs. Each is fetched once, from where the
 //! manifest says, checked against the SHA-256 it gives before it is kept,
 //! and kept in the plugin's environment's folder - `files` beside its
 //! `venv` - so that taking the plugin away takes them too.
