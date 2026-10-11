@@ -499,31 +499,47 @@ export function pushShape(from: PushEndAt, to: PushEndAt, bend: PushBend | undef
 }
 
 /**
- * The arrow as outlines to fill: its line, along the curve to where its
- * head begins, as wide as a bond's - round at its tail in a style with
- * round ends - and its head, barbed as the style draws it in, full, or
- * (`half`) the one side of it on the outside of the curve, as a fishhook is
- * drawn.
+ * Where an arrow's head is and where its line gives way to it: the curve
+ * up to `cut` of the way along it (as `along` steps it, `n` steps), then
+ * straight on into the head as far as its drawn-in back (`lineEnd`); the
+ * head along the curve's last stretch, so that it points the way the curve
+ * comes in, barbed as the style draws it - full, or (`half`) the one side
+ * of it on the outside of the curve, as a fishhook is drawn.
  */
-export function pushOutlines(shape: PushShape, half: boolean, m: PushMeasures): P[][] {
+function headOf(shape: PushShape, half: boolean, m: PushMeasures, pts: readonly P[]): { cut: number; lineEnd: P; head: P[] } {
   const t = Math.max(0, m.thickness / 2);
-  const n = 64;
-  const pts = along(shape, n);
+  const n = pts.length - 1;
   let total = 0;
   for (let i = 1; i <= n; i++) total += len(sub(pts[i], pts[i - 1]));
   // (the head no longer than a little under half the arrow)
   const h = Math.min(m.headLength, total * 0.42);
   const e = shape.end;
-  // the line: the curve up to where the head begins, each point offset
-  // either side - the head along the curve's last stretch, so that it
-  // points the way the curve comes in
   let cut = n;
   while (cut > 1 && len(sub(pts[cut], e)) < h) cut--;
   const heading = unit(sub(e, pts[cut]));
   const base = sub(e, mul(heading, h));
   const inset = Math.max(0, Math.min(0.6, m.headInset));
-  // (the line reaches into the head as far as its drawn-in back)
-  const line = [...pts.slice(0, cut + 1), add(base, mul(heading, inset * h * 0.9))];
+  const w = Math.max(m.headWidth / 2, t);
+  const across = left(heading);
+  const notch = add(base, mul(heading, inset * h));
+  // (the outside of the curve: the side its middle stands, seen from the middle of its ends)
+  const outside = dot(sub(pointAt(shape, 0.5), mid(shape.start, e)), across) >= 0 ? across : mul(across, -1);
+  const head = half
+    ? [e, add(base, mul(outside, w)), add(notch, mul(outside, -t)), sub(e, mul(heading, t * 2))]
+    : [e, add(base, mul(across, w)), notch, sub(base, mul(across, w))];
+  return { cut, lineEnd: add(base, mul(heading, inset * h * 0.9)), head };
+}
+
+/**
+ * The arrow as outlines to fill: its line, along the curve to where its
+ * head begins, as wide as a bond's - round at its tail in a style with
+ * round ends - and its head (`headOf`). The canvas draws these.
+ */
+export function pushOutlines(shape: PushShape, half: boolean, m: PushMeasures): P[][] {
+  const t = Math.max(0, m.thickness / 2);
+  const pts = along(shape, 64);
+  const { cut, lineEnd, head } = headOf(shape, half, m, pts);
+  const line = [...pts.slice(0, cut + 1), lineEnd];
   const sides = line.map((p, i) => {
     const a = line[Math.max(0, i - 1)];
     const b = line[Math.min(line.length - 1, i + 1)];
@@ -540,13 +556,28 @@ export function pushOutlines(shape: PushShape, half: boolean, m: PushMeasures): 
       outline.push(add(shape.start, { x: t * Math.cos(a), y: t * Math.sin(a) }));
     }
   }
-  const w = Math.max(m.headWidth / 2, t);
-  const across = left(heading);
-  const notch = add(base, mul(heading, inset * h));
-  // (the outside of the curve: the side its middle stands, seen from the middle of its ends)
-  const outside = dot(sub(pointAt(shape, 0.5), mid(shape.start, e)), across) >= 0 ? across : mul(across, -1);
-  const head = half
-    ? [e, add(base, mul(outside, w)), add(notch, mul(outside, -t)), sub(e, mul(heading, t * 2))]
-    : [e, add(base, mul(across, w)), notch, sub(base, mul(across, w))];
   return [outline, head];
+}
+
+/**
+ * The arrow as a picture writes it: its line as the curve it is - cubic
+ * segments, the start then three points each, to be stroked as wide as a
+ * bond's line, round at its tail in a style with round ends - so that it
+ * stays smooth however far the picture is enlarged; and its head to fill
+ * (`headOf`), as the canvas's outlines have them.
+ */
+export function pushStroke(shape: PushShape, half: boolean, m: PushMeasures): { curve: P[]; head: P[] } {
+  const n = 64;
+  const { cut, lineEnd, head } = headOf(shape, half, m, along(shape, n));
+  // the curve up to where the head begins (its first part, by de Casteljau), then straight on into the head
+  const t = cut / n;
+  const lerp = (a: P, b: P) => add(a, mul(sub(b, a), t));
+  const p01 = lerp(shape.start, shape.c1);
+  const p12 = lerp(shape.c1, shape.c2);
+  const p23 = lerp(shape.c2, shape.end);
+  const p012 = lerp(p01, p12);
+  const p123 = lerp(p12, p23);
+  const at = lerp(p012, p123);
+  const third = mul(sub(lineEnd, at), 1 / 3);
+  return { curve: [shape.start, p01, p012, at, add(at, third), add(at, mul(third, 2)), lineEnd], head };
 }

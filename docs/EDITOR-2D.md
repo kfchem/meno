@@ -634,7 +634,10 @@ All hover-based, as above.
     deletes it.
   - Saved with the workspace, carried by a copy that holds both its ends
     (on their new ids where it is pasted), and drawn in an exported SVG and
-    in a copy's pictures, as on the canvas; a MOL, SD or RXN file has no
+    in a copy's pictures, as on the canvas - its line there as the curve it
+    is (an SVG path, EMF+'s Bezier curves and GDI's PolyBezier), smooth
+    however far a picture is enlarged (a Windows check found PowerPoint
+    showing corners at 17 times); a MOL, SD or RXN file has no
     place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
     `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
