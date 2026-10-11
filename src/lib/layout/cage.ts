@@ -106,7 +106,7 @@ function majorise(X: Vec3[], D: number[][]): Vec3[] {
  * tetrahedral 1.63, and nothing else nearer than 1.9 - eased in from the
  * rough placement until those hold.
  */
-function settle(X: Vec3[], hop: number[][]): Vec3[] {
+function settle(X: Vec3[], hop: number[][], hold: readonly Held[] = []): Vec3[] {
   const n = X.length;
   const P = X.map((p) => [...p] as Vec3);
   const pull = (i: number, j: number, target: number, k: number, onlyApart: boolean) => {
@@ -128,9 +128,22 @@ function settle(X: Vec3[], hop: number[][]): Vec3[] {
         else pull(i, j, 1.9, 0.3, true);
       }
     }
+    // (a centre held the way round it is given, put back through the plane
+    // of its three neighbours whenever the easing turns it)
+    for (const { c, three, sign } of hold) {
+      const [a, b, d] = three.map((k) => P[k]);
+      const v = [a, b, d].map((q) => subV(q, P[c]));
+      if (Math.sign(dotV(v[0], crossV(v[1], v[2]))) === sign) continue;
+      const nrm = normalise(crossV(subV(b, a), subV(d, a)));
+      const k = 2 * dotV(subV(P[c], a), nrm);
+      P[c] = [P[c][0] - k * nrm[0], P[c][1] - k * nrm[1], P[c][2] - k * nrm[2]];
+    }
   }
   return P;
 }
+
+/** A stereocentre held the way round it is given while a solid is eased: its index, three neighbours' and the sign of the volume they span from it. */
+type Held = { c: number; three: [number, number, number]; sign: number };
 
 /**
  * How badly a flat view reads: atoms hidden or on bonds, bonds crossing,
@@ -145,11 +158,13 @@ function viewCost(
   near = 0.6,
   onBond = 0.3,
   depth?: readonly number[],
+  /** Only its faults: atoms on atoms or on bonds, a bond far too short, bonds crossing with neither behind - not its bonds uneven, nor one passing behind another. */
+  faultsOnly = false,
 ): number {
   const lens = bonds.map(([a, b]) => Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y));
   const mean = lens.reduce((s, v) => s + v, 0) / lens.length;
   const spread = Math.sqrt(lens.reduce((s, v) => s + (v - mean) ** 2, 0) / lens.length) / mean;
-  let cost = 20 * spread;
+  let cost = faultsOnly ? 0 : 20 * spread;
   for (const l of lens) if (l / mean < 0.55) cost += 5;
   const bonded = new Set(bonds.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
   for (let i = 0; i < pts.length; i++) {
@@ -177,7 +192,7 @@ function viewCost(
       // a bond passing behind another is drawn broken there, which reads
       // - the better where the drawing says which is in front
       const apart = depth && Math.abs((depth[a] + depth[b]) / 2 - (depth[c] + depth[d]) / 2) > 0.25;
-      if (segmentsCross(pts[a], pts[b], pts[c], pts[d])) cost += apart ? 0.3 : 1;
+      if (segmentsCross(pts[a], pts[b], pts[c], pts[d])) cost += apart ? (faultsOnly ? 0 : 0.3) : 1;
     }
   }
   return cost;
@@ -262,6 +277,7 @@ export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
   const D = hop.map((row) => row.map(span));
   let X = settle(majorise(classical(D), D), hop);
   if (handedness(mol, sys.atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
+  X = rightCentres(mol, sys.atoms, index, X, hop);
   return new Map(sys.atoms.map((a, i) => [a, X[i]]));
 }
 
@@ -279,6 +295,7 @@ export function projectCage(mol: Molecule, sys: RingSystem): CageView {
   // the solid is found from distances, which cannot tell a shape from its
   // mirror image: the one whose stereocentres are as given is taken
   if (handedness(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
+  X = rightCentres(mol, atoms, index, X, hop);
 
   // a bicyclo[3.3.1] cage as 9-BBN is drawn: its two chairs stood on end
   const twin = twinChairs(mol, sys, X, index, bonds);
@@ -597,7 +614,7 @@ function textbook(
               viewCost(pts, bonds, 0.45, 0.2) +
               cost0 +
               (restUp ? 0 : 0.5) +
-              exitCost(pts, bonds, index, hints) +
+              exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
               0.25 * behind;
             const held = best.get(hand);
             if (!held || cost < held.cost - 1e-9) best.set(hand, { pts, depth, hints, cost });
@@ -817,13 +834,22 @@ function exits(
 }
 
 /** How much a cage's bonds out run into it: an end on an atom or a bond, or crossing one. */
-function exitCost(pts: Point[], bonds: [number, number][], index: Map<number, number>, hints: Map<number, Map<number, Point>>): number {
+function exitCost(
+  pts: Point[],
+  bonds: [number, number][],
+  index: Map<number, number>,
+  hints: Map<number, Map<number, Point>>,
+  labelled: (a: number) => boolean = () => false,
+): number {
   let cost = 0;
+  const atoms = [...index.keys()];
   for (const [a, m] of hints) {
     const i = index.get(a)!;
-    for (const [, h] of m) {
+    for (const [t, h] of m) {
       for (let j = 0; j < pts.length; j++) {
-        if (j !== i && Math.hypot(pts[j].x - h.x, pts[j].y - h.y) < 0.5) cost += 3;
+        // (two labels - an OH ending by a cage's O - a label's breadth apart)
+        const room = labelled(t) && labelled(atoms[j]) ? 0.85 : 0.5;
+        if (j !== i && Math.hypot(pts[j].x - h.x, pts[j].y - h.y) < room) cost += 3;
       }
       for (const [p, q] of bonds) {
         if (p === i || q === i) continue;
@@ -923,6 +949,55 @@ function drawOn(
     });
   }
   return pts;
+}
+
+/**
+ * The solid with each stereocentre it has the wrong way that three of its
+ * bonds in the system fix turned the right way: from how far apart the
+ * bonds put the atoms, a ring fusion can come out trans where it is cis
+ * (tetrodotoxin's C4a, where its guanidine ring joins the cage). The
+ * centre is put through the plane of those three neighbours - its bonds to
+ * them keep their lengths - and the solid eased again from there, every
+ * centre so fixed held the way round it is given; taken where that leaves
+ * fewer wrong.
+ */
+function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number, number>, X: Vec3[], hop: number[][]): Vec3[] {
+  const fixed = (c: number) => {
+    const t = mol.tetra.get(c);
+    if (!t) return null;
+    const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
+    return known.length >= 3 ? { t, known } : null;
+  };
+  const wrong = (Y: Vec3[]) =>
+    atoms.filter((c) => {
+      const f = fixed(c);
+      if (!f) return false;
+      const three = f.known.slice(0, 3);
+      const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
+      const p = Y[index.get(c)!];
+      const v = three.map(([n]) => subV(Y[index.get(n)!], p));
+      return Math.sign(dotV(v[0], crossV(v[1], v[2]))) !== f.t.volume * (left % 2 === 1 ? 1 : -1);
+    });
+  const bad = wrong(X);
+  if (!bad.length) return X;
+  // (every centre so fixed held the way it is given while the solid eases)
+  const hold: Held[] = atoms.flatMap((c) => {
+    const f = fixed(c);
+    if (!f) return [];
+    const three = f.known.slice(0, 3);
+    const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
+    return [{ c: index.get(c)!, three: three.map(([n]) => index.get(n)!) as [number, number, number], sign: f.t.volume * (left % 2 === 1 ? 1 : -1) }];
+  });
+  const next = X.map((p) => [...p] as Vec3);
+  for (const c of bad) {
+    const [a, b, d] = fixed(c)!.known.slice(0, 3).map(([n]) => X[index.get(n)!]);
+    const nrm = normalise(crossV(subV(b, a), subV(d, a)));
+    const p = X[index.get(c)!];
+    const k = 2 * dotV(subV(p, a), nrm);
+    next[index.get(c)!] = [p[0] - k * nrm[0], p[1] - k * nrm[1], p[2] - k * nrm[2]];
+  }
+  const settled = settle(next, hop, hold);
+  return wrong(settled).length < bad.length ? settled : X;
 }
 
 /**
@@ -1119,6 +1194,8 @@ export function flatCost(
   depth?: Map<number, number>,
   /** And whether the room its bonds out of the system have is counted: in choosing between flat and solid. */
   room = false,
+  /** Only its faults (viewCost). */
+  faultsOnly = false,
 ): number {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
@@ -1128,7 +1205,7 @@ export function flatCost(
     if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
   }
   const pts = atoms.map((a) => pos.get(a)!);
-  return viewCost(pts, bonds, 0.6, 0.3, depth && atoms.map((a) => depth.get(a) ?? 0)) + (room ? roomFault(mol, sys, pos, pts, bonds) : 0);
+  return viewCost(pts, bonds, 0.6, 0.3, depth && atoms.map((a) => depth.get(a) ?? 0), faultsOnly) + (room ? roomFault(mol, sys, pos, pts, bonds) : 0);
 }
 
 /**

@@ -491,7 +491,11 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const flat = layoutFlat(mol, sys);
   // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
   const flatFaults = flatCost(mol, sys, flat.pos, flat.depth, true);
-  if (flatFaults < 1) return flat;
+  // (and not where its bonds are only a little uneven and a bond or two
+  // passes behind another where a bridge crosses a ring - no atom on
+  // another or on a bond, no bond crossing one in front of it: how morphine
+  // and strychnine are drawn, flat with their bridges across)
+  if (flatFaults < 1 || (flatFaults < 3 && flatCost(mol, sys, flat.pos, flat.depth, true, true) < 1)) return flat;
   // Where it will not lie flat without a fault, it is drawn as the solid it
   // is, by the cage's own way - its atoms set in space by how far apart the
   // bonds put them, seen from the side that reads best (cage.ts) - however
