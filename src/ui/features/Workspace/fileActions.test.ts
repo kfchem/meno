@@ -214,6 +214,28 @@ describe("drawingSvg", () => {
     }
   });
 
+  it("says over a molecule in 3D what its file left out - its hydrogens, its bond orders - one over the other", () => {
+    // (formaldehyde's heavy atoms, as an X-ray entry would give them)
+    const bare = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "O", x: 1.2, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 6 * L, y: 0 },
+      bondOrders: "unknown" as const,
+    };
+    const drawn = drawingSvg({ ...model, molecules3d: [bare] }, aromatic, ACS_1996);
+    expect(drawn).toContain(">No H in file</text>");
+    expect(drawn).toContain(">Bond orders unknown</text>");
+    const y = (text: string) => Number(new RegExp(`y="([-\\d.]+)"[^>]*>${text}</text>`).exec(drawn)![1]);
+    expect(y("No H in file")).toBeLessThan(y("Bond orders unknown"));
+    // (its orders given: it says only that its hydrogens are not there)
+    const given = drawingSvg({ ...model, molecules3d: [{ ...bare, bonds: [{ a1: 0, a2: 1, order: 2 }], bondOrders: undefined }] }, aromatic, ACS_1996);
+    expect(given).toContain(">No H in file</text>");
+    expect(given).not.toContain("Bond orders");
+  });
+
   it("writes the label in Arial", () => {
     expect(svg).toContain('font-family="Arial');
     // run by run: the symbol, then its hydrogen

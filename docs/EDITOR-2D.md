@@ -163,8 +163,9 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
-| A bond | clean up, 3D, colour; Delete | select its structure |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
+| A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure |
+| An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text, fit, R and S, the texts, find in PDFs, drawing style, run all |
@@ -215,7 +216,8 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow and a "+". A choice puts it down where the
+SMILES, text, a reaction arrow, a "+" and an electron-pushing arrow (from
+the first atom or bond pressed, *Electron-pushing arrows* below). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
@@ -566,6 +568,64 @@ All hover-based, as above.
   anew; undo brings them back. A label's charge put by hand leaves the
   label, set beside it where it was put (`Atom.chargeAt`, `stereoAt`;
   `Bond.stereoAt`; `MarkHold2D`).
+- **Electron-pushing arrows** (the maintainer, 2026-10-10: arrows for how
+  electrons move; their drawing settled 2026-10-11). A curved arrow from a
+  lone pair, a bond or an atom to an atom, a bond, or the gap between two
+  atoms where a bond forms - its head full, for a pair of electrons, or
+  half, a fishhook, for one, the barb on the outside of the curve.
+  - Begun from the menu of the atom or bond it leaves - *Electron-pushing
+    arrow* or *Fishhook arrow*, icons in its row - or from Quick Add,
+    where the first atom or bond pressed is where it leaves. It then
+    follows the pointer, the button up, and comes to the atom or the bond
+    under it, or to the gap between two atoms not bonded whose middle the
+    pointer is near; a click there puts it down, one step - and so does
+    letting go there, of a press that began on the menu's icon. A click on
+    nothing, Escape or a right press lets it go. Being drawn, it is in the
+    highlight's colour until it has an end. No key draws one (drawing by
+    extension, 2026-09-27).
+  - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
+    by where it was drawn, so it goes with them as they are moved, turned,
+    turned over (bent to its other side, as a mirror shows it) and cleaned
+    up (bent as Meno bends it again, as marks put by hand are put back), and
+    goes when they go.
+  - Laid as a chemist draws one by hand (the maintainer, 2026-10-11, from
+    their own handwritten mechanism; "an SN2 should look much more like an
+    SN2"):
+    - it leaves a lone pair the way the pair points - two dots beside the
+      element's symbol, clear of its bonds and of the side its label's H's
+      are written on, where the atom has one to give (N, O, S, P, Se, the
+      halogens, or a negative charge), which its menu can leave off - or a
+      bond from beside the middle of its line as drawn (shortened where a
+      label stands at an end), clear of its lines by a little, a double
+      bond's second line too;
+    - it comes onto an atom from the side its new bond forms, short of its
+      label - and straight from behind a bond the atom loses as it gains
+      one, another arrow taking that bond's electrons: an SN2's attack
+      comes in from the back of the carbon;
+    - a long one rises off its tail and comes down onto its head, an arc
+      and never a line or an S, round the structure rather than across its
+      bonds and labels, and clear of the arrows laid before it (a leaving
+      group's curl on the far side from the attack);
+    - a short one - from a bond to its own atom, a lone pair to the bond
+      beside it - is a round curl beside the bond, about as big as a label,
+      with no corner in it;
+    - its line is a bond's; its head small and barbed, the drawing style's
+      (*Electron-pushing arrows*: head length, width and notch). It is in
+      the bonds' ink, unless it is given a colour of its own from its menu
+      (*Colour…*).
+
+    Where a crowded drawing leaves it no good way, it can be bent by hand.
+  - Under the pointer it is lit from behind, is the one a right-click's
+    menu is for, and shows a handle at its middle and at each end: its line
+    or its middle dragged bends it through the pointer; an end dragged onto
+    an atom, a bond or a gap takes it there; each one step. Two clicks on
+    it bend it as Meno does again. Delete or Backspace under the pointer
+    deletes it.
+  - Saved with the workspace, carried by a copy that holds both its ends
+    (on their new ids where it is pasted), and drawn in an exported SVG and
+    in a copy's pictures, as on the canvas; a MOL, SD or RXN file has no
+    place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
+    `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
   a highlight's edge sharp, never a glow; rings filled too). *Colour…*, in
   the menu of an atom, a bond, the selection or a ring - a right-click
@@ -576,7 +636,8 @@ All hover-based, as above.
   its label, where it has one - flat, so that the pieces of one colour run
   together into one shape with a sharp edge; and *Fill ring*, a lighter
   tint over the inside of each ring it holds whole, or of the ring
-  right-clicked. Each row has none, Okabe and Ito's colours but black -
+  right-clicked. An electron-pushing arrow's menu has it too, of the one
+  row *Colour* - the arrow's line, head and lone pair. Each row has none, Okabe and Ito's colours but black -
   told apart by those who see colours otherwise - and any other, from the
   system's chooser; the one given now is ringed. A swatch is given at
   once, one step each (as long as the chooser is open, one step in all),

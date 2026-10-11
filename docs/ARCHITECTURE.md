@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
   utils/atomUtils         element table (radii, colours)
@@ -574,7 +575,8 @@ like any plugin (`resources/plugins/rdkit/`, its environment
 (`chemWorker(role)`: the plugin chosen for the role in Settings, else the
 first that fills it) and asked through `lib/roles/client.ts`: JSON lines, a
 fixed set of requests (to_smiles, from_smiles, analyse, and for 3D
-open_stereo, conformers and drawing_of; the worker says its version in its
+open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
+the worker says its version in its
 first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
 blocks or coordinates out. It is set up the first time a role it fills is
@@ -794,7 +796,12 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 `utils/drawnLink`), so that hover is shared and a changed drawing is seen.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
-coordinates gave none, for Meno's engine to draw. These take as long as
+coordinates gave none - and it has its hydrogens, without which they are
+not found (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
+engine to draw; it says whether it found them (`perceived`), which the
+3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
+`add_hydrogens` complete a ligand there: its orders from a SMILES, its
+hydrogens added. These take as long as
 they take (`CONFORMERS_MS`, five minutes at most).
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
@@ -926,11 +933,31 @@ window decodes; nothing of it goes through Rust but the clipboard.
   (`createImageBitmap`), and makes a PNG of a JPEG or of a Windows bitmap
   read off the clipboard (`lib/binary/dib` `rgbaOfDib`).
 - **Drawn** by `components/Pictures2D.tsx`: a texture each, shared by
-  SHA-256 and let go once nothing draws it, on a plane turned and scaled
-  as the picture is; under the drawing and over the PDFs, each one put
-  there later a step over the one before in depth. Its frame and corner
-  handles, and its hold's light (`components/HeldLight.tsx`, shared with
-  the PDFs), are drawn in its own turned frame.
+  SHA-256 and let go once nothing draws it (`components/pictureTextures`),
+  on a plane turned and scaled as the picture is; under the drawing and
+  over the PDFs, each one put there later a step over the one before in
+  depth. Its frame and corner handles, and its hold's light
+  (`components/HeldLight.tsx`, shared with the PDFs), are drawn in its own
+  turned frame.
+- **A film** (docs/RENDER.md) is a picture whose media is `video/mp4`, held
+  as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
+  element playing it, over and over and muted, its texture a
+  `VideoTexture`, a frame of the canvas drawn for each of the film's
+  (`requestVideoFrameCallback`) - none while it is paused.
+
+### Renders
+
+A render (docs/RENDER.md) is the molecules in 3D asked for, written as a
+glTF 2.0 scene (`lib/scene/gltf.ts`, its shapes `lib/scene/shapes.ts`;
+built from the canvas's own geometry by
+`ui/features/Workspace/render/renderScene.ts`), given to the plugin that
+fills the role *Render* and run as a job (`render/renders.ts`: prepared by
+the plugin, the scene put into the job's folder, looked at each second,
+its `progress` lines read, and what it made read from the job's folder and
+put on the page with `putPicture`). The card asking for one is
+`render/RenderCard.tsx` (Meno's own choices in `render/renderOptions.ts`),
+the frames standing where renders will put what they make
+`render/Renders2D.tsx`, and Save picture or film `render/savePicture.ts`.
 - **Selected** with the rest (`selPictures`): a box or a lasso takes those
   whose middle it holds (`molecules3dIn`), a dragged selection carries
   them (`utils/dragSelection`, `MarkPlaces.pictures`), and the selection's
@@ -1099,6 +1126,15 @@ to be able to work with nothing going out at all.
   (`Meno-<version>-updater-…`), which Meno takes away as it starts once it
   is some minutes old (`tidy_after_updates`). Releases:
   `docs/RELEASING.md`.
+
+- **Chemical components** (`src-tauri/src/ccd.rs`, `lib/net/components.ts`; read by `lib/chem/ccd.ts`):
+  a PDB entry's residues looked up in the wwPDB's Chemical Component
+  Dictionary, asked for from its menu (docs/WORKSPACE.md, *Hydrogens and
+  bond orders*). Each component's file is fetched from files.wwpdb.org
+  by the app itself (reqwest, through the proxy with the task's token),
+  under the purpose `ccd`, and kept in the app's cache (`ccd/<id>.cif`),
+  so that each is fetched once; the window asks for those kept first, and
+  for the network only when some are not.
 
 Anything new that needs the network begins a task in `net.rs` and routes
 its process, or its own requests, through the proxy; nothing may reach the

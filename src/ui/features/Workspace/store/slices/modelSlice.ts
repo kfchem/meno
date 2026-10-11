@@ -5,7 +5,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver } from "../../utils/selection";
 import { schemeAmong } from "../../utils/copyPaste";
 import { relinked } from "../../utils/drawnLink";
@@ -145,7 +145,8 @@ export const createModelSlice = (
     const over = turnedOver(model, sel.atoms, axis);
     // (marks put by hand turned over with them)
     const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
-    doc.edit("turn over", (d) => ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts }));
+    // (and the electron-pushing arrows on it, each bent to its other side)
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
@@ -470,6 +471,25 @@ export const createModelSlice = (
     const id = doc.getState().nextArrowId;
     doc.edit("add arrow", (d) => ops.addArrow(d, x, y, angle, length));
     return id;
+  },
+
+  setHoveredPush: (id: number | null) => set({ hoveredPush: id }),
+
+  setPushDraw: (draw: EditorState["pushDraw"]) => set({ pushDraw: draw }),
+
+  addPush: (from: PushEnd, to: PushEnd, half: boolean) => {
+    const id = doc.getState().nextPushId ?? 1;
+    doc.edit("add electron arrow", (d) => ops.addPush(d, from, to, half));
+    return id;
+  },
+
+  updatePush: (id: number, patch: Parameters<EditorState["updatePush"]>[1], gesture?: string) => {
+    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? { coalesceKey: `push:${id}:${gesture}` } : undefined);
+  },
+
+  removePush: (id: number) => {
+    if (doc.edit("delete electron arrow", (d) => ops.removePush(d, id)))
+      set((prev: EditorState) => (prev.hoveredPush === id ? { ...prev, hoveredPush: null } : prev));
   },
 
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {

@@ -186,6 +186,17 @@ export type DrawingStyle = {
    * fraction of the head's length: none draws a triangle, more a barbed head.
    */
   reactionArrowHeadInset: number;
+
+  // --- Electron-pushing arrows ---------------------------------------------
+  /**
+   * An electron-pushing arrow's head: how long, from its point to its back
+   * corners, and how wide across them - a half head, a fishhook, being the
+   * one side of it. Its line is a bond's.
+   */
+  electronArrowHeadLength: Length;
+  electronArrowHeadWidth: Length;
+  /** How far the back of its head is drawn in toward its point, as a fraction of the head's length: a barbed head. */
+  electronArrowHeadInset: number;
 };
 
 /**
@@ -215,6 +226,8 @@ const RULES = {
   stereoDescriptorGap: 0.15,
   aromaticCircleSize: 0.5,
   reactionArrowHeadInset: 0,
+  // (a small barbed head, as a chemist draws one by hand)
+  electronArrowHeadInset: 0.35,
 } satisfies Partial<DrawingStyle>;
 
 /**
@@ -244,6 +257,8 @@ export const ACS_1996: DrawingStyle = {
   arrowheadWidth: pt(2.0),
   reactionArrowHeadLength: pt(5.0),
   reactionArrowHeadWidth: pt(3.6),
+  electronArrowHeadLength: pt(3.2),
+  electronArrowHeadWidth: pt(2.6),
   waveAmplitude: pt(0.94),
   wavelength: pt(3.76),
   fontFamily: "Arial",
@@ -263,6 +278,8 @@ const ACS_PROPORTIONS = {
   arrowheadWidth: ofBond(2.0 / 14.4),
   reactionArrowHeadLength: ofBond(5.0 / 14.4),
   reactionArrowHeadWidth: ofBond(3.6 / 14.4),
+  electronArrowHeadLength: ofBond(3.2 / 14.4),
+  electronArrowHeadWidth: ofBond(2.6 / 14.4),
   waveAmplitude: ofBond(0.94 / 14.4),
   wavelength: ofBond(3.76 / 14.4),
 } satisfies Partial<DrawingStyle>;

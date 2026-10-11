@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isMarked, valueText, type ListResult } from "../../../../lib/calc/results";
+import { SCALE_STOPS } from "../utils/isosurface";
 
 /** The list's rows' height at most, in pixels; and at least, near the window's edge - three rows; and its heading's, over them. */
 const TALLEST = 176;
@@ -18,6 +19,10 @@ const sliderOf = (iso: number) => Math.round((ISO_STEPS * Math.log(iso / ISO_LEA
 const isoOf = (step: number) => ISO_LEAST * Math.pow(ISO_MOST / ISO_LEAST, step / ISO_STEPS);
 /** A surface's value as it is written: "0.050", "0.0020". */
 const isoText = (iso: number) => (iso >= 0.01 ? iso.toFixed(3) : iso.toPrecision(2));
+/** A colour scale's ends, as written: a minus sign, not a hyphen. */
+const scaleText = (v: number) => String(Number(v.toPrecision(3))).replace("-", "\u2212");
+/** The scale's colours, as the surface is drawn in them (utils/isosurface `SCALE_STOPS`). */
+const SCALE_CSS = SCALE_STOPS.map(([r, g, b]) => `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`).join(", ");
 
 /**
  * One of a molecule's calculation's lists, under it (lib/calc/results): its
@@ -50,6 +55,7 @@ export default function CalcList3D({
   onFind,
   iso,
   onIso,
+  scale,
   area,
 }: {
   list: ListResult;
@@ -66,6 +72,8 @@ export default function CalcList3D({
   /** The value the row chosen's surface is drawn at - a slider under it sets it; none, no slider. */
   iso?: number;
   onIso?: (iso: number) => void;
+  /** The scale the surface shown is coloured on, where another grid colours it: what its values run between, and what they are. */
+  scale?: { from: number; to: number; label?: string };
   /** Asks for room below it, opened: where its card would end at its full height, in the window's pixels. */
   onRoom?: (bottom: number) => void;
   /** What it keeps within: the canvas. */
@@ -239,6 +247,17 @@ export default function CalcList3D({
           />
           <span className="w-12 text-right tabular-nums text-gh-black">{isoText(iso)}</span>
         </label>
+      )}
+      {scale && (
+        // (the colours the surface is drawn in, blue to green to red, and the values they stand for)
+        <div className="px-3 pt-1 pb-0.5 text-[11px] text-gh-gray meno-fade-in" role="img" aria-label={`Colour scale${scale.label ? ` of ${scale.label}` : ""}, from ${scaleText(scale.from)} to ${scaleText(scale.to)}`}>
+          <div className="h-2 rounded-full border border-gh-line" style={{ background: `linear-gradient(to right, ${SCALE_CSS})` }} />
+          <div className="mt-0.5 flex justify-between tabular-nums">
+            <span>{scaleText(scale.from)}</span>
+            {scale.label && <span className="truncate px-2">{scale.label}</span>}
+            <span>{scaleText(scale.to)}</span>
+          </div>
+        </div>
       )}
     </div>
   );

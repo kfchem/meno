@@ -29,7 +29,7 @@ describe("a plugin's manifest", () => {
     const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["cclib", "crest", "gaussian", "getting-started", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
   });
 
   it("knows each kind of file in one list: those it reads told by their marks, those it only colours by their names and lines", () => {
@@ -80,9 +80,12 @@ describe("a plugin's manifest", () => {
     const opts = [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }];
     const roles = [{ role: "conformers", options: opts }, { role: "smiles", options: [{ id: "x", label: "X", type: "switch", default: true }] }, { role: "smiles" }, { role: "Not A Role" }, "checks"];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles })?.roles).toEqual([
-      { role: "conformers", options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
-      { role: "smiles", options: [] },
+      { role: "conformers", programs: [], options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
+      { role: "smiles", programs: [], options: [] },
     ]);
+    // (a role it does by running a program: the program by name - never a path - each once)
+    const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
@@ -122,6 +125,9 @@ describe("a plugin's manifest", () => {
     ]);
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
     expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
+    // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
+    const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
+    expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
   });
 
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {
@@ -156,8 +162,8 @@ describe("a plugin's manifest", () => {
       { name: "../x", label: "X", files: { linux: "x" } },
     ];
     expect(acceptManifest({ ...steps, installed })?.installed).toEqual([
-      { name: "orca", label: "ORCA", files: { macos: "orca", windows: "orca.exe", linux: "orca" }, path: ["{folder}"], env: {} },
-      { name: "g16", label: "Gaussian 16", files: { linux: "g16" }, path: ["{folder}", "{parent}/bsd"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}", "{folder}/bsd"] } },
+      { name: "orca", label: "ORCA", files: { macos: "orca", windows: "orca.exe", linux: "orca" }, path: ["{folder}"], env: {}, places: {} },
+      { name: "g16", label: "Gaussian 16", files: { linux: "g16" }, path: ["{folder}", "{parent}/bsd"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}", "{folder}/bsd"] }, places: {} },
     ]);
     // (a place outside its installation, a variable it may not set: as Meno's backend, none of it)
     const g16 = (d: Record<string, unknown>) => acceptManifest({ ...steps, installed: [{ name: "g16", label: "Gaussian 16", files: { linux: "g16" }, ...d }] })?.installed;
@@ -168,6 +174,13 @@ describe("a plugin's manifest", () => {
     expect(g16({ env: { OMP_NUM_THREADS: "{folder}" } })).toEqual([]);
     expect(g16({ env: { HOME: "/root" } })).toEqual([]);
     expect(acceptManifest(steps)?.installed).toEqual([]);
+    // the places it is usually installed in, on each system: from /, {home} or {programs}, a * in a folder's name - the backend's rule
+    const usual = { macos: ["/Applications/G16.app/Contents/MacOS", "{home}/Applications/G16.app/Contents/MacOS"], windows: ["{programs}/Gaussian */bin"] };
+    expect(g16({ files: { linux: "g16", macos: "g16" }, places: usual })?.[0].places).toEqual(usual);
+    for (const bad of ["Applications/g16", "/a/../b", "{home}g16", "{folder}/g16", "/a/**/b", "/a/{home}", "C:\\g16"]) expect(g16({ places: { linux: [bad] } })).toEqual([]);
+    // run by a role, not a step: kept too
+    const byRole = { ...good, reads: [], kinds: [], roles: [{ role: "render", programs: ["blender"] }], installed: [{ name: "blender", label: "Blender", files: { macos: "Blender" } }] };
+    expect(acceptManifest(byRole)?.installed.map((d) => d.name)).toEqual(["blender"]);
     // (Gaussian's, as Meno carries it)
     expect(MANIFESTS.find((m) => m.id === "gaussian")?.installed[0]).toMatchObject({ name: "g16", path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] } });
   });

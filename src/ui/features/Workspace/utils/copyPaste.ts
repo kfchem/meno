@@ -5,14 +5,16 @@
  */
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
+import { pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, Measure3D, PictureItem, Plus, Sel, Turn3D, WordsFrom } from "../store/types";
+import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Turn3D, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -37,9 +39,10 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
       ? fragmentOf(model, around)
       : new Set<number>();
   if (!atoms.size) return null;
-  // (the fills of the rings it holds whole, with it)
+  // (the electron-pushing arrows wholly on it, and the fills of the rings it holds whole, with it)
+  const pushes = (drawn.pushes ?? []).filter((p) => pushAtoms({ model }, p).every((id) => atoms.has(id)) && [p.from, p.to].every((e) => !("bond" in e) || model.bonds.some((b) => b.id === e.bond)));
   const fills = fillsAmong(drawn.ringFills, atoms);
-  const part = { ...partOf(model, atoms), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
+  const part = { ...partOf(model, atoms), ...(pushes.length ? { pushes } : {}), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
   if (!sel.atoms.size) return part;
   const { arrows, pluses, captions } = schemeAmong(drawn, atoms);
   return {
@@ -143,6 +146,7 @@ export function recordText(part: Drawn): string {
     version: VERSION,
     atoms: part.atoms,
     bonds: part.bonds,
+    ...(part.pushes?.length ? { pushes: part.pushes } : {}),
     ...(part.ringFills && Object.keys(part.ringFills).length ? { ringFills: part.ringFills } : {}),
     ...(part.arrows?.length ? { arrows: part.arrows } : {}),
     ...(part.pluses?.length ? { pluses: part.pluses } : {}),
@@ -196,6 +200,7 @@ export function readDrawn(data: unknown): Drawn | null {
     version?: unknown;
     atoms?: unknown;
     bonds?: unknown;
+    pushes?: unknown;
     ringFills?: unknown;
     arrows?: unknown;
     pluses?: unknown;
@@ -262,6 +267,23 @@ export function readDrawn(data: unknown): Drawn | null {
     }
     return out;
   };
+  // (electron-pushing arrows whose ends read, on atoms and bonds it has)
+  const bondIds = new Set(bonds.map((b) => b.id));
+  const endOf = (e: unknown): PushEnd | null => {
+    const x = e as { atom?: unknown; bond?: unknown; gap?: unknown } | null;
+    if (!x) return null;
+    if (isNum(x.atom) && ids.has(x.atom)) return { atom: x.atom };
+    if (isNum(x.bond) && bondIds.has(x.bond)) return { bond: x.bond };
+    if (Array.isArray(x.gap) && x.gap.length === 2 && x.gap.every((g) => isNum(g) && ids.has(g)) && x.gap[0] !== x.gap[1]) return { gap: [x.gap[0], x.gap[1]] };
+    return null;
+  };
+  const pushes = (Array.isArray(r.pushes) ? (r.pushes as Partial<PushArrow>[]) : []).flatMap((p): PushArrow[] => {
+    const from = endOf(p.from);
+    const to = endOf(p.to);
+    if (!isNum(p.id) || !from || !to) return [];
+    const bend = p.bend && isNum(p.bend.along) && isNum(p.bend.out) && Math.abs(p.bend.along) < 10 && Math.abs(p.bend.out) < 10 ? { along: p.bend.along, out: p.bend.out } : undefined;
+    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) }];
+  });
   // (colours only as colours: what is not one is left out - it would go into a picture's markup)
   const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
     const out = { ...x };
@@ -277,6 +299,7 @@ export function readDrawn(data: unknown): Drawn | null {
   return {
     atoms: atoms.map((a) => withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])) as Atom),
     bonds: bonds.map((b) => withColours(withMarks(b, ["stereoAt"]))) as Bond[],
+    ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),
     ...(pluses.length ? { pluses } : {}),
@@ -291,7 +314,7 @@ export function readDrawn(data: unknown): Drawn | null {
 function readPicture(v: unknown): PictureItem | null {
   const p = v as Partial<PictureItem> | null;
   if (!p || !isNum(p.id) || typeof p.name !== "string" || typeof p.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(p.sha256)) return null;
-  if (p.media !== "image/png" && p.media !== "image/jpeg") return null;
+  if (!p.media || !PICTURE_MEDIA.includes(p.media as PictureMedia)) return null;
   if (!Array.isArray(p.px) || p.px.length !== 2 || !p.px.every((n) => isNum(n) && n > 0)) return null;
   if (!isNum(p.x) || !isNum(p.y) || !isNum(p.w) || !isNum(p.h) || p.w <= 0 || p.h <= 0) return null;
   const from = pictureFromOf(p.from);
@@ -383,6 +406,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
     ...(biopolymer ? { biopolymer } : {}),
+    ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" ? { bondOrders: m.bondOrders } : {}),
+    ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
+    ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),

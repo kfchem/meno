@@ -430,12 +430,13 @@ pub fn inside_name(name: &str) -> bool {
     !name.is_empty() && Path::new(name).components().all(|c| matches!(c, Component::Normal(_)))
 }
 
-/// The programs a plugin's manifest names: those its steps need (`steps`,
-/// each with its `programs`, by name).
+/// The programs a plugin's manifest names: those its steps need, and its
+/// roles (`steps` and `roles`, each with its `programs`, by name).
 fn programs_named(manifest: &serde_json::Value) -> Vec<String> {
-    let steps = manifest.get("steps").and_then(|s| s.as_array()).map(Vec::as_slice).unwrap_or_default();
-    steps
+    let listed = |key: &str| manifest.get(key).and_then(|s| s.as_array()).map(Vec::as_slice).unwrap_or_default();
+    listed("steps")
         .iter()
+        .chain(listed("roles"))
         .filter_map(|s| s.get("programs")?.as_array())
         .flatten()
         .filter_map(|p| p.as_str())
@@ -535,6 +536,115 @@ pub struct Installed {
     pub file: String,
     pub path: Vec<String>,
     pub env: Vec<(String, Vec<String>)>,
+    /// The folders it is usually installed in, on this system (`places`),
+    /// each from `/`, `{home}` or `{programs}`; a `*` in a folder's name
+    /// stands for any text - a version's, say.
+    pub places: Vec<String>,
+}
+
+/// Where a usual place starts, as Meno has it: the home folder, and the
+/// folder programs are installed in (Windows' Program Files).
+#[derive(Debug, Clone, Default)]
+pub struct Bases {
+    pub home: Option<PathBuf>,
+    pub programs: Option<PathBuf>,
+}
+
+impl Bases {
+    /// This computer's.
+    pub fn here() -> Bases {
+        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+        let programs = if cfg!(windows) { std::env::var_os("ProgramFiles").map(PathBuf::from) } else { None };
+        Bases { home: home.filter(|p| p.is_absolute()), programs: programs.filter(|p| p.is_absolute()) }
+    }
+}
+
+/// Whether `t` is a usual place for a program: from `/`, `{home}` or
+/// `{programs}`, and after it folders' names - never `.` or `..`, a `*` at
+/// most once in each.
+fn usual_place_ok(t: &str) -> bool {
+    let rest = if let Some(r) = t.strip_prefix("{home}").or_else(|| t.strip_prefix("{programs}")) {
+        if r.is_empty() {
+            return true;
+        }
+        match r.strip_prefix('/') {
+            Some(r) => r,
+            None => return false,
+        }
+    } else {
+        match t.strip_prefix('/') {
+            Some(r) => r,
+            None => return false,
+        }
+    };
+    t.len() <= 300
+        && rest.split('/').all(|part| {
+            !part.is_empty() && part != "." && part != ".." && part.matches('*').count() <= 1 && !part.contains(['\\', ':', '{', '}'])
+        })
+}
+
+/// Names compared as a person reads them: numbers by their value, so that
+/// "Blender 10.1" comes after "Blender 5.2".
+fn natural(a: &str, b: &str) -> std::cmp::Ordering {
+    fn chunks(s: &str) -> Vec<(bool, String)> {
+        let mut out: Vec<(bool, String)> = Vec::new();
+        for c in s.chars() {
+            let digit = c.is_ascii_digit();
+            match out.last_mut() {
+                Some((d, t)) if *d == digit => t.push(c),
+                _ => out.push((digit, c.to_string())),
+            }
+        }
+        out
+    }
+    let (x, y) = (chunks(a), chunks(b));
+    for (p, q) in x.iter().zip(&y) {
+        let order = match (p, q) {
+            ((true, m), (true, n)) => {
+                let (m, n) = (m.trim_start_matches('0'), n.trim_start_matches('0'));
+                m.len().cmp(&n.len()).then_with(|| m.cmp(n))
+            }
+            ((_, m), (_, n)) => m.cmp(n),
+        };
+        if order != std::cmp::Ordering::Equal {
+            return order;
+        }
+    }
+    x.len().cmp(&y.len())
+}
+
+/// The folders a usual place stands for, the newest first where a `*` stands
+/// for a version: those there are.
+fn usual_folders(place: &str, bases: &Bases) -> Vec<PathBuf> {
+    let (base, rest) = if let Some(r) = place.strip_prefix("{home}") {
+        (bases.home.clone(), r)
+    } else if let Some(r) = place.strip_prefix("{programs}") {
+        (bases.programs.clone(), r)
+    } else {
+        (Some(PathBuf::from("/")), place)
+    };
+    let Some(base) = base else {
+        return Vec::new();
+    };
+    let mut folders = vec![base];
+    for part in rest.split('/').filter(|p| !p.is_empty()) {
+        let mut next = Vec::new();
+        for f in &folders {
+            match part.split_once('*') {
+                None => next.push(f.join(part)),
+                Some((before, after)) => {
+                    let mut names: Vec<String> = fs::read_dir(f)
+                        .map(|rd| rd.filter_map(|e| e.ok()?.file_name().into_string().ok()).collect())
+                        .unwrap_or_default();
+                    names.retain(|n| n.len() >= before.len() + after.len() && n.starts_with(before) && n.ends_with(after));
+                    names.sort_by(|a, b| natural(b, a));
+                    next.extend(names.into_iter().map(|n| f.join(n)));
+                }
+            }
+        }
+        folders = next;
+    }
+    folders.into_iter().filter(|f| f.is_dir()).collect()
 }
 
 /// Whether `t` is a place in a program's installation: `{folder}` or
@@ -585,6 +695,14 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
         list.into_iter().map(|t| if place_ok(t) { Ok(t.to_string()) } else { Err(format!("not a place in {name}'s installation: {t}")) }).collect()
     };
     let path = places(decl.get("path"))?;
+    let usual = match decl.get("places").and_then(|p| p.get(system)) {
+        None => Vec::new(),
+        Some(serde_json::Value::Array(a)) => a
+            .iter()
+            .map(|x| x.as_str().filter(|t| usual_place_ok(t)).map(str::to_string).ok_or_else(|| format!("not a place {name} is installed in: {x}")))
+            .collect::<Result<_, _>>()?,
+        Some(x) => return Err(format!("not a place {name} is installed in: {x}")),
+    };
     let mut env = Vec::new();
     if let Some(vars) = decl.get("env").and_then(|e| e.as_object()) {
         for (k, v) in vars {
@@ -594,7 +712,7 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
             env.push((k.clone(), places(Some(v))?));
         }
     }
-    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env }))
+    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual }))
 }
 
 /// Whether `p` is a program that can be run: a file, executable where that is said.
@@ -611,17 +729,22 @@ fn runnable(p: &Path) -> bool {
 }
 
 /// Where a program installed separately is: where the chemist located it,
-/// where that is still a program of its file's name; else the first of its
+/// where that is still a program of its file's name - or a macOS app that
+/// holds it (`Blender.app`: its `Contents/MacOS`); else the first of its
 /// file's name where the system finds programs (`path_var`: PATH, as Meno
-/// was given it).
-pub fn installed_where(decl: &Installed, located: Option<&str>, path_var: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
-    let located = located.map(Path::new).filter(|p| {
-        p.is_absolute() && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&decl.file)) && runnable(p)
-    });
-    if let Some(p) = located {
-        return Some(p.to_path_buf());
+/// was given it); else in the folders it is usually installed in, the
+/// newest first.
+pub fn installed_where(decl: &Installed, located: Option<&str>, path_var: Option<&std::ffi::OsStr>, bases: &Bases) -> Option<PathBuf> {
+    let is_it = |p: &Path| p.is_absolute() && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&decl.file)) && runnable(p);
+    if let Some(p) = located.map(Path::new) {
+        let inside = p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")) && p.is_dir();
+        let p = if inside { p.join("Contents").join("MacOS").join(&decl.file) } else { p.to_path_buf() };
+        if is_it(&p) {
+            return Some(p);
+        }
     }
-    std::env::split_paths(path_var?).filter(|d| d.is_absolute()).map(|d| d.join(&decl.file)).find(|p| runnable(p))
+    let on_path = path_var.and_then(|v| std::env::split_paths(v).filter(|d| d.is_absolute()).map(|d| d.join(&decl.file)).find(|p| runnable(p)));
+    on_path.or_else(|| decl.places.iter().flat_map(|t| usual_folders(t, bases)).map(|d| d.join(&decl.file)).find(|p| runnable(p)))
 }
 
 /// What a program installed separately is given, found at `program`: its
@@ -672,7 +795,7 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
         return Err(format!("{id} names no program {name}"));
     }
     let path_var = std::env::var_os("PATH");
-    let program = installed_where(&decl, located, path_var.as_deref()).ok_or_else(|| format!("{name} is not found"))?;
+    let program = installed_where(&decl, located, path_var.as_deref(), &Bases::here()).ok_or_else(|| format!("{name} is not found"))?;
     let env = installed_env(&decl, &program, path_var.as_deref())?;
     Ok(Some(Found { program, activation: None, env }))
 }
@@ -888,7 +1011,7 @@ pub async fn program_where(app: AppHandle, plugin: String, name: String, located
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&plugin))?;
     let decl = installed_named(&manifest_of(&plugin_dir, &plugin)?, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
     let path_var = std::env::var_os("PATH");
-    Ok(installed_where(&decl, located.as_deref(), path_var.as_deref()).map(|p| p.to_string_lossy().into_owned()))
+    Ok(installed_where(&decl, located.as_deref(), path_var.as_deref(), &Bases::here()).map(|p| p.to_string_lossy().into_owned()))
 }
 
 /// A job, as Meno lists it.
@@ -1328,18 +1451,19 @@ mod tests {
     #[test]
     fn finds_a_program_installed_separately_where_it_was_located_or_where_programs_are() {
         let base = temp();
-        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])] };
+        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![] };
+        let none = Bases::default();
         let installed = program_file(&base.join("apps").join("orca_6"), "orca");
         let on_path = program_file(&base.join("bin"), "orca");
         let path_var = std::env::join_paths([base.join("nowhere"), base.join("bin")]).unwrap();
         // where it was located; else where the system finds programs
-        assert_eq!(installed_where(&decl, installed.to_str(), Some(&path_var)), Some(installed.clone()));
-        assert_eq!(installed_where(&decl, None, Some(&path_var)), Some(on_path.clone()));
+        assert_eq!(installed_where(&decl, installed.to_str(), Some(&path_var), &none), Some(installed.clone()));
+        assert_eq!(installed_where(&decl, None, Some(&path_var), &none), Some(on_path.clone()));
         // a place located that is not it - another file's name, gone, not absolute - is passed over
         let other = program_file(&base.join("apps"), "other");
-        assert_eq!(installed_where(&decl, other.to_str(), Some(&path_var)), Some(on_path));
-        assert_eq!(installed_where(&decl, Some("orca"), None), None);
-        assert_eq!(installed_where(&decl, base.join("gone").join("orca").to_str(), None), None);
+        assert_eq!(installed_where(&decl, other.to_str(), Some(&path_var), &none), Some(on_path));
+        assert_eq!(installed_where(&decl, Some("orca"), None, &none), None);
+        assert_eq!(installed_where(&decl, base.join("gone").join("orca").to_str(), None, &none), None);
         // what it is given: its folder first where programs are looked for, its variables in its installation
         let env = installed_env(&decl, &installed, Some(&path_var)).unwrap();
         let path: Vec<PathBuf> = std::env::split_paths(&env[0].1).collect();
@@ -1353,11 +1477,11 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_found_only_where_it_can_be_run() {
         let base = temp();
-        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![] };
+        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![] };
         let p = base.join("g16");
         fs::create_dir_all(&base).unwrap();
         fs::write(&p, "").unwrap();
-        assert_eq!(installed_where(&decl, p.to_str(), None), None);
+        assert_eq!(installed_where(&decl, p.to_str(), None, &Bases::default()), None);
         let _ = fs::remove_dir_all(base);
     }
 
@@ -1391,9 +1515,64 @@ mod tests {
 
     #[test]
     fn reads_the_programs_a_manifest_names() {
-        let m: serde_json::Value = serde_json::from_str(r#"{"steps": [{"kinds": ["optimise", "energy"], "programs": ["a", {"name": "b"}]}, {"kinds": ["energy"]}, {"programs": [3, "c"]}]}"#).unwrap();
-        // (by name only, as the manifest's reader takes them)
-        assert_eq!(programs_named(&m), vec!["a", "c"]);
+        let m: serde_json::Value = serde_json::from_str(r#"{"steps": [{"kinds": ["optimise", "energy"], "programs": ["a", {"name": "b"}]}, {"kinds": ["energy"]}, {"programs": [3, "c"]}], "roles": [{"role": "render", "programs": ["d"]}, {"role": "checks"}]}"#).unwrap();
+        // (by name only, as the manifest's reader takes them: its steps', then its roles')
+        assert_eq!(programs_named(&m), vec!["a", "c", "d"]);
         assert!(programs_named(&serde_json::json!({})).is_empty());
+    }
+
+    #[test]
+    fn reads_the_places_a_program_is_usually_installed_in() {
+        let m = serde_json::json!({"installed": [{
+            "name": "blender", "files": {"macos": "Blender", "windows": "blender.exe"},
+            "places": {"macos": ["/Applications/Blender.app/Contents/MacOS", "{home}/Applications/Blender.app/Contents/MacOS"], "windows": ["{programs}/Blender Foundation/Blender *"]}
+        }]});
+        assert_eq!(installed_named(&m, "blender", "macos").unwrap().unwrap().places.len(), 2);
+        assert_eq!(installed_named(&m, "blender", "windows").unwrap().unwrap().places, vec!["{programs}/Blender Foundation/Blender *"]);
+        let one = |place: &str| installed_named(&serde_json::json!({"installed": [{"name": "p", "files": {"linux": "p"}, "places": {"linux": [place]}}]}), "p", "linux");
+        for place in ["/opt/p", "{home}", "{home}/p", "{programs}/P */bin"] {
+            assert!(one(place).is_ok(), "{place}");
+        }
+        // never relative, never above, one * a folder at most, no token but at its start
+        for place in ["opt/p", "/opt/../p", "/opt/./p", "{folder}/p", "{home}p", "/a/**/p", "/a/{home}", "C:\\p", "/a//p"] {
+            assert!(one(place).is_err(), "{place}");
+        }
+    }
+
+    #[test]
+    fn finds_a_program_where_it_is_usually_installed_the_newest_first() {
+        let base = temp();
+        let file = if cfg!(windows) { "blender.exe" } else { "blender" };
+        let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
+        let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
+        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()] };
+        let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
+        assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
+        assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
+        // a base this computer has none of; a folder that is not there
+        assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &Bases::default()), None);
+        assert_eq!(installed_where(&place("{home}/Elsewhere/*"), None, None, &bases), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_macos_app_located_stands_for_the_program_inside_it() {
+        let base = temp();
+        let app = base.join("Blender.app");
+        let inside = program_file(&app.join("Contents").join("MacOS"), "Blender");
+        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![] };
+        assert_eq!(installed_where(&decl, app.to_str(), None, &Bases::default()), Some(inside));
+        // an app that holds no such program
+        let other = base.join("Other.app");
+        fs::create_dir_all(&other).unwrap();
+        assert_eq!(installed_where(&decl, other.to_str(), None, &Bases::default()), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn compares_names_as_a_person_reads_them() {
+        let mut names = vec!["Blender 4.5", "Blender 10.0", "Blender 5.2", "Blender 5.10"];
+        names.sort_by(|a, b| natural(a, b));
+        assert_eq!(names, vec!["Blender 4.5", "Blender 5.2", "Blender 5.10", "Blender 10.0"]);
     }
 }

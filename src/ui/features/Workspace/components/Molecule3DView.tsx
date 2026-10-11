@@ -3,9 +3,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
-import { atomColour, bondRadiusOf, HIDDEN_MARK, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
-import { bondLines, bondReach, frameBondsOf, frameOf, labelSpot, linesOf, populations, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
+import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -180,6 +180,8 @@ export type Molecule3DViewProps = {
   /** The surface it shows - a list's row chosen - and the value it is drawn at; none, none (or one fading out). */
   surface?: Grid | null;
   surfaceIso?: number;
+  /** What colours the surface, where another grid does, and the values its scale runs between. */
+  surfaceColour?: { grid: Grid; from: number; to: number } | null;
   /** Its measurement whose value is being typed, by id: its chip a field; none, none. */
   editingMeasure?: number | null;
   /** A value typed for a measurement, and Enter pressed: set it (utils/edit3d). */
@@ -277,7 +279,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const bondsMat = useRef<THREE.MeshStandardMaterial>(null);
   // (the atoms either look leaves out, and whether it leaves out any)
   const hidden = solid.hidden;
-  const hides = solid.hidesH;
+  // what it says of itself, as it is drawn now, and in either look
+  const notesNow = useMemo(() => notesOf(m, solid, look), [m, solid, look]);
+  const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -1271,6 +1275,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
+          colour={props.surfaceColour ?? null}
           renderOrder={OVER_PAGE + 2}
         />
         {stereoMarks.map((mark) => (
@@ -1339,15 +1344,21 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           )}
         </group>
       )}
-      {/* (drawn without the hydrogens on its carbons, in either look, it says so
-          above it while it is - its frames' chip is below - at any zoom: not a
-          chip that goes when the page's words are too small, and never too
-          small or too large to read) */}
-      {(hides.primary || hides.secondary) && !props.rising && (
+      {/* (what it says of itself - its hydrogens hidden or not in its file,
+          its bond orders not known - above it while it is so, in either
+          look - its frames' chip is below - at any zoom: not a chip that goes
+          when the page's words are too small, and never too small or too
+          large to read) */}
+      {notesEver.length > 0 && !props.rising && (
         <group ref={markAnchor}>
           <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
-            <div style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}>
-              <HiddenMark on={hides[look]} />
+            <div
+              className="flex flex-col items-center"
+              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}
+            >
+              {notesEver.map((text) => (
+                <NoteMark key={text} text={text} on={notesNow.includes(text)} />
+              ))}
             </div>
           </PageHtml>
         </group>
@@ -1438,12 +1449,14 @@ function placePiece(mesh: THREE.InstancedMesh, k: number, a: THREE.Vector3, b: T
 }
 
 /**
- * Drawn without the hydrogens on its carbons: said for as long as it is,
- * under it, where it cannot be missed - the picture misrepresents the
- * molecule (the maintainer, 2026-10-10). It comes and goes as the molecule
- * goes over to a look that hides them or back, folding away.
+ * What a molecule says of itself (utils/molecule3d `notesOf`): its
+ * hydrogens on carbon hidden, its file's hydrogens missing, its bond
+ * orders not known - said for as long as it is so, over it, where it
+ * cannot be missed, as a picture without them misleads (the maintainer,
+ * 2026-10-10 and 2026-10-11). It comes and goes as the molecule goes over
+ * to a look it says it in or not, folding away.
  */
-function HiddenMark({ on }: { on: boolean }) {
+function NoteMark({ text, on }: { text: string; on: boolean }) {
   return (
     <div
       // (as wide as it says: in a chip of no width of its own, the fold would cut it off)
@@ -1453,10 +1466,10 @@ function HiddenMark({ on }: { on: boolean }) {
     >
       <div className="overflow-hidden">
         <div
-          data-hidden-mark
-          className="whitespace-nowrap rounded-full border border-accel-accent/50 bg-accel-lightaccent/90 px-2 text-[11px] leading-[20px] font-medium text-accel-accent shadow-sm"
+          data-note
+          className="mt-1 whitespace-nowrap rounded-full border border-accel-accent/50 bg-accel-lightaccent/90 px-2 text-[11px] leading-[20px] font-medium text-accel-accent shadow-sm"
         >
-          {HIDDEN_MARK}
+          {text}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import type { Grid, ListResult } from "../../../../lib/calc/results";
 import type { Carried3D } from "../store/types";
-import { frameCentre, pictureSurface, shownSurface, SURFACE_ISO } from "./surfaceMesh";
+import { colourSurface, frameCentre, pictureSurface, shownSurface, SURFACE_ISO, SURFACE_OPACITY, surfaceGeometry, surfaceOpacity } from "./surfaceMesh";
 
 /** A grid of f over a cube of side 6 Å about the origin, n points a side, as a result carries it. */
 function gridOf(f: (x: number, y: number, z: number) => number, n: number, signed = false): Grid {
@@ -57,5 +57,37 @@ describe("a surface as a picture draws it", () => {
     const m = { atoms: [{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 2, y: 0, z: 0 }], frames: [[0, 0, 0, 0, 4, 0]] } as unknown as Carried3D;
     expect(frameCentre(m, 0)).toEqual([1, 0, 0]);
     expect(frameCentre(m, 1)).toEqual([0, 2, 0]);
+  });
+});
+
+describe("a surface coloured by another grid, as the canvas and a picture draw it", () => {
+  /** One atom at the origin showing a sphere's surface coloured by height. */
+  function coloured(): Carried3D {
+    const m = carrying(gridOf((x, y, z) => Math.hypot(x, y, z), 13), 0, 1.5);
+    const list = m.calc!.results![0] as ListResult;
+    list.rows[0].colour = { by: gridOf((_x, _y, z) => z, 13), from: -1.5, to: 1.5, label: "height" };
+    return m;
+  }
+
+  it("is shown with what colours it, and the values its scale runs between", () => {
+    const shown = shownSurface(coloured());
+    expect(shown?.colour).toMatchObject({ from: -1.5, to: 1.5 });
+    expect(shown?.colour?.grid.counts).toEqual([13, 13, 13]);
+  });
+
+  it("is one mesh whose points keep the other grid's colours, never painted over by the phases', and not seen through", () => {
+    const surface = pictureSurface(coloured(), STYLE_3D)!;
+    expect(surface.minus).toBeNull();
+    expect(surface.plus.colours?.length).toBe(surface.plus.positions.length);
+    const made = surfaceGeometry(surface.plus, surface.minus);
+    expect(made.coloured).toBe(true);
+    colourSurface(made.geometry, made.split, "#ff0000", "#0000ff");
+    const colours = made.geometry.getAttribute("color").array as Float32Array;
+    expect(Array.from(colours.slice(0, 30))).toEqual(Array.from(surface.plus.colours!.slice(0, 30)));
+    expect(surfaceOpacity(made.coloured)).toBe(1);
+    // (a surface of its own phases: painted, and seen through)
+    const plain = surfaceGeometry({ positions: surface.plus.positions, normals: surface.plus.normals }, null);
+    expect(plain.coloured).toBe(false);
+    expect(surfaceOpacity(plain.coloured)).toBe(SURFACE_OPACITY);
   });
 });
