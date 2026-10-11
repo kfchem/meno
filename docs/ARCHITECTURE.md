@@ -813,7 +813,12 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, five minutes at most).
+they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
+in 2D (`from_smiles`, `drawing_of`) it lays out with RDKit's own depictor,
+not CoordGen, which ran for minutes and gigabytes on a long chain of
+para-linked rings or a large ring: Meno lays the drawing out again with
+its own engine, so these coordinates need only be quick, and right for
+the wedges read off them.
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
 (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when

@@ -49,7 +49,12 @@ from rdkit.Chem.EnumerateStereoisomers import (
 
 # RDKit's own warnings go to stderr, not into the answers.
 RDLogger.DisableLog("rdApp.*")
-rdDepictor.SetPreferCoordGen(True)
+# Structures laid out in 2D by RDKit's own depictor, not CoordGen: CoordGen
+# ran for minutes, and gigabytes, on a long chain of para-linked rings
+# (some 35 of them) or a large ring (60 atoms). Meno lays out what comes
+# back with its own engine (from_smiles, drawing_of): these coordinates
+# need only be quick, and right for the wedges read off them.
+rdDepictor.SetPreferCoordGen(False)
 
 
 def read(molblock, sanitize=True):

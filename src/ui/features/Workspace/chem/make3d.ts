@@ -17,7 +17,6 @@ import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { lookOf, solidOf } from "../utils/molecule3d";
-import { MOST_PERCEIVED } from "../utils/completeness";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
@@ -363,18 +362,15 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * A molecule in 3D drawn as a formula, by Meno's own engine (as a SMILES is):
  * the frame it shows, its heavy atoms, wedged as it is in 3D - its bonds'
  * orders found where it has none (all single, as a file of coordinates
- * gives them), and is not too large to seek them in (`MOST_PERCEIVED`, as
- * when they are sought as it comes in: the plugin's search can run for
- * minutes on a large conjugated molecule, and the worker with it). And
- * which of the formula's atoms each of its atoms is: none for a hydrogen;
- * and whether its orders, wanted, are still unknown - drawn single.
+ * gives them). And which of the formula's atoms each of its atoms is: none
+ * for a hydrogen; and whether its orders, wanted, are still unknown - not
+ * found (no hydrogens, say), and so drawn single.
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const xyz = frame > 0 && m.frames?.[frame - 1] ? m.frames[frame - 1] : m.atoms.flatMap((a) => [a.x, a.y, a.z]);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
-  const perceive = wanted && m.atoms.length <= MOST_PERCEIVED;
-  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive });
+  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
   const model = await laidOut(drawn).catch(() => drawn);
   // (its heavy atoms came back in their order)

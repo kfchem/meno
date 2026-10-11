@@ -3,7 +3,6 @@ import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
-import { MOST_PERCEIVED } from "../utils/completeness";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
 import { blocksOf, formulaOf, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
@@ -229,16 +228,10 @@ describe("a molecule in 3D drawn as a formula", () => {
     at: { x: 0, y: 0 },
   });
 
-  it("has its bond orders sought, as it comes in, only where it is not too large - and says where they are still unknown", async () => {
-    const small = worker(true);
-    expect((await formulaOf(small.chem, chain(4), 0)).ordersUnknown).toBe(false);
-    expect(small.asked[0].perceive).toBe(true);
-
-    // (more atoms than the orders are sought for: drawn single, and said so - the plugin's search is not let run)
-    const large = worker(false);
-    expect((await formulaOf(large.chem, chain(MOST_PERCEIVED + 1), 0)).ordersUnknown).toBe(true);
-    expect(large.asked[0].perceive).toBe(false);
-
+  it("has its bond orders sought where its file gave none - and says where they are still unknown", async () => {
+    const found = worker(true);
+    expect((await formulaOf(found.chem, chain(4), 0)).ordersUnknown).toBe(false);
+    expect(found.asked[0].perceive).toBe(true);
     // (sought, and not found)
     expect((await formulaOf(worker(false).chem, chain(4), 0)).ordersUnknown).toBe(true);
     // (its file gave them: nothing to seek, nothing unknown)

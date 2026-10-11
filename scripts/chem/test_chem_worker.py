@@ -378,6 +378,21 @@ class ChemWorkerTest(unittest.TestCase):
         lost = ask("drawing_of", molblock=Chem.MolToMolBlock(heavy, kekulize=False), perceive=True)
         self.assertFalse(lost["ok"] and lost["result"]["perceived"])
 
+    def test_lays_out_a_long_chain_of_rings_and_a_large_ring_at_once(self):
+        # (CoordGen ran for minutes on these: RDKit's own depictor does them at once)
+        t = time.time()
+        r = ask("from_smiles", smiles="-".join(["c1ccc(cc1)"] * 40))
+        self.assertTrue(r["ok"])
+        r = ask("from_smiles", smiles="C1" + "C" * 59 + "1")
+        self.assertTrue(r["ok"])
+        from rdkit.Chem import AllChem
+        mol = Chem.AddHs(Chem.MolFromSmiles("-".join(["c1ccc(cc1)"] * 40)))
+        AllChem.EmbedMolecule(mol, randomSeed=7)
+        r = ask("drawing_of", molblock=Chem.MolToMolBlock(coordinates_only(mol), kekulize=False), perceive=True)
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["result"]["perceived"])
+        self.assertLess(time.time() - t, 10)
+
     def test_gives_a_ligand_its_bond_orders_from_a_smiles_and_then_its_hydrogens(self):
         from rdkit.Chem import AllChem
         mol = Chem.AddHs(Chem.MolFromSmiles("OC(=O)c1ccccc1"))
