@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isosurface, type MeshGrid, type Vec3 } from "./isosurface";
+import { coloursOf, isosurface, sampleAt, scaleColour, type MeshGrid, type Vec3 } from "./isosurface";
 
 /** A grid of `f` over a cube of side 2 about the origin, `n` points a side, its axes `axes` (each scaled to the step). */
 function gridOf(f: (x: number, y: number, z: number) => number, n: number, axes: [Vec3, Vec3, Vec3] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]): MeshGrid {
@@ -62,5 +62,37 @@ describe("a grid's surface", () => {
 
   it("is nothing where the values never come to it", () => {
     expect(isosurface(gridOf(ball, 9), 2).positions.length).toBe(0);
+  });
+});
+
+describe("a surface coloured by another grid", () => {
+  it("reads the other grid where each of its points is, by the eight nearest of its points - along skewed axes too, none outside it", () => {
+    // (a value that goes linearly is read exactly between the points)
+    const g = gridOf((x, y, z) => x + 2 * y + 3 * z, 5);
+    expect(sampleAt(g, 0.3, -0.2, 0.1)).toBeCloseTo(0.2, 6);
+    expect(sampleAt(g, 5, 0, 0)).toBeNull();
+    const skew = gridOf((x, y) => x + y, 5, [[1, 0, 0], [0.5, 1, 0], [0, 0, 1]]);
+    const p = [0, 1, 2].map((x) => skew.origin[x] + 2.5 * skew.axes[0][x] + 1.25 * skew.axes[1][x] + 2 * skew.axes[2][x]);
+    expect(sampleAt(skew, p[0], p[1], p[2])).toBeCloseTo(p[0] + p[1], 5);
+  });
+
+  it("is coloured blue through green to red as the values run from the scale's start to its end, held at its ends", () => {
+    expect(scaleColour(-1, -1, 1)).toEqual([0, 0, 1]);
+    expect(scaleColour(0, -1, 1)).toEqual([0, 1, 0]);
+    expect(scaleColour(1, -1, 1)).toEqual([1, 0, 0]);
+    expect(scaleColour(5, -1, 1)).toEqual([1, 0, 0]);
+    expect(scaleColour(null, -1, 1)).toEqual([0.6, 0.6, 0.6]);
+    const mesh = isosurface(gridOf((x, y, z) => Math.hypot(x, y, z), 9), 0.6);
+    // (coloured by height: the top red, the bottom blue - three numbers a point, linear)
+    const colours = coloursOf(mesh, gridOf((_x, _y, z) => z, 9), -0.6, 0.6);
+    expect(colours.length).toBe(mesh.positions.length);
+    let top = 2;
+    let bottom = 2;
+    for (let i = 2; i < mesh.positions.length; i += 3) {
+      if (mesh.positions[i] > mesh.positions[top]) top = i;
+      if (mesh.positions[i] < mesh.positions[bottom]) bottom = i;
+    }
+    expect(colours[top - 2]).toBeGreaterThan(colours[top]);
+    expect(colours[bottom]).toBeGreaterThan(colours[bottom - 2]);
   });
 });

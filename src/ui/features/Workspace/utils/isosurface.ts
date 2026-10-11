@@ -13,8 +13,8 @@ export type Vec3 = [number, number, number];
 /** A grid as the mesher takes it: its values, last axis fastest; its counts, origin and axes, in the units the mesh is wanted in. */
 export type MeshGrid = { values: Float32Array; counts: Vec3; origin: Vec3; axes: [Vec3, Vec3, Vec3] };
 
-/** A surface as drawn: three numbers a point, three points a triangle, and each point's normal. */
-export type Mesh = { positions: Float32Array; normals: Float32Array };
+/** A surface as drawn: three numbers a point, three points a triangle, and each point's normal - and its colour, where another grid colours it. */
+export type Mesh = { positions: Float32Array; normals: Float32Array; colours?: Float32Array };
 
 /** A cell's corners, as the tables number them: offsets along the three axes. */
 const CORNER: Vec3[] = [
@@ -125,4 +125,65 @@ export function isosurface(grid: MeshGrid, iso: number, sign: 1 | -1 = 1): Mesh 
     }
   }
   return { positions: Float32Array.from(positions), normals: Float32Array.from(normals) };
+}
+
+/** A grid's value at a point in space, by its eight nearest points (trilinear); none outside it. */
+export function sampleAt(grid: MeshGrid, x: number, y: number, z: number, inverse = dual(grid.axes)): number | null {
+  const { values, counts, origin } = grid;
+  const [nx, ny, nz] = counts;
+  const px = x - origin[0];
+  const py = y - origin[1];
+  const pz = z - origin[2];
+  // (how far along each axis, in its steps: the axes' reciprocal basis)
+  const u = px * inverse[0][0] + py * inverse[0][1] + pz * inverse[0][2];
+  const v = px * inverse[1][0] + py * inverse[1][1] + pz * inverse[1][2];
+  const w = px * inverse[2][0] + py * inverse[2][1] + pz * inverse[2][2];
+  if (!(u >= 0 && v >= 0 && w >= 0 && u <= nx - 1 && v <= ny - 1 && w <= nz - 1)) return null;
+  const i = Math.min(Math.floor(u), nx - 2);
+  const j = Math.min(Math.floor(v), ny - 2);
+  const k = Math.min(Math.floor(w), nz - 2);
+  const fu = u - i;
+  const fv = v - j;
+  const fw = w - k;
+  const at = (a: number, b: number, c: number) => values[((i + a) * ny + (j + b)) * nz + (k + c)];
+  const along = (b: number, c: number) => at(0, b, c) * (1 - fu) + at(1, b, c) * fu;
+  const across = (c: number) => along(0, c) * (1 - fv) + along(1, c) * fv;
+  return across(0) * (1 - fw) + across(1) * fw;
+}
+
+/**
+ * The colour scale a surface coloured by another grid is drawn in: blue,
+ * through green, to red - as the values run from `from` to `to` - each
+ * colour sRGB.
+ */
+export const SCALE_STOPS: readonly [number, number, number][] = [
+  [0, 0, 1],
+  [0, 1, 0],
+  [1, 0, 0],
+];
+
+/** Where a value falls on the scale, as an sRGB colour: held at its ends beyond them; grey where there is none. */
+export function scaleColour(value: number | null, from: number, to: number): [number, number, number] {
+  if (value == null || !Number.isFinite(value)) return [0.6, 0.6, 0.6];
+  const t = Math.min(1, Math.max(0, (value - from) / (to - from)));
+  const s = t * (SCALE_STOPS.length - 1);
+  const a = Math.min(Math.floor(s), SCALE_STOPS.length - 2);
+  const f = s - a;
+  const c0 = SCALE_STOPS[a];
+  const c1 = SCALE_STOPS[a + 1];
+  return [c0[0] + (c1[0] - c0[0]) * f, c0[1] + (c1[1] - c0[1]) * f, c0[2] + (c1[2] - c0[2]) * f];
+}
+
+/** Each of a mesh's points coloured by a grid's value there, on the scale from `from` to `to`: three numbers a point, linear, as a mesh is drawn. */
+export function coloursOf(mesh: Mesh, by: MeshGrid, from: number, to: number): Float32Array {
+  const inverse = dual(by.axes);
+  const out = new Float32Array(mesh.positions.length);
+  const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  for (let p = 0; p < mesh.positions.length; p += 3) {
+    const [r, g, b] = scaleColour(sampleAt(by, mesh.positions[p], mesh.positions[p + 1], mesh.positions[p + 2], inverse), from, to);
+    out[p] = linear(r);
+    out[p + 1] = linear(g);
+    out[p + 2] = linear(b);
+  }
+  return out;
 }

@@ -5,7 +5,7 @@ import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace"
 import { centredAt, readRecord, recordText } from "../utils/copyPaste";
 import { POINT } from "../../../../lib/pdf/layout";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
-import { holdPicture, holdPicturesOf, pictureBytes } from "../../../../lib/picture/held";
+import { holdFilm, holdPicture, holdPicturesOf, pictureBytes } from "../../../../lib/picture/held";
 import { cornersOf } from "../utils/selection";
 import type { PictureToAdd } from "./types";
 
@@ -107,6 +107,27 @@ describe("pictures on the page", () => {
     again.state().openWorkspace(readWorkspace(file.workspace)!, true);
     expect(again.state().pictures[0]).toMatchObject({ id: 1, name: "figure.png", turn: 0.5 });
     expect(again.doc.getState().nextPictureId).toBe(2);
+  });
+
+  it("may be films - a render's MP4 - put just where they were made for, saved, read back and copied as pictures are", async () => {
+    // (an ISO base media file's first box, its file type: what Meno takes to be an MP4)
+    const mp4 = new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d, 9]);
+    expect(await holdFilm(png(4, 4))).toBeNull();
+    const film = (await holdFilm(mp4))!;
+    const { store, state } = editor();
+    const id = state().putPicture({ name: "morphine.mp4", sha256: film.sha256, media: "video/mp4", px: [1920, 1080], x: 30, y: 40, w: 16, h: 9 });
+    expect(state().pictures[0]).toMatchObject({ id, media: "video/mp4", x: 30, y: 40, w: 16, h: 9 });
+    // (one step to undo, as any picture put down)
+    expect(state().selPictures.size).toBe(0);
+    const file = readMenoFile(await workspaceFile(store.getState()));
+    expect(file.files.find((f) => f.media === "video/mp4")?.sha256).toBe(film.sha256);
+    holdPicturesOf(file);
+    const again = editor();
+    again.state().openWorkspace(readWorkspace(file.workspace)!, true);
+    expect(again.state().pictures[0]).toMatchObject({ name: "morphine.mp4", media: "video/mp4", px: [1920, 1080] });
+    expect(pictureBytes(film.sha256)).toEqual(mp4);
+    const record = readRecord(recordText({ atoms: [], bonds: [], pictures: [state().pictures[0]] }));
+    expect(record?.pictures?.[0].media).toBe("video/mp4");
   });
 
   it("are copied and pasted with the rest, moved as far, and those not held left out", async () => {

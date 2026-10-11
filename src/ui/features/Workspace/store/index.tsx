@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PdfItem, PictureItem, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -38,8 +38,10 @@ function mirrorOf(doc: WorkspaceDocument) {
     model: doc.model,
     arrows: doc.arrows,
     pluses: doc.pluses ?? [],
+    pushes: doc.pushes ?? NO_PUSHES,
     aromaticEnabled: doc.aromaticEnabled,
     aromaticRings: doc.aromaticRings,
+    ringFills: doc.ringFills ?? NO_FILLS,
     nextId: doc.nextId,
     nextArrowId: doc.nextArrowId,
     nextPlusId: doc.nextPlusId ?? 1,
@@ -90,6 +92,8 @@ function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Se
   return [...sel].every((id) => ids.has(id)) ? sel : new Set([...sel].filter((id) => ids.has(id)));
 }
 const NO_CAPTIONS: Caption[] = [];
+const NO_PUSHES: PushArrow[] = [];
+const NO_FILLS: RingFills = {};
 const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
@@ -118,6 +122,7 @@ export function connectStoreToDocument(
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
+        selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         // (sheets selected kept to those still on the page - and the one under the pointer, if it still is)
         selTexts: picturesHeld(prev.selTexts, (mirrored.texts ?? []).filter((t) => t.at)),
@@ -165,6 +170,7 @@ export function createEditorStore(
     pdfBox: null,
     hoveredText: null,
     selTexts: new Set<number>(),
+    selPdfs: new Set<number>(),
     textFlight: null,
     pdfPicture: null,
 
@@ -186,6 +192,8 @@ export function createEditorStore(
     hoveredMeasure3d: null,
     measureEdit3d: null,
     hoveredArrow: null,
+    hoveredPush: null,
+    pushDraw: null,
     hoveredPlus: null,
     hoveredCaption: null,
     hoveredPdf: null,
@@ -195,6 +203,7 @@ export function createEditorStore(
     hoveredMark: null,
     captionEdit: null,
     captionLeft: null,
+    wordsWriting: null,
     quickAdd: null,
     hoveredSet: null,
     chosenSet: null,

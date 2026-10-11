@@ -3,9 +3,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
-import { atomColour, bondRadiusOf, HIDDEN_MARK, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
-import { bondLines, bondReach, frameBondsOf, frameOf, labelSpot, linesOf, populations, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
+import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -19,8 +19,12 @@ import { cardGroupsOf } from "../../../../lib/calc/sources";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
+import { frameCentre } from "../utils/surfaceMesh";
+import { useShading3d } from "./shading3d";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
+import { chainRuns } from "../../../../lib/chem/biopolymer";
+import { ribbonMesh } from "../utils/ribbon";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -176,6 +180,8 @@ export type Molecule3DViewProps = {
   /** The surface it shows - a list's row chosen - and the value it is drawn at; none, none (or one fading out). */
   surface?: Grid | null;
   surfaceIso?: number;
+  /** What colours the surface, where another grid does, and the values its scale runs between. */
+  surfaceColour?: { grid: Grid; from: number; to: number } | null;
   /** Its measurement whose value is being typed, by id: its chip a field; none, none. */
   editingMeasure?: number | null;
   /** A value typed for a measurement, and Enter pressed: set it (utils/edit3d). */
@@ -226,6 +232,30 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const markAt = useRef<number | null>(null);
   const [hoverAtom, setHoverAtom] = useState<number | null>(null);
   const [hoverBond, setHoverBond] = useState<number | null>(null);
+  // its chains as ribbons, where a look draws them so (utils/ribbon): the
+  // runs, the residue under the pointer, the band's triangles - shared with
+  // its outline, which pushes them out along their normals - and the size
+  // they were last made at
+  const runs = useMemo(
+    () => (m.biopolymer && (solid.ribbons.primary || solid.ribbons.secondary) ? chainRuns(m.biopolymer, m.atoms) : []),
+    [m.biopolymer, m.atoms, solid.ribbons],
+  );
+  const traceOf = useMemo(() => new Map(runs.flatMap((r) => r.residues.map((res, i) => [res, r.trace[i]] as const))), [runs]);
+  const [hoverResidue, setHoverResidue] = useState<number | null>(null);
+  const ribbon = useRef<THREE.Mesh>(null);
+  const ribbonHull = useRef<THREE.Mesh>(null);
+  const ribbonMat = useRef<THREE.MeshStandardMaterial>(null);
+  const ribbonGeo = useMemo(() => new THREE.BufferGeometry(), []);
+  useEffect(() => () => ribbonGeo.dispose(), [ribbonGeo]);
+  const hullMat = useMemo(() => grownMaterial(), []);
+  useEffect(() => () => hullMat.dispose(), [hullMat]);
+  const ribbonResidues = useRef<Int32Array>(new Int32Array(0));
+  // (going over to a look without ribbons, the residue pointed at is let go)
+  const ribbonsNow = solid.ribbons[look];
+  useEffect(() => {
+    if (!ribbonsNow) setHoverResidue(null);
+  }, [ribbonsNow]);
+  const ribbonMade = useRef(-1);
   const { invalidate, camera, size, gl } = useThree();
   const quaternion = useMemo(() => (turn ? new THREE.Quaternion(...turn) : new THREE.Quaternion()), [turn]);
   // how it is turned as drawn: following a drag at once, going over to a turn set afresh
@@ -249,7 +279,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const bondsMat = useRef<THREE.MeshStandardMaterial>(null);
   // (the atoms either look leaves out, and whether it leaves out any)
   const hidden = solid.hidden;
-  const hides = useMemo(() => ({ primary: hidden.primary.includes(1), secondary: hidden.secondary.includes(1) }), [hidden]);
+  // what it says of itself, as it is drawn now, and in either look
+  const notesNow = useMemo(() => notesOf(m, solid, look), [m, solid, look]);
+  const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
+  // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
+  const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const rings = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const sleeves = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -321,13 +355,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
   const shownFrame = frameOf(solid, frame);
-  const centre = useMemo((): [number, number, number] => {
-    const xyz = shownFrame === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : (m.frames?.[shownFrame - 1] ?? []);
-    const c: [number, number, number] = [0, 0, 0];
-    const count = Math.floor(xyz.length / 3) || 1;
-    for (let i = 0; i + 2 < xyz.length; i += 3) for (let x = 0; x < 3; x++) c[x] += xyz[i + x] / count;
-    return c;
-  }, [m.atoms, m.frames, shownFrame]);
+  const centre = useMemo(() => frameCentre({ atoms: m.atoms, frames: m.frames }, shownFrame), [m.atoms, m.frames, shownFrame]);
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
   const stereoMarks = useMemo(() => {
     const st = m.stereo;
@@ -417,8 +445,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // has been pointed at a moment - at once, where something is said already
   const atomResults = useMemo(() => resultsOn(m.calc?.results, "atoms"), [m.calc]);
   const pairResults = useMemo(() => resultsOn(m.calc?.results, "pairs"), [m.calc]);
-  const cardOf = (on: { atom: number } | { bond: number }): { title: string; groups: CardGroups; atoms: number[] } | null => {
+  const cardOf = (on: { atom: number } | { bond: number } | { residue: number }): { title: string; groups: CardGroups; atoms: number[] } | null => {
     const name = (i: number) => `${m.atoms[i]?.el ?? "?"} ${i + 1}`;
+    // (a ribbon's residue: its name, number and chain, by its backbone atom)
+    if ("residue" in on) {
+      const r = m.biopolymer?.residues[on.residue];
+      const at = traceOf.get(on.residue);
+      if (!r || at == null) return null;
+      return { title: `${r.name} ${r.seq}${r.iCode}${r.chain ? ` (${r.chain})` : ""}`, groups: [], atoms: [at] };
+    }
     if ("atom" in on) {
       const i = on.atom;
       if (!atomResults.length || i >= n) return null;
@@ -435,8 +470,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     });
     return { title: `${name(b.a1)}\u2013${name(b.a2)}`, groups, atoms: [b.a1, b.a2] };
   };
-  const pointedAt = hoverAtom != null ? { atom: hoverAtom } : hoverBond != null ? { bond: hoverBond } : null;
-  const pointedKey = pointedAt ? ("atom" in pointedAt ? `a${pointedAt.atom}` : `b${pointedAt.bond}`) : null;
+  const pointedAt = hoverAtom != null ? { atom: hoverAtom } : hoverBond != null ? { bond: hoverBond } : hoverResidue != null ? { residue: hoverResidue } : null;
+  const pointedKey = pointedAt ? ("atom" in pointedAt ? `a${pointedAt.atom}` : "bond" in pointedAt ? `b${pointedAt.bond}` : `r${pointedAt.residue}`) : null;
   const [card, setCard] = useState<{ key: string; title: string; groups: CardGroups; atoms: number[] } | null>(null);
   const [cardShown, setCardShown] = useState(false);
   const cardEl = useRef<HTMLDivElement>(null);
@@ -678,7 +713,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const linesNow = () => {
       const all = bondLines(drawn, p, bondR);
       if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]]));
-      if (hides.primary || hides.secondary) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
+      if (leaves) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
       return all;
     };
     let lines: BondLine[] | null = null;
@@ -690,6 +725,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         bonds.current.visible = bondsShown;
       }
     }
+    // its ribbons: as large as the look it is going over to has them - none,
+    // where it draws the chains as atoms - made afresh as the atoms move
+    const ribbonFrom = solid.ribbons.primary ? 1 : 0;
+    const ribbonScale = (ribbonFrom + ((solid.ribbons.secondary ? 1 : 0) - ribbonFrom) * fill.current) * risen.current;
+    if (runs.length && m.biopolymer && (reshaped || dirty.current || ribbonMade.current !== ribbonScale)) {
+      const made = ribbonMesh(p, runs, m.biopolymer, style.ribbonColours, ribbonScale, WORLD_PER_ANGSTROM);
+      fillGeometry(ribbonGeo, made);
+      ribbonResidues.current = made.residues;
+      ribbonMade.current = ribbonScale;
+    }
+    const ribbonsShown = runs.length > 0 && ribbonScale > 1e-3;
+    if (ribbon.current) ribbon.current.visible = ribbonsShown;
     // (as wide in pixels whatever the zoom - and, in perspective, however
     // high it stands)
     const eye = eyeOf(camera);
@@ -699,6 +746,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const lightOn = outPx > 0.02 || holdShown;
     atomHull.current.visible = lightOn;
     if (bondHull.current) bondHull.current.visible = lightOn && bondsShown;
+    if (ribbonHull.current) ribbonHull.current.visible = lightOn && ribbonsShown;
     if (lightOn && (reshaped || relit || dirty.current || holdShown)) {
       const w = outPx * px;
       const wide = SELECTED_PX * px;
@@ -720,6 +768,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const colour = blue(k);
       (atomHull.current.material as THREE.MeshBasicMaterial).color.copy(colour);
       if (bondHull.current) (bondHull.current.material as THREE.MeshBasicMaterial).color.copy(colour);
+      // (a ribbon's outline: its band pushed out all round - as wide as the selection's while a press is held)
+      hullMat.color.copy(colour);
+      (hullMat.userData.grow as { value: number }).value = holdShown ? Math.max(w, wide * holdMost) : w;
     }
     // the atom whose drawing's atom is under the pointer, outlined
     {
@@ -896,6 +947,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
     }
     dirty.current = false;
+    // how far an atom reaches as drawn - its ball, or, where its chain is a
+    // ribbon, the ribbon about its backbone atom: what the chips beside the
+    // molecule keep clear of
+    const ribbonReach = ribbonsShown ? ribbonScale : 0;
+    const reachOf = (i: number) => {
+      const r = radius(i);
+      return r > 0 ? r : solid.extent[look][i] > 0 ? solid.extent[look][i] * ribbonReach : 0;
+    };
     // the mark of hydrogens left out: just above it on the page
     if (markAnchor.current) {
       const g = Math.max(grown.current.v, 1e-3);
@@ -903,7 +962,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const v = new THREE.Vector3();
       let high = -Infinity;
       for (let i = 0; i < n; i++) {
-        const r = radius(i);
+        const r = reachOf(i);
         if (r <= 0) continue;
         v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!);
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
@@ -925,10 +984,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       let low = Infinity;
       for (let i = 0; i < n; i++) {
         // (an atom its look leaves out is not its lowest)
-        if (radius(i) <= 0) continue;
+        const r = reachOf(i);
+        if (r <= 0) continue;
         v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!);
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
-        low = Math.min(low, seen.y - radius(i) * seen.k);
+        low = Math.min(low, seen.y - r * seen.k);
       }
       const below = low - at.y;
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
@@ -938,6 +998,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (moving) invalidate();
   }, FRAME_ORDER.molecules);
 
+  // its hollows shaded and its shadow cast, as it stands now (after the frame
+  // above has placed its atoms)
+  useShading3d({ turned, atoms, bonds, ribbon, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
+
   /** The atoms' and bonds' finish, `f` of the way from the primary look's to the secondary's. */
   const finish = (f: number) => {
     const P = style.primary;
@@ -945,6 +1009,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const mix = (a: number, b: number) => a + (b - a) * f;
     atomsMat.current.roughness = mix(P.roughness, S.roughness);
     atomsMat.current.metalness = mix(P.metalness, S.metalness);
+    if (ribbonMat.current) {
+      ribbonMat.current.roughness = atomsMat.current.roughness;
+      ribbonMat.current.metalness = atomsMat.current.metalness;
+    }
     const b = bondsMat.current;
     if (b) {
       b.roughness = atomsMat.current.roughness;
@@ -993,6 +1061,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           args={[undefined, undefined, n]}
           renderOrder={OVER_PAGE}
           frustumCulled={false}
+          receiveShadow
           onPointerMove={(e) => {
             e.stopPropagation();
             if (e.instanceId != null && e.instanceId !== hoverAtom) setHoverAtom(e.instanceId);
@@ -1008,6 +1077,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             args={[undefined, undefined, lineCount]}
             renderOrder={OVER_PAGE}
             frustumCulled={false}
+            receiveShadow
             // (pointed at, a bond says what a calculation found of it - where one did)
             onPointerMove={
               pairResults.length
@@ -1022,6 +1092,39 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
             <meshStandardMaterial ref={bondsMat} transparent opacity={1} />
           </instancedMesh>
+        )}
+        {runs.length > 0 && (
+          <>
+            <mesh
+              ref={ribbon}
+              geometry={ribbonGeo}
+              renderOrder={OVER_PAGE}
+              frustumCulled={false}
+              // (found under the pointer only while it is there to be seen)
+              raycast={function (this: THREE.Mesh, rc, hits) {
+                if (this.visible) THREE.Mesh.prototype.raycast.call(this, rc, hits);
+              }}
+              onPointerMove={(e) => {
+                e.stopPropagation();
+                const index = ribbonGeo.getIndex();
+                const v = e.faceIndex != null && index ? index.getX(3 * e.faceIndex) : -1;
+                const r = v >= 0 ? ribbonResidues.current[v] : undefined;
+                if (r != null && r !== hoverResidue) setHoverResidue(r);
+              }}
+              onPointerOut={() => setHoverResidue(null)}
+            >
+              <meshStandardMaterial ref={ribbonMat} vertexColors transparent opacity={1} />
+            </mesh>
+            <mesh
+              ref={ribbonHull}
+              geometry={ribbonGeo}
+              material={hullMat}
+              renderOrder={OVER_PAGE - 1}
+              frustumCulled={false}
+              visible={false}
+              raycast={() => {}}
+            />
+          </>
         )}
         {/* The outline, and a chosen atom's ring: the molecule, or the atom,
             drawn a little larger, before it and under it - what shows is a
@@ -1172,6 +1275,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
+          colour={props.surfaceColour ?? null}
           renderOrder={OVER_PAGE + 2}
         />
         {stereoMarks.map((mark) => (
@@ -1240,15 +1344,21 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           )}
         </group>
       )}
-      {/* (drawn without the hydrogens on its carbons, in either look, it says so
-          above it while it is - its frames' chip is below - at any zoom: not a
-          chip that goes when the page's words are too small, and never too
-          small or too large to read) */}
-      {(hides.primary || hides.secondary) && !props.rising && (
+      {/* (what it says of itself - its hydrogens hidden or not in its file,
+          its bond orders not known - above it while it is so, in either
+          look - its frames' chip is below - at any zoom: not a chip that goes
+          when the page's words are too small, and never too small or too
+          large to read) */}
+      {notesEver.length > 0 && !props.rising && (
         <group ref={markAnchor}>
           <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
-            <div style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}>
-              <HiddenMark on={hides[look]} />
+            <div
+              className="flex flex-col items-center"
+              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}
+            >
+              {notesEver.map((text) => (
+                <NoteMark key={text} text={text} on={notesNow.includes(text)} />
+              ))}
             </div>
           </PageHtml>
         </group>
@@ -1261,6 +1371,44 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
 function same(a: Record<number, string>, b: Record<number, string>): boolean {
   const ka = Object.keys(a);
   return ka.length === Object.keys(b).length && ka.every((k) => a[Number(k)] === b[Number(k)]);
+}
+
+/**
+ * An outline's material for a band of triangles: unlit, its surface pushed
+ * out along its normals by `userData.grow` (page units) - drawn before the
+ * band and under it, only a rim of it shows.
+ */
+function grownMaterial(): THREE.MeshBasicMaterial {
+  const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
+  const grow = { value: 0 };
+  mat.userData.grow = grow;
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.grow = grow;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float grow;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed += normalize(normal) * grow;");
+  };
+  return mat;
+}
+
+/** A geometry given a ribbon's triangles: in place where it holds as many already, so nothing is made anew as the ribbon moves. */
+function fillGeometry(g: THREE.BufferGeometry, m: { positions: Float32Array; normals: Float32Array; colours: Float32Array; indices: Uint32Array }) {
+  const set = (name: string, data: Float32Array) => {
+    const a = g.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (a && a.array.length === data.length) {
+      (a.array as Float32Array).set(data);
+      a.needsUpdate = true;
+    } else g.setAttribute(name, new THREE.BufferAttribute(data, 3));
+  };
+  set("position", m.positions);
+  set("normal", m.normals);
+  set("color", m.colours);
+  const index = g.getIndex();
+  if (index && index.array.length === m.indices.length) {
+    (index.array as Uint32Array).set(m.indices);
+    index.needsUpdate = true;
+  } else g.setIndex(new THREE.BufferAttribute(m.indices, 1));
+  g.computeBoundingSphere();
 }
 
 const mtx = new THREE.Matrix4();
@@ -1301,12 +1449,14 @@ function placePiece(mesh: THREE.InstancedMesh, k: number, a: THREE.Vector3, b: T
 }
 
 /**
- * Drawn without the hydrogens on its carbons: said for as long as it is,
- * under it, where it cannot be missed - the picture misrepresents the
- * molecule (the maintainer, 2026-10-10). It comes and goes as the molecule
- * goes over to a look that hides them or back, folding away.
+ * What a molecule says of itself (utils/molecule3d `notesOf`): its
+ * hydrogens on carbon hidden, its file's hydrogens missing, its bond
+ * orders not known - said for as long as it is so, over it, where it
+ * cannot be missed, as a picture without them misleads (the maintainer,
+ * 2026-10-10 and 2026-10-11). It comes and goes as the molecule goes over
+ * to a look it says it in or not, folding away.
  */
-function HiddenMark({ on }: { on: boolean }) {
+function NoteMark({ text, on }: { text: string; on: boolean }) {
   return (
     <div
       // (as wide as it says: in a chip of no width of its own, the fold would cut it off)
@@ -1316,10 +1466,10 @@ function HiddenMark({ on }: { on: boolean }) {
     >
       <div className="overflow-hidden">
         <div
-          data-hidden-mark
-          className="whitespace-nowrap rounded-full border border-accel-accent/50 bg-accel-lightaccent/90 px-2 text-[11px] leading-[20px] font-medium text-accel-accent shadow-sm"
+          data-note
+          className="mt-1 whitespace-nowrap rounded-full border border-accel-accent/50 bg-accel-lightaccent/90 px-2 text-[11px] leading-[20px] font-medium text-accel-accent shadow-sm"
         >
-          {HIDDEN_MARK}
+          {text}
         </div>
       </div>
     </div>

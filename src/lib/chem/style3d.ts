@@ -8,6 +8,7 @@
  * primary's defaults are the 3D viewer's look.
  */
 import { getColor, getVdwRadius } from "../../utils/atomUtils";
+import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
 export type MoleculeLook = {
@@ -22,12 +23,28 @@ export type MoleculeLook = {
   roughness: number;
   metalness: number;
   /**
+   * How the hollows are shaded - where atoms crowd round, less of the light
+   * from all round reaches: not at all; per atom, worked out once for each
+   * shape a molecule takes, never as it turns (Workspace/utils/occlusion3d);
+   * or on the screen, as it is seen, molecules shading one another too
+   * (Workspace/utils/screenShade, three.js's GTAO). Meno's own: a picture
+   * rendered elsewhere finds its own.
+   */
+  occlusionBy: "none" | "atoms" | "screen";
+  /** And how deep: from faint (0.1) to all of it (1). */
+  occlusion: number;
+  /**
    * The hydrogens on carbon, shown or left out. Left out, the picture is
    * wrong - smaller and more open than the molecule - so it is never so
    * unless the chemist has said, past a warning, that they know it
    * (the maintainer, 2026-10-10: for pictures, never for research).
    */
   hydrogens: "shown" | "carbonHidden";
+  /**
+   * A PDB entry's chains - proteins, nucleic acids - as ribbons, what is
+   * bound to them drawn as atoms; or every atom (docs/WORKSPACE.md, *Ribbons*).
+   */
+  biopolymers: "ribbons" | "atoms";
 };
 
 /** What every style shares: the light molecules are seen in, how they turn, a surface's colours, and how smooth they are drawn. */
@@ -35,6 +52,19 @@ export type Scene3D = {
   /** The light from all round, and the light from above right, in front. */
   ambientLight: number;
   keyLight: number;
+  /**
+   * How dark the shadows the light from above right casts are, from none
+   * (0) to as dark as the light from all round leaves them (1): a
+   * molecule's on itself and on another, never on the page. Meno's own, as
+   * the hollows' shade is.
+   */
+  shadows: number;
+  /**
+   * With very many atoms on the canvas: "lighter" - no shadows, and hollows
+   * shaded per atom where a style shades them on the screen, so that
+   * turning stays smooth (a picture keeps them as set) - or "asSet".
+   */
+  largeDrawings: "lighter" | "asSet";
   /** How far a drag across half the canvas turns a molecule, in radians. */
   turnPerHalfWidth: number;
   /** How much of its speed a turn left to itself loses each sixtieth of a second. */
@@ -45,6 +75,8 @@ export type Scene3D = {
   /** A surface's colours (an orbital's, a density's): an orbital's positive phase - a density's one - and its negative one. */
   surfacePlus: string;
   surfaceMinus: string;
+  /** A ribbon's colours: by its helices and strands, by its chain, or along its sequence from start to end. */
+  ribbonColours: "structure" | "chain" | "sequence";
 };
 
 /** Which of its two styles a molecule is drawn in. */
@@ -61,13 +93,18 @@ export const BALL_AND_STICK: MoleculeLook = {
   bondColor: "#000000",
   roughness: 1,
   metalness: 0,
+  occlusionBy: "atoms",
+  occlusion: 0.6,
   hydrogens: "shown",
+  biopolymers: "ribbons",
 };
 
 /** What the styles share, as the 3D viewer had it. */
 export const SCENE_3D: Scene3D = {
   ambientLight: 0.9,
   keyLight: 1,
+  shadows: 0.4,
+  largeDrawings: "lighter",
   turnPerHalfWidth: 3,
   turnDamping: 0.1,
   ballSegments: 32,
@@ -75,6 +112,7 @@ export const SCENE_3D: Scene3D = {
   // (a muted blue and orange: the maintainer's, 2026-10-05)
   surfacePlus: "#4f7cc4",
   surfaceMinus: "#d98a4b",
+  ribbonColours: "structure",
 };
 
 /** Where the key light comes from, as seen: above right, in front. */
@@ -102,7 +140,9 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     id: "space",
     name: "Space-filling",
     description: "Each atom as large as its van der Waals radius: the molecule's surface.",
-    look: { ...BALL_AND_STICK, atoms: "space" },
+    // (a protein space-filling, every atom: its surface, its pockets -
+    // its hollows the deepest, and the most telling of its shape)
+    look: { ...BALL_AND_STICK, atoms: "space", biopolymers: "atoms", occlusion: 0.8 },
   },
 ];
 
@@ -184,24 +224,54 @@ export function atomColour(el: string): string {
   return colour.get(el)!;
 }
 
-/**
- * Which atoms a look leaves out: none - or, with the hydrogens on carbon
- * hidden, each hydrogen bonded to a carbon (one on a heteroatom, which
- * takes part in hydrogen bonds and in reactions, stays).
- */
-export function hiddenAtoms(
-  m: { atoms: readonly { el: string }[]; bonds: readonly { a1: number; a2: number }[] },
-  look: MoleculeLook,
-): Uint8Array {
-  const hidden = new Uint8Array(m.atoms.length);
-  if (look.hydrogens !== "carbonHidden") return hidden;
+/** A molecule as what it leaves out is worked out from: its atoms (where they stand, for a biopolymer's chains), bonds and biopolymer. */
+type Leaving = { atoms: readonly { el: string }[]; bonds: readonly { a1: number; a2: number }[]; biopolymer?: Biopolymer };
+
+/** Each hydrogen bonded to a carbon. */
+function carbonHydrogens(m: Leaving): Uint8Array {
+  const out = new Uint8Array(m.atoms.length);
   for (const b of m.bonds) {
     const a = m.atoms[b.a1]?.el;
     const c = m.atoms[b.a2]?.el;
-    if (a === "H" && c === "C") hidden[b.a1] = 1;
-    if (c === "H" && a === "C") hidden[b.a2] = 1;
+    if (a === "H" && c === "C") out[b.a1] = 1;
+    if (c === "H" && a === "C") out[b.a2] = 1;
+  }
+  return out;
+}
+
+/** The atoms a look draws as ribbons, not as atoms (lib/chem/biopolymer `ribbonAtoms`): none, where it draws atoms or the molecule is no biopolymer. */
+function inRibbons(m: Leaving, look: MoleculeLook): Uint8Array | null {
+  if (look.biopolymers !== "ribbons" || !m.biopolymer) return null;
+  return ribbonAtoms(m.biopolymer, m.atoms as readonly { el: string; x: number; y: number; z: number }[]);
+}
+
+/** Whether a look draws a molecule's chains as ribbons: it says so, and the molecule has chains to draw. */
+export function ribbonsOf(m: Leaving, look: MoleculeLook): boolean {
+  return look.biopolymers === "ribbons" && !!m.biopolymer && chainRuns(m.biopolymer, m.atoms as readonly { el: string; x: number; y: number; z: number }[]).length > 0;
+}
+
+/**
+ * Which atoms a look leaves out: those its ribbons stand for, where it
+ * draws a biopolymer's chains as ribbons; and, with the hydrogens on
+ * carbon hidden, each hydrogen bonded to a carbon (one on a heteroatom,
+ * which takes part in hydrogen bonds and in reactions, stays).
+ */
+export function hiddenAtoms(m: Leaving, look: MoleculeLook): Uint8Array {
+  const hidden = inRibbons(m, look) ?? new Uint8Array(m.atoms.length);
+  if (look.hydrogens === "carbonHidden") {
+    const ch = carbonHydrogens(m);
+    for (let i = 0; i < ch.length; i++) if (ch[i]) hidden[i] = 1;
   }
   return hidden;
+}
+
+/** Whether a look leaves out hydrogens on carbon that it would otherwise draw: what a molecule says of itself (`HIDDEN_MARK`). */
+export function hidesCarbonHydrogens(m: Leaving, look: MoleculeLook): boolean {
+  if (look.hydrogens !== "carbonHidden") return false;
+  const ribbons = inRibbons(m, look);
+  const ch = carbonHydrogens(m);
+  for (let i = 0; i < ch.length; i++) if (ch[i] && !ribbons?.[i]) return true;
+  return false;
 }
 
 /** What a molecule drawn without the hydrogens on its carbons says of itself, on the canvas and in a picture of it. */
@@ -211,7 +281,14 @@ export const HIDDEN_MARK_COLOUR = "#cd4560";
 
 // --- The settings, as they are shown ------------------------------------------
 
-export type Style3DField<K extends string = string> = { key: K; group: string; label: string; description: string } & (
+export type Style3DField<K extends string = string> = {
+  key: K;
+  group: string;
+  label: string;
+  description: string;
+  /** Set only while another setting of the same style is not this: greyed out, and kept as it is, while it is. */
+  unless?: { key: string; is: string };
+} & (
   | { kind: "choice"; options: { value: string; label: string }[] }
   | {
       kind: "number";
@@ -278,6 +355,17 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     ],
   },
   {
+    key: "biopolymers",
+    group: "Proteins and nucleic acids",
+    label: "Chains",
+    description: "A PDB entry's chains as ribbons, what is bound to them as atoms - or every atom.",
+    kind: "choice",
+    options: [
+      { value: "ribbons", label: "Ribbons" },
+      { value: "atoms", label: "Atoms" },
+    ],
+  },
+  {
     key: "roughness",
     group: "Surface",
     label: "Surface",
@@ -298,6 +386,30 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     max: 1,
     step: 0.05,
     ends: ["Not at all", "Fully"],
+  },
+  {
+    key: "occlusionBy",
+    group: "Surface",
+    label: "Shade in hollows",
+    description: "Where atoms crowd round, less light reaches: hollows and pockets darker, so the shape reads in depth.",
+    kind: "choice",
+    options: [
+      { value: "none", label: "None" },
+      { value: "atoms", label: "Per atom" },
+      { value: "screen", label: "Screen-space" },
+    ],
+  },
+  {
+    key: "occlusion",
+    group: "Surface",
+    label: "How deep",
+    description: "How much darker the hollows are.",
+    kind: "number",
+    min: 0.1,
+    max: 1,
+    step: 0.05,
+    ends: ["Faint", "Deep"],
+    unless: { key: "occlusionBy", is: "none" },
   },
 ];
 
@@ -326,6 +438,28 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
     digits: 2,
   },
   {
+    key: "shadows",
+    group: "Light",
+    label: "Shadows",
+    description: "The shadows the light from above right casts, on the molecule and on those beside it - never on the page.",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    ends: ["None", "Dark"],
+  },
+  {
+    key: "largeDrawings",
+    group: "Light",
+    label: "Very large drawings",
+    description: "Past twenty thousand atoms on the canvas: no shadows, and hollows shaded per atom, so that turning stays smooth.",
+    kind: "choice",
+    options: [
+      { value: "lighter", label: "Lighter" },
+      { value: "asSet", label: "As set" },
+    ],
+  },
+  {
     key: "surfacePlus",
     group: "Orbitals and densities",
     label: "Positive phase",
@@ -338,6 +472,18 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
     label: "Negative phase",
     description: "An orbital's surface where its values are negative.",
     kind: "colour",
+  },
+  {
+    key: "ribbonColours",
+    group: "Ribbons",
+    label: "Coloured by",
+    description: "Helices and strands, each chain, or along the chain from start to end.",
+    kind: "choice",
+    options: [
+      { value: "structure", label: "Structure" },
+      { value: "chain", label: "Chain" },
+      { value: "sequence", label: "Sequence" },
+    ],
   },
   {
     key: "turnPerHalfWidth",

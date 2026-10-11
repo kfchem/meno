@@ -123,8 +123,10 @@ export type SetEntry = {
   /** In hartrees, where it has one. */
   energy?: number;
   name?: string;
-  /** The molecule in 3D it is a frame of, by id. */
+  /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
+  frame?: number;
+  last?: boolean;
 };
 
 /** A molecule's frame `f`: its atoms' x, y and z in turn. */
@@ -155,6 +157,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(energies ? { energy: energies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         from: m.id,
+        frame: f,
+        last: f === n - 1,
       });
     }
   });

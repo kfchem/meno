@@ -22,8 +22,10 @@ describe("the settings file", () => {
       pictures: { dpi: 1200 as const },
       pointer: { wheelUp: "out" as const },
       labels: { smart: false },
+      words: { smart: false },
       calculations: { atOnce: 2, cores: 4 },
       procedures: [{ id: "p-1", name: "Optimise, then energies", saved: 1, flow: { sets: [{ id: 1, x0: 0, y0: -4, x1: 4, y1: 0 }], steps: [{ id: 2, kind: "optimise", x: 6, y: 0 }], wires: [{ id: 3, from: { set: 1 }, to: 2 }] } }],
+      colours: { use: "set-1", sets: [{ id: "set-1", name: "Talk slides", colours: ["#cd4560", "#317689", "#2a9d8f"] }] },
     };
     const text = settingsFileText(settings);
     expect(JSON.parse(text).format).toBe(1);
@@ -60,6 +62,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ drawingStyle: { preset: "rsc", changes: {} } }).style3d).toEqual(DEFAULT_APP_SETTINGS.style3d);
     // the options remembered: by a role, each value a string, a number or a switch; whether it fits is asked when drawn
     expect(acceptAppSettings({}).options).toEqual({});
+    // labels and words written as they are meant, unless the file says not
+    expect([acceptAppSettings({}).labels, acceptAppSettings({}).words]).toEqual([{ smart: true }, { smart: true }]);
+    expect(acceptAppSettings({ words: { smart: "no" } }).words).toEqual({ smart: true });
     expect(
       acceptAppSettings({ options: { "write:mol": { version: "V3000", scale: 2, x: null, "a b": 1 }, "Bad Role": { a: 1 }, export: "sdf" } }).options,
     ).toEqual({ "write:mol": { version: "V3000", scale: 2 } });

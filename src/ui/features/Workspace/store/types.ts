@@ -2,10 +2,12 @@ import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } fro
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
+import type { ArrowWords } from "../../../../lib/chem/captions";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { Role3D } from "../../../../lib/chem/style3d";
+import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -36,6 +38,10 @@ export type Atom = EditorAtom & {
   stereoAt?: MarkAt;
   /** What was typed for its label, where it was read as something else (obz, read as OBz): had back from its menu. */
   typed?: string;
+  /** The colour its label - its charge too - is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
+  highlight?: string;
 };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
@@ -59,6 +65,10 @@ export type Bond = BondChem & {
   dative?: boolean;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
+  /** The colour it is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
+  highlight?: string;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -68,6 +78,8 @@ export type Sel = { atoms: Set<number>; bonds: Set<number> };
 export type SelFlow = { sets: Set<number>; steps: Set<number> };
 
 export type Model = { atoms: Atom[]; bonds: Bond[] };
+/** Rings filled with a colour (#rrggbb), behind the drawing, by each ring's key: its atoms' ids, ascending, joined by "-" (utils/rings). */
+export type RingFills = Record<string, string>;
 export type Arrow = {
   id: number;
   x: number;
@@ -79,6 +91,21 @@ export type Arrow = {
 };
 /** A "+" between two structures of a reaction scheme: where its middle is. */
 export type Plus = { id: number; x: number; y: number };
+/**
+ * Where an electron-pushing arrow starts or ends (docs/EDITOR-2D.md,
+ * *Electron-pushing arrows*), by id: an atom - from its lone pair, where
+ * one is drawn there - a bond, or two atoms with a gap between them, where
+ * a bond forms.
+ */
+export type PushEnd = { atom: number } | { bond: number } | { gap: [number, number] };
+/**
+ * An electron-pushing arrow: from where to where, its head half - a
+ * fishhook, one electron - or full, its bend (lib/chem/pushArrow
+ * `PushBend`; unset, as Meno bends it), a lone pair's dots left off its
+ * tail (`noPair`), and the colour it is drawn in, where it is given one
+ * (#rrggbb; else the bonds' ink).
+ */
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; color?: string };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -207,6 +234,22 @@ export type Molecule3D = {
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
+  /** Its atoms' names and residues and its secondary structure, where it is a PDB entry's chains: drawn as ribbons (lib/chem/biopolymer). */
+  biopolymer?: Biopolymer;
+  /**
+   * Its bonds' orders, where its file gives none - coordinates alone: an
+   * XYZ file, a calculation's output, a PDB entry (its ligands; its chains'
+   * own are not known): "unknown" until they are found from its shape by
+   * the RDKit plugin ("perceived"), given from a SMILES ("assigned") or
+   * from the wwPDB's Chemical Component Dictionary ("dictionary"), or
+   * estimated from its atoms' distances ("estimated"). Unset, its file gave
+   * them (utils/completeness).
+   */
+  bondOrders?: "unknown" | "perceived" | "assigned" | "dictionary" | "estimated";
+  /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
+  unknownOrders?: number[];
+  /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
+  chainOrders?: "dictionary";
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
@@ -395,7 +438,20 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
 export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
-export type Drawn = Model & { arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
+export type Drawn = Model & {
+  pushes?: PushArrow[];
+  ringFills?: RingFills;
+  arrows?: Arrow[];
+  pluses?: Plus[];
+  captions?: Caption[];
+  molecules3d?: Carried3D[];
+  flow?: FlowParts;
+  pictures?: PictureItem[];
+  /** PDFs carried: each as it lies - its file by its SHA-256, held in Meno's cache - not where it is read. */
+  pdfs?: PdfItem[];
+  /** Texts' sheets carried: each text whole, where its sheet lies. */
+  sheets?: WorkspaceText[];
+};
 
 export type EditorState = {
   model: Model;
@@ -636,11 +692,32 @@ export type EditorState = {
   removeMolecule3d: (id: number) => void;
   /** Molecules in 3D drawn in the primary look or the secondary, in one step. */
   setLook3d: (ids: number[], look: Look3D) => void;
+  /** What is learnt of a molecule in 3D - its bond orders found from its shape - with no undo step of its own (doc.amend). */
+  learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
+  /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */
+  changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */
   switchLook3d: (id: number) => void;
   /** A measurement of the atoms and bonds chosen, which are then let go. */
   measureChosen3d: () => void;
   removeMeasure3d: (id: number, measure: number) => void;
+  /** The electron-pushing arrows. */
+  pushes: PushArrow[];
+  /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
+  hoveredPush: number | null;
+  setHoveredPush: (id: number | null) => void;
+  /**
+   * An electron-pushing arrow being drawn: from where - none yet, begun from
+   * Quick Add, until an atom or a bond is pressed - with a half head or a
+   * full one, to where the pointer is, or the end under it (`to`).
+   */
+  pushDraw: { from: PushEnd | null; half: boolean; pointer: { x: number; y: number } | null; to: PushEnd | null } | null;
+  setPushDraw: (draw: EditorState["pushDraw"]) => void;
+  /** An electron-pushing arrow added, as one step; its id. */
+  addPush: (from: PushEnd, to: PushEnd, half: boolean) => number;
+  /** An electron-pushing arrow changed - its head, its bend (null: as Meno bends it), its ends, its lone pair - a run of changes in one gesture one step. */
+  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean }, gesture?: string) => void;
+  removePush: (id: number) => void;
   /** The reaction arrow under the pointer: its menu is the one a right-click opens. */
   hoveredArrow: number | null;
   /** The "+" under the pointer, likewise. */
@@ -658,6 +735,12 @@ export type EditorState = {
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
   turnPdf: (id: number, page: number) => void;
+  /** The PDFs selected, by id: moved, copied and deleted with the rest of the selection (docs/PDF.md). */
+  selPdfs: Set<number>;
+  /** These PDFs selected: alone, or (`add`) besides what is already. */
+  selectPdfs: (ids: Iterable<number>, add?: boolean) => void;
+  /** A PDF added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  togglePdfSel: (id: number) => void;
   /** A PDF's pages spread out, or gathered again. */
   spreadPdf: (id: number, spread: boolean) => void;
   /** A page of a PDF spread put in a place of its own, its middle at (x, y) on the page, on top of the others: one step for a drag (`gesture`). */
@@ -680,6 +763,8 @@ export type EditorState = {
   togglePictureSel: (id: number) => void;
   /** Pictures held put on the page, as one step: the first's middle where `at` is, the others beside it in a row - clear of what lies there, unless `just` there - selected; their ids. */
   addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just?: boolean) => number[];
+  /** A picture made for a place on the page - a render's - put there, clear of the pictures there, as one step: its id; none where nothing changed. */
+  putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;
@@ -719,6 +804,14 @@ export type EditorState = {
    */
   leaveCaptionEdit: (n: number, id: number | null) => void;
   captionLeft: { id: number; n: number; at: { x: number; y: number } } | null;
+  /**
+   * Words being written over an arrow, or to go over one as they are kept -
+   * where they stand and how far they reach, the writing's `n` - so that the
+   * arrow is drawn as long as they need as they are written.
+   */
+  wordsWriting: (ArrowWords & { arrow: number; n: number }) | null;
+  /** The words being written over an arrow, or (null) none - those of writing `n` gone. */
+  setWordsWriting: (words: EditorState["wordsWriting"], n?: number) => void;
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
@@ -828,6 +921,15 @@ export type EditorState = {
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
+  /** The rings filled with a colour (`RingFills`). */
+  ringFills: RingFills;
+  /**
+   * The atoms and bonds named given a colour - drawn in it (`which` "color"),
+   * or highlighted in it - or (null) none: one step.
+   */
+  colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
+  fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle?: StyleChoice;
   labelEdit: {

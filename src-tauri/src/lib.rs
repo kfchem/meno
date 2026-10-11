@@ -11,6 +11,7 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use uuid::Uuid;
 
+mod ccd;
 mod clipboard;
 mod fonts;
 #[cfg(windows)]
@@ -886,6 +887,8 @@ pub fn run() {
             clipboard::clipboard_write,
             clipboard::clipboard_read,
             clipboard::clipboard_takes,
+            clipboard::clipboard_file_names,
+            clipboard::clipboard_file,
             clipboard::drag_read,
             // drags the page cannot read, taken from the webview (Windows)
             drop_catch,
@@ -911,6 +914,8 @@ pub fn run() {
             net::net_grant,
             net::net_revoke,
             net::net_note_blocked,
+            // the wwPDB's chemical components, fetched once and kept
+            ccd::ccd_components,
             // keeping Meno up to date
             update::update_state,
             update::update_check,

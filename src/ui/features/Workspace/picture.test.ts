@@ -7,6 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996 } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
 import { pictureDpiFor, pictureItems, structureInPicture } from "./picture";
+import { ballSegmentsFor, tilesOf } from "./render3d";
 import type { Model } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
 
@@ -117,5 +118,37 @@ describe("the resolution a copied picture is made at", () => {
     expect(dpi).toBeLessThan(1200);
     expect(1920 * 960 * (dpi / 96) ** 2).toBeLessThanOrEqual(48_000_000);
     expect(1920 * 960 * ((dpi + 1) / 96) ** 2).toBeGreaterThan(48_000_000);
+  });
+});
+
+describe("molecules in 3D drawn for a picture, in tiles", () => {
+  it("cuts a picture into tiles that cover it once, none larger than asked", () => {
+    const tiles = tilesOf(5000, 2100, 2048);
+    expect(tiles).toEqual([
+      { x: 0, y: 0, w: 2048, h: 2048 },
+      { x: 2048, y: 0, w: 2048, h: 2048 },
+      { x: 4096, y: 0, w: 904, h: 2048 },
+      { x: 0, y: 2048, w: 2048, h: 52 },
+      { x: 2048, y: 2048, w: 2048, h: 52 },
+      { x: 4096, y: 2048, w: 904, h: 52 },
+    ]);
+    expect(tiles.reduce((a, t) => a + t.w * t.h, 0)).toBe(5000 * 2100);
+    // (one that fits is one tile)
+    expect(tilesOf(300, 200, 2048)).toEqual([{ x: 0, y: 0, w: 300, h: 200 }]);
+  });
+});
+
+describe("a ball in a picture", () => {
+  it("has as many sides as keep its outline a circle to the eye, within a budget", () => {
+    // (small, as before)
+    expect(ballSegmentsFor(20, 100)).toBe(48);
+    // (hundreds of pixels across - a 1200 dpi picture - finer)
+    const n = ballSegmentsFor(240, 100);
+    expect(n).toBeGreaterThan(80);
+    expect(240 * (1 - Math.cos(Math.PI / n))).toBeLessThanOrEqual(0.15);
+    // (never past the most, and coarser for very many balls - but never coarser than before)
+    expect(ballSegmentsFor(1e6, 1)).toBe(256);
+    expect(ballSegmentsFor(240, 30_000)).toBe(48);
+    expect(ballSegmentsFor(240, 2000) ** 2 * 2000).toBeLessThanOrEqual(20_000_000 + 2 * 2000 * 100);
   });
 });

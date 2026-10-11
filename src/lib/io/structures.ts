@@ -10,6 +10,7 @@ import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
+import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -27,6 +28,10 @@ export type FileMolecule3D = {
   frame?: number;
   /** Its bonds are where its atoms stand close enough, frame by frame: its file gives none (an XYZ file). */
   bondsFrom?: "distance";
+  /** Its atoms' names and residues, and its secondary structure: a PDB entry's chains (lib/chem/biopolymer). */
+  biopolymer?: Biopolymer;
+  /** Its bonds' orders "unknown": its file gives coordinates alone (an XYZ or PDB file). */
+  bondOrders?: "unknown";
 };
 
 /**
@@ -132,6 +137,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           atoms: first.atoms,
           bonds: first.bonds,
           bondsFrom: "distance",
+          bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((f) => f.atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
           ...(energies?.length === molecules.length ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
@@ -217,6 +223,11 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
   const [first, ...rest] = models;
   const alike = rest.every((atoms) => atoms.length === first.length && atoms.every((a, i) => a.element === first[i].element));
   const named = filename ? { name: filename } : {};
+  // (its chains, residues and secondary structure: what it is drawn as a biopolymer by)
+  const biopolymer = (atoms: readonly PdbAtom[]) => {
+    const bp = biopolymerOf(atoms, entry.helices, entry.strands);
+    return bp ? { biopolymer: bp } : {};
+  };
   if (alike) {
     return [
       {
@@ -224,10 +235,13 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         bonds: pdbBonds(first, entry.conect),
         ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
         ...named,
+        ...biopolymer(first),
+        // (a PDB file gives no bond orders: CONECT records say which atoms are bonded, not how)
+        bondOrders: "unknown" as const,
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named }));
+  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);

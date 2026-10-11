@@ -19,6 +19,9 @@ import {
   Pluses2D,
   AromaticCircles2D,
   Wedges2D,
+  PushArrows2D,
+  PushDraw2D,
+  Fills2D,
   Labels2D,
   LabelTyping2D,
   HoverOverlay2D,
@@ -37,6 +40,9 @@ import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard, { type Offered3D } from "./ExportCard";
+import OrdersCard from "./OrdersCard";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import { partOf } from "./utils/completeness";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
@@ -54,7 +60,10 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { hasLonePair } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
+import ColourCard, { type ColourTarget } from "./ColourCard";
+import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
@@ -106,6 +115,12 @@ import QuickAdd from "./QuickAdd";
 import Captions2D from "./components/Captions2D";
 import Pdfs2D from "./components/Pdfs2D";
 import Pictures2D from "./components/Pictures2D";
+import { filmPlaying, playFilm } from "./components/pictureTextures";
+import RenderCard from "./render/RenderCard";
+import Renders2D from "./render/Renders2D";
+import { renderer, startRender } from "./render/renders";
+import type { Motion } from "./render/renderScene";
+import { savePictureFile } from "./render/savePicture";
 import TextSheets2D from "./components/TextSheets2D";
 import PdfColumn from "./components/PdfColumn";
 import { goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
@@ -201,6 +216,7 @@ function WorkspaceContent({
     handleWrapperMouseLeave,
     handleWrapperClick,
     dropZone,
+    openFilesAt,
     importError,
     dismissImportError,
     handleMouseDownCapture,
@@ -298,6 +314,41 @@ function WorkspaceContent({
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // a molecule's bond orders sought from its shape as it comes in, where they
+  // are unknown; and those given from a SMILES, asked for on its ligand
+  useBondOrders();
+  const [givingOrders, setGivingOrders] = useState<{ id: number; atom: number | null } | null>(null);
+  // its ligand's hydrogens, the ones its file leaves out, added - as one undo step
+  const completeHydrogens = useCallback(
+    async (id: number, atom: number | null) => {
+      setWorking3d("Adding hydrogens…");
+      setChemError(null);
+      try {
+        await addHydrogens(store, id, atom);
+      } catch (e: unknown) {
+        setChemError(`The hydrogens could not be added: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setWorking3d(null);
+      }
+    },
+    [store],
+  );
+  // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
+  const lookUpComponents = useCallback(
+    async (id: number) => {
+      setWorking3d("Looking up chemical components…");
+      setChemError(null);
+      try {
+        const r = await ordersFromDictionary(store, id);
+        if (r && !r.given) setChemError("No residue of this entry is in the CCD as the entry draws it.");
+      } catch (e: unknown) {
+        setChemError(`The CCD could not be looked up: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setWorking3d(null);
+      }
+    },
+    [store],
+  );
   const build3d = useCallback(
     async (blocks: Block[], isomers: "one" | "all", replacing?: Molecule3D) => {
       setWorking3d("Making the 3D structure…");
@@ -441,7 +492,7 @@ function WorkspaceContent({
   }, [store]);
   const structureAt = useCallback(
     (kind: MenuTarget["kind"] | null, id: number | null) => {
-      if (kind === "atom") return id;
+      if (kind === "atom" || kind === "ring") return id;
       const { model: m } = store.getState();
       return m.bonds.find((b) => b.id === id)?.a ?? null;
     },
@@ -457,6 +508,8 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // a colour card opened from a menu, where the menu was (ColourCard)
+  const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
   // the PDF it shows - or the one under the pointer, or read there, or the
   // first - with the words selected in it, if any
@@ -543,7 +596,7 @@ function WorkspaceContent({
   /** A flow being saved as a procedure: its parts, asking for its name. */
   const [naming, setNaming] = useState<FlowParts | null>(null);
   // Copy, cut and paste, by the keys and from the menu
-  const clip = useClipboardActions(store, setChemError);
+  const clip = useClipboardActions(store, setChemError, openFilesAt);
   const chargeAtom = useCallback(
     (id: number, step: 1 | -1) => {
       const st = store.getState();
@@ -586,6 +639,9 @@ function WorkspaceContent({
       } else if (isDeleteKey(e) && kind && id != null) {
         e.preventDefault();
         deletePart(kind, id);
+      } else if (isDeleteKey(e) && !busy && st.hoveredPush != null && st.pushes.some((p) => p.id === st.hoveredPush)) {
+        e.preventDefault();
+        st.removePush(st.hoveredPush);
       } else if (isDeleteKey(e) && !busy && st.hoveredArrow != null && st.arrows.some((a) => a.id === st.hoveredArrow)) {
         // a reaction arrow under the pointer, and nothing else
         e.preventDefault();
@@ -697,6 +753,7 @@ function WorkspaceContent({
     }
   };
   const menuLink = menuMolecule ? linkOf(menuMolecule, model) : null;
+  const menuPart = menuMolecule ? partOf(menuMolecule, menu?.atom ?? null) : null;
   // (what is chosen of it, or the measurement right-clicked, can be set: utils/edit3d)
   const frameShown = (id: number) => store.getState().frames3d[id] ?? 0;
   const chosenPathOf = menuMolecule && chosen3d?.id === menuMolecule.id ? chosenPath(menuMolecule, chosen3d) : null;
@@ -723,6 +780,22 @@ function WorkspaceContent({
         ...(menuLink === "live" || menuLink === "changed" ? { onTurnLikeDrawing: () => turnLikeDrawing(menuMolecule.id) } : {}),
         ...(menuLink === "changed" ? { onRemake: () => remake3d(menuMolecule.id) } : {}),
         ...(menuLink == null || menuLink === "gone" ? { onDrawFormula: () => void drawFormula(menuMolecule.id) } : {}),
+        // (its bond orders given, its hydrogens added: its ligand's, for a PDB entry - utils/completeness)
+        ...(canAskDictionary(menuMolecule) ? { onOrdersFromDictionary: () => void lookUpComponents(menuMolecule.id) } : {}),
+        ...(canGiveOrders(menuMolecule, menuPart) ? { onOrdersFromSmiles: () => setGivingOrders({ id: menuMolecule.id, atom: menu?.atom ?? null }) } : {}),
+        ...(canGiveOrders(menuMolecule, menuPart)
+          ? {
+              onEstimateOrders: () => {
+                setChemError(null);
+                try {
+                  estimateOrders(store, menuMolecule.id, menu?.atom ?? null);
+                } catch (e: unknown) {
+                  setChemError(e instanceof Error ? e.message : String(e));
+                }
+              },
+            }
+          : {}),
+        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {
               lists: resultsOn(menuMolecule.calc?.results, "list").map((l, _, all) => ({
@@ -808,7 +881,7 @@ function WorkspaceContent({
     // A card's text field keeps the system's own menu - cut, copy, paste.
     if (e.target !== domRef.current) return;
     e.preventDefault(); // no browser menu over the drawing
-    const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d } = store.getState();
+    const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d, hoveredAtom3d } = store.getState();
     const box = e.currentTarget.getBoundingClientRect();
     const place = {
       at: clientToWorld(e.clientX, e.clientY) ?? pasteTarget(),
@@ -837,8 +910,16 @@ function WorkspaceContent({
         id: hovered3d.id,
         selection: here ? "here" : drawing || sel3d.size ? "elsewhere" : "none",
         drawing,
+        // (the atom under the pointer: which of its ligands the menu is about)
+        ...(hoveredAtom3d?.id === hovered3d.id && hoveredAtom3d.atom != null ? { atom: hoveredAtom3d.atom } : {}),
         ...place,
       });
+      return;
+    }
+    // on an electron-pushing arrow, and nothing else: its menu
+    const { hoveredPush, pushes } = store.getState();
+    if (!kind && hoveredPush != null && pushes.some((p) => p.id === hoveredPush)) {
+      open({ kind: "push", id: hoveredPush, selection: "none", ...place });
       return;
     }
     // on a reaction arrow, and nothing else: the arrow's menu
@@ -857,7 +938,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -869,7 +950,7 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || selTexts.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
@@ -881,7 +962,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || selPictures.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -889,9 +970,13 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
-    // likewise a PDF (docs/PDF.md)
-    const { hoveredPdf, pdfs } = store.getState();
-    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf)) {
+    // likewise a PDF, unless it is selected with more (docs/PDF.md)
+    const { hoveredPdf, pdfs, selPdfs } = store.getState();
+    const pdfWithMore = (() => {
+      const s = store.getState();
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+    })();
+    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -913,6 +998,15 @@ function WorkspaceContent({
     const onSelected =
       part &&
       (kind === "atom" ? sel.atoms.has(id) : sel.bonds.has(id));
+    // inside a ring, with nothing selected: the ring's own menu (its colour)
+    if (!part && !selected) {
+      const m = store.getState().model;
+      const ring = ringAt(m, place.at);
+      if (ring) {
+        open({ kind: "ring", id: Number(ring.split("-")[0]), ring, selection: "none", ...place });
+        return;
+      }
+    }
     const target: MenuTarget = {
       kind: part ? kind : null,
       id: part ? id : null,
@@ -950,6 +1044,22 @@ function WorkspaceContent({
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
   useDropZone(dropRef, dropZone);
+  // Render: a picture or a film of molecules in 3D, asked in a card over the canvas (docs/RENDER.md)
+  const [rendering, setRendering] = useState<{ ids: number[]; motions: Motion[]; surfaces: boolean } | null>(null);
+  const askRender = (ids: number[]) => {
+    const st = store.getState();
+    const ms = st.molecules3d.filter((m) => ids.includes(m.id));
+    if (!ms.length || !renderer()) return;
+    // (how it can move: turning, always; through its frames, where one has them; in its vibration, where one shows it)
+    const shownRow = (id: number) => {
+      const open = st.lists3d[id];
+      const m = st.molecules3d.find((x) => x.id === id);
+      const list = open ? resultsOn(m?.calc?.results, "list").find((r) => resultKey(r) === open.list) : undefined;
+      return list && open?.row != null ? list.rows[open.row] : undefined;
+    };
+    const motions: Motion[] = ["turn", ...(ms.some((m) => (m.frames?.length ?? 0) > 0) ? (["frames"] as const) : []), ...(ms.some((m) => shownRow(m.id)?.move) ? (["vibration"] as const) : [])];
+    setRendering({ ids: ms.map((m) => m.id), motions, surfaces: ms.some((m) => !!shownRow(m.id)?.surface) });
+  };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
 
@@ -1095,6 +1205,34 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {givingOrders && (
+          <OrdersCard
+            key="orders"
+            onCancel={() => setGivingOrders(null)}
+            onGive={async (smiles) => {
+              await ordersFromSmiles(store, givingOrders.id, givingOrders.atom, smiles);
+              setGivingOrders(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {rendering && renderer() && (
+          <RenderCard
+            key="render"
+            plugin={renderer()!}
+            motions={rendering.motions}
+            surfaces={rendering.surfaces}
+            onCancel={() => setRendering(null)}
+            onRender={(ask, options) => {
+              const ids = rendering.ids;
+              setRendering(null);
+              startRender(store, ids, ask, options).catch((e: unknown) => setChemError(`Render failed: ${e instanceof Error ? e.message : String(e)}`));
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {exporting && (
           <ExportCard
             key="export"
@@ -1166,6 +1304,8 @@ function WorkspaceContent({
                 st.addBondedPair({ x: at.x - dx, y: at.y - dy }, { x: at.x + dx, y: at.y + dy });
               } else if (what === "text") st.setCaptionEdit({ id: null, at });
               else if (what === "arrow") st.addArrow(at.x, at.y);
+              // (from the first atom or bond pressed, then on as from a menu)
+              else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -1198,6 +1338,11 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {colourCard && (
+          <ColourCard key={`${colourCard.x},${colourCard.y}`} target={colourCard.target} x={colourCard.x} y={colourCard.y} within={colourCard.within} onClose={() => setColourCard(null)} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
       {menu && (
         <PartMenu
           key={`${menu.x},${menu.y}`}
@@ -1214,6 +1359,7 @@ function WorkspaceContent({
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
             else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
             else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
+            else if (menu.kind === "push" && menu.id != null) st.removePush(menu.id);
             else if (menu.kind === "measure3d" && menu.id != null && menu.measure != null) st.removeMeasure3d(menu.id, menu.measure);
             else if (menu.selection === "here") st.deleteSelection();
             else if (menu.kind === "molecule3d" && menu.id != null) st.removeMolecule3d(menu.id);
@@ -1285,7 +1431,25 @@ function WorkspaceContent({
             const c = store.getState().captions.find((x) => x.id === menu.id);
             if (c) store.getState().setCaptionEdit({ id: c.id, at: { x: c.x, y: c.y } });
           }}
-          onCopyPicture={menu.kind === "picture" && menu.id != null ? () => void clip.copyPicture(menu.id!) : undefined}
+          onCopyPicture={menu.kind === "picture" && menu.id != null && store.getState().pictures.find((x) => x.id === menu.id)?.media !== "video/mp4" ? () => void clip.copyPicture(menu.id!) : undefined}
+          picture={(() => {
+            const p = menu.kind === "picture" ? store.getState().pictures.find((x) => x.id === menu.id) : undefined;
+            if (!p) return undefined;
+            const film = p.media === "video/mp4";
+            return {
+              film,
+              playing: film ? filmPlaying(p.sha256) : null,
+              onPlay: (on: boolean) => playFilm(p.sha256, on),
+              onSave: () => void savePictureFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
+            };
+          })()}
+          onRender={(() => {
+            if (!renderer()) return undefined;
+            if (menu.kind === "molecule3d" && menu.selection !== "here" && menuMolecule) return () => askRender([menuMolecule.id]);
+            if (menu.selection !== "here") return undefined;
+            const ids = [...store.getState().sel3d];
+            return ids.length ? () => askRender(ids) : undefined;
+          })()}
           text={(() => {
             const t = menu.kind === "text" && menu.id != null ? store.getState().texts.find((x) => x.id === menu.id) : undefined;
             if (!t) return undefined;
@@ -1347,10 +1511,51 @@ function WorkspaceContent({
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
           canvas={canvasCommands(menu.at)}
-          onExport={menu.selection === "here" ? () => {
+          // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
+          onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
             const taken = clip.part();
             if (taken) startExport(taken);
           } : undefined}
+          onPush={(menu.kind === "atom" || menu.kind === "bond") && menu.id != null && menu.selection !== "here" ? (half, press) => {
+            const st = store.getState();
+            const from = menu.kind === "atom" ? { atom: menu.id! } : { bond: menu.id! };
+            st.setPushDraw({ from, half, pointer: press ? clientToWorld(press.clientX, press.clientY) ?? menu.at : menu.at, to: null });
+          } : undefined}
+          push={(() => {
+            if (menu.kind !== "push" || menu.id == null) return undefined;
+            const st = store.getState();
+            const p = st.pushes.find((x) => x.id === menu.id);
+            if (!p) return undefined;
+            const tail = "atom" in p.from ? st.model.atoms.find((a) => "atom" in p.from && a.id === p.from.atom) : undefined;
+            return {
+              half: !!p.half,
+              setHalf: (half: boolean) => st.updatePush(p.id, { half }),
+              ...(tail && hasLonePair(tail) ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
+              ...(p.bend ? { onUnbend: () => st.updatePush(p.id, { bend: null }) } : {}),
+            };
+          })()}
+          onColour={(() => {
+            // what is drawn: the selection, or the atom, bond or ring right-clicked
+            const st = store.getState();
+            const target: ColourTarget | null =
+              menu.selection === "here"
+                ? menu.drawing !== false
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms) }
+                  : null
+                : menu.kind === "atom" && menu.id != null
+                  ? { atoms: [menu.id], bonds: [], rings: [] }
+                  : menu.kind === "bond" && menu.id != null
+                    ? { atoms: [], bonds: [menu.id], rings: [] }
+                    : menu.kind === "push" && menu.id != null
+                    ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
+                    : menu.kind === "ring" && menu.ring
+                      ? (() => {
+                          const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
+                          return { atoms: [...ids], bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)).map((b) => b.id), rings: [menu.ring] };
+                        })()
+                      : null;
+            return target ? () => setColourCard({ target, x: menu.x, y: menu.y, within: menu.within }) : undefined;
+          })()}
           clipboard={{
             onCut: () => void clip.cut(),
             onCopy: () => void clip.copy(),
@@ -1403,6 +1608,10 @@ function WorkspaceContent({
           <TextSheets2D />
           {/* Pictures, over the PDFs and under the drawing (docs/PDF.md, *A picture*) */}
           <Pictures2D />
+          {/* Rings filled and parts highlighted with a colour, behind the drawing */}
+          <Fills2D />
+          {/* where renders under way will put what they make (docs/RENDER.md) */}
+          <Renders2D />
           {/* Bonds */}
           <Bonds2D />
           <Atoms2D />
@@ -1413,6 +1622,9 @@ function WorkspaceContent({
           {/* Shapes and labels */}
           <AromaticCircles2D />
           <Wedges2D />
+          {/* Electron-pushing arrows, and one being drawn */}
+          <PushArrows2D />
+          <PushDraw2D />
           {/* Atom hover rings */}
           <AtomsHoverRings2D />
           {/* what is selected, the box or lasso selecting, the handle turning it */}

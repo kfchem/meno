@@ -77,6 +77,10 @@ before building, and a build on a computer of one's own needs it once.
    Never publish the draft of a run that failed. (Editing the notes does
    not change `latest.json`, whose `notes` were written as the workflow
    ran; Meno does not show them for now.)
+5. Publishing also rebuilds the website (`.github/workflows/pages.yml`):
+   its download buttons, the version and the files' sizes come from the
+   release just published. If the release's files are ever named
+   otherwise, change `ASSETS` in `scripts/site/release.mjs` to match.
 
 An installed Meno checks more than the signature itself: the signature's
 trusted comment must carry the version `latest.json` announces
