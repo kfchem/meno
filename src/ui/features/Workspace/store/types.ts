@@ -42,17 +42,19 @@ export type Atom = EditorAtom & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
   highlight?: string;
-  /** Where it was drawn in a PDF's figure it was read from (docs/PDF.md, *Stage 5*): lit there while it is under the pointer, and it while that place is. */
+  /** Where it was drawn in the figure it was read from - a PDF's, or a picture (docs/PDF.md, *Stage 5*): lit there while it is under the pointer, and it while that place is. */
   seen?: FigureSpot;
   /** What was unsure of it as it was read from a figure: marked until it is changed. */
   unsure?: Unsure;
 };
 /**
- * A place on a PDF's page: the PDF, by its SHA-256, the page, and the
- * point, in points from its top left - and how long the bonds of the figure
- * there are drawn, in points, which says how near is near.
+ * A place on a PDF's page - the PDF, by its SHA-256, the page, and the
+ * point, in points from its top left - or in a picture: the picture, by its
+ * SHA-256, no page, and the point in its pixels from its top left; and how
+ * long the bonds of the figure there are drawn, in the same, which says how
+ * near is near.
  */
-export type FigureSpot = { sha256: string; page: number; x: number; y: number; bond: number };
+export type FigureSpot = { sha256: string; page?: number; x: number; y: number; bond: number };
 /** What Meno said was unsure of a part as it read it from a figure, and what the part was then (utils/figures `partAs`): marked while it is still that. */
 export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */

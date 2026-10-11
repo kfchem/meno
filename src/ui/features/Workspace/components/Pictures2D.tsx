@@ -183,6 +183,14 @@ function Picture({
   // the light round it while the pointer is on it, coming and going
   const lightMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => lightMaterial.dispose(), [lightMaterial]);
+  // an atom lit in the drawing from a place in it: unlit as the pointer leaves it - or as it goes, under the pointer
+  const lit = useRef(false);
+  const unlight = () => {
+    if (lit.current && store.getState().figureLit != null) store.getState().setFigureLit(null);
+    lit.current = false;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- (once, as it goes)
+  useEffect(() => unlight, []);
   useFrame((_, dt) => {
     const m = lightMaterial;
     const to = hovered ? LIT : 0;
@@ -296,17 +304,20 @@ function Picture({
         onPointerOver={() => store.getState().setHoveredPicture(p.id)}
         onPointerOut={() => {
           if (store.getState().hoveredPicture === p.id) store.getState().setHoveredPicture(null);
-          if (p.from) store.getState().setFigureLit(null);
+          unlight();
         }}
         onPointerMove={(e) => {
-          // (cut out of a PDF: over where an atom read from that figure was drawn, that atom lit in the drawing)
-          const f = p.from;
-          if (!f) return;
+          // (over where an atom read from it was drawn - from the PDF it was cut out of, or from it - that atom lit in the drawing)
           const q = local(e.point);
           const st = store.getState();
-          const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
-          const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
-          st.setFigureLit(atomAtSpot(st.model, f.sha256, f.page, x, y));
+          let atom: number | null = null;
+          for (const f of figuresIn(p)) {
+            const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
+            const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
+            atom ??= atomAtSpot(st.model, f.sha256, f.page, x, y);
+          }
+          if (atom !== st.figureLit) st.setFigureLit(atom);
+          lit.current = atom != null;
         }}
         onPointerDown={onDown}
       >
@@ -315,7 +326,9 @@ function Picture({
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
-      {p.from && <SpotRing p={p} from={p.from} />}
+      {figuresIn(p).map((f) => (
+        <SpotRing key={f.page ?? "own"} p={p} from={f} />
+      ))}
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
       {selected && <Frame p={p} px={px} toWorld={toWorld} />}
     </group>
@@ -327,7 +340,11 @@ function Picture({
  * ringed on the picture while it is lit (components/figureTie), as the
  * drawing rings it.
  */
-function SpotRing({ p, from }: { p: PictureItem; from: PictureFrom }) {
+/** Where a picture shows a figure an atom may have been read from: the box of the PDF's page it was cut out of, if it was, and itself, in its pixels (no page). */
+type FigureIn = { sha256: string; page?: number; box: PictureFrom["box"] };
+const figuresIn = (p: PictureItem): FigureIn[] => [...(p.from ? [p.from] : []), { sha256: p.sha256, box: [0, 0, p.px[0], p.px[1]] }];
+
+function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
   const { invalidate } = useThree();
   const mesh = useRef<THREE.Mesh>(null!);
   useFrame(() => {

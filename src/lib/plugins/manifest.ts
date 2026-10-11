@@ -5,8 +5,9 @@
  * lock); every kind of file it knows (`kinds`) - those it reads (`reads`),
  * those it writes (`writes`), and the rest, texts it colours; the roles it
  * fills (`roles`) and the kinds of a workflow's step (`steps`), each with
- * its options; the systems it can be added on and the programs installed
- * separately its steps run; and, besides, a guide Meno shows once and a
+ * its options; the systems it can be added on, the programs installed
+ * separately its steps run, and the files it needs downloaded besides its
+ * environment (`downloads`); and, besides, a guide Meno shows once and a
  * catalogue of plugins it suggests - for files of the kinds it names, too.
  *
  * A plugin stands alone: it knows of no other, and Meno of no program. Two
@@ -145,6 +146,18 @@ export type InstalledDecl = {
   version?: VersionRule;
 };
 
+/**
+ * A file a plugin needs besides its environment (docs/PLUGINS.md, *The
+ * manifest*, `downloads`) - a model's trained weights, say: what it is, in
+ * words, and under what licence; where it is fetched from, over HTTPS; its
+ * SHA-256 and size in bytes, which it is checked against before it is
+ * kept; and its name in the plugin's `files` folder, which the worker is
+ * given. Fetched as the plugin is set up, under the same leave - the user
+ * told of it and its size first. Meno's backend reads and checks the same
+ * (src-tauri/src/plugfiles.rs).
+ */
+export type DownloadDecl = { file: string; name: string; licence: string; url: string; sha256: string; bytes: number };
+
 /** How a program installed separately says its version, and the least Meno takes. */
 export type VersionRule = { args: string[]; after: string; least: string };
 
@@ -185,6 +198,8 @@ export type Manifest = {
   systems: System[];
   /** The programs installed separately that its steps run. */
   installed: InstalledDecl[];
+  /** The files it needs downloaded besides its environment. */
+  downloads: DownloadDecl[];
   /** Its guide: shown once, the first time it is there. */
   guide: GuideStep[];
   /** The plugins it suggests. */
@@ -349,6 +364,28 @@ function installedOf(v: unknown): InstalledDecl | null {
   return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null ? { name, label, files, path, env, places, ...(version ? { version } : {}) } : null;
 }
 
+/** A kept file's name: a name, not a path. The backend's rule (`file_ok`). */
+const DOWNLOAD_FILE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/** The most a file may be: a model's weights, a few gigabytes at most. */
+const DOWNLOAD_MOST = 20e9;
+
+/** Whether a URL is one a file may be fetched from: HTTPS, with a host, and nothing in it that is not a URL's. The backend's rule (`url_ok`). */
+function downloadUrlOk(v: unknown): v is string {
+  if (typeof v !== "string" || v.length > 500 || !v.startsWith("https://") || !/^[\x21-\x7e]+$/.test(v)) return false;
+  const host = v.slice(8).split(/[/?#]/)[0];
+  return host !== "" && !host.includes("@");
+}
+
+function downloadOf(v: unknown): DownloadDecl | null {
+  const d = v as Record<string, unknown> | null;
+  const file = typeof d?.file === "string" && DOWNLOAD_FILE.test(d.file) && !d.file.endsWith(".part") ? d.file : null;
+  const name = text(d?.name, 80);
+  const licence = text(d?.licence, 60);
+  const sha256 = typeof d?.sha256 === "string" && /^[0-9a-f]{64}$/.test(d.sha256) ? d.sha256 : null;
+  const bytes = typeof d?.bytes === "number" && Number.isInteger(d.bytes) && d.bytes > 0 && d.bytes <= DOWNLOAD_MOST ? d.bytes : null;
+  return file && name && licence && downloadUrlOk(d?.url) && sha256 && bytes ? { file, name, licence, url: d!.url as string, sha256, bytes } : null;
+}
+
 /** How long a guide's words may be: a title, a step's text. */
 const TITLE_MOST = 60;
 const STEP_MOST = 300;
@@ -451,6 +488,10 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
   // (each program installed separately once, and only one a step or a role runs)
   const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
+  // (files to download, where it runs something to use them: all as they must be, or the plugin is none - the backend refuses the list whole)
+  if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
+  const downloads = environment ? list(m.downloads).map(downloadOf) : [];
+  if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
   return {
     id,
     name,
@@ -466,6 +507,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     steps,
     systems,
     installed,
+    downloads: downloads as DownloadDecl[],
     guide,
     suggests,
     files,

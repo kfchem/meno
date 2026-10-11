@@ -15,7 +15,17 @@ import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, 
  * carbon at bonds' meeting - what else the label might read as, its letters
  * drawn as shapes, and what is unsure of it.
  */
-export type ReadAtom = { x: number; y: number; label?: string; alts?: string[]; box?: Box; unsure?: string[] };
+export type ReadAtom = {
+  x: number;
+  y: number;
+  label?: string;
+  alts?: string[];
+  /** Read as an element, with its charge, rather than a label as drawn: as a picture's reader gives it. */
+  el?: string;
+  charge?: number;
+  box?: Box;
+  unsure?: string[];
+};
 
 /** A bond read, between atoms by index, `a` at a wedge's or a hash's narrow end. */
 export type ReadBond = {
@@ -25,6 +35,8 @@ export type ReadBond = {
   stereo?: "up" | "down" | "wavy";
   /** Its hashes even: which end is narrow is not drawn. */
   either?: true;
+  /** Only which end lies nearer is known - as a picture's reader gives it - not which is narrow: `up`, `b` nearer than `a`. */
+  facing?: true;
   /** In a ring drawn with a circle in it: its order is the ring's to work out. */
   aromatic?: true;
   bold?: boolean;
