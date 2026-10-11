@@ -178,6 +178,8 @@ export default function Selection2D() {
           ),
           add,
         );
+        // (and slides, by their middles)
+        s.selectSlides(molecules3dIn(s.slides.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -190,7 +192,7 @@ export default function Selection2D() {
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0 || e.target !== gl.domElement) return;
       const st = store.getState();
-      // (on an arrow, a "+", words, a workflow's wire, a PDF, a picture, a text's sheet or a measurement's value: theirs)
+      // (on an arrow, a "+", words, a workflow's wire, a PDF, a picture, a text's sheet, a measurement's value or a slide's edge: theirs)
       const onMark =
         st.hoveredArrow != null ||
         st.hoveredPlus != null ||
@@ -200,7 +202,8 @@ export default function Selection2D() {
         st.hoveredPicture != null ||
         st.hoveredText != null ||
         st.hoveredMark != null ||
-        st.hoveredMeasure3d != null;
+        st.hoveredMeasure3d != null ||
+        st.hoveredSlide != null;
       if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || onMark || st.labelEdit.active || st.extend.active || st.captionEdit) return;
       const add = addsToSelection(e);
       const count = pressOnEmpty(lastEmpty, { t: e.timeStamp, x: e.clientX, y: e.clientY }, DOUBLE_CLICK_MS);
@@ -311,6 +314,8 @@ export default function Selection2D() {
     });
     const sheetsAt = (angle: number) => turned(sheets, about, angle).map((q, i) => ({ id: q.id, x: q.x - sheets[i].w / 2, y: q.y + sheets[i].h / 2 }));
     const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
+    // (slides carried round by their middles, upright: the page never tilts)
+    const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
@@ -330,12 +335,13 @@ export default function Selection2D() {
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
-        pics.length || markAts || sheets.length || pdfs.length
+        pics.length || markAts || sheets.length || pdfs.length || slides.length
           ? {
               ...(pics.length ? { pictures: picturesAt(angle) } : {}),
               ...(markAts ? { markAts } : {}),
               ...(sheets.length ? { texts: sheetsAt(angle) } : {}),
               ...(pdfs.length ? { pdfs: turned(pdfs, about, angle) } : {}),
+              ...(slides.length ? { slides: turned(slides, about, angle) } : {}),
             }
           : undefined;
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);

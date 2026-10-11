@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -155,6 +155,8 @@ export default function PartMenu({
   onRender,
   picture,
   words,
+  slide,
+  onSlideAround,
   canvas = [],
   clipboard,
   molecule3d,
@@ -250,6 +252,15 @@ export default function PartMenu({
   onRender?: () => void;
   /** What the picture right-clicked can do besides: saved as a file - a picture, or a film, which plays on the page and can be paused. */
   picture?: { film: boolean; playing: boolean | null; onPlay: (on: boolean) => void; onSave: () => void };
+  /**
+   * What the slide right-clicked can do (docs/PRESENTING.md): a talk given
+   * from it; put earlier or later in the talk - none, where it is first or
+   * last; the page about it shown while it is, or not; the other
+   * proportions; and what is on it selected.
+   */
+  slide?: { onPresent: () => void; onEarlier?: () => void; onLater?: () => void; around: boolean; onAround: () => void; standard: boolean; onShape: () => void; onSelectOn: () => void };
+  /** A slide made round what is selected, last in the talk. */
+  onSlideAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -445,6 +456,16 @@ export default function PartMenu({
           ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
           ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
         ]
+      : target.kind === "slide" && slide
+      ? [
+          { name: "Present from here", keys: "", run: slide.onPresent, icon: MENU_ICONS.present },
+          { name: "Earlier in the talk", keys: "", run: slide.onEarlier ?? (() => {}), icon: MENU_ICONS.earlier, disabled: !slide.onEarlier },
+          { name: "Later in the talk", keys: "", run: slide.onLater ?? (() => {}), icon: MENU_ICONS.later, disabled: !slide.onLater },
+          { name: "Show the page around it", keys: "", run: slide.onAround, icon: MENU_ICONS.around, checked: slide.around },
+          del("Delete slide"),
+          { name: slide.standard ? "Make it 16:9" : "Make it 4:3", keys: "", run: slide.onShape },
+          { name: "Select what is on it", keys: "", run: slide.onSelectOn },
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -487,6 +508,7 @@ export default function PartMenu({
                 { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
               ]
             : []),
+          ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
@@ -575,6 +597,8 @@ export default function PartMenu({
                       ? "Electron-pushing arrow"
                     : target.kind === "ring"
                       ? "Ring"
+                    : target.kind === "slide"
+                      ? "Slide"
                       : "Canvas"
       }
       tabIndex={-1}

@@ -196,11 +196,11 @@ function Invoke-MenoQuickAdd {
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide")] [string] $Item,
         [int] $CalcRows = 1,
         [int] $CalcMost = 3
     )
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow")
+    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide")
     $size = Get-ClientSize
     $cw = $size.Width / 2; $ch = $size.Height / 2 - 40
     $px = $X / 2; $py = $Y / 2 - 40

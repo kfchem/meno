@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { usePresentingWindow } from "../presenting";
 import { FADE, RISE } from "../theme/motion";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef } from "react";
@@ -10,7 +11,9 @@ import { purposeName, useNetwork } from "../../lib/net/network";
  * withdrawn in Settings; a no fetches nothing.
  */
 export default function ConsentDialog() {
-  const asking = useNetwork((s) => s.asking);
+  // (asked once a talk given in the window has ended: ../presenting - whatever asks waits meanwhile)
+  const talking = usePresentingWindow((s) => s.on);
+  const asking = useNetwork((s) => (talking ? null : s.asking));
   const noRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!asking) return;
