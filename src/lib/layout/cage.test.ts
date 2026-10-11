@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cageCore, keepsConfigurations } from "./cage";
+import { cageCore, keepsConfigurations, projectCage } from "./cage";
+import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
 import { layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
 
@@ -60,6 +63,22 @@ describe("a solid's configurations", () => {
     [2, { x: 0, y: 1 }],
     [3, { x: -0.5, y: -0.5 }],
   ]);
+
+  it("are as given in a solid found from bond distances, a ring fusion those make trans turned cis", () => {
+    // tetrodotoxin: its guanidine ring joins its cage at C4a, whose
+    // configuration the distances alone leave the wrong way round
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const ttx = perceive({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+    const sys = ttx.systems.find((x) => x.atoms.length === 14)!;
+    const view = projectCage(ttx, sys);
+    expect(keepsConfigurations(ttx, sys.atoms, view.pos, view.depth)).toBe(true);
+  });
 
   it("are kept where the solid has the centre as given, and not where it has its mirror image", () => {
     const near = new Map([[0, 0], [1, 0], [2, 0], [3, 1]]);

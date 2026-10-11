@@ -150,8 +150,17 @@ they hang from.
   before the whole, unless the whole reads far better. A solid is taken
   only with every stereocentre in it as given: a ring fusion is cis or
   trans with the same bonds between the same atoms, so a solid found from
-  how far apart the bonds put its atoms may have one the wrong way - and
-  morphine, flat with its bridge across, stays as it was. That goes for a
+  how far apart the bonds put its atoms may have one the wrong way. Such a
+  centre is turned - put through the plane of three of its neighbours, its
+  bonds keeping their lengths - and the solid eased again with every
+  centre held the way it is given (tetrodotoxin's C4a, where its guanidine
+  ring joins its cage). A flat drawing whose only faults are bonds a
+  little uneven and a bond or two passing behind another where a bridge
+  crosses a ring is no drawing with a fault: morphine and strychnine stay
+  flat with their bridges across, as they are drawn everywhere. And a
+  solid is seen from where a bond out of it, ending at a label, keeps a
+  label's breadth from another label of the solid (tetrodotoxin's OH on C9
+  by its bridging O). That goes for a
   cage with rings fused flat onto it too, read as it is drawn, those rings
   with it: laid beside the bond it shares with the cage, a ring stands on
   one face of the cage there or the other, and only one is the molecule.

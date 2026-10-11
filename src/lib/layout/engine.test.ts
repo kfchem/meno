@@ -7,6 +7,8 @@ import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
 import { solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -131,6 +133,28 @@ describe("layout2D", () => {
       .filter((i) => s.atoms[i].el === "O" && bondedTo(i).some((c) => bondedTo(c).filter((o) => s.atoms[o].el === "O").length === 2));
     expect(dioxy).toHaveLength(2);
     for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
+  });
+
+  it("draws tetrodotoxin as the solid it is, and morphine still flat with its bridge across", () => {
+    const input = (smiles: string): LayoutInput => {
+      const s = readSmiles(smiles);
+      const orders = kekuleOrders(s.atoms, s.bonds);
+      const sum = s.atoms.map(() => 0);
+      s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+      return {
+        atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+        bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+      };
+    };
+    // (tetrodotoxin's flat drawing crosses bonds; its solid, once its C4a is
+    // turned the way it is given, has none)
+    const ttx = layout2D(input("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O"));
+    expect(ttx.solid.filter(Boolean).length).toBe(14);
+    // (morphine's solid reads as given now too, but its flat drawing has no
+    // fault - its bonds a little uneven, its bridge passing behind a ring -
+    // and it is drawn so, as everywhere)
+    const morphine = layout2D(input("CN1CC[C@]23[C@@H]4[C@H]1CC5=C2C(=C(C=C5)O)O[C@H]3[C@H](C=C4)O"));
+    expect(morphine.solid.some(Boolean)).toBe(false);
   });
 
   it("draws huperzine A with room for its ethylidene, no atom on another", () => {
