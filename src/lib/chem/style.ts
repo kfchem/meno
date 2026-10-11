@@ -496,6 +496,7 @@ export function layoutOptionsFor(
     wavyAmpPx: at(style.waveAmplitude),
     wavyPeriodPx: at(style.wavelength),
     fontPx: at(style.fontSize),
+    pointPx: L / style.bondLengthPt,
     fontFamily: style.fontFamily,
     labelMarginPx: at(style.labelClearance),
     bondColor: style.bondColor,

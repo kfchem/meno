@@ -3,6 +3,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { Caption, EditorState, WordsFrom } from "../types";
+import { marksAll, stylesOf, toggled, type WordsMark } from "../../../../../lib/chem/captions";
 
 type SetState = StoreApi<EditorState>["setState"];
 
@@ -38,7 +39,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         return { ...prev, wordsWriting: words };
       }),
     setQuickAdd: (q: EditorState["quickAdd"]) => set({ quickAdd: q }),
-    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"]) => {
+    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => {
       const id = doc.getState().nextCaptionId ?? 1;
       doc.edit("add text", (d) =>
         ops.addCaption(d, {
@@ -49,18 +50,39 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           ...(from ? { from } : {}),
           ...(width != null && width > 0 ? { width } : {}),
           ...(align ? { align } : {}),
+          ...(more?.size ? { size: more.size } : {}),
+          ...(more?.marks?.length ? { marks: more.marks } : {}),
         }),
       );
       return id;
     },
     updateCaption: (id: number, patch: Parameters<EditorState["updateCaption"]>[1], gesture?: string) =>
       doc.edit(
-        patch.text != null ? "edit text" : patch.width !== undefined ? "resize text" : patch.align !== undefined ? "align text" : "move text",
+        patch.text != null
+          ? "edit text"
+          : patch.width !== undefined
+            ? "resize text"
+            : patch.align !== undefined
+              ? "align text"
+              : patch.size !== undefined
+                ? "size text"
+                : patch.marks !== undefined
+                  ? "mark text"
+                  : "move text",
         (d) => ops.updateCaption(d, id, patch),
         {
           ...(gesture ? { coalesceKey: `caption:${id}:${gesture}` } : {}),
         },
       ),
+    // (all the letters of the words `ids` set otherwise, as one step: in a colour, or none of their own; bold, italic, raised or lowered - or, all of them so, not)
+    colourWords: (ids: number[], color: string | null, gesture?: string) =>
+      doc.edit("colour text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, { color })), gesture ? { coalesceKey: `colour-words:${gesture}` } : undefined),
+    styleWords: (ids: number[], side: "bold" | "italic" | "sup" | "sub") => {
+      const take = new Set(ids);
+      const all = doc.getState().captions?.filter((c) => take.has(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks)) ?? [];
+      const r = toggled(all, side);
+      doc.edit("mark text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, r)));
+    },
     removeCaption: (id: number) => {
       if (doc.edit("delete text", (d) => ops.removeCaption(d, id)))
         set((prev: EditorState) => ({

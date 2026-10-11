@@ -2,7 +2,7 @@ import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } fro
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
-import type { ArrowWords } from "../../../../lib/chem/captions";
+import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -130,7 +130,37 @@ export type CaptionPress = { at: { x: number; y: number }; client: { x: number; 
  * `arrow`, going where it goes.
  */
 /** Words on the page: where their middle is, what they say, the arrow they are over, - made as wide as something - how wide they are, broken into lines at it, how their lines lie in it, centred unless said (lib/chem/captions), and - taken out of a PDF - where they came from. */
-export type Caption = { id: number; x: number; y: number; text: string; arrow?: number; width?: number; align?: "left" | "right" | "justify"; from?: WordsFrom };
+export type Caption = {
+  id: number;
+  x: number;
+  y: number;
+  text: string;
+  arrow?: number;
+  width?: number;
+  align?: "left" | "right" | "justify";
+  from?: WordsFrom;
+  /** Its own size, in points; unset, the drawing's labels' (lib/chem/captions `wordsFontPx`). */
+  size?: number;
+  /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
+  marks?: WordsMark[];
+};
+/**
+ * A change to words on the page: written anew, moved, put over an arrow or
+ * taken from one (`arrow` null), made as wide as something or as their
+ * words (`width` null), laid otherwise, given a size of their own or the
+ * labels' (`size` null), their letters marked otherwise (`marks`, none
+ * for plain).
+ */
+export type CaptionPatch = {
+  text?: string;
+  x?: number;
+  y?: number;
+  arrow?: number | null;
+  width?: number | null;
+  align?: "left" | "center" | "right" | "justify";
+  size?: number | null;
+  marks?: WordsMark[];
+};
 /** Where words taken out of a PDF came from (docs/PDF.md, *Taking things out*): the PDF, by its SHA-256, and the places they ran between. */
 export type WordsFrom = { sha256: string; from: WordPlace; to: WordPlace };
 /**
@@ -872,7 +902,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"]) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words
@@ -880,10 +910,14 @@ export type EditorState = {
    */
   updateCaption: (
     id: number,
-    patch: { text?: string; x?: number; y?: number; arrow?: number | null; width?: number | null; align?: "left" | "center" | "right" | "justify" },
+    patch: CaptionPatch,
     gesture?: string,
   ) => void;
   removeCaption: (id: number) => void;
+  /** All the letters of the words `ids` in a colour, or (null) in none of their own - a gesture's changes one step. */
+  colourWords: (ids: number[], color: string | null, gesture?: string) => void;
+  /** All the letters of the words `ids` set bold, in italics, raised or lowered - or, every one of them so already, not. */
+  styleWords: (ids: number[], side: "bold" | "italic" | "sup" | "sub") => void;
   /**
    * The icons a double-click on empty space opens there (QuickAdd): where,
    * on the page and in the canvas, and how big the canvas is, for them to

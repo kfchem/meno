@@ -155,6 +155,7 @@ export default function PartMenu({
   onColour,
   onRender,
   picture,
+  words,
   slide,
   onSlideAround,
   canvas = [],
@@ -192,6 +193,23 @@ export default function PartMenu({
   onFitWords?: () => void;
   /** How the words' lines lie, and setting it. */
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
+  /**
+   * What the words right-clicked can do besides (docs/EDITOR-2D.md,
+   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * in italics, raised or lowered - ticked where all are already; their
+   * lines a list, or plain again.
+   */
+  words?: {
+    onSize: () => void;
+    bold: boolean;
+    italic: boolean;
+    list: boolean;
+    onBold: () => void;
+    onItalic: () => void;
+    onList: () => void;
+    onSup: () => void;
+    onSub: () => void;
+  };
   /** A workflow's step right-clicked: run, or opened to its options. */
   onRunStep: () => void;
   onStepOptions: () => void;
@@ -377,19 +395,35 @@ export default function PartMenu({
       : target.kind === "caption"
       ? [
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
+          ...(words
+            ? [
+                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
+                { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
+                { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
+              ]
+            : []),
+          ...colour,
+          del("Delete text"),
+          // (how its lines lie: listed, ticked as they lie now)
           ...(captionAlign
             ? (
                 [
-                  ["left", "Align left", MENU_ICONS.alignLeft],
-                  ["center", "Align centre", MENU_ICONS.alignCentre],
-                  ["right", "Align right", MENU_ICONS.alignRight],
-                  ["justify", "Justify", MENU_ICONS.justify],
+                  ["left", "Align left"],
+                  ["center", "Align centre"],
+                  ["right", "Align right"],
+                  ["justify", "Justify"],
                 ] as const
-              ).map(([align, name, icon]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align, icon }))
+              ).map(([align, name]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align }))
             : []),
-          del("Delete text"),
-          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
-          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords }] : []),
+          ...(words
+            ? [
+                { name: "Superscript", keys: MAC ? "\u21e7\u2318=" : "Ctrl+Shift+=", run: words.onSup, divider: true },
+                { name: "Subscript", keys: shortcut("="), run: words.onSub },
+              ]
+            : []),
+          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords, divider: true }] : []),
+          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource, divider: !onFitWords }] : []),
         ]
       : target.kind === "pdf"
       ? [

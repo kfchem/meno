@@ -14,8 +14,14 @@
  * 60dc as 60 °C, -78 as −78, 1-2 h as 1–2 h - a step of its own to undo,
  * the words as typed coming back, and that part then left as typed until it
  * is written again. What is pasted is left as it is.
+ *
+ * Each letter keeps how it is set (`styles`, lib/chem/captions
+ * `WordsStyle`): bold, italic, a colour, raised or lowered - what is typed
+ * set as the letter before it, or as just asked for at the caret - and a
+ * list's lines go on, and in or out a level (docs/EDITOR-2D.md,
+ * *Text*).
  */
-import { captionPlaceAt, type CaptionPlaces } from "../../../../lib/chem/captions";
+import { captionPlaceAt, listItem, marksOf, restyled, stylesOf, toggled, type CaptionPlaces, type Restyle, type WordsMark, type WordsStyle } from "../../../../lib/chem/captions";
 import { applyEdit, caretAt, isCaret, letterStep, lineAround, Lines, mapThrough, paragraphStep, selected, selFrom, selTo, wordAround, wordStep, type Edit, type Sel } from "../../../../lib/text/editing";
 import type { Command, Unit } from "../../../../lib/text/keys";
 import { typedChanges, wordEnded, type Change } from "../../../../lib/text/smartWords";
@@ -50,7 +56,13 @@ type Span = { from: number; to: number };
  * left as typed, as those words had them; and, the step having written
  * what was typed as it is meant, the parts it wrote.
  */
-type Step = { text: string; sel: Sel; declined: Span[]; wrote?: Span[] };
+type Step = { text: string; sel: Sel; declined: Span[]; wrote?: Span[]; styles: (WordsStyle | undefined)[] };
+
+/** Letters' styles after an edit: those of what it leaves as they were, what it puts in set as `put` - or as the letter before it, or at the text's start the one after. */
+export function stylesThrough(styles: readonly (WordsStyle | undefined)[], e: Edit, put?: WordsStyle | null): (WordsStyle | undefined)[] {
+  const like = put !== undefined && put !== null ? put : e.from > 0 ? styles[e.from - 1] : styles[e.to];
+  return [...styles.slice(0, e.from), ...new Array<WordsStyle | undefined>(e.insert.length).fill(like), ...styles.slice(e.to)];
+}
 
 /** Where a part is after an edit: moved with what is before it - or, the edit in it, none, as it is written again. */
 function spanThrough(s: Span, e: Edit): Span | null {
@@ -80,20 +92,31 @@ export class WordsEditor implements FieldHost {
   private declined: Span[] = [];
   /** Where the last letters typed end - none once the caret is moved, or the words are pasted into or undone. */
   private typedTo: number | null = null;
+  /** How each letter is set. */
+  styles: (WordsStyle | undefined)[];
+  /** How what is typed next at the caret is set, as just asked for there - none once the caret moves. */
+  pending: WordsStyle | null = null;
 
-  constructor(text: string) {
+  constructor(text: string, marks?: readonly WordsMark[]) {
     this.lines = new Lines(text);
+    this.styles = stylesOf(text.length, marks);
     // (written on from their end)
     this.sel = caretAt(text.length);
+  }
+
+  /** The letters' marks, as a caption keeps them. */
+  marks(): WordsMark[] {
+    return marksOf(this.styles);
   }
 
   get text(): string {
     return this.lines.text;
   }
 
-  private moved(sel: Sel, keepGoal = false): void {
+  private moved(sel: Sel, keepGoal = false, keepPending = false): void {
     this.sel = sel;
     this.typedTo = null;
+    if (!keepPending) this.pending = null;
     if (!keepGoal) this.goalX = null;
     this.stirred = performance.now();
     this.onChange();
@@ -109,8 +132,12 @@ export class WordsEditor implements FieldHost {
     this.redone = [];
     this.lastTyped = { at: now, kind };
     this.declined = this.declined.flatMap((s) => spanThrough(s, e) ?? []);
+    this.styles = stylesThrough(this.styles, e, e.insert ? this.pending : null);
+    const pending = this.pending;
     this.lines = new Lines(applyEdit(this.text, e));
     this.moved(sel ?? caretAt(e.from + e.insert.length));
+    // (typing on in what was asked for at the caret)
+    if (pending && e.insert && !sel) this.pending = pending;
     if (!typed || !e.insert) return;
     this.typedTo = e.from + e.insert.length;
     if (this.smart()) this.write(typedChanges(this.text, e.from, e.from + e.insert.length));
@@ -131,7 +158,10 @@ export class WordsEditor implements FieldHost {
     let { anchor, head } = this.sel;
     let typedTo = this.typedTo;
     // (from the last: each part where the words as typed have it)
+    let styles = this.styles;
     for (const c of [...wrote].reverse()) {
+      // (what is written set as what it replaces)
+      styles = stylesThrough(styles, c, styles[c.from] ?? null);
       text = applyEdit(text, c);
       anchor = mapThrough(anchor, c);
       head = mapThrough(head, c);
@@ -140,6 +170,7 @@ export class WordsEditor implements FieldHost {
     }
     // (typing on, a run of its own)
     this.lastTyped = null;
+    this.styles = styles;
     this.lines = new Lines(text);
     this.moved({ anchor, head });
     this.typedTo = typedTo;
@@ -147,7 +178,7 @@ export class WordsEditor implements FieldHost {
 
   /** The words as they are now, to come back to. */
   private asNow(): Step {
-    return { text: this.text, sel: this.sel, declined: this.declined };
+    return { text: this.text, sel: this.sel, declined: this.declined, styles: this.styles };
   }
 
   /**
@@ -171,8 +202,128 @@ export class WordsEditor implements FieldHost {
   private restore(was: Step): void {
     this.lastTyped = null;
     this.lines = new Lines(was.text);
+    this.styles = was.styles;
     this.declined = was.declined;
     this.moved(was.sel);
+  }
+
+  // --- how letters are set, and lists ----------------------------------------
+
+  /**
+   * What is selected set otherwise - a step of its own to undo - or, with
+   * no selection, what is typed next at the caret.
+   */
+  restyle(r: Restyle): void {
+    const from = selFrom(this.sel);
+    const to = selTo(this.sel);
+    if (from === to) {
+      this.pending = restyled(this.pending ?? (from > 0 ? this.styles[from - 1] : this.styles[from]), r) ?? {};
+      this.stirred = performance.now();
+      this.onChange();
+      return;
+    }
+    this.undone.push(this.asNow());
+    this.redone = [];
+    this.lastTyped = null;
+    this.styles = this.styles.map((s, i) => (i >= from && i < to ? restyled(s, r) : s));
+    this.moved(this.sel, true);
+  }
+
+  /** A side of how letters are set turned on, or off where all of what is selected - or what is typed next - has it. */
+  toggle(side: "bold" | "italic" | "sup" | "sub"): void {
+    const from = selFrom(this.sel);
+    const to = selTo(this.sel);
+    const now = from === to ? [this.pending ?? (from > 0 ? this.styles[from - 1] : this.styles[from])] : this.styles.slice(from, to);
+    this.restyle(toggled(now, side));
+  }
+
+  /** The typed lines the selection - or the caret - is on: where each begins. */
+  private linesSelected(): number[] {
+    const from = selFrom(this.sel);
+    const to = selTo(this.sel);
+    let at = this.text.lastIndexOf("\n", from - 1) + 1;
+    const starts = [at];
+    for (;;) {
+      const next = this.text.indexOf("\n", at);
+      // (on to the next line while the selection reaches into it - not where it ends at its very start)
+      if (next < 0 || next + 1 > to || (next + 1 === to && to > from)) break;
+      at = next + 1;
+      starts.push(at);
+    }
+    return starts;
+  }
+
+  /** Several edits at once, from the last back, as one step - the selection carried through them. */
+  private editAll(edits: Edit[]): void {
+    if (!edits.length) return;
+    this.undone.push(this.asNow());
+    this.redone = [];
+    this.lastTyped = null;
+    let text = this.text;
+    let { anchor, head } = this.sel;
+    let styles = this.styles;
+    for (const e of [...edits].sort((a, b) => b.from - a.from)) {
+      styles = stylesThrough(styles, e, e.from < text.length ? (styles[e.from] ?? null) : null);
+      text = applyEdit(text, e);
+      anchor = mapThrough(anchor, e);
+      head = mapThrough(head, e);
+      this.declined = this.declined.flatMap((s) => spanThrough(s, e) ?? []);
+    }
+    this.styles = styles;
+    this.lines = new Lines(text);
+    this.moved({ anchor, head });
+  }
+
+  /** The lines selected made a list's items - or, all of them items already, plain lines again. */
+  toggleList(): void {
+    const starts = this.linesSelected();
+    const items = starts.map((at) => listItem(this.text.slice(at, this.lineEndFrom(at))));
+    if (items.every((it) => it)) this.editAll(starts.map((at, k) => ({ from: at + items[k]!.level, to: at + items[k]!.head, insert: "" })));
+    else this.editAll(starts.flatMap((at, k) => (items[k] ? [] : [{ from: at, to: at, insert: "• " }])));
+  }
+
+  /** The list's items selected a level further in (`dir` 1) or out (-1); false where the caret is on no item. */
+  indent(dir: 1 | -1): boolean {
+    const starts = this.linesSelected();
+    const items = starts.map((at) => listItem(this.text.slice(at, this.lineEndFrom(at))));
+    if (!items.some((it) => it)) return false;
+    this.editAll(
+      starts.flatMap((at, k) => {
+        const it = items[k];
+        if (!it) return [];
+        if (dir > 0) return it.level < 4 ? [{ from: at, to: at, insert: "\t" }] : [];
+        return it.level > 0 ? [{ from: at, to: at + 1, insert: "" }] : [];
+      }),
+    );
+    return true;
+  }
+
+  /**
+   * A new line - in a list's item, the next item, as deep, its number one
+   * on; on an item with nothing written after its bullet, the list ended
+   * there, its bullet taken away.
+   */
+  newLine(): void {
+    const at = selFrom(this.sel);
+    const start = this.text.lastIndexOf("\n", at - 1) + 1;
+    const end = this.lineEndFrom(start);
+    const item = listItem(this.text.slice(start, end));
+    if (!item || at < start + item.head) {
+      this.replaceSelection("\n");
+      return;
+    }
+    if (!this.text.slice(start + item.head, end).trim()) {
+      this.editAll([{ from: start, to: end, insert: "" }]);
+      return;
+    }
+    const number = /^(\d+)([.)])$/.exec(item.mark);
+    const mark = number ? `${Number(number[1]) + 1}${number[2]}` : item.mark;
+    this.replaceSelection(`\n${"\t".repeat(item.level)}${mark} `);
+  }
+
+  private lineEndFrom(start: number): number {
+    const end = this.text.indexOf("\n", start);
+    return end < 0 ? this.text.length : end;
   }
 
   /** What is selected replaced - by what is typed, or, `pasted`, what is pasted, left as it is. */

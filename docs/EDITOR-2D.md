@@ -170,7 +170,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text, present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
-| Words on the page | edit, align left, centre, right, justify; Delete | show in the PDF, as wide as its words |
+| Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture; Delete | show in the PDF |
@@ -739,6 +739,9 @@ All hover-based, as above.
        yet be a CAS number. Numbers joined by more hyphens are no range -
        a CAS number (7647-01-0), a date (2026-10-10) - and stay; so does a
        hyphen with a letter beside it (4-Å MS, Pd-118, 1,2-dichloroethane).
+    4. **Bullets.** A hyphen or a star alone at a line's start - after
+       the tabs that take it a level in - is a bullet (•) as soon as a
+       space is typed after it: "- " is "• ", a list's item (below).
 
     Each is a step of its own: one undo gives back the words as typed, and
     that part is then left as typed until it is written again. Settings ›
@@ -796,6 +799,48 @@ All hover-based, as above.
     spread to both edges, but for the last line of each line typed, which
     lies to the left - the one chosen marked. In the width they were made,
     or the widest line's. Saved, copied and drawn so.
+  - **Text boxes** (the maintainer, 2026-10-11: words for a research talk,
+    in place of a slide program's): words on the page with a size of
+    their own, letters marked, and lists.
+    - *A size of their own*, in points as the drawing's labels are: their
+      menu's *Size…* shows a card of *Label* (the drawing's labels' size,
+      10 points in ACS 1996's style, as words have had), *Text* 14,
+      *Heading* 20 and *Title* 28 - the one they have ringed - and any
+      other typed, 4 to 288 points, given with Enter. While they are
+      written, Ctrl/Cmd+Shift+> and < take them a size up or down (6, 7,
+      8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
+      so in pictures (SVG, EMF and PNG). Without one, they are the labels'
+      size, as the drawing style says.
+    - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
+      mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
+      what is selected bold or in italics, Ctrl/Cmd+Shift+= (+) raises it
+      and Ctrl/Cmd+= lowers it - or, nothing selected, what is typed next
+      - and set it back where all of it is already so; a letter typed is
+      set as the one before it. From their menu, *Bold* and *Italic*
+      (ticked where all their letters are), *Superscript* and *Subscript*
+      do so to all their letters, as does the colour card's *Colour* row,
+      from the palette (Settings, *General*), where they are right-clicked
+      or among a selection. The words stay plain text: the marks are kept
+      beside them as ranges of their letters, so that copying, smart words
+      and finding words are as they were. A formula's counts stay low and
+      its prefixes in italics, whatever is marked. Bold is drawn on the
+      canvas as an outline of the letters' own colour, and as bold type
+      in pictures.
+    - *Lists*: a line that starts - after a tab for each level it is in,
+      up to four - with a bullet (•, ◦, ▪ or –) or a number (1. or 1)) and
+      a space is a list's item: its lines after the first hang under its
+      words, a level one and a half ems in from the one above it. "- "
+      typed at a line's start is "• " (above). While they are written,
+      Shift+Enter in an item starts the next one, as deep, its number one
+      on, and on an item with nothing after its bullet ends the list, the
+      bullet taken away; Tab and Shift+Tab take the items the selection
+      touches a level in or out (anywhere else, Tab does as it did). Their
+      menu's *Bullets* makes every line an item, or, all of them items,
+      plain lines again.
+    - *A box keeps its top*: words given a width, and over no arrow, keep
+      the top of their first line where it is as their lines grow or
+      shrink - written, sized, made a list - rather than growing up and
+      down about their middle.
   - While they are written, their box is the system's own text box, which
     breaks lines as the system does, and may part a number from its unit;
     kept, they break as above. Words written in place drawn by Meno itself,

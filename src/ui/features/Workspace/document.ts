@@ -13,8 +13,9 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
+import type { WordsMark } from "../../../lib/chem/captions";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
@@ -1349,21 +1350,33 @@ export function addCaption(doc: WorkspaceDocument, c: Omit<Caption, "id">): Work
 export function updateCaption(
   doc: WorkspaceDocument,
   id: number,
-  patch: { text?: string; x?: number; y?: number; arrow?: number | null; width?: number | null; align?: "left" | "center" | "right" | "justify" },
+  patch: CaptionPatch,
 ): WorkspaceDocument {
   const captions = doc.captions ?? [];
   const index = captions.findIndex((c) => c.id === id);
   if (index < 0) return doc;
-  const { arrow, width, align, ...rest } = patch;
+  const { arrow, width, align, size, marks, ...rest } = patch;
   const was = captions[index];
   // (over the arrow it was over, unless said; as wide as it was, unless said - none, as its words)
   const link = arrow === undefined ? was.arrow : (arrow ?? undefined);
   const wide = width === undefined ? was.width : width != null && width > 0 ? width : undefined;
   // (centred, unless said otherwise)
   const lie = align === undefined ? was.align : align === "center" ? undefined : align;
-  const { arrow: _was, width: _wide, align: _lie, ...kept } = was;
-  const next: Caption = { ...kept, ...rest, ...(link != null ? { arrow: link } : {}), ...(wide != null ? { width: wide } : {}), ...(lie ? { align: lie } : {}) };
-  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align) return doc;
+  // (its own size, unless said - none, the labels'; its letters marked as they were, unless said - none, plain)
+  const sized = size === undefined ? was.size : size != null && size > 0 ? size : undefined;
+  const marked = marks === undefined ? was.marks : marks.length ? marks : undefined;
+  const { arrow: _was, width: _wide, align: _lie, size: _size, marks: _marks, ...kept } = was;
+  const next: Caption = {
+    ...kept,
+    ...rest,
+    ...(link != null ? { arrow: link } : {}),
+    ...(wide != null ? { width: wide } : {}),
+    ...(lie ? { align: lie } : {}),
+    ...(sized != null ? { size: sized } : {}),
+    ...(marked ? { marks: marked } : {}),
+  };
+  const sameMarks = JSON.stringify(next.marks ?? []) === JSON.stringify(was.marks ?? []);
+  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && sameMarks) return doc;
   const out = captions.slice();
   out[index] = next;
   return { ...doc, captions: out };
@@ -1506,6 +1519,21 @@ export function removePictures(doc: WorkspaceDocument, ids: Iterable<number>): W
   const gone = new Set(ids);
   if (!doc.pictures?.some((p) => gone.has(p.id))) return doc;
   return { ...doc, pictures: doc.pictures.filter((p) => !gone.has(p.id)) };
+}
+
+/** `doc` with the words `ids` marked as `marksFor` says for each - their letters set otherwise - unchanged where nothing changes. */
+export function markCaptions(doc: WorkspaceDocument, ids: Iterable<number>, marksFor: (c: Caption) => WordsMark[]): WorkspaceDocument {
+  const take = new Set(ids);
+  let changed = false;
+  const captions = (doc.captions ?? []).map((c) => {
+    if (!take.has(c.id)) return c;
+    const marks = marksFor(c);
+    if (JSON.stringify(marks) === JSON.stringify(c.marks ?? [])) return c;
+    changed = true;
+    const { marks: _was, ...kept } = c;
+    return marks.length ? { ...kept, marks } : kept;
+  });
+  return changed ? { ...doc, captions } : doc;
 }
 
 // --- slides ----------------------------------------------------------------------

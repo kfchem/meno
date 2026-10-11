@@ -4,9 +4,10 @@ import { RISE } from "../../theme/motion";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
+import { stylesOf } from "../../../lib/chem/captions";
 
-/** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, and the electron-pushing arrows it colours. */
-export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[] };
+/** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, and the electron-pushing arrows and words on the page it colours. */
+export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; captions?: number[] };
 
 type Row = "color" | "highlight" | "ring";
 const ROW_NAME: Record<Row, string> = { color: "Colour", highlight: "Highlight", ring: "Fill ring" };
@@ -60,8 +61,11 @@ export default function ColourCard({
   const parts = target.atoms.length + target.bonds.length > 0;
   const arrows = target.pushes ?? [];
   const pushes = useEditor((s) => s.pushes);
-  // (an arrow has a colour, not a highlight)
-  const rows: Row[] = [...(parts ? (["color", "highlight"] as const) : arrows.length ? (["color"] as const) : []), ...(target.rings.length ? (["ring"] as const) : [])];
+  // (words on the page: their letters' colour)
+  const words = target.captions ?? [];
+  const captions = useEditor((s) => s.captions);
+  // (an arrow has a colour, not a highlight; nor have words)
+  const rows: Row[] = [...(parts ? (["color", "highlight"] as const) : arrows.length || words.length ? (["color"] as const) : []), ...(target.rings.length ? (["ring"] as const) : [])];
   // (the colour each row has now, where all it is for have the same one; null, none; undefined, several)
   const now = (row: Row): string | null | undefined => {
     const atoms = new Set(target.atoms);
@@ -73,7 +77,9 @@ export default function ColourCard({
             ...model.atoms.filter((a) => atoms.has(a.id)),
             ...model.bonds.filter((b) => bonds.has(b.id)),
             ...(row === "color" ? pushes.filter((p) => arrows.includes(p.id)) : []),
-          ].map((p) => (p as { color?: string; highlight?: string })[row] ?? null);
+          ]
+            .map((p) => (p as { color?: string; highlight?: string })[row] ?? null)
+            .concat(row === "color" ? captions.filter((c) => words.includes(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks).map((st) => st?.color ?? null)) : []);
     return had.every((c) => c === had[0]) ? had[0] : undefined;
   };
   // (a colour chosen in the system's chooser is given as it changes there, all of it one step)
@@ -81,7 +87,10 @@ export default function ColourCard({
   const give = (row: Row, color: string | null, gesture?: string) => {
     const s = store.getState();
     if (row === "ring") s.fillRings(target.rings, color, gesture);
-    else s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
+    else {
+      if (parts || arrows.length) s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
+      if (words.length && row === "color") s.colourWords(words, color, gesture);
+    }
   };
   const width = 92 + (palette.length + 2) * (SWATCH + 4) + 12;
   const height = rows.length * (SWATCH + 10) + 12;

@@ -14,6 +14,7 @@ import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
+import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
 import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
@@ -241,6 +242,12 @@ export function readDrawn(data: unknown): Drawn | null {
         ...(isNum(c.width) && c.width > 0 ? { width: c.width } : {}),
         ...(c.align === "left" || c.align === "right" || c.align === "justify" ? { align: c.align } : {}),
         ...(from ? { from } : {}),
+        // (its own size, within reason; its letters' marks where they read, inside its text - colours only as colours)
+        ...(isNum(c.size) && c.size >= WORDS_SIZE_RANGE[0] && c.size <= WORDS_SIZE_RANGE[1] ? { size: c.size } : {}),
+        ...(() => {
+          const marks = marksRead(c.marks, c.text.length);
+          return marks.length ? { marks } : {};
+        })(),
       },
     ];
   });
@@ -326,6 +333,22 @@ export function readDrawn(data: unknown): Drawn | null {
     ...(pictures.length ? { pictures } : {}),
     ...(slides.length ? { slides } : {}),
   };
+}
+
+/** Marks on a caption's letters as they read: within its `length` letters, each saying what it sets - bold, italics, a colour, raised or lowered - apart and in order. */
+function marksRead(v: unknown, length: number): WordsMark[] {
+  if (!Array.isArray(v)) return [];
+  const read = (v as Partial<WordsMark>[]).flatMap((m): WordsMark[] => {
+    if (!m || !Number.isInteger(m.from) || !Number.isInteger(m.to) || m.from! < 0 || m.to! > length || m.from! >= m.to!) return [];
+    const style = {
+      ...(m.bold === true ? { bold: true as const } : {}),
+      ...(m.italic === true ? { italic: true as const } : {}),
+      ...(isColour(m.color) ? { color: m.color } : {}),
+      ...(m.script === "sup" || m.script === "sub" ? { script: m.script } : {}),
+    };
+    return Object.keys(style).length ? [{ from: m.from!, to: m.to!, ...style }] : [];
+  });
+  return marksOf(stylesOf(length, read));
 }
 
 /** A picture as a record or a workspace carries it, as far as it reads: what it is known by, what it is, its size in pixels, where it lies, how large and how turned. */
