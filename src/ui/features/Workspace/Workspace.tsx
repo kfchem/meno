@@ -41,7 +41,7 @@ import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard, { type Offered3D } from "./ExportCard";
 import OrdersCard from "./OrdersCard";
-import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
@@ -783,6 +783,18 @@ function WorkspaceContent({
         // (its bond orders given, its hydrogens added: its ligand's, for a PDB entry - utils/completeness)
         ...(canAskDictionary(menuMolecule) ? { onOrdersFromDictionary: () => void lookUpComponents(menuMolecule.id) } : {}),
         ...(canGiveOrders(menuMolecule, menuPart) ? { onOrdersFromSmiles: () => setGivingOrders({ id: menuMolecule.id, atom: menu?.atom ?? null }) } : {}),
+        ...(canGiveOrders(menuMolecule, menuPart)
+          ? {
+              onEstimateOrders: () => {
+                setChemError(null);
+                try {
+                  estimateOrders(store, menuMolecule.id, menu?.atom ?? null);
+                } catch (e: unknown) {
+                  setChemError(e instanceof Error ? e.message : String(e));
+                }
+              },
+            }
+          : {}),
         ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {

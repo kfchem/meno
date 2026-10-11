@@ -6,7 +6,7 @@ import { addMolecule3d, createWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { stillUnknown } from "../utils/completeness";
 import type { Component } from "../../../../lib/chem/ccd";
-import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, ordersFromDictionary, ordersFromSmiles, perceiveOrders } from "./bondOrders";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, perceiveOrders } from "./bondOrders";
 
 /** The worker, as these tests have it answer: each request's answer by its name. */
 const answers: Record<string, (args: Record<string, unknown>) => unknown> = {};
@@ -160,5 +160,32 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
     expect(canAddHydrogens(molecule(), [2, 3])).toBe(true);
     doc.undo();
     expect(molecule().bondOrders).toBe("unknown");
+  });
+
+  it("estimated from distances: its ligand's, as one undo step, said no more - and nothing where they cannot be told", () => {
+    const { doc, store, molecule } = editor(entry);
+    // (the ligand's C-O, 1.2 A: double)
+    estimateOrders(store, molecule().id, 3);
+    expect(molecule().bonds[0].order).toBe(2);
+    expect(molecule().bondOrders).toBe("estimated");
+    expect(stillUnknown(molecule())).toEqual([]);
+    expect(doc.history().undoLabel).toBe("bond orders");
+    doc.undo();
+    expect(molecule().bondOrders).toBe("unknown");
+
+    // a carbon flat among three chlorines: no double bond it could have
+    const flat = editor({
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "Cl", x: 1.76, y: 0, z: 0 },
+        { el: "Cl", x: -0.88, y: 1.524, z: 0 },
+        { el: "Cl", x: -0.88, y: -1.524, z: 0 },
+      ],
+      bonds: [1, 2, 3].map((a2) => ({ a1: 0, a2, order: 1 })),
+      at: { x: 0, y: 0 },
+      bondOrders: "unknown",
+    });
+    expect(() => estimateOrders(flat.store, flat.molecule().id, null)).toThrow(/cannot be told/);
+    expect(flat.molecule().bondOrders).toBe("unknown");
   });
 });
