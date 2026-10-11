@@ -28,6 +28,7 @@
       "resources/plugins/*/*.py",
       "resources/plugins/*/*.lock",
       "resources/plugins/*/pixi.toml",
+      "resources/plugins/*/LICENSE",
       "resources/licenses/*"
     ],
     "macOS": {
