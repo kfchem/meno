@@ -222,6 +222,8 @@ export type PictureItem = {
   turn?: number;
   /** Where it was cut out of a PDF, if it was (docs/PDF.md, *Taking things out*). */
   from?: PictureFrom;
+  /** The step that made it, by id, where one did (Render): run again, it makes it anew. */
+  step?: number;
 };
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
@@ -476,7 +478,8 @@ export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; re
  * their place among those that came in; and the files of its folder its
  * plugin reads back once it is done.
  */
-export type StepJob = { id: string; entries: number[]; reads: string[] };
+/** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
+export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they

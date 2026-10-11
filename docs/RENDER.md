@@ -86,6 +86,37 @@ down -Z (3.4). Built by `render/renderScene.ts`:
 Khronos's glTF-Validator finds nothing wrong in what Meno writes (checked
 while it was built; not part of Meno or its tests).
 
+## Render as a step
+
+**Render** is a kind of a workflow's step too (WORKFLOWS.md, *Kinds of
+step*), done by a plugin that fills the role - the Blender interface,
+whose manifest names it among its `steps` with no options of its own, so
+that it takes the role's: the same work, asked as a step. Built on
+2026-10-12, its open questions answered the simplest way, for the
+maintainer to change later:
+
+- It takes molecules in 3D or a conformer set, and **gives no set**: each
+  entry is rendered as **a picture of its own** - its scene written by
+  Meno as the command writes one, at the entry's own geometry, in its
+  molecule's look, turned as the canvas turns that molecule, showing
+  nothing besides (no list's surface, no vibration) - one job for each.
+  Nothing is wired from it; its card has no port out.
+- **Pictures only**, no films.
+- Its options are Meno's own choices for a picture - width, shape, what
+  the molecules and the surfaces are made of, starting from the command's
+  defaults - then the plugin's; remembered for the step as any step's
+  are (Settings, *Calculations*), apart from the command's.
+- The pictures are laid **beside the step**, in a row to its right where
+  a result set would stand, each as large as its molecules are drawn, a
+  bond's length apart; each knows the step that made it (`step`). Run
+  again, the step's earlier pictures are taken away and its new ones laid
+  down - with what it did - as **one step to undo**; a run that makes none
+  leaves them as they were and says why. A copy of such a picture is its
+  own.
+- Its jobs are a step's: they wait their turn with the others, and a
+  workspace opened again picks them up (the size each picture takes on
+  the page kept with its job).
+
 ## The role, and its contract
 
 *Render* is a role Meno defines (`lib/plugins/roles.ts`): given a scene,
@@ -205,11 +236,12 @@ By the maintainer, 2026-10-10 and 2026-10-11:
    taken, its version shown in Settings.
 8. **The view moves once**, as a render is begun; not again as what it
    makes lands.
+9. **Render as a step** (2026-10-12, the simplest answers while the
+   maintainer is away, open to change): pictures beside the step, no set;
+   one for each entry; pictures only; a run again replaces them, one step
+   to undo; its own options, from Meno's defaults.
 
 ## Not yet
-
-- **Render as a step** in a workflow: each entry rendered, pictures in a
-  result set (sets hold molecules alone today).
 - What the canvas draws besides molecules: measurements' lines, labels,
   R and S, PDB ribbons (lane L5) - none is in the scene yet.
 - Films with a transparent background (a video kind that keeps it, which

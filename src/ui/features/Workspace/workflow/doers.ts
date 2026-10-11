@@ -84,7 +84,8 @@ export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefine
  */
 export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   if (by === MENO.id) return kindInfo(kind).options ?? [];
-  return pluginById(by)?.steps.find((d) => d.kind === kind)?.options ?? [];
+  // (Meno's own choices for the kind, whoever does it - Render's - then the plugin's)
+  return [...(kindInfo(kind).own ?? []), ...(pluginById(by)?.steps.find((d) => d.kind === kind)?.options ?? [])];
 }
 
 /** The options a step takes, as who does it declares them. */

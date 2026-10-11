@@ -270,7 +270,10 @@ export default function StepCard(p: StepCardProps) {
         )}
       </div>
       <Port look={p.ports.take} label={`Into ${p.info.name}`} data={{ "data-take": String(p.step.id) }} onPointerDown={p.onTakeDown} style={{ left: 0, top: PORT_DOWN / PX }} />
-      <Port look={p.ports.give} label={`Out of ${p.info.name}`} data={{ "data-give-step": String(p.step.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: PORT_DOWN / PX }} />
+      {/* (a step that makes no set - Render - has nothing to give) */}
+      {p.info.gives !== null && (
+        <Port look={p.ports.give} label={`Out of ${p.info.name}`} data={{ "data-give-step": String(p.step.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: PORT_DOWN / PX }} />
+      )}
     </div>
   );
 }

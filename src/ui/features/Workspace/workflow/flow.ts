@@ -31,6 +31,7 @@ export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new
   const made = resultOf(doc, step.id);
   if (made?.made) return made.made.holds;
   const g = kindInfo(step.kind).gives;
+  if (g === null) return null;
   if (g !== "same") return g;
   const into = wireInto(doc, step.id);
   return into ? givesOf(doc, into.from, new Set([...seen, step.id])) : null;
@@ -60,6 +61,8 @@ export function canWire(doc: Flow, from: WireEnd, to: number): boolean {
   const step = stepOf(doc, to);
   if (!step) return false;
   if ("step" in from && (from.step === to || !stepOf(doc, from.step))) return false;
+  // (a step that makes no set - Render - gives nothing to wire)
+  if ("step" in from && kindInfo(stepOf(doc, from.step)!.kind).gives === null) return false;
   if ("set" in from) {
     const set = findSet(doc, from.set);
     if (!set || set.made?.step === to) return false;

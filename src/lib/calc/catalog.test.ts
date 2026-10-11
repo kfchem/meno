@@ -105,7 +105,10 @@ describe("the readers Meno knows of", () => {
     ]);
     // (and those that fill a role by running a program installed separately: Blender, rendering - found where it is usually installed too)
     const blender = PLUGINS.find((p) => p.id === "blender")!;
-    expect(blender).toMatchObject({ roles: ["render"], rolePrograms: { render: ["blender"] }, steps: [], licence: "GPL-3.0-or-later", profile: "plugin-blender" });
+    expect(blender).toMatchObject({ roles: ["render"], rolePrograms: { render: ["blender"] }, licence: "GPL-3.0-or-later", profile: "plugin-blender" });
+    // (and Render as a workflow's step, its options the role's - the same work, asked as a step)
+    expect(blender.steps.map((d) => [d.kind, d.programs])).toEqual([["render", ["blender"]]]);
+    expect(blender.steps[0].options.map((o) => o.id)).toEqual(blender.roleOptions.render!.map((o) => o.id));
     expect(pluginsFilling("render").map((p) => p.id)).toEqual(["blender"]);
     expect(blender.installed[0]).toMatchObject({ name: "blender", files: { macos: "Blender", windows: "blender.exe", linux: "blender" } });
     expect(blender.installed[0].places.macos).toContain("/Applications/Blender.app/Contents/MacOS");

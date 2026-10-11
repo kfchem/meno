@@ -18,6 +18,9 @@
       "version": {"args": ["--version"], "after": "Blender ", "least": "5.0"}
     }
   ],
+  "steps": [
+    {"kinds": ["render"], "programs": ["blender"]}
+  ],
   "roles": [
     {
       "role": "render",

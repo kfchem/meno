@@ -74,7 +74,8 @@ export function renderer(): PythonPlugin | undefined {
 /** How often a render's job is looked at. */
 const LOOK_MS = 1000;
 /** What the scene is called in its job's folder. */
-const SCENE = "scene.gltf";
+/** What the scene Meno writes is called in a render's job's folder. */
+export const SCENE = "scene.gltf";
 let next = 1;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
