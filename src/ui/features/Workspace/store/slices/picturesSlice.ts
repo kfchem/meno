@@ -39,6 +39,8 @@ export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       // (where it was made for, clear of what lies there already - moved along to the right)
       const [placed] = ops.clearOfPictures([picture], doc.getState());
       const id = doc.getState().nextPictureId ?? 1;
+      // (the view eased to it as it was begun: not again as it lands)
+      set((prev: EditorState) => ({ ...prev, picturesLaid: new Set([...prev.picturesLaid, id]) }));
       return doc.edit(placed.media === "video/mp4" ? "add film" : "add picture", (d) => ops.addPicture(d, placed)) ? id : null;
     },
     updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) =>

@@ -113,7 +113,10 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 While it renders, a dashed frame stands where what it makes will lie -
 beside the molecules, on the right, as large as they are drawn - saying
 how far it is and what its job said last, with a button that stops it.
-Where it fails, the frame says why; the button puts it away.
+Where it fails, the frame says why; the button puts it away. The view
+eases to the frame and the molecules once, as the render is begun, where
+they are not all in view; what it makes lands as the view then is, never
+moving it again (the maintainer, 2026-10-11).
 
 What it makes is a **picture** on the page (docs/PDF.md, *A picture*): a
 PNG, or a **film** - an MP4 - which plays where it lies, over and over,
@@ -136,6 +139,16 @@ uv, no package), and the script Blender runs, `render.py`.
   `Program Files\Blender Foundation\Blender *`, the newest first
   (`installed[].places`). On macOS an app picked in *Locate…* stands for
   the program inside it.
+- **Blender 5.0 or later.** Meno asks each copy it finds its version
+  (`blender --version`, `installed[].version`) - as it looks, as one is
+  located and before each render - and takes the one located where it is
+  new enough, else the newest copy that is. Settings, *Plugins*, shows
+  the version beside where it is; of an older copy it says why it will not
+  do: "Meno needs Blender 5.0 or later; this one is 4.1", and *Locate…*
+  refuses one. It looks again whenever Meno is come back to while
+  *Plugins* is shown, so a Blender installed or updated meanwhile is taken
+  without starting Meno again; a copy is asked once, and again only once
+  its file has changed.
 - **Its job** runs Blender as its manual says (docs.blender.org, Blender
   5.2, "Command Line Arguments"): `blender -b --factory-startup -noaudio
   --offline-mode -t <cores> --python-exit-code 1 -P render.py --
@@ -157,6 +170,12 @@ uv, no package), and the script Blender runs, `render.py`.
   the shadows' softness, and a film's quality.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
+- **What the canvas alone draws** is left out of the scene, as a renderer
+  finds its own: the hollows' shade and how deep (`MoleculeLook.occlusionBy`,
+  `MoleculeLook.occlusion`), the shadows' darkness (`Scene3D.shadows`) and
+  the lighter drawing of very many atoms (`Scene3D.largeDrawings`) - none
+  is written in the glTF. Blender finds its own shadows and hollows as it
+  lights the scene; the shadows' softness is the plugin's own option.
 
 ## Licences
 
@@ -182,6 +201,10 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 5. **Materials** - glossy, metal, glass, matte, clay - for molecules and for
    surfaces apart, written as Khronos's glTF extensions.
 6. **The command first**; Render as a workflow's step in a later change.
+7. **Blender 5.0 or later**, a round line; the newest copy new enough
+   taken, its version shown in Settings.
+8. **The view moves once**, as a render is begun; not again as what it
+   makes lands.
 
 ## Not yet
 

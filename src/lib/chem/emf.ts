@@ -39,6 +39,7 @@ const DEVICE = { px: [1920, 1080], mm: [508, 286], um: [508000, 285750] } as con
 
 const EMR = {
   HEADER: 1,
+  POLYBEZIER: 2,
   POLYGON: 3,
   POLYLINE: 4,
   SETWINDOWEXTEX: 9,
@@ -71,6 +72,7 @@ const PLUS = {
   DRAW_LINES: 0x400d,
   FILL_ELLIPSE: 0x400e,
   DRAW_ELLIPSE: 0x400f,
+  DRAW_BEZIERS: 0x4019,
   DRAW_IMAGE: 0x401a,
   SET_ANTI_ALIAS_MODE: 0x401e,
   SET_TEXT_RENDERING_HINT: 0x401f,
@@ -221,13 +223,14 @@ export function layoutEmf(
     });
     return h;
   };
-  const pen = (widthLogical: number, color: number) => {
+  const pen = (widthLogical: number, color: number, round = false) => {
     const h = w.handle();
     w.add(EMR.EXTCREATEPEN, 20 + 24, (v) => {
       v.setUint32(0, h, true);
       // no pattern bitmap: offBmi, cbBmi, offBits, cbBits all 0
-      // PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT | PS_JOIN_MITER, as the SVG's butt caps and miter joins
-      v.setUint32(20, 0x00010000 | 0x00000200 | 0x00002000, true);
+      // PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT | PS_JOIN_MITER, as the SVG's butt caps and miter joins;
+      // round ends and joins (PS_ENDCAP_ROUND | PS_JOIN_ROUND, both 0) for a curve with round ends
+      v.setUint32(20, 0x00010000 | (round ? 0 : 0x00000200 | 0x00002000), true);
       v.setUint32(24, Math.max(1, widthLogical), true);
       v.setUint32(28, 0, true); // BS_SOLID
       v.setUint32(32, color, true);
@@ -300,17 +303,24 @@ export function layoutEmf(
     objects.set(key, id);
     return id;
   };
-  const plusPen = (widthLogical: number, color = stroke) =>
-    object(`pen ${widthLogical} ${color}`, PLUS_OBJECT.PEN, 32, (v) => {
+  const plusPen = (widthLogical: number, color = stroke, round = false) =>
+    object(`pen ${widthLogical} ${color}${round ? " round" : ""}`, PLUS_OBJECT.PEN, round ? 40 : 32, (v) => {
       v.setUint32(0, PLUS_VERSION, true);
       v.setUint32(4, 0, true);
-      v.setUint32(8, 0, true); // nothing optional: flat ends and mitred joins, as the GDI pen has
+      // nothing optional - flat ends and mitred joins, as the GDI pen has - or its two ends round (PenDataStartCap | PenDataEndCap)
+      v.setUint32(8, round ? 0x2 | 0x4 : 0, true);
       v.setUint32(12, 0, true); // its width in the drawing's own units
       v.setFloat32(16, px(Math.max(1, widthLogical)), true);
+      let at = 20;
+      if (round) {
+        v.setInt32(20, 2, true); // LineCapRound, at its start
+        v.setInt32(24, 2, true); // and its end
+        at = 28;
+      }
       // its brush, a solid colour
-      v.setUint32(20, PLUS_VERSION, true);
-      v.setUint32(24, 0, true);
-      v.setUint32(28, argb(color), true);
+      v.setUint32(at, PLUS_VERSION, true);
+      v.setUint32(at + 4, 0, true);
+      v.setUint32(at + 8, argb(color), true);
     });
 
   // a pen for each width and colour (selected for GDI; EMF+ names its own in each record)
@@ -418,6 +428,26 @@ export function layoutEmf(
   for (const l of layout.lines) {
     const id = penFor(l.widthPx > 0 ? l.widthPx : 1, l.color ? colorRef(l.color) : stroke);
     drawLines(id, points([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]));
+  }
+  // the curves - an electron-pushing arrow's line - as the Bezier curves they are, smooth however far the picture is enlarged
+  for (const c of layout.curves ?? []) {
+    if (c.points.length < 4) continue;
+    const color = c.color ? colorRef(c.color) : stroke;
+    const width = L(c.width);
+    const key = `${width} ${color}${c.round ? " round" : ""}`;
+    let h = pens.get(key);
+    if (h == null) {
+      h = pen(width, color, !!c.round);
+      pens.set(key, h);
+    }
+    select(h);
+    const id = plusPen(width, color, !!c.round);
+    const pts = points(c.points);
+    w.plus(PLUS.DRAW_BEZIERS, id, 4 + 8 * pts.length, (v) => {
+      v.setUint32(0, pts.length, true);
+      plusPoints(v, 4, pts);
+    });
+    poly(EMR.POLYBEZIER, pts);
   }
   if (pens.size) {
     select(NULL_PEN);

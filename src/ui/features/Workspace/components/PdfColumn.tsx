@@ -48,6 +48,7 @@ import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from ".
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
 import { layOut } from "../../TextEditor/markdownLayout";
 import { measureText } from "../../TextEditor/markdownType";
+import { spotMoving } from "./figureTie";
 
 /** How long a page takes between the page and the column, in ms; and a text's lines, once settled, to hand over to the column's own. */
 export const FLIGHT_MS = 420;
@@ -296,6 +297,7 @@ function ColumnPass({
       if (pics.fading(now)) redraw();
       // (a place shown marked, fading)
       if (st.pdfFlash && now - st.pdfFlash.start < FLASH_MS + 80) redraw();
+      if (spotMoving(now)) redraw();
     }
     // a page between the page and the column - or a text, handing over once there
     if (flight) {

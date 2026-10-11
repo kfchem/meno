@@ -63,6 +63,7 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   for (const p of among.pluses) take(p.x - opts.fontPx / 2, p.y - opts.fontPx / 2, p.x + opts.fontPx / 2, p.y + opts.fontPx / 2);
   const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
   for (const c of words) {
+    // (at their own size, their letters as they are marked)
     const set = wordsSet(c, opts, labelSetOf(opts));
     take(c.x - set.halfW, c.y - set.halfH, c.x + set.halfW, c.y + set.halfH);
   }

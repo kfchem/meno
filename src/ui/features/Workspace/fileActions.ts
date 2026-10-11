@@ -1,5 +1,5 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { pushMeasures, pushOutlines } from "../../../lib/chem/pushArrow";
+import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
@@ -253,8 +253,12 @@ export function drawingLayout(
   const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout, opts, opts.fontPx, pm);
   for (const { push, shape } of pushed) {
     const polys = pushOutlines(shape, !!push.half, pm);
-    // (in the bonds' ink, unless the arrow is given its own colour)
-    layout.polys.push(...polys.map((points) => ({ points, ...(push.color ? { color: push.color } : {}) })));
+    // (in the bonds' ink, unless the arrow is given its own colour: its line
+    // as the curve it is, smooth however far a picture is enlarged, its head filled)
+    const color = push.color ? { color: push.color } : {};
+    const { curve, head } = pushStroke(shape, !!push.half, pm);
+    (layout.curves ??= []).push({ points: curve, width: pm.thickness, round: pm.round, ...color });
+    layout.polys.push({ points: head, ...color });
     layout.fills.push(...shape.dots.map((d) => ({ ...d, ...(push.color ? { color: push.color } : {}) })));
     const pts = [...polys.flat(), ...shape.dots.flatMap((d) => [{ x: d.c.x - d.r, y: d.c.y - d.r }, { x: d.c.x + d.r, y: d.c.y + d.r }])];
     take(

@@ -185,6 +185,19 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "gaussian")?.installed[0]).toMatchObject({ name: "g16", path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] } });
   });
 
+  it("may say how a program installed separately says its version, and the least Meno takes - as the backend reads it", () => {
+    const blender = (version: unknown) =>
+      acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: ["blender"] }], installed: [{ name: "blender", label: "Blender", files: { macos: "Blender" }, version }] })?.installed;
+    const rule = { args: ["--version"], after: "Blender ", least: "5.0" };
+    expect(blender(rule)?.[0].version).toEqual(rule);
+    expect(blender(undefined)?.[0]).not.toHaveProperty("version");
+    // (options alone - never a file or a path - text to find, a version: else none of it)
+    for (const bad of [{ ...rule, args: [] }, { ...rule, args: ["/tmp/x"] }, { ...rule, args: ["--version", "file"] }, { ...rule, after: "" }, { ...rule, after: "a\nb" }, { ...rule, least: "5.x" }, { ...rule, least: "" }, "5.0"])
+      expect(blender(bad)).toEqual([]);
+    // (Blender's, as Meno carries it: 5.0 or later)
+    expect(MANIFESTS.find((m) => m.id === "blender")?.installed[0].version).toEqual(rule);
+  });
+
   it("runs nothing where it says no environment: then it brings data alone - and a plugin that does nothing is none", () => {
     const data = { ...good, environment: undefined };
     expect(acceptManifest(data)).toBeNull();

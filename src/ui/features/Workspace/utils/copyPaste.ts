@@ -16,7 +16,7 @@ import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
 import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Slide, Turn3D, WordsFrom } from "../store/types";
+import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -306,12 +306,21 @@ export function readDrawn(data: unknown): Drawn | null {
     const to = endOf(p.to);
     if (!isNum(p.id) || !from || !to) return [];
     const bend = p.bend && isNum(p.bend.along) && isNum(p.bend.out) && Math.abs(p.bend.along) < 10 && Math.abs(p.bend.out) < 10 ? { along: p.bend.along, out: p.bend.out } : undefined;
-    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) }];
+    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(p.fromPair ? { fromPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) }];
   });
   // (colours only as colours: what is not one is left out - it would go into a picture's markup)
   const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
     const out = { ...x };
     for (const k of ["color", "highlight"] as const) if (!isColour(x[k])) delete out[k];
+    return out;
+  };
+  // (where it was read from a figure, and what was unsure of it then, only where they read as such)
+  const withRead = <T extends { seen?: unknown; unsure?: unknown }>(x: T): T => {
+    const out = { ...x };
+    const s = x.seen as Partial<FigureSpot> | undefined;
+    if (!s || typeof s.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(s.sha256) || !Number.isInteger(s.page) || (s.page as number) < 0 || !isNum(s.x) || !isNum(s.y) || !isNum(s.bond) || s.bond <= 0) delete out.seen;
+    const u = x.unsure as Partial<Unsure> | undefined;
+    if (!u || !Array.isArray(u.said) || !u.said.length || u.said.length > 8 || !u.said.every((t) => typeof t === "string" && t.length <= 400) || typeof u.as !== "string" || u.as.length > 4000) delete out.unsure;
     return out;
   };
   // (a ring's fill where its key and its colour read)
@@ -321,8 +330,8 @@ export function readDrawn(data: unknown): Drawn | null {
     ),
   ) as Record<string, string>;
   return {
-    atoms: atoms.map((a) => withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])) as Atom),
-    bonds: bonds.map((b) => withColours(withMarks(b, ["stereoAt"]))) as Bond[],
+    atoms: atoms.map((a) => withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]))) as Atom),
+    bonds: bonds.map((b) => withRead(withColours(withMarks(b, ["stereoAt"])))) as Bond[],
     ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),

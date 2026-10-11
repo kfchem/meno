@@ -1,13 +1,15 @@
 /**
  * What is marked on a PDF's page (docs/PDF.md, *Text*, *Search*): the words
  * selected, in Meno's light, and the places a search found, the one gone to
- * the stronger - the same on the stack and in the column.
+ * the stronger - the same on the stack and in the column - and where an
+ * atom read from a figure there was drawn, while it is lit (*Stage 5*).
  */
 import { COLORS } from "../../../theme/colors";
 import { marksBetween, textHad } from "../../../../lib/pdf/text";
 import type { EditorState, PdfFound, PdfItem, PdfSelection } from "../store/types";
 import { onPage } from "../utils/pdfSelection";
 import type { Mark } from "./pdfPictures";
+import { spotMark } from "./figureTie";
 
 /** How long a place shown is marked, in ms: held, then fading. */
 export const FLASH_MS = 1800;
@@ -40,6 +42,9 @@ export function marksOn(
   box: EditorState["pdfBox"] = null,
 ): Mark[] {
   const out: Mark[] = [];
+  // (an atom read from a figure here, lit: a ring where it was drawn)
+  const spot = spotMark(pdf.sha256, page);
+  if (spot) out.push(spot);
   // (a box drawn there, outlined, and a box shown, marked for a moment: no letters wanted)
   if (box?.id === pdf.id && box.page === page) out.push({ rects: [box.box], color: COLORS.highlight, opacity: BOX, edge: true });
   if (flash?.box && flash.id === pdf.id && flash.from.page === page) {
