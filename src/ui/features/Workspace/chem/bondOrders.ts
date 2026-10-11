@@ -18,7 +18,7 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { useEditor, useEditorStore, type EditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
 import { blockOf, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withHydrogens, withOrders } from "../utils/completeness";
-import { componentsNamed } from "../../../../lib/chem/ccd";
+import { componentsNamed } from "../../../../lib/net/components";
 import { isWater } from "../../../../lib/chem/biopolymer";
 
 /** What is asked of the plugin, and how long it may take, in ms. */
@@ -143,7 +143,7 @@ export function canAddHydrogens(m: Molecule3D, atoms: readonly number[] | null):
  * A PDB entry's residues - its chains' and its ligands' - given their bond
  * orders and charges from the wwPDB's Chemical Component Dictionary, as
  * one undo step: each component fetched once, asking first the first time
- * (lib/chem/ccd). Null where the chemist said no to the network; else how
+ * (lib/net/components). Null where the chemist said no to the network; else how
  * many residues were given, of how many it has, and the names the
  * dictionary has no component for.
  */

@@ -20,7 +20,7 @@ const fake = {
 vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: async () => fake, chemAtHand: async () => true }));
 /** The dictionary, as these tests have it answer: the components found, or null - the chemist said no. */
 let looked: { components: Map<string, Component>; absent: string[] } | null = null;
-vi.mock("../../../../lib/chem/ccd", () => ({ componentsNamed: async () => looked }));
+vi.mock("../../../../lib/net/components", () => ({ componentsNamed: async () => looked }));
 
 /** Acetic acid with its hydrogens, every bond single, as an XYZ file gives it. */
 const acetic: Omit<Molecule3D, "id"> = {

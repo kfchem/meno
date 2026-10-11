@@ -892,7 +892,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   dictionary's, as its components are drawn, not a protonation worked out
   for the entry. One undo step. The files come from files.wwpdb.org
   (`refdata/chem_comp/<last character>/<id>/<id>.cif`), fetched by the app
-  as a task of its own on Meno's network (`src-tauri/src/ccd.rs`, purpose
+  as a task of its own on Meno's network (`src-tauri/src/ccd.rs`,
+  `lib/net/components.ts`, purpose
   `ccd`, asked for the first time it is used) and kept in Meno's cache, so
   each is fetched once; only the components' names leave Meno. A PDB file
   with no chain (a ligand on its own) keeps no residue names, and is not

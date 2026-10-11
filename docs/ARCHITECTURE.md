@@ -1114,7 +1114,7 @@ to be able to work with nothing going out at all.
   is some minutes old (`tidy_after_updates`). Releases:
   `docs/RELEASING.md`.
 
-- **Chemical components** (`src-tauri/src/ccd.rs`, `lib/chem/ccd.ts`):
+- **Chemical components** (`src-tauri/src/ccd.rs`, `lib/net/components.ts`; read by `lib/chem/ccd.ts`):
   a PDB entry's residues looked up in the wwPDB's Chemical Component
   Dictionary, asked for from its menu (docs/WORKSPACE.md, *Hydrogens and
   bond orders*). Each component's file is fetched from files.wwpdb.org
