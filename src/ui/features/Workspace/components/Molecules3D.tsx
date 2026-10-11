@@ -380,6 +380,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         const frame = st.frames3d[label.id] ?? 0;
         if (m && x && movingFor(m, x.id, frame)) {
           e.stopPropagation();
+          spins.current.delete(m.id);
           try {
             dom.setPointerCapture(e.pointerId);
           } catch {}
@@ -396,6 +397,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const m = st.molecules3d.find((x) => x.id === h.id);
       if (!m) return;
       e.stopPropagation();
+      // (turning on after it was let go, it is caught: what the press is on stays under the pointer)
+      spins.current.delete(m.id);
       try {
         dom.setPointerCapture(e.pointerId);
       } catch {}
