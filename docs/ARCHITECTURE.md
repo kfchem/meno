@@ -51,10 +51,10 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
-  utils/atomUtils         element table (radii, colours)
   samples/                textbook structures and reactions for the tests and the workflow's 3D node
                           (see samples/README.md)
   ui/layouts/TopBar       custom title bar: tabs, "+" (a new workspace), online/offline, Save (the workspace in front), Settings,
@@ -807,8 +807,8 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 `utils/drawnLink`), so that hover is shared and a changed drawing is seen.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
-coordinates gave none - and it has its hydrogens, without which they are
-not found (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
+coordinates gave none - where it has its hydrogens, which the method
+works from (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
 engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its

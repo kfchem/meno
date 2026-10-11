@@ -28,8 +28,8 @@ const ORDERS_MS = 30_000;
 /**
  * A molecule's bond orders found from where its atoms stand, as its first
  * frame has them: its ligands' still unknown, for a PDB entry, each alone;
- * else all of it - where it has hydrogens (without them none can be found, or the ones
- * found may be wrong) and not too many atoms. What is found is learnt of
+ * else all of it - where it has hydrogens (the plugin's method works from
+ * them) and not too many atoms. What is found is learnt of
  * the molecule; what is not stays unknown, and it says so.
  */
 export async function perceiveOrders(store: EditorStore, m: Molecule3D, chem: ChemClient): Promise<void> {

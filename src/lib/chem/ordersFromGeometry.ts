@@ -4,7 +4,7 @@
  * *Hydrogens and bond orders*). Three kinds of evidence, weighed together:
  *
  * - **Lengths.** A bond's length set against the sums of its atoms'
- *   single-, double- and triple-bond covalent radii (./covalentRadii,
+ *   single-, double- and triple-bond covalent radii (./elements,
  *   Pyykkö's) reads as an order between one and three: 1.39 Å between two
  *   carbons is about one and a half.
  * - **Shapes.** What an atom's neighbours make of it: a carbon with four is
@@ -24,7 +24,7 @@
  * counting a ring's electrons, are as the maintainer's ACCeL does; the code
  * is Meno's own.)
  */
-import { COVALENT_RADII } from "./covalentRadii";
+import { elementOf } from "./elements";
 
 export type GeoAtom = { el: string; x: number; y: number; z: number };
 export type GeoBond = { a1: number; a2: number };
@@ -86,8 +86,8 @@ function torsion(a: GeoAtom, b: GeoAtom, c: GeoAtom, d: GeoAtom): number {
 
 /** A bond's order as its length reads: one at the single-bond radii's sum or longer, two at the double's, three at the triple's, between in proportion. Null where the elements have no double-bond radii. */
 export function orderFromLength(elA: string, elB: string, d: number): number | null {
-  const a = COVALENT_RADII[elA];
-  const b = COVALENT_RADII[elB];
+  const a = elementOf(elA)?.radii;
+  const b = elementOf(elB)?.radii;
   if (!a || !b || a[0] == null || b[0] == null || a[1] == null || b[1] == null) return null;
   const l1 = (a[0] + b[0]) / 100;
   const l2 = (a[1] + b[1]) / 100;

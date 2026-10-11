@@ -6,6 +6,7 @@ import { hydrogenSpot, layoutMetrics } from "./metrics";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
 import { solidOf } from "./cage";
+import { readSmiles } from "../chem/smiles";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -111,6 +112,36 @@ describe("layout2D", () => {
     const middle = fused.reduce((sum, a) => sum + y[a], 0) / fused.length;
     expect(y[4]).toBeGreaterThan(middle);
     expect(y[0]).toBeLessThan(middle);
+  });
+
+  it("draws berberine with its ring N at the bottom, before the O of its methylenedioxy", () => {
+    // the maintainer, 2026-10-11: as it is always drawn - the N is in two
+    // rings fused to benzene rings, the O's in one
+    const s = readSmiles("COC1=C(C2=C[N+]3=C(C=C2C=C1)C4=CC5=C(C=C4CC3)OCO5)OC");
+    const input: LayoutInput = {
+      atoms: s.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })),
+      bonds: s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    };
+    const { y } = layout2D(input);
+    const n = s.atoms.findIndex((a) => a.el === "N");
+    const bondedTo = (a: number) => s.bonds.flatMap((b) => (b.a1 === a ? [b.a2] : b.a2 === a ? [b.a1] : []));
+    // the methylenedioxy's O: those on a carbon between two O
+    const dioxy = s.atoms
+      .map((_, i) => i)
+      .filter((i) => s.atoms[i].el === "O" && bondedTo(i).some((c) => bondedTo(c).filter((o) => s.atoms[o].el === "O").length === 2));
+    expect(dioxy).toHaveLength(2);
+    for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
+  });
+
+  it("draws huperzine A with room for its ethylidene, no atom on another", () => {
+    // its one-atom bridge laid flat across a ring's face put the ethylidene's carbon on that ring
+    const s = readSmiles("CC=C1C2CC3=C(C1(CC(=C2)C)N)C=CC(=O)N3");
+    const input: LayoutInput = {
+      atoms: s.atoms.map((a) => ({ el: a.el })),
+      bonds: s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    };
+    const { x, y } = layout2D(input);
+    for (let i = 0; i < x.length; i++) for (let j = i + 1; j < x.length; j++) expect(Math.hypot(x[i] - x[j], y[i] - y[j])).toBeGreaterThan(0.3);
   });
 
   it("fuses rings on a shared side", () => {

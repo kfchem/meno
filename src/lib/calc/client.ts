@@ -45,6 +45,13 @@ const TIMEOUT_MS = 120_000;
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
 
+/**
+ * Hears a worker's questions, by id, as its clients ask them, have them
+ * answered (or let go of them) and give up on them for want of an answer in
+ * time: its queue (lib/plugins/queue), shared by the clients of one worker.
+ */
+export type Watch = { sent(id: number): void; settled(id: number): void; overdue(id: number): void };
+
 /** Ids counted from 1: a worker's, for the clients that share it. */
 export function counter(): () => number {
   let next = 1;
@@ -65,6 +72,8 @@ export class ReaderClient implements Reader {
     private timeoutMs = TIMEOUT_MS,
     /** Where its questions' ids come from: shared with the other clients of the same worker, so that each hears only its own answers. */
     private ids: () => number = counter(),
+    /** The worker's queue, which hears each question asked, answered and given up on. */
+    private watch?: Watch,
   ) {
     let markReady!: (v: string) => void;
     this.ready = new Promise((resolve) => (markReady = resolve));
@@ -87,6 +96,7 @@ export class ReaderClient implements Reader {
     if (!p) return;
     this.pending.delete(m.id!);
     clearTimeout(p.timer);
+    this.watch?.settled(m.id!);
     if (m.ok) p.resolve(m.result);
     else p.reject(new Error(m.error ?? `${this.name} could not read it`));
   }
@@ -139,8 +149,10 @@ export class ReaderClient implements Reader {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${this.name} did not finish ${what} in time`));
+        this.watch?.overdue(id);
       }, this.timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
+      this.watch?.sent(id);
       this.transport.send(JSON.stringify({ id, ...question }));
     });
   }
@@ -148,9 +160,10 @@ export class ReaderClient implements Reader {
   /** Stops listening; whatever is still waiting fails. */
   close(reason = `the ${this.name} reader stopped`): void {
     this.stop();
-    for (const p of this.pending.values()) {
+    for (const [id, p] of this.pending) {
       clearTimeout(p.timer);
       p.reject(new Error(reason));
+      this.watch?.settled(id);
     }
     this.pending.clear();
   }

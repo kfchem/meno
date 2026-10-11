@@ -98,14 +98,15 @@ describe("a measurement in a picture", () => {
     expect(marks).toHaveLength(2);
     const [distance, angle] = marks;
     expect(distance.text).toBe("1.52 Å");
-    expect(distance.label.x).toBeCloseTo(10, 6);
+    // (beside the line's middle, where it would cover a hydrogen's ball)
+    expect(Math.abs(distance.label.x - 10)).toBeLessThan(1);
     expect(distance.fan).toHaveLength(0);
     expect(distance.width).toBeCloseTo(2 * MEASURE_RADIUS * WORLD_PER_ANGSTROM, 9);
     expect(angle.fan.length).toBeGreaterThan(0);
     expect(angle.text).toMatch(/°$/);
     // turned a half turn about y: the molecule's left and right swap, the distance's middle stays
     const turned = measurePictureMarks({ ...water, turn: [0, 1, 0, 0] }, STYLE_3D, 0.75)[0];
-    expect(turned.label.x).toBeCloseTo(10, 6);
+    expect(Math.abs(turned.label.x - 10)).toBeLessThan(1);
     expect(turned.lines[0][0].x).toBeCloseTo(2 * 10 - distance.lines[0][0].x, 6);
   });
 

@@ -14,7 +14,7 @@
  * sits on a bond, the fewest bonds cross, and the bonds come out most
  * nearly one length.
  */
-import { segmentsCross, type Point } from "./geometry";
+import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { isMetal, type Molecule, type RingSystem } from "./perceive";
 
 export type Vec3 = [number, number, number];
@@ -1117,6 +1117,8 @@ export function flatCost(
   sys: RingSystem,
   pos: Map<number, Point>,
   depth?: Map<number, number>,
+  /** And whether the room its bonds out of the system have is counted: in choosing between flat and solid. */
+  room = false,
 ): number {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
@@ -1125,11 +1127,48 @@ export function flatCost(
     const [a, b] = k.split(",").map(Number);
     if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
   }
-  return viewCost(
-    atoms.map((a) => pos.get(a)!),
-    bonds,
-    0.6,
-    0.3,
-    depth && atoms.map((a) => depth.get(a) ?? 0),
-  );
+  const pts = atoms.map((a) => pos.get(a)!);
+  return viewCost(pts, bonds, 0.6, 0.3, depth && atoms.map((a) => depth.get(a) ?? 0)) + (room ? roomFault(mol, sys, pos, pts, bonds) : 0);
+}
+
+/**
+ * Where the system's atoms have bonds out of it, how badly the first of
+ * them would sit where the drawing leaves it room - out of the atom's
+ * rings: on another of the system's atoms, or on one of its bonds. A
+ * one-atom bridge drawn across a ring's face leaves its substituent none
+ * (huperzine A's ethylidene, laid on the ring it crossed).
+ */
+function roomFault(mol: Molecule, sys: RingSystem, pos: Map<number, Point>, pts: readonly Point[], bonds: readonly [number, number][]): number {
+  const inSys = new Set(sys.atoms);
+  const lens = bonds.map(([a, b]) => Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y));
+  const mean = lens.reduce((s, v) => s + v, 0) / Math.max(lens.length, 1);
+  let fault = 0;
+  sys.atoms.forEach((a, i) => {
+    const out = mol.neighbours[a].filter((b) => !inSys.has(b));
+    if (!out.length) return;
+    const at = pts[i];
+    const own = mol.neighbours[a].filter((b) => inSys.has(b)).map((b) => Math.atan2(pos.get(b)!.y - at.y, pos.get(b)!.x - at.x));
+    const centres = mol.ringsOf[a]
+      .filter((r) => sys.rings.includes(r))
+      .map((r) => {
+        const c = centroid(mol.rings[r].map((v) => pos.get(v)!));
+        return Math.atan2(c.y - at.y, c.x - at.x);
+      });
+    const [t] = splitOutside(own, centres, 1);
+    if (t == null) return;
+    const p = { x: at.x + mean * Math.cos(t), y: at.y + mean * Math.sin(t) };
+    if (pts.some((q, j) => j !== i && Math.hypot(q.x - p.x, q.y - p.y) < 0.5 * mean)) fault += 5;
+    else if (
+      bonds.some(([u, v]) => {
+        if (u === i || v === i) return false;
+        const vx = pts[v].x - pts[u].x;
+        const vy = pts[v].y - pts[u].y;
+        const l2 = vx * vx + vy * vy;
+        const k = l2 ? Math.max(0, Math.min(1, ((p.x - pts[u].x) * vx + (p.y - pts[u].y) * vy) / l2)) : 0;
+        return Math.hypot(p.x - (pts[u].x + k * vx), p.y - (pts[u].y + k * vy)) < 0.25 * mean;
+      })
+    )
+      fault += 3;
+  });
+  return fault;
 }

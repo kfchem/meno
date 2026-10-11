@@ -11,7 +11,7 @@
  * file's own indices - which need only be unique - are turned into
  * positions.
  */
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 import type { AtomList, Radical } from "./molecule";
 
 export type { AtomList };
@@ -174,7 +174,7 @@ export type CtReaction = {
 // --- shared ------------------------------------------------------------------
 
 const RADICALS: Record<number, Radical> = { 1: "singlet", 2: "doublet", 3: "triplet" };
-const SYMBOL_OF = new Map<number, string>(elements.map((e) => [e.number, e.symbol]));
+const SYMBOL_OF = new Map<number, string>(ELEMENTS.map((e) => [e.number, e.symbol]));
 
 /**
  * The mass the periodic table gives each element, rounded: what a V2000

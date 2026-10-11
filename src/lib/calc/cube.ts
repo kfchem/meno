@@ -14,7 +14,7 @@
  * where it is; then the values, the last axis running fastest, and where
  * there are several grids - orbitals - all theirs at each point together.
  */
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "../chem/elements";
 import type { ReaderOutput } from "./output";
 import { floatsText, type Grid } from "./results";
 
@@ -43,7 +43,7 @@ type Header = {
 };
 
 /** Each element's symbol, by its atomic number. */
-const SYMBOL = new Map(elements.map((e) => [e.number, e.symbol]));
+const SYMBOL = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
 /** An atom's element by its atomic number - a dummy, as an unknown one. */
 const symbolOf = (z: number) => SYMBOL.get(z) ?? "X";
 

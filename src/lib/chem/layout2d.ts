@@ -12,7 +12,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 import { namesLaid } from "../layout/names";
 
 export { implicitHydrogens };
@@ -207,6 +207,17 @@ export type Poly = { points: Vec2[]; color?: string };
 export type Curve = { points: Vec2[]; width: number; round?: boolean; color?: string };
 /** What is drawn behind the drawing, filled flat, its edge sharp: a ring's fill, a part's highlight. */
 export type Under = { points: Vec2[]; color: string };
+/**
+ * A shape on the page as a picture draws it, under everything of the
+ * drawing (lib/chem/shapes): its fill, its line - whole or in dashes, each
+ * `width` wide in the layout's units, its corners mitred - and an arrow's
+ * heads.
+ */
+export type ShapeMark = {
+  fill?: { points: Vec2[]; color: string };
+  lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
+  heads: { points: Vec2[]; color: string }[];
+};
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
 /** A corner within one stroke - a wavy bond's - and the ways its two pieces leave it. */
@@ -545,6 +556,8 @@ export function shadeOf(hex: string, t: number): string {
 }
 
 export type Layout = {
+  /** Shapes on the page, under all of it, from the back. */
+  shapes?: ShapeMark[];
   /** What is drawn behind all of it, from the back: the rings' fills, then the parts' highlights. */
   under?: Under[];
   lines: LineSeg[];
@@ -2046,7 +2059,7 @@ export function showsLabel(
   );
 }
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /**
  * How an atom that is not an element is labelled, or nothing for one that
@@ -4388,7 +4401,16 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   let s = "";
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
-  // behind it all: the rings' fills and the parts' highlights
+  // under it all: the shapes on the page, each filled, its line over its fill, an arrow's heads over its line
+  for (const m of layout.shapes ?? []) {
+    if (m.fill) s += `<path d="${toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    for (const l of m.lines) {
+      const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
+      s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+    }
+    for (const h of m.heads) s += `<path d="${toSvgPath(h)}" fill="${svgColor(h.color)}" stroke="none" />`;
+  }
+  // behind the drawing: the rings' fills and the parts' highlights
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
   }

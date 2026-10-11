@@ -14,7 +14,7 @@
  */
 
 /** The pointers Meno draws, by what a drag under them does: a corner's, down to the right (and up to the left), or up to the right. */
-export type CursorName = "turn" | "turning" | "move" | "sideways" | "corner-down" | "corner-up";
+export type CursorName = "turn" | "turning" | "move" | "sideways" | "updown" | "corner-down" | "corner-up";
 
 const INK = "#1f2328";
 const ACCENT = "#317689";
@@ -62,6 +62,12 @@ export const CURSORS: Record<CursorName, Cursor> = {
     fills: [head(5.6, 12, -1, 0), head(18.4, 12, 1, 0)].join(" "),
     ink: INK,
     fallback: "ew-resize",
+  },
+  updown: {
+    lines: "M12,6.5 L12,17.5",
+    fills: [head(12, 5.6, 0, -1), head(12, 18.4, 0, 1)].join(" "),
+    ink: INK,
+    fallback: "ns-resize",
   },
   "corner-down": {
     lines: "M8.1,8.1 L15.9,15.9",

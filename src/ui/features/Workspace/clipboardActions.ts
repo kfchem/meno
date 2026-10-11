@@ -58,9 +58,12 @@ export function useClipboardActions(
     // (and the PDFs and texts' sheets selected: carried whole, by what they are)
     const pdfs = only != null ? [] : state.pdfs.filter((p) => state.selPdfs.has(p.id));
     const sheets = only != null ? [] : state.texts.filter((t) => t.at && state.selTexts.has(t.id));
-    // (and the slides selected, in the talk's order)
+    // (and the slides selected, in the talk's order; and the shapes selected, from the back, with the words in them)
     const slides = only != null ? [] : state.slides.filter((s) => state.selSlides.has(s.id));
-    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length > 0;
+    const shapes = only != null ? [] : state.shapes.filter((s) => state.selShapes.has(s.id));
+    const inShapes = state.captions.filter((c) => c.shape != null && shapes.some((s) => s.id === c.shape) && !words.some((w) => w.id === c.id));
+    words.push(...inShapes);
+    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length > 0;
     // (a set selected takes what it holds along, selected or not - as it does when dragged)
     const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
     const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
@@ -89,6 +92,7 @@ export function useClipboardActions(
         ...(pdfs.length ? { pdfs } : {}),
         ...(sheets.length ? { sheets } : {}),
         ...(slides.length ? { slides } : {}),
+        ...(shapes.length ? { shapes } : {}),
       },
       ids3d: molecules3d.filter((m) => ids3d.includes(m.id)).map((m) => m.id),
     };
@@ -151,7 +155,7 @@ export function useClipboardActions(
           return;
         }
         const found = await structureOnClipboard();
-        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length)) {
+        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length)) {
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;

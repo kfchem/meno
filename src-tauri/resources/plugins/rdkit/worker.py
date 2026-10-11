@@ -470,11 +470,10 @@ def op_drawing_of(m):
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("not a MOL block RDKit can read")
-    # (whether its bonds' orders were found: they cannot be where it has no
-    # hydrogens - DetermineBondOrders counts each atom's electrons from what
-    # is bonded to it, hydrogens and all)
+    # (whether its bonds' orders were found: DetermineBondOrders works from
+    # each atom's electrons as what is bonded to it gives them, hydrogens
+    # and all, so they are sought only where the molecule has its hydrogens)
     perceived = False
-    # (and none are sought without them: found anyway, they may be wrong)
     if m.get("perceive") and any(a.GetAtomicNum() == 1 for a in mol.GetAtoms()):
         from rdkit.Chem import rdDetermineBonds
 

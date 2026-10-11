@@ -934,13 +934,14 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** Tried with RDKit 2026.03: a ligand
-  without its hydrogens (biotin, from entry 1STP) has no orders found, and
-  with them its orders are exact; benzoic acid without them has orders
-  found that are wrong. So a molecule, or a ligand, without hydrogens is
-  not sought at all, and says its orders are unknown; nor is one of more
-  than 400 atoms. Such a molecule's orders can be estimated from its
-  distances, asked for (below).
+- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
+  a molecule's full set of atoms, hydrogens included (tried with RDKit
+  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
+  orders; without them, it finds none, and given benzoic acid without
+  them, it does not find benzoic acid's. So Meno does not seek the orders
+  of a molecule, or a ligand, without hydrogens, and says they are
+  unknown; nor of one of more than 400 atoms. Such a molecule's orders
+  can be estimated from its distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without
@@ -948,7 +949,7 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   (`lib/chem/ordersFromGeometry.ts`). It weighs three things. A bond's
   length is read as an order between one and three against the sums of
   its atoms' single-, double- and triple-bond covalent radii
-  (`lib/chem/covalentRadii.ts`: Pyykkö's, as collected in J. Phys. Chem.
+  (`lib/chem/elements.ts`: Pyykkö's, as collected in J. Phys. Chem.
   A 2015, 119, 2326, from Pyykkö and Atsumi, Chem. Eur. J. 2009, 15, 186
   and 12770, and Pyykkö, Riedel and Patzschke, Chem. Eur. J. 2005, 11,
   3511). An atom's shape says how many double bonds it can have: a carbon
