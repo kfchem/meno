@@ -99,7 +99,13 @@ they hang from.
   and regular as though the bridge were not there, and the bridge is a
   path of bonds across the face of a ring, in front of it or behind it as
   the molecule has it, the bond behind broken where they cross -
-  artemisinin's peroxide inside its seven-membered ring. A bridge as long
+  artemisinin's peroxide inside its seven-membered ring. Which side is the
+  one that shows its stereocentres as given, where the bridge's bonds into
+  the flat rings show them: a solid found from how far apart the bonds put
+  the atoms can have a ring fusion the wrong way, and morphine's 5-epimer
+  had its bridge behind the ring while the wedge it starts with stood in
+  front. The centres on the bridge itself show theirs by their wedges: in
+  front or behind is a layer, not a place in space. A bridge as long
   as the path it spans is that path set off by a bond, the ring the two
   make the chair or boat it is (a morphinan's piperidine under its B
   ring).

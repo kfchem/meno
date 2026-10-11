@@ -262,7 +262,11 @@ describe("cleanUp", () => {
     expect(drawn.bonds.filter((b) => cus.has(b.a) && cus.has(b.b) && b.display === "dashed")).toHaveLength(12);
     await cleanUp(store);
     expect(store.getState().model.atoms.filter((a) => a.el === "PPh3")).toHaveLength(6);
-  }, 20000);
+    // (the first Clean-up lays the reagent out drawn out in full - 126 atoms,
+    // eighteen phenyl rings round six coppers - scoring some 2,400 drawings
+    // of it on the way: 3 to 4 s on a quiet machine, and many times that on
+    // one busy with other work, 37 s seen)
+  }, 90_000);
 
   it("writes a protecting group by name, in the same step, and leaves one just drawn out drawn", async () => {
     // tert-butyldimethylsilyl ethyl ether, drawn atom by atom
