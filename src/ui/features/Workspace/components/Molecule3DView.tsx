@@ -1000,7 +1000,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
 
   // its hollows shaded and its shadow cast, as it stands now (after the frame
   // above has placed its atoms)
-  useShading3d({ turned, atoms, bonds, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
+  useShading3d({ turned, atoms, bonds, ribbon, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
 
   /** The atoms' and bonds' finish, `f` of the way from the primary look's to the secondary's. */
   const finish = (f: number) => {
