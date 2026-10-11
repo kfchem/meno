@@ -94,9 +94,12 @@ export function PanZoom2D() {
     const onDown = (e: PointerEvent) => {
       // (a talk given has the view: presenting/Presenter)
       if (viewDriven(camera)) return;
-      // (the user takes the view: a fit on its way gives way, and a pinch's glide)
+      // (the user takes the view: a fit on its way gives way, and a pinch's
+      // glide, and a drag's - whatever the press is on: an atom or a
+      // molecule pressed stays under the pointer)
       letViewGoalGo(camera);
       zoomGlide.current = 0;
+      vel.current.set(0, 0);
       // disable pan during bond extension or on a double-click down
       if (extendRef.current) return;
       const btn = (e as any).button;
