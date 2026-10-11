@@ -117,8 +117,8 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
   });
   it("offers what completes a file's molecule - its bond orders, its hydrogens - together, under a line", () => {
     const t = target({ kind: "molecule3d", id: 1 });
-    const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onAddHydrogens: none }) });
-    expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Add hydrogens"]);
+    const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onEstimateOrders: none, onAddHydrogens: none }) });
+    expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens"]);
     // (one line, above the first of them)
     expect(html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
     expect(html).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
