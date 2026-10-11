@@ -189,8 +189,7 @@ def narrow_end(dark, pa, pb):
     n = np.array([-u[1], u[0]])
     reach = np.arange(0.0, 0.15 * length, 0.5)
 
-    def width(t):
-        c = a + (b - a) * t
+    def across(c):
         out = 0.0
         for side in (1, -1):
             pts = c[None, :] + side * reach[:, None] * n[None, :]
@@ -202,8 +201,12 @@ def narrow_end(dark, pa, pb):
             out += reach[on].max() if on.any() else 0.0
         return out
 
-    near_a = np.mean([width(t) for t in np.linspace(0.3, 0.45, 4)])
-    near_b = np.mean([width(t) for t in np.linspace(0.55, 0.7, 4)])
+    def width(t):
+        # (the widest within a short stretch of the bond: a hash's strokes have gaps between them)
+        return max(across(a + (b - a) * (t + s)) for s in np.linspace(-0.04, 0.04, 9))
+
+    near_a = np.mean([width(t) for t in np.linspace(0.27, 0.43, 5)])
+    near_b = np.mean([width(t) for t in np.linspace(0.57, 0.73, 5)])
     if max(near_a, near_b) < 1.5 or abs(near_a - near_b) < 0.25 * max(near_a, near_b):
         return None
     return "a" if near_a < near_b else "b"
