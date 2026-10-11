@@ -145,8 +145,8 @@ h1 b { font-weight: 600; }
 .chapter .n { font: 500 13px/1 var(--font-mono); color: var(--teal); letter-spacing: 0.08em; text-transform: uppercase; }
 .chapter h2 { margin: 14px 0 12px; font-weight: 500; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.08; letter-spacing: -0.025em; text-wrap: balance; }
 .chapter p { margin: 0; color: var(--muted); max-width: 40ch; }
-.chapter .datum { margin-top: 18px; display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font: 400 13px/1.2 var(--font-mono); color: var(--ink); background: var(--sheet); }
-.chapter .datum span { color: var(--muted); }
+.chapter .datum { margin-top: 18px; display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font: 400 13px/1.2 var(--font-mono); color: var(--ink); background: var(--sheet); }
+.chapter .datum span { margin-left: 2px; color: var(--muted); white-space: nowrap; }
 .chapter .datum sub { font-size: 0.75em; line-height: 0; }
 
 .rail { position: absolute; left: 0; right: 0; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
