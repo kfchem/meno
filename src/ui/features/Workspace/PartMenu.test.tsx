@@ -148,3 +148,9 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     expect(menu(t).listed).toEqual([]);
   });
 });
+
+describe("the menu of writing by hand", () => {
+  it("offers its colour and Delete, as icons", () => {
+    expect(menu(target({ kind: "ink", id: 1 }), { onColour: none }).icons).toEqual(["Colour…", "Delete writing"]);
+  });
+});

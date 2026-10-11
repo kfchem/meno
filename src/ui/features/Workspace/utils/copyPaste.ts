@@ -16,7 +16,8 @@ import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
 import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
+import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -114,7 +115,7 @@ export function clipItems(part: Drawn): ClipItem[] {
   if (!part.atoms.length) {
     const ms = part.molecules3d ?? [];
     // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
-    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
+    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
@@ -158,6 +159,7 @@ export function recordText(part: Drawn): string {
     ...(part.pictures?.length ? { pictures: part.pictures } : {}),
     ...(part.slides?.length ? { slides: part.slides } : {}),
     ...(part.shapes?.length ? { shapes: part.shapes } : {}),
+    ...(part.inks?.length ? { inks: part.inks } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
     ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
     ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
@@ -214,6 +216,7 @@ export function readDrawn(data: unknown): Drawn | null {
     pictures?: unknown;
     slides?: unknown;
     shapes?: unknown;
+    inks?: unknown;
   };
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
@@ -342,6 +345,30 @@ export function readDrawn(data: unknown): Drawn | null {
     ...(pictures.length ? { pictures } : {}),
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
+    ...(() => {
+      const inks = (Array.isArray(r.inks) ? r.inks : []).flatMap((k): Ink[] => {
+        const read = readInk(k);
+        return read ? [read] : [];
+      });
+      return inks.length ? { inks } : {};
+    })(),
+  };
+}
+
+/** A piece of writing as a copy or a workspace carries it, where it reads: its pen, width and colour, and the strokes whose points read - three numbers to a point. */
+function readInk(raw: unknown): Ink | null {
+  const k = raw as Partial<Record<keyof Ink, unknown>> | null;
+  if (!k || !isNum(k.id) || (k.pen !== "pen" && k.pen !== "marker") || !Array.isArray(k.strokes)) return null;
+  const strokes = (k.strokes as { points?: unknown; pressure?: unknown }[]).flatMap((s) =>
+    s && Array.isArray(s.points) && s.points.length >= 3 && s.points.length % 3 === 0 && s.points.every(isNum) ? [{ points: s.points as number[], ...(s.pressure === true ? { pressure: true as const } : {}) }] : [],
+  );
+  if (!strokes.length) return null;
+  return {
+    id: k.id,
+    pen: k.pen,
+    width: k.width === 0 || k.width === 2 ? k.width : 1,
+    ...(typeof k.color === "string" && COLOUR.test(k.color) ? { color: k.color.toLowerCase() } : {}),
+    strokes,
   };
 }
 
@@ -546,7 +573,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
       { x: p.x - p.w / 2, y: p.y - p.h / 2 },
       { x: p.x + p.w / 2, y: p.y + p.h / 2 },
     ]),
-    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? [])].flatMap((b) => [
+    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? []), ...(drawn.inks ?? []).flatMap((k) => strokesBounds(k.strokes, 0) ?? [])].flatMap((b) => [
       { x: b.x0, y: b.y0 },
       { x: b.x1, y: b.y1 },
     ]),
@@ -567,6 +594,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.pictures ? { pictures: drawn.pictures.map(moved) } : {}),
     ...(drawn.slides ? { slides: drawn.slides.map(moved) } : {}),
     ...(drawn.shapes ? { shapes: drawn.shapes.map((x) => shapeMoved(x, { x: dx, y: dy })) } : {}),
+    ...(drawn.inks ? { inks: drawn.inks.map((k) => ({ ...k, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })) } : {}),
     ...(drawn.pdfs ? { pdfs: drawn.pdfs.map(moved) } : {}),
     ...(drawn.sheets ? { sheets: drawn.sheets.map((t) => (t.at ? { ...t, at: moved(t.at) } : t)) } : {}),
     ...(drawn.flow

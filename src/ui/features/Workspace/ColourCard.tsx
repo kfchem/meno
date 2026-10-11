@@ -8,7 +8,7 @@ import { stylesOf } from "../../../lib/chem/captions";
 import { isBox, tintOf } from "../../../lib/chem/shapes";
 
 /** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, the electron-pushing arrows and words on the page it colours, and the shapes whose line it colours and which it fills. */
-export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; captions?: number[]; shapes?: number[] };
+export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; captions?: number[]; shapes?: number[]; inks?: number[] };
 
 type Row = "color" | "highlight" | "ring" | "line" | "fill" | "tint";
 const ROW_NAME: Record<Row, string> = { color: "Colour", highlight: "Highlight", ring: "Fill ring", line: "Line", fill: "Fill", tint: "Light fill" };
@@ -72,8 +72,11 @@ export default function ColourCard({
   const shapeIds = target.shapes ?? [];
   const shapes = useEditor((s) => s.shapes).filter((x) => shapeIds.includes(x.id));
   const boxes = shapes.filter((x) => isBox(x.kind));
+  // (writing by hand: its colour)
+  const inkIds = target.inks ?? [];
+  const inks = useEditor((s) => s.inks).filter((k) => inkIds.includes(k.id));
   const rows: Row[] = [
-    ...(parts ? (["color", "highlight"] as const) : arrows.length || words.length ? (["color"] as const) : []),
+    ...(parts ? (["color", "highlight"] as const) : arrows.length || words.length || inks.length ? (["color"] as const) : []),
     ...(target.rings.length ? (["ring"] as const) : []),
     ...(shapes.length ? (["line"] as const) : []),
     ...(boxes.length ? (["fill", "tint"] as const) : []),
@@ -95,7 +98,8 @@ export default function ColourCard({
             ...(row === "color" ? pushes.filter((p) => arrows.includes(p.id)) : []),
           ]
             .map((p) => (p as { color?: string; highlight?: string })[row] ?? null)
-            .concat(row === "color" ? captions.filter((c) => words.includes(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks).map((st) => st?.color ?? null)) : []);
+            .concat(row === "color" ? captions.filter((c) => words.includes(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks).map((st) => st?.color ?? null)) : [])
+            .concat(row === "color" ? inks.map((k) => k.color ?? null) : []);
     return had.every((c) => c === had[0]) ? had[0] : undefined;
   };
   // (a colour chosen in the system's chooser is given as it changes there, all of it one step)
@@ -108,6 +112,7 @@ export default function ColourCard({
     else {
       if (parts || arrows.length) s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
       if (words.length && row === "color") s.colourWords(words, color, gesture);
+      if (inks.length && row === "color") s.colourInks(inks.map((k) => k.id), color, gesture);
     }
   };
   const width = 92 + (palette.length + 2) * (SWATCH + 4) + 12;

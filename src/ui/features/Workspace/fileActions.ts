@@ -5,6 +5,7 @@ import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { fillOutline, headsOf, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { inkColour, inkWidth, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -300,6 +301,26 @@ export function drawingLayout(
       boxes.flatMap((b) => [b.y0, b.y1]),
     );
   }
+  // and writing by hand, as the canvas draws it: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*)
+  const inks = model.inks ?? [];
+  if (inks.length) {
+    const pointPx = opts.pointPx ?? 0;
+    const ink = opts.bondColor ?? "#000000";
+    layout.inks = inks.flatMap((k) =>
+      k.strokes.map((s) => ({
+        points: strokeOutline(s, inkWidth(k, pointPx), k.pen !== "marker"),
+        color: inkColour(k, ink),
+        ...(k.pen === "marker" ? { opacity: MARKER_OPACITY } : {}),
+        over: k.pen !== "marker",
+      })),
+    );
+    const boxes = inks.flatMap((k) => strokesBounds(k.strokes, inkWidth(k, pointPx) / 2) ?? []);
+    if (boxes.length)
+      take(
+        boxes.flatMap((b) => [b.x0, b.x1]),
+        boxes.flatMap((b) => [b.y0, b.y1]),
+      );
+  }
   // and the words on the page, set as the canvas sets them
   const words = (model.captions ?? []).flatMap((c) => wordsSet(c, opts, set).items);
   if (words.length) {
@@ -490,7 +511,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
 }
 
 /** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes">>): Drawn {
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks">>): Drawn {
   return {
     ...state.model,
     ...(state.pushes?.length ? { pushes: state.pushes } : {}),
@@ -499,5 +520,6 @@ export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" |
     pluses: state.pluses,
     captions: state.captions,
     ...(state.shapes?.length ? { shapes: state.shapes } : {}),
+    ...(state.inks?.length ? { inks: state.inks } : {}),
   };
 }

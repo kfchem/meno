@@ -167,6 +167,9 @@ import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import Shapes2D from "./components/Shapes2D";
+import Inks2D from "./components/Inks2D";
+import InkWriting from "./components/InkWriting";
+import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
 import { SHAPE_PAD } from "./document";
@@ -723,6 +726,10 @@ function WorkspaceContent({
         // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
         e.preventDefault();
         st.removeSlide(st.hoveredSlide);
+      } else if (isDeleteKey(e) && !busy && st.hoveredInk != null && st.inks.some((k) => k.id === st.hoveredInk)) {
+        // writing by hand under the pointer, likewise (docs/PRESENTING.md, *Handwriting*)
+        e.preventDefault();
+        st.removeInk(st.hoveredInk);
       } else if (isDeleteKey(e) && !busy && st.hoveredShape != null && st.shapes.some((x) => x.id === st.hoveredShape)) {
         // a shape under the pointer, likewise (docs/PRESENTING.md, *Shapes*)
         e.preventDefault();
@@ -778,6 +785,9 @@ function WorkspaceContent({
   }, [talking]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
+  // the pen's card, while writing with a mouse or a trackpad (docs/PRESENTING.md, *Handwriting*)
+  const inkMode = useEditor((s) => s.inkMode);
+  const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
@@ -1007,6 +1017,18 @@ function WorkspaceContent({
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise writing by hand, unless it is selected with more (docs/PRESENTING.md, *Handwriting*)
+    const { hoveredInk, inks, selInks } = store.getState();
+    const inkWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selInks: new Set() }).any || selInks.size > 1;
+    })();
+    if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk) && !(selInks.has(hoveredInk) && inkWithMore)) {
+      const target: MenuTarget = { kind: "ink", id: hoveredInk, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1406,6 +1428,8 @@ function WorkspaceContent({
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
+              // (the pen's card: writing with the mouse or the trackpad, until Done)
+              else if (what === "pen") st.setInkMode({ tool: "pen", color: null, width: 1 });
               else if (what === "slide") {
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
@@ -1441,6 +1465,7 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
         {sizeCard && (
           <SizeCard
@@ -1473,6 +1498,7 @@ function WorkspaceContent({
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
             else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
+            else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
@@ -1756,13 +1782,15 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selInks.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], inks: [...st.selInks] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
                 : menu.kind === "shape" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], shapes: [menu.id] }
+                : menu.kind === "ink" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], inks: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
@@ -1831,6 +1859,9 @@ function WorkspaceContent({
           <Pictures2D />
           {/* Shapes, over the pictures and under the drawing (docs/PRESENTING.md, *Shapes*) */}
           <Shapes2D />
+          {/* Writing by hand: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*) */}
+          <Inks2D />
+          <InkWriting />
           {/* Rings filled and parts highlighted with a colour, behind the drawing */}
           <Fills2D />
           {/* where renders under way will put what they make (docs/RENDER.md) */}

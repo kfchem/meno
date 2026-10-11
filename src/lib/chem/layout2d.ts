@@ -213,6 +213,8 @@ export type Under = { points: Vec2[]; color: string };
  * `width` wide in the layout's units, its corners mitred - and an arrow's
  * heads.
  */
+/** Writing by hand as a picture draws it: each stroke's outline, filled in its colour - a marker's see-through (`opacity`) and under the drawing, a pen's over everything (`over`). */
+export type InkMark = { points: Vec2[]; color: string; opacity?: number; over: boolean };
 export type ShapeMark = {
   fill?: { points: Vec2[]; color: string };
   lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
@@ -558,6 +560,8 @@ export function shadeOf(hex: string, t: number): string {
 export type Layout = {
   /** Shapes on the page, under all of it, from the back. */
   shapes?: ShapeMark[];
+  /** Writing by hand: a marker's over the shapes and under the drawing, a pen's over everything. */
+  inks?: InkMark[];
   /** What is drawn behind all of it, from the back: the rings' fills, then the parts' highlights. */
   under?: Under[];
   lines: LineSeg[];
@@ -4410,6 +4414,8 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     }
     for (const h of m.heads) s += `<path d="${toSvgPath(h)}" fill="${svgColor(h.color)}" stroke="none" />`;
   }
+  // a marker's writing, over the shapes and under the drawing
+  for (const k of layout.inks ?? []) if (!k.over) s += svgInk(k);
   // behind the drawing: the rings' fills and the parts' highlights
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
@@ -4457,11 +4463,18 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   // (with the molecules an image, their measurements' lines and fans are in
   // it, in depth among the atoms: only the values are written over it)
   for (const m of layout.measures ?? []) s += svgMeasure(m, set.fontFamily, !img);
+  // a pen's writing, over everything
+  for (const k of layout.inks ?? []) if (k.over) s += svgInk(k);
   s += `</svg>`;
   return s;
 }
 
 /** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
+/** A stroke written by hand, as SVG: its outline, filled - see-through where it is a marker's. */
+function svgInk(k: InkMark): string {
+  return `<path d="${toSvgPath(k)}" fill="${svgColor(k.color)}"${k.opacity != null && k.opacity < 1 ? ` fill-opacity="${k.opacity}"` : ""} stroke="none" />`;
+}
+
 function svgColor(css: string | undefined, otherwise = "black"): string {
   return css && /^#[0-9a-f]{6}$/i.test(css) ? css : otherwise;
 }

@@ -124,6 +124,15 @@ class Writer {
 }
 
 /** A COLORREF (0x00BBGGRR) as EMF+'s opaque ARGB (0xAARRGGBB). */
+/** `hex` as it shows `share` of the way from white to it. */
+function towardWhite(hex: string, share: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const ch = (k: number) => Math.round(255 - (255 - ((n >> k) & 0xff)) * share);
+  return `#${[16, 8, 0].map((k) => ch(k).toString(16).padStart(2, "0")).join("")}`;
+}
+
 const argb = (c: number) => (0xff000000 | ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)) >>> 0;
 
 /** A CSS colour as a COLORREF (0x00BBGGRR); black if it is not one this reads. */
@@ -384,6 +393,35 @@ export function layoutEmf(
       for (const h of m.heads) fillPolygon(points(h.points), colorRef(h.color));
     }
   }
+  // writing by hand, filled: a marker's see-through for EMF+ - GDI, which
+  // has no way to fill faintly, as far toward white as it shows - a pen's solid
+  const inkFills = (over: boolean) => {
+    const list = (layout.inks ?? []).filter((k) => k.over === over && k.points.length >= 3);
+    if (!list.length) return;
+    select(NULL_PEN);
+    const own = new Map<number, number>();
+    for (const k of list) {
+      const color = colorRef(k.color);
+      const a = Math.max(0, Math.min(1, k.opacity ?? 1));
+      const pts = points(k.points);
+      w.plus(PLUS.FILL_POLYGON, SOLID, 8 + 8 * pts.length, (v) => {
+        v.setUint32(0, ((Math.round(a * 255) << 24) | (argb(color) & 0xffffff)) >>> 0, true);
+        v.setUint32(4, pts.length, true);
+        plusPoints(v, 8, pts);
+      });
+      const shown = a < 1 ? colorRef(towardWhite(k.color, a)) : color;
+      let h = own.get(shown);
+      if (h == null) {
+        h = brush(shown);
+        own.set(shown, h);
+      }
+      select(h);
+      poly(EMR.POLYGON, pts);
+    }
+    select(NULL_BRUSH);
+    for (const h of own.values()) remove(h);
+  };
+  inkFills(false);
   const fills = (layout.under ?? []).length + (layout.fills ?? []).length + layout.polys.length;
   if (fills) {
     select(NULL_PEN);
@@ -758,6 +796,8 @@ export function layoutEmf(
     for (const h of fonts.values()) remove(h);
   }
 
+  // a pen's writing, over everything
+  inkFills(true);
   w.plus(PLUS.END_OF_FILE, 0, 0, () => {});
   w.add(EMR.EOF, 12, (v) => {
     v.setUint32(0, 0, true);

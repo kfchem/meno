@@ -3,6 +3,7 @@ import { setMembers } from "../workflow/entries";
 import { schemeAmong } from "./copyPaste";
 import { guideMove, type Held } from "./guiding";
 import { shapePlace } from "../document";
+import { strokeMoved } from "../../../../lib/chem/ink";
 
 type Pt = { x: number; y: number };
 
@@ -45,6 +46,7 @@ export function dragSelection(
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   const shapes = st.shapes.filter((s) => st.selShapes.has(s.id));
+  const inks = st.inks.filter((k) => st.selInks.has(k.id));
   const p0 = toWorld(from.x, from.y);
   // (lined up with what is near as it goes: docs/PRESENTING.md, *Guides*)
   const guide = guideMove(store, toWorld, from);
@@ -71,6 +73,7 @@ export function dragSelection(
       pdfs: pdfs.map(by),
       slides: slides.map(by),
       shapes: shapes.map((s) => shapePlace(s, { x: dx, y: dy })),
+      inks: inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })),
     });
   };
   const onMove = (ev: PointerEvent) => {

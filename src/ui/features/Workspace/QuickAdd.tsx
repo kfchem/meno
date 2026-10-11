@@ -9,7 +9,7 @@ import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
@@ -42,8 +42,9 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
  * The row's icons, in order: what draws a structure - a bond, a chain, a
  * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
  * - and an electron-pushing arrow, begun at the first atom or bond pressed;
- * then a slide of what is seen (docs/PRESENTING.md), and the shapes, which
- * open a row of their own below it.
+ * then a slide of what is seen (docs/PRESENTING.md), the pen - its card
+ * opened, to write by hand - and the shapes, which open a row of their own
+ * below it.
  */
 const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; icon: ReactNode }[] = [
   {
@@ -108,6 +109,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
         <circle cx="3.5" cy="5.5" r="2.4" fill="currentColor" />
       </>
     ),
+  },
+  {
+    id: "pen",
+    name: "Pen",
+    // (a pen, writing)
+    icon: <path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M11.5 5.5 L14.5 8.5" />,
   },
   {
     id: "shapes",

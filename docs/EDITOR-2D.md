@@ -175,6 +175,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture; Delete | show in the PDF |
 | A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, head at both ends (an arrow), bring to front, send to back |
+| Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run (or stop), run from here, options; Delete | show log, show files, save as procedure |
 | A set, an arrow, a "+", a wire, a measurement | Delete | save as procedure (a set), arrow style (an arrow) |
@@ -229,7 +230,9 @@ icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
 SMILES, text, a reaction arrow, a "+", an electron-pushing arrow (from
 the first atom or bond pressed, *Electron-pushing arrows* below), a
-slide of what is seen (docs/PRESENTING.md) and *Shapes*, which opens a
+slide of what is seen (docs/PRESENTING.md), *Pen* - its card opened, to
+write by hand with the mouse or the trackpad (docs/PRESENTING.md,
+*Handwriting*; a pen writes anywhere, always) - and *Shapes*, which opens a
 row below it of a rectangle, a rounded one, an ellipse, a line, an arrow
 and a callout - each drawn from where the double-click was by a drag from
 its icon, or traced with the button up until a click (docs/PRESENTING.md,

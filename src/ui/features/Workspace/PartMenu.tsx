@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -516,6 +516,8 @@ export default function PartMenu({
           { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
           { name: "Send to back", keys: "", run: shape.onBack },
         ]
+      : target.kind === "ink"
+      ? [...colour, del("Delete writing")]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -658,6 +660,8 @@ export default function PartMenu({
                       ? "Slide"
                     : target.kind === "shape"
                       ? "Shape"
+                    : target.kind === "ink"
+                      ? "Writing"
                       : "Canvas"
       }
       tabIndex={-1}

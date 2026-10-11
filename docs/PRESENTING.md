@@ -309,7 +309,44 @@ Shift+Enter, since Enter keeps the words, as it did before.
 - `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
   pixel on the screen at any zoom, coming and going in a short ease.
 
-Not yet, and where it comes: everything under *Handwriting* (its own pull
-request); shapes' handles taking another's size; a slide's notes, with the
-presenter's view. Words in a shape do not make it taller: words longer
+### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
+
+- `lib/chem/ink.ts`, the same for the canvas, SVG and EMF: a stroke's
+  outline - as thick as the pen was pressed (from 0.35 to 1.65 of its
+  width) where the system said, else even with its ends tapered over two
+  and a half widths; a marker's flat - its triangles for the canvas, where
+  a press takes it, how far it reaches; the 1€ filter (Casiez, Roussel and
+  Vogel, 2012) that smooths what the pointer gives as it comes; and points
+  nearer than 0.6 pixels to the one before dropped as it is kept. The pen
+  writes 0.75, 1.5 or 3 points wide, the marker 6, 10 or 16, see-through
+  (0.38) and yellow (#f0e442) unless given a colour.
+- `store/types.ts` `Ink` (a piece: its pen, width, colour and strokes,
+  each its points - x, y and the pressure - and whether the pressure was
+  the pen's own) and `InkMode` (the card); `document.ts` `addInkStroke`
+  (a stroke on the piece before it, where it is in the same pen),
+  `addInk`, `removeInkStrokes`, `colourInks`, `removeInks` and
+  `MarkPlaces.inks`; `store/slices/inksSlice.ts`; `selInks`, `hoveredInk`,
+  `inkMode` and `inkDraft` beside the other kinds'; the clipboard's
+  record, a cut, a paste and the workspace's file (`inks`).
+- `components/InkWriting.tsx`: a press on the canvas by a pen - or by the
+  mouse's button while the card is open - is the writing's alone; a pen's
+  eraser end or its button, or the card's eraser, rubs out the strokes it
+  passes over, one step for a rub. A stroke joins the piece before it when
+  it comes within 1.5 seconds, in the same pen, and its box within six
+  widths and an em of that piece's. `components/Inks2D.tsx`: the pieces -
+  a pen's at 0.3, over the drawing, a marker's at -0.12, under it - the
+  stroke being written, the light round a piece, and a press, a hold and a
+  click on one, as on a picture.
+- `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
+  eraser, the colours of the set in use and the pen's own, three widths,
+  Done (or Escape). Quick Add's *Pen* opens it; the pointer is a cross
+  while it is open. Writing's menu: *Colour…* and *Delete writing*.
+- Pictures (`Layout.inks`): a marker's under the drawing, see-through in
+  SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
+  everything.
+
+Not yet, and where it comes: writing on a PDF's page, kept with that page,
+and in the column; a pen's writing over a slide while a talk is given (the
+second half of *Handwriting*, its own pull request); a slide's notes, with
+the presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.
