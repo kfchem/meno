@@ -258,6 +258,15 @@ fn tar() -> String {
     }
 }
 
+/// Where an archive is unpacked first: beside the folder it goes to, its
+/// name with `.part` after it - the whole name, dots and all, never cut at
+/// its last dot as a file's extension would be ("blender-5.2.2-macos-arm64").
+fn staging(folder: &Path) -> PathBuf {
+    let mut name = folder.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    folder.with_file_name(name)
+}
+
 /// An archive fetched (`archive`, its hash checked) unpacked as its download
 /// says, into the folder it goes to: first beside it - then put in place
 /// whole, and stamped. The program in it, where it is there; why not.
@@ -265,7 +274,7 @@ pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, Strin
     let how = d.unpack.ok_or("not an archive")?;
     let program = d.program.as_deref().ok_or("no program said")?;
     let folder = unpacked(dir, d);
-    let part = folder.with_extension("part");
+    let part = staging(&folder);
     let _ = std::fs::remove_dir_all(&part);
     std::fs::create_dir_all(&part).map_err(|e| format!("{}: {e}", part.display()))?;
     let done = match how {
@@ -731,6 +740,14 @@ mod tests {
         run("/usr/bin/codesign", &["--verify".as_ref(), "--deep".as_ref(), "--strict".as_ref(), app.as_os_str()]).unwrap();
         let said = std::process::Command::new(&program).arg("--version").output().unwrap();
         assert!(String::from_utf8_lossy(&said.stdout).starts_with("Blender 5.2.2"));
+    }
+
+    #[test]
+    fn unpacks_first_beside_where_it_goes_its_whole_name_kept() {
+        let dir = Path::new("/data/files");
+        assert_eq!(staging(&dir.join("blender-5.2.2-macos-arm64")), dir.join("blender-5.2.2-macos-arm64.part"));
+        // (two archives of one version, for two processors: never the same place)
+        assert_ne!(staging(&dir.join("blender-5.2.2-windows-x64")), staging(&dir.join("blender-5.2.2-windows-arm64")));
     }
 
     #[test]
