@@ -132,7 +132,10 @@ describe("writing by hand on the page", () => {
     const { doc, state } = editor();
     state().addSlide({ x: 0, y: 0, w: 32, h: 18 });
     state().addSlide({ x: 50, y: 0, w: 32, h: 18 });
+    // (the pen's card, open as the talk begins, is closed)
+    state().setInkMode({ tool: "pen", color: null, width: 1 });
     state().present(0);
+    expect(state().inkMode).toBeNull();
     const depth = doc.history().undoDepth;
     state().writeTalkStroke(PEN, stroke(0));
     state().writeTalkStroke(PEN, stroke(5));
