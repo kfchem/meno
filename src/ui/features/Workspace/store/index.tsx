@@ -110,6 +110,13 @@ const NO_WIRES: Wire[] = [];
  * back (React StrictMode remounts it in dev) subscribes again and catches up
  * on whatever changed meanwhile.
  */
+/** What was under the pointer, kept while it is still in the drawing. */
+function hoverHeld(hovered: EditorState["hovered"], model: EditorState["model"]): EditorState["hovered"] {
+  const atom = hovered.atomId != null && !model.atoms.some((a) => a.id === hovered.atomId);
+  const bond = hovered.bondId != null && !model.bonds.some((b) => b.id === hovered.bondId);
+  return atom || bond ? { atomId: atom ? null : hovered.atomId, bondId: bond ? null : hovered.bondId } : hovered;
+}
+
 export function connectStoreToDocument(
   store: EditorStore,
   doc: DocumentStore<WorkspaceDocument>,
@@ -126,6 +133,10 @@ export function connectStoreToDocument(
         ...heldOf(prev, mirrored.molecules3d),
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
+        // (the atom or bond under the pointer, gone from under it - an undo took it away: the pointer
+        // has not moved, so nothing says so, and a key would act on it - its light left where it was)
+        hovered: hoverHeld(prev.hovered, mirrored.model),
+        hoveredPush: prev.hoveredPush != null && !(mirrored.pushes ?? []).some((p) => p.id === prev.hoveredPush) ? null : prev.hoveredPush,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
