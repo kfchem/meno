@@ -632,6 +632,11 @@ export type EditorState = {
    */
   /** Texts added - each a sheet on the page too, in a row from `onPage`, where it is given - and the last shown in the column. */
   addTexts: (texts: Omit<WorkspaceText, "id">[], onPage?: { x: number; y: number }) => void;
+  /** A new text, empty - its sheet at `onPage` - shown in the column, and given the keys there as it shows (`textToWrite`). */
+  newText: (onPage?: { x: number; y: number }) => void;
+  /** The text just made to be written in: the column gives it the keys as it shows it, and lets go of this. */
+  textToWrite: number | null;
+  wroteText: () => void;
   /** A text as typed: a run of typing in it is one undo step. */
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */

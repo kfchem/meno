@@ -1193,7 +1193,7 @@ function WorkspaceContent({
           { name: "Open…", keys: shortcutLabel("O"), run: askToOpen },
           { name: "Save As…", keys: shortcutLabel("S", true), run: () => void saveAs() },
           // (a text of its own, in the column of texts)
-          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().addTexts([{ name: "", text: "" }], at) }] : []),
+          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().newText(at) }] : []),
         ]
       : []),
     // (a talk given from the slides on the page: docs/PRESENTING.md)

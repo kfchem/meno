@@ -269,6 +269,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         pdfWords: null,
         pdfPicture: null,
         menuAsk: null,
+        textToWrite: null,
         // (and no talk being given: one that failed ends)
         presenting: null,
         guides: null,
