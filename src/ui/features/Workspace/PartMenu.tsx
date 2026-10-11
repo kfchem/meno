@@ -140,6 +140,8 @@ export default function PartMenu({
   onSaveAbbreviation,
   onExport,
   onColour,
+  onRender,
+  picture,
   canvas = [],
   clipboard,
   molecule3d,
@@ -210,6 +212,10 @@ export default function PartMenu({
   onExport?: () => void;
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
+  /** The molecules in 3D right-clicked - or selected - rendered as a picture or a film (docs/RENDER.md); unset, where no plugin added renders. */
+  onRender?: () => void;
+  /** What the picture right-clicked can do besides: saved as a file - a picture, or a film, which plays on the page and can be paused. */
+  picture?: { film: boolean; playing: boolean | null; onPlay: (on: boolean) => void; onSave: () => void };
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -310,6 +316,8 @@ export default function PartMenu({
           ...moleculeRow,
           del("Delete molecule", keys),
           ...moleculeList,
+          // (rendered, by a plugin added that renders)
+          ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
         ]
       : target.kind === "arrow"
       ? [del("Delete arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
@@ -369,6 +377,9 @@ export default function PartMenu({
           ...(onCopyPicture ? [{ name: "Copy picture", keys: "", run: onCopyPicture, icon: MENU_ICONS.picture }] : []),
           del("Delete picture"),
           ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
+          // (saved as a file; a film, played or paused where it lies)
+          ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
+          ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
         ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
@@ -404,6 +415,8 @@ export default function PartMenu({
           ...moleculeList,
           ...(drawing ? [{ name: "Copy as SMILES", keys: "", run: clipboard.onCopySmiles, divider: moleculeList.length > 0 }] : []),
           ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),
+          // (its molecules in 3D rendered, by a plugin added that renders)
+          ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
           ...(drawing
             ? [
                 { name: "Turn over left to right", keys: "", run: () => onTurnOver("vertical"), divider: true },

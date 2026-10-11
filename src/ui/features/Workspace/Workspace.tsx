@@ -109,6 +109,12 @@ import QuickAdd from "./QuickAdd";
 import Captions2D from "./components/Captions2D";
 import Pdfs2D from "./components/Pdfs2D";
 import Pictures2D from "./components/Pictures2D";
+import { filmPlaying, playFilm } from "./components/pictureTextures";
+import RenderCard from "./render/RenderCard";
+import Renders2D from "./render/Renders2D";
+import { renderer, startRender } from "./render/renders";
+import type { Motion } from "./render/renderScene";
+import { savePictureFile } from "./render/savePicture";
 import TextSheets2D from "./components/TextSheets2D";
 import PdfColumn from "./components/PdfColumn";
 import { goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
@@ -969,6 +975,22 @@ function WorkspaceContent({
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
   useDropZone(dropRef, dropZone);
+  // Render: a picture or a film of molecules in 3D, asked in a card over the canvas (docs/RENDER.md)
+  const [rendering, setRendering] = useState<{ ids: number[]; motions: Motion[]; surfaces: boolean } | null>(null);
+  const askRender = (ids: number[]) => {
+    const st = store.getState();
+    const ms = st.molecules3d.filter((m) => ids.includes(m.id));
+    if (!ms.length || !renderer()) return;
+    // (how it can move: turning, always; through its frames, where one has them; in its vibration, where one shows it)
+    const shownRow = (id: number) => {
+      const open = st.lists3d[id];
+      const m = st.molecules3d.find((x) => x.id === id);
+      const list = open ? resultsOn(m?.calc?.results, "list").find((r) => resultKey(r) === open.list) : undefined;
+      return list && open?.row != null ? list.rows[open.row] : undefined;
+    };
+    const motions: Motion[] = ["turn", ...(ms.some((m) => (m.frames?.length ?? 0) > 0) ? (["frames"] as const) : []), ...(ms.some((m) => shownRow(m.id)?.move) ? (["vibration"] as const) : [])];
+    setRendering({ ids: ms.map((m) => m.id), motions, surfaces: ms.some((m) => !!shownRow(m.id)?.surface) });
+  };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
 
@@ -1110,6 +1132,22 @@ function WorkspaceContent({
               void build3d(ask3d.blocks, "one", ask3d.replacing);
             }}
             onCancel={() => setAsk3d(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {rendering && renderer() && (
+          <RenderCard
+            key="render"
+            plugin={renderer()!}
+            motions={rendering.motions}
+            surfaces={rendering.surfaces}
+            onCancel={() => setRendering(null)}
+            onRender={(ask, options) => {
+              const ids = rendering.ids;
+              setRendering(null);
+              startRender(store, ids, ask, options).catch((e: unknown) => setChemError(`Render failed: ${e instanceof Error ? e.message : String(e)}`));
+            }}
           />
         )}
       </AnimatePresence>
@@ -1309,7 +1347,25 @@ function WorkspaceContent({
             const c = store.getState().captions.find((x) => x.id === menu.id);
             if (c) store.getState().setCaptionEdit({ id: c.id, at: { x: c.x, y: c.y } });
           }}
-          onCopyPicture={menu.kind === "picture" && menu.id != null ? () => void clip.copyPicture(menu.id!) : undefined}
+          onCopyPicture={menu.kind === "picture" && menu.id != null && store.getState().pictures.find((x) => x.id === menu.id)?.media !== "video/mp4" ? () => void clip.copyPicture(menu.id!) : undefined}
+          picture={(() => {
+            const p = menu.kind === "picture" ? store.getState().pictures.find((x) => x.id === menu.id) : undefined;
+            if (!p) return undefined;
+            const film = p.media === "video/mp4";
+            return {
+              film,
+              playing: film ? filmPlaying(p.sha256) : null,
+              onPlay: (on: boolean) => playFilm(p.sha256, on),
+              onSave: () => void savePictureFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
+            };
+          })()}
+          onRender={(() => {
+            if (!renderer()) return undefined;
+            if (menu.kind === "molecule3d" && menu.selection !== "here" && menuMolecule) return () => askRender([menuMolecule.id]);
+            if (menu.selection !== "here") return undefined;
+            const ids = [...store.getState().sel3d];
+            return ids.length ? () => askRender(ids) : undefined;
+          })()}
           text={(() => {
             const t = menu.kind === "text" && menu.id != null ? store.getState().texts.find((x) => x.id === menu.id) : undefined;
             if (!t) return undefined;
@@ -1450,6 +1506,8 @@ function WorkspaceContent({
           <Pictures2D />
           {/* Rings filled and parts highlighted with a colour, behind the drawing */}
           <Fills2D />
+          {/* where renders under way will put what they make (docs/RENDER.md) */}
+          <Renders2D />
           {/* Bonds */}
           <Bonds2D />
           <Atoms2D />

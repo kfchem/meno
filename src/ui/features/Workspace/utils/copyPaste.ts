@@ -7,6 +7,7 @@ import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import { fragmentOf, partOf } from "../chem/cleanUp";
@@ -291,7 +292,7 @@ export function readDrawn(data: unknown): Drawn | null {
 function readPicture(v: unknown): PictureItem | null {
   const p = v as Partial<PictureItem> | null;
   if (!p || !isNum(p.id) || typeof p.name !== "string" || typeof p.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(p.sha256)) return null;
-  if (p.media !== "image/png" && p.media !== "image/jpeg") return null;
+  if (!p.media || !PICTURE_MEDIA.includes(p.media as PictureMedia)) return null;
   if (!Array.isArray(p.px) || p.px.length !== 2 || !p.px.every((n) => isNum(n) && n > 0)) return null;
   if (!isNum(p.x) || !isNum(p.y) || !isNum(p.w) || !isNum(p.h) || p.w <= 0 || p.h <= 0) return null;
   const from = pictureFromOf(p.from);

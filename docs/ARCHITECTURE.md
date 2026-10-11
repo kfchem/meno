@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
   utils/atomUtils         element table (radii, colours)
@@ -913,11 +914,31 @@ window decodes; nothing of it goes through Rust but the clipboard.
   (`createImageBitmap`), and makes a PNG of a JPEG or of a Windows bitmap
   read off the clipboard (`lib/binary/dib` `rgbaOfDib`).
 - **Drawn** by `components/Pictures2D.tsx`: a texture each, shared by
-  SHA-256 and let go once nothing draws it, on a plane turned and scaled
-  as the picture is; under the drawing and over the PDFs, each one put
-  there later a step over the one before in depth. Its frame and corner
-  handles, and its hold's light (`components/HeldLight.tsx`, shared with
-  the PDFs), are drawn in its own turned frame.
+  SHA-256 and let go once nothing draws it (`components/pictureTextures`),
+  on a plane turned and scaled as the picture is; under the drawing and
+  over the PDFs, each one put there later a step over the one before in
+  depth. Its frame and corner handles, and its hold's light
+  (`components/HeldLight.tsx`, shared with the PDFs), are drawn in its own
+  turned frame.
+- **A film** (docs/RENDER.md) is a picture whose media is `video/mp4`, held
+  as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
+  element playing it, over and over and muted, its texture a
+  `VideoTexture`, a frame of the canvas drawn for each of the film's
+  (`requestVideoFrameCallback`) - none while it is paused.
+
+### Renders
+
+A render (docs/RENDER.md) is the molecules in 3D asked for, written as a
+glTF 2.0 scene (`lib/scene/gltf.ts`, its shapes `lib/scene/shapes.ts`;
+built from the canvas's own geometry by
+`ui/features/Workspace/render/renderScene.ts`), given to the plugin that
+fills the role *Render* and run as a job (`render/renders.ts`: prepared by
+the plugin, the scene put into the job's folder, looked at each second,
+its `progress` lines read, and what it made read from the job's folder and
+put on the page with `putPicture`). The card asking for one is
+`render/RenderCard.tsx` (Meno's own choices in `render/renderOptions.ts`),
+the frames standing where renders will put what they make
+`render/Renders2D.tsx`, and Save picture or film `render/savePicture.ts`.
 - **Selected** with the rest (`selPictures`): a box or a lasso takes those
   whose middle it holds (`molecules3dIn`), a dragged selection carries
   them (`utils/dragSelection`, `MarkPlaces.pictures`), and the selection's

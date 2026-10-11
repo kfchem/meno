@@ -45,10 +45,11 @@ export async function lookForAll(plugins: readonly { id: string; installed: read
 }
 
 /**
- * Locates a program installed separately: the chemist picks its file, which
- * is kept where it is that program - its file's name, and one that can be
- * run. Where it was taken; null where nothing was picked; throws, saying
- * why, where what was picked is not it.
+ * Locates a program installed separately: the chemist picks its file - or,
+ * on macOS, the app that holds it (Blender.app) - which is kept where it is
+ * that program: its file's name, and one that can be run. Where it was
+ * taken - the program, inside an app picked; null where nothing was picked;
+ * throws, saying why, where what was picked is not it.
  */
 export async function locate(
   plugin: string,
@@ -63,9 +64,12 @@ export async function locate(
   if (!picked) return null;
   const file = systemHere() ? decl.files[systemHere()!] : undefined;
   const where = await ask<string | null>("program_where", { plugin, name: decl.name, located: picked }).catch(() => null);
-  if (where !== picked) throw new Error(`That is not ${decl.label}: its program is ${file ? `the file called ${file}` : "not made for this system"}, one that can be run.`);
+  // (an app picked: the program the backend found inside it)
+  const app = picked.replace(/\/+$/, "");
+  const inApp = !!where && /\.app$/i.test(app) && where.startsWith(`${app}/`);
+  if (!where || (where !== picked && !inApp)) throw new Error(`That is not ${decl.label}: its program is ${file ? `the file called ${file}` : "not made for this system"}, one that can be run.`);
   const settings = useAppSettings.getState();
-  settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [programKey(plugin, decl.name)]: picked } });
-  useInstalled.setState((s) => ({ where: { ...s.where, [programKey(plugin, decl.name)]: picked } }));
-  return picked;
+  settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [programKey(plugin, decl.name)]: where } });
+  useInstalled.setState((s) => ({ where: { ...s.where, [programKey(plugin, decl.name)]: where } }));
+  return where;
 }
