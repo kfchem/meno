@@ -939,7 +939,41 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   with them its orders are exact; benzoic acid without them has orders
   found that are wrong. So a molecule, or a ligand, without hydrogens is
   not sought at all, and says its orders are unknown; nor is one of more
-  than 400 atoms.
+  than 400 atoms. Such a molecule's orders can be estimated from its
+  distances, asked for (below).
+- **Estimated from distances** (asked for by the maintainer, 2026-10-11:
+  from the menu, worded as an estimate, and no mark once made). *Estimate
+  bond orders from distances* on a ligand, or a molecule, works without
+  its hydrogens and without the RDKit plugin
+  (`lib/chem/ordersFromGeometry.ts`). It weighs three things. A bond's
+  length is read as an order between one and three against the sums of
+  its atoms' single-, double- and triple-bond covalent radii
+  (`lib/chem/covalentRadii.ts`: Pyykkö's, as collected in J. Phys. Chem.
+  A 2015, 119, 2326, from Pyykkö and Atsumi, Chem. Eur. J. 2009, 15, 186
+  and 12770, and Pyykkö, Riedel and Patzschke, Chem. Eur. J. 2005, 11,
+  3511). An atom's shape says how many double bonds it can have: a carbon
+  with three neighbours in a plane has one; pyramidal, none; with two in
+  a line, a triple or two doubles. A flat five- or six-membered ring
+  whose double bonds and lone pairs make 4n+2 electrons is taken as
+  aromatic, which is how such rings almost always are. The orders chosen
+  are those, of all the shapes allow, that fit the lengths best with the
+  most aromatic rings: a search over each conjugated part. A sulfonyl
+  has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
+  group's charges are N+ and O-. Bonds to metals stay single. Where an
+  atom's shape asks for a double bond it cannot have, nothing is changed
+  and the orders stay unknown. Otherwise they are drawn with no mark: a
+  later SMILES or CCD replaces them. Comparing lengths with bond-type
+  radii, and counting a ring's electrons, are ideas from the maintainer's
+  ACCeL; the code is Meno's own. Checked (2026-10-11) against 120
+  molecules made in 3D by RDKit with their hydrogens taken away: all
+  right; 98% with each coordinate shaken by 0.01 to 0.02 Å, 68% at
+  0.05 Å. Against the CCD's 41 components on their ideal coordinates, all
+  but heme. Against ligands as X-ray entries place them (1STP, 1HSG, 3PTB,
+  1M17, 1IEP, 3ERT, 4HHB, 2RH1, 1ATP, 1F88, 1A6M): 21 of 24. The three
+  wrong were two hemes (with which of the porphyrin's nitrogens carry
+  hydrogens swapped, the same in a complex) and dioxygen, read as single.
+  Tautomers are the estimate's weak point: which nitrogen of a histidine
+  carries the hydrogen.
 - **Given from a SMILES.** Right-click a ligand (for a PDB entry, the
   one under the pointer), *Bond orders from SMILES…*: a card over the
   canvas takes its SMILES, and RDKit's `AssignBondOrdersFromTemplate`

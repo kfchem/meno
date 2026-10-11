@@ -17,7 +17,8 @@ import { chemAtHand, chemWorker } from "../../../../lib/roles/worker";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { useEditor, useEditorStore, type EditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
-import { blockOf, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withHydrogens, withOrders } from "../utils/completeness";
+import { blockOf, bondsAmong, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withHydrogens, withOrders, withPartOrders } from "../utils/completeness";
+import { ordersFromGeometry } from "../../../../lib/chem/ordersFromGeometry";
 import { componentsNamed } from "../../../../lib/net/components";
 import { isWater } from "../../../../lib/chem/biopolymer";
 
@@ -114,6 +115,29 @@ export async function ordersFromSmiles(store: EditorStore, id: number, atom: num
     const { unknownOrders: _was, ...rest } = next;
     // (all of it given, or every ligand's: known now)
     return left.length ? { ...rest, bondOrders: "unknown", unknownOrders: left } : { ...rest, bondOrders: "assigned" };
+  });
+}
+
+/**
+ * The bond orders of a molecule's ligand - the one `atom` is part of, for
+ * a PDB entry; else all of it - estimated from its atoms' distances and
+ * shape (lib/chem/ordersFromGeometry), as one undo step. Throws, changing
+ * nothing, where they cannot all be told so: they stay unknown, and say so.
+ */
+export function estimateOrders(store: EditorStore, id: number, atom: number | null): void {
+  const m = store.getState().molecules3d.find((x) => x.id === id);
+  const atoms = m && partOf(m, atom);
+  if (!m || !atoms) throw new Error("Point at the ligand whose bond orders these are.");
+  const r = ordersFromGeometry(
+    atoms.map((i) => m.atoms[i]),
+    bondsAmong(m, atoms),
+  );
+  if (!r.decided) throw new Error("Some of these bond orders cannot be told from the distances: give them from a SMILES.");
+  store.getState().changeMolecule3d("bond orders", id, (cur) => {
+    const next = withPartOrders(cur, atoms, r.orders, r.charges);
+    const left = (cur.biopolymer ? stillUnknown(cur) : []).filter((i) => !atoms.includes(i));
+    const { unknownOrders: _was, ...rest } = next;
+    return left.length ? { ...rest, bondOrders: "unknown", unknownOrders: left } : { ...rest, bondOrders: "estimated" };
   });
 }
 
