@@ -225,7 +225,14 @@ export default function PartMenu({
   /** An electron-pushing arrow begun from the atom or bond right-clicked, its head full or (`half`) a fishhook's. */
   onPush?: (half: boolean, press?: React.PointerEvent) => void;
   /** What an electron-pushing arrow right-clicked can do: its head made full or half, its lone pair's dots shown or left off (where it leaves one), bent as Meno bends it. */
-  push?: { half: boolean; setHalf: (half: boolean) => void; pair?: { shown: boolean; set: (shown: boolean) => void }; onUnbend?: () => void };
+  push?: {
+    half: boolean;
+    setHalf: (half: boolean) => void;
+    /** From an atom with a negative charge: whether it leaves from a lone pair rather than the charge's mark. */
+    source?: { fromPair: boolean; set: (fromPair: boolean) => void };
+    pair?: { shown: boolean; set: (shown: boolean) => void };
+    onUnbend?: () => void;
+  };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
   /** The molecules in 3D right-clicked - or selected - rendered as a picture or a film (docs/RENDER.md); unset, where no plugin added renders. */
@@ -462,6 +469,12 @@ export default function PartMenu({
             { name: "Fishhook (half head)", keys: "", run: () => push.setHalf(true), icon: MENU_ICONS.fishhook, checked: push.half },
             ...colour,
             del("Delete arrow", keys),
+            ...(push.source
+              ? [
+                  { name: "From the charge", keys: "", run: () => push.source!.set(false), checked: !push.source.fromPair, divider: true },
+                  { name: "From a lone pair", keys: "", run: () => push.source!.set(true), checked: push.source.fromPair },
+                ]
+              : []),
             ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
             ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),
           ]

@@ -102,10 +102,11 @@ export type PushEnd = { atom: number } | { bond: number } | { gap: [number, numb
  * An electron-pushing arrow: from where to where, its head half - a
  * fishhook, one electron - or full, its bend (lib/chem/pushArrow
  * `PushBend`; unset, as Meno bends it), a lone pair's dots left off its
- * tail (`noPair`), and the colour it is drawn in, where it is given one
- * (#rrggbb; else the bonds' ink).
+ * tail (`noPair`), from an atom with a negative charge, from a lone pair
+ * rather than its charge's mark (`fromPair`), and the colour it is drawn
+ * in, where it is given one (#rrggbb; else the bonds' ink).
  */
-export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; color?: string };
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; fromPair?: true; color?: string };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -716,7 +717,7 @@ export type EditorState = {
   /** An electron-pushing arrow added, as one step; its id. */
   addPush: (from: PushEnd, to: PushEnd, half: boolean) => number;
   /** An electron-pushing arrow changed - its head, its bend (null: as Meno bends it), its ends, its lone pair - a run of changes in one gesture one step. */
-  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean }, gesture?: string) => void;
+  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean; fromPair?: boolean }, gesture?: string) => void;
   removePush: (id: number) => void;
   /** The reaction arrow under the pointer: its menu is the one a right-click opens. */
   hoveredArrow: number | null;

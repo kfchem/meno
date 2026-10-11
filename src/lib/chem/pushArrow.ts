@@ -25,15 +25,16 @@ type P = { x: number; y: number };
 /**
  * An end as the drawing has it: an atom - where it is, how far round it its
  * label (or its bare vertex) keeps clear in a direction, whether a lone pair
- * is drawn there, which way its bonds leave it, and which way any bond it
- * loses leaves it - a bond, by where its atoms are, the side of it away from
+ * is drawn there, or else the mark it leaves from (its negative charge's,
+ * its radical's: the mark's middle and how far it reaches), which way its
+ * bonds leave it, and which way any bond it loses leaves it - a bond, by where its atoms are, the side of it away from
  * the rest of its structure, the middle of its line as drawn (shortened
  * where a label stands at an end) and how far its lines reach either side
  * of its axis (`left` of the way from its first atom to its second) - or two
  * atoms with a gap between them.
  */
 export type PushEndAt =
-  | { atom: P; clear: (toward: P) => number; pair?: boolean; bonds?: readonly P[]; losing?: readonly P[] }
+  | { atom: P; clear: (toward: P) => number; pair?: boolean; mark?: { c: P; r: number }; bonds?: readonly P[]; losing?: readonly P[] }
   | { bond: readonly [P, P]; outside?: P; middle?: P; reach?: { left: number; right: number } }
   | { gap: readonly [P, P] };
 
@@ -95,9 +96,9 @@ const DEG = Math.PI / 180;
 /** The angle between two directions, 0 to pi. */
 const apart = (a: P, b: P) => Math.acos(Math.max(-1, Math.min(1, dot(unit(a), unit(b)))));
 
-/** Where an end is, before it is drawn clear of anything: an atom, a bond's middle, a gap's middle. */
+/** Where an end is, before it is drawn clear of anything: an atom - or the mark it leaves from - a bond's middle, a gap's middle. */
 export function endBase(e: PushEndAt): P {
-  return "atom" in e ? e.atom : "bond" in e ? (e.middle ?? mid(e.bond[0], e.bond[1])) : mid(e.gap[0], e.gap[1]);
+  return "atom" in e ? (e.mark?.c ?? e.atom) : "bond" in e ? (e.middle ?? mid(e.bond[0], e.bond[1])) : mid(e.gap[0], e.gap[1]);
 }
 
 /** Where an arrow's end beside a bond is, on the side `side` of it: clear of its lines - a double bond's second one too - by a little. */
@@ -148,6 +149,8 @@ const PAIR_GAP = 0.2;
 const PAIR_CLEAR = 0.08;
 /** How far short of an atom it ends, beyond what its label keeps clear, in bonds. */
 const END_CLEAR = 0.06;
+/** How far beyond a mark's circle it starts, in bonds. */
+const MARK_GAP = 0.06;
 
 /** The control point of the part of the quadratic curve from `s` through `c` to `e` between `a` and `b` (its blossom). */
 function controlBetween(s: P, c: P, e: P, a: number, b: number): P {
@@ -157,8 +160,9 @@ function controlBetween(s: P, c: P, e: P, a: number, b: number): P {
   return { x: w0 * s.x + w1 * c.x + w2 * e.x, y: w0 * s.y + w1 * c.y + w2 * e.y };
 }
 
-/** How far a lone pair's tail starts from its atom, toward `u`. */
+/** How far a tail starts from where it is (`endBase`), toward `u`: beyond a mark's circle, or beyond its atom's label and a lone pair's dots. */
 function pairRoom(e: Extract<PushEndAt, { atom: P }>, u: P, L: number): number {
+  if (e.mark) return e.mark.r + MARK_GAP * L;
   return e.clear(u) + (e.pair ? 2 * PAIR_DOT * L + (PAIR_GAP * L) / 2 + PAIR_CLEAR * L : 0);
 }
 
@@ -210,6 +214,18 @@ type Way = { at: P; heading: P; cost: number; dots?: { c: P; r: number }[] };
 function startWays(from: PushEndAt, target: P, L: number): Way[] {
   const base = endBase(from);
   const toward = unit(sub(target, base));
+  if ("atom" in from && from.mark) {
+    // from a mark: out of its circle, away from its atom's label
+    const { c, r } = from.mark;
+    const outward = unit(sub(c, from.atom));
+    return freeWays([], 0)
+      .filter((u) => apart(u, outward) <= 100 * DEG)
+      .map((u) => ({
+        at: add(c, mul(u, r + MARK_GAP * L)),
+        heading: u,
+        cost: 0.3 * Math.max(0, apart(u, outward) - 45 * DEG) + 2 * Math.max(0, 35 * DEG - apart(u, toward)) + 0.4 * Math.max(0, apart(u, toward) - 75 * DEG),
+      }));
+  }
   if ("atom" in from) {
     const ways = freeWays(from.bonds ?? [], 60 * DEG);
     const nearest = Math.min(...ways.map((u) => from.clear(u)));
@@ -305,8 +321,8 @@ function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: numbe
   const pad = 0.12 * L;
   for (const p of pts) {
     for (const b of scene.boxes) {
-      // (not the labels of the atoms it leaves and reaches: it keeps clear of those as it ends)
-      if (b.at && ends.some((e) => len(sub(e, b.at!)) < 1e-6)) continue;
+      // (the labels of the atoms it leaves and reaches it keeps clear of as it ends: only away from its ends do they count)
+      if (b.at && ends.some((e) => len(sub(e, b.at!)) < 1e-6) && Math.min(len(sub(p, pts[0])), len(sub(p, pts[pts.length - 1]))) < 0.3 * L) continue;
       if (p.x > b.min.x - pad && p.x < b.max.x + pad && p.y > b.min.y - pad && p.y < b.max.y + pad) f += 1;
       if (p.x > b.min.x && p.x < b.max.x && p.y > b.min.y && p.y < b.max.y) f += 3;
     }
@@ -375,7 +391,13 @@ function laidCurve(from: PushEndAt, to: PushEndAt, scene: PushScene, L: number):
   const e0 = endBase(to);
   const starts = startWays(from, e0, L);
   const ends = endWays(to, from, L);
-  const atomsAt = [s0, e0, ...("atom" in from ? [] : "bond" in from ? from.bond : from.gap), ...("atom" in to ? [] : "bond" in to ? to.bond : to.gap)];
+  // (what it leaves and reaches, whose labels and atoms it may come near: a mark's atom too, the mark being in its label)
+  const atomsAt = [
+    s0,
+    e0,
+    ...("atom" in from ? (from.mark ? [from.atom] : []) : "bond" in from ? from.bond : from.gap),
+    ...("atom" in to ? [] : "bond" in to ? to.bond : to.gap),
+  ];
   let best: { shape: PushShape; cost: number } | null = null;
   for (const s of starts)
     for (const e of ends) {
