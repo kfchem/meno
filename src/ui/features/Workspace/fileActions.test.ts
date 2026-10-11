@@ -15,6 +15,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { readStructures } from "../../../lib/io/structures";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -48,6 +49,28 @@ describe("structureFileText", () => {
     expect(structureFileText(model, "/tmp/a.sdf", { version: "V3000" })).toContain("M  V30 BEGIN CTAB");
     const reaction = { ...model, arrows: [{ id: 1, x: 3 * L, y: 0, angle: 0, length: 2 * L }] };
     expect(structureFileText(reaction, "/tmp/r.rxn", { version: "V3000" }).startsWith("$RXN V3000")).toBe(true);
+  });
+
+  it("writes an SD file's molecule in 3D past 999 atoms in V3000, every frame of it, and it opens again in 3D", () => {
+    // a chain of 1001 atoms in 3D, in two frames, and one of five
+    const chain = (n: number, dz = 0) => ({
+      name: `chain${n}.sdf`,
+      atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: 1.26 * i, y: i % 2 ? 0.44 : -0.44, z: dz })),
+      bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+      at: { x: 0, y: 0 },
+    });
+    const big = { ...chain(1001), frames: [chain(1001, 0.5).atoms.flatMap((a) => [a.x, a.y, a.z])] };
+    const drawn = { atoms: [], bonds: [], molecules3d: [big, chain(5)] } as unknown as Parameters<typeof structureFileText>[0];
+    const shown = structureFileText(drawn, "/tmp/chains.sdf");
+    expect(shown.split("$$$$\n").map((r) => / V(2000|3000)\n/.exec(r)?.[1])).toEqual(["3000", "2000", undefined]);
+    const read = readStructures("sdf", "chains.sdf", shown).molecules3d!;
+    expect(read.map((m) => [m.atoms.length, m.bonds.length])).toEqual([
+      [1001, 1000],
+      [5, 4],
+    ]);
+    const every = structureFileText(drawn, "/tmp/chains.sdf", { frames: "all" });
+    expect(every.match(/ V3000\n/g)).toHaveLength(2);
+    expect(readStructures("sdf", "chains.sdf", every).molecules3d!.map((m) => m.atoms.length)).toEqual([1001, 1001, 5]);
   });
 });
 
