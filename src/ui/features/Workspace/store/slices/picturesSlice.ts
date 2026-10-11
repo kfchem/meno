@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -47,7 +48,7 @@ export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit(
         patch.w !== undefined || patch.h !== undefined ? "resize picture" : patch.turn !== undefined ? "turn picture" : "move picture",
         (d) => ops.updatePicture(d, id, patch),
-        { ...(gesture ? { coalesceKey: `picture:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`picture:${id}:${gesture}`) : {},
       ),
     removePicture: (id: number) => {
       if (doc.edit("delete picture", (d) => ops.removePictures(d, [id])))

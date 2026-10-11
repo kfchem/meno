@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -31,7 +32,7 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       doc.edit(
         patch.tail ? "move callout's tail" : patch.x0 !== undefined || patch.x1 !== undefined || patch.y0 !== undefined || patch.y1 !== undefined ? "resize shape" : "change shape",
         (d) => ops.updateShape(d, id, patch),
-        { ...(gesture ? { coalesceKey: `shape:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`shape:${id}:${gesture}`) : {},
       ),
     styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
     colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) =>

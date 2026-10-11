@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -72,7 +73,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
                   : "move text",
         (d) => ops.updateCaption(d, id, patch),
         {
-          ...(gesture ? { coalesceKey: `caption:${id}:${gesture}` } : {}),
+          ...(gesture ? gestureStep(`caption:${id}:${gesture}`) : {}),
         },
       ),
     // (all the letters of the words `ids` set otherwise, as one step: in a colour, or none of their own; bold, italic, raised or lowered - or, all of them so, not)

@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -79,11 +80,11 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       if (row.length) doc.edit(row.length > 1 ? "add PDFs" : "add PDF", (d) => row.reduce(ops.addPdf, d));
     },
     movePdf: (id: number, x: number, y: number, gesture?: string) =>
-      doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), { ...(gesture ? { coalesceKey: `pdf:${id}:${gesture}` } : {}) }),
+      doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), gesture ? gestureStep(`pdf:${id}:${gesture}`) : {}),
     turnPdf: (id: number, page: number) => doc.edit("turn page", (d) => ops.updatePdf(d, id, { page })),
     spreadPdf: (id: number, spread: boolean) => doc.edit(spread ? "spread pages" : "gather pages", (d) => ops.updatePdf(d, id, { spread, ...(spread ? { icon: false } : {}) })),
     placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) =>
-      doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), { ...(gesture ? { coalesceKey: `pdf-page:${id}:${page}:${gesture}` } : {}) }),
+      doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), gesture ? gestureStep(`pdf-page:${id}:${page}:${gesture}`) : {}),
     pdfPagesInRows: (id: number) => doc.edit("put pages in rows", (d) => ops.updatePdf(d, id, { placed: null })),
     // (made an icon, its pages gathered first)
     iconPdf: (id: number, icon: boolean) =>

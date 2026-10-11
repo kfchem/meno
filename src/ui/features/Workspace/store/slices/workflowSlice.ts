@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { valuesOf } from "../../../../../lib/options";
@@ -25,7 +26,7 @@ export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
  * what is under the pointer, chosen, open or being drawn, the view's.
  */
 export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
-  const coalesce = (what: string, id: number, gesture?: string) => (gesture ? { coalesceKey: `${what}:${id}:${gesture}` } : {});
+  const coalesce = (what: string, id: number, gesture?: string) => (gesture ? gestureStep(`${what}:${id}:${gesture}`) : {});
   const { forgetJobs, ...runs } = createStepRuns(doc, set, get, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn) });
   return {
     ...runs,

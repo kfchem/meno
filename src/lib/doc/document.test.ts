@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDocument, DEFAULT_COALESCE_MS } from "./document";
+import { createDocument, DEFAULT_COALESCE_MS, gestureStep } from "./document";
 
 type Doc = { atoms: string[]; title: string };
 
@@ -114,6 +114,20 @@ describe("createDocument", () => {
     doc.edit("plain", (d) => ({ ...d, title: "d" }));
     doc.edit("plain", (d) => ({ ...d, title: "e" }));
     expect(doc.history().undoDepth).toBe(5);
+  });
+
+  it("merges a gesture's edits into one step however long it is held still", () => {
+    const { doc, tick } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    tick(10 * DEFAULT_COALESCE_MS);
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    expect(doc.history().undoDepth).toBe(1);
+    // (another gesture is a step of its own, however soon)
+    doc.edit("drag", (d) => ({ ...d, title: "c" }), gestureStep("drag:2"));
+    expect(doc.history().undoDepth).toBe(2);
+    doc.undo();
+    doc.undo();
+    expect(doc.getState().title).toBe("untitled");
   });
 
   it("keeps the history bounded, dropping the oldest steps", () => {

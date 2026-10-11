@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -36,7 +37,7 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       doc.edit(
         patch.around !== undefined ? "show the page about a slide" : patch.w !== undefined || patch.h !== undefined ? "resize slide" : "move slide",
         (d) => ops.updateSlide(d, id, patch),
-        { ...(gesture ? { coalesceKey: `slide:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`slide:${id}:${gesture}`) : {},
       ),
     // what is on a slide, selected - all of it whose middle lies in it, as a box selects; the slide, and the slides within it, with it
     selectOnSlide: (id: number) => {
