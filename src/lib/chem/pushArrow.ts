@@ -259,7 +259,8 @@ function endWays(to: PushEndAt, from: PushEndAt, L: number): Way[] {
       });
     }
     const losing = to.losing ?? [];
-    const ways = losing.length ? freeWays([], 0).filter((u) => losing.every((l) => apart(u, l) >= 150 * DEG)) : freeWays(to.bonds ?? [], 40 * DEG);
+    // (from behind, or as near behind as it comes without a corner where it turns in)
+    const ways = losing.length ? freeWays(to.bonds ?? [], 40 * DEG).filter((u) => losing.every((l) => apart(u, l) >= 105 * DEG)) : freeWays(to.bonds ?? [], 40 * DEG);
     return ways.map((u) => ({
       at: add(to.atom, mul(u, to.clear(u) + END_CLEAR * L)),
       heading: mul(u, -1),
@@ -325,8 +326,9 @@ function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: numbe
   // (and bends one way, never both: an arc, not an S)
   let leftward = 0;
   let rightward = 0;
-  // (and turns smoothly, never at a corner)
-  let sharpest = 0;
+  // (and turns smoothly, never at a corner: its tightest bend no tighter
+  // than a round curl's)
+  let tightest = Infinity;
   for (let i = 1; i < pts.length; i++) {
     length += len(sub(pts[i], pts[i - 1]));
     if (i < 2) continue;
@@ -334,12 +336,12 @@ function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: numbe
     const b = sub(pts[i], pts[i - 1]);
     const t = apart(a, b);
     turning += t;
-    sharpest = Math.max(sharpest, t);
+    if (t > 1e-6) tightest = Math.min(tightest, (len(a) + len(b)) / 2 / t);
     if (cross(a, b) > 0) leftward += t;
     else rightward += t;
   }
   const chord = Math.max(len(sub(pts[pts.length - 1], pts[0])), 1e-9);
-  return f + 0.6 * Math.max(0, length / chord - 1.25) + 0.25 * Math.max(0, turning - 100 * DEG) + 1.5 * Math.max(0, Math.min(leftward, rightward) - 8 * DEG) + 4 * Math.max(0, sharpest - 14 * DEG);
+  return f + 0.6 * Math.max(0, length / chord - 1.25) + 0.25 * Math.max(0, turning - 100 * DEG) + 1.5 * Math.max(0, Math.min(leftward, rightward) - 8 * DEG) + 6 * Math.max(0, 1 - tightest / (0.2 * L));
 }
 
 /**
@@ -403,8 +405,11 @@ function laidCurve(from: PushEndAt, to: PushEndAt, scene: PushScene, L: number):
         [0.5, 0.5, 0.1],
         [0.8, 0.5, 0.15],
         [1.1, 0.45, 0.25],
+        // (and low, to slip between labels)
+        [0.25, 0.25, 0.1],
+        [0.3, 0.45, 0.15],
       ]) {
-        const h1 = Math.min(Math.max(k1 * d, 0.45 * L), 2.2 * L);
+        const h1 = Math.min(Math.max(k1 * d, 0.4 * L), 2.2 * L);
         const h2 = Math.min(Math.max(k2 * d, 0.32 * L), 1.4 * L);
         const shape = { start: s.at, c1: add(s.at, mul(s.heading, h1)), c2: sub(e.at, mul(e.heading, h2)), end: e.at, dots: s.dots ?? [] };
         const cost = s.cost + e.cost + fault(along(shape, 40), scene, atomsAt, L) + extra;

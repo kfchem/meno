@@ -40,6 +40,19 @@ describe("an electron-pushing arrow Meno lays", () => {
     expect(Math.abs(heading)).toBeLessThan((25 * Math.PI) / 180);
   });
 
+  it("turns in toward behind without a corner, where the attack comes from beyond the bond lost", () => {
+    // HO- beyond the Br: the arrow comes round, its tightest bend no tighter than a curl's
+    const c: PushEndAt = { atom: { x: 0, y: 0 }, clear: () => 0.12, bonds: [{ x: 1, y: 0 }], losing: [{ x: 1, y: 0 }] };
+    const scene: PushScene = { segments: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], boxes: [], atoms: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 3.2, y: 0 }] };
+    const s = pushShape(bare(3.2, 0, true), c, undefined, scene, m)!;
+    const q = pts(s);
+    const tightest = Math.min(
+      ...turns(s).map((t, i) => (Math.abs(t) > 1e-6 ? Math.hypot(q[i + 1].x - q[i].x, q[i + 1].y - q[i].y) / Math.abs(t) : Infinity)),
+    );
+    expect(tightest).toBeGreaterThan(0.15);
+    expect(s.end.x).toBeLessThan(0);
+  });
+
   it("is a curve, never a line, and bends one way only", () => {
     const s = pushShape(bare(0, 0, true), bare(2.5, 0), undefined, empty, m)!;
     expect(rise(s)).toBeGreaterThan(0.15);
