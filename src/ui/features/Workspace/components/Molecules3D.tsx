@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import KeyLight3D from "./KeyLight3D";
+import ScreenShade3D from "./ScreenShade3D";
 import { LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
@@ -578,7 +579,13 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   return (
     <group>
       <ambientLight intensity={style.ambientLight} />
-      <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
+      <KeyLight3D
+        intensity={style.keyLight}
+        shadows={style.shadows}
+        large={style.largeDrawings}
+        screen={style.primary.occlusionBy === "screen" || style.secondary.occlusionBy === "screen"}
+      />
+      <ScreenShade3D />
       {molecules.map((m) => {
         // (one of its lists open under it: the row chosen moves it, the row pointed at - or chosen - marks its atoms)
         const open = lists[m.id];
