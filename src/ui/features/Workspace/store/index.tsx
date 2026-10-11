@@ -110,11 +110,35 @@ const NO_WIRES: Wire[] = [];
  * back (React StrictMode remounts it in dev) subscribes again and catches up
  * on whatever changed meanwhile.
  */
-/** What was under the pointer, kept while it is still in the drawing. */
-function hoverHeld(hovered: EditorState["hovered"], model: EditorState["model"]): EditorState["hovered"] {
-  const atom = hovered.atomId != null && !model.atoms.some((a) => a.id === hovered.atomId);
-  const bond = hovered.bondId != null && !model.bonds.some((b) => b.id === hovered.bondId);
-  return atom || bond ? { atomId: atom ? null : hovered.atomId, bondId: bond ? null : hovered.bondId } : hovered;
+/**
+ * What is under the pointer, kept while it is still on the page. An undo or
+ * a redo can take away what the pointer rests on, and as the pointer has not
+ * moved nothing else says so: its light would stay where it was, and a key
+ * - a letter, Delete - act on what is gone.
+ */
+function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>) {
+  const kept = (id: number | null, there: readonly { id: number }[]) => (id != null && !there.some((x) => x.id === id) ? null : id);
+  const { atoms, bonds } = now.model;
+  const atom = prev.hovered.atomId != null && !atoms.some((a) => a.id === prev.hovered.atomId);
+  const bond = prev.hovered.bondId != null && !bonds.some((b) => b.id === prev.hovered.bondId);
+  const molecule = (id: number) => now.molecules3d.find((m) => m.id === id);
+  const { hovered3d: m3d, hoveredAtom3d: a3d, hoveredMeasure3d: q3d, hoveredMark: mark } = prev;
+  return {
+    hovered: atom || bond ? { atomId: atom ? null : prev.hovered.atomId, bondId: bond ? null : prev.hovered.bondId } : prev.hovered,
+    hoveredPush: kept(prev.hoveredPush, now.pushes),
+    hoveredArrow: kept(prev.hoveredArrow, now.arrows),
+    hoveredPlus: kept(prev.hoveredPlus, now.pluses),
+    hoveredCaption: kept(prev.hoveredCaption, now.captions),
+    hoveredPdf: kept(prev.hoveredPdf, now.pdfs),
+    hoveredPicture: kept(prev.hoveredPicture, now.pictures),
+    hoveredSet: kept(prev.hoveredSet, now.sets),
+    hoveredStep: kept(prev.hoveredStep, now.steps),
+    hoveredWire: kept(prev.hoveredWire, now.wires),
+    hovered3d: m3d && !molecule(m3d.id) ? null : m3d,
+    hoveredAtom3d: a3d && !((molecule(a3d.id)?.atoms.length ?? 0) > a3d.atom) ? null : a3d,
+    hoveredMeasure3d: q3d && !molecule(q3d.id)?.measures?.some((x) => x.id === q3d.measure) ? null : q3d,
+    hoveredMark: mark && ("bond" in mark ? !bonds.some((b) => b.id === mark.bond) : !atoms.some((a) => a.id === mark.atom)) ? null : mark,
+  };
 }
 
 export function connectStoreToDocument(
@@ -133,10 +157,7 @@ export function connectStoreToDocument(
         ...heldOf(prev, mirrored.molecules3d),
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
-        // (the atom or bond under the pointer, gone from under it - an undo took it away: the pointer
-        // has not moved, so nothing says so, and a key would act on it - its light left where it was)
-        hovered: hoverHeld(prev.hovered, mirrored.model),
-        hoveredPush: prev.hoveredPush != null && !(mirrored.pushes ?? []).some((p) => p.id === prev.hoveredPush) ? null : prev.hoveredPush,
+        ...hoversHeld(prev, mirrored),
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
