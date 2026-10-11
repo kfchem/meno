@@ -6,7 +6,7 @@
  * changes.
  */
 import { floatsOf, type Grid } from "../../../../lib/calc/results";
-import type { Mesh, MeshGrid, Vec3 } from "./isosurface";
+import { isosurface, type Mesh, type MeshGrid, type Vec3 } from "./isosurface";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 
 let worker: Worker | null = null;
@@ -59,4 +59,23 @@ export async function surfaceOf(grid: Grid, centre: Vec3, iso: number): Promise<
   const data = placed(grid, centre);
   sent.add(id);
   return post({ grid: id, data, iso, signed }, [data.values.buffer]);
+}
+
+// (worked out here, kept by the grid and where and at what it was)
+const now = new WeakMap<Grid, Map<string, { plus: Mesh; minus: Mesh | null }>>();
+
+/**
+ * The same, worked out at once, here, and kept: for a picture, which is
+ * made at once - and asked for twice, for the room it takes and to draw it.
+ */
+export function surfaceNow(grid: Grid, centre: Vec3, iso: number): { plus: Mesh; minus: Mesh | null } {
+  const key = `${centre.map((v) => v.toFixed(4)).join(",")} ${iso}`;
+  let byKey = now.get(grid);
+  if (!byKey) now.set(grid, (byKey = new Map()));
+  const known = byKey.get(key);
+  if (known) return known;
+  const data = placed(grid, centre);
+  const made = { plus: isosurface(data, iso, 1), minus: grid.signed ? isosurface(data, iso, -1) : null };
+  byKey.set(key, made);
+  return made;
 }
