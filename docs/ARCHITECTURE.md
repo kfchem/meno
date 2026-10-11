@@ -92,6 +92,10 @@ src-tauri/
   resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
                           Meno names none of them (docs/PLUGINS.md)
+site/                     the website, kfchem.github.io/meno: plain HTML, CSS and JS, no build. The
+                          Pages workflow (.github/workflows/pages.yml) writes the latest release
+                          into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
+                          wordmark; frames/ holds the app's pictures its story steps through
 ```
 
 ## Tabs and views
