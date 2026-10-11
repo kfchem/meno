@@ -119,6 +119,67 @@ By the maintainer, 2026-10-10 and 2026-10-11:
    by its promolecular NCI, NCIPLOT as before; each is installed apart and
    used as the chemist has it.
 
+## A proposal: Meno's own promolecular NCI
+
+Not built; written on 2026-10-12 from reading alone, for the maintainer
+to decide (the second of the two ways asked for on #223: NCI needing no
+program installed at all).
+
+**The method.** As the method's paper has it (Johnson, Keinan,
+Mori-Sánchez, Contreras-García, Cohen and Yang, "Revealing Noncovalent
+Interactions", J. Am. Chem. Soc. 2010, 132, 6498, doi:10.1021/ja100936w),
+and NCIPLOT 4's (Boto et al., J. Chem. Theory Comput. 2020, 16, 4150,
+doi:10.1021/acs.jctc.0c00063): the promolecular density is the sum of the
+free atoms' spherically averaged densities, each written as a few
+exponentials - one for each shell - ρ(r) = Σ_A Σ_n c_An e^{-|r - R_A|/ζ_An};
+the reduced density gradient is s = |∇ρ| / (2 (3π²)^{1/3} ρ^{4/3}), and the
+colour sign(λ2)ρ, λ2 the middle eigenvalue of ρ's Hessian. Every one of
+these is a closed form for sums of exponentials: the value, its gradient
+and its Hessian, atom by atom - no wavefunction, no program.
+
+**Where Meno would do it.** In Meno itself, in a worker, beside the
+isosurfaces it already makes (utils/isosurface, utils/surfaces): a grid
+over the molecule as Multiwfn's are (about 0.1 Å), each point summing the
+atoms near enough to matter, λ2 from the 3x3 Hessian's eigenvalues in
+closed form. A rough count: 512 000 points and some 30 atoms within reach
+of each is about 1.5 × 10^7 exponentials - well under a second in a
+worker. NCI would then be a kind Meno does itself (as Duplicates and
+Choose one are), the NCIPLOT and Multiwfn interfaces kept beside it.
+
+**The atomic densities, and their licences.** The one piece Meno does
+not have:
+
+- NCIPLOT's density files (its `dat` folder) come in its repository,
+  under the GPL: not for Meno, which is Apache-2.0.
+- The fitted constants printed in the 2010 paper's Supporting Information
+  (H to Ar): the American Chemical Society allows its Supporting
+  Information to be downloaded for personal use, not reproduced or
+  redistributed without its permission.
+- Multiwfn's built-in atomic densities: under Multiwfn's own licence,
+  which asks each user to agree to its terms.
+- **Meno's own** (proposed): each element's free-atom density worked out
+  by Meno's maintainers with PySCF (Apache-2.0) - an unrestricted
+  calculation of the neutral atom in its ground state with a large basis,
+  spherically averaged - and fitted to a few exponentials, one for each
+  shell, by a script kept in the repository; the constants, and the
+  script that made them, under Apache-2.0. Run once, by hand, as a
+  developer's step, never by Meno for its users.
+
+**Steps, were it agreed.** (1) The maintainer's OK to fetch PySCF for the
+one-off calculation; (2) the script and its constants, H to Kr at first,
+each fit checked against the density it was made from; (3) the worker's
+code, tested against closed forms on single atoms and on a water dimer;
+(4) the result set against Multiwfn's promolecular NCI on a few systems
+- the water dimer, a benzene dimer, a base pair - their surfaces' shapes
+and colours side by side; (5) NCI done by Meno, in Quick Add as any kind
+Meno does.
+
+**Questions for the maintainer.** Which elements to cover first (H to
+Kr, or further); whether a charged molecule's density stays a sum of
+neutral atoms', as the method has it; and whether Meno's own NCI should
+be the one a new NCI step is done by, the plugins then chosen by those
+who have them.
+
 ## Not yet
 
 - No reader of WFN or WFX files yet: those kinds are named for when one
