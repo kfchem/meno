@@ -22,8 +22,8 @@ export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictur
 
 export type Point = { x: number; y: number };
 
-/** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick. */
-export type Stroke = { a: Point; b: Point; w: number };
+/** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick; a bar's own outline kept, as a letter's stem may be one. */
+export type Stroke = { a: Point; b: Point; w: number; outline?: Point[] };
 
 /** A filled wedge: its narrow end, the middle of its wide end, and how wide that is. */
 export type Wedge = { tip: Point; base: Point; w: number };
@@ -31,8 +31,8 @@ export type Wedge = { tip: Point; base: Point; w: number };
 /** A curve stroked, as points along it: a wavy bond, a ring's circle, an arrow's arc. */
 export type Curve = { pts: Point[]; closed: boolean; w: number };
 
-/** A filled shape that is none of the above: a letter drawn as its outline, a dot, an arrow's head. */
-export type Blob = { pts: Point[]; box: Box; curved: boolean };
+/** A filled shape that is none of the above - a letter drawn as its outline, a dot, an arrow's head: its outlines, each closed, a hole within another where the path has one. */
+export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean };
 
 /** What a figure's paths make: strokes, wedges, curves and other shapes. */
 export type Shapes = { strokes: Stroke[]; wedges: Wedge[]; curves: Curve[]; blobs: Blob[] };
@@ -178,7 +178,7 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     const hi = wide.reduce((p, q) => (b(q) > b(p) ? q : p));
     return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: Math.max(w0, w1) } };
   }
-  if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short } };
+  if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short, outline: pts } };
   return null;
 }
 
@@ -194,7 +194,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       const curved = parts.some((p) => p.straight.some((s) => !s));
       if (parts.length > 1 && curved) {
         const pts = parts.flatMap((p) => p.pts);
-        out.blobs.push({ pts, box: boxOf(pts), curved });
+        out.blobs.push({ pts, parts: parts.map((p) => p.pts), box: boxOf(pts), curved });
         continue;
       }
       for (const p of parts) {
@@ -202,7 +202,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
         const read = filledShape(p.pts, pc);
         if (read && "stroke" in read) out.strokes.push(read.stroke);
         else if (read && "wedge" in read) out.wedges.push(read.wedge);
-        else out.blobs.push({ pts: p.pts, box: boxOf(p.pts), curved: pc });
+        else out.blobs.push({ pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc });
       }
       if (!stroked) continue;
     }

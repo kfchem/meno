@@ -13,6 +13,8 @@ import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/f
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { labelReading, readLabel } from "./labelTyping";
+import { systemGlyphs } from "./glyphShapes";
+import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model } from "../store/types";
 
 /** A label as drawn read as one typed is: an element with its charge, or a group's name - or nothing. */
@@ -61,8 +63,10 @@ export async function readBox(sha256: string, page: number, box: Box): Promise<M
 }
 
 /** What a figure as drawn reads as, tied to its PDF's page (`readBox`). */
-export function structureFrom(drawn: FigureDrawn, sha256: string, page: number): Model | Unread {
-  const read = readFigure(drawn, (l) => readDrawnLabel(l, figureLabels).read);
+export function structureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): Model | Unread {
+  // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
+  const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
+  const read = readFigure(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
   if (!read.atoms.length || !read.bonds.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
