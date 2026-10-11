@@ -369,13 +369,15 @@ export function PanZoom2D() {
       zoomLeft.current = 0;
       zoomGlide.current = 0;
     }
-    // The view moved last frame under a pointer resting on it, or something
-    // did on it (viewGoal): what is under the pointer now is lit, and taken
-    // hold of by a press, as a move of no distance finds it - drawn as it
-    // was moved to, so the hit areas are too.
+    // The view moved last frame under a pointer held still on it, or
+    // something did on it (viewGoal): what is under the pointer now is lit,
+    // and taken hold of by a press - or what a press drags follows it - as a
+    // move of no distance finds it, drawn as it was moved to, so the hit
+    // areas are too. (A drag of the view keeps the page under the pointer:
+    // nothing to find till it is let go.)
     if (tookMovedUnderPointer(camera)) pointer.current.moved();
-    const at = pointer.current.findAgain();
-    if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, pointerType: "mouse", bubbles: true, cancelable: true }));
+    const at = dragging.current ? null : pointer.current.findAgain();
+    if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, button: -1, pointerType: "mouse", bubbles: true, cancelable: true }));
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one
     const goal = viewGoalOf(camera);

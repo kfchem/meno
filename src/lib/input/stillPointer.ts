@@ -1,12 +1,14 @@
 /**
- * A pointer resting over a view while the view moves under it - two fingers
- * on a trackpad, a wheel's zoom, a glide, a fit - comes to be over something
- * else without moving. What is lit as under it, and what a press there will
- * take hold of, is found again then, as a move of no distance would find it:
- * the way a browser moves the pointer by nothing after a page scrolls.
+ * A pointer held still over a view while the view moves under it - two
+ * fingers on a trackpad, a wheel's zoom, a glide, a fit - comes to be over
+ * something else without moving. What is lit as under it, and what a press
+ * there will take hold of, is found again then, as a move of no distance
+ * would find it: the way a browser moves the pointer by nothing after a
+ * page scrolls. With a button held, what the press drags - an atom, a box's
+ * corner - goes on following the pointer the same way, rather than staying
+ * where the view took it and jumping back at the next move.
  *
- * Only a mouse rests: a finger or a pen lifted is over nothing. And with a
- * button held a gesture has the pointer, and finds for itself.
+ * Only a mouse stays over the view: a finger or a pen lifted is over nothing.
  */
 
 export type PointerLike = {
@@ -18,25 +20,23 @@ export type PointerLike = {
   buttons: number;
 };
 
-/** Where a pointer rests, to be moved to again. */
-export type Resting = { clientX: number; clientY: number; pointerId: number };
+/** Where a pointer is, and the buttons held: to be moved there again. */
+export type PointerAt = { clientX: number; clientY: number; pointerId: number; buttons: number };
 
 export type View = { x: number; y: number; zoom: number };
 
 /**
- * A watch on one view's pointer: what it has heard, where the pointer rests,
- * and whether something has moved under it since it was last found.
+ * A watch on one view's pointer: what it has heard, and whether something
+ * has moved under the pointer since it was last found.
  */
 export function stillPointer() {
-  let at: (Resting & { buttons: number }) | null = null;
+  let at: PointerAt | null = null;
   let due = false;
-  const resting = (): Resting | null =>
-    at && at.buttons === 0 ? { clientX: at.clientX, clientY: at.clientY, pointerId: at.pointerId } : null;
   return {
     /**
      * A pointer event heard on the view (pointermove, -down, -up, -leave,
-     * -cancel). True where the pointer has come to rest with something
-     * moved under it: a frame is wanted, to find again what is under it.
+     * -cancel). True where the button has been let go with something moved
+     * under the pointer still to be found: a frame is wanted, to find it.
      */
     heard(e: PointerLike): boolean {
       if (e.type === "pointerleave" || e.type === "pointercancel" || e.pointerType !== "mouse") {
@@ -46,25 +46,21 @@ export function stillPointer() {
       }
       at = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId, buttons: e.buttons };
       // (a move finds for itself)
-      if (e.type === "pointermove" && e.buttons === 0) due = false;
-      return due && e.type === "pointerup" && e.buttons === 0;
+      if (e.type === "pointermove") due = false;
+      return due && e.type === "pointerup";
     },
-    /** Where the pointer rests over the view, with no button held; or null. */
-    resting,
     /** Something has moved under the pointer: the view, or what is on it. */
     moved() {
       due = true;
     },
     /**
      * Where to move the pointer by no distance, once, to find again what is
-     * under it: when something has moved under it, and it rests - a move
-     * made with a button held waits until the button is let go.
+     * under it: when something has moved under it, and it is over the view.
      */
-    findAgain(): Resting | null {
-      if (!due) return null;
-      const r = resting();
-      if (r) due = false;
-      return r;
+    findAgain(): PointerAt | null {
+      if (!due || !at) return null;
+      due = false;
+      return { ...at };
     },
   };
 }
