@@ -113,7 +113,10 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 While it renders, a dashed frame stands where what it makes will lie -
 beside the molecules, on the right, as large as they are drawn - saying
 how far it is and what its job said last, with a button that stops it.
-Where it fails, the frame says why; the button puts it away.
+Where it fails, the frame says why; the button puts it away. The view
+eases to the frame and the molecules once, as the render is begun, where
+they are not all in view; what it makes lands as the view then is, never
+moving it again (the maintainer, 2026-10-11).
 
 What it makes is a **picture** on the page (docs/PDF.md, *A picture*): a
 PNG, or a **film** - an MP4 - which plays where it lies, over and over,
@@ -194,6 +197,8 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 6. **The command first**; Render as a workflow's step in a later change.
 7. **Blender 5.0 or later**, a round line; the newest copy new enough
    taken, its version shown in Settings.
+8. **The view moves once**, as a render is begun; not again as what it
+   makes lands.
 
 ## Not yet
 

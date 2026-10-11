@@ -754,6 +754,8 @@ export type EditorState = {
   pictures: PictureItem[];
   /** The picture under the pointer: its menu is the one a right-click opens. */
   hoveredPicture: number | null;
+  /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
+  picturesLaid: ReadonlySet<number>;
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;
