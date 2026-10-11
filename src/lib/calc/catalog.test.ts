@@ -50,13 +50,22 @@ describe("the readers Meno knows of", () => {
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
     expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf"]);
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
+    // (two that read structures from pictures, each standing alone: the chemist chooses, in Settings, Chemistry)
+    expect(pluginsFilling("pictures").map((p) => p.id)).toEqual(["molnextr", "molscribe"]);
+    for (const id of ["molnextr", "molscribe"]) {
+      const p = PLUGINS.find((q) => q.id === id)!;
+      expect(p).toMatchObject({ roles: ["pictures"], systems: ["macos", "windows"], lock: `resources/plugins/${id}/requirements.lock` });
+      // (its trained model downloaded besides, from where its makers keep it, pinned to a revision, checked by its hash)
+      expect(p.downloads).toHaveLength(1);
+      expect(p.downloads[0].url).toMatch(/^https:\/\/huggingface\.co\/.+\/resolve\/[0-9a-f]{40}\//);
+    }
     // (and those that write files: Gaussian's input, its plugin set up as any is)
     expect(WRITER_PLUGINS.map((p) => p.id)).toEqual(["gaussian"]);
     expect(WRITER_PLUGINS[0]).toMatchObject({ reads: [], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
@@ -123,6 +132,7 @@ describe("the readers Meno knows of", () => {
       steps: [],
       systems: [],
       installed: [],
+      downloads: [],
       writes: [],
       guide: [],
       suggests: [],
