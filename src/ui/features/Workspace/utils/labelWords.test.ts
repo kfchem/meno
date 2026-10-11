@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { labelReading } from "./labelTyping";
-import { liveLabel } from "../../../../lib/chem/smartLabel";
+import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
 import { LabelWords } from "./labelWords";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
+import { buildTextLabels } from "../../../../lib/chem/layout2d";
+import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
+import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 
 describe("a label typed in place", () => {
   it("is one line: a new line typed or pasted is none, the caret after what went in", () => {
@@ -84,5 +87,53 @@ describe("a label typed in place", () => {
     s().setLabelEditValue("OMe");
     s().commitLabelEdit("OMe");
     expect(s().model.atoms[0].typed).toBeUndefined();
+  });
+
+  it("typed any way, is kept as one label, drawn as it reads from its bond on either side - and had back as typed (the maintainer, 2026-10-11)", () => {
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+    // (the label, as it is drawn where its bond leaves to the left, then the ways of typing it)
+    for (const [label, drawn, ...typings] of [
+      ["OH", "HO", "OH", "oh", "HO", "ho"],
+      ["OAc", "AcO", "OAc", "oac", "AcO", "aco"],
+      ["OMe", "MeO", "OMe", "ome", "MeO", "meo"],
+      ["OBn", "BnO", "OBn", "obn", "BnO", "bno"],
+      ["NHAc", "AcHN", "NHAc", "nhac", "AcHN", "achn", "HNAc", "hnac"],
+      ["CO2Me", "MeO2C", "CO2Me", "co2me", "MeO2C", "meo2c"],
+    ]) {
+      // (its atom right of a carbon, the bond leaving to the left; then left of it)
+      for (const side of [1, -1]) {
+        for (const typed of typings) {
+          const doc = createWorkspaceDocument();
+          const store = createEditorStore(doc);
+          connectStoreToDocument(store, doc);
+          const s = () => store.getState();
+          const c = s().addAtom(0, 0, "C");
+          const x = s().addAtomBonded(c, side * 1.5, 0, "C", 1);
+          s().beginLabelEdit(x, "");
+          s().setLabelEditValue(keptLabel(typed, labelReading));
+          s().commitLabelEdit(typed);
+          const { atoms, bonds } = s().model;
+          const at = atoms.findIndex((a) => a.id === x);
+          const text = buildTextLabels(atoms, opts, layoutBonds(bonds, new Map(atoms.map((a, i) => [a.id, i])))).find((t) => t.atom === at && !t.beside)?.text;
+          expect(text, `${typed} ${side > 0 ? "right" : "left"}`).toBe(side > 0 ? label : drawn);
+          // (what was typed, where it is not what is kept: in the atom's menu, As typed)
+          expect(atoms[at].typed, typed).toBe(typed === label ? undefined : typed);
+        }
+      }
+    }
+    // (HO typed as it is drawn: OH, HO to be had back - one step)
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const s = () => store.getState();
+    const id = s().addAtom(0, 0, "C");
+    s().beginLabelEdit(id, "");
+    s().setLabelEditValue(keptLabel("HO", labelReading));
+    s().commitLabelEdit("HO");
+    expect(s().model.atoms[0]).toMatchObject({ el: "O", typed: "HO" });
+    s().labelAsTyped(id);
+    expect(s().model.atoms[0].el).toBe("HO");
+    doc.undo();
+    expect(s().model.atoms[0]).toMatchObject({ el: "O", typed: "HO" });
   });
 });

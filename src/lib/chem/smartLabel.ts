@@ -13,7 +13,12 @@
  *    nh is NH, not nihonium; ts tosyl, not tennessine.
  * 3. A label typed as it is drawn on a bond's left - AcO, BocHN, HO2C, H2N,
  *    or HN before a group - is kept as it reads from the bond: OAc, NHBoc,
- *    CO2H, NH2, NHFmoc.
+ *    CO2H, NH2, NHFmoc. So what is kept is the same however it was typed -
+ *    small, as it is written or as it is drawn on the left (the maintainer,
+ *    2026-10-11): HO, ho and oh are OH; AcO, aco and OAc OAc. What reads
+ *    as something as it is written is that, not turned round (hcl is HCl);
+ *    an element with its H, typed H first, comes before an element the
+ *    same letters spell (ho is OH; holmium is typed Ho).
  * 4. A prefix set in italics gets its hyphen: tBu is t-Bu, CO2tBu CO2t-Bu.
  * 5. What reads as nothing stays as typed.
  *
@@ -134,7 +139,8 @@ function before(a: readonly number[], b: readonly number[]): boolean {
 /**
  * The reading chosen for what was typed: the writing shown, and the label it
  * is kept as. Part of a structure before a whole molecule - a label stands
- * for part of one - then the fewest letters made capitals.
+ * for part of one - then an element with its H typed H first (ho is HO, OH
+ * - not holmium), then the fewest letters made capitals.
  */
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
@@ -143,20 +149,26 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   let best: { shown: string; kept: string; rank: number[] } | null = null;
   const consider = (shown: string, kept: string, r: Reading, w: Writing) => {
     if (!r || !allowed(typed, kept, r)) return;
-    const rank = [r.whole ? 1 : 0, w.cost, w.loose, w.words];
+    // (an element with its H, typed H first: HO, H2N)
+    const hFirst = kept !== shown && !!r.element && shown.startsWith("H");
+    const rank = [r.whole ? 1 : 0, hFirst ? 0 : 1, w.cost, w.loose, w.words];
     if (!best || before(rank, best.rank)) best = { shown, kept, rank };
   };
   let tried = 0;
   for (const w of writings(typed)) {
-    if (w.cost === 0) continue;
-    if (++tried > 120) break;
-    consider(w.text, w.text, reads(w.text), w);
-    // (as drawn on a bond's left: only from letters each in a word)
-    if (w.loose === 0)
+    // (as typed - no letter made a capital - it reads as nothing: asked above)
+    const r = w.cost > 0 ? reads(w.text) : null;
+    if (w.cost > 0) {
+      if (++tried > 120) break;
+      consider(w.text, w.text, r, w);
+    }
+    // (as drawn on a bond's left - HO, AcO as typed, or aco - only what reads
+    // as nothing as it is written, from letters each in a word: hcl is HCl)
+    if (!r && w.loose === 0)
       for (const f of forwards(w.text)) {
         // (a group, drawn the other way round: never a whole molecule)
-        const r = reads(f);
-        if (r && !r.whole) consider(w.text, f, r, w);
+        const back = reads(f);
+        if (back && !back.whole) consider(w.text, f, back, w);
       }
   }
   return best ?? { shown: typed, kept: typed };
