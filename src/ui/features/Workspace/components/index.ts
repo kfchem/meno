@@ -4,6 +4,7 @@ export { PanZoom2D } from "./PanZoom2D";
 export { default as FitToContent2D } from "./FitToContent2D";
 export { default as AromaticCircles2D } from "./AromaticCircles2D";
 export { default as Wedges2D } from "./Wedges2D";
+export { default as Fills2D } from "./Fills2D";
 export { default as Labels2D } from "./Labels2D";
 export { default as LabelTyping2D } from "./LabelTyping2D";
 export { default as JoinCaps2D } from "./JoinCaps2D";

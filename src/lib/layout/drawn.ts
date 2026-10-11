@@ -161,6 +161,78 @@ export function readStereo(
   return { tetra, cisTrans, axes };
 }
 
+/** How far a bond in the page is turned, either way, to ask whether what the drawing says of a centre or a double bond stays the same. */
+const UNSURE_TURN = (12 * Math.PI) / 180;
+
+const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: number) => ({
+  x: c.x + (p.x - c.x) * Math.cos(t) - (p.y - c.y) * Math.sin(t),
+  y: c.y + (p.x - c.x) * Math.sin(t) + (p.y - c.y) * Math.cos(t),
+});
+
+/**
+ * What the drawing says of its stereochemistry only by luck, by index: the
+ * stereocentres drawn flat with a wedge whose reading changes with one of
+ * their bonds in the page turned a little either way, or with every bond
+ * in one half of the page (ibogaine's bridgehead, bilobalide's carbon,
+ * drawn so); and the double bonds whose cis or trans changes so, a group
+ * on one in line with it. A reader - RDKit, a chemist - may take either
+ * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
+ */
+export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
+  const neighbours: number[][] = atoms.map(() => []);
+  const bondOf = new Map<string, DrawnBond>();
+  bonds.forEach((b) => {
+    if (b.a === b.b || bondOf.has(key(b.a, b.b))) return;
+    neighbours[b.a].push(b.b);
+    neighbours[b.b].push(b.a);
+    bondOf.set(key(b.a, b.b), b);
+  });
+  const lift = (c: number, n: number) => {
+    const w = bondOf.get(key(c, n))?.wedge;
+    return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
+  };
+  const centres: number[] = [];
+  atoms.forEach((atom, c) => {
+    const around = neighbours[c];
+    if (atom.z != null || atom.hs > 1 || around.length + atom.hs !== 4) return;
+    if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
+    if (!around.some((n) => lift(c, n) !== 0)) return;
+    const order = atom.hs ? [...around, -1] : around;
+    const lifts = order.map((n) => (n === -1 ? 0 : lift(c, n)));
+    const at = (n: number) => (n === -1 ? null : atoms[n]);
+    const read = (pts: ({ x: number; y: number } | null)[]) => drawnVolume(atom, pts, lifts);
+    const pts = order.map(at);
+    const v = read(pts);
+    const steady = pts.every((p, i) => !p || lifts[i] !== 0 || [-UNSURE_TURN, UNSURE_TURN].every((t) => read(pts.map((q, j) => (j === i && q ? turned(q, atom, t) : q))) === v));
+    const angles = around.map((n) => Math.atan2(atoms[n].y - atom.y, atoms[n].x - atom.x)).sort((p, q) => p - q);
+    const widest = Math.max(...angles.map((t, k) => (k + 1 < angles.length ? angles[k + 1] : angles[0] + 2 * Math.PI) - t));
+    const spread = around.length < 4 || widest < Math.PI - UNSURE_TURN;
+    if (!v || !steady || !spread) centres.push(c);
+  });
+  const doubles: number[] = [];
+  bonds.forEach((bond, i) => {
+    if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
+    const { a, b } = bond;
+    if (atoms[a].z != null || atoms[b].z != null || inSmallRing(neighbours, a, b)) return;
+    if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
+    // (a group on either end within the turn of the bond's own line: cis and trans told apart by luck)
+    // (a group exactly in line says nothing, as an allene's middle does; one
+    // by a double or triple bond is no group of a stereo double bond)
+    const inLine = (end: number, other: number) =>
+      neighbours[end]
+        .filter((n) => n !== other && bondOf.get(key(end, n))!.order === 1)
+        .some((n) => {
+          const u = Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x);
+          const w = Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x);
+          const off = Math.abs(Math.atan2(Math.sin(u - w), Math.cos(u - w)));
+          return off > 1e-3 && off < UNSURE_TURN;
+        });
+    const groups = neighbours[a].some((n) => n !== b) && neighbours[b].some((n) => n !== a);
+    if (groups && (inLine(a, b) || inLine(b, a))) doubles.push(i);
+  });
+  return { atoms: centres, bonds: doubles };
+}
+
 /**
  * A cage drawn in perspective, as the solid it is drawn from: the solid
  * the engine takes it to be (cage.ts), and the map that takes that solid to

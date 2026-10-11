@@ -34,7 +34,9 @@ import type { Molecule } from "./fetch";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../..");
-const outDir = resolve(root, ".layout");
+// --list=heldout: another list of molecules beside molecules.json (heldout.json), drawn into .layout/heldout/
+const listName = process.argv.find((a) => a.startsWith("--list="))?.slice(7) ?? "molecules";
+const outDir = listName === "molecules" ? resolve(root, ".layout") : resolve(root, ".layout", listName);
 
 type Graph = {
   atoms: {
@@ -170,7 +172,7 @@ const fmt = (m: LayoutMetrics) => {
 };
 
 const listed: Molecule[] = JSON.parse(
-  readFileSync(resolve(here, "molecules.json"), "utf8"),
+  readFileSync(resolve(here, `${listName}.json`), "utf8"),
 ).molecules;
 const basePath = resolve(outDir, "baselines.json");
 if (!existsSync(basePath)) {
@@ -262,7 +264,7 @@ for (const m of listed) {
 // out), drawn and measured as the rest - but a pi system's star, and the
 // haptic bond to it, which are no atom and no bond to measure.
 type Metal = { name: string; label: string; page: string; category: string };
-const metals: Metal[] = JSON.parse(readFileSync(resolve(here, "organometallics.json"), "utf8")).molecules;
+const metals: Metal[] = listName === "molecules" ? JSON.parse(readFileSync(resolve(here, "organometallics.json"), "utf8")).molecules : [];
 const metalTotals = { score: 0, overlaps: 0, crossings: 0, n: 0 };
 let metalCategory = "";
 for (const m of metals) {

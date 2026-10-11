@@ -13,7 +13,8 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, RingFills, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { ringKeyOf } from "./utils/rings";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
@@ -39,6 +40,8 @@ export type WorkspaceDocument = {
   aromaticEnabled: boolean;
   /** Per-ring aromatic circle flags, keyed by ring key. */
   aromaticRings: Record<string, boolean>;
+  /** The rings filled with a colour, by ring key (`RingFills`). */
+  ringFills?: RingFills;
   /** Ids are handed out from one counter shared by atoms and bonds. */
   nextId: number;
   nextArrowId: number;
@@ -705,7 +708,7 @@ export function replaceDraggedAtomWith(
 /** Replaces the content, e.g. opening a file: one undo step for the import. */
 export function replaceModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { ringFills?: RingFills },
 ): WorkspaceDocument {
   const maxId = Math.max(
     0,
@@ -729,6 +732,7 @@ export function replaceModel(
     nextWorkflowId: 1,
     aromaticEnabled: false,
     aromaticRings: {},
+    ringFills: { ...(next.ringFills ?? {}) },
     nextId: Math.max(1, maxId + 1),
   };
 }
@@ -736,7 +740,7 @@ export function replaceModel(
 /** Adds another structure alongside the current one, renumbering its ids. */
 export function appendModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { ringFills?: RingFills },
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
   const idMap = new Map<number, number>();
@@ -768,6 +772,11 @@ export function appendModel(
     b: idMap.get(b.b) ?? b.b,
     ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
   }));
+  // (its rings' fills with it, by its atoms' new ids)
+  const fills = Object.entries(next.ringFills ?? {}).flatMap(([key, color]) => {
+    const ids = key.split("-").map((id) => idMap.get(Number(id)));
+    return ids.every((id) => id != null) ? [[ringKeyOf(ids as number[]), color] as const] : [];
+  });
   return {
     ...doc,
     nextId: cursor,
@@ -775,6 +784,7 @@ export function appendModel(
       atoms: [...doc.model.atoms, ...atoms],
       bonds: [...doc.model.bonds, ...bonds],
     },
+    ...(fills.length ? { ringFills: { ...(doc.ringFills ?? {}), ...Object.fromEntries(fills) } } : {}),
   };
 }
 
@@ -1052,9 +1062,10 @@ export function removePlus(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   return pluses.length === (doc.pluses ?? []).length ? doc : { ...doc, pluses };
 }
 
-/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; and texts' sheets, by their top left. */
+/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; texts' sheets, by their top left; PDFs, by where they lie. */
 export type MarkPlaces = {
   pictures?: { id: number; x: number; y: number; turn?: number }[];
+  pdfs?: { id: number; x: number; y: number }[];
   texts?: { id: number; x: number; y: number }[];
   arrows?: { id: number; x: number; y: number }[];
   pluses?: { id: number; x: number; y: number }[];
@@ -1075,6 +1086,11 @@ export type MarksAt = { atoms: { id: number; chargeAt?: MarkAt; stereoAt?: MarkA
 export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): WorkspaceDocument {
   if (places?.markAts) return placeMarks(withMarksAt(doc, places.markAts), { ...places, markAts: undefined });
   if (places?.molecules3d?.length) return placeMarks(moveMolecules3d(doc, places.molecules3d), { ...places, molecules3d: [] });
+  if (places?.pdfs?.length) {
+    const at = new Map(places.pdfs.map((p) => [p.id, p]));
+    const placed = { ...doc, pdfs: (doc.pdfs ?? []).map((p) => (at.has(p.id) ? { ...p, x: at.get(p.id)!.x, y: at.get(p.id)!.y } : p)) };
+    return placeMarks(placed, { ...places, pdfs: [] });
+  }
   if (places?.texts?.length) {
     const at = new Map(places.texts.map((t) => [t.id, t]));
     const placed = { ...doc, texts: (doc.texts ?? []).map((t) => (at.has(t.id) && t.at ? { ...t, at: { x: at.get(t.id)!.x, y: at.get(t.id)!.y } } : t)) };
@@ -1269,6 +1285,12 @@ export function placePdfPage(doc: WorkspaceDocument, id: number, page: number, x
   return { ...doc, pdfs: doc.pdfs!.map((p) => (p.id === id ? next : p)) };
 }
 
+/** `doc` without the PDFs `ids`. */
+export function removePdfs(doc: WorkspaceDocument, ids: ReadonlySet<number>): WorkspaceDocument {
+  if (!ids.size || !(doc.pdfs ?? []).some((p) => ids.has(p.id))) return doc;
+  return { ...doc, pdfs: doc.pdfs!.filter((p) => !ids.has(p.id)) };
+}
+
 /** `doc` without a PDF. */
 /** Where a PDF is read in the column, as far as it can be: its pages there, at a size between a quarter and eight times the column's width. */
 export function readingOf(r: { at: number; zoom: number }, pages: number): NonNullable<PdfItem["reading"]> {
@@ -1384,6 +1406,43 @@ function withoutArrowsOf(doc: WorkspaceDocument, gone: ReadonlySet<number>): Wor
   };
 }
 
+// --- colour ----------------------------------------------------------------
+
+/**
+ * `doc` with the atoms and bonds `parts` names given `color` - drawn in it
+ * (`which` "color"), or highlighted in it - or (null) none.
+ */
+export function colourParts(
+  doc: WorkspaceDocument,
+  parts: { atoms: Iterable<number>; bonds: Iterable<number> },
+  which: "color" | "highlight",
+  color: string | null,
+): WorkspaceDocument {
+  const atomIds = new Set(parts.atoms);
+  const bondIds = new Set(parts.bonds);
+  let changed = false;
+  const paint = <T extends { id: number; color?: string; highlight?: string }>(x: T, named: ReadonlySet<number>): T => {
+    if (!named.has(x.id) || (x[which] ?? null) === color) return x;
+    changed = true;
+    const { [which]: _was, ...rest } = x;
+    return (color ? { ...rest, [which]: color } : rest) as T;
+  };
+  const atoms = doc.model.atoms.map((a) => paint(a, atomIds));
+  const bonds = doc.model.bonds.map((b) => paint(b, bondIds));
+  return changed ? { ...doc, model: { atoms, bonds } } : doc;
+}
+
+/** `doc` with the rings `keys` filled with `color`, or (null) not. */
+export function fillRings(doc: WorkspaceDocument, keys: readonly string[], color: string | null): WorkspaceDocument {
+  const was = doc.ringFills ?? {};
+  const next = { ...was };
+  for (const k of keys) {
+    if (color) next[k] = color;
+    else delete next[k];
+  }
+  return keys.every((k) => was[k] === next[k]) ? doc : { ...doc, ringFills: next };
+}
+
 // --- aromatic circles ------------------------------------------------------
 
 export function setAromaticEnabled(
@@ -1476,6 +1535,23 @@ export function setTextOf(doc: WorkspaceDocument, id: number, of: TextOf): Works
   const texts = doc.texts!.slice();
   texts[at] = { ...texts[at], of };
   return { ...doc, texts };
+}
+
+/**
+ * Texts' sheets pasted: each a text of its own, even where the workspace
+ * holds the same, its sheet where it says, not read in the column - its
+ * id, as it is added, among `ids`.
+ */
+export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<WorkspaceText, "id">[]): { doc: WorkspaceDocument; ids: number[] } {
+  const held = (doc.texts ?? []).slice();
+  let next = doc.nextTextId ?? Math.max(0, ...held.map((t) => t.id)) + 1;
+  const ids: number[] = [];
+  for (const t of sheets) {
+    if (!t.at) continue;
+    held.push({ id: next, name: t.name || newTextName(held), text: t.text, at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    ids.push(next++);
+  }
+  return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };
 }
 
 /** The texts `ids` taken out. */

@@ -42,6 +42,8 @@ export type AppSettings = {
   pointer: PointerSettings;
   /** How an atom's label is read as it is typed. */
   labels: LabelSettings;
+  /** How words on the page are written as they are typed. */
+  words: WordSettings;
   /** How a workflow's jobs run (Settings, Calculations; docs/WORKFLOWS.md). */
   calculations: CalculationSettings;
   /** The procedures saved (docs/WORKFLOWS.md, *Procedures*): put down again from Quick Add. */
@@ -78,6 +80,12 @@ export type PointerSettings = {
 /** How an atom's label is read as it is typed (Workspace/LabelTyping2D; lib/chem/smartLabel). */
 export type LabelSettings = {
   /** As it was meant - nh2 as NH2, obz as OBz - or, off, exactly as typed. */
+  smart: boolean;
+};
+
+/** How words on the page are written as they are typed (Workspace/CaptionTyping2D; lib/text/smartWords). */
+export type WordSettings = {
+  /** As they are meant - 60dc as 60 °C, -78 as −78, 1-2 h as 1–2 h - or, off, exactly as typed. */
   smart: boolean;
 };
 
@@ -150,6 +158,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
   labels: { smart: true },
+  words: { smart: true },
   calculations: {},
   procedures: [],
 };
@@ -174,6 +183,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     pictures: acceptPictures(r.pictures),
     pointer: acceptPointer(r.pointer),
     labels: { smart: (r.labels as { smart?: unknown } | undefined)?.smart !== false },
+    words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
     procedures: acceptProcedures(r.procedures),
   };
@@ -376,6 +386,7 @@ type SettingsState = AppSettings & {
   setPictures: (pictures: PictureSettings) => void;
   setPointer: (pointer: PointerSettings) => void;
   setLabels: (labels: LabelSettings) => void;
+  setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
   setProcedures: (procedures: SavedProcedure[]) => void;
 };
@@ -388,9 +399,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, calculations, procedures } = get();
+      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, calculations, procedures }),
+        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -435,6 +446,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setLabels: (labels) => {
       set({ labels });
+      scheduleSave();
+    },
+    setWords: (words) => {
+      set({ words });
       scheduleSave();
     },
     setCalculations: (calculations) => {

@@ -10,7 +10,18 @@ npm run layout-labels                                  # a label's H running int
 npm run layout-compare -- before.json                  # Meno's scores against an earlier .layout/scores.json
 npm run layout-stereo                                  # each drawing as a MOL file -> .layout/stereo.json
 <chem python> scripts/layout/stereo.py                 # RDKit reads each back: the stereochemistry as given?
+
+npm run layout-fetch -- --list=heldout                 # the held-out natural products (heldout.json), likewise
+<chem python> scripts/layout/baselines.py --list=heldout
+npm run layout-bench -- --list=heldout                 # writes .layout/heldout/index.html
 ```
+
+`heldout.json` lists natural products kept out of the benchmark: nothing
+is tuned for them, so they show how the engine does on a structure nobody
+has drawn for it (the maintainer, 2026-10-11: outside the benchmark,
+natural products come out much worse). A rule found on them is a rule;
+once one is tuned for, it belongs in `molecules.json`, and the held-out
+list gets new ones.
 
 How to tune the engine with these, and what has been decided, is in
 [`docs/LAYOUT-2D-TUNING.md`](../../docs/LAYOUT-2D-TUNING.md).

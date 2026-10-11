@@ -2,10 +2,12 @@ import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } fro
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
+import type { ArrowWords } from "../../../../lib/chem/captions";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { Role3D } from "../../../../lib/chem/style3d";
+import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -36,6 +38,10 @@ export type Atom = EditorAtom & {
   stereoAt?: MarkAt;
   /** What was typed for its label, where it was read as something else (obz, read as OBz): had back from its menu. */
   typed?: string;
+  /** The colour its label - its charge too - is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
+  highlight?: string;
 };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
@@ -59,6 +65,10 @@ export type Bond = BondChem & {
   dative?: boolean;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
+  /** The colour it is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
+  highlight?: string;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -68,6 +78,8 @@ export type Sel = { atoms: Set<number>; bonds: Set<number> };
 export type SelFlow = { sets: Set<number>; steps: Set<number> };
 
 export type Model = { atoms: Atom[]; bonds: Bond[] };
+/** Rings filled with a colour (#rrggbb), behind the drawing, by each ring's key: its atoms' ids, ascending, joined by "-" (utils/rings). */
+export type RingFills = Record<string, string>;
 export type Arrow = {
   id: number;
   x: number;
@@ -207,6 +219,8 @@ export type Molecule3D = {
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
+  /** Its atoms' names and residues and its secondary structure, where it is a PDB entry's chains: drawn as ribbons (lib/chem/biopolymer). */
+  biopolymer?: Biopolymer;
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
@@ -395,7 +409,19 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
 export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
-export type Drawn = Model & { arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
+export type Drawn = Model & {
+  ringFills?: RingFills;
+  arrows?: Arrow[];
+  pluses?: Plus[];
+  captions?: Caption[];
+  molecules3d?: Carried3D[];
+  flow?: FlowParts;
+  pictures?: PictureItem[];
+  /** PDFs carried: each as it lies - its file by its SHA-256, held in Meno's cache - not where it is read. */
+  pdfs?: PdfItem[];
+  /** Texts' sheets carried: each text whole, where its sheet lies. */
+  sheets?: WorkspaceText[];
+};
 
 export type EditorState = {
   model: Model;
@@ -658,6 +684,12 @@ export type EditorState = {
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
   turnPdf: (id: number, page: number) => void;
+  /** The PDFs selected, by id: moved, copied and deleted with the rest of the selection (docs/PDF.md). */
+  selPdfs: Set<number>;
+  /** These PDFs selected: alone, or (`add`) besides what is already. */
+  selectPdfs: (ids: Iterable<number>, add?: boolean) => void;
+  /** A PDF added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  togglePdfSel: (id: number) => void;
   /** A PDF's pages spread out, or gathered again. */
   spreadPdf: (id: number, spread: boolean) => void;
   /** A page of a PDF spread put in a place of its own, its middle at (x, y) on the page, on top of the others: one step for a drag (`gesture`). */
@@ -721,6 +753,14 @@ export type EditorState = {
    */
   leaveCaptionEdit: (n: number, id: number | null) => void;
   captionLeft: { id: number; n: number; at: { x: number; y: number } } | null;
+  /**
+   * Words being written over an arrow, or to go over one as they are kept -
+   * where they stand and how far they reach, the writing's `n` - so that the
+   * arrow is drawn as long as they need as they are written.
+   */
+  wordsWriting: (ArrowWords & { arrow: number; n: number }) | null;
+  /** The words being written over an arrow, or (null) none - those of writing `n` gone. */
+  setWordsWriting: (words: EditorState["wordsWriting"], n?: number) => void;
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
@@ -830,6 +870,15 @@ export type EditorState = {
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
+  /** The rings filled with a colour (`RingFills`). */
+  ringFills: RingFills;
+  /**
+   * The atoms and bonds named given a colour - drawn in it (`which` "color"),
+   * or highlighted in it - or (null) none: one step.
+   */
+  colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
+  fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle?: StyleChoice;
   labelEdit: {

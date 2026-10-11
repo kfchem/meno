@@ -58,7 +58,12 @@ they hang from.
   before its bond lengths: the rest of it goes where the regular polygon
   best fitted to what is fixed puts it, a little larger than the others
   if it must be. A ring system whose rings still come out bent (strychnine)
-  is eased toward rings of their own shape, its bonds giving first.
+  is eased toward rings of their own shape, its bonds giving first. Two
+  rings fused on neighbouring sides of a third meet at the atom the three
+  share, closer than their own angles leave room for - saxitoxin's two
+  five-membered rings beside its six: each is drawn whole, on its own side,
+  and the gap between them opened by the same easing, never one of them
+  squeezed flat against the other's side.
 - **Macrocycles** (nine and more): a chain closed on itself, drawn as one:
   two zigzags, one above the other, joined at their ends, every angle 120
   or 240 degrees - never round. At every corner a substituent takes the
@@ -126,6 +131,24 @@ they hang from.
   one the lower; each three-atom bridge a chair's lower half to one side,
   its middle atom the foot. Seen from above it would have that bridge
   between the rings, hemmed in.
+- **A system that will not lie flat** (2026-10-11, from natural products
+  outside the benchmark): where every flat drawing of it has a fault - an
+  atom on another or on a bond, a bond crossing one not behind it - it is
+  drawn as the solid it is, as a cage is, if it has twenty atoms or fewer:
+  its atoms set in space by how far apart its bonds put them, and seen
+  from the side that reads best (paeoniflorin's cage, rings fused round a
+  middle they close off). Where it has a cage in it with rings fused to the
+  cage on a side - ibogaine's isoquinuclidine, joined to its indole by a
+  seven-membered ring; gelsemine's, its oxindole spiro to it; tetrodotoxin's,
+  its guanidine ring fused to it - the cage is drawn so and the rings
+  fused to it flat onto it, the cage's atoms bonded to them showing their
+  configuration by a wedge. Of these and the flat drawing, the one with the
+  fewest faults, where that is clearly fewer than flat; the cage alone
+  before the whole, unless the whole reads far better. A solid is taken
+  only with every stereocentre in it as given: a ring fusion is cis or
+  trans with the same bonds between the same atoms, so a solid found from
+  how far apart the bonds put its atoms may have one the wrong way - and
+  morphine, flat with its bridge across, stays as it was.
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds
@@ -173,6 +196,13 @@ lie level either way round - the drawing takes the one that reads best
   right of it. Phenanthrene's third ring goes up and to the right; a
   steroid's A and B rings form the row, with C and D above and to the right
   - the way steroids are always drawn.
+- **A fusion H upright.** A stereocentre where rings of five to eight are
+  fused (not bridged, not on a macrocycle) gets its H drawn last (section
+  6), but the way the molecule is turned is chosen counting it where it
+  will go: a turn that leaves it no room to stand upright is the worse for
+  it. So lovastatin's hexahydronaphthalene lies in a row with its 8a-H
+  straight up, as it is always drawn, rather than aslant with the H
+  squeezed beside its ester.
 - **A biaryl hung anti**: a ring system hung from a ring's atom by a
   bond, where both have something beside the bond, is hung the way round
   that puts the heavier of each on opposite sides - BINOL's two OH, BINAP's
@@ -185,7 +215,11 @@ lie level either way round - the drawing takes the one that reads best
   fused to it go below: quinoline's N, indole's NH, coumarin's O at the
   bottom, and so morphine's ether O and strychnine's indoline N, as IUPAC
   draws morphinan and strychnidine. Which way up a ring system is comes
-  before how the rest of its rings lie.
+  before how the rest of its rings lie. A flavonoid is the exception (the
+  maintainer, 2026-10-11): the ring O of a chromane or chromene with an
+  aryl ring on the atom next to it, or the one after - a flavone's, a
+  flavanone's, a catechin's, an isoflavone's - stands at the top, its B
+  ring to the right, as they are always drawn.
 - **Seen from the face its angular groups are on.** A ring system has two
   faces, and a drawing from one is the mirror image of a drawing from the
   other, every wedge a hash. It is drawn from the face its angular groups
@@ -294,7 +328,12 @@ last, when room is made for them as for an H, by the same small moves
   Where that spot is taken - the middle of morphine or strychnine, hemmed
   in by rings - the H goes wherever round its atom there is most room,
   clear of atoms and bonds and crossing none; its wedge says the same
-  whichever way it points.
+  whichever way it points. It goes into one of its own rings only as a
+  steroid's does: straight up or down, into a ring with no double bond of
+  its own (one no other ring shares, whose second line is drawn inside
+  it). Aslant into a ring, or into lovastatin's ring with its double bond,
+  it reads as pointing into the ring; it goes outside where there is room.
+  An H with three rings or more round its atom keeps to the most room.
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.

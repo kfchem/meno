@@ -3,7 +3,9 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
+import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
@@ -16,6 +18,9 @@ import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
+import { readPdfs } from "./pdfItems";
+import { pdfBounds } from "../../../../lib/pdf/layout";
+import { drawnSheetBox } from "./textSheets";
 
 type Pt = { x: number; y: number };
 
@@ -33,7 +38,9 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
       ? fragmentOf(model, around)
       : new Set<number>();
   if (!atoms.size) return null;
-  const part = partOf(model, atoms);
+  // (the fills of the rings it holds whole, with it)
+  const fills = fillsAmong(drawn.ringFills, atoms);
+  const part = { ...partOf(model, atoms), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
   if (!sel.atoms.size) return part;
   const { arrows, pluses, captions } = schemeAmong(drawn, atoms);
   return {
@@ -102,8 +109,8 @@ export function clipItems(part: Drawn): ClipItem[] {
   // molecules in 3D alone: a molfile in 3D, as they are seen
   if (!part.atoms.length) {
     const ms = part.molecules3d ?? [];
-    // (a workflow's parts, or pictures, alone: Meno's record, which no other program reads)
-    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
+    // (a workflow's parts, pictures, PDFs or texts' sheets, alone: Meno's record, which no other program reads)
+    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
@@ -137,12 +144,16 @@ export function recordText(part: Drawn): string {
     version: VERSION,
     atoms: part.atoms,
     bonds: part.bonds,
+    ...(part.ringFills && Object.keys(part.ringFills).length ? { ringFills: part.ringFills } : {}),
     ...(part.arrows?.length ? { arrows: part.arrows } : {}),
     ...(part.pluses?.length ? { pluses: part.pluses } : {}),
     ...(part.captions?.length ? { captions: part.captions } : {}),
     ...(part.molecules3d?.length ? { molecules3d: part.molecules3d } : {}),
     ...(hasFlow(part) ? { flow: part.flow } : {}),
     ...(part.pictures?.length ? { pictures: part.pictures } : {}),
+    // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
+    ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
+    ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
   });
 }
 
@@ -150,6 +161,8 @@ export function recordText(part: Drawn): string {
 export const hasFlow = (part: Pick<Drawn, "flow">) => !!(part.flow?.sets.length || part.flow?.steps.length);
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** A colour as Meno keeps one: #rrggbb. */
+export const isColour = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
 /** The structure in Meno's own record, or null if `text` is not one this version reads. */
 export function readRecord(text: string): Drawn | null {
@@ -159,9 +172,18 @@ export function readRecord(text: string): Drawn | null {
   } catch {
     return null;
   }
-  const r = data as { format?: unknown; version?: unknown };
+  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown };
   if (r?.format !== RECORD || r.version !== VERSION) return null;
-  return readDrawn(data);
+  const drawn = readDrawn(data);
+  if (!drawn) return null;
+  // (a copy's PDFs and texts' sheets: a workspace's file keeps its own, apart)
+  const pdfs = readPdfs(r.pdfs).map((p, i) => ({ ...p, id: i + 1 }));
+  const sheets = (Array.isArray(r.sheets) ? (r.sheets as { name?: unknown; text?: unknown; at?: { x?: unknown; y?: unknown }; icon?: unknown }[]) : []).flatMap((t, i) =>
+    typeof t?.name === "string" && typeof t.text === "string" && isNum(t.at?.x) && isNum(t.at?.y)
+      ? [{ id: i + 1, name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }]
+      : [],
+  );
+  return { ...drawn, ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
 
 /**
@@ -175,6 +197,7 @@ export function readDrawn(data: unknown): Drawn | null {
     version?: unknown;
     atoms?: unknown;
     bonds?: unknown;
+    ringFills?: unknown;
     arrows?: unknown;
     pluses?: unknown;
     captions?: unknown;
@@ -240,9 +263,22 @@ export function readDrawn(data: unknown): Drawn | null {
     }
     return out;
   };
+  // (colours only as colours: what is not one is left out - it would go into a picture's markup)
+  const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
+    const out = { ...x };
+    for (const k of ["color", "highlight"] as const) if (!isColour(x[k])) delete out[k];
+    return out;
+  };
+  // (a ring's fill where its key and its colour read)
+  const ringFills = Object.fromEntries(
+    Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
+      ([key, color]) => /^\d+(-\d+){2,}$/.test(key) && key.split("-").every((id) => ids.has(Number(id))) && isColour(color),
+    ),
+  ) as Record<string, string>;
   return {
-    atoms: atoms.map((a) => withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]) as Atom),
-    bonds: bonds.map((b) => withMarks(b, ["stereoAt"])) as Bond[],
+    atoms: atoms.map((a) => withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])) as Atom),
+    bonds: bonds.map((b) => withColours(withMarks(b, ["stereoAt"]))) as Bond[],
+    ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),
     ...(pluses.length ? { pluses } : {}),
     ...(captions.length ? { captions } : {}),
@@ -330,6 +366,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
       ? (m.drawnFrom as (number | null)[])
       : undefined;
   const stereo = readStereo(m.stereo, n, bonds.length);
+  const biopolymer = readBiopolymer(m.biopolymer, n);
   const calc = readCalc(m.calc, n, 1 + frames.length);
   return {
     atoms: atoms as Carried3D["atoms"],
@@ -346,6 +383,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(biopolymer ? { biopolymer } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
@@ -407,6 +445,10 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
       { x: p.x - p.w / 2, y: p.y - p.h / 2 },
       { x: p.x + p.w / 2, y: p.y + p.h / 2 },
     ]),
+    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? [])].flatMap((b) => [
+      { x: b.x0, y: b.y0 },
+      { x: b.x1, y: b.y1 },
+    ]),
   ];
   if (!points.length) return drawn;
   const xs = points.map((a) => a.x);
@@ -422,6 +464,8 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.captions ? { captions: drawn.captions.map(moved) } : {}),
     ...(drawn.molecules3d ? { molecules3d: drawn.molecules3d.map((m) => ({ ...m, at: moved(m.at) })) } : {}),
     ...(drawn.pictures ? { pictures: drawn.pictures.map(moved) } : {}),
+    ...(drawn.pdfs ? { pdfs: drawn.pdfs.map(moved) } : {}),
+    ...(drawn.sheets ? { sheets: drawn.sheets.map((t) => (t.at ? { ...t, at: moved(t.at) } : t)) } : {}),
     ...(drawn.flow
       ? {
           flow: {

@@ -383,8 +383,9 @@ export function useStructureEvents(
       e.target === domRef.current &&
       stClick.hovered.atomId == null &&
       stClick.hovered.bondId == null &&
-      // (a click on a text's sheet selects it: not a click on nothing)
+      // (a click on a text's sheet, or on a PDF, selects it: not a click on nothing)
       stClick.hoveredText == null &&
+      stClick.hoveredPdf == null &&
       !heldOff
     )
       stClick.clearSel();
@@ -451,7 +452,20 @@ export function useStructureEvents(
       }
     }
     if (!dropped) return;
-    const f = dropped;
+    await openFilesAt(files, at, () => void dropAppend(drop));
+  };
+
+  /**
+   * Files put on the page at `at`, dropped or pasted - copied in the Finder
+   * or Explorer: PDFs and pictures held and laid there; a workspace's or a
+   * record's drawing, a text's sheet, or a structure read from its file,
+   * there, selected.
+   */
+  const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void) => {
+    const f = files[0];
+    if (!f) return;
+    const head = await f.slice(0, MARK_REACH).text();
+    const kind = await kindOfFile(f.name, head);
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
     const pdfs = files.filter((g) => /\.pdf$/i.test(g.name) || g.type === "application/pdf");
     if (pdfs.length) {
@@ -525,7 +539,7 @@ export function useStructureEvents(
         .appendModel(toModel(shifted), importedScheme(result, dx, dy, at));
       setImportError(null);
     } catch (err) {
-      reportImportError("append", err, () => void dropAppend(drop));
+      reportImportError("append", err, again);
     }
   };
 
@@ -576,6 +590,7 @@ export function useStructureEvents(
     handleWrapperMouseLeave,
     handleWrapperClick,
     dropZone,
+    openFilesAt,
     importError,
     dismissImportError,
     handleMouseDownCapture,
