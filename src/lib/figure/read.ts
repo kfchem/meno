@@ -10,7 +10,16 @@
 import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Stroke, type Wedge } from "./drawn";
 
 /** An atom read: where it lies on the page, its label as drawn - none for a carbon at bonds' meeting - and what is unsure of it. */
-export type ReadAtom = { x: number; y: number; label?: string; box?: Box; unsure?: string[] };
+export type ReadAtom = {
+  x: number;
+  y: number;
+  label?: string;
+  /** Read as an element, with its charge, rather than a label as drawn: as a picture's reader gives it. */
+  el?: string;
+  charge?: number;
+  box?: Box;
+  unsure?: string[];
+};
 
 /** A bond read, between atoms by index, `a` at a wedge's or a hash's narrow end. */
 export type ReadBond = {
@@ -20,6 +29,8 @@ export type ReadBond = {
   stereo?: "up" | "down" | "wavy";
   /** Its hashes even: which end is narrow is not drawn. */
   either?: true;
+  /** Only which end lies nearer is known - as a picture's reader gives it - not which is narrow: `up`, `b` nearer than `a`. */
+  facing?: true;
   /** In a ring drawn with a circle in it: its order is the ring's to work out. */
   aromatic?: true;
   bold?: boolean;
