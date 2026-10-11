@@ -414,8 +414,21 @@ there are none, which the format reads as none. A drawing with no arrow, or
 more than one, is not saved as an RXN file: the save says why.
 
 MOL files are written V2000 where that can say everything, and V3000
-where it cannot: a coordination or hydrogen bond (V2000's types stop at 8),
-and whether a coordination bond is shown plainly (DISP=COORD). A query bond
-is written with its query type, and a double bond of either configuration
-as V2000's stereo 3, V3000's CFG=2. What RDKit is asked about takes a query
-bond as the bond it is drawn as.
+where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past
+999 or a coordinate past xxxxx.xxxx (V2000's fields are fixed in width:
+the format's *automatic V3000 output*, long fields); a coordination or
+hydrogen bond (V2000's types stop at 8), and whether a coordination bond
+is shown plainly (DISP=COORD). A query bond is written with its query
+type, and a double bond of either configuration as V2000's stereo 3,
+V3000's CFG=2. What RDKit is asked about takes a query bond as the bond it
+is drawn as.
+
+A molecule in 3D - an SD file's records, a copy of molecules in 3D alone,
+and what is sent to the RDKit plugin to draw as a formula or to find bond
+orders and hydrogens for - is written by `writeMolfile3d`, its header
+saying 3D: V2000 wherever it can be, and V3000 past 999 atoms or bonds, a
+coordinate or a symbol wider than V2000's field, or a coordination or
+hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
+atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
+such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
+quote, a double quote, "=", "(" or ")" are written in double quotes.
