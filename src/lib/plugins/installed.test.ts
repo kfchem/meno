@@ -59,6 +59,17 @@ describe("a program installed separately", () => {
     expect(useAppSettings.getState().plugins.programs).toEqual({ "orca:orca": "/Applications/orca_6/orca" });
   });
 
+  it("keeps where it was located, whatever a look begun before answers after", async () => {
+    // (the window coming back as the file dialog closes: a look begun with nothing located yet, answering late)
+    let late: (v: unknown) => void = () => {};
+    const slow = ((_cmd: string, a?: Record<string, unknown>) => (a?.located ? Promise.resolve({ path: a.located }) : new Promise((go) => (late = go)))) as never;
+    const looking = lookFor("orca", "orca", slow);
+    expect(await locate("orca", ORCA, async () => "/Applications/orca_6/orca", slow)).toBe("/Applications/orca_6/orca");
+    late(null);
+    await looking;
+    expect(whereIs("orca", "orca")).toBe("/Applications/orca_6/orca");
+  });
+
   it("is located on macOS by picking the app that holds it: the program inside it kept", async () => {
     const inside = "/Applications/Blender.app/Contents/MacOS/Blender";
     const asked: unknown[] = [];
