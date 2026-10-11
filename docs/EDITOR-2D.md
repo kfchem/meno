@@ -203,8 +203,8 @@ workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide or a picture made larger
-takes another's width or height, and words made wider another's width.
+thin line in Meno's accent showing each. A slide, a picture or a shape made
+larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
