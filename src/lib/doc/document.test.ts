@@ -130,6 +130,20 @@ describe("createDocument", () => {
     expect(doc.getState().title).toBe("untitled");
   });
 
+  it("takes back a gesture's step when it is let go of, leaving nothing to redo", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    expect(doc.drop("drag:1")).toBe(true);
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "untitled" });
+    expect(doc.history().redoDepth).toBe(0);
+    expect(doc.history().undoLabel).toBe("add C");
+    // (a gesture that made no step - another's on top - takes nothing back)
+    expect(doc.drop("drag:2")).toBe(false);
+    expect(doc.getState().atoms).toEqual(["C"]);
+  });
+
   it("keeps the history bounded, dropping the oldest steps", () => {
     const doc = createDocument<Doc>(initial, { limit: 3 });
     for (const el of ["C", "O", "N", "S", "P"]) doc.edit(`add ${el}`, addAtom(el));

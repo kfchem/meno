@@ -173,7 +173,7 @@ export function Atoms2D() {
   /**
    * Moving an atom, from its first move to the release. It snaps as it goes;
    * after a pause of FREE_MS it follows the pointer freely. Dropped on
-   * another atom, it becomes that atom.
+   * another atom, it becomes that atom. Escape lets it go, where it was.
    */
   const moveGesture = (idx: number, first: PointerEvent, pid: number | null) => {
     const thisAtom = model.atoms[idx];
@@ -202,19 +202,35 @@ export function Atoms2D() {
     beginMoveDrag(thisAtom.id, { x: p0.x, y: p0.y });
     updateMovePointer(p0.x, p0.y);
     restartHold();
+    let letGo = false;
     const onMove = (ev: PointerEvent) => {
-      if (!cand.current.active) return;
+      if (!cand.current.active || letGo) return;
       const p = toWorld(ev.clientX, ev.clientY);
       updateMovePointer(p.x, p.y);
       restartHold();
+    };
+    // (the button's release still ends the press: nothing is moved then)
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      letGo = true;
+      clearHold();
+      window.removeEventListener("keydown", onKey, true);
+      endMoveDrag();
     };
     const onUp = (ev: PointerEvent) => {
       clearHold();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
       resetCand();
       endedByInteractive.current = true;
       suppressDoubleClick?.(480);
+      if (letGo) {
+        endPanHold(ev.pointerId ?? pid);
+        return;
+      }
       try {
         const pEnd = toWorld(ev.clientX, ev.clientY);
         // Dropped straight onto another atom: it becomes that atom.
@@ -274,6 +290,7 @@ export function Atoms2D() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
 
   /**

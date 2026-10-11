@@ -138,6 +138,10 @@ export const createModelSlice = (
     doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
   },
 
+  dropMoveAtoms: (gesture: string) => {
+    doc.drop(`move-atoms:${gesture}`);
+  },
+
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
     const { sel, model } = get();
     if (!sel.atoms.size) return;

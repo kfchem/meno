@@ -179,6 +179,17 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const after = doc.getState();
       if (after !== before) noteTurns(doc, gesture, before, after, turnsBefore, turnsAfter);
     },
+    dropTurnMolecules3d: (gesture: string, turnsBefore: Record<number, Turn3D | undefined>) => {
+      if (!doc.drop(gesture)) return;
+      set((prev) => {
+        const turns3d = { ...prev.turns3d };
+        for (const [id, turn] of Object.entries(turnsBefore)) {
+          if (turn) turns3d[Number(id)] = turn;
+          else delete turns3d[Number(id)];
+        }
+        return { ...prev, turns3d };
+      });
+    },
     keepTurns3d: (turnsBefore: Record<number, Turn3D | undefined>, turnsAfter: Record<number, Turn3D>) => {
       const before = doc.getState();
       // (where they stand is as it was: a step of the document's all the

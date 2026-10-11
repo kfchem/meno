@@ -118,3 +118,42 @@ describe("a drag held still a while on the way", () => {
     expect(st().model.atoms.find((x) => x.id === a)).toMatchObject({ x: 0, y: 0 });
   });
 });
+
+// (the maintainer, 2026-10-12: Escape during a drag - an atom, the
+// selection, a turn of it - puts everything back where it was)
+describe("a move let go of by Escape", () => {
+  it("puts the atoms back where they were, leaving nothing to undo or redo of it", () => {
+    const { doc, st } = editor();
+    const a = st().addAtom(0, 0, "C");
+    const b = st().addAtom(L, 0, "O");
+    st().moveAtoms([{ id: a, x: 1, y: 1 }, { id: b, x: 1 + L, y: 1 }], "drag-1");
+    st().moveAtoms([{ id: a, x: 2, y: 2 }, { id: b, x: 2 + L, y: 2 }], "drag-1");
+    st().dropMoveAtoms("drag-1");
+    expect(st().model.atoms.map((x) => [x.x, x.y])).toEqual([
+      [0, 0],
+      [L, 0],
+    ]);
+    expect(doc.history()).toMatchObject({ undoDepth: 2, redoDepth: 0 });
+  });
+
+  it("takes nothing back where the drag had not moved anything yet", () => {
+    const { doc, st } = editor();
+    st().addAtom(0, 0, "C");
+    st().dropMoveAtoms("drag-2");
+    expect(st().model.atoms).toHaveLength(1);
+    expect(doc.history().undoDepth).toBe(1);
+  });
+});
+
+describe("a bond being drawn, let go of by Escape", () => {
+  it("draws nothing when the button comes up", () => {
+    const { doc, st } = editor();
+    const a = st().addAtom(0, 0, "C");
+    st().startExtend(a, "bond");
+    st().updateExtend(L, 0.2);
+    st().cancelExtend();
+    st().commitExtend();
+    expect(st().model.atoms).toHaveLength(1);
+    expect(doc.history().undoDepth).toBe(1);
+  });
+});

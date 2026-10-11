@@ -66,6 +66,12 @@ export interface DocumentStore<T> {
   edit(label: string, updater: (state: T) => T, meta?: EditMeta): boolean;
   undo(): boolean;
   redo(): boolean;
+  /**
+   * Takes back the step a gesture made (its `coalesceKey`), as if it had
+   * never been: a drag let go of by Escape. Nothing is left to redo. False
+   * where the step on top is not that gesture's - it made none.
+   */
+  drop(coalesceKey: string): boolean;
   /** Replaces the content and forgets the history, e.g. after opening a file. */
   reset(state: T, label?: string): void;
   /**
@@ -161,6 +167,13 @@ export function createDocument<T>(
       if (!previous) return false;
       future.unshift(present);
       present = previous;
+      notify();
+      return true;
+    },
+
+    drop(coalesceKey) {
+      if (present.coalesceKey !== coalesceKey || !past.length) return false;
+      present = past.pop()!;
       notify();
       return true;
     },

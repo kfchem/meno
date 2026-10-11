@@ -774,6 +774,8 @@ export type EditorState = {
     drawing?: { id: number; x: number; y: number }[],
     marks?: MarkPlaces,
   ) => void;
+  /** A turn made with turnMolecules3d (`gesture`) let go of by Escape: taken back, nothing left to redo, and the molecules turned as they were (`turnsBefore`). */
+  dropTurnMolecules3d: (gesture: string, turnsBefore: Record<number, Turn3D | undefined>) => void;
   /**
    * Molecules in 3D turned where they stand, by the selection's handle, from
    * `turnsBefore` to `turnsAfter` (each set as it turned): one undo step,
@@ -1198,6 +1200,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
+  dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
   /** The selection deleted, as one undo step. */
