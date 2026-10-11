@@ -274,6 +274,11 @@ highlight's colour, under the drawing, and a small handle stands above it.
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
   each stereocentre keeps its configuration.
+- Turned by the handle or turned over, a selection takes along the
+  reaction arrows, "+" signs and words among it, as a drag does. An
+  arrow is carried round and points as far round, or is mirrored and
+  points the mirrored way. Words move to their new places, their letters
+  upright, and words over an arrow stay with it.
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,

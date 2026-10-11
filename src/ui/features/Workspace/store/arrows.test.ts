@@ -51,3 +51,26 @@ describe("an arrow or a plus dragged and held still a while on the way", () => {
     expect(doc.history().undoDepth).toBe(depth + 2);
   });
 });
+
+describe("a bent arrow of a kind turned over with its reaction", () => {
+  it("keeps its kind and heads, its corner on its other side, its words with it", () => {
+    const { doc, st } = editor();
+    const a = st().addAtom(0, 0, "C");
+    const b = st().addAtom(10, 0, "C");
+    const c = st().addAtom(10, 2, "O");
+    const arrow = st().addArrowBetween({ x: 3, y: 0 }, { x: 7, y: 0 });
+    st().setArrowForm([arrow], { kind: "equilibrium", full: true, corners: [{ along: 0.5, across: 1 }] });
+    const words = st().addCaption("NaH", 5, 1.6, arrow);
+    st().setSel({ atoms: new Set([a, b, c]), bonds: new Set() });
+    st().turnSelectionOver("vertical");
+    const over = st().arrows.find((x) => x.id === arrow)!;
+    expect(over).toMatchObject({ kind: "equilibrium", full: true, corners: [{ along: 0.5, across: -1 }] });
+    expect(Math.cos(over.angle)).toBeCloseTo(-1);
+    // (its corner where a mirror puts it: still above the line, the words still over it)
+    const corner = { x: over.x + Math.cos(over.angle) * 0 - Math.sin(over.angle) * -1, y: over.y + Math.sin(over.angle) * 0 + Math.cos(over.angle) * -1 };
+    expect(corner.y).toBeCloseTo(1);
+    expect(st().captions.find((x) => x.id === words)).toMatchObject({ x: 5, y: 1.6, arrow });
+    doc.undo();
+    expect(st().arrows.find((x) => x.id === arrow)).toMatchObject({ angle: 0, corners: [{ along: 0.5, across: 1 }] });
+  });
+});

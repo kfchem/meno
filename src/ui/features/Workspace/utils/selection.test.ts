@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedOver } from "./selection";
+import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedArrows, turnedOver, turnedOverArrows } from "./selection";
 
 const atom = (id: number, x: number, y: number) => ({ id, x, y, r: 0.9, el: "C" });
 
@@ -71,5 +71,20 @@ describe("turned and turnedOver", () => {
     expect(over.bonds).toEqual([{ id: 12, stereo: "down" }]);
     // a bond reaching out of the selection keeps its wedge
     expect(turnedOver(model, new Set([2]), "horizontal").bonds).toEqual([]);
+  });
+
+  it("carries arrows round, each pointing as far round, and turns them over, each pointing the mirrored way, its corners on its other side", () => {
+    const [a] = turnedArrows([{ id: 1, x: 3, y: 0, angle: 0 }], { x: 1, y: 0 }, Math.PI / 2);
+    expect(a.x).toBeCloseTo(1);
+    expect(a.y).toBeCloseTo(2);
+    expect(a.angle).toBeCloseTo(Math.PI / 2);
+    const arrow = { id: 1, x: 3, y: 1, angle: 0.3, corners: [{ along: 0.5, across: 2 }] };
+    const [lr] = turnedOverArrows([arrow], { x: 1, y: 0 }, "vertical");
+    expect(lr).toMatchObject({ x: -1, y: 1, corners: [{ along: 0.5, across: -2 }] });
+    expect(lr.angle).toBeCloseTo(Math.PI - 0.3);
+    const [ud] = turnedOverArrows([arrow], { x: 1, y: 0 }, "horizontal");
+    expect(ud).toMatchObject({ x: 3, y: -1, angle: -0.3, corners: [{ along: 0.5, across: -2 }] });
+    // (one with no corners has none after)
+    expect(turnedOverArrows([{ id: 2, x: 0, y: 0, angle: 0 }], { x: 1, y: 0 }, "vertical")[0]).not.toHaveProperty("corners");
   });
 });
