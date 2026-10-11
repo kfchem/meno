@@ -66,4 +66,65 @@ describe("words written in place", () => {
     expect(parseFloat(ta.style.top)).toBeCloseTo(b.top - 12.5);
     expect(ta.style.font).toBe("10px Arial");
   });
+
+  it("write what is typed as it is meant, where said to: a step of its own to undo, the part then left as typed", () => {
+    const ed = writing("");
+    const type = (keys: string) => {
+      for (const k of keys) ed.replaceSelection(k);
+    };
+    // (not unless said)
+    type("-78dc ");
+    expect(ed.text).toBe("-78dc ");
+    const on = writing("");
+    on.smart = () => true;
+    const typeOn = (keys: string) => {
+      for (const k of keys) on.replaceSelection(k);
+    };
+    typeOn("60dc ");
+    expect(on.text).toBe("60 °C ");
+    expect(on.sel).toEqual(caretAt(6));
+    on.undo();
+    expect(on.text).toBe("60dc ");
+    expect(on.sel).toEqual(caretAt(5));
+    // (left as typed: the same word ended again)
+    on.command({ kind: "delete", unit: "letter", dir: -1 }, true);
+    typeOn(")");
+    expect(on.text).toBe("60dc)");
+    on.kept();
+    expect(on.text).toBe("60dc)");
+    // (written again: as it is meant)
+    on.command({ kind: "delete", unit: "letter", dir: -1 }, true);
+    on.command({ kind: "delete", unit: "letter", dir: -1 }, true);
+    typeOn("c)");
+    expect(on.text).toBe("60 °C)");
+    on.undo();
+    on.redo();
+    expect(on.text).toBe("60 °C)");
+    // (undone a run of typing further: the words as they were)
+    on.undo();
+    on.undo();
+    expect(on.text).toBe("60d");
+  });
+
+  it("leave what is pasted as it is, and write the word last typed as it is meant as they are kept", () => {
+    const ed = writing("");
+    ed.smart = () => true;
+    ed.replaceSelection("-78dc, 1-2 h", true);
+    expect(ed.text).toBe("-78dc, 1-2 h");
+    ed.kept();
+    expect(ed.text).toBe("-78dc, 1-2 h");
+    ed.replaceSelection(", 0-25dc");
+    expect(ed.text).toBe("-78dc, 1-2 h, 0-25dc");
+    ed.kept();
+    expect(ed.text).toBe("-78dc, 1-2 h, 0–25 °C");
+    // (a minus as soon as its digit is typed; a digit typed after one left as typed, nothing)
+    const m = writing("x ");
+    m.smart = () => true;
+    m.replaceSelection("-");
+    m.replaceSelection("7");
+    expect(m.text).toBe("x −7");
+    m.undo();
+    m.replaceSelection("8");
+    expect(m.text).toBe("x -78");
+  });
 });

@@ -75,6 +75,7 @@ describe("a caption made as wide as something", () => {
       expect(lines.some((l) => /(^|\s)60$/.test(l) || /(^|\s)12$/.test(l) || /(^|\s)2$/.test(l))).toBe(false);
     }
     expect(captionLines("60 °C", 1, undefined, 0.5)).toEqual(["60 °C"]);
+    expect(captionLines("−78–0 °C, 1–2 h", 1, undefined, 0.5)).toEqual(["−78–0 °C,", "1–2 h"]);
     expect(captionLines("aged 3 days", 1, undefined, 0.5)).toEqual(["aged", "3 days"]);
   });
 

@@ -12,9 +12,10 @@
  * click among them puts the caret, two select a word, three a line, a drag
  * selects on - the click or the drag that opened them counted among those.
  * Enter keeps them, Shift+Enter starts another line, Escape lets them go,
- * and a press elsewhere keeps them too. New words put down near an arrow go
- * over it or under it; words written anew over an arrow stay clear of it as
- * they grow. Words written away are gone.
+ * and a press elsewhere keeps them too. What is typed is written as it is
+ * meant, unless Settings say not (lib/text/smartWords): 60dc as 60 °C. New
+ * words put down near an arrow go over it or under it; words written anew
+ * over an arrow stay clear of it as they grow. Words written away are gone.
  *
  * What is drawn is drawn whole (Labels2D `WholeTexts2D`): the caret and
  * what is selected go with the words as they are drawn, not ahead of them;
@@ -28,6 +29,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useFrame, useThree } from "@react-three/fiber";
 import { CAPTION_LINE, captionPlace, captionPlaces, captionSet } from "../../../../lib/chem/captions";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
@@ -70,7 +72,11 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const { camera, gl, size, invalidate } = useThree();
   const [, setTick] = useState(0);
   // (its words as they were, or none: written in their own editor until they are kept)
-  const [ed] = useState(() => new WordsEditor(caption?.text ?? ""));
+  const [ed] = useState(() => {
+    const e = new WordsEditor(caption?.text ?? "");
+    e.smart = () => useAppSettings.getState().words.smart;
+    return e;
+  });
   const field = useRef<TypingField | null>(null);
   const done = useRef(false);
   const n = edit.n ?? 0;
@@ -125,6 +131,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     if (done.current) return;
     done.current = true;
     const s = store.getState();
+    // (the word last typed ended as they are kept)
+    if (keep) ed.kept();
     const text = ed.text.replace(/\s+$/, "").replace(/^\s*\n/, "");
     // (the caption they are now - none, new ones let go or any written away)
     let kept: number | null = edit.id;

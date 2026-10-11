@@ -48,8 +48,8 @@ export function captionRuns(line: string): TextRun[] {
   return runs;
 }
 
-/** A number, and a unit after one: kept together on a line, as 60 °C, 12 h, 2 equiv, 10 mol% are. */
-const NUMBER = /^[−-]?\d+([.,]\d+)?$/;
+/** A number - or a range - and a unit after one: kept together on a line, as 60 °C, 12 h, 2 equiv, 10 mol%, 0–25 °C are. */
+const NUMBER = /^[−-]?\d+([.,]\d+)?([–-][−-]?\d+([.,]\d+)?)?$/;
 const UNIT = /^(°\S*|[\p{L}%µ][\p{L}%µ]{0,4}[.,;)]?)$/u;
 
 /** A typed line's words as they are kept on a line: its words, a number with the unit after it as one. */
