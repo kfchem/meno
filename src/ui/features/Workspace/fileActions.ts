@@ -1,11 +1,11 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { pushMeasures, pushOutlines } from "../../../lib/chem/pushArrow";
+import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
-import { arrowsWithWords, captionSet } from "../../../lib/chem/captions";
+import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionFileText } from "./chem/reactionFile";
@@ -252,8 +252,12 @@ export function drawingLayout(
   const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout, opts, opts.fontPx, pm);
   for (const { push, shape } of pushed) {
     const polys = pushOutlines(shape, !!push.half, pm);
-    // (in the bonds' ink, unless the arrow is given its own colour)
-    layout.polys.push(...polys.map((points) => ({ points, ...(push.color ? { color: push.color } : {}) })));
+    // (in the bonds' ink, unless the arrow is given its own colour: its line
+    // as the curve it is, smooth however far a picture is enlarged, its head filled)
+    const color = push.color ? { color: push.color } : {};
+    const { curve, head } = pushStroke(shape, !!push.half, pm);
+    (layout.curves ??= []).push({ points: curve, width: pm.thickness, round: pm.round, ...color });
+    layout.polys.push({ points: head, ...color });
     layout.fills.push(...shape.dots.map((d) => ({ ...d, ...(push.color ? { color: push.color } : {}) })));
     const pts = [...polys.flat(), ...shape.dots.flatMap((d) => [{ x: d.c.x - d.r, y: d.c.y - d.r }, { x: d.c.x + d.r, y: d.c.y + d.r }])];
     take(
@@ -263,7 +267,7 @@ export function drawingLayout(
   }
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
-  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set);
+  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
   const outlines = schemeOutlines({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
   if (outlines.length) {
     const points = outlines.flat();
@@ -274,11 +278,11 @@ export function drawingLayout(
     );
   }
   // and the words on the page, set as the canvas sets them
-  const words = (model.captions ?? []).flatMap((c) => captionSet(c.text, c.x, c.y, opts.fontPx, set, c.width, c.align).items);
+  const words = (model.captions ?? []).flatMap((c) => wordsSet(c, opts, set).items);
   if (words.length) {
     layout.texts.push(...words);
     // (each line's ink, about where it is set)
-    const boxes = words.map((t) => ({ t, b: labelBox(t, opts.fontPx, set) }));
+    const boxes = words.map((t) => ({ t, b: labelBox(t, t.ownSize ? t.fontPx : opts.fontPx, set) }));
     take(
       boxes.flatMap(({ t, b }) => [t.x - b.left, t.x + b.right]),
       boxes.flatMap(({ t, b }) => [t.y - b.bottom, t.y + b.top]),

@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -144,6 +144,7 @@ export default function PartMenu({
   step,
   pdf,
   onCopyPicture,
+  onReadStructure,
   text,
   onSaveProcedure,
   onUseAsInput,
@@ -154,6 +155,9 @@ export default function PartMenu({
   onColour,
   onRender,
   picture,
+  words,
+  slide,
+  onSlideAround,
   canvas = [],
   clipboard,
   molecule3d,
@@ -189,6 +193,23 @@ export default function PartMenu({
   onFitWords?: () => void;
   /** How the words' lines lie, and setting it. */
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
+  /**
+   * What the words right-clicked can do besides (docs/EDITOR-2D.md,
+   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * in italics, raised or lowered - ticked where all are already; their
+   * lines a list, or plain again.
+   */
+  words?: {
+    onSize: () => void;
+    bold: boolean;
+    italic: boolean;
+    list: boolean;
+    onBold: () => void;
+    onItalic: () => void;
+    onList: () => void;
+    onSup: () => void;
+    onSub: () => void;
+  };
   /** A workflow's step right-clicked: run, or opened to its options. */
   onRunStep: () => void;
   onStepOptions: () => void;
@@ -212,6 +233,8 @@ export default function PartMenu({
   };
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
+  /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
+  onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
   text?: { icon: boolean; onRead: () => void; onIcon: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
@@ -225,13 +248,29 @@ export default function PartMenu({
   /** An electron-pushing arrow begun from the atom or bond right-clicked, its head full or (`half`) a fishhook's. */
   onPush?: (half: boolean, press?: React.PointerEvent) => void;
   /** What an electron-pushing arrow right-clicked can do: its head made full or half, its lone pair's dots shown or left off (where it leaves one), bent as Meno bends it. */
-  push?: { half: boolean; setHalf: (half: boolean) => void; pair?: { shown: boolean; set: (shown: boolean) => void }; onUnbend?: () => void };
+  push?: {
+    half: boolean;
+    setHalf: (half: boolean) => void;
+    /** From an atom with a negative charge: whether it leaves from a lone pair rather than the charge's mark. */
+    source?: { fromPair: boolean; set: (fromPair: boolean) => void };
+    pair?: { shown: boolean; set: (shown: boolean) => void };
+    onUnbend?: () => void;
+  };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
   /** The molecules in 3D right-clicked - or selected - rendered as a picture or a film (docs/RENDER.md); unset, where no plugin added renders. */
   onRender?: () => void;
   /** What the picture right-clicked can do besides: saved as a file - a picture, or a film, which plays on the page and can be paused. */
   picture?: { film: boolean; playing: boolean | null; onPlay: (on: boolean) => void; onSave: () => void };
+  /**
+   * What the slide right-clicked can do (docs/PRESENTING.md): a talk given
+   * from it; put earlier or later in the talk - none, where it is first or
+   * last; the page about it shown while it is, or not; the other
+   * proportions; and what is on it selected.
+   */
+  slide?: { onPresent: () => void; onEarlier?: () => void; onLater?: () => void; around: boolean; onAround: () => void; standard: boolean; onShape: () => void; onSelectOn: () => void };
+  /** A slide made round what is selected, last in the talk. */
+  onSlideAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -356,19 +395,35 @@ export default function PartMenu({
       : target.kind === "caption"
       ? [
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
+          ...(words
+            ? [
+                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
+                { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
+                { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
+              ]
+            : []),
+          ...colour,
+          del("Delete text"),
+          // (how its lines lie: listed, ticked as they lie now)
           ...(captionAlign
             ? (
                 [
-                  ["left", "Align left", MENU_ICONS.alignLeft],
-                  ["center", "Align centre", MENU_ICONS.alignCentre],
-                  ["right", "Align right", MENU_ICONS.alignRight],
-                  ["justify", "Justify", MENU_ICONS.justify],
+                  ["left", "Align left"],
+                  ["center", "Align centre"],
+                  ["right", "Align right"],
+                  ["justify", "Justify"],
                 ] as const
-              ).map(([align, name, icon]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align, icon }))
+              ).map(([align, name]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align }))
             : []),
-          del("Delete text"),
-          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
-          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords }] : []),
+          ...(words
+            ? [
+                { name: "Superscript", keys: MAC ? "\u21e7\u2318=" : "Ctrl+Shift+=", run: words.onSup, divider: true },
+                { name: "Subscript", keys: shortcut("="), run: words.onSub },
+              ]
+            : []),
+          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords, divider: true }] : []),
+          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource, divider: !onFitWords }] : []),
         ]
       : target.kind === "pdf"
       ? [
@@ -389,6 +444,7 @@ export default function PartMenu({
           ...(pdf?.onCopy ? [{ name: "Copy", keys: shortcut("C"), run: pdf.onCopy }] : []),
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
+          ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
         ]
@@ -407,9 +463,20 @@ export default function PartMenu({
           ...(onCopyPicture ? [{ name: "Copy picture", keys: "", run: onCopyPicture, icon: MENU_ICONS.picture }] : []),
           del("Delete picture"),
           ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
+          ...(onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           // (saved as a file; a film, played or paused where it lies)
           ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
           ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
+        ]
+      : target.kind === "slide" && slide
+      ? [
+          { name: "Present from here", keys: "", run: slide.onPresent, icon: MENU_ICONS.present },
+          { name: "Earlier in the talk", keys: "", run: slide.onEarlier ?? (() => {}), icon: MENU_ICONS.earlier, disabled: !slide.onEarlier },
+          { name: "Later in the talk", keys: "", run: slide.onLater ?? (() => {}), icon: MENU_ICONS.later, disabled: !slide.onLater },
+          { name: "Show the page around it", keys: "", run: slide.onAround, icon: MENU_ICONS.around, checked: slide.around },
+          del("Delete slide"),
+          { name: slide.standard ? "Make it 16:9" : "Make it 4:3", keys: "", run: slide.onShape },
+          { name: "Select what is on it", keys: "", run: slide.onSelectOn },
         ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
@@ -453,6 +520,7 @@ export default function PartMenu({
                 { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
               ]
             : []),
+          ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
@@ -462,6 +530,12 @@ export default function PartMenu({
             { name: "Fishhook (half head)", keys: "", run: () => push.setHalf(true), icon: MENU_ICONS.fishhook, checked: push.half },
             ...colour,
             del("Delete arrow", keys),
+            ...(push.source
+              ? [
+                  { name: "From the charge", keys: "", run: () => push.source!.set(false), checked: !push.source.fromPair, divider: true },
+                  { name: "From a lone pair", keys: "", run: () => push.source!.set(true), checked: push.source.fromPair },
+                ]
+              : []),
             ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
             ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),
           ]
@@ -541,6 +615,8 @@ export default function PartMenu({
                       ? "Electron-pushing arrow"
                     : target.kind === "ring"
                       ? "Ring"
+                    : target.kind === "slide"
+                      ? "Slide"
                       : "Canvas"
       }
       tabIndex={-1}

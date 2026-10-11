@@ -6,7 +6,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 /**
  * What lies behind the drawing, from the shared layout: rings filled with a
  * colour, then parts highlighted in one (docs/EDITOR-2D.md, *Colour*) -
- * each a light tint, flat and opaque, so that pieces of one colour run
+ * each in its colour exactly, flat and opaque, so that pieces of one colour run
  * together into one shape with a sharp edge, as on the page. Under the
  * selection's shade, which shows over them what is selected.
  */

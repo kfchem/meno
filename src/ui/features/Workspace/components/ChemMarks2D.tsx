@@ -45,7 +45,16 @@ const MARKS_APART = 0.6;
  * so. They are the editor's, laid over the drawing where it stands this
  * frame; they are not part of it, and no picture of it has them.
  */
-export default function ChemMarks2D({ marks, unsure }: { marks: ChemMarks | null; unsure?: { atoms: Set<number>; bonds: Set<number> } }) {
+export default function ChemMarks2D({
+  marks,
+  unsure,
+  read,
+}: {
+  marks: ChemMarks | null;
+  unsure?: { atoms: Set<number>; bonds: Set<number> };
+  /** What Meno was unsure of as it read parts from a figure, still as read: each with what it says (utils/figures `readMarks`). */
+  read?: { atoms: Map<number, string>; bonds: Map<number, string> };
+}) {
   const { atoms, layout, opts, zoom } = useDrawnLayout();
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
@@ -157,13 +166,19 @@ export default function ChemMarks2D({ marks, unsure }: { marks: ChemMarks | null
       w: (r.left + r.right) * z,
       h: (r.top + r.bottom) * z,
       round: !box,
-      message: valenceMessage(a.el, problem),
+      // (read from a figure and unsure there too: said after - the one mark says both)
+      message: [valenceMessage(a.el, problem), read?.atoms.get(id)].filter(Boolean).join(" "),
     });
   }
   // and, dashed, what the drawing says of its stereochemistry only by luck:
   // a centre - its box as a valence problem's - or a double bond, a ring
   // at its middle (the maintainer, 2026-10-11: never shown as if certain)
-  for (const id of unsure?.atoms ?? []) {
+  // (an atom read from a figure says what was unsure of it; a stereocentre otherwise)
+  const atomsSaid = new Map<number, string>([...(unsure?.atoms ?? [])].map((id) => [id, "This stereocentre can be read either way as drawn."]));
+  for (const [id, said] of read?.atoms ?? []) atomsSaid.set(id, said);
+  const bondsSaid = new Map<number, string>([...(unsure?.bonds ?? [])].map((id) => [id, "This double bond can be read as cis or trans as drawn."]));
+  for (const [id, said] of read?.bonds ?? []) bondsSaid.set(id, said);
+  for (const [id, said] of atomsSaid) {
     const a = at.get(id);
     if (!a || marks?.valence.has(id)) continue;
     const box = boxes.get(id);
@@ -179,11 +194,11 @@ export default function ChemMarks2D({ marks, unsure }: { marks: ChemMarks | null
       w: (r.left + r.right) * z,
       h: (r.top + r.bottom) * z,
       round: !box,
-      message: "This stereocentre can be read either way as drawn.",
+      message: said,
       dashed: true,
     });
   }
-  for (const id of unsure?.bonds ?? []) {
+  for (const [id, said] of bondsSaid) {
     const b = drawn.bonds.find((x) => x.id === id);
     const p = b && at.get(b.a);
     const q = b && at.get(b.b);
@@ -197,7 +212,7 @@ export default function ChemMarks2D({ marks, unsure }: { marks: ChemMarks | null
       w: d,
       h: d,
       round: true,
-      message: "This double bond can be read as cis or trans as drawn.",
+      message: said,
       bond: true,
       dashed: true,
     });

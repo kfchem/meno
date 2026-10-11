@@ -1000,7 +1000,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
 
   // its hollows shaded and its shadow cast, as it stands now (after the frame
   // above has placed its atoms)
-  useShading3d({ turned, atoms, bonds, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
+  useShading3d({ turned, atoms, bonds, ribbon, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
 
   /** The atoms' and bonds' finish, `f` of the way from the primary look's to the secondary's. */
   const finish = (f: number) => {
@@ -1334,7 +1334,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           ) : (
             <PageHtml zIndexRange={[30, 20]}>
               <div
-                className="meno-page-chip flex flex-col items-center"
+                className="meno-page-chip meno-control-chip flex flex-col items-center"
                 style={{ transform: "translate(-50%, calc(10px * var(--page, 1))) scale(var(--page, 1))", transformOrigin: "50% 0" }}
               >
                 {m.edited && <Edited from={m.edited.from} />}

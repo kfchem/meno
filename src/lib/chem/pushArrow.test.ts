@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bendThrough, controlOf, curveAt, endBase, pointAt, pushMeasures, pushOutlines, pushShape, type PushEndAt, type PushScene, type PushShape } from "./pushArrow";
+import { bendThrough, controlOf, curveAt, endBase, pointAt, pushMeasures, pushOutlines, pushShape, pushStroke, type PushEndAt, type PushScene, type PushShape } from "./pushArrow";
 import { ACS_1996 } from "./style";
 
 const L = 1;
@@ -157,5 +157,25 @@ describe("an electron-pushing arrow's outlines", () => {
     const [, half] = pushOutlines(shape, true, m);
     // (bent up, the curve bulges up: its one barb is above the line it ends on)
     expect(half[1].y).toBeGreaterThan(shape.end.y);
+  });
+});
+
+describe("an electron-pushing arrow as a picture writes it", () => {
+  const shape = pushShape(bare(0, 0), bare(3, 0), { along: 0.5, out: 0.5 }, empty, m)!;
+
+  it("is the curve itself up to its head, then straight on into the head", () => {
+    const { curve, head } = pushStroke(shape, false, m);
+    expect(curve).toHaveLength(7);
+    expect(curve[0]).toEqual(shape.start);
+    // (its first segment the arrow's own curve: a point of it on the curve)
+    const mid = (() => {
+      const [a, b, c, d] = curve.slice(0, 4);
+      const u = 0.5;
+      const k = [(1 - u) ** 3, 3 * (1 - u) ** 2 * u, 3 * (1 - u) * u * u, u ** 3];
+      return { x: k[0] * a.x + k[1] * b.x + k[2] * c.x + k[3] * d.x, y: k[0] * a.y + k[1] * b.y + k[2] * c.y + k[3] * d.y };
+    })();
+    const near = Math.min(...Array.from({ length: 401 }, (_, i) => pointAt(shape, i / 400)).map((p) => Math.hypot(p.x - mid.x, p.y - mid.y)));
+    expect(near).toBeLessThan(0.01);
+    expect(head[0]).toEqual(shape.end);
   });
 });

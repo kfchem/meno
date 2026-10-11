@@ -106,7 +106,7 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 | 2. 2D and 3D joined | A drawing to 3D (RDKit's ETKDG and MMFF, the drawn stereochemistry kept); the 3D structure rising out of the drawing where it is, turned to match it, and back; hover and choice shared; a 3D structure drawn as a formula by Meno's engine; conformer sets (overlaid, by energy, Boltzmann weights). | 1 |
 | 3. Calculation output | Geometries, optimisation paths, energies, vibrations (modes animated) and charges read from ORCA, Gaussian, xTB and CREST, attached to their molecule; later orbitals and densities (cube files) as surfaces. Each program's reader a plugin, added and removed online. | 2 |
 | 4. Text and PDF | Notes on the page; a PDF on the page (pdf.js): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
-| 5. Structures from PDFs | Figures read as structures (candidates: MolScribe, DECIMER) in the sidecar, their weights fetched with consent; drawn by Meno's engine, tied to the figure they came from, for the chemist to check and correct. | 4 |
+| 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture, or any picture, read by a model, as a plugin - MolScribe or MolNexTR, as the chemist chooses - its trained model fetched with consent (part B, built 2026-10-11). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
 | 6. Workflows that run | Workflow steps as items on the page, tied to molecules: RDKit conformers, xTB, CREST, and ORCA or Gaussian where installed. Jobs started, stopped and logged by the app. Procedures saved and shared with their results. Specified in [WORKFLOWS.md](WORKFLOWS.md) (2026-10-08): the workspace is the node editor. | 2, 3 |
 | 7. Depth | Analogue series, conformers and reaction steps arranged in depth; detail that changes with zoom. Tried as prototypes and shown before anything is settled. | 1 on |
 
@@ -768,14 +768,37 @@ slowing it - and in the pictures made of it.
   stand where they do and draw nothing themselves; cast again only when a
   molecule moves, turns or changes - fitted round every molecule, so
   that panning and zooming leave it, until that would make it coarser
-  than the screen's pixels, when it is fitted round what is in view. Past
-  twenty thousand atoms on the canvas the shadows fade: casting them
-  again as such a drawing turns costs more than turning it can spare.
+  than the screen's pixels, when it is fitted round what is in view.
+- **Shade worked out on the screen** (lane L11, 2026-10-11, the
+  maintainer finding it the prettier of the two): each style's *Shade in
+  hollows* is *None*, *Per atom* (the first) or *Screen-space* - *None*
+  the one way to have no shade, *How deep* beside it greyed out while it
+  is. On the screen, the shade is three.js's GTAO (ground-truth ambient
+  occlusion, worked out from the depth and the normals of what is seen)
+  smoothed by its Poisson denoise: molecules shade one another too, and
+  the creases where balls meet darken; worked out each frame, at half the
+  canvas's resolution, over the molecules alone - their balls, sticks and
+  ribbons drawn once more into a pass of their own - and laid over them
+  by a sheet multiplying what is under it, one where no molecule is, so
+  the page is drawn exactly as it was. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. It shows a
+  faint grain close up, as screen-space shading does. Going over to it,
+  or from it, the one shade gives way to the other.
+- **Very large drawings** (the maintainer's choice, 2026-10-11): past
+  twenty thousand atoms on the canvas, drawn lighter - no shadows, and
+  hollows shaded per atom where a style shades them on the screen - as
+  casting shadows again and shading the screen as such a drawing turns
+  cost more than turning it can spare. Said once on the canvas, in a
+  notice in the corner (*Many atoms on the canvas*) with *Keep them*,
+  which sets *Very large drawings* (Settings, every style) to *As set*
+  for good. A picture made of it has its shade and shadows all the same.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
-  in a finer shadow map, however many atoms.
-- **No jump.** A change of either in Settings is gone over to; so is a
-  frame's shade, or a look's.
+  in a finer shadow map, however many atoms; shaded on the screen, at the
+  picture's own resolution, each tile drawn with a margin as wide as the
+  shade looks round (cut off again), so that the tiles meet unseen.
+- **No jump.** A change of any of them in Settings is gone over to; so is
+  a frame's shade, or a look's, or the change a very large drawing makes.
 - **Meno's own.** A render made elsewhere (Blender) finds its own hollows
   and shadows: neither setting is written into a scene handed over.
 - **What it costs** (a MacBook Air M4, Chrome, a canvas 2796 by 1796

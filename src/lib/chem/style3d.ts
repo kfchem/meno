@@ -23,12 +23,15 @@ export type MoleculeLook = {
   roughness: number;
   metalness: number;
   /**
-   * How much darker the hollows are - where atoms crowd round, less of the
-   * light from all round reaches: none (0) to all of it (1). Worked out
-   * once for each shape a molecule takes, never as it turns
-   * (Workspace/utils/occlusion3d). Meno's own: a picture rendered elsewhere
-   * finds its own.
+   * How the hollows are shaded - where atoms crowd round, less of the light
+   * from all round reaches: not at all; per atom, worked out once for each
+   * shape a molecule takes, never as it turns (Workspace/utils/occlusion3d);
+   * or on the screen, as it is seen, molecules shading one another too
+   * (Workspace/utils/screenShade, three.js's GTAO). Meno's own: a picture
+   * rendered elsewhere finds its own.
    */
+  occlusionBy: "none" | "atoms" | "screen";
+  /** And how deep: from faint (0.1) to all of it (1). */
   occlusion: number;
   /**
    * The hydrogens on carbon, shown or left out. Left out, the picture is
@@ -56,6 +59,12 @@ export type Scene3D = {
    * the hollows' shade is.
    */
   shadows: number;
+  /**
+   * With very many atoms on the canvas: "lighter" - no shadows, and hollows
+   * shaded per atom where a style shades them on the screen, so that
+   * turning stays smooth (a picture keeps them as set) - or "asSet".
+   */
+  largeDrawings: "lighter" | "asSet";
   /** How far a drag across half the canvas turns a molecule, in radians. */
   turnPerHalfWidth: number;
   /** How much of its speed a turn left to itself loses each sixtieth of a second. */
@@ -84,6 +93,7 @@ export const BALL_AND_STICK: MoleculeLook = {
   bondColor: "#000000",
   roughness: 1,
   metalness: 0,
+  occlusionBy: "atoms",
   occlusion: 0.6,
   hydrogens: "shown",
   biopolymers: "ribbons",
@@ -94,6 +104,7 @@ export const SCENE_3D: Scene3D = {
   ambientLight: 0.9,
   keyLight: 1,
   shadows: 0.4,
+  largeDrawings: "lighter",
   turnPerHalfWidth: 3,
   turnDamping: 0.1,
   ballSegments: 32,
@@ -270,7 +281,14 @@ export const HIDDEN_MARK_COLOUR = "#cd4560";
 
 // --- The settings, as they are shown ------------------------------------------
 
-export type Style3DField<K extends string = string> = { key: K; group: string; label: string; description: string } & (
+export type Style3DField<K extends string = string> = {
+  key: K;
+  group: string;
+  label: string;
+  description: string;
+  /** Set only while another setting of the same style is not this: greyed out, and kept as it is, while it is. */
+  unless?: { key: string; is: string };
+} & (
   | { kind: "choice"; options: { value: string; label: string }[] }
   | {
       kind: "number";
@@ -370,15 +388,28 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     ends: ["Not at all", "Fully"],
   },
   {
-    key: "occlusion",
+    key: "occlusionBy",
     group: "Surface",
     label: "Shade in hollows",
     description: "Where atoms crowd round, less light reaches: hollows and pockets darker, so the shape reads in depth.",
+    kind: "choice",
+    options: [
+      { value: "none", label: "None" },
+      { value: "atoms", label: "Per atom" },
+      { value: "screen", label: "Screen-space" },
+    ],
+  },
+  {
+    key: "occlusion",
+    group: "Surface",
+    label: "How deep",
+    description: "How much darker the hollows are.",
     kind: "number",
-    min: 0,
+    min: 0.1,
     max: 1,
     step: 0.05,
-    ends: ["None", "Deep"],
+    ends: ["Faint", "Deep"],
+    unless: { key: "occlusionBy", is: "none" },
   },
 ];
 
@@ -416,6 +447,17 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
     max: 1,
     step: 0.05,
     ends: ["None", "Dark"],
+  },
+  {
+    key: "largeDrawings",
+    group: "Light",
+    label: "Very large drawings",
+    description: "Past twenty thousand atoms on the canvas: no shadows, and hollows shaded per atom, so that turning stays smooth.",
+    kind: "choice",
+    options: [
+      { value: "lighter", label: "Lighter" },
+      { value: "asSet", label: "As set" },
+    ],
   },
   {
     key: "surfacePlus",

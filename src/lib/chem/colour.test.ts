@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSVG, highlightTint, layoutMolecule, ringOfKey, ringTint, type Atom, type Bond } from "./layout2d";
+import { createSVG, layoutMolecule, ringOfKey, type Atom, type Bond } from "./layout2d";
 import { acsWorldOptions } from "./acs";
 import { colorRef, emfRecords, layoutEmf } from "./emf";
 
@@ -51,24 +51,23 @@ describe("a part's colour", () => {
 });
 
 describe("a part's highlight", () => {
-  it("lies behind the drawing in a light tint of its colour, round its atoms and along its bonds", () => {
+  it("lies behind the drawing in its colour exactly, round its atoms and along its bonds", () => {
     const lit = atoms.map((a) => (a.id <= 2 ? { ...a, highlight: "#0072b2" } : a));
     const litBonds = bonds.map((b, i) => (i === 0 ? { ...b, highlight: "#0072b2" } : b));
     const layout = layoutMolecule(lit, litBonds, opts(), 60);
     expect(layout.under?.length).toBe(3);
-    expect(layout.under!.every((u) => u.color === highlightTint("#0072b2"))).toBe(true);
-    expect(highlightTint("#0072b2")).not.toBe("#0072b2");
+    expect(layout.under!.every((u) => u.color === "#0072b2")).toBe(true);
     // (and in an SVG, first of all)
     const svg = createSVG(layout, opts());
-    expect(svg.indexOf(highlightTint("#0072b2"))).toBeLessThan(svg.indexOf("<line"));
+    expect(svg.indexOf("#0072b2")).toBeLessThan(svg.indexOf("<line"));
   });
 });
 
 describe("a ring's fill", () => {
-  it("is the ring's outline, round it in order, in a tint of its colour", () => {
+  it("is the ring's outline, round it in order, in its colour exactly", () => {
     const layout = layoutMolecule(atoms, bonds, opts({ ringFills: { "1-2-3-4-5-6": "#009e73" } }), 60);
     expect(layout.under).toHaveLength(1);
-    expect(layout.under![0].color).toBe(ringTint("#009e73"));
+    expect(layout.under![0].color).toBe("#009e73");
     expect(layout.under![0].points).toHaveLength(6);
   });
 

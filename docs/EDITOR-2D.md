@@ -166,14 +166,15 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
 | A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure |
 | An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
-| The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
+| The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, a slide around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text, fit, R and S, the texts, find in PDFs, drawing style, run all |
+| Empty space | paste, select all | open, save as, new text, present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
-| Words on the page | edit, align left, centre, right, justify; Delete | show in the PDF, as wide as its words |
+| Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture; Delete | show in the PDF |
+| A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run (or stop), run from here, options; Delete | show log, show files, save as procedure |
 | A set, an arrow, a "+", a wire, a measurement | Delete | save as procedure (a set), arrow style (an arrow) |
 
@@ -216,8 +217,9 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow, a "+" and an electron-pushing arrow (from
-the first atom or bond pressed, *Electron-pushing arrows* below). A choice puts it down where the
+SMILES, text, a reaction arrow, a "+", an electron-pushing arrow (from
+the first atom or bond pressed, *Electron-pushing arrows* below) and a
+slide of what is seen (docs/PRESENTING.md). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
@@ -396,7 +398,10 @@ Both go together, because both touch every layer.
 - **Defaults.** ACS 1996, exactly, as a preset. The default is Meno's own
   style built on it: ACS 1996's proportions with round ends and joins and
   labels in IBM Plex Sans, which is also the app's own typeface - its
-  capital I has serifs and its l a tail, so Cl never reads as CI. (PR #47)
+  capital I has serifs and its l a tail, so Cl never reads as CI (PR #47) -
+  and drawn in the black of Meno's palette, #141414, a little softer than
+  the pure black the journals' styles keep for print (the maintainer,
+  2026-10-11).
 - **Typefaces.** Any typeface on the computer: a label is placed and
   cleared by that typeface's own letter shapes, read from its file when it
   is first used (the app hands over one face of a collection, with its
@@ -598,6 +603,14 @@ All hover-based, as above.
       bond from beside the middle of its line as drawn (shortened where a
       label stands at an end), clear of its lines by a little, a double
       bond's second line too;
+    - from an atom with a negative charge - O-, N-, a carbanion, a halide,
+      HO- - it leaves from the charge's mark, out of its circle and away
+      from the label, with no lone pair's dots, wherever the charge is
+      written or was put by hand (the maintainer, 2026-10-11, as their
+      handwriting does at an oxyanion); its menu sets it to leave from a
+      lone pair instead, *From a lone pair*, its dots then shown or left
+      off. A fishhook from an atom with a radical leaves from the
+      radical's dot. A neutral atom's arrow leaves a lone pair, as before;
     - it comes onto an atom from the side its new bond forms, short of its
       label - and straight from behind a bond the atom loses as it gains
       one, another arrow taking that bond's electrons: an SN2's attack
@@ -623,7 +636,10 @@ All hover-based, as above.
     deletes it.
   - Saved with the workspace, carried by a copy that holds both its ends
     (on their new ids where it is pasted), and drawn in an exported SVG and
-    in a copy's pictures, as on the canvas; a MOL, SD or RXN file has no
+    in a copy's pictures, as on the canvas - its line there as the curve it
+    is (an SVG path, EMF+'s Bezier curves and GDI's PolyBezier), smooth
+    however far a picture is enlarged (a Windows check found PowerPoint
+    showing corners at 17 times); a MOL, SD or RXN file has no
     place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
     `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
@@ -631,17 +647,36 @@ All hover-based, as above.
   the menu of an atom, a bond, the selection or a ring - a right-click
   inside one with nothing selected - opens a card where the menu was, of
   a row for each thing it can give: *Colour*, the atoms' labels (their
-  charges too) and the bonds' lines; *Highlight*, a light tint of it laid
-  behind the drawing, a band along each bond and round each atom - round
-  its label, where it has one - flat, so that the pieces of one colour run
-  together into one shape with a sharp edge; and *Fill ring*, a lighter
-  tint over the inside of each ring it holds whole, or of the ring
-  right-clicked. An electron-pushing arrow's menu has it too, of the one
-  row *Colour* - the arrow's line, head and lone pair. Each row has none, Okabe and Ito's colours but black -
-  told apart by those who see colours otherwise - and any other, from the
-  system's chooser; the one given now is ringed. A swatch is given at
-  once, one step each (as long as the chooser is open, one step in all),
-  and the card stays open for the next; Escape, a press elsewhere or the
+  charges too) and the bonds' lines; *Highlight*, laid behind the drawing,
+  a band along each bond and round each atom - round its label, where it
+  has one - flat, so that the pieces of one colour run together into one
+  shape with a sharp edge; and *Fill ring*, over the inside of each ring
+  it holds whole, or of the ring right-clicked. A highlight and a fill are
+  in the colour exactly as it is chosen, never lightened (the maintainer,
+  2026-10-11): a pale colour for them is in the set. An electron-pushing
+  arrow's menu has it too, of the one row *Colour* - the arrow's line,
+  head and lone pair. Each row has none, the colours of the set in use and
+  any other, from the system's chooser; the one given now is ringed.
+  - **Colour sets** (the maintainer, 2026-10-11), in Settings, General,
+    *Colours*, chosen as the drawing style's presets are; the one chosen is
+    the one in use (the card offers only it). Meno's - its base #317689,
+    its accent #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
+    highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
+    look right as they are, as colour makes a drawing look cheap easily -
+    and Okabe and Ito's, told apart by those who see colours otherwise,
+    are built in and kept as they are. The plus after the sets begins one
+    of the user's own; a set's menu (a right-click) duplicates it, and
+    renames or deletes one of the user's own. The user's own set in use
+    shows its colours: two clicks on one open the system's chooser beside
+    its hex and its red, green and blue (0 to 255), which keep in step; a
+    drag moves it along; its menu changes or removes it; the plus adds one.
+    The sets are saved in Settings' file, read back only as colours
+    (#rrggbb, each once, sixteen to a set), their names on one line,
+    twenty sets of the user's own at most (`lib/chem/palette`,
+    `ColourSettings`).
+
+  A swatch is given at once, one step each (as long as the chooser is
+  open, one step in all), and the card stays open for the next; Escape, a press elsewhere or the
   wheel closes it. A selection's colour goes to its atoms and the bonds
   selected among them; a bond keeps its own colour, its atoms theirs.
   R, S, E and Z are never coloured (2026-10-05), nor is anything Meno
@@ -704,6 +739,9 @@ All hover-based, as above.
        yet be a CAS number. Numbers joined by more hyphens are no range -
        a CAS number (7647-01-0), a date (2026-10-10) - and stay; so does a
        hyphen with a letter beside it (4-Å MS, Pd-118, 1,2-dichloroethane).
+    4. **Bullets.** A hyphen or a star alone at a line's start - after
+       the tabs that take it a level in - is a bullet (•) as soon as a
+       space is typed after it: "- " is "• ", a list's item (below).
 
     Each is a step of its own: one undo gives back the words as typed, and
     that part is then left as typed until it is written again. Settings ›
@@ -761,6 +799,48 @@ All hover-based, as above.
     spread to both edges, but for the last line of each line typed, which
     lies to the left - the one chosen marked. In the width they were made,
     or the widest line's. Saved, copied and drawn so.
+  - **Text boxes** (the maintainer, 2026-10-11: words for a research talk,
+    in place of a slide program's): words on the page with a size of
+    their own, letters marked, and lists.
+    - *A size of their own*, in points as the drawing's labels are: their
+      menu's *Size…* shows a card of *Label* (the drawing's labels' size,
+      10 points in ACS 1996's style, as words have had), *Text* 14,
+      *Heading* 20 and *Title* 28 - the one they have ringed - and any
+      other typed, 4 to 288 points, given with Enter. While they are
+      written, Ctrl/Cmd+Shift+> and < take them a size up or down (6, 7,
+      8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
+      so in pictures (SVG, EMF and PNG). Without one, they are the labels'
+      size, as the drawing style says.
+    - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
+      mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
+      what is selected bold or in italics, Ctrl/Cmd+Shift+= (+) raises it
+      and Ctrl/Cmd+= lowers it - or, nothing selected, what is typed next
+      - and set it back where all of it is already so; a letter typed is
+      set as the one before it. From their menu, *Bold* and *Italic*
+      (ticked where all their letters are), *Superscript* and *Subscript*
+      do so to all their letters, as does the colour card's *Colour* row,
+      from the palette (Settings, *General*), where they are right-clicked
+      or among a selection. The words stay plain text: the marks are kept
+      beside them as ranges of their letters, so that copying, smart words
+      and finding words are as they were. A formula's counts stay low and
+      its prefixes in italics, whatever is marked. Bold is drawn on the
+      canvas as an outline of the letters' own colour, and as bold type
+      in pictures.
+    - *Lists*: a line that starts - after a tab for each level it is in,
+      up to four - with a bullet (•, ◦, ▪ or –) or a number (1. or 1)) and
+      a space is a list's item: its lines after the first hang under its
+      words, a level one and a half ems in from the one above it. "- "
+      typed at a line's start is "• " (above). While they are written,
+      Shift+Enter in an item starts the next one, as deep, its number one
+      on, and on an item with nothing after its bullet ends the list, the
+      bullet taken away; Tab and Shift+Tab take the items the selection
+      touches a level in or out (anywhere else, Tab does as it did). Their
+      menu's *Bullets* makes every line an item, or, all of them items,
+      plain lines again.
+    - *A box keeps its top*: words given a width, and over no arrow, keep
+      the top of their first line where it is as their lines grow or
+      shrink - written, sized, made a list - rather than growing up and
+      down about their middle.
   - While they are written, their box is the system's own text box, which
     breaks lines as the system does, and may part a number from its unit;
     kept, they break as above. Words written in place drawn by Meno itself,

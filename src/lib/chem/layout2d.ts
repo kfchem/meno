@@ -42,7 +42,7 @@ export type Atom = AtomChem & {
   chargeAt?: Vec2;
   /** The colour its label is drawn in - its charge with it - where it is given one (as CSS: "#d55e00"). */
   color?: string;
-  /** The colour it is highlighted in, behind the drawing, where it is: drawn as a light tint of it (`highlightTint`). */
+  /** The colour it is highlighted in, behind the drawing, where it is: drawn in it exactly. */
   highlight?: string;
 };
 export type Bond = BondChem & {
@@ -127,6 +127,8 @@ export type LayoutOptions = {
   wavyAmpPx: number;
   /** One whole wave of a wavy bond: a turn to either side. */
   wavyPeriodPx: number;
+  /** How long a point is, in the same units: what words on the page given a size of their own in points are set at (lib/chem/captions `wordsFontPx`). */
+  pointPx?: number;
   fontPx: number;
   /**
    * How far a bond stops short of a label's letters. Left unset, it is 16%
@@ -179,8 +181,8 @@ export type LayoutOptions = {
   aromaticCircle?: boolean | { enabled: Set<string> };
   /**
    * The rings filled with a colour, behind the drawing: the colour (as CSS)
-   * by the ring's key - its atoms' ids, ascending, joined by "-" - drawn as
-   * a light tint of it (`ringTint`).
+   * by the ring's key - its atoms' ids, ascending, joined by "-" - drawn in
+   * it exactly.
    */
   ringFills?: Readonly<Record<string, string>>;
 };
@@ -195,6 +197,14 @@ export type LineSeg = {
   color?: string;
 };
 export type Poly = { points: Vec2[]; color?: string };
+/**
+ * A stroked curve: cubic Bezier segments end to end, its points the start
+ * then three for each segment (two controls and an end) - as EMF's
+ * PolyBezier takes them - its width in the drawing's units, its ends round
+ * or flat. A picture draws it as the curve it is, smooth however far it is
+ * enlarged (an electron-pushing arrow's line).
+ */
+export type Curve = { points: Vec2[]; width: number; round?: boolean; color?: string };
 /** What is drawn behind the drawing, filled flat, its edge sharp: a ring's fill, a part's highlight. */
 export type Under = { points: Vec2[]; color: string };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
@@ -233,6 +243,10 @@ export type TextRun = {
   part?: boolean;
   /** Set in italics: the t of t-Bu, the p of p-Ts (IUPAC's Table II). */
   italic?: boolean;
+  /** Set bold, as words on the page are marked (lib/chem/captions `WordsMark`). */
+  bold?: boolean;
+  /** Its colour, where it is not the text's (as #rrggbb): words on the page marked so. */
+  color?: string;
 };
 
 /**
@@ -336,6 +350,11 @@ export type TextItem = {
   markOf?: number;
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
+  /**
+   * Set at its own size - `fontPx` - in pictures too, not at the labels':
+   * words on the page given a size of their own (docs/EDITOR-2D.md, *Text*).
+   */
+  ownSize?: boolean;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -359,6 +378,9 @@ export type PlacedRun = {
   sub: boolean;
   /** In italics: see `TextRun`. */
   italic?: boolean;
+  /** Bold, and in a colour of its own: see `TextRun`. */
+  bold?: boolean;
+  color?: string;
   /** Drawn, not set in type: see `TextRun`. */
   mark?: "charge" | "radical";
   x: number;
@@ -527,6 +549,8 @@ export type Layout = {
   under?: Under[];
   lines: LineSeg[];
   polys: Poly[];
+  /** Curves stroked, over the filled shapes. */
+  curves?: Curve[];
   texts: TextItem[];
   circles: Circle[];
   fills: Circle[];
@@ -699,6 +723,8 @@ export function placeLabel(
     text: runs[i].text,
     sub: !!runs[i].sub,
     ...(runs[i].italic ? { italic: true } : {}),
+    ...(runs[i].bold ? { bold: true } : {}),
+    ...(runs[i].color ? { color: runs[i].color } : {}),
     ...(runs[i].mark ? { mark: runs[i].mark } : {}),
     x,
     y: runs[i].sub ? line - fontSize * set.subscriptDrop : runs[i].sup || runs[i].mark ? line + rise : line,
@@ -4159,28 +4185,6 @@ export function layoutMolecule(
 
 /** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
 const HIGHLIGHT_REACH = 0.4;
-/** How much of white a highlight, and a ring's fill, is mixed with: light enough to read the drawing over. */
-const HIGHLIGHT_WHITE = 0.7;
-const RING_WHITE = 0.78;
-
-/** `css` (#rrggbb) mixed with white by `share`; as it is, if it is not one this reads. */
-function towardWhite(css: string, share: number): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(css.trim());
-  if (!m) return css;
-  const n = parseInt(m[1], 16);
-  const mix = (c: number) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0");
-  return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
-}
-
-/** The light tint a part highlighted in `css` is drawn in, flat, its edge sharp. */
-export function highlightTint(css: string): string {
-  return towardWhite(css, HIGHLIGHT_WHITE);
-}
-
-/** The light tint a ring filled with `css` is drawn in. */
-export function ringTint(css: string): string {
-  return towardWhite(css, RING_WHITE);
-}
 
 /** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
 export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
@@ -4244,14 +4248,16 @@ function roundedBox(left: number, bottom: number, right: number, top: number, r:
 /**
  * What is drawn behind the drawing: each ring filled (`LayoutOptions.ringFills`),
  * then each part highlighted - a band along each bond, round each atom, or
- * round its label where it has one - in a flat light tint of its colour, so
- * that one colour's pieces run together into one shape with a sharp edge.
+ * round its label where it has one - flat in its colour exactly (a pale one
+ * from the palette reads the drawing over), so that one colour's pieces run
+ * together into one shape with a sharp edge.
  */
 function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
   const out: Under[] = [];
   for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
     const ring = ringOfKey(atoms, bonds, key);
-    if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color: ringTint(color) });
+    // (in the colour given, exactly - the maintainer, 2026-10-11)
+    if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color });
   }
   if (!atoms.some((a) => a.highlight) && !bonds.some((b) => b.highlight)) return out;
   const font = toWorld(opts.fontPx, zoom, opts.units);
@@ -4259,13 +4265,13 @@ function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts
   const set = labelSetOf(opts);
   for (const b of bonds) {
     if (!b.highlight || b.endpoints?.length || b.a1 === b.a2) continue;
-    out.push({ points: bandOf(atoms[b.a1], atoms[b.a2], h), color: highlightTint(b.highlight) });
+    out.push({ points: bandOf(atoms[b.a1], atoms[b.a2], h), color: b.highlight });
   }
   const labelOf = new Map(labels.filter((t) => t.atom != null).map((t) => [t.atom!, t]));
   atoms.forEach((a, i) => {
     if (!a.highlight) return;
     const t = labelOf.get(i);
-    const color = highlightTint(a.highlight);
+    const color = a.highlight;
     if (!t) {
       out.push({ points: roundOf(a, h), color });
       return;
@@ -4354,7 +4360,7 @@ function svgLabel(
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""} fill="${fill}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${svgColor(run.color, fill)}" stroke="none"` +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4394,6 +4400,16 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const p of layout.polys) {
     s += `<path d="${toSvgPath(p)}" fill="${svgColor(p.color, stroke)}" stroke="none" />`;
   }
+  for (const c of layout.curves ?? []) {
+    if (c.points.length < 4) continue;
+    let d = `M${c.points[0].x} ${-c.points[0].y}`;
+    for (let i = 1; i + 2 < c.points.length; i += 3) {
+      const [p, q, r] = [c.points[i], c.points[i + 1], c.points[i + 2]];
+      d += `C${p.x} ${-p.y} ${q.x} ${-q.y} ${r.x} ${-r.y}`;
+    }
+    s += `<path d="${d}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${c.width}"` +
+      ` stroke-linecap="${c.round ? "round" : "butt"}" stroke-linejoin="round" />`;
+  }
   for (const c of layout.circles || []) {
     s +=
       c.squash != null && c.squash < 1
@@ -4409,7 +4425,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, fontSize, set, svgColor(t.color, fill));
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img
