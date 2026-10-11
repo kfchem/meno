@@ -323,6 +323,26 @@ export function layoutEmf(
       v.setUint32(at + 8, argb(color), true);
     });
 
+  // a pen for each width and colour (selected for GDI; EMF+ names its own in each record)
+  const pens = new Map<string, number>();
+  const penFor = (widthPx: number, color = stroke) => {
+    const width = Math.round(widthPx * S);
+    let h = pens.get(`${width} ${color}`);
+    if (h == null) {
+      h = pen(width, color);
+      pens.set(`${width} ${color}`, h);
+    }
+    select(h);
+    return plusPen(width, color);
+  };
+  const drawLines = (id: number, pts: readonly (readonly [number, number])[]) => {
+    w.plus(PLUS.DRAW_LINES, id, 4 + 8 * pts.length, (v) => {
+      v.setUint32(0, pts.length, true);
+      plusPoints(v, 4, pts);
+    });
+    poly(EMR.POLYLINE, pts);
+  };
+
   // filled: what lies behind the drawing (rings' fills, parts' highlights),
   // then join caps, then wedges and the like - each in its own colour, a
   // brush for each
@@ -344,6 +364,26 @@ export function layoutEmf(
     });
     poly(EMR.POLYGON, pts);
   };
+  // under it all, the shapes on the page, one after another: each filled,
+  // its line over its fill - a corner where it closes - and an arrow's heads over that
+  for (const m of layout.shapes ?? []) {
+    if (m.fill && m.fill.points.length >= 3) {
+      select(NULL_PEN);
+      fillPolygon(points(m.fill.points), colorRef(m.fill.color));
+    }
+    if (m.lines.length) {
+      select(NULL_BRUSH);
+      for (const l of m.lines) {
+        if (l.points.length < 2) continue;
+        const id = penFor(l.width * zoom, colorRef(l.color));
+        drawLines(id, points(l.closed ? [...l.points, l.points[0], l.points[1]] : l.points));
+      }
+    }
+    if (m.heads.length) {
+      select(NULL_PEN);
+      for (const h of m.heads) fillPolygon(points(h.points), colorRef(h.color));
+    }
+  }
   const fills = (layout.under ?? []).length + (layout.fills ?? []).length + layout.polys.length;
   if (fills) {
     select(NULL_PEN);
@@ -361,22 +401,12 @@ export function layoutEmf(
       if (p.points.length < 3) continue;
       fillPolygon(points(p.points), p.color ? colorRef(p.color) : stroke);
     }
+  }
+  if (brushes.size) {
     select(NULL_BRUSH);
     for (const h of brushes.values()) remove(h);
   }
-  // stroked: aromatic circles, then lines, a pen for each width (selected
-  // for GDI; EMF+ names its own in each record)
-  const pens = new Map<string, number>();
-  const penFor = (widthPx: number, color = stroke) => {
-    const width = Math.round(widthPx * S);
-    let h = pens.get(`${width} ${color}`);
-    if (h == null) {
-      h = pen(width, color);
-      pens.set(`${width} ${color}`, h);
-    }
-    select(h);
-    return plusPen(width, color);
-  };
+  // stroked: aromatic circles, then lines
   if ((layout.circles ?? []).length) {
     select(NULL_BRUSH);
     for (const c of layout.circles) {
@@ -397,12 +427,7 @@ export function layoutEmf(
   }
   for (const l of layout.lines) {
     const id = penFor(l.widthPx > 0 ? l.widthPx : 1, l.color ? colorRef(l.color) : stroke);
-    const pts = points([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]);
-    w.plus(PLUS.DRAW_LINES, id, 4 + 8 * pts.length, (v) => {
-      v.setUint32(0, pts.length, true);
-      plusPoints(v, 4, pts);
-    });
-    poly(EMR.POLYLINE, pts);
+    drawLines(id, points([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]));
   }
   // the curves - an electron-pushing arrow's line - as the Bezier curves they are, smooth however far the picture is enlarged
   for (const c of layout.curves ?? []) {
@@ -438,7 +463,7 @@ export function layoutEmf(
   const font = labelFont(family);
   const fonts = new Map<string, number>();
   let textColor: number | null = null;
-  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; text: string }, color: number) => {
+  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; bold?: boolean; text: string }, color: number) => {
     if (textColor == null) w.add(EMR.SETTEXTALIGN, 4, (v) => v.setUint32(0, 24, true)); // TA_BASELINE | TA_LEFT
     if (textColor !== color) {
       w.add(EMR.SETTEXTCOLOR, 4, (v) => v.setUint32(0, color, true));
@@ -446,7 +471,8 @@ export function layoutEmf(
     }
     const height = L(run.size);
     const italic = !!run.italic;
-    const key = `${height}${italic ? " italic" : ""}`;
+    const bold = !!run.bold;
+    const key = `${height}${italic ? " italic" : ""}${bold ? " bold" : ""}`;
     let h = fonts.get(key);
     if (h == null) {
       h = w.handle();
@@ -454,7 +480,7 @@ export function layoutEmf(
       w.add(EMR.EXTCREATEFONTINDIRECTW, 4 + 92, (v) => {
         v.setUint32(0, handle, true);
         v.setInt32(4, -height, true); // the em, not the cell
-        v.setInt32(20, 400, true); // FW_NORMAL
+        v.setInt32(20, bold ? 700 : 400, true); // FW_BOLD or FW_NORMAL
         if (italic) v.setUint8(24, 1); // lfItalic
         v.setUint8(27, 1); // DEFAULT_CHARSET
         v.setUint8(28, 4); // OUT_TT_PRECIS
@@ -488,7 +514,7 @@ export function layoutEmf(
         v.setUint32(0, PLUS_VERSION, true);
         v.setFloat32(4, px(height), true); // the em
         v.setUint32(8, 0, true); // in the drawing's own units
-        v.setUint32(12, italic ? 2 : 0, true); // FontStyleItalic, or regular
+        v.setUint32(12, (italic ? 2 : 0) | (bold ? 1 : 0), true); // FontStyleItalic, FontStyleBold, or regular
         v.setUint32(16, 0, true);
         v.setUint32(20, face.length, true);
         for (let i = 0; i < face.length; i++) v.setUint16(24 + 2 * i, face.charCodeAt(i), true);
@@ -532,9 +558,11 @@ export function layoutEmf(
     const fontSize = opts.units === "world" ? opts.fontPx : opts.fontPx / zoom;
     for (const t of layout.texts) {
       const color = t.color ? colorRef(t.color) : ink;
-      for (const run of placeLabel(t, fontSize, set)) {
+      // (words given a size of their own: at it)
+      const size = t.ownSize ? (opts.units === "world" ? t.fontPx : t.fontPx / zoom) : fontSize;
+      for (const run of placeLabel(t, size, set)) {
         if (run.mark || !run.text) continue; // (a mark is drawn with the lines and shapes)
-        writeRun(run, color);
+        writeRun(run, run.color ? colorRef(run.color) : color);
       }
     }
   }

@@ -51,10 +51,10 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
-  utils/atomUtils         element table (radii, colours)
   samples/                textbook structures and reactions for the tests and the workflow's 3D node
                           (see samples/README.md)
   ui/layouts/TopBar       custom title bar: tabs, "+" (a new workspace), online/offline, Save (the workspace in front), Settings,
@@ -807,13 +807,19 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 `utils/drawnLink`), so that hover is shared and a changed drawing is seen.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
-coordinates gave none - and it has its hydrogens, without which they are
-not found (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
+coordinates gave none - where it has its hydrogens, which the method
+works from (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
 engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, five minutes at most).
+they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
+in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
+structure with a ring of 34 atoms or more, or 25 rings or more, which
+RDKit's own depictor lays out: for those, CoordGen's layout took from
+seconds to over 20 s here (`lay_out_2d` in the worker). Meno lays both
+drawings out again with its own engine; only their stereochemistry and
+scale come from these coordinates.
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
 (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
@@ -934,7 +940,9 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   *Stage 5*): what a figure within a box is drawn with - its paths' steps,
   filled or stroked and how thick, and its letters with where their lines
   start and their sizes, read through forms under their matrices - read in
-  the window as bonds and labels (`lib/figure/read.ts`), then as a
+  the window as bonds and labels (`lib/figure/read.ts`) - letters drawn as
+  outlines matched against the system's own letters, drawn once on a
+  canvas (`lib/figure/glyphs.ts`, `utils/glyphShapes.ts`) - then as a
   structure in Meno's units (`lib/figure/structure.ts`), its labels read
   as typed ones are (`utils/figures.ts` `figureLabels`). Each atom keeps
   where it was drawn (`Atom.seen`), and what was unsure of a part keeps
@@ -944,6 +952,15 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   cut out of it (`components/figureTie.ts`), and an atom whose place is
   under the pointer there is lit in the drawing (`figureLit`, drawn by
   `LinkedHover2D`).
+- **Pictures read as structures** (docs/PDF.md, *A picture read*): a
+  figure that is a picture, drawn by PDFium (`boxPicture`), or a picture
+  on the page, sent to the plugin that fills the role *Structures read
+  from pictures* (`read_picture`, `lib/roles/client.ts`), and its answer
+  read as a figure read is (`lib/figure/picture.ts`) - the same structure,
+  marks and tie, the tie in the picture's own pixels where it came from
+  no PDF (`FigureSpot` without a page). The plugin's trained model is
+  fetched by Meno as the plugin is set up (`plugfiles.rs`, its manifest's
+  `downloads`), into its environment's folder, which its worker is given.
 
 ### Pictures
 
@@ -994,6 +1011,7 @@ the frames standing where renders will put what they make
 | --- | --- | --- |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
+| `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
 | `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
@@ -1136,7 +1154,9 @@ to be able to work with nothing going out at all.
   purpose's first use of the network waits on the user's yes
   (`askToConnect`, remembered in the settings until withdrawn); each task
   has a card in the corner while it runs; the top bar switches offline mode;
-  Settings › Network holds the allowed purposes and the record.
+  Settings › Network holds the allowed purposes and the record. While a
+  talk is given in the window (docs/PRESENTING.md), the cards and the
+  question wait until it ends; the record is kept as ever.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

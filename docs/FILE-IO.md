@@ -465,11 +465,19 @@ work.meno (zip)
   `pdfs`), and `pdfShown` names the one the column showed, in place of
   `textShown` (docs/PDF.md, step 2). Words on the page taken out of a PDF
   keep where they came from (`captions[].from`: the PDF's SHA-256 and two
-  places in it; docs/PDF.md, step 3). Pictures on the page are listed in
+  places in it; docs/PDF.md, step 3), and words given a size of their own
+  or letters marked keep them (`captions[].size`, in points, and
+  `captions[].marks`: ranges of their letters, each bold, italic, a colour
+  or raised or lowered; docs/EDITOR-2D.md, *Text*). Pictures on the page are listed in
   `pictures`, each by its image's SHA-256 with its place, size and turn
   (docs/PDF.md, step 4a); one cut out of a PDF keeps where it came from
   (`pictures[].from`: the PDF's SHA-256, its page and the box on it;
-  step 4b).
+  step 4b). Slides are listed in `slides`, in the order a talk shows
+  them, each by its middle and its size, `around: true` where the page
+  about it is shown while it is (docs/PRESENTING.md). Shapes are listed in
+  `shapes`, from the back, each with its kind, its corners or ends and
+  what of its look is not as a shape is made; words in one say which
+  (`captions[].shape`; docs/PRESENTING.md, *Shapes*).
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.

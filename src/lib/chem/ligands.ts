@@ -4,7 +4,7 @@ import { anionOf, longestGroup, partsOf } from "./formula";
 import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 
 /**
  * The ligands of transition-metal chemistry, and the complexes written with
@@ -414,7 +414,7 @@ export function structureFormula(s: GroupStructure): string {
 const METALS = new Set(
   "Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg La Ce Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split(" "),
 );
-const NAME = new Map(elements.map((e) => [e.symbol, e.name]));
+const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
 /**
  * A complex's counter-anions, written after its brackets, that no rule

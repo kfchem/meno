@@ -89,7 +89,9 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
-import { readWorkspace, workspaceText } from "../utils/workspace";
+import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { heldOutput } from "../../../../lib/calc/asks";
+import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
 
@@ -198,6 +200,49 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1:00 · −76.40000 Eh" });
     const m = st().molecules3d[st().molecules3d.length - 1];
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
+  });
+
+  it("runs the programs installed beside it after it, and keeps the wavefunction it wrote with what was read - saved with the workspace", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const then = [{ program: "orca_2mkl", args: ["input", "-molden"] }];
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], then, reads: ["input.molden.input"] }] }) as never);
+    const wavefunction = { kind: "molden", file: "input.molden.input", name: "water.molden" };
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction }] }) as never);
+    const { st } = editor();
+    const step = st().addStep("energy", "orca", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toEqual([expect.objectContaining({ program: "orca", then })]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output", files: { "input.molden.input": "[Molden Format]\n" } });
+    await st().lookAtJobs();
+    await ran;
+    const m = st().molecules3d[st().molecules3d.length - 1];
+    expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
+    // (held, for a step after it to be given; and kept in the workspace's file)
+    expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
+    const file = readMenoFile(await workspaceFile(st()));
+    expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
+  });
+
+  it("keeps no wavefunction where the job wrote none", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: ["input.molden.input"] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction: { kind: "molden", file: "input.molden.input", name: "water.molden" } }] }) as never);
+    const { st } = editor();
+    const step = st().addStep("energy", "orca", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, log: "ORCA's output" });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+    expect(st().molecules3d[st().molecules3d.length - 1].calc?.wavefunction).toBeUndefined();
   });
 
   it("gives a program one of its files to read, and lays what it gave back turned over what went in - as that is turned", async () => {

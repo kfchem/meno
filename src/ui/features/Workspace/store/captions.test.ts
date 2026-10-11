@@ -211,3 +211,39 @@ describe("words in a picture", () => {
     expect(width).toBeGreaterThan(20);
   });
 });
+
+describe("words given a size of their own and letters marked (docs/EDITOR-2D.md, Text)", () => {
+  it("keep their size and marks - changed each one step - saved, copied and read back, what does not read left out", () => {
+    const { doc, state } = editor();
+    const id = state().addCaption("Title", 0, 0, undefined, undefined, undefined, undefined, { size: 28, marks: [{ from: 0, to: 5, bold: true }] });
+    expect(state().captions[0]).toMatchObject({ size: 28, marks: [{ from: 0, to: 5, bold: true }] });
+    state().colourWords([id], "#317689");
+    expect(state().captions[0].marks).toEqual([{ from: 0, to: 5, bold: true, color: "#317689" }]);
+    state().styleWords([id], "bold");
+    expect(state().captions[0].marks).toEqual([{ from: 0, to: 5, color: "#317689" }]);
+    state().updateCaption(id, { size: null });
+    expect("size" in state().captions[0]).toBe(false);
+    doc.undo();
+    expect(state().captions[0].size).toBe(28);
+    const text = workspaceText(state());
+    const back = readWorkspace(text)!.drawn.captions![0];
+    expect(back).toMatchObject({ size: 28, marks: [{ from: 0, to: 5, color: "#317689" }] });
+    const record = readRecord(recordText({ atoms: [], bonds: [], captions: state().captions }))!;
+    expect(record.captions![0]).toMatchObject({ size: 28 });
+    // (a size out of reason, marks past the words or of no colour: left out)
+    const odd = readRecord(JSON.stringify({ format: "meno-structure", version: 1, atoms: [], bonds: [], captions: [{ id: 1, x: 0, y: 0, text: "abc", size: 9000, marks: [{ from: 0, to: 9, bold: true }, { from: 0, to: 2, color: "red" }, { from: 1, to: 2, italic: true }] }] }))!;
+    expect(odd.captions![0]).toEqual({ id: 1, x: 0, y: 0, text: "abc", marks: [{ from: 1, to: 2, italic: true }] });
+  });
+
+  it("are set in pictures at their own size, their letters bold and coloured as marked", () => {
+    const captions = [{ id: 1, x: 0, y: 0, text: "Big", size: 28, marks: [{ from: 0, to: 1, bold: true as const, color: "#cd4560" }] }, { id: 2, x: 0, y: -10, text: "small" }];
+    const svg = drawingSvg({ atoms: [], bonds: [], captions }, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    const texts = [...svg.matchAll(/<text[^>]*font-size="([\d.]+)"([^>]*)>([^<]*)<\/text>/g)].map((m) => ({ size: Number(m[1]), attrs: m[2], text: m[3] }));
+    const big = texts.find((t) => t.text === "B")!;
+    const small = texts.find((t) => t.text === "small")!;
+    expect(big.size / small.size).toBeCloseTo(2.8, 1);
+    expect(big.attrs).toMatch(/font-weight="bold"/);
+    expect(big.attrs).toMatch(/fill="#cd4560"/);
+    expect(texts.find((t) => t.text === "ig")!.attrs).not.toMatch(/bold/);
+  });
+});

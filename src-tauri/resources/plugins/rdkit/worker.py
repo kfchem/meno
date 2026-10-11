@@ -51,6 +51,25 @@ from rdkit.Chem.EnumerateStereoisomers import (
 RDLogger.DisableLog("rdApp.*")
 rdDepictor.SetPreferCoordGen(True)
 
+# 2D coordinates come from CoordGen, except for a ring of LARGEST_RING atoms
+# or more, or MOST_RINGS rings or more: for these, Compute2DCoords with
+# CoordGen took from seconds to over 20 s here (RDKit 2026.03.6: a chain of
+# 32 para-linked benzene rings 2.2 s, of 35 over 8 s; a ring of 34 carbons
+# 2.5 s, of 37 over 20 s), so RDKit's own depictor lays them out. Meno lays
+# both of the worker's drawings out again with its own engine (from_smiles,
+# drawing_of); only their stereochemistry and scale come from here.
+LARGEST_RING = 34
+MOST_RINGS = 25
+
+
+def lay_out_2d(mol):
+    """A molecule's 2D coordinates: CoordGen's, but for a ring of
+    LARGEST_RING atoms or more, or MOST_RINGS rings or more, RDKit's own
+    depictor's."""
+    rings = [len(r) for r in Chem.GetSymmSSSR(mol)]
+    plain = len(rings) >= MOST_RINGS or max(rings, default=0) >= LARGEST_RING
+    rdDepictor.Compute2DCoords(mol, forceRDKit=plain)
+
 
 def read(molblock, sanitize=True):
     """A molecule from a MOL block, kept as drawn: no hydrogens removed."""
@@ -76,7 +95,7 @@ def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
         raise ValueError("not a SMILES RDKit can read")
-    rdDepictor.Compute2DCoords(mol)
+    lay_out_2d(mol)
     return {"molblock": Chem.MolToV3KMolBlock(mol)}
 
 
@@ -451,11 +470,10 @@ def op_drawing_of(m):
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("not a MOL block RDKit can read")
-    # (whether its bonds' orders were found: they cannot be where it has no
-    # hydrogens - DetermineBondOrders counts each atom's electrons from what
-    # is bonded to it, hydrogens and all)
+    # (whether its bonds' orders were found: DetermineBondOrders works from
+    # each atom's electrons as what is bonded to it gives them, hydrogens
+    # and all, so they are sought only where the molecule has its hydrogens)
     perceived = False
-    # (and none are sought without them: found anyway, they may be wrong)
     if m.get("perceive") and any(a.GetAtomicNum() == 1 for a in mol.GetAtoms()):
         from rdkit.Chem import rdDetermineBonds
 
@@ -472,7 +490,7 @@ def op_drawing_of(m):
     Chem.AssignStereochemistryFrom3D(mol)
     heavy = Chem.RemoveHs(mol)
     heavy.RemoveAllConformers()
-    rdDepictor.Compute2DCoords(heavy)
+    lay_out_2d(heavy)
     return {"molblock": Chem.MolToV3KMolBlock(heavy), "perceived": perceived}
 
 

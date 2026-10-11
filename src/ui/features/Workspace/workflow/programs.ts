@@ -24,20 +24,24 @@ export type PluginEntry = WrittenMolecule & { charge: number; multiplicity: numb
 export type EntryFile = { kind: string; name: string; text: string };
 
 /**
- * The file an entry's molecule was read from, where it is of one of
- * `kinds` (a step's `files`) - and the entry is that molecule's last frame,
- * the geometry an output ends on - its text held this session (`held`).
- * None, where it is not.
+ * The file an entry's molecule was read from, or the wavefunction kept with
+ * it - the first of them of one of `kinds` (a step's `files`) - where the
+ * entry is that molecule's last frame, the geometry an output ends on; its
+ * text held this session (`held`). None, where there is none.
  */
 export async function entryFiles(
   e: Pick<SetEntry, "last">,
-  source: { name: string; sha256: string; kind?: string } | undefined,
+  sources: readonly ({ name: string; sha256: string; kind?: string } | undefined)[],
   kinds: readonly string[],
   held: (sha256: string) => Promise<{ name: string; text: string } | undefined>,
 ): Promise<EntryFile[]> {
-  if (!kinds.length || !source?.kind || !kinds.includes(source.kind) || e.last === false) return [];
-  const got = await held(source.sha256);
-  return got ? [{ kind: source.kind, name: source.name, text: got.text }] : [];
+  if (!kinds.length || e.last === false) return [];
+  for (const source of sources) {
+    if (!source?.kind || !kinds.includes(source.kind)) continue;
+    const got = await held(source.sha256);
+    if (got) return [{ kind: source.kind, name: source.name, text: got.text }];
+  }
+  return [];
 }
 
 export function pluginEntry(e: SetEntry): PluginEntry {
@@ -62,12 +66,20 @@ export function pluginEntry(e: SetEntry): PluginEntry {
  * A job as a plugin prepares it: the entries it is for, by their place; its
  * program, by name; its arguments; its input files, and the one of them its
  * program reads as its input, where it reads one (Gaussian's, run as
- * `g16 <input`); and the files it reads back.
+ * `g16 <input`); the programs installed beside its own run after it, each
+ * by its name and with its arguments (ORCA's orca_2mkl: its manifest's
+ * `installed[].beside`); and the files it reads back.
  */
-export type Prepared = { entries: number[]; program: string; args: string[]; files: JobFile[]; stdin?: string; reads: string[] };
+export type Prepared = { entries: number[]; program: string; args: string[]; files: JobFile[]; stdin?: string; then?: Then[]; reads: string[] };
+
+/** A program installed beside a job's own, run after it: by its name there, with its arguments. */
+export type Then = { program: string; args: string[] };
+
+const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 
 /** A file's name in a job's folder: inside it, never above it. */
 const inside = (name: string) => !!name && name.length <= 200 && !name.startsWith("/") && !/^[A-Za-z]:/.test(name) && name.split(/[\\/]/).every((p) => p && p !== "." && p !== "..");
+const KIND_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const texts = (v: unknown, most: number) => (Array.isArray(v) && v.length <= most && v.every((t) => typeof t === "string") ? (v as string[]) : null);
 
 /**
@@ -83,9 +95,19 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
   for (const j of jobs) {
     const r = j as Record<string, unknown> | null;
     const entries = Array.isArray(r?.entries) && r.entries.every((i) => Number.isInteger(i) && i >= 0 && i < count) ? (r.entries as number[]) : null;
-    const program = typeof r?.program === "string" && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(r.program) ? r.program : null;
+    const program = typeof r?.program === "string" && PROGRAM.test(r.program) ? r.program : null;
     const args = texts(r?.args, 200);
     const reads = texts(r?.reads ?? [], 50);
+    const then =
+      r?.then === undefined
+        ? []
+        : Array.isArray(r.then) && r.then.length <= 4
+          ? r.then.map((t: unknown) => {
+              const g = t as { program?: unknown; args?: unknown } | null;
+              const a = texts(g?.args ?? [], 50);
+              return typeof g?.program === "string" && PROGRAM.test(g.program) && a ? { program: g.program, args: [...a] } : null;
+            })
+          : [null];
     const files = Array.isArray(r?.files)
       ? r.files.flatMap((f: unknown) => {
           const g = f as { name?: unknown; text?: unknown } | null;
@@ -94,10 +116,18 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       : [];
     const stdin = r?.stdin;
     const given = stdin === undefined || (typeof stdin === "string" && files.some((f) => f.name === stdin));
-    if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given)
+    if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given || then.some((t) => !t))
       return "It prepared a job Meno cannot run";
     entries.forEach((i) => covered.add(i));
-    out.push({ entries: [...entries], program, args: [...args], files, ...(typeof stdin === "string" ? { stdin } : {}), reads: [...reads] });
+    out.push({
+      entries: [...entries],
+      program,
+      args: [...args],
+      files,
+      ...(typeof stdin === "string" ? { stdin } : {}),
+      ...(then.length ? { then: then as Then[] } : {}),
+      reads: [...reads],
+    });
   }
   if (covered.size !== count) return "It prepared no job for some of what came in";
   return out;
@@ -107,9 +137,11 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
  * An output a job wrote that Meno is to read with its readers, as it reads
  * one opened (lib/calc/read): its kind, by id; and where it is - a file the
  * job's `prepare` said it reads back, or what the program printed, its log
- * - and the name it goes by.
+ * - and the name it goes by; and, where the job wrote one, the wavefunction
+ * to keep with the molecules read from it (a file it reads back, its kind
+ * and the name it goes by: lib/calc/output `CalcInfo.wavefunction`).
  */
-export type ToRead = { kind: string; name: string } & ({ file: string } | { log: true });
+export type ToRead = { kind: string; name: string; wavefunction?: { kind: string; file: string; name: string } } & ({ file: string } | { log: true });
 
 /**
  * Surfaces a job wrote for an entry, as grids in cube files Meno reads
@@ -164,11 +196,18 @@ export function readCollected(raw: unknown, count: number): ReaderOutput[] | { r
     if (!Array.isArray(r.read) || r.read.length !== count) return { why: "It read back nothing for it" };
     const read: ToRead[] = [];
     for (const x of r.read as Record<string, unknown>[]) {
-      const kind = typeof x?.kind === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(x.kind) ? x.kind : null;
+      const kind = typeof x?.kind === "string" && KIND_ID.test(x.kind) ? x.kind : null;
       const file = typeof x?.file === "string" && inside(x.file) ? x.file : null;
       const name = typeof x?.name === "string" && inside(x.name) ? x.name : file;
-      if (!kind || !name || (!file && x?.log !== true)) return { why: "It said to read what Meno cannot" };
-      read.push(file ? { kind, name, file } : { kind, name, log: true });
+      const w = x?.wavefunction as Record<string, unknown> | undefined;
+      const wavefunction =
+        w === undefined
+          ? undefined
+          : typeof w?.kind === "string" && KIND_ID.test(w.kind) && typeof w.file === "string" && inside(w.file) && typeof w.name === "string" && inside(w.name)
+            ? { kind: w.kind, file: w.file, name: w.name }
+            : null;
+      if (!kind || !name || (!file && x?.log !== true) || wavefunction === null) return { why: "It said to read what Meno cannot" };
+      read.push({ ...(file ? { kind, name, file } : { kind, name, log: true as const }), ...(wavefunction ? { wavefunction } : {}) });
     }
     return { read };
   }

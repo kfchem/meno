@@ -17,9 +17,14 @@ export type PageWords = FieldHost & { undo(): void; redo(): void };
  * A field for `ed`, under the canvas `canvas`, focused: `keep` told when
  * Enter is pressed - with Shift too, where `lines` is false, as words on
  * one line have no other - or the keys go elsewhere; `letGo` when Escape
- * is. `dispose` takes it away.
+ * is. `key` is asked first about any other key, and takes it where it says
+ * so. `dispose` takes it away.
  */
-export function pageField(canvas: HTMLElement, ed: PageWords, o: { label: string; lines: boolean; keep: () => void; letGo: () => void }): { field: TypingField; dispose: () => void } {
+export function pageField(
+  canvas: HTMLElement,
+  ed: PageWords,
+  o: { label: string; lines: boolean; keep: () => void; letGo: () => void; key?: (e: KeyboardEvent) => boolean },
+): { field: TypingField; dispose: () => void } {
   const host = canvas.parentElement ?? document.body;
   const ec = hasEditContext();
   const el: HTMLElement = document.createElement(ec ? "div" : "textarea");
@@ -59,7 +64,10 @@ export function pageField(canvas: HTMLElement, ed: PageWords, o: { label: string
       e.preventDefault();
       e.stopImmediatePropagation();
     };
-    if (e.key === "Enter" && (!e.shiftKey || !o.lines) && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    if (o.key?.(e)) {
+      stop();
+      field?.sync();
+    } else if (e.key === "Enter" && (!e.shiftKey || !o.lines) && !e.altKey && !e.ctrlKey && !e.metaKey) {
       stop();
       o.keep();
     } else if (e.key === "Escape") {

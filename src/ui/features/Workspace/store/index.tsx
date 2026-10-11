@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -20,6 +20,8 @@ import { createCaptionsSlice } from "./slices/captionsSlice";
 import { createPdfsSlice } from "./slices/pdfsSlice";
 import { createPicturesSlice } from "./slices/picturesSlice";
 import { createWorkflowSlice } from "./slices/workflowSlice";
+import { createSlidesSlice } from "./slices/slidesSlice";
+import { createShapesSlice } from "./slices/shapesSlice";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
 
@@ -55,6 +57,8 @@ function mirrorOf(doc: WorkspaceDocument) {
     texts: doc.texts ?? NO_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
     pictures: doc.pictures ?? NO_PICTURES,
+    slides: doc.slides ?? NO_SLIDES,
+    shapes: doc.shapes ?? NO_SHAPES,
   };
 }
 
@@ -84,6 +88,8 @@ function flowHeld(sel: SelFlow, sets: readonly WorkflowSet[], steps: readonly Wo
 const NO_TEXTS: WorkspaceText[] = [];
 const NO_PDFS: PdfItem[] = [];
 const NO_PICTURES: PictureItem[] = [];
+const NO_SLIDES: Slide[] = [];
+const NO_SHAPES: Shape[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {
@@ -124,6 +130,12 @@ export function connectStoreToDocument(
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
+        selSlides: picturesHeld(prev.selSlides, mirrored.slides),
+        selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
+        hoveredShape: prev.hoveredShape != null && !mirrored.shapes.some((s) => s.id === prev.hoveredShape) ? null : prev.hoveredShape,
+        hoveredSlide: prev.hoveredSlide != null && !mirrored.slides.some((s) => s.id === prev.hoveredSlide) ? null : prev.hoveredSlide,
+        // (a talk given from slides an undo took away: ended; from fewer, at the last there is)
+        presenting: !prev.presenting || !mirrored.slides.length ? null : prev.presenting.at < mirrored.slides.length ? prev.presenting : { at: mirrored.slides.length - 1 },
         // (sheets selected kept to those still on the page - and the one under the pointer, if it still is)
         selTexts: picturesHeld(prev.selTexts, (mirrored.texts ?? []).filter((t) => t.at)),
         hoveredText: prev.hoveredText != null && !(mirrored.texts ?? []).some((t) => t.id === prev.hoveredText && t.at) ? null : prev.hoveredText,
@@ -202,6 +214,14 @@ export function createEditorStore(
     picturesLaid: new Set<number>(),
     selPictures: new Set<number>(),
     selCaptions: new Set<number>(),
+    selSlides: new Set<number>(),
+    hoveredSlide: null,
+    selShapes: new Set<number>(),
+    hoveredShape: null,
+    shapeDraft: null,
+    presenting: null,
+    guides: null,
+    setGuides: (guides: EditorState["guides"]) => set({ guides }),
     hoveredMark: null,
     captionEdit: null,
     captionLeft: null,
@@ -246,6 +266,8 @@ export function createEditorStore(
     ...createPdfsSlice(doc, set, get),
     ...createPicturesSlice(doc, set),
     ...createWorkflowSlice(doc, set, get),
+    ...createSlidesSlice(doc, set, get),
+    ...createShapesSlice(doc, set),
   }));
 
   return store;

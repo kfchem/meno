@@ -9,7 +9,7 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
-import { counter } from "../calc/client";
+import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
@@ -46,8 +46,29 @@ export type ChemRequests = {
    * atoms in their order, its bonds' orders and charges the SMILES's.
    */
   orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
+  /**
+   * A picture - a PNG or a JPEG, in base64 - read as the structure drawn in
+   * it (docs/PDF.md, *Stage 5*): see `PictureRead`.
+   */
+  read_picture: { args: { picture: string }; result: PictureRead };
   /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
   add_hydrogens: { args: { molblock: string }; result: { molblock: string } };
+};
+
+/**
+ * The structure drawn in a picture, as the plugin that reads pictures reads
+ * it: its atoms where the picture has them, in its pixels from its top
+ * left - each an element, with its charge, or a label as it is drawn (a
+ * group's: OTBS); its bonds, by index; and what the plugin is unsure of, by
+ * no number. A wedge or a hash says which end lies nearer - `up`, `b`
+ * nearer than `a`; `down`, farther - and, where the plugin can tell, which
+ * end the picture draws narrow (`narrow`): a picture's reader may know
+ * only the first, a wedge narrow at one end being a hash narrow at the
+ * other. No structure found: no atoms.
+ */
+export type PictureRead = {
+  atoms: { x: number; y: number; el?: string; charge?: number; label?: string; unsure?: true }[];
+  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
 };
 
 export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };
@@ -131,6 +152,8 @@ export class ChemClient {
     private name = "The plugin",
     /** Where its questions' ids come from: shared with the other clients of the same worker (lib/calc/client `counter`). */
     private ids: () => number = counter(),
+    /** The worker's queue, which hears each question asked, answered and given up on (lib/plugins/queue). */
+    private watch?: Watch,
   ) {
     let markReady!: (v: string) => void;
     this.ready = new Promise((resolve) => (markReady = resolve));
@@ -160,6 +183,7 @@ export class ChemClient {
     if (!p) return;
     this.pending.delete(m.id!);
     clearTimeout(p.timer);
+    this.watch?.settled(m.id!);
     if (m.ok) p.resolve(m.result);
     else p.reject(new ChemError(m.error ?? `${this.name} could not answer`));
   }
@@ -178,12 +202,14 @@ export class ChemClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new ChemError(`${this.name} did not answer ${op} in time`));
+        this.watch?.overdue(id);
       }, timeoutMs);
       this.pending.set(id, {
         resolve: resolve as (v: unknown) => void,
         reject,
         timer,
       });
+      this.watch?.sent(id);
       this.transport.send(JSON.stringify({ id, op, ...args }));
     });
   }
@@ -195,6 +221,7 @@ export class ChemClient {
       clearTimeout(p.timer);
       p.reject(new ChemError(reason));
       this.pending.delete(id);
+      this.watch?.settled(id);
     }
   }
 }

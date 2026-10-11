@@ -12,7 +12,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 import { namesLaid } from "../layout/names";
 
 export { implicitHydrogens };
@@ -127,6 +127,8 @@ export type LayoutOptions = {
   wavyAmpPx: number;
   /** One whole wave of a wavy bond: a turn to either side. */
   wavyPeriodPx: number;
+  /** How long a point is, in the same units: what words on the page given a size of their own in points are set at (lib/chem/captions `wordsFontPx`). */
+  pointPx?: number;
   fontPx: number;
   /**
    * How far a bond stops short of a label's letters. Left unset, it is 16%
@@ -205,6 +207,17 @@ export type Poly = { points: Vec2[]; color?: string };
 export type Curve = { points: Vec2[]; width: number; round?: boolean; color?: string };
 /** What is drawn behind the drawing, filled flat, its edge sharp: a ring's fill, a part's highlight. */
 export type Under = { points: Vec2[]; color: string };
+/**
+ * A shape on the page as a picture draws it, under everything of the
+ * drawing (lib/chem/shapes): its fill, its line - whole or in dashes, each
+ * `width` wide in the layout's units, its corners mitred - and an arrow's
+ * heads.
+ */
+export type ShapeMark = {
+  fill?: { points: Vec2[]; color: string };
+  lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
+  heads: { points: Vec2[]; color: string }[];
+};
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
 /** A corner within one stroke - a wavy bond's - and the ways its two pieces leave it. */
@@ -241,6 +254,10 @@ export type TextRun = {
   part?: boolean;
   /** Set in italics: the t of t-Bu, the p of p-Ts (IUPAC's Table II). */
   italic?: boolean;
+  /** Set bold, as words on the page are marked (lib/chem/captions `WordsMark`). */
+  bold?: boolean;
+  /** Its colour, where it is not the text's (as #rrggbb): words on the page marked so. */
+  color?: string;
 };
 
 /**
@@ -344,6 +361,11 @@ export type TextItem = {
   markOf?: number;
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
+  /**
+   * Set at its own size - `fontPx` - in pictures too, not at the labels':
+   * words on the page given a size of their own (docs/EDITOR-2D.md, *Text*).
+   */
+  ownSize?: boolean;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -367,6 +389,9 @@ export type PlacedRun = {
   sub: boolean;
   /** In italics: see `TextRun`. */
   italic?: boolean;
+  /** Bold, and in a colour of its own: see `TextRun`. */
+  bold?: boolean;
+  color?: string;
   /** Drawn, not set in type: see `TextRun`. */
   mark?: "charge" | "radical";
   x: number;
@@ -531,6 +556,8 @@ export function shadeOf(hex: string, t: number): string {
 }
 
 export type Layout = {
+  /** Shapes on the page, under all of it, from the back. */
+  shapes?: ShapeMark[];
   /** What is drawn behind all of it, from the back: the rings' fills, then the parts' highlights. */
   under?: Under[];
   lines: LineSeg[];
@@ -709,6 +736,8 @@ export function placeLabel(
     text: runs[i].text,
     sub: !!runs[i].sub,
     ...(runs[i].italic ? { italic: true } : {}),
+    ...(runs[i].bold ? { bold: true } : {}),
+    ...(runs[i].color ? { color: runs[i].color } : {}),
     ...(runs[i].mark ? { mark: runs[i].mark } : {}),
     x,
     y: runs[i].sub ? line - fontSize * set.subscriptDrop : runs[i].sup || runs[i].mark ? line + rise : line,
@@ -2030,7 +2059,7 @@ export function showsLabel(
   );
 }
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /**
  * How an atom that is not an element is labelled, or nothing for one that
@@ -4344,7 +4373,7 @@ function svgLabel(
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""} fill="${fill}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${svgColor(run.color, fill)}" stroke="none"` +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4372,7 +4401,16 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   let s = "";
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
-  // behind it all: the rings' fills and the parts' highlights
+  // under it all: the shapes on the page, each filled, its line over its fill, an arrow's heads over its line
+  for (const m of layout.shapes ?? []) {
+    if (m.fill) s += `<path d="${toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    for (const l of m.lines) {
+      const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
+      s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+    }
+    for (const h of m.heads) s += `<path d="${toSvgPath(h)}" fill="${svgColor(h.color)}" stroke="none" />`;
+  }
+  // behind the drawing: the rings' fills and the parts' highlights
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
   }
@@ -4409,7 +4447,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, fontSize, set, svgColor(t.color, fill));
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img

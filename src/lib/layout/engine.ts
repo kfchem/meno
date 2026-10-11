@@ -489,7 +489,8 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   // perspective, the way it always is; anything else flat
   if (isCage(mol, sys)) return { ...projectCage(mol, sys), solid: true };
   const flat = layoutFlat(mol, sys);
-  const flatFaults = flatCost(mol, sys, flat.pos, flat.depth);
+  // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
+  const flatFaults = flatCost(mol, sys, flat.pos, flat.depth, true);
   if (flatFaults < 1) return flat;
   // Where it will not lie flat without a fault, it is drawn as the solid it
   // is, by the cage's own way - its atoms set in space by how far apart the
@@ -506,7 +507,7 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   // (and only a solid with every stereocentre in it as given)
   const projected = wholeFits ? projectCage(mol, sys) : null;
   const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) ? projected : null;
-  const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth) : Infinity;
+  const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth, true) : Infinity;
   const core = cageCore(mol, sys);
   if (!core) return whole && wholeFaults < flatFaults - 1 ? { ...whole, solid: true } : flat;
   const view = projectCage(mol, core);
@@ -523,9 +524,15 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
       }
     return { pos, depth, hints: v.hints, cost: v.cost };
   };
+  // (and only one that shows every stereocentre in the system as given, as
+  // it is drawn: the cage's own, and those of the atoms where a ring fused
+  // flat onto it joins it - laid beside the bond it shares with the cage, a
+  // ring stands on one face of the cage there or the other, and only one is
+  // the molecule: scopolamine's epoxide laid towards its three-carbon
+  // bridge, not its N, was another)
+  const shows = (v: Omit<CageView, "other">) => sys.atoms.every((a) => v.pos.has(a)) && keepsConfigurations(mol, sys.atoms, v.pos, v.depth);
   const persp = onto(view);
-  const perspFaults =
-    sys.atoms.every((a) => persp.pos.has(a)) && keepsConfigurations(mol, core.atoms, view.pos, view.depth) ? flatCost(mol, sys, persp.pos, persp.depth) : Infinity;
+  const perspFaults = shows(persp) ? flatCost(mol, sys, persp.pos, persp.depth, true) : Infinity;
   // (the cage alone in perspective before the whole, its fused rings flat
   // and wedged as a chemist draws them, unless the whole reads far better)
   if (whole && wholeFaults < flatFaults - 1 && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
@@ -536,7 +543,9 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const inSys = new Set(sys.atoms);
   const coreAtoms = new Set(core.atoms);
   const solidAtoms = core.atoms.filter((a) => mol.neighbours[a].every((b) => !inSys.has(b) || coreAtoms.has(b)));
-  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(view.other ? { other: onto(view.other) } : {}) };
+  // (and seen from its other side, for a mirrored frame, only so too)
+  const other = view.other && onto(view.other);
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}) };
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
@@ -564,10 +573,12 @@ function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
   // stays regular and which arcs round it decides whether it reads
   if (bridged && !rings.some((r) => r.length >= 9)) {
     flat = eased(flat);
-    let least = cost(flat);
+    // (which ring stays regular counting the room its bonds out of it leave, as well)
+    const roomed = (pos: Map<number, Point>) => cost(pos) + flatCost(mol, sys, pos, undefined, true) - flatCost(mol, sys, pos);
+    let least = roomed(flat);
     for (const r of sys.rings) {
       const trial = eased(placeRingSystem(mol, sys, 0, r));
-      const c = cost(trial);
+      const c = roomed(trial);
       if (c < least - 1e-9) {
         least = c;
         flat = trial;

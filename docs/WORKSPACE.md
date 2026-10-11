@@ -106,7 +106,7 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 | 2. 2D and 3D joined | A drawing to 3D (RDKit's ETKDG and MMFF, the drawn stereochemistry kept); the 3D structure rising out of the drawing where it is, turned to match it, and back; hover and choice shared; a 3D structure drawn as a formula by Meno's engine; conformer sets (overlaid, by energy, Boltzmann weights). | 1 |
 | 3. Calculation output | Geometries, optimisation paths, energies, vibrations (modes animated) and charges read from ORCA, Gaussian, xTB and CREST, attached to their molecule; later orbitals and densities (cube files) as surfaces. Each program's reader a plugin, added and removed online. | 2 |
 | 4. Text and PDF | Notes on the page; a PDF on the page (pdf.js): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
-| 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture read by a model, as a plugin, its weights fetched with consent (part B, planned). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
+| 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture, or any picture, read by a model, as a plugin - MolScribe or MolNexTR, as the chemist chooses - its trained model fetched with consent (part B, built 2026-10-11). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
 | 6. Workflows that run | Workflow steps as items on the page, tied to molecules: RDKit conformers, xTB, CREST, and ORCA or Gaussian where installed. Jobs started, stopped and logged by the app. Procedures saved and shared with their results. Specified in [WORKFLOWS.md](WORKFLOWS.md) (2026-10-08): the workspace is the node editor. | 2, 3 |
 | 7. Depth | Analogue series, conformers and reaction steps arranged in depth; detail that changes with zoom. Tried as prototypes and shown before anything is settled. | 1 on |
 
@@ -934,13 +934,14 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** Tried with RDKit 2026.03: a ligand
-  without its hydrogens (biotin, from entry 1STP) has no orders found, and
-  with them its orders are exact; benzoic acid without them has orders
-  found that are wrong. So a molecule, or a ligand, without hydrogens is
-  not sought at all, and says its orders are unknown; nor is one of more
-  than 400 atoms. Such a molecule's orders can be estimated from its
-  distances, asked for (below).
+- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
+  a molecule's full set of atoms, hydrogens included (tried with RDKit
+  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
+  orders; without them, it finds none, and given benzoic acid without
+  them, it does not find benzoic acid's. So Meno does not seek the orders
+  of a molecule, or a ligand, without hydrogens, and says they are
+  unknown; nor of one of more than 400 atoms. Such a molecule's orders
+  can be estimated from its distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without
@@ -948,7 +949,7 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   (`lib/chem/ordersFromGeometry.ts`). It weighs three things. A bond's
   length is read as an order between one and three against the sums of
   its atoms' single-, double- and triple-bond covalent radii
-  (`lib/chem/covalentRadii.ts`: Pyykkö's, as collected in J. Phys. Chem.
+  (`lib/chem/elements.ts`: Pyykkö's, as collected in J. Phys. Chem.
   A 2015, 119, 2326, from Pyykkö and Atsumi, Chem. Eur. J. 2009, 15, 186
   and 12770, and Pyykkö, Riedel and Patzschke, Chem. Eur. J. 2005, 11,
   3511). An atom's shape says how many double bonds it can have: a carbon

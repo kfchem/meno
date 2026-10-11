@@ -45,6 +45,10 @@ describe("the jobs a plugin prepares", () => {
     // (its program given one of its files to read: Gaussian's, run as `g16 <input`)
     const read = { ...job, program: "g16", args: [], stdin: "input.xyz" };
     expect(readPrepared({ jobs: [read] }, 1)).toEqual([read]);
+    // (programs installed beside its own, run after it: ORCA's orca_2mkl)
+    const then = { ...job, program: "orca", then: [{ program: "orca_2mkl", args: ["input", "-molden"] }] };
+    expect(readPrepared({ jobs: [then] }, 1)).toEqual([then]);
+    expect(readPrepared({ jobs: [{ ...job, then: [] }] }, 1)).toEqual([job]);
   });
 
   it("are refused where they cannot", () => {
@@ -62,6 +66,11 @@ describe("the jobs a plugin prepares", () => {
       { ...job, stdin: "other.xyz" },
       { ...job, stdin: "../input.xyz" },
       { ...job, stdin: 1 },
+      // (a program after it by name alone, a few at most)
+      { ...job, then: [{ program: "/bin/sh", args: [] }] },
+      { ...job, then: [{ program: "orca_2mkl", args: "-molden" }] },
+      { ...job, then: new Array(5).fill({ program: "orca_2mkl", args: [] }) },
+      { ...job, then: "orca_2mkl" },
     ])
       expect(readPrepared({ jobs: [bad] }, 1)).toBe("It prepared a job Meno cannot run");
   });
@@ -84,7 +93,18 @@ describe("what a plugin reads back of a job", () => {
     // (a file's name goes by its own, where none is given)
     expect(readCollected({ read: [{ kind: "gaussian", file: "input.log" }] }, 1)).toEqual({ read: [{ kind: "gaussian", file: "input.log", name: "input.log" }] });
     expect(readCollected({ read: [] }, 1)).toEqual({ why: "It read back nothing for it" });
-    for (const bad of [{ kind: "Not A Kind", log: true, name: "a.out" }, { kind: "orca", file: "../secret" }, { kind: "orca", name: "a.out" }, { kind: "orca", log: true, name: "/etc/a.out" }]) {
+    // (with the wavefunction the job wrote besides, to keep with what is read)
+    const wavefunction = { kind: "molden", file: "input.molden.input", name: "water.molden" };
+    expect(readCollected({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction }] }, 1)).toEqual({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction }] });
+    for (const bad of [
+      { kind: "Not A Kind", log: true, name: "a.out" },
+      { kind: "orca", file: "../secret" },
+      { kind: "orca", name: "a.out" },
+      { kind: "orca", log: true, name: "/etc/a.out" },
+      { kind: "orca", log: true, name: "a.out", wavefunction: { ...wavefunction, file: "../a.molden" } },
+      { kind: "orca", log: true, name: "a.out", wavefunction: { ...wavefunction, kind: "Molden File" } },
+      { kind: "orca", log: true, name: "a.out", wavefunction: "input.molden.input" },
+    ]) {
       expect(readCollected({ read: [bad] }, 1)).toEqual({ why: "It said to read what Meno cannot" });
     }
   });
@@ -124,13 +144,21 @@ describe("the files a step takes besides", () => {
   const held = async (sha256: string) => (sha256 === "abc" ? { name: "water.molden", text: "[Molden Format]" } : undefined);
   it("are an entry's molecule's output, where it is of a kind the step takes - and the entry its last geometry", async () => {
     const source = { name: "water.molden", sha256: "abc", kind: "molden" };
-    expect(await entryFiles({ last: true }, source, ["molden", "wfx"], held)).toEqual([{ kind: "molden", name: "water.molden", text: "[Molden Format]" }]);
+    expect(await entryFiles({ last: true }, [source], ["molden", "wfx"], held)).toEqual([{ kind: "molden", name: "water.molden", text: "[Molden Format]" }]);
     // (of no kind it takes; not its last geometry; held nowhere; read from nothing)
-    expect(await entryFiles({ last: true }, { ...source, kind: "orca" }, ["molden"], held)).toEqual([]);
-    expect(await entryFiles({ last: false }, source, ["molden"], held)).toEqual([]);
-    expect(await entryFiles({ last: true }, { ...source, sha256: "def" }, ["molden"], held)).toEqual([]);
-    expect(await entryFiles({ last: true }, undefined, ["molden"], held)).toEqual([]);
-    expect(await entryFiles({ last: true }, source, [], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, [{ ...source, kind: "orca" }], ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: false }, [source], ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, [{ ...source, sha256: "def" }], ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, [undefined], ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, [source], [], held)).toEqual([]);
+  });
+
+  it("are the wavefunction kept with an entry's molecule, where its output is of no kind the step takes", async () => {
+    // (ORCA's output read, its orbitals kept as a Molden file beside it)
+    const output = { name: "water.out", sha256: "out", kind: "orca" };
+    const wavefunction = { name: "water.molden", sha256: "abc", kind: "molden" };
+    expect(await entryFiles({ last: true }, [output, wavefunction], ["molden", "wfx"], held)).toEqual([{ kind: "molden", name: "water.molden", text: "[Molden Format]" }]);
+    expect(await entryFiles({ last: true }, [output, undefined], ["molden"], held)).toEqual([]);
   });
 });
 

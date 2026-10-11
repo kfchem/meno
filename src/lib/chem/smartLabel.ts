@@ -30,7 +30,7 @@
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
 import { labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 
 /**
  * What a label reads as: part of a structure - an element with its H and
@@ -43,7 +43,7 @@ export type Reads = (label: string) => Reading;
 
 /** The first element after uranium: none from there on is read from letters typed small. */
 const AFTER_URANIUM = 93;
-const HEAVY = new Set(elements.filter((e) => e.number >= AFTER_URANIUM).map((e) => e.symbol));
+const HEAVY = new Set(ELEMENTS.filter((e) => e.number >= AFTER_URANIUM).map((e) => e.symbol));
 
 type Token = { text: string };
 
@@ -53,7 +53,8 @@ function vocabulary(): { words: Token[]; names: Set<string> } {
   const units = labelUnitNames();
   if (tokens?.from !== units) {
     const words = [
-      ...elements.map((e) => ({ text: e.symbol })),
+      // (by symbol, as ever: ties among writings keep this order)
+      ...ELEMENTS.map((e) => e.symbol).sort().map((text) => ({ text })),
       ...units.map((text) => ({ text })),
       // (an Rgroup's R)
       { text: "R" },

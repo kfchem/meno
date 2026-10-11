@@ -363,19 +363,20 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * the frame it shows, its heavy atoms, wedged as it is in 3D - its bonds'
  * orders found where it has none (all single, as a file of coordinates
  * gives them). And which of the formula's atoms each of its atoms is: none
- * for a hydrogen.
+ * for a hydrogen; and whether its orders, wanted, are still unknown - not
+ * found (no hydrogens, say), and so drawn single.
  */
-export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number): Promise<{ model: Model; link: (number | null)[] }> {
+export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const xyz = frame > 0 && m.frames?.[frame - 1] ? m.frames[frame - 1] : m.atoms.flatMap((a) => [a.x, a.y, a.z]);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
-  const perceive = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
-  const { molblock } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive });
+  const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
+  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
   const model = await laidOut(drawn).catch(() => drawn);
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
-  return { model, link };
+  return { model, link, ordersUnknown: wanted && !perceived };
 }
 
 /** Where a formula drawn of a molecule in 3D goes: beside it, to its left, level with it. */

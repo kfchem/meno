@@ -29,6 +29,7 @@ import { setCursor } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pageAt } from "../utils/page";
 import { cornersOf } from "../utils/selection";
+import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { setViewGoal } from "./viewGoal";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
@@ -183,6 +184,14 @@ function Picture({
   // the light round it while the pointer is on it, coming and going
   const lightMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => lightMaterial.dispose(), [lightMaterial]);
+  // an atom lit in the drawing from a place in it: unlit as the pointer leaves it - or as it goes, under the pointer
+  const lit = useRef(false);
+  const unlight = () => {
+    if (lit.current && store.getState().figureLit != null) store.getState().setFigureLit(null);
+    lit.current = false;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- (once, as it goes)
+  useEffect(() => unlight, []);
   useFrame((_, dt) => {
     const m = lightMaterial;
     const to = hovered ? LIT : 0;
@@ -296,17 +305,20 @@ function Picture({
         onPointerOver={() => store.getState().setHoveredPicture(p.id)}
         onPointerOut={() => {
           if (store.getState().hoveredPicture === p.id) store.getState().setHoveredPicture(null);
-          if (p.from) store.getState().setFigureLit(null);
+          unlight();
         }}
         onPointerMove={(e) => {
-          // (cut out of a PDF: over where an atom read from that figure was drawn, that atom lit in the drawing)
-          const f = p.from;
-          if (!f) return;
+          // (over where an atom read from it was drawn - from the PDF it was cut out of, or from it - that atom lit in the drawing)
           const q = local(e.point);
           const st = store.getState();
-          const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
-          const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
-          st.setFigureLit(atomAtSpot(st.model, f.sha256, f.page, x, y));
+          let atom: number | null = null;
+          for (const f of figuresIn(p)) {
+            const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
+            const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
+            atom ??= atomAtSpot(st.model, f.sha256, f.page, x, y);
+          }
+          if (atom !== st.figureLit) st.setFigureLit(atom);
+          lit.current = atom != null;
         }}
         onPointerDown={onDown}
       >
@@ -315,7 +327,9 @@ function Picture({
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
-      {p.from && <SpotRing p={p} from={p.from} />}
+      {figuresIn(p).map((f) => (
+        <SpotRing key={f.page ?? "own"} p={p} from={f} />
+      ))}
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
       {selected && <Frame p={p} px={px} toWorld={toWorld} />}
     </group>
@@ -327,7 +341,11 @@ function Picture({
  * ringed on the picture while it is lit (components/figureTie), as the
  * drawing rings it.
  */
-function SpotRing({ p, from }: { p: PictureItem; from: PictureFrom }) {
+/** Where a picture shows a figure an atom may have been read from: the box of the PDF's page it was cut out of, if it was, and itself, in its pixels (no page). */
+type FigureIn = { sha256: string; page?: number; box: PictureFrom["box"] };
+const figuresIn = (p: PictureItem): FigureIn[] => [...(p.from ? [p.from] : []), { sha256: p.sha256, box: [0, 0, p.px[0], p.px[1]] }];
+
+function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
   const { invalidate } = useThree();
   const mesh = useRef<THREE.Mesh>(null!);
   useFrame(() => {
@@ -390,15 +408,23 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
     const gesture = `scale-${performance.now()}`;
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
+    // (as wide or as tall as something near, where it comes near - upright, as most are: docs/PRESENTING.md, *Guides*)
+    const placeAt = (f: number) => ({ w: p.w * f, h: p.h * f, x: fixed.x + (dir.x * len * f) / 2, y: fixed.y + (dir.y * len * f) / 2 });
+    const boxAt = (f: number) => {
+      const q = cornersOf({ ...p, ...placeAt(f) });
+      return { x0: Math.min(...q.map((v) => v.x)), y0: Math.min(...q.map((v) => v.y)), x1: Math.max(...q.map((v) => v.x)), y1: Math.max(...q.map((v) => v.y)) };
+    };
+    const guide = guideScale(store, toWorld, { x: ev.clientX, y: ev.clientY }, boxAt(1));
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
       const along = Math.max(least, (q.x - fixed.x) * dir.x + (q.y - fixed.y) * dir.y);
-      const f = along / len;
-      store.getState().updatePicture(p.id, { w: p.w * f, h: p.h * f, x: fixed.x + (dir.x * along) / 2, y: fixed.y + (dir.y * along) / 2 }, gesture);
+      const f = Math.max(least / len, guide.step(along / len, m, boxAt));
+      store.getState().updatePicture(p.id, placeAt(f), gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      guide.end();
       const s = store.getState();
       s.endPanHold(u.pointerId);
       s.suppressDoubleClick(DOUBLE_CLICK_MS);

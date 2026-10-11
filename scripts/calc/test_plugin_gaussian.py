@@ -156,22 +156,32 @@ class Steps(unittest.TestCase):
         self.assertEqual(len(jobs), 2)
         job = jobs[0]
         # ("g16 <input-file >output-file": its output what it prints, the job's log)
-        self.assertEqual((job["entries"], job["program"], job["args"], job["stdin"], job["reads"]), ([0], "g16", [], "input.gjf", []))
+        self.assertEqual((job["entries"], job["program"], job["args"], job["stdin"], job["reads"]), ([0], "g16", [], "input.gjf", ["wavefunction.wfx"]))
         text = job["files"][0]["text"]
         self.assertEqual(job["files"][0]["name"], "input.gjf")
         lines = text.splitlines()
         # Link 0: the processors from Meno's cores, no checkpoint; the route: the method, dispersion and the job
         self.assertEqual(lines[0], "%NProcShared=4")
         self.assertNotIn("%Chk", text)
-        self.assertEqual(lines[1], "# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt")
+        self.assertEqual(lines[1], "# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Output=WFX")
         self.assertEqual(lines[3], "water")
         self.assertEqual(lines[5], "0 1")
+        # (the wavefunction's file, "read from the input stream, on a separate line": after the molecule, ended by a blank line)
+        self.assertEqual(text.split("\n\n")[3:], ["wavefunction.wfx", ""])
+
+    def test_keeps_the_wavefunction_only_where_asked(self):
+        job = ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "wavefunction": False})["jobs"][0]
+        self.assertNotIn("Output=WFX", job["files"][0]["text"])
+        self.assertNotIn("wavefunction.wfx", job["files"][0]["text"])
+        self.assertEqual(job["reads"], [])
+        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [ENTRY], "options": {**step_defaults("energy"), "wavefunction": "yes"}}))
+        self.assertFalse(said["ok"])
 
     def test_each_kind_its_job_and_solvation_as_scrf_says(self):
         energy = ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "solvation": "SMD", "solvent": "TetraHydroFuran"})["jobs"][0]
         self.assertIn("SP SCRF=(SMD,Solvent=TetraHydroFuran)", energy["files"][0]["text"].splitlines()[0])
         freq = ask("prepare", step="frequencies", entries=[ENTRY], options={**step_defaults("frequencies"), "solvation": "PCM", "solvent": "Water", "keywords": "Int=UltraFine"})["jobs"][0]
-        self.assertTrue(freq["files"][0]["text"].splitlines()[0].endswith("Freq SCRF=(PCM,Solvent=Water) Int=UltraFine"))
+        self.assertTrue(freq["files"][0]["text"].splitlines()[0].endswith("Freq SCRF=(PCM,Solvent=Water) Int=UltraFine Output=WFX"))
 
     def test_refuses_what_it_does_not_know(self):
         for options in ({"solvation": "COSMO"}, {"solvation": "PCM", "solvent": "Lava"}, {"dispersion": "D9"}):
@@ -191,6 +201,9 @@ class Steps(unittest.TestCase):
     def test_its_output_is_read_by_meno_s_readers_and_a_failure_says_why(self):
         read = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=" Normal termination of Gaussian 16", ended="done")
         self.assertEqual(read, {"read": [{"kind": "gaussian", "log": True, "name": "water.log"}]})
+        # (with the wavefunction it wrote, kept with the molecule)
+        read = ask("collect", step="optimise", entries=[ENTRY], options={}, files={"wavefunction.wfx": "<Title>"}, log=" Normal termination of Gaussian 16", ended="done")
+        self.assertEqual(read["read"][0]["wavefunction"], {"kind": "wfx", "file": "wavefunction.wfx", "name": "water.wfx"})
         why = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=FAILED, ended="failed")
         self.assertEqual(why, {"why": "Some atoms are too close together."})
         # (a link that dies says nothing of why: what it printed last is said)

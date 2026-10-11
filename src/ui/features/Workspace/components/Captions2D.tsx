@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { captionPlace, captionSet, type CaptionSet } from "../../../../lib/chem/captions";
+import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
@@ -9,6 +9,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { Caption } from "../store/types";
+import { guideMove, guideWidth } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -34,7 +35,7 @@ const NARROWEST_EMS = 2;
 const SHADE_COLOR = new THREE.Color(SELECTION_SHADE);
 
 /** A caption as it is set about its middle, and the room it takes. */
-type Laid = { c: Caption } & CaptionSet;
+type Laid = { c: Caption; fs: number } & CaptionSet;
 
 /**
  * The words on the page (lib/chem/captions), set as the drawing sets its
@@ -76,8 +77,9 @@ export default function Captions2D() {
 function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selected: boolean }) {
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
-  const fs = opts.fontPx;
-  const laid = useMemo<Laid>(() => ({ c, ...captionSet(c.text, 0, 0, fs, set, c.width, c.align) }), [c, fs, set]);
+  // (at its own size, or the labels'; its letters as they were marked)
+  const fs = wordsFontPx(c, opts);
+  const laid = useMemo<Laid>(() => ({ c, fs, ...wordsSet(c, opts, set, { x: 0, y: 0 }) }), [c, fs, opts, set]);
   // (given back by what was written in their place: seen at once, as that was - else faded in, as they come)
   const [fadeIn] = useState(() => store.getState().captionLeft?.id !== c.id);
   return (
@@ -90,12 +92,12 @@ function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selecte
 
 /** Where a caption is taken hold of: the room round its words, lit while the pointer is on it, shaded while it is selected. */
 function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
-  const { c, halfW, halfH } = laid;
+  const { c, halfW, halfH, fs } = laid;
   const store = useEditorStore();
   const hovered = useEditor((s) => s.hoveredCaption === c.id);
   const { opts } = useDrawnLayout();
   const { camera, gl, invalidate } = useThree();
-  const margin = MARGIN * opts.fontPx;
+  const margin = MARGIN * fs;
   const light = useRef<THREE.MeshBasicMaterial>(null);
   const shade = useRef<THREE.MeshBasicMaterial>(null);
   // (shaded as a structure is, under the drawing: the page's white going over to the shade - opaque, so behind the bonds)
@@ -155,12 +157,18 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
     const off = { x: c.x - at.x, y: c.y - at.y };
     const gesture = `move-${performance.now()}`;
     let moved = false;
+    // (lined up with what is near as they go: docs/PRESENTING.md, *Guides*)
+    const guide = guideMove(store, toWorld, { x: sx, y: sy });
+    const goes = (ev: PointerEvent) => {
+      const q = toWorld(ev.clientX, ev.clientY);
+      const d = guide.step(q.x - at.x, q.y - at.y, ev);
+      return { x: at.x + d.x + off.x, y: at.y + d.y + off.y };
+    };
     const onMove = (ev: PointerEvent) => {
       if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;
       moved = true;
-      const q = toWorld(ev.clientX, ev.clientY);
       // (taken from an arrow as it is moved: put down near one, it goes over it again)
-      store.getState().updateCaption(c.id, { x: q.x + off.x, y: q.y + off.y, arrow: null }, gesture);
+      store.getState().updateCaption(c.id, { ...goes(ev), arrow: null }, gesture);
     };
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
@@ -170,15 +178,19 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       setHeld((h) => (h && h.let == null ? { ...h, let: performance.now() } : h));
       // (the button coming up here is no click on empty space)
       s.suppressDoubleClick(DOUBLE_CLICK_MS);
-      if (!moved) return;
-      const q = toWorld(ev.clientX, ev.clientY);
+      if (!moved) {
+        guide.end();
+        return;
+      }
+      const q = goes(ev);
+      guide.end();
       const others = s.captions
         .filter((o) => o.id !== c.id)
         .map((o) => {
-          const r = captionSet(o.text, o.x, o.y, opts.fontPx, labelSetOf(opts), o.width, o.align);
+          const r = wordsSet(o, opts, labelSetOf(opts));
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
-      const placed = captionPlace({ x: q.x + off.x, y: q.y + off.y }, { w: halfW, h: halfH }, arrowsBeside(s, opts.fontPx, labelSetOf(opts), c.id), opts.fontPx, others);
+      const placed = captionPlace(q, { w: halfW, h: halfH }, arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
       s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
     };
     window.addEventListener("pointermove", onMove);
@@ -192,7 +204,12 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
     // (one press, one thing: not the arrow under the words as well)
     e.stopPropagation();
     const st = store.getState();
-    // (Ctrl, or ⌘: added to the selection, or taken out of it)
+    // (Ctrl, or ⌘: added to the selection, or taken out of it - words in a shape, the shape)
+    if (addsToSelection(ev) && c.shape != null) {
+      st.toggleShapeSel(c.shape);
+      st.suppressDoubleClick(DOUBLE_CLICK_MS);
+      return;
+    }
     if (addsToSelection(ev)) {
       const now = new Set(st.selCaptions);
       if (now.has(c.id)) now.delete(c.id);
@@ -222,7 +239,21 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      // (words in a shape: the shape taken hold of - selected, if it is not - and moved, its words with it)
+      if (c.shape != null) {
+        if (!s.selShapes.has(c.shape)) {
+          s.clearSel();
+          s.selectShapes([c.shape]);
+        }
+        dragSelection(store, toWorld, from, (u) => {
+          const s2 = store.getState();
+          s2.endPanHold(u.pointerId);
+          s2.suppressDoubleClick(DOUBLE_CLICK_MS);
+          letGo();
+        });
+        return;
+      }
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selSlides.size || s.selShapes.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);
@@ -288,7 +319,8 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
         <meshBasicMaterial ref={light} color={COLORS.highlight} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
       </mesh>
       {held && heldShows(held, now) && <HeldLight b={box} at={held} held={held} now={now} z={0.005} />}
-      {(hovered || resizing) && (
+      {/* (words in a shape are as wide as it is: made wider with it) */}
+      {(hovered || resizing) && c.shape == null && (
         <>
           <CaptionEdge side={-1} laid={laid} margin={margin} onResizing={setResizing} />
           <CaptionEdge side={1} laid={laid} margin={margin} onResizing={setResizing} />
@@ -325,19 +357,29 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
         e.stopPropagation();
         // (the other edge stays where it is; this one follows the pointer)
         const fixed = c.x - side * halfW;
-        const narrowest = NARROWEST_EMS * opts.fontPx;
+        const narrowest = NARROWEST_EMS * laid.fs;
+        // (a box keeps its top as its lines are broken again; words over an arrow, their middle)
+        const top = c.arrow == null ? c.y + halfH : null;
+        const set = labelSetOf(opts);
         const gesture = `resize-${performance.now()}`;
         const st = store.getState();
+        // (as wide as something near, where it comes near: docs/PRESENTING.md, *Guides*)
+        const guide = guideWidth(store, toWorld, { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY }, c.id);
         st.beginPanHold(e.nativeEvent.pointerId);
         onResizing(true);
         const onMove = (ev: PointerEvent) => {
           const q = toWorld(ev.clientX, ev.clientY);
-          const edge = side > 0 ? Math.max(fixed + narrowest, q.x) : Math.min(fixed - narrowest, q.x);
-          store.getState().updateCaption(c.id, { width: Math.abs(edge - fixed), x: (edge + fixed) / 2 }, gesture);
+          let edge = side > 0 ? Math.max(fixed + narrowest, q.x) : Math.min(fixed - narrowest, q.x);
+          const like = guide.step({ x0: Math.min(edge, fixed), x1: Math.max(edge, fixed), y0: c.y - halfH, y1: c.y + halfH }, ev);
+          if (like != null && like >= narrowest) edge = fixed + side * like;
+          const width = Math.abs(edge - fixed);
+          const y = top != null ? top - wordsSet({ ...c, width }, opts, set).halfH : c.y;
+          store.getState().updateCaption(c.id, { width, x: (edge + fixed) / 2, y }, gesture);
         };
         const onUp = (ev: PointerEvent) => {
           window.removeEventListener("pointermove", onMove);
           window.removeEventListener("pointerup", onUp, true);
+          guide.end();
           const s = store.getState();
           s.endPanHold(ev.pointerId);
           s.suppressDoubleClick(200);

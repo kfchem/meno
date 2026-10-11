@@ -7,7 +7,7 @@
  * drawing style is (./style), so that it can be set the same way; the
  * primary's defaults are the 3D viewer's look.
  */
-import { getColor, getVdwRadius } from "../../utils/atomUtils";
+import { elementColour, vdwRadius } from "./elements";
 import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
@@ -209,7 +209,7 @@ const colour = new Map<string, string>();
 
 /** An atom's radius as a look draws it, in ångströms. */
 export function atomRadius(el: string, look: MoleculeLook): number {
-  if (!vdw.has(el)) vdw.set(el, getVdwRadius(el));
+  if (!vdw.has(el)) vdw.set(el, vdwRadius(el));
   return vdw.get(el)! * (look.atoms === "space" ? 1 : look.ballScale);
 }
 
@@ -220,7 +220,7 @@ export function bondRadiusOf(look: MoleculeLook): number {
 
 /** An atom's colour, by its element (an unknown one grey). */
 export function atomColour(el: string): string {
-  if (!colour.has(el)) colour.set(el, getColor(el));
+  if (!colour.has(el)) colour.set(el, elementColour(el));
   return colour.get(el)!;
 }
 

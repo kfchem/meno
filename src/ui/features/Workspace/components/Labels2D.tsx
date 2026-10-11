@@ -15,6 +15,8 @@ import { useEditor, useEditorStore } from "../store";
  * typeface's italic.
  */
 const ITALIC_SLANT = Math.tan((12 * Math.PI) / 180);
+/** How much a bold run's letters are thickened, as a share of their size: Markdown's strong words' (components/MarkdownRows). */
+const BOLD = "3.5%";
 
 /** A run at (x, y), its baseline, leaning to the right above it. */
 function slanted(x: number, y: number): THREE.Matrix4 {
@@ -143,12 +145,17 @@ export function Texts2D({
               <Text
                 font={font}
                 fontSize={run.size}
-                color={t.color ?? labelColor}
+                color={run.color ?? t.color ?? labelColor}
                 fillOpacity={fill}
                 anchorX="left"
                 anchorY="top-baseline"
                 renderOrder={renderOrder}
-                {...(shadow ? { outlineBlur: shadow, outlineColor: "black", outlineOpacity: 0 } : {})}
+                {...(shadow
+                  ? { outlineBlur: shadow, outlineColor: "black", outlineOpacity: 0 }
+                  : run.bold
+                    ? // (bold: the letters thickened by an outline of their own colour, as Markdown's are - one face of each)
+                      { outlineWidth: BOLD, outlineColor: run.color ?? t.color ?? labelColor, outlineOpacity: fill }
+                    : {})}
                 material-toneMapped={false}
                 material-depthTest={false}
                 material-depthWrite={false}

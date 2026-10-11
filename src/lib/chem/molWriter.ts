@@ -3,7 +3,7 @@ import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number };
@@ -101,11 +101,23 @@ function rows(model: WriterModel, index: Map<number, number>): Row[] {
 
 const f10 = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4).padStart(10);
 const i3 = (n: number) => String(n).padStart(3);
+/** Whether a coordinate fits V2000's xxxxx.xxxx: ten columns, four of them decimals. */
+const fitsF10 = (v: number) => f10(v).length <= 10;
+/** A number as a V3000 entry has it: four decimals, as V2000's coordinates. */
+const v30Number = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
+/**
+ * A string as a V3000 entry has it: in double quotes where it holds a
+ * blank, a quote, a double quote, "=", "(" or ")", a double quote in it
+ * doubled ("CTfile Formats", the general syntax of entries).
+ */
+const v30String = (t: string) => (/[\s'"=()]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t);
+/** A V3000 molfile's fourth line: a counts line of no atoms, and the version. */
+const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 
 /** MOL's radical codes. */
 const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
 
@@ -454,7 +466,7 @@ function fitV3000(line: string): string[] {
 }
 
 function writeV3000(given: WriterModel, title: string): string {
-  const lines = [title, PROGRAM_LINE, "", "  0  0  0     0  0  0  0  0  0999 V3000", ...ctabV3000(given), "M  END"];
+  const lines = [title, PROGRAM_LINE, "", V3000_COUNTS, ...ctabV3000(given), "M  END"];
   return lines.join("\n") + "\n";
 }
 
@@ -468,7 +480,6 @@ function ctabV3000(given: WriterModel): string[] {
   const scale = MOL_BOND_LENGTH / NOMINAL_BOND_LENGTH;
   const bonds = rows(model, index);
   const cfg = { up: 1, down: 3, wavy: 2, either: 2, none: 0 } as const;
-  const num = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
   const lines = [
     "M  V30 BEGIN CTAB",
     `M  V30 COUNTS ${model.atoms.length} ${bonds.length} ${groups.length} 0 ${chiralFlag(model) ? 1 : 0}`,
@@ -488,7 +499,7 @@ function ctabV3000(given: WriterModel): string[] {
     const type = a.list
       ? `${a.list.not ? '"NOT ' : ""}[${a.list.symbols.join(",")}]${a.list.not ? '"' : ""}`
       : symbolOf(a, aliases);
-    lines.push(`M  V30 ${i + 1} ${type} ${num(a.x * scale)} ${num(a.y * scale)} 0 ${a.map ?? 0}${props}`);
+    lines.push(`M  V30 ${i + 1} ${type} ${v30Number(a.x * scale)} ${v30Number(a.y * scale)} 0 ${a.map ?? 0}${props}`);
   });
   lines.push("M  V30 END ATOM");
   if (bonds.length > 0) {
@@ -506,7 +517,6 @@ function ctabV3000(given: WriterModel): string[] {
     lines.push("M  V30 END BOND");
   }
   if (groups.length) {
-    const quote = (t: string) => (/[\s"=()]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t);
     const rowOf = new Map(model.bonds.map((b, i) => [b, i + 1]));
     const listOf = (values: number[]) => `(${values.length} ${values.join(" ")})`;
     lines.push("M  V30 BEGIN SGROUP");
@@ -525,11 +535,11 @@ function ctabV3000(given: WriterModel): string[] {
           (g.connect ? ` CONNECT=${g.connect}` : "") +
           (g.parent != null ? ` PARENT=${g.parent + 1}` : "") +
           (g.componentNumber ? ` COMPNO=${g.componentNumber}` : "") +
-          (g.label && g.type !== "MUL" ? ` LABEL=${quote(g.label)}` : "") +
-          brackets.map((b) => ` BRKXYZ=(9 ${num(b.x1)} ${num(b.y1)} 0 ${num(b.x2)} ${num(b.y2)} 0 0 0 0)`).join("") +
+          (g.label && g.type !== "MUL" ? ` LABEL=${v30String(g.label)}` : "") +
+          brackets.map((b) => ` BRKXYZ=(9 ${v30Number(b.x1)} ${v30Number(b.y1)} 0 ${v30Number(b.x2)} ${v30Number(b.y2)} 0 0 0 0)`).join("") +
           (g.paren ? " BRKTYP=PAREN" : "") +
           (g.expanded ? " ESTATE=E" : "") +
-          (g.field ? ` FIELDNAME=${quote(g.field.name)}${g.field.data.map((d) => ` FIELDDATA=${quote(d)}`).join("")}` : ""),
+          (g.field ? ` FIELDNAME=${v30String(g.field.name)}${g.field.data.map((d) => ` FIELDDATA=${v30String(d)}`).join("")}` : ""),
       );
     });
     lines.push("M  V30 END SGROUP");
@@ -566,17 +576,23 @@ function titleLine(title: string | undefined): string {
 
 /**
  * Whether V2000 cannot say all there is to say of the structure, its
- * labels written out: past 999 atoms or bonds; a coordination or a
- * hydrogen bond, and whether the one is drawn as a plain line (V2000's
- * bond types stop at 8); racemic and relative stereo groups, a stereo
- * bond's group and a haptic bond's endpoints.
+ * labels written out: what is wider than V2000's fixed fields - past 999
+ * atoms, bonds or Sgroups, or mapping numbers (three columns each), or a
+ * coordinate past xxxxx.xxxx ("CTfile Formats", automatic V3000 output:
+ * long fields); a coordination or a hydrogen bond, and whether the one is
+ * drawn as a plain line (V2000's bond types stop at 8); racemic and
+ * relative stereo groups, a stereo bond's group and a haptic bond's
+ * endpoints.
  */
 export function needsV3000(given: WriterModel): boolean {
   // (as written: a label's atoms - a complex's coordination bonds - among them)
-  const model = prepared(given).model;
+  const { model, sups } = prepared(given);
+  const scale = MOL_BOND_LENGTH / NOMINAL_BOND_LENGTH;
   return (
     model.atoms.length > 999 ||
     model.bonds.length > 999 ||
+    model.atoms.some((a) => (a.map ?? 0) > 999 || !fitsF10(a.x * scale) || !fitsF10(a.y * scale)) ||
+    groupsOf(model, sups).length > 999 ||
     model.bonds.some((b) => ((b.dative || b.coordination) && b.order === 1) || b.hydrogen || b.stereoGroup || b.endpoints?.length) ||
     // (V2000 has only the chiral flag: no racemic nor relative groups)
     model.atoms.some((a) => a.stereoGroup && a.stereoGroup.kind !== "abs")
@@ -647,7 +663,6 @@ export function writeRxnfile(
   return lines.join("\n") + "\n";
 }
 
-/** The structure as a one-record SD file. */
 /** An atom or a bond of a molecule in 3D, as a file gives it: in ångströms, its bonds by atom index. */
 export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; isotope?: number };
 export type Bond3D = { a1: number; a2: number; order: number };
@@ -656,17 +671,60 @@ export type Bond3D = { a1: number; a2: number; order: number };
 const PROGRAM_LINE_3D = "  Meno    " + " ".repeat(10) + "3D";
 
 /**
- * A molecule in 3D as a V2000 molfile: its atoms where they are, in
- * ångströms, its bonds by type as given, charges and isotopes as M CHG and
- * M ISO lines, and a header that says it is 3D ("CTfile Formats").
+ * Whether V2000 cannot hold a molecule in 3D: past 999 atoms or bonds - the
+ * counts line's fields and the bond block's atom numbers are three columns
+ * - a coordinate past xxxxx.xxxx or a symbol past aaa ("CTfile Formats",
+ * automatic V3000 output: long fields); or a bond of a type V2000 has not,
+ * its types stopping at 8: a coordination (9) or a hydrogen (10) bond.
  */
-export function writeMolfile3d(atoms: Atom3D[], bonds: Bond3D[], options: { title?: string } = {}): string {
-  const lines = [
-    titleLine(options.title),
-    PROGRAM_LINE_3D,
-    "",
-    `${i3(atoms.length)}${i3(bonds.length)}  0  0  0  0  0  0  0  0999 V2000`,
-  ];
+export function needsV3000In3d(atoms: readonly Atom3D[], bonds: readonly Bond3D[]): boolean {
+  return (
+    atoms.length > 999 ||
+    bonds.length > 999 ||
+    bonds.some((b) => b.order > 8) ||
+    atoms.some((a) => a.el.length > 3 || !fitsF10(a.x) || !fitsF10(a.y) || !fitsF10(a.z))
+  );
+}
+
+/**
+ * A molecule in 3D as a molfile: its atoms where they are, in ångströms,
+ * its bonds by type as given, its charges and isotopes, and a header that
+ * says it is 3D ("CTfile Formats"). V2000 - charges and isotopes as M  CHG
+ * and M  ISO lines - wherever V2000 holds it, and V3000 - CHG and MASS on
+ * the atoms - where it cannot (`needsV3000In3d`), unless one is asked for.
+ */
+export function writeMolfile3d(
+  atoms: Atom3D[],
+  bonds: Bond3D[],
+  options: { title?: string; version?: "V2000" | "V3000" | "auto" } = {},
+): string {
+  const version = options.version ?? "auto";
+  const head = [titleLine(options.title), PROGRAM_LINE_3D, ""];
+  if (version === "V3000" || (version === "auto" && needsV3000In3d(atoms, bonds))) {
+    const lines = [
+      ...head,
+      V3000_COUNTS,
+      "M  V30 BEGIN CTAB",
+      `M  V30 COUNTS ${atoms.length} ${bonds.length} 0 0 0`,
+      "M  V30 BEGIN ATOM",
+    ];
+    atoms.forEach((a, i) =>
+      lines.push(
+        `M  V30 ${i + 1} ${v30String(a.el)} ${v30Number(a.x)} ${v30Number(a.y)} ${v30Number(a.z)} 0` +
+          (a.charge ? ` CHG=${a.charge}` : "") +
+          (a.isotope ? ` MASS=${a.isotope}` : ""),
+      ),
+    );
+    lines.push("M  V30 END ATOM");
+    if (bonds.length > 0) {
+      lines.push("M  V30 BEGIN BOND");
+      bonds.forEach((b, i) => lines.push(`M  V30 ${i + 1} ${b.order} ${b.a1 + 1} ${b.a2 + 1}`));
+      lines.push("M  V30 END BOND");
+    }
+    lines.push("M  V30 END CTAB", "M  END");
+    return lines.flatMap(fitV3000).join("\n") + "\n";
+  }
+  const lines = [...head, `${i3(atoms.length)}${i3(bonds.length)}  0  0  0  0  0  0  0  0999 V2000`];
   for (const a of atoms) lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
   for (const b of bonds) lines.push(`${i3(b.a1 + 1)}${i3(b.a2 + 1)}${i3(b.order)}  0  0  0  0`);
   // (eight to a line)
@@ -682,6 +740,7 @@ export function writeMolfile3d(atoms: Atom3D[], bonds: Bond3D[], options: { titl
   return lines.join("\n") + "\n";
 }
 
+/** The structure as a one-record SD file. */
 export function writeSdf(
   model: WriterModel,
   options: { title?: string; version?: "V2000" | "V3000" | "auto" } = {},

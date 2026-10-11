@@ -9,7 +9,7 @@
  * last choices remembered, but for those that start from what is written
  * (`knownOf`). Save writes the workspace, and takes none.
  */
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "../chem/elements";
 import type { Radical } from "../chem/molecule";
 import type { Known, Option } from "../options";
 import type { WriteDecl } from "../plugins/manifest";
@@ -32,7 +32,7 @@ export type Writer = {
   by: string;
 };
 
-/** Which CTfile version a structure is written in: the drawing's - molecules in 3D are written in V2000. */
+/** Which CTfile version a structure is written in: the drawing's - molecules in 3D are written in V2000, or in V3000 where V2000 cannot hold them (lib/chem/molWriter `writeMolfile3d`). */
 const VERSION: WriterOption = {
   about: "drawing",
   id: "version",
@@ -124,7 +124,7 @@ export type WrittenAtom = { el: string; x: number; y: number; z: number; charge?
  */
 export type WrittenMolecule = { name?: string; atoms: WrittenAtom[]; bonds: { a1: number; a2: number; order: number }[] };
 
-const NUMBERS = new Map(elements.map((e) => [e.symbol, e.number]));
+const NUMBERS = new Map(ELEMENTS.map((e) => [e.symbol, e.number]));
 const UNPAIRED: Record<Radical, number> = { singlet: 0, doublet: 1, triplet: 2 };
 
 /**

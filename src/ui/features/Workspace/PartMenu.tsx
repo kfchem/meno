@@ -14,7 +14,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -155,6 +155,11 @@ export default function PartMenu({
   onColour,
   onRender,
   picture,
+  words,
+  slide,
+  onSlideAround,
+  shape,
+  onBoxAround,
   canvas = [],
   clipboard,
   molecule3d,
@@ -190,6 +195,23 @@ export default function PartMenu({
   onFitWords?: () => void;
   /** How the words' lines lie, and setting it. */
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
+  /**
+   * What the words right-clicked can do besides (docs/EDITOR-2D.md,
+   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * in italics, raised or lowered - ticked where all are already; their
+   * lines a list, or plain again.
+   */
+  words?: {
+    onSize: () => void;
+    bold: boolean;
+    italic: boolean;
+    list: boolean;
+    onBold: () => void;
+    onItalic: () => void;
+    onList: () => void;
+    onSup: () => void;
+    onSub: () => void;
+  };
   /** A workflow's step right-clicked: run, or opened to its options. */
   onRunStep: () => void;
   onStepOptions: () => void;
@@ -242,6 +264,33 @@ export default function PartMenu({
   onRender?: () => void;
   /** What the picture right-clicked can do besides: saved as a file - a picture, or a film, which plays on the page and can be paused. */
   picture?: { film: boolean; playing: boolean | null; onPlay: (on: boolean) => void; onSave: () => void };
+  /**
+   * What the slide right-clicked can do (docs/PRESENTING.md): a talk given
+   * from it; put earlier or later in the talk - none, where it is first or
+   * last; the page about it shown while it is, or not; the other
+   * proportions; and what is on it selected.
+   */
+  slide?: { onPresent: () => void; onEarlier?: () => void; onLater?: () => void; around: boolean; onAround: () => void; standard: boolean; onShape: () => void; onSelectOn: () => void };
+  /** A slide made round what is selected, last in the talk. */
+  onSlideAround?: () => void;
+  /**
+   * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*):
+   * words written in it (a box); its line thin, regular or thick, dashed or
+   * not; an arrow's heads at one end or both; and brought over the other
+   * shapes or put under them.
+   */
+  shape?: {
+    onWrite?: () => void;
+    weight: "thin" | "regular" | "thick";
+    onWeight: (weight: "thin" | "regular" | "thick") => void;
+    dash: boolean;
+    onDash: () => void;
+    heads?: { both: boolean; onBoth: () => void };
+    onFront: () => void;
+    onBack: () => void;
+  };
+  /** A rounded rectangle made round what is selected. */
+  onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -360,25 +409,41 @@ export default function PartMenu({
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
         ]
       : target.kind === "arrow"
-      ? [del("Delete arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
+      ? [del("Delete reaction arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
       : target.kind === "plus"
       ? [del("Delete plus")]
       : target.kind === "caption"
       ? [
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
+          ...(words
+            ? [
+                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
+                { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
+                { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
+              ]
+            : []),
+          ...colour,
+          del("Delete text"),
+          // (how its lines lie: listed, ticked as they lie now)
           ...(captionAlign
             ? (
                 [
-                  ["left", "Align left", MENU_ICONS.alignLeft],
-                  ["center", "Align centre", MENU_ICONS.alignCentre],
-                  ["right", "Align right", MENU_ICONS.alignRight],
-                  ["justify", "Justify", MENU_ICONS.justify],
+                  ["left", "Align left"],
+                  ["center", "Align centre"],
+                  ["right", "Align right"],
+                  ["justify", "Justify"],
                 ] as const
-              ).map(([align, name, icon]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align, icon }))
+              ).map(([align, name]) => ({ name, keys: "", run: () => captionAlign.set(align), checked: captionAlign.now === align }))
             : []),
-          del("Delete text"),
-          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource }] : []),
-          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords }] : []),
+          ...(words
+            ? [
+                { name: "Superscript", keys: MAC ? "\u21e7\u2318=" : "Ctrl+Shift+=", run: words.onSup, divider: true },
+                { name: "Subscript", keys: shortcut("="), run: words.onSub },
+              ]
+            : []),
+          ...(onFitWords ? [{ name: "As wide as its words", keys: "", run: onFitWords, divider: true }] : []),
+          ...(onShowSource ? [{ name: "Show in the PDF", keys: "", run: onShowSource, divider: !onFitWords }] : []),
         ]
       : target.kind === "pdf"
       ? [
@@ -423,6 +488,34 @@ export default function PartMenu({
           ...(picture?.film && picture.playing != null ? [{ name: picture.playing ? "Pause" : "Play", keys: "", run: () => picture.onPlay(!picture.playing) }] : []),
           ...(picture ? [{ name: picture.film ? "Save film…" : "Save picture…", keys: "", run: picture.onSave }] : []),
         ]
+      : target.kind === "slide" && slide
+      ? [
+          { name: "Present from here", keys: "", run: slide.onPresent, icon: MENU_ICONS.present },
+          { name: "Earlier in the talk", keys: "", run: slide.onEarlier ?? (() => {}), icon: MENU_ICONS.earlier, disabled: !slide.onEarlier },
+          { name: "Later in the talk", keys: "", run: slide.onLater ?? (() => {}), icon: MENU_ICONS.later, disabled: !slide.onLater },
+          { name: "Show the page around it", keys: "", run: slide.onAround, icon: MENU_ICONS.around, checked: slide.around },
+          del("Delete slide"),
+          { name: slide.standard ? "Make it 16:9" : "Make it 4:3", keys: "", run: slide.onShape },
+          { name: "Select what is on it", keys: "", run: slide.onSelectOn },
+        ]
+      : target.kind === "shape" && shape
+      ? [
+          ...(shape.onWrite ? [{ name: "Edit text", keys: "", run: shape.onWrite, icon: MENU_ICONS.edit }] : []),
+          ...colour,
+          del("Delete shape"),
+          // (its line's weight, ticked as it is; dashed or not; an arrow's heads)
+          ...(
+            [
+              ["thin", "Thin line"],
+              ["regular", "Regular line"],
+              ["thick", "Thick line"],
+            ] as const
+          ).map(([w, name]) => ({ name, keys: "", run: () => shape.onWeight(w), checked: shape.weight === w })),
+          { name: "Dashed line", keys: "", run: shape.onDash, checked: shape.dash },
+          ...(shape.heads ? [{ name: "Head at both ends", keys: "", run: shape.heads.onBoth, checked: shape.heads.both }] : []),
+          { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
+          { name: "Send to back", keys: "", run: shape.onBack },
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -465,6 +558,8 @@ export default function PartMenu({
                 { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
               ]
             : []),
+          ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
+          ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
@@ -534,7 +629,7 @@ export default function PartMenu({
             : target.kind === "bond"
               ? "Bond"
               : target.kind === "arrow"
-                ? "Arrow"
+                ? "Reaction arrow"
                 : target.kind === "plus"
                   ? "Plus"
                   : target.kind === "caption"
@@ -559,6 +654,10 @@ export default function PartMenu({
                       ? "Electron-pushing arrow"
                     : target.kind === "ring"
                       ? "Ring"
+                    : target.kind === "slide"
+                      ? "Slide"
+                    : target.kind === "shape"
+                      ? "Shape"
                       : "Canvas"
       }
       tabIndex={-1}

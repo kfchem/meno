@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelKey, labelReading, labelTextOf, readLabel } from "./labelTyping";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
-import { elements } from "../../../../utils/atomUtils";
+import { ELEMENTS } from "../../../../lib/chem/elements";
 
 describe("labelKey", () => {
   it("starts a label with the letter typed", () => {
@@ -143,7 +143,7 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     expect(kept("NH")).toBe("NH");
     expect(kept("nh")).toBe("NH");
     expect(kept("OC")).toBe("OC");
-    for (const e of elements) {
+    for (const e of ELEMENTS) {
       expect(kept(e.symbol), e.symbol).toBe(e.symbol);
       // (typed small: the element, up to uranium - but ho, above)
       if (e.number < 93 && e.symbol !== "Ho") expect(kept(e.symbol.toLowerCase()), e.symbol).toBe(e.symbol);

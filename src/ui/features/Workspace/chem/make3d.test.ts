@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import type { Conformers } from "../../../../lib/roles/client";
+import type { ChemClient, Conformers } from "../../../../lib/roles/client";
+import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { blocksOf, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
+import { blocksOf, formulaOf, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -208,5 +209,35 @@ describe("takenOnPage", () => {
     expect(boxes[2].x0).toBeCloseTo(3 - pad);
     expect(boxes[2].x1).toBeCloseTo(7 + pad);
     expect(boxes[4]).toBe(solid);
+  });
+});
+
+describe("a molecule in 3D drawn as a formula", () => {
+  /** The worker as these tests have it: what it was asked, and ethane drawn back - its orders found, or not. */
+  const worker = (perceived: boolean) => {
+    const asked: { perceive?: boolean }[] = [];
+    const ethane = writeMolfile3d([{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 1.5, y: 0, z: 0 }], [{ a1: 0, a2: 1, order: 1 }]);
+    const chem = { request: async (_op: string, args: { perceive?: boolean }) => (asked.push(args), { molblock: ethane, perceived }) } as unknown as ChemClient;
+    return { chem, asked };
+  };
+  /** A chain of carbons, every bond single, as a file of coordinates gives it. */
+  const chain = (n: number) => ({
+    id: 1,
+    atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: 1.5 * i, y: 0, z: 0 })),
+    bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+    at: { x: 0, y: 0 },
+  });
+
+  it("has its bond orders sought where its file gave none - and says where they are still unknown", async () => {
+    const found = worker(true);
+    expect((await formulaOf(found.chem, chain(4), 0)).ordersUnknown).toBe(false);
+    expect(found.asked[0].perceive).toBe(true);
+    // (sought, and not found)
+    expect((await formulaOf(worker(false).chem, chain(4), 0)).ordersUnknown).toBe(true);
+    // (its file gave them: nothing to seek, nothing unknown)
+    const given = { ...chain(2), bonds: [{ a1: 0, a2: 1, order: 2 }] };
+    const known = worker(false);
+    expect((await formulaOf(known.chem, given, 0)).ordersUnknown).toBe(false);
+    expect(known.asked[0].perceive).toBe(false);
   });
 });

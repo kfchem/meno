@@ -18,7 +18,7 @@
  *
  * Columns are numbered from 1 here, as the format numbers them.
  */
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 
 /** An atom, as an ATOM or HETATM record gives it (Coordinate Section). */
 export type PdbAtom = {
@@ -146,7 +146,7 @@ function real(line: string, from: number, to: number): number | undefined {
 /** The record name a line begins with: columns 1 to 6, blanks trimmed. */
 export const recordName = (line: string) => cols(line, 1, 6).trimEnd();
 
-const SYMBOLS: ReadonlySet<string> = new Set(elements.map((e) => e.symbol));
+const SYMBOLS: ReadonlySet<string> = new Set(ELEMENTS.map((e) => e.symbol));
 /** An element's symbol as Meno writes it - "Fe", not "FE" - or undefined where it is none. */
 function symbol(s: string): string | undefined {
   const t = s.trim();

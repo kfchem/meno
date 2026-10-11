@@ -4,8 +4,9 @@ import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
+import { fillOutline, headsOf, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
-import { arrowsWithWords, captionSet } from "../../../lib/chem/captions";
+import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionFileText } from "./chem/reactionFile";
@@ -267,7 +268,7 @@ export function drawingLayout(
   }
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
-  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set);
+  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
   const outlines = schemeOutlines({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
   if (outlines.length) {
     const points = outlines.flat();
@@ -277,12 +278,34 @@ export function drawingLayout(
       points.map((p) => p.y),
     );
   }
+  // and the shapes, under all of it, as the canvas draws them (docs/PRESENTING.md, *Shapes*)
+  const shapes = model.shapes ?? [];
+  if (shapes.length) {
+    const pointPx = opts.pointPx ?? 0;
+    const ink = opts.bondColor ?? "#000000";
+    layout.shapes = shapes.map((s) => {
+      const area = s.fill ? fillOutline(s, pointPx) : null;
+      const lined = s.stroke !== "none";
+      const color = s.stroke && s.stroke !== "none" ? s.stroke : ink;
+      const width = lineWidthOf(s, pointPx);
+      return {
+        ...(area ? { fill: { points: area, color: s.fill! } } : {}),
+        lines: lined ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
+        heads: lined ? headsOf(s, pointPx).map((points) => ({ points, color })) : [],
+      };
+    });
+    const boxes = shapes.map((s) => shapeBounds(s, pointPx));
+    take(
+      boxes.flatMap((b) => [b.x0, b.x1]),
+      boxes.flatMap((b) => [b.y0, b.y1]),
+    );
+  }
   // and the words on the page, set as the canvas sets them
-  const words = (model.captions ?? []).flatMap((c) => captionSet(c.text, c.x, c.y, opts.fontPx, set, c.width, c.align).items);
+  const words = (model.captions ?? []).flatMap((c) => wordsSet(c, opts, set).items);
   if (words.length) {
     layout.texts.push(...words);
     // (each line's ink, about where it is set)
-    const boxes = words.map((t) => ({ t, b: labelBox(t, opts.fontPx, set) }));
+    const boxes = words.map((t) => ({ t, b: labelBox(t, t.ownSize ? t.fontPx : opts.fontPx, set) }));
     take(
       boxes.flatMap(({ t, b }) => [t.x - b.left, t.x + b.right]),
       boxes.flatMap(({ t, b }) => [t.y - b.bottom, t.y + b.top]),
@@ -466,8 +489,8 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
-/** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills">>): Drawn {
+/** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes">>): Drawn {
   return {
     ...state.model,
     ...(state.pushes?.length ? { pushes: state.pushes } : {}),
@@ -475,5 +498,6 @@ export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" |
     arrows: state.arrows,
     pluses: state.pluses,
     captions: state.captions,
+    ...(state.shapes?.length ? { shapes: state.shapes } : {}),
   };
 }

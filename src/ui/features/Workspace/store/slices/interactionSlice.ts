@@ -242,6 +242,9 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         hoveredMark: null,
         hoveredPdf: null,
         hoveredPicture: null,
+        hoveredSlide: null,
+        hoveredShape: null,
+        shapeDraft: null,
         hoveredText: null,
         hoveredSet: null,
         hoveredStep: null,
@@ -266,6 +269,9 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         pdfWords: null,
         pdfPicture: null,
         menuAsk: null,
+        // (and no talk being given: one that failed ends)
+        presenting: null,
+        guides: null,
       })),
   };
 }

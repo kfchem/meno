@@ -10,7 +10,7 @@
  * more room - as a chemist writes OAc or AcO under a ring as there is
  * space - the usual way where both have as much.
  */
-import { elements as ELEMENTS } from "../../utils/atomUtils";
+import { ELEMENTS } from "../chem/elements";
 import type { Edge } from "./rings";
 
 export type Box = { x0: number; x1: number; y0: number; y1: number };

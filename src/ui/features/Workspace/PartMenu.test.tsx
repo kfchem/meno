@@ -91,11 +91,29 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
   });
 
-  it("marks the words' alignment as it is, among their icons", () => {
-    const { icons, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none } });
-    expect(icons).toEqual(["Edit text", "Align left", "Align centre", "Align right", "Justify", "Delete text"]);
-    expect(html).toMatch(/aria-label="Align right" aria-pressed="true"/);
-    expect(html).toMatch(/aria-label="Align left" aria-pressed="false"/);
+  it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
+    const words = { onSize: none, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
+    const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
+    expect(icons).toEqual(["Edit text", "Size…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
+    expect(html).toMatch(/aria-label="Bold" aria-pressed="true"/);
+    expect(html).toMatch(/aria-label="Italic" aria-pressed="false"/);
+    expect(html).toMatch(/Align right<\/span><svg[^>]*aria-label="Chosen"/);
+    expect(html).not.toMatch(/Align left<\/span><svg[^>]*aria-label="Chosen"/);
+  });
+
+  it("offers a shape its words, colour and Delete as icons, and its line, an arrow's heads and its place among the shapes listed", () => {
+    const shape = { onWrite: none, weight: "thick" as const, onWeight: none, dash: false, onDash: none, onFront: none, onBack: none };
+    const { icons, listed, html } = menu(target({ kind: "shape", id: 1 }), { shape, onColour: none });
+    expect(icons).toEqual(["Edit text", "Colour…", "Delete shape"]);
+    expect(listed).toEqual(["Thin line", "Regular line", "Thick line", "Dashed line", "Bring to front", "Send to back"]);
+    expect(html).toMatch(/Thick line<\/span><svg[^>]*aria-label="Chosen"/);
+    // (an arrow: its heads too; a line holds no words)
+    const arrow = menu(target({ kind: "shape", id: 1 }), { shape: { ...shape, onWrite: undefined, heads: { both: true, onBoth: none } } });
+    expect(arrow.icons).toEqual(["Delete shape"]);
+    expect(arrow.listed).toContain("Head at both ends");
+    // (and the selection a box round it)
+    expect(menu(target({ selection: "here", drawing: true }), { onBoxAround: none }).listed).toContain("Box around these");
   });
 });
 

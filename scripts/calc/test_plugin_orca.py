@@ -54,7 +54,9 @@ class Prepare(unittest.TestCase):
         jobs = ask("prepare", step="optimise", entries=[WATER, {**WATER, "charge": -1, "multiplicity": 2}], options=defaults("optimise"), cores=4)["jobs"]
         self.assertEqual(len(jobs), 2)
         job = jobs[0]
-        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], []))
+        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], ["input.molden.input"]))
+        # (then orca_2mkl, beside ORCA, writing its orbitals as a Molden file, as the manual's "orca_2mkl BaseName -molden")
+        self.assertEqual(job["then"], [{"program": "orca_2mkl", "args": ["input", "-molden"]}])
         self.assertEqual(job["files"][0]["name"], "input.inp")
         lines = job["files"][0]["text"].splitlines()
         # a simple input line; the processes; the coordinates between * xyz charge multiplicity and *
@@ -75,8 +77,13 @@ class Prepare(unittest.TestCase):
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
 
+    def test_keeps_the_wavefunction_only_where_asked(self):
+        job = ask("prepare", step="energy", entries=[WATER], options={**defaults("energy"), "wavefunction": False})["jobs"][0]
+        self.assertNotIn("then", job)
+        self.assertEqual(job["reads"], [])
+
     def test_refuses_what_it_does_not_know(self):
-        for options in ({"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
+        for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))
             self.assertFalse(said["ok"], options)
         said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "conformers", "entries": [WATER], "options": {}}))
@@ -99,6 +106,9 @@ class Collect(unittest.TestCase):
     def test_what_orca_printed_is_its_output_for_meno_s_readers(self):
         said = ask("collect", step="optimise", entries=[WATER, {**WATER, "name": ""}], options={}, files={}, log="ORCA output", ended="done")
         self.assertEqual(said, {"read": [{"kind": "orca", "log": True, "name": "water.out"}, {"kind": "orca", "log": True, "name": "orca.out"}]})
+        # (with the wavefunction orca_2mkl wrote, kept with the molecule)
+        said = ask("collect", step="optimise", entries=[WATER], options={}, files={"input.molden.input": "[Molden Format]"}, log="ORCA output", ended="done")
+        self.assertEqual(said["read"][0]["wavefunction"], {"kind": "molden", "file": "input.molden.input", "name": "water.molden"})
 
     def test_says_why_a_job_failed(self):
         log = "\n ... \nORCA finished by error termination in SCF\nCalling Command: orca_scf input.gbw b input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"

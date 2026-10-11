@@ -55,7 +55,7 @@ type Saved = Pick<
 > &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -122,13 +122,18 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.pdfs?.length ? { pdfs: state.pdfs.map(({ id: _id, ...p }) => p) } : {}),
       ...(pdfShown >= 0 ? { pdfShown } : {}),
       ...(state.pictures?.length ? { pictures: state.pictures } : {}),
+      // (the slides, in the talk's order: docs/PRESENTING.md)
+      ...(state.slides?.length ? { slides: state.slides } : {}),
+      // (the shapes, from the back: docs/PRESENTING.md, *Shapes*)
+      ...(state.shapes?.length ? { shapes: state.shapes } : {}),
     }) + "\n"
   );
 }
 
 /** The canvas as its workspace file: its JSON, every output its molecules were read from that is held this session, and its texts. */
 export async function workspaceFile(state: Saved): Promise<Uint8Array> {
-  const sources = state.molecules3d.flatMap((m): CalcSource[] => (m.calc?.source ? [m.calc.source] : []));
+  // (the outputs they were read from, and the wavefunctions kept with them)
+  const sources = state.molecules3d.flatMap((m): CalcSource[] => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
   const kept = await outputsToKeep(sources);
   const texts = await textsToKeep(state.texts ?? []);
   const pdfs = await pdfsToKeep(state.pdfs ?? []);

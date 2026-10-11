@@ -1334,7 +1334,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           ) : (
             <PageHtml zIndexRange={[30, 20]}>
               <div
-                className="meno-page-chip flex flex-col items-center"
+                className="meno-page-chip meno-control-chip flex flex-col items-center"
                 style={{ transform: "translate(-50%, calc(10px * var(--page, 1))) scale(var(--page, 1))", transformOrigin: "50% 0" }}
               >
                 {m.edited && <Edited from={m.edited.from} />}
