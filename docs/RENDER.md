@@ -170,6 +170,12 @@ uv, no package), and the script Blender runs, `render.py`.
   the shadows' softness, and a film's quality.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
+- **What the canvas alone draws** is left out of the scene, as a renderer
+  finds its own: the hollows' shade and how deep (`MoleculeLook.occlusionBy`,
+  `MoleculeLook.occlusion`), the shadows' darkness (`Scene3D.shadows`) and
+  the lighter drawing of very many atoms (`Scene3D.largeDrawings`) - none
+  is written in the glTF. Blender finds its own shadows and hollows as it
+  lights the scene; the shadows' softness is the plugin's own option.
 
 ## Licences
 
