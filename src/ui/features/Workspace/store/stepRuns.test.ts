@@ -311,6 +311,21 @@ describe("a step that runs a plugin's program", () => {
     useInstalled.setState({ chosen: {} });
   });
 
+  it("starts its jobs once, however often Run is pressed before they have started", async () => {
+    const { st, step } = editor();
+    const a = st().runStep(step);
+    const b = st().runStep(step);
+    const c = st().runAll();
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.running!.jobs.map((j) => j.id)).toEqual([idOf(1)]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await Promise.all([a, b, c]);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+  });
+
   it("says it was stopped, and brings nothing in", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);
@@ -385,6 +400,24 @@ describe("a step that runs a plugin's program", () => {
     expect(st().askDeleteStep).toBeNull();
     await settle();
     expect(asked.stopped).toEqual([idOf(1)]);
+  });
+
+  it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().removeStep(step, true);
+    await settle();
+    // (stopped by the deletion: the runner says so)
+    Object.assign(jobs.get(idOf(1))!, { state: "stopped", started: 1000, ended: 2000 });
+    doc.undo();
+    expect(st().steps.find((s) => s.id === step)).toBeTruthy();
+    await st().lookAtJobs();
+    await ran;
+    const back = st().steps.find((s) => s.id === step)!;
+    expect(back.running).toBeUndefined();
+    expect(back.ran).toMatchObject({ ok: false, stopped: true });
   });
 });
 

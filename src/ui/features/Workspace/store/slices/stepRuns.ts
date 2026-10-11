@@ -193,6 +193,22 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * wires give - those that do not wait on one another at once (*Several at
    * once*); a step after one that failed, not. Kept when all have ended.
    */
+  /**
+   * The runs this window has begun, by step: so that a step asked to run
+   * again while its run starts - Run pressed twice, Run all after Run -
+   * waits for that run, never starting its jobs twice (its `running` is
+   * set only once they have started).
+   */
+  const begun = new Map<number, Promise<void>>();
+  const runOnce = (id: number): Promise<void> => {
+    let going = begun.get(id);
+    if (!going) {
+      going = runOne(id).finally(() => begun.delete(id));
+      begun.set(id, going);
+    }
+    return going;
+  };
+
   async function runSteps(targets: readonly number[]): Promise<void> {
     const d = doc.getState();
     const wanted = new Set<number>();
@@ -208,8 +224,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           } else if (prior?.running) await ended(prior.id);
           const step = stepOf(doc.getState(), id);
           if (!step) return false;
-          if (step.running) await ended(id);
-          else await runOne(id);
+          if (begun.has(id)) await begun.get(id);
+          else if (step.running) await ended(id);
+          else await runOnce(id);
           return !!stepOf(doc.getState(), id)?.ran?.ok;
         })();
         runs.set(id, going);
