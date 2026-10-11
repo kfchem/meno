@@ -57,6 +57,45 @@ export type PdbModel = {
   chainEnds: number[];
 };
 
+/** A residue, as a secondary structure record names one: its name, its chain, its sequence number and insertion code. */
+export type PdbResidue = { resName: string; chainID: string; seqNum: number; iCode: string };
+// (HELIX and SHEET as the format's Secondary Structure Section lays them out:
+// what lib/chem/biopolymer makes a molecule's chains' ribbons from)
+
+/**
+ * A helix, as a HELIX record gives it (Secondary Structure Section): its
+ * serial number and identifier, its first (N-terminal) and last residue,
+ * its class - 1 right-handed alpha (the default), 5 right-handed 3-10, 3
+ * right-handed pi, and the others the format lists - its comment, and its
+ * length in residues.
+ */
+export type PdbHelix = {
+  serNum: number;
+  helixID: string;
+  init: PdbResidue;
+  end: PdbResidue;
+  helixClass: number;
+  comment?: string;
+  length?: number;
+};
+
+/**
+ * A strand of a sheet, as a SHEET record gives it (Secondary Structure
+ * Section): its number in its sheet, the sheet's identifier and its number
+ * of strands, its first (N-terminal) and last residue, and its sense to the
+ * strand before it - 0 the first, 1 parallel, -1 antiparallel - with the
+ * hydrogen bond registering it to that strand, where given.
+ */
+export type PdbStrand = {
+  strand: number;
+  sheetID: string;
+  numStrands: number;
+  init: PdbResidue;
+  end: PdbResidue;
+  sense: number;
+  registration?: { cur: PdbResidue & { atom: string }; prev: PdbResidue & { atom: string } };
+};
+
 /** What a PDB file says, as far as Meno reads it. */
 export type PdbEntry = {
   /** HEADER: the entry's ID code (63-66) and classification (11-50), where given. */
@@ -67,6 +106,9 @@ export type PdbEntry = {
   models: PdbModel[];
   /** CONECT: the bonds it gives, each once, between atoms by serial number, the lower first. */
   conect: [number, number][];
+  /** HELIX and SHEET: its helices, and its sheets' strands, as listed. */
+  helices: PdbHelix[];
+  strands: PdbStrand[];
   /** The records not read, by name, and how many lines of each. */
   unread: Record<string, number>;
   /** Lines that are no record the format names, or an atom's whose coordinates do not read. */
@@ -218,11 +260,58 @@ const RECORDS: Record<string, Handler> = {
     }
   },
   END: () => "end",
+  // the Secondary Structure Section: a helix's or a strand's first and last residues
+  HELIX: (line, r) => {
+    const init = residueAt(line, 16, 20, 22, 26);
+    const end = residueAt(line, 28, 32, 34, 38);
+    if (!init || !end) return void r.unreadable++;
+    const comment = text(line, 41, 70);
+    const length = integer(line, 72, 76);
+    r.helices.push({
+      serNum: integer(line, 8, 10) ?? r.helices.length + 1,
+      helixID: text(line, 12, 14),
+      init,
+      end,
+      // (blank: the default class, right-handed alpha)
+      helixClass: integer(line, 39, 40) ?? 1,
+      ...(comment ? { comment } : {}),
+      ...(length !== undefined ? { length } : {}),
+    });
+  },
+  SHEET: (line, r) => {
+    const init = residueAt(line, 18, 22, 23, 27);
+    const end = residueAt(line, 29, 33, 34, 38);
+    if (!init || !end) return void r.unreadable++;
+    const cur = residueAt(line, 46, 50, 51, 55);
+    const prev = residueAt(line, 61, 65, 66, 70);
+    const curAtom = text(line, 42, 45);
+    const prevAtom = text(line, 57, 60);
+    r.strands.push({
+      strand: integer(line, 8, 10) ?? 1,
+      sheetID: text(line, 12, 14),
+      numStrands: integer(line, 15, 16) ?? 0,
+      init,
+      end,
+      sense: integer(line, 39, 40) ?? 0,
+      ...(cur && prev && curAtom && prevAtom ? { registration: { cur: { ...cur, atom: curAtom }, prev: { ...prev, atom: prevAtom } } } : {}),
+    });
+  },
 };
+
+/**
+ * A residue named in a record: its name in columns `name` to `name + 2`,
+ * its chain at `chain`, its sequence number from `seq` to `seq + 3` and its
+ * insertion code at `code`; undefined where its sequence number does not read.
+ */
+function residueAt(line: string, name: number, chain: number, seq: number, code: number): PdbResidue | undefined {
+  const seqNum = integer(line, seq, seq + 3);
+  if (seqNum === undefined) return undefined;
+  return { resName: text(line, name, name + 2), chainID: text(line, chain, chain), seqNum, iCode: text(line, code, code) };
+}
 
 /** A PDB file's records, as far as Meno reads them; the rest counted. */
 export function readPdb(content: string): PdbEntry {
-  const r: Reading = { models: [], conect: [], unread: {}, unreadable: 0, model: null, titleParts: [], bonds: new Set() };
+  const r: Reading = { models: [], conect: [], helices: [], strands: [], unread: {}, unreadable: 0, model: null, titleParts: [], bonds: new Set() };
   for (const raw of content.split("\n")) {
     const line = raw.replace(/\r$/, "");
     if (!line.trim()) continue;
@@ -241,6 +330,8 @@ export function readPdb(content: string): PdbEntry {
     // (a MODEL record with no atoms after it is no model)
     models: r.models.filter((m) => m.atoms.length),
     conect: [...r.bonds].map((k) => k.split(" ").map(Number) as [number, number]).sort((p, q) => p[0] - q[0] || p[1] - q[1]),
+    helices: r.helices,
+    strands: r.strands,
     unread: r.unread,
     unreadable: r.unreadable,
   };

@@ -77,6 +77,44 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 3], [1, 2]]);
   });
 
+  it("keeps a protein's chains - its atoms' names and residues, and its helices from HELIX records - with the molecule", () => {
+    const atomLine = (serial: number, name: string, el: string, resSeq: number, x: number) => {
+      const line = Array(80).fill(" ");
+      const put = (from: number, t: string) => [...t].forEach((c, i) => (line[from - 1 + i] = c));
+      put(1, "ATOM  ");
+      put(7, String(serial).padStart(5));
+      put(13, name.length === 1 ? ` ${name}`.padEnd(4) : ` ${name}`.padEnd(4));
+      put(18, "ALA");
+      put(22, "A");
+      put(23, String(resSeq).padStart(4));
+      put(31, x.toFixed(3).padStart(8));
+      put(39, "0.000".padStart(8));
+      put(47, "0.000".padStart(8));
+      put(77, el.padStart(2));
+      return line.join("");
+    };
+    const helix = (() => {
+      const line = Array(80).fill(" ");
+      const put = (from: number, t: string) => [...t].forEach((c, i) => (line[from - 1 + i] = c));
+      put(1, "HELIX ");
+      put(8, "  1");
+      put(16, "ALA");
+      put(20, "A");
+      put(22, "   1");
+      put(28, "ALA");
+      put(32, "A");
+      put(34, "   3");
+      put(39, " 1");
+      return line.join("");
+    })();
+    const text = [helix, ...[1, 2, 3].map((k) => atomLine(k, "CA", "C", k, 3.8 * k))].join("\n");
+    const m = readStructures("pdb", "p.pdb", text).molecules3d![0];
+    expect(m.biopolymer?.names).toEqual(["CA", "CA", "CA"]);
+    expect(m.biopolymer?.structure).toEqual(["helix", "helix", "helix"]);
+    // (a hetero group alone: no chains)
+    expect(readStructures("pdb", "x.pdb", het(1, "C", 0, 0, 0)).molecules3d![0].biopolymer).toBeUndefined();
+  });
+
   it("shows each atom in one place: its residue's first alternate location", () => {
     const text = [het(1, "C", 0, 0, 0, { altLoc: "A" }), het(2, "C", 0.3, 0, 0, { altLoc: "B" }), het(3, "O", 1.4, 0, 0, { altLoc: "A" }), het(4, "O", 1.5, 0.3, 0, { altLoc: "B" }), het(5, "N", 9, 9, 9)].join("\n");
     const m = readStructures("pdb", "x.pdb", text).molecules3d![0];

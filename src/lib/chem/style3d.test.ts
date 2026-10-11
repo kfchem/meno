@@ -7,7 +7,9 @@ import {
   bondRadiusOf,
   DEFAULT_STYLE_3D_CHOICE,
   hiddenAtoms,
+  hidesCarbonHydrogens,
   look3dPreset,
+  ribbonsOf,
   LOOK_3D_FIELDS,
   LOOK_3D_PRESETS,
   SCENE_3D,
@@ -50,6 +52,49 @@ describe("the 3D style", () => {
     };
     expect([...hiddenAtoms(m, BALL_AND_STICK)]).toEqual([0, 0, 0, 0, 0, 0]);
     expect([...hiddenAtoms(m, { ...BALL_AND_STICK, hydrogens: "carbonHidden" })]).toEqual([0, 0, 1, 1, 1, 0]);
+  });
+});
+
+describe("a biopolymer's chains in a look", () => {
+  // a chain of two residues (an alpha carbon each, one with a C-H), a water, and a ligand's C-H
+  const m = {
+    atoms: [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "H", x: -1, y: 0, z: 0 },
+      { el: "C", x: 3.8, y: 0, z: 0 },
+      { el: "O", x: 0, y: 6, z: 0 },
+      { el: "C", x: 0, y: -6, z: 0 },
+      { el: "H", x: 0, y: -7, z: 0 },
+    ],
+    bonds: [
+      { a1: 0, a2: 1 },
+      { a1: 4, a2: 5 },
+    ],
+    biopolymer: {
+      names: ["CA", "HA", "CA", "O", "C1", "H1"],
+      residueOf: [0, 0, 1, 2, 3, 3],
+      residues: [
+        { name: "GLY", chain: "A", seq: 1, iCode: "", standard: true },
+        { name: "GLY", chain: "A", seq: 2, iCode: "", standard: true },
+        { name: "HOH", chain: "A", seq: 9, iCode: "", standard: false },
+        { name: "LIG", chain: "A", seq: 10, iCode: "", standard: false },
+      ],
+      structure: [null, null, null, null],
+    },
+  };
+  it("leaves out what its ribbons stand for, and water, where it draws ribbons - the ligand stays", () => {
+    expect([...hiddenAtoms(m, BALL_AND_STICK)]).toEqual([1, 1, 1, 1, 0, 0]);
+    expect([...hiddenAtoms(m, look3dPreset("space").look)]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(ribbonsOf(m, BALL_AND_STICK)).toBe(true);
+    expect(ribbonsOf(m, look3dPreset("space").look)).toBe(false);
+  });
+  it("says it hides hydrogens on carbon only where one it would draw is hidden", () => {
+    const hiding = { ...BALL_AND_STICK, hydrogens: "carbonHidden" as const };
+    expect(hidesCarbonHydrogens(m, hiding)).toBe(true);
+    // (the ligand's C-H gone: what is left is the chain's, which the ribbon stands for)
+    const chainOnly = { ...m, bonds: [m.bonds[0]] };
+    expect(hidesCarbonHydrogens(chainOnly, hiding)).toBe(false);
+    expect(hidesCarbonHydrogens(chainOnly, { ...hiding, biopolymers: "atoms" })).toBe(true);
   });
 });
 
