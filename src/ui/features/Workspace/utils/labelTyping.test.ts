@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelKey, labelReading, labelTextOf, readLabel } from "./labelTyping";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
+import { ELEMENTS } from "../../../../lib/chem/elements";
 
 describe("labelKey", () => {
   it("starts a label with the letter typed", () => {
@@ -72,6 +73,90 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       expect(live(typed)).toBe(shown);
       expect(kept(typed)).toBe(label);
     }
+  });
+
+  it("keeps a label the same however it is typed - small, as it is written, or as it is drawn on a bond's left (the maintainer, 2026-10-11)", () => {
+    // (the label, as it is drawn on a bond's left, then typed small and otherwise)
+    for (const [label, drawn, ...typings] of [
+      ["OH", "HO", "oh", "ho", "hO", "oH"],
+      ["OAc", "AcO", "oac", "aco"],
+      ["OMe", "MeO", "ome", "meo"],
+      ["OBn", "BnO", "obn", "bno"],
+      ["OTs", "TsO", "ots", "tso"],
+      ["NHAc", "AcHN", "HNAc", "nhac", "achn", "hnac"],
+      ["CO2Me", "MeO2C", "co2me", "meo2c"],
+      ["CN", "NC", "cn", "nc"],
+      ["NH2", "H2N", "nh2", "h2n"],
+      ["SH", "HS", "sh", "hs"],
+      ["NHBoc", "BocHN", "HNBoc", "nhboc", "bochn", "hnboc"],
+      ["CO2H", "HO2C", "co2h", "ho2c"],
+      ["NO2", "O2N", "no2", "o2n"],
+      ["OTBS", "TBSO", "otbs", "tbso"],
+    ]) {
+      for (const typed of [label, drawn, ...typings]) {
+        expect(kept(typed), typed).toBe(label);
+        // (as it is typed: the same letters in the same places)
+        expect(live(typed).toLowerCase(), typed).toBe(typed.toLowerCase());
+      }
+      // (typed as it is written, or as it is drawn: shown as typed)
+      for (const typed of [label, drawn]) expect(live(typed), typed).toBe(typed);
+    }
+    // (with its italic prefix, turned round or not)
+    for (const typed of ["OtBu", "otbu", "tBuO", "tbuo"]) expect(kept(typed), typed).toBe("OtBu");
+    for (const typed of ["Ot-Bu", "t-BuO"]) expect(kept(typed), typed).toBe("Ot-Bu");
+  });
+
+  it("reads letters typed small as a heteroatom with its H or a group, as drawn on a bond's left, before any other reading (the maintainer, 2026-10-12)", () => {
+    // (ho: the hydroxy group, not holmium - which is typed Ho)
+    expect(live("ho")).toBe("HO");
+    expect(kept("ho")).toBe("OH");
+    expect(kept("Ho")).toBe("Ho");
+    // (mes: MeS, the methylthio group - not mesityl, which is typed Mes)
+    expect(live("mes")).toBe("MeS");
+    expect(kept("mes")).toBe("SMe");
+    for (const typed of ["MeS", "SMe", "sme"]) expect(kept(typed), typed).toBe("SMe");
+    expect(kept("Mes")).toBe("Mes");
+    // (typed in capitals, M and E are no word: nothing to read, nor to turn round - MES is no SEM)
+    expect(live("MES")).toBe("MES");
+    expect(kept("MES")).toBe("MES");
+    // (what the letters spell drawn the other way round on no heteroatom, or of two elements, does not come first)
+    for (const [typed, label] of [["fmoc", "Fmoc"], ["alloc", "Alloc"], ["troc", "Troc"], ["sn", "Sn"], ["sb", "Sb"], ["co", "Co"]])
+      expect(kept(typed), typed).toBe(label);
+  });
+
+  it("keeps a charge typed last where it was, turned round or not", () => {
+    for (const typed of ["ho-", "HO-", "oh-", "OH-"]) {
+      expect(kept(typed), typed).toBe("OH-");
+      expect(live(typed).toLowerCase(), typed).toBe(typed.toLowerCase());
+    }
+    expect(live("ho-")).toBe("HO-");
+    for (const typed of ["h3n+", "H3N+", "nh3+", "NH3+"]) expect(kept(typed), typed).toBe("NH3+");
+    for (const typed of ["hs-", "HS-", "sh-"]) expect(kept(typed), typed).toBe("SH-");
+    // (holmium, typed as its symbol is written)
+    expect(kept("Ho-")).toBe("Ho-");
+  });
+
+  it("leaves what reads as it is written as it is: CO, Co, NH and every element's symbol", () => {
+    expect(kept("CO")).toBe("CO");
+    expect(kept("Co")).toBe("Co");
+    expect(kept("co")).toBe("Co");
+    expect(kept("NH")).toBe("NH");
+    expect(kept("nh")).toBe("NH");
+    expect(kept("OC")).toBe("OC");
+    for (const e of ELEMENTS) {
+      expect(kept(e.symbol), e.symbol).toBe(e.symbol);
+      // (typed small: the element, up to uranium - but ho, above)
+      if (e.number < 93 && e.symbol !== "Ho") expect(kept(e.symbol.toLowerCase()), e.symbol).toBe(e.symbol);
+    }
+  });
+
+  it("keeps a molecule typed small as the molecule it reads as, not turned round - as typed in capitals", () => {
+    for (const [typed, label] of [
+      ["hcl", "HCl"], ["HCl", "HCl"], ["hbr", "HBr"], ["h2o", "H2O"], ["H2O", "H2O"], ["hac", "HAc"],
+    ]) expect(kept(typed), typed).toBe(label);
+    // (part of a structure before a whole molecule, still: hafnium, HF typed so)
+    expect(kept("hf")).toBe("Hf");
+    expect(kept("HF")).toBe("HF");
   });
 
   it("hyphenates an italic prefix, and leaves iPr as it is", () => {
