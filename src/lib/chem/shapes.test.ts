@@ -85,8 +85,8 @@ describe("what a shape draws", () => {
   });
 
   it("makes a line as wide as its weight says, as triangles either side of it, its corners mitred", () => {
-    expect(lineWidthOf({}, PT)).toBeCloseTo(0.12);
-    expect(lineWidthOf({ weight: "thick" }, PT)).toBeCloseTo(0.24);
+    expect(lineWidthOf({}, PT)).toBeCloseTo(0.1);
+    expect(lineWidthOf({ weight: "thick" }, PT)).toBeCloseTo(0.2);
     const t = strokeTriangles(
       [
         { x: 0, y: 0 },
@@ -123,8 +123,8 @@ describe("where a shape is", () => {
 
   it("reaches as far as its line, its heads and its tail", () => {
     const b = shapeBounds(box("callout", { tail: { x: 4, y: -6 } }), PT);
-    expect(b.y0).toBeCloseTo(-6 - 0.06);
-    expect(b.x1).toBeCloseTo(20.06);
+    expect(b.y0).toBeCloseTo(-6 - 0.05);
+    expect(b.x1).toBeCloseTo(20.05);
   });
 
   it("holds its words about its middle, as wide as it is inside - an ellipse's within it - and a line none", () => {

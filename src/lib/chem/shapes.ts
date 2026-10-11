@@ -28,7 +28,7 @@ export const SHAPE_NAMES: Record<ShapeKind, string> = {
 /** How heavy a shape's line is: thin, regular (as one is made) or thick. */
 export type ShapeWeight = "thin" | "regular" | "thick";
 /** Each weight's line, in points: a thin one as heavy as a bond's (ACS 1996: 0.6 pt). */
-export const WEIGHT_PT: Record<ShapeWeight, number> = { thin: 0.6, regular: 1.2, thick: 2.4 };
+export const WEIGHT_PT: Record<ShapeWeight, number> = { thin: 0.6, regular: 1, thick: 2 };
 
 /**
  * What a shape's drawing depends on. A box - a rectangle, a rounded one, an

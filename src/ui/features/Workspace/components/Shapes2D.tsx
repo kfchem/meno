@@ -275,11 +275,13 @@ function ShapeItem({
       if (room) st.setCaptionEdit({ id: null, at: { x: room.x, y: room.y }, shape: s.id });
     }
   };
-  const onDown = (e: { nativeEvent: PointerEvent; stopPropagation: () => void }) => {
+  const onDown = (e: { nativeEvent: PointerEvent; point: THREE.Vector3; stopPropagation: () => void }) => {
     const ev = e.nativeEvent;
     const st = store.getState();
-    if (ev.button !== 0 || st.hoveredShape !== s.id || drawingHas()) return;
+    // (taken where the press is on it, whatever the pointer last moved over)
+    if (ev.button !== 0 || drawingHas() || !shapeHit(s, { x: e.point.x, y: e.point.y }, slack, pointPx, filled, lined)) return;
     e.stopPropagation();
+    st.setHoveredShape(s.id);
     if (addsToSelection(ev)) {
       st.toggleShapeSel(s.id);
       st.suppressDoubleClick(DOUBLE_CLICK_MS);
@@ -368,7 +370,7 @@ function ShapeItem({
           <HeldLight b={{ x0: b.x0 - m.x, x1: b.x1 - m.x, y0: b.y0 - m.y, y1: b.y1 - m.y }} at={held} held={held} now={now} z={Z_STEP / 3} />
         </group>
       )}
-      {selected && <Handles s={s} px={px} toWorld={toWorld} />}
+      {selected && <Handles s={s} px={px} toWorld={toWorld} clicked={clicked} onWrite={isBox(s.kind) ? write : undefined} />}
     </group>
   );
 }
@@ -385,12 +387,37 @@ function cursorOf(h: ShapeHandle): CursorName {
 /**
  * A selected shape's handles, the same size on the screen at any zoom: a
  * box's at its corners and sides, a line's at its ends, a callout's at its
- * tail. Dragged, each takes what it is at along, as one step.
+ * tail. Dragged, each takes what it is at along, as one step; clicked
+ * twice, a box's writes in it, as its line does.
  */
-function Handles({ s, px, toWorld }: { s: Shape; px: number; toWorld: (cx: number, cy: number) => Pt }) {
+function Handles({
+  s,
+  px,
+  toWorld,
+  clicked,
+  onWrite,
+}: {
+  s: Shape;
+  px: number;
+  toWorld: (cx: number, cy: number) => Pt;
+  /** The last click on the shape - on its line or a handle - for a second. */
+  clicked: React.MutableRefObject<number>;
+  onWrite?: () => void;
+}) {
   const store = useEditorStore();
   const { gl } = useThree();
   const start = (h: ShapeHandle, ev: PointerEvent) => {
+    if (onWrite && ev.timeStamp - clicked.current < DOUBLE_CLICK_MS) {
+      clicked.current = 0;
+      store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+      const up = () => {
+        window.removeEventListener("pointerup", up, true);
+        onWrite();
+      };
+      window.addEventListener("pointerup", up, true);
+      return;
+    }
+    const from = { x: ev.clientX, y: ev.clientY };
     const gesture = `reshape-${performance.now()}`;
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
@@ -403,6 +430,7 @@ function Handles({ s, px, toWorld }: { s: Shape; px: number; toWorld: (cx: numbe
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      if (Math.hypot(u.clientX - from.x, u.clientY - from.y) < CLICK_PX) clicked.current = u.timeStamp;
       const st2 = store.getState();
       st2.endPanHold(u.pointerId);
       st2.suppressDoubleClick(DOUBLE_CLICK_MS);

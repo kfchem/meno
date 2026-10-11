@@ -244,7 +244,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   tail from the side its tip lies beyond, an arrow's line stopping short of
   its heads), its dashes, its heads, the area it fills, where a press takes
   it, how far it reaches, where its words go, and how it is drawn, made
-  larger or smaller, moved and turned. Lines are 0.6, 1.2 or 2.4 points
+  larger or smaller, moved and turned. Lines are 0.6, 1 or 2 points
   (thin as a bond's, regular, thick); a dash is 3.5 widths and 2 points
   long, a gap 2 widths and 1.5 points.
 - `store/types.ts` `Shape` (its kind, two corners or two ends, a callout's
@@ -273,6 +273,12 @@ Shift+Enter, since Enter keeps the words, as it did before.
   arrow* in its menu.
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
   pens, under everything else, from the back.
+- **A shape's arrow is not a reaction arrow.** It points at something for
+  the audience, holds no words, and is never part of a reaction: an RXN
+  file does not hold it, and Clean-up and reaction schemes pass it by. A
+  reaction arrow (Quick Add's *Reaction arrow*) is chemistry - words over
+  and under it, its own styles, written into an RXN file - and the two are
+  kept apart in the code too (`Shape` here, `Arrow` there).
 
 Not yet, and where it comes: everything under *Guides* and *Handwriting*
 (their own pull requests, in that order); a slide's notes, with the
