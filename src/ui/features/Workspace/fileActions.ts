@@ -3,7 +3,7 @@ import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
-import { captionSet } from "../../../lib/chem/captions";
+import { arrowsWithWords, captionSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionFileText } from "./chem/reactionFile";
@@ -207,7 +207,17 @@ export function drawingLayout(
   aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings">,
   style: DrawingStyle,
 ): { layout: Layout; opts: LayoutOptions } {
-  const atoms = model.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.z != null ? { z: a.z } : {}), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}) }));
+  const atoms = model.atoms.map((a) => ({
+    id: a.id,
+    x: a.x,
+    y: a.y,
+    el: a.el,
+    ...chemistry(a),
+    ...(a.z != null ? { z: a.z } : {}),
+    ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    ...(a.color ? { color: a.color } : {}),
+    ...(a.highlight ? { highlight: a.highlight } : {}),
+  }));
   const index = new Map(model.atoms.map((a, i) => [a.id, i]));
   const bonds = layoutBonds(model.bonds, index);
   const enabled = Object.keys(aromatic.aromaticRings || {}).filter(
@@ -219,6 +229,7 @@ export function drawingLayout(
       : !!aromatic.aromaticEnabled;
   const opts = editorLayoutOptions(style, {
     aromaticCircle,
+    ...(model.ringFills ? { ringFills: model.ringFills } : {}),
     minLinePx: 0,
     paddingPx: 4,
   });
@@ -233,7 +244,10 @@ export function drawingLayout(
     };
     drawn = true;
   };
-  const outlines = schemeOutlines(model, style, NOMINAL_BOND_LENGTH);
+  // (each arrow as long as the words over it and under it need, as on the canvas)
+  const set = labelSetOf(opts);
+  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set);
+  const outlines = schemeOutlines({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
   if (outlines.length) {
     const points = outlines.flat();
     layout.polys.push(...outlines.map((o) => ({ points: o })));
@@ -243,7 +257,6 @@ export function drawingLayout(
     );
   }
   // and the words on the page, set as the canvas sets them
-  const set = labelSetOf(opts);
   const words = (model.captions ?? []).flatMap((c) => captionSet(c.text, c.x, c.y, opts.fontPx, set, c.width, c.align).items);
   if (words.length) {
     layout.texts.push(...words);
@@ -424,7 +437,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
-/** Everything the canvas draws: its structures, arrows and "+" signs. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions">): Drawn {
-  return { ...state.model, arrows: state.arrows, pluses: state.pluses, captions: state.captions };
+/** Everything the canvas draws: its structures - its rings' fills with them - arrows and "+" signs. */
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "ringFills">>): Drawn {
+  return { ...state.model, ...(state.ringFills && Object.keys(state.ringFills).length ? { ringFills: state.ringFills } : {}), arrows: state.arrows, pluses: state.pluses, captions: state.captions };
 }

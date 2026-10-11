@@ -40,7 +40,8 @@ export interface FieldHost {
   onChange(): void;
   command(c: Command, mac: boolean): void;
   selectedText(): string;
-  replaceSelection(insert: string): void;
+  /** What is selected replaced by what is typed - or, `pasted`, by what is pasted. */
+  replaceSelection(insert: string, pasted?: boolean): void;
   edit(e: Edit, sel?: Sel): void;
   setComposing(c: Composing | null): void;
   /** Where a place in the text lies. */
@@ -137,7 +138,7 @@ abstract class Field implements TypingField {
     e.preventDefault();
     const text = e.clipboardData?.getData("text/plain");
     if (!text) return;
-    this.ed.replaceSelection(plainLines(text));
+    this.ed.replaceSelection(plainLines(text), true);
     this.sync();
   }
 

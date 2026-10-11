@@ -70,6 +70,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const extend = useEditor((s) => s.extend);
   const aromaticEnabled = useEditor((s) => s.aromaticEnabled);
   const aromaticRings = useEditor((s) => s.aromaticRings);
+  const ringFills = useEditor((s) => s.ringFills);
   const style = useDrawingStyle();
 
   const draggedId =
@@ -91,6 +92,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       ...(a.z != null ? { z: a.z } : {}),
       // (its charge where a hand put it)
       ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+      // (its colour, and its highlight)
+      ...(a.color ? { color: a.color } : {}),
+      ...(a.highlight ? { highlight: a.highlight } : {}),
     }));
     // (a stroke on empty space: its own new atom where it starts)
     if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
@@ -223,8 +227,8 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
         : aromaticEnabled
           ? true
           : false;
-    return editorLayoutOptions(style, { aromaticCircle });
-  }, [style, aromaticEnabled, aromaticRings]);
+    return editorLayoutOptions(style, { aromaticCircle, ringFills });
+  }, [style, aromaticEnabled, aromaticRings, ringFills]);
   // The typeface's own letters, and Japanese ones when a label has any, are
   // read when first needed; the layout is redone as they come in.
   const fonts = useTypefaces(
