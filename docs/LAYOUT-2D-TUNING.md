@@ -23,7 +23,7 @@ decided. Read both before changing anything.
 | `drawn.ts` | a drawing's stereochemistry read back out of it - wedges as RDKit reads them, a cage in perspective from its solid - which is what the app gives the engine; and the wedges a flat reader needs for such a cage |
 | `metrics.ts` | the measure: every rule as a number, `SCORE_WEIGHTS`, and where the drawing sets a label's H (`hydrogenSpot`) |
 
-Tests: `engine.test.ts`, `metrics.test.ts`, `stereo.test.ts`, `rings.test.ts`, `drawn.test.ts`.
+Tests: `engine.test.ts`, `metrics.test.ts`, `stereo.test.ts`, `rings.test.ts`, `drawn.test.ts`; and `readBack.benchmark.test.ts` and `readBack.heldout.test.ts`, which read back every drawing the engine makes with depth of the molecules on both lists, as Meno reads a drawing, each stereocentre as given.
 
 In the app, `src/ui/features/Workspace/chem/engineLayout.ts` turns a
 drawing into what the engine is given and its layout back into edits, and
@@ -154,6 +154,17 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   engine (WebKit's) came to another view from the last bits of the same
   sums. Such a bond now goes along its corner. A test turns every bond
   out of a cage 15 degrees each way and asks for the same reading.
+- **A ring fused flat onto a cage can stand on the wrong face.** The cage
+  is drawn in perspective and the rings fused to it laid flat beside the
+  bonds they share with it; a ring so laid stands on one face of the cage
+  or the other. Only the cage's own atoms were checked, so scopolamine's
+  epoxide was laid towards its three-carbon bridge rather than its N and
+  drew another isomer, and tetrodotoxin's guanidine ring turned one of the
+  atoms it joins the cage at. `stereo.py` passed both: the wedges were
+  right for a reader that reads them flat, and the perspective said the
+  opposite. Every atom of such a system is now checked as drawn, and the
+  read-back tests read every drawing with depth on both lists as Meno
+  does, the perspective with the wedges.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -216,7 +227,11 @@ now kept by a rule in `LAYOUT-2D.md`:
   - morphinan turned 60 degrees from its reference is acceptable;
   - penicillin as its reference;
   - griseofulvin's aromatic ring on the left;
-  - diazepam fine as it is.
+  - diazepam fine as it is;
+  - (2026-10-11) berberine's ring N at the bottom, as its reference, before
+    the O's of its methylenedioxy; colchicine fine as it is, its
+    trimethoxyphenyl ring on the left (its reference has the tropolone
+    there).
 - **Phosphates** drawn in a straight line, by a general rule.
 - **Labels**: no H is ever hidden. The layout makes room by moving bonds
   a little, never by writing the H under its symbol, and the drawing code
@@ -254,10 +269,17 @@ and the held-out list takes new ones. What it showed, by kind:
   part: a system that will not lie flat is drawn as a solid, or its cage
   so and the rest flat onto it (`cageCore`, `keepsConfigurations`); a
   solid is taken only with its stereocentres as given. Gelsemine,
-  paeoniflorin and galantamine now read as their references; tetrodotoxin
-  and ibogaine are whole but small and close; ginkgolide B, aconitine,
-  picrotoxinin and gibberellic acid still flat, their solids failing the
-  stereo test or not clearly better;
+  paeoniflorin and galantamine now read as their references; ibogaine is
+  whole but small and close; ginkgolide B, aconitine and gibberellic acid
+  still flat, their solids failing the stereo test or not clearly better.
+  Part 2: a flat drawing that leaves an atom's substituent no room is not
+  one without a fault - huperzine A (a bridge across a ring's face, its
+  ethylidene on that ring) now a solid, picrotoxinin's rings laid with
+  room (counted in choosing a bridged system's regular ring, not in easing
+  it: paclitaxel worsened). Scopolamine and tetrodotoxin are flat: their
+  cages with a ring fused flat onto them showed another isomer (*What has
+  gone wrong before*), scopolamine's on its epoxide's face (the
+  maintainer, 2026-10-11). Tetrodotoxin is carried over (*Open*);
 - two rings fused on neighbouring sides of a third, squeezed flat
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
@@ -267,10 +289,19 @@ and the held-out list takes new ones. What it showed, by kind:
   drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
   (done: the turn is chosen counting the fusion H it will carry, which
   `layoutMetrics` places as `placeStereo` will before it is drawn);
-  berberine, colchicine.
+  berberine (done: heteroatoms below counted by the ring); colchicine as
+  it is.
 
 ## Open
 
+- **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11):
+  it is drawn flat, its cage in perspective with the guanidine ring laid
+  flat onto it having shown C4a the other way. The maintainer noted two
+  things: the perspective drawing read better than the flat one, and
+  both face the wrong way - their orientation. Wanted: a perspective
+  drawing that shows the molecule as given, in the right orientation: its
+  cage seen from above, as cages are drawn (`LAYOUT-2D.md` section 2), and
+  from its front face (section 4).
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

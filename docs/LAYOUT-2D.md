@@ -133,7 +133,10 @@ they hang from.
   between the rings, hemmed in.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
-  atom on another or on a bond, a bond crossing one not behind it - it is
+  atom on another or on a bond, a bond crossing one not behind it, or an
+  atom with a bond out of the system left no room for it, its way out of
+  its rings landing on another atom or bond (huperzine A's one-atom
+  bridge, laid across a ring's face, its ethylidene on that ring) - it is
   drawn as the solid it is, as a cage is, if it has twenty atoms or fewer:
   its atoms set in space by how far apart its bonds put them, and seen
   from the side that reads best (paeoniflorin's cage, rings fused round a
@@ -148,7 +151,17 @@ they hang from.
   only with every stereocentre in it as given: a ring fusion is cis or
   trans with the same bonds between the same atoms, so a solid found from
   how far apart the bonds put its atoms may have one the wrong way - and
-  morphine, flat with its bridge across, stays as it was.
+  morphine, flat with its bridge across, stays as it was. That goes for a
+  cage with rings fused flat onto it too, read as it is drawn, those rings
+  with it: laid beside the bond it shares with the cage, a ring stands on
+  one face of the cage there or the other, and only one is the molecule.
+  Scopolamine's epoxide, laid towards its three-carbon bridge and not its
+  N, drew another isomer - the wedges right for a reader that reads them
+  flat, the perspective showing the epoxide on the other face; and
+  tetrodotoxin's guanidine ring turned one of the atoms it joins the cage
+  at. Both are drawn flat now.
+  The cage seen from its other side, for a mirrored frame, is kept only so
+  too.
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds
@@ -215,7 +228,12 @@ lie level either way round - the drawing takes the one that reads best
   fused to it go below: quinoline's N, indole's NH, coumarin's O at the
   bottom, and so morphine's ether O and strychnine's indoline N, as IUPAC
   draws morphinan and strychnidine. Which way up a ring system is comes
-  before how the rest of its rings lie. A flavonoid is the exception (the
+  before how the rest of its rings lie. It is counted by the ring, not by
+  its atoms: a methylenedioxy's two O are one ring the wrong way up, and
+  berberine's N, in two rings fused to benzene rings, goes to the bottom
+  before them (the maintainer, 2026-10-11). A benzene ring is six carbons
+  each with a double bond in the rings, however its Kekule structure is
+  written. A flavonoid is the exception (the
   maintainer, 2026-10-11): the ring O of a chromane or chromene with an
   aryl ring on the atom next to it, or the one after - a flavone's, a
   flavanone's, a catechin's, an isoflavone's - stands at the top, its B
