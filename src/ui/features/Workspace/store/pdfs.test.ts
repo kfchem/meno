@@ -303,6 +303,25 @@ describe("PDFs selected with the rest", () => {
     expect([...state().selPdfs]).toEqual([pasted.id]);
   });
 
+  it("ride in a copy's record with the drawing's colours and rings' fills, none dropping the others", () => {
+    const atoms = [0, 1, 2, 3, 4, 5].map((i) => ({ id: i + 1, x: Math.cos(i), y: Math.sin(i), el: "C", ...(i === 0 ? { color: "#cc0000" } : {}) }));
+    const bonds = [0, 1, 2, 3, 4, 5].map((i) => ({ id: i + 1, a: i + 1, b: ((i + 1) % 6) + 1, order: 1, ...(i === 0 ? { highlight: "#ffee00" } : {}) }));
+    const record = readRecord(
+      recordText({
+        atoms,
+        bonds,
+        ringFills: { "1-2-3-4-5-6": "#ffcc00" },
+        pdfs: [{ id: 1, name: "p.pdf", sha256: SHA, pages: [A4], x: 0, y: 0, page: 0, spread: true, placed: [{ page: 0, x: 5, y: 5 }] }],
+        sheets: [{ id: 1, name: "a.md", text: "# a", at: { x: 1, y: 2 } }],
+      } as never),
+    )!;
+    expect(record.pdfs?.[0]).toMatchObject({ spread: true, placed: [{ page: 0, x: 5, y: 5 }] });
+    expect(record.sheets).toHaveLength(1);
+    expect(record.ringFills).toEqual({ "1-2-3-4-5-6": "#ffcc00" });
+    expect(record.atoms[0]).toMatchObject({ color: "#cc0000" });
+    expect(record.bonds[0]).toMatchObject({ highlight: "#ffee00" });
+  });
+
   it("and texts' sheets: copied whole, pasted as sheets of their own - not read - selected", () => {
     const { state } = editor();
     state().addTexts([{ name: "notes.md", text: "# Hi" }], { x: 0, y: 0 });
