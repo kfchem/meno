@@ -470,9 +470,11 @@ function WorkspaceContent({
       setWorking3d("Drawing the formula…");
       setChemError(null);
       try {
-        const { model: formula, link } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
+        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
+        // (its bonds drawn single where their orders could not be had: said)
+        if (ordersUnknown) setChemError("Bond orders unknown: the formula is drawn with every bond single.");
         // (beyond the view, the view takes it in)
         const view = viewBox();
         if (view && placed.atoms.some((a) => a.x < view.x0 || a.x > view.x1 || a.y < view.y0 || a.y > view.y1)) requestFit();
