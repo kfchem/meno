@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
 
 /** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, and the electron-pushing arrows it colours. */
@@ -33,8 +34,8 @@ export default function ColourCard({
   onClose: () => void;
 }) {
   const store = useEditorStore();
-  // (the user's palette, from Settings - and any other by the system's own chooser)
-  const palette = useAppSettings((s) => s.palette);
+  // (the set in use, chosen in Settings - and any other colour by the system's own chooser)
+  const palette = setInUse(useAppSettings((s) => s.colours)).colours;
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
