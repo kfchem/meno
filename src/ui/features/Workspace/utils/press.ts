@@ -43,3 +43,32 @@ export function chordedPress(buttons: number, lastButtons: number): boolean {
   const both = (b: number) => (b & 1) !== 0 && (b & 2) !== 0;
   return both(buttons) || both(lastButtons);
 }
+
+/** What comes of a press after its pointerdown: none of it is heard of a press swallowed. */
+const AFTER_PRESS = ["mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"] as const;
+
+/**
+ * A press swallowed (`down`, its pointerdown, heard first): nothing else
+ * hears of it - not the press, nor its release, nor the click or the menu
+ * that come of it. A press that closes a menu or Quick Add only closes it,
+ * as on a Mac (the maintainer, 2026-10-12): it used to go on to the atom
+ * under it, whose label began to be written half a second later. It is
+ * over a moment after the release, or should no release come, after `most`
+ * ms.
+ */
+export function swallowPress(down: Event, on: EventTarget = window, most = 10_000): void {
+  down.stopPropagation();
+  down.preventDefault();
+  const stop = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+    // (the click, or the auxclick, comes straight after the release)
+    if (e.type === "pointerup") setTimeout(off, 0);
+  };
+  const off = () => {
+    clearTimeout(late);
+    for (const type of AFTER_PRESS) on.removeEventListener(type, stop, { capture: true });
+  };
+  for (const type of AFTER_PRESS) on.addEventListener(type, stop, { capture: true });
+  const late = setTimeout(off, most);
+}
