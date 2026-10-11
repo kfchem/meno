@@ -773,8 +773,12 @@ function WorkspaceContent({
   }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
+  // (nor a card a menu opened - a colour's, a size's - left over it)
   useEffect(() => {
-    if (talking) setMenu(null);
+    if (!talking) return;
+    setMenu(null);
+    setColourCard(null);
+    setSizeCard(null);
   }, [talking]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
