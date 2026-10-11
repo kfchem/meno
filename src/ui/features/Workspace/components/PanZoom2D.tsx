@@ -7,6 +7,7 @@ import { useEditor, useEditorStore } from "../store";
 import { letViewGoalGo, viewDriven, viewGoalOf } from "./viewGoal";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
+import { stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 
 /** WebKit's pinch on a trackpad, which it gives as gestures, not wheels. */
@@ -80,6 +81,12 @@ export function PanZoom2D() {
   const zoomGlide = useRef(0);
   const pinchSteps = useRef<Move[]>([]);
   const anchor = useRef({ cx: 0, cy: 0 });
+  // where the pointer rests over the canvas; the view as last drawn; and
+  // whether what is under the pointer is to be found again, the view having
+  // moved under it
+  const pointer = useRef(stillPointer());
+  const seenView = useRef<View | null>(null);
+  const findAgain = useRef(false);
   // (the camera's zoom: CSS pixels per world unit on the page, whether it is
   // orthographic - the canvas's - or in perspective, as PageCamera keeps it)
   useEffect(() => {
@@ -178,10 +185,9 @@ export function PanZoom2D() {
           vel.current.set(sum.x / took, sum.y / took);
         }
         recent.current = [];
-        // The view may glide on after the release: what was under the
-        // pointer need not be any more. The next move finds what is.
-        store.getState().clearAtomHover();
-        store.getState().clearBondHover();
+        // (what the drag brought under the pointer is found once it is let go)
+        findAgain.current = true;
+        invalidate();
       }
       dragging.current = false;
       maybe.current.active = false;
@@ -290,6 +296,12 @@ export function PanZoom2D() {
       invalidate();
     };
 
+    // (heard first, so the pointer is known to rest before a frame finds again)
+    const heard = (e: PointerEvent) => {
+      if (e.isTrusted) pointer.current.heard(e);
+    };
+    const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
+    for (const name of HEARD) dom.addEventListener(name, heard);
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
@@ -303,6 +315,7 @@ export function PanZoom2D() {
     box.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
+      for (const name of HEARD) dom.removeEventListener(name, heard);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointermove", onMove);
       dom.removeEventListener("pointerup", onUp);
@@ -357,6 +370,14 @@ export function PanZoom2D() {
       vel.current.set(0, 0);
       zoomLeft.current = 0;
       zoomGlide.current = 0;
+    }
+    // The view moved last frame under a pointer resting on it: what is under
+    // the pointer now is lit, and taken hold of by a press, as a move of no
+    // distance finds it - drawn as it was moved to, so the hit areas are too.
+    if (findAgain.current) {
+      findAgain.current = false;
+      const at = pointer.current.resting();
+      if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, pointerType: "mouse", bubbles: true, cancelable: true }));
     }
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one
@@ -424,6 +445,13 @@ export function PanZoom2D() {
       pos.current.set(cam.position.x, cam.position.y);
       if (Math.abs(zoomGlide.current) < 0.02 || next !== old * Math.exp(take)) zoomGlide.current = 0;
     }
+
+    const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
+    if (viewMoved(seenView.current, view)) {
+      findAgain.current = true;
+      invalidate();
+    }
+    seenView.current = view;
 
     // On-demand rendering: request the next frame while the camera is still
     // moving, otherwise dragging and inertia would stop after one frame.
