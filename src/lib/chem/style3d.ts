@@ -8,6 +8,7 @@
  * primary's defaults are the 3D viewer's look.
  */
 import { getColor, getVdwRadius } from "../../utils/atomUtils";
+import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
 export type MoleculeLook = {
@@ -28,6 +29,11 @@ export type MoleculeLook = {
    * (the maintainer, 2026-10-10: for pictures, never for research).
    */
   hydrogens: "shown" | "carbonHidden";
+  /**
+   * A PDB entry's chains - proteins, nucleic acids - as ribbons, what is
+   * bound to them drawn as atoms; or every atom (docs/WORKSPACE.md, *Ribbons*).
+   */
+  biopolymers: "ribbons" | "atoms";
 };
 
 /** What every style shares: the light molecules are seen in, how they turn, a surface's colours, and how smooth they are drawn. */
@@ -45,6 +51,8 @@ export type Scene3D = {
   /** A surface's colours (an orbital's, a density's): an orbital's positive phase - a density's one - and its negative one. */
   surfacePlus: string;
   surfaceMinus: string;
+  /** A ribbon's colours: by its helices and strands, by its chain, or along its sequence from start to end. */
+  ribbonColours: "structure" | "chain" | "sequence";
 };
 
 /** Which of its two styles a molecule is drawn in. */
@@ -62,6 +70,7 @@ export const BALL_AND_STICK: MoleculeLook = {
   roughness: 1,
   metalness: 0,
   hydrogens: "shown",
+  biopolymers: "ribbons",
 };
 
 /** What the styles share, as the 3D viewer had it. */
@@ -75,6 +84,7 @@ export const SCENE_3D: Scene3D = {
   // (a muted blue and orange: the maintainer's, 2026-10-05)
   surfacePlus: "#4f7cc4",
   surfaceMinus: "#d98a4b",
+  ribbonColours: "structure",
 };
 
 /** Where the key light comes from, as seen: above right, in front. */
@@ -102,7 +112,8 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     id: "space",
     name: "Space-filling",
     description: "Each atom as large as its van der Waals radius: the molecule's surface.",
-    look: { ...BALL_AND_STICK, atoms: "space" },
+    // (a protein space-filling, every atom: its surface, its pockets)
+    look: { ...BALL_AND_STICK, atoms: "space", biopolymers: "atoms" },
   },
 ];
 
@@ -184,24 +195,54 @@ export function atomColour(el: string): string {
   return colour.get(el)!;
 }
 
-/**
- * Which atoms a look leaves out: none - or, with the hydrogens on carbon
- * hidden, each hydrogen bonded to a carbon (one on a heteroatom, which
- * takes part in hydrogen bonds and in reactions, stays).
- */
-export function hiddenAtoms(
-  m: { atoms: readonly { el: string }[]; bonds: readonly { a1: number; a2: number }[] },
-  look: MoleculeLook,
-): Uint8Array {
-  const hidden = new Uint8Array(m.atoms.length);
-  if (look.hydrogens !== "carbonHidden") return hidden;
+/** A molecule as what it leaves out is worked out from: its atoms (where they stand, for a biopolymer's chains), bonds and biopolymer. */
+type Leaving = { atoms: readonly { el: string }[]; bonds: readonly { a1: number; a2: number }[]; biopolymer?: Biopolymer };
+
+/** Each hydrogen bonded to a carbon. */
+function carbonHydrogens(m: Leaving): Uint8Array {
+  const out = new Uint8Array(m.atoms.length);
   for (const b of m.bonds) {
     const a = m.atoms[b.a1]?.el;
     const c = m.atoms[b.a2]?.el;
-    if (a === "H" && c === "C") hidden[b.a1] = 1;
-    if (c === "H" && a === "C") hidden[b.a2] = 1;
+    if (a === "H" && c === "C") out[b.a1] = 1;
+    if (c === "H" && a === "C") out[b.a2] = 1;
+  }
+  return out;
+}
+
+/** The atoms a look draws as ribbons, not as atoms (lib/chem/biopolymer `ribbonAtoms`): none, where it draws atoms or the molecule is no biopolymer. */
+function inRibbons(m: Leaving, look: MoleculeLook): Uint8Array | null {
+  if (look.biopolymers !== "ribbons" || !m.biopolymer) return null;
+  return ribbonAtoms(m.biopolymer, m.atoms as readonly { el: string; x: number; y: number; z: number }[]);
+}
+
+/** Whether a look draws a molecule's chains as ribbons: it says so, and the molecule has chains to draw. */
+export function ribbonsOf(m: Leaving, look: MoleculeLook): boolean {
+  return look.biopolymers === "ribbons" && !!m.biopolymer && chainRuns(m.biopolymer, m.atoms as readonly { el: string; x: number; y: number; z: number }[]).length > 0;
+}
+
+/**
+ * Which atoms a look leaves out: those its ribbons stand for, where it
+ * draws a biopolymer's chains as ribbons; and, with the hydrogens on
+ * carbon hidden, each hydrogen bonded to a carbon (one on a heteroatom,
+ * which takes part in hydrogen bonds and in reactions, stays).
+ */
+export function hiddenAtoms(m: Leaving, look: MoleculeLook): Uint8Array {
+  const hidden = inRibbons(m, look) ?? new Uint8Array(m.atoms.length);
+  if (look.hydrogens === "carbonHidden") {
+    const ch = carbonHydrogens(m);
+    for (let i = 0; i < ch.length; i++) if (ch[i]) hidden[i] = 1;
   }
   return hidden;
+}
+
+/** Whether a look leaves out hydrogens on carbon that it would otherwise draw: what a molecule says of itself (`HIDDEN_MARK`). */
+export function hidesCarbonHydrogens(m: Leaving, look: MoleculeLook): boolean {
+  if (look.hydrogens !== "carbonHidden") return false;
+  const ribbons = inRibbons(m, look);
+  const ch = carbonHydrogens(m);
+  for (let i = 0; i < ch.length; i++) if (ch[i] && !ribbons?.[i]) return true;
+  return false;
 }
 
 /** What a molecule drawn without the hydrogens on its carbons says of itself, on the canvas and in a picture of it. */
@@ -278,6 +319,17 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     ],
   },
   {
+    key: "biopolymers",
+    group: "Proteins and nucleic acids",
+    label: "Chains",
+    description: "A PDB entry's chains as ribbons, what is bound to them as atoms - or every atom.",
+    kind: "choice",
+    options: [
+      { value: "ribbons", label: "Ribbons" },
+      { value: "atoms", label: "Atoms" },
+    ],
+  },
+  {
     key: "roughness",
     group: "Surface",
     label: "Surface",
@@ -338,6 +390,18 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
     label: "Negative phase",
     description: "An orbital's surface where its values are negative.",
     kind: "colour",
+  },
+  {
+    key: "ribbonColours",
+    group: "Ribbons",
+    label: "Coloured by",
+    description: "Helices and strands, each chain, or along the chain from start to end.",
+    kind: "choice",
+    options: [
+      { value: "structure", label: "Structure" },
+      { value: "chain", label: "Chain" },
+      { value: "sequence", label: "Sequence" },
+    ],
   },
   {
     key: "turnPerHalfWidth",

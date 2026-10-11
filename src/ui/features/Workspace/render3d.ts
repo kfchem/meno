@@ -5,6 +5,8 @@ import { EYE_HEIGHT } from "./utils/page";
 import { bondLines, bondsAt, frameOf, heightOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
+import { chainRuns } from "../../../lib/chem/biopolymer";
+import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 
 /** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely. */
@@ -70,6 +72,8 @@ export function rendered3d(
     toneMapped: false,
   });
   const fans: THREE.BufferGeometry[] = [];
+  const ribbons: THREE.BufferGeometry[] = [];
+  const ribbonMats: THREE.Material[] = [];
   // (one for each colour in each finish: a molecule's look's)
   const material = (color: string, look: MoleculeLook) => {
     const key = `${color} ${look.roughness} ${look.metalness}`;
@@ -123,6 +127,19 @@ export function rendered3d(
           mesh.scale.set(line.r, length, line.r);
           group.add(mesh);
         }
+      }
+      // its chains as ribbons, where its look draws them so
+      if (solid.ribbons[look] && m.biopolymer) {
+        const made = ribbonMesh(places, chainRuns(m.biopolymer, m.atoms), m.biopolymer, style.ribbonColours, 1, WORLD_PER_ANGSTROM);
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(made.positions, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(made.normals, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(made.colours, 3));
+        geometry.setIndex(new THREE.BufferAttribute(made.indices, 1));
+        ribbons.push(geometry);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: drawn.roughness, metalness: drawn.metalness });
+        ribbonMats.push(mat);
+        group.add(new THREE.Mesh(geometry, mat));
       }
       // its measurements, as the canvas draws them: lines - a distance's
       // dashed - and an angle's faint fan, in depth among its atoms, so that
@@ -196,6 +213,8 @@ export function rendered3d(
     measureLine.dispose();
     measureFan.dispose();
     for (const g of fans) g.dispose();
+    for (const g of ribbons) g.dispose();
+    for (const mat of ribbonMats) mat.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
   }
