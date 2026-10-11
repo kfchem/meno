@@ -93,8 +93,8 @@ export type WriteDecl = {
   grammar?: GrammarDecl;
 };
 
-/** A role a plugin fills (lib/plugins/roles), by the id Meno gives it, and its options where the role takes them. */
-export type RoleDecl = { role: RoleId; options: Option[] };
+/** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
+export type RoleDecl = { role: RoleId; programs: string[]; options: Option[] };
 
 /**
  * A kind of step a plugin fills (docs/WORKFLOWS.md, *What changes in the
@@ -126,7 +126,10 @@ export type System = (typeof SYSTEMS)[number];
  * each system it is made for; and, as it runs, the folders put first where
  * programs are looked for (`path`) and the variables it is given (`env`) -
  * each a place in its installation, `{folder}` (where its file is) or
- * `{parent}` (the folder above), with a path inside it. Meno's backend
+ * `{parent}` (the folder above), with a path inside it; and the folders it
+ * is usually installed in, on each system (`places`) - each from `/`,
+ * `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's
+ * name for any text, a version's, the newest found first. Meno's backend
  * reads and checks the same (src-tauri/src/jobs.rs `installed_named`).
  */
 export type InstalledDecl = {
@@ -135,6 +138,7 @@ export type InstalledDecl = {
   files: Partial<Record<System, string>>;
   path: string[];
   env: Record<string, string[]>;
+  places: Partial<Record<System, string[]>>;
 };
 
 /** A kind of file a plugin's catalogue names, and the plugins it suggests for one: told by its marks, as a kind a plugin reads is. */
@@ -280,6 +284,19 @@ function placesOf(v: unknown): string[] | null {
   return given && given.every(placeOk) ? (given as string[]) : null;
 }
 
+/** Whether `t` is a usual place for a program: from `/`, `{home}` or `{programs}`, and after it folders' names - never `.` or `..`, a `*` at most once in each. The backend's rule (`usual_place_ok`). */
+export function usualPlaceOk(t: unknown): t is string {
+  if (typeof t !== "string" || t.length > 300) return false;
+  const token = ["{home}", "{programs}"].find((b) => t.startsWith(b));
+  const rest = token ? t.slice(token.length) : t;
+  if (token && rest === "") return true;
+  if (!rest.startsWith("/")) return false;
+  return rest
+    .slice(1)
+    .split("/")
+    .every((part) => part !== "" && part !== "." && part !== ".." && (part.match(/\*/g) ?? []).length <= 1 && !/[\\:{}]/.test(part));
+}
+
 function installedOf(v: unknown): InstalledDecl | null {
   const d = v as Record<string, unknown> | null;
   const name = typeof d?.name === "string" && PROGRAM.test(d.name) ? d.name : null;
@@ -299,8 +316,17 @@ function installedOf(v: unknown): InstalledDecl | null {
         else env[k] = places;
       }
   }
-  // (one it cannot be run as it says - a place outside its installation, a variable it may not set - is none)
-  return name && label && Object.keys(files).length && path && envOk ? { name, label, files, path, env } : null;
+  const placesGiven = (d?.places ?? {}) as Record<string, unknown>;
+  const places: Partial<Record<System, string[]>> = {};
+  let placesOk = typeof placesGiven === "object" && !Array.isArray(placesGiven);
+  for (const sys of SYSTEMS) {
+    const given = placesGiven[sys];
+    if (given === undefined) continue;
+    if (Array.isArray(given) && given.every(usualPlaceOk)) places[sys] = [...(given as string[])];
+    else placesOk = false;
+  }
+  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one - is none)
+  return name && label && Object.keys(files).length && path && envOk && placesOk ? { name, label, files, path, env, places } : null;
 }
 
 /** How long a guide's words may be: a title, a step's text. */
@@ -380,8 +406,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
         (v): RoleDecl | null => {
           const r = v as Record<string, unknown> | null;
           if (typeof r?.role !== "string" || !isRole(r.role)) return null;
+          const programs = [...new Set(list(r.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
           // (options only for a role that takes them)
-          return { role: r.role, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [] };
+          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [] };
         },
         (r) => r.role,
       )
@@ -402,8 +429,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
   // (a plugin that does nothing is none)
   if (!readable.length && !writes.length && !roles.length && !steps.length && !colours && !guide.length && !suggests.length && !files.length) return null;
   const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
-  // (each program installed separately once, and only one a step runs)
-  const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => steps.some((s) => s.programs.includes(d.name)));
+  // (each program installed separately once, and only one a step or a role runs)
+  const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
   return {
     id,
     name,

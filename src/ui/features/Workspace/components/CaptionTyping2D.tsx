@@ -12,9 +12,10 @@
  * click among them puts the caret, two select a word, three a line, a drag
  * selects on - the click or the drag that opened them counted among those.
  * Enter keeps them, Shift+Enter starts another line, Escape lets them go,
- * and a press elsewhere keeps them too. New words put down near an arrow go
- * over it or under it; words written anew over an arrow stay clear of it as
- * they grow. Words written away are gone.
+ * and a press elsewhere keeps them too. What is typed is written as it is
+ * meant, unless Settings say not (lib/text/smartWords): 60dc as 60 °C. New
+ * words put down near an arrow go over it or under it; words written anew
+ * over an arrow stay clear of it as they grow. Words written away are gone.
  *
  * What is drawn is drawn whole (Labels2D `WholeTexts2D`): the caret and
  * what is selected go with the words as they are drawn, not ahead of them;
@@ -28,6 +29,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useFrame, useThree } from "@react-three/fiber";
 import { CAPTION_LINE, captionPlace, captionPlaces, captionSet } from "../../../../lib/chem/captions";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
@@ -35,6 +37,7 @@ import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { WordsEditor } from "../utils/wordsEditor";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { arrowsBeside, useWordsWriting } from "./drawnArrows";
 import { WholeTexts2D } from "./Labels2D";
 import { usePressAmong, useWriting, writingMarks, measured, type WritingDrawn } from "./writing";
 import type { TypingField } from "../../TextEditor/typingField";
@@ -70,7 +73,11 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const { camera, gl, size, invalidate } = useThree();
   const [, setTick] = useState(0);
   // (its words as they were, or none: written in their own editor until they are kept)
-  const [ed] = useState(() => new WordsEditor(caption?.text ?? ""));
+  const [ed] = useState(() => {
+    const e = new WordsEditor(caption?.text ?? "");
+    e.smart = () => useAppSettings.getState().words.smart;
+    return e;
+  });
   const field = useRef<TypingField | null>(null);
   const done = useRef(false);
   const n = edit.n ?? 0;
@@ -97,6 +104,12 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, set, width, align) : places;
   const halfW = Math.max(laid.halfW, fs / 2);
   const halfH = Math.max(laid.halfH, fs / 2);
+  // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
+  const arrows = useEditor((s) => s.arrows);
+  const captions = useEditor((s) => s.captions);
+  const beside = useMemo(() => arrowsBeside({ arrows, captions }, fs, set, edit.id), [arrows, captions, fs, set, edit.id]);
+  const goes = left || !text.trim() ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
+  useWordsWriting(goes?.arrow != null ? { arrow: goes.arrow, x: goes.x, y: goes.y, halfW: laid.halfW, halfH: laid.halfH } : null, n);
   // what is drawn: the caret, what is selected and the light round them as the words drawn have them - those last given, until they are drawn
   const latest = useRef<WritingDrawn | null>(null);
   const drawnNow = useRef<WritingDrawn | null>(null);
@@ -125,6 +138,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     if (done.current) return;
     done.current = true;
     const s = store.getState();
+    // (the word last typed ended as they are kept)
+    if (keep) ed.kept();
     const text = ed.text.replace(/\s+$/, "").replace(/^\s*\n/, "");
     // (the caption they are now - none, new ones let go or any written away)
     let kept: number | null = edit.id;
@@ -141,7 +156,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         });
       if (edit.id == null) {
         if (text.trim()) {
-          const placed = captionPlace(edit.at, half(text), s.arrows, fs, others);
+          const placed = captionPlace(edit.at, half(text), arrowsBeside(s, fs, set, edit.id), fs, others);
           kept = s.addCaption(text, placed.x, placed.y, placed.arrow);
         }
       } else if (!text.trim()) {
@@ -149,7 +164,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         kept = null;
       } else if (caption && text !== caption.text) {
         // (over an arrow: kept clear of it as it grows or shrinks)
-        const arrow = caption.arrow != null ? s.arrows.find((a) => a.id === caption.arrow) : undefined;
+        const arrow = caption.arrow != null ? arrowsBeside(s, fs, set, edit.id).find((a) => a.id === caption.arrow) : undefined;
         const placed = arrow ? captionPlace({ x: caption.x, y: caption.y }, half(text), [arrow], fs, others) : null;
         s.updateCaption(edit.id, placed ? { text, x: placed.x, y: placed.y, arrow: placed.arrow ?? null } : { text });
       }

@@ -5,7 +5,11 @@ import { EYE_HEIGHT } from "./utils/page";
 import { bondLines, bondsAt, frameOf, heightOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
+import { chainRuns } from "../../../lib/chem/biopolymer";
+import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
+import { backToFront } from "./utils/backToFront";
+import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
 
 /** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely. */
 const BALL_SEGMENTS = 48;
@@ -13,10 +17,17 @@ const BOND_SEGMENTS = 16;
 
 type Bounds = { min: { x: number; y: number }; max: { x: number; y: number } };
 
+/** Two boxes as one, either of which may be none. */
+function unionOf(a: Bounds | null, b: Bounds | null): Bounds | null {
+  if (!a || !b) return a ?? b;
+  return { min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y) }, max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y) } };
+}
+
 /**
  * Molecules in 3D drawn as the canvas draws them - lit, in depth, so that
  * where balls run into one another only what is nearer shows, their
- * measurements' lines and fans among them - for a picture: each seen as the canvas sees it, straight from above - or, given
+ * measurements' lines and fans among them, and the surface each shows (an
+ * orbital's, a density's), seen through, farthest first - for a picture: each seen as the canvas sees it, straight from above - or, given
  * `eyeHeight`, in perspective from that far straight above its centre - as
  * a picture lays them out (utils/molecule3d's pictureMarks), on a canvas
  * covering where they all reach on the page, `pxPerWorld` pixels to the
@@ -31,9 +42,13 @@ export function rendered3d(
 ): { canvas: HTMLCanvasElement; bounds: Bounds } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
+  // (each as far as it reaches: its atoms, and the surface it shows)
   const each = ms
-    .map((m) => ({ m, bounds: solidsBounds(pictureMarks(m, style, eyeOver(m))) }))
-    .filter((e): e is { m: Carried3D; bounds: Bounds } => !!e.bounds);
+    .map((m) => {
+      const surface = pictureSurface(m, style, eyeOver(m));
+      return { m, surface, bounds: unionOf(solidsBounds(pictureMarks(m, style, eyeOver(m))), surface?.bounds ?? null) };
+    })
+    .filter((e): e is typeof e & { bounds: Bounds } => !!e.bounds);
   if (!each.length) return null;
   const bounds: Bounds = {
     min: { x: Math.min(...each.map((e) => e.bounds.min.x)), y: Math.min(...each.map((e) => e.bounds.min.y)) },
@@ -70,6 +85,12 @@ export function rendered3d(
     toneMapped: false,
   });
   const fans: THREE.BufferGeometry[] = [];
+  const ribbons: THREE.BufferGeometry[] = [];
+  const ribbonMats: THREE.Material[] = [];
+  const surfaces: THREE.BufferGeometry[] = [];
+  const surfaceMat = surfaceMaterial(SURFACE_OPACITY);
+  // (one coloured by another grid - NCI's - not seen through, as the canvas draws it)
+  const colouredMat = surfaceMaterial(surfaceOpacity(true));
   // (one for each colour in each finish: a molecule's look's)
   const material = (color: string, look: MoleculeLook) => {
     const key = `${color} ${look.roughness} ${look.metalness}`;
@@ -82,7 +103,7 @@ export function rendered3d(
   };
   const up = new THREE.Vector3(0, 1, 0);
   try {
-    for (const { m, bounds: b } of each) {
+    for (const { m, surface, bounds: b } of each) {
       const w = Math.max(1, Math.round((b.max.x - b.min.x) * pxPerWorld));
       const h = Math.max(1, Math.round((b.max.y - b.min.y) * pxPerWorld));
       renderer.setSize(w, h, false);
@@ -123,6 +144,31 @@ export function rendered3d(
           mesh.scale.set(line.r, length, line.r);
           group.add(mesh);
         }
+      }
+      // its chains as ribbons, where its look draws them so
+      if (solid.ribbons[look] && m.biopolymer) {
+        const made = ribbonMesh(places, chainRuns(m.biopolymer, m.atoms), m.biopolymer, style.ribbonColours, 1, WORLD_PER_ANGSTROM);
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(made.positions, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(made.normals, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(made.colours, 3));
+        geometry.setIndex(new THREE.BufferAttribute(made.indices, 1));
+        ribbons.push(geometry);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: drawn.roughness, metalness: drawn.metalness });
+        ribbonMats.push(mat);
+        group.add(new THREE.Mesh(geometry, mat));
+      }
+      // the surface it shows, as the canvas draws it: its phases one mesh,
+      // seen through, its triangles farthest first as the picture sees them
+      if (surface) {
+        const { geometry, split, coloured } = surfaceGeometry(surface.plus, surface.minus);
+        colourSurface(geometry, split, style.surfacePlus, style.surfaceMinus);
+        const way = new THREE.Vector3(0, 0, -1).applyQuaternion(group.quaternion.clone().invert());
+        backToFront(geometry.getAttribute("position").array as Float32Array, [way.x, way.y, way.z], geometry.getIndex()!.array as Uint32Array);
+        surfaces.push(geometry);
+        const mesh = new THREE.Mesh(geometry, coloured ? colouredMat : surfaceMat);
+        mesh.renderOrder = 1;
+        group.add(mesh);
       }
       // its measurements, as the canvas draws them: lines - a distance's
       // dashed - and an angle's faint fan, in depth among its atoms, so that
@@ -196,6 +242,11 @@ export function rendered3d(
     measureLine.dispose();
     measureFan.dispose();
     for (const g of fans) g.dispose();
+    for (const g of ribbons) g.dispose();
+    for (const g of surfaces) g.dispose();
+    surfaceMat.dispose();
+    colouredMat.dispose();
+    for (const mat of ribbonMats) mat.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
   }

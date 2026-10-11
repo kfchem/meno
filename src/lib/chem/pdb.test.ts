@@ -163,6 +163,66 @@ describe("a PDB file, read", () => {
   });
 });
 
+/** A line with each field put in its columns, as a record's layout says: [first column, text] pairs. */
+function fieldsLine(name: string, fields: [number, string][]): string {
+  const line = Array(80).fill(" ");
+  [[1, name.padEnd(6)] as [number, string], ...fields].forEach(([from, s]) => [...s].forEach((c, i) => (line[from - 1 + i] = c)));
+  return line.join("").trimEnd();
+}
+
+describe("a PDB file's secondary structure, read", () => {
+  it("reads a helix's residues, class, comment and length from their columns (HELIX)", () => {
+    const helix = fieldsLine("HELIX", [
+      [8, "  3"], [12, " H3"], [16, "LEU"], [20, "B"], [22, "  12"], [26, "A"],
+      [28, "SER"], [32, "B"], [34, "  25"], [38, " "], [39, " 5"], [41, "a 3-10 one"], [72, "   14"],
+    ]);
+    // (no class given: right-handed alpha, the default)
+    const plain = fieldsLine("HELIX", [[8, "  4"], [12, " H4"], [16, "ALA"], [20, "B"], [22, "  40"], [28, "LYS"], [32, "B"], [34, "  47"]]);
+    const entry = readPdb([helix, plain].join("\n"));
+    expect(entry.helices).toEqual([
+      {
+        serNum: 3,
+        helixID: "H3",
+        init: { resName: "LEU", chainID: "B", seqNum: 12, iCode: "A" },
+        end: { resName: "SER", chainID: "B", seqNum: 25, iCode: "" },
+        helixClass: 5,
+        comment: "a 3-10 one",
+        length: 14,
+      },
+      { serNum: 4, helixID: "H4", init: { resName: "ALA", chainID: "B", seqNum: 40, iCode: "" }, end: { resName: "LYS", chainID: "B", seqNum: 47, iCode: "" }, helixClass: 1 },
+    ]);
+    expect(entry.unread).toEqual({});
+  });
+
+  it("reads a strand's residues, sense and registration from their columns (SHEET)", () => {
+    const first = fieldsLine("SHEET", [[8, "  1"], [12, "  S"], [15, " 2"], [18, "VAL"], [22, "A"], [23, "   3"], [29, "ILE"], [33, "A"], [34, "   7"], [39, " 0"]]);
+    const second = fieldsLine("SHEET", [
+      [8, "  2"], [12, "  S"], [15, " 2"], [18, "THR"], [22, "A"], [23, "  20"], [29, "GLU"], [33, "A"], [34, "  24"], [39, "-1"],
+      [42, " N  "], [46, "THR"], [50, "A"], [51, "  22"], [57, " O  "], [61, "VAL"], [65, "A"], [66, "   5"],
+    ]);
+    const entry = readPdb([first, second].join("\n"));
+    expect(entry.strands[0]).toEqual({
+      strand: 1,
+      sheetID: "S",
+      numStrands: 2,
+      init: { resName: "VAL", chainID: "A", seqNum: 3, iCode: "" },
+      end: { resName: "ILE", chainID: "A", seqNum: 7, iCode: "" },
+      sense: 0,
+    });
+    expect(entry.strands[1].sense).toBe(-1);
+    expect(entry.strands[1].registration).toEqual({
+      cur: { resName: "THR", chainID: "A", seqNum: 22, iCode: "", atom: "N" },
+      prev: { resName: "VAL", chainID: "A", seqNum: 5, iCode: "", atom: "O" },
+    });
+  });
+
+  it("counts a record whose residues do not read as unreadable, and goes on", () => {
+    const entry = readPdb(fieldsLine("HELIX", [[8, "  1"], [16, "ALA"], [22, "  xx"]]));
+    expect(entry.helices).toEqual([]);
+    expect(entry.unreadable).toBe(1);
+  });
+});
+
 describe("a PDB file, written", () => {
   const water: PdbWriteMolecule = {
     atoms: [

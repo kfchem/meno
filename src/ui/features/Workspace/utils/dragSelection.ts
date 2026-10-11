@@ -5,9 +5,16 @@ import { schemeAmong } from "./copyPaste";
 type Pt = { x: number; y: number };
 
 /**
+ * Whether the selection is being moved by hand now - dragged, or turned by
+ * its handle: what moves with it follows the pointer, gliding nowhere (a
+ * PDF moved by an undo glides; one dragged does not).
+ */
+export const selectionMoving = { active: false };
+
+/**
  * The selection dragged, from the press at `from` (on the screen): moved by
  * as much as the pointer goes, off the grid, with the arrows, "+" signs and
- * words among it, the molecules in 3D and pictures selected with it, and a
+ * words among it, the molecules in 3D, pictures, texts' sheets and PDFs selected with it, and a
  * workflow's sets - with what they hold - and steps selected, as one undo step - one
  * move a frame, as every move lays the drawing out again. `toWorld` takes a
  * point of the screen to the page; `done` is told when the button comes up,
@@ -33,8 +40,10 @@ export function dragSelection(
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   const pictures = st.pictures.filter((p) => st.selPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const texts = st.texts.flatMap((t) => (t.at && st.selTexts.has(t.id) ? [{ id: t.id, x: t.at.x, y: t.at.y }] : []));
+  const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const p0 = toWorld(from.x, from.y);
   const gesture = `drag-${performance.now()}`;
+  selectionMoving.active = true;
   let frame: number | null = null;
   let last = p0;
   const apply = () => {
@@ -51,6 +60,7 @@ export function dragSelection(
       steps: steps.map(by),
       pictures: pictures.map(by),
       texts: texts.map(by),
+      pdfs: pdfs.map(by),
     });
   };
   const onMove = (ev: PointerEvent) => {
@@ -65,6 +75,7 @@ export function dragSelection(
       last = toWorld(ev.clientX, ev.clientY);
       apply();
     }
+    selectionMoving.active = false;
     done(ev, last.x !== p0.x || last.y !== p0.y);
   };
   window.addEventListener("pointermove", onMove);

@@ -5,7 +5,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
 import { SELECTION_SHADE } from "./selectionShade";
-import { sheetMiddle } from "../utils/textSheets";
+import { sheetMiddle, sheetOf } from "../utils/textSheets";
+import { pdfBounds } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -18,6 +19,7 @@ import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, tur
 import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { selectionMoving } from "../utils/dragSelection";
 import { TAU, follow } from "../../../theme/motion";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
@@ -163,8 +165,19 @@ export default function Selection2D() {
         // (the molecules in 3D whose centres it takes, with the drawing - and pictures, and a workflow's sets and steps, likewise)
         s.selectMolecules3d(molecules3dIn(s.molecules3d, kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
-        // (and texts' sheets, by their middles)
+        // (and texts' sheets, by their middles - and PDFs, by the middle of what they cover)
         s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), kind, points), add);
+        s.selectPdfs(
+          molecules3dIn(
+            s.pdfs.map((p) => {
+              const b = pdfBounds(p);
+              return { id: p.id, at: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } };
+            }),
+            kind,
+            points,
+          ),
+          add,
+        );
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -289,8 +302,15 @@ export default function Selection2D() {
     // (marks put by hand turned with it: from where they were as the turn began)
     const model0 = st.model;
     const marksAt = (angle: number) => marksAtOf(model0, st.sel.atoms, turnedBy(angle));
-    // (pictures carried round, and turned as far)
+    // (pictures carried round, and turned as far; texts' sheets and PDFs carried round by their middles, upright)
     const picturesAt = (angle: number) => turned(pics, about, angle).map((q, i) => ({ ...q, turn: (pics[i].turn ?? 0) + angle }));
+    const sheets = st.texts.flatMap((t) => {
+      if (!t.at || !st.selTexts.has(t.id)) return [];
+      const s = sheetOf(t.text, t.name);
+      return [{ id: t.id, x: t.at.x + s.w / 2, y: t.at.y - s.h / 2, w: s.w, h: s.h }];
+    });
+    const sheetsAt = (angle: number) => turned(sheets, about, angle).map((q, i) => ({ id: q.id, x: q.x - sheets[i].w / 2, y: q.y + sheets[i].h / 2 }));
+    const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
@@ -301,6 +321,7 @@ export default function Selection2D() {
     let last = p0;
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
+    selectionMoving.active = true;
     const apply = () => {
       frame = null;
       const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
@@ -308,7 +329,15 @@ export default function Selection2D() {
       const angle = free ? a : Math.round(a / step) * step;
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
-      const marks = pics.length || markAts ? { ...(pics.length ? { pictures: picturesAt(angle) } : {}), ...(markAts ? { markAts } : {}) } : undefined;
+      const marks =
+        pics.length || markAts || sheets.length || pdfs.length
+          ? {
+              ...(pics.length ? { pictures: picturesAt(angle) } : {}),
+              ...(markAts ? { markAts } : {}),
+              ...(sheets.length ? { texts: sheetsAt(angle) } : {}),
+              ...(pdfs.length ? { pdfs: turned(pdfs, about, angle) } : {}),
+            }
+          : undefined;
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);
       else store.getState().moveAtoms(turned(from, about, angle), gesture, marks);
     };
@@ -330,6 +359,7 @@ export default function Selection2D() {
       }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      selectionMoving.active = false;
       const s = store.getState();
       s.endPanHold(ev.pointerId);
       // (and its end is no click on nothing, which would let it go)

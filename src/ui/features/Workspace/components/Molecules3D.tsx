@@ -20,6 +20,7 @@ import { schemeAmong } from "../utils/copyPaste";
 import { setMembers } from "../workflow/entries";
 import CalcList3D from "./CalcList3D";
 import { isAsk, readGrid, resultKey, resultsOn, type Ask, type ListResult } from "../../../../lib/calc/results";
+import { SURFACE_ISO } from "../utils/surfaceMesh";
 import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "../../../../lib/calc/asks";
 import { titled } from "../../../../lib/calc/sources";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -693,7 +694,7 @@ const NONE: number[] = [];
 const SCRUB_ANGSTROM = 0.01;
 const SCRUB_DEGREES = 0.5;
 /** The value a surface is drawn at where its grid says none. */
-const DEFAULT_ISO = 0.05;
+const DEFAULT_ISO = SURFACE_ISO;
 
 /**
  * A row's motion or surface (`v`), as it can be shown: given in the row,

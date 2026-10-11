@@ -12,6 +12,7 @@ import type { Caption } from "../store/types";
 import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { arrowsBeside } from "./drawnArrows";
 import { heldShows, type Held } from "./held";
 import { HeldLight } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
@@ -177,7 +178,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
           const r = captionSet(o.text, o.x, o.y, opts.fontPx, labelSetOf(opts), o.width, o.align);
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
-      const placed = captionPlace({ x: q.x + off.x, y: q.y + off.y }, { w: halfW, h: halfH }, s.arrows, opts.fontPx, others);
+      const placed = captionPlace({ x: q.x + off.x, y: q.y + off.y }, { w: halfW, h: halfH }, arrowsBeside(s, opts.fontPx, labelSetOf(opts), c.id), opts.fontPx, others);
       s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
     };
     window.addEventListener("pointermove", onMove);
@@ -221,7 +222,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);

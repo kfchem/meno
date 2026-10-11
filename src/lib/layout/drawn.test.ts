@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
+import { readStereo, sameConfiguration, unsureStereo, type DrawnAtom, type DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
 import cages from "./testdata/cages.json";
@@ -163,5 +163,49 @@ describe("sameConfiguration", () => {
     expect(sameConfiguration(t, { neighbours: [2, 3, 1, 4], volume: 1 })).toBe(true);
     expect(sameConfiguration(t, { neighbours: [2, 3, 1, 4], volume: -1 })).toBe(false);
     expect(sameConfiguration(t, { neighbours: [1, 2, 3, 5], volume: 1 })).toBe(false);
+  });
+});
+
+describe("what a drawing says of its stereochemistry only by luck", () => {
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180), hs: 0 });
+  it("is a wedged centre whose other bonds lie in a line, not one whose bonds are spread", () => {
+    const centre = { x: 0, y: 0, hs: 1 };
+    const tee = [centre, at(-90), at(0), at(180)];
+    const bonds = [
+      { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" as const } },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+    ];
+    expect(unsureStereo(tee, bonds).atoms).toEqual([0]);
+    const spread = [centre, at(-90), at(30), at(150)];
+    expect(unsureStereo(spread, bonds).atoms).toEqual([]);
+  });
+
+  it("is a centre with all four bonds in one half of the page", () => {
+    const fan = [{ x: 0, y: 0, hs: 0 }, at(-20), at(30), at(80), at(130)];
+    const bonds = [
+      { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" as const } },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+      { a: 0, b: 4, order: 1 },
+    ];
+    expect(unsureStereo(fan, bonds).atoms).toEqual([0]);
+  });
+
+  it("is a double bond with a group almost in line with it, not one exactly in line or well off it", () => {
+    const pts = (deg: number) => [
+      { x: 0, y: 0, hs: 1 },
+      { x: 1, y: 0, hs: 1 },
+      { x: -0.5, y: 0.87, hs: 3 },
+      { x: 1 + Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180), hs: 3 },
+    ];
+    const bonds = [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1 },
+      { a: 1, b: 3, order: 1 },
+    ];
+    expect(unsureStereo(pts(5), bonds).bonds).toEqual([0]);
+    expect(unsureStereo(pts(0), bonds).bonds).toEqual([]);
+    expect(unsureStereo(pts(60), bonds).bonds).toEqual([]);
   });
 });

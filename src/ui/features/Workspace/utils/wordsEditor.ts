@@ -9,10 +9,16 @@
  * Where each place lies comes from how the words are set as they will be
  * kept (lib/chem/captions `captionPlaces`), given by the drawing each time
  * it sets them (`layout`).
+ *
+ * What is typed may be written as it is meant (`smart`; lib/text/smartWords):
+ * 60dc as 60 °C, -78 as −78, 1-2 h as 1–2 h - a step of its own to undo,
+ * the words as typed coming back, and that part then left as typed until it
+ * is written again. What is pasted is left as it is.
  */
 import { captionPlaceAt, type CaptionPlaces } from "../../../../lib/chem/captions";
-import { applyEdit, caretAt, isCaret, letterStep, lineAround, Lines, paragraphStep, selected, selFrom, selTo, wordAround, wordStep, type Edit, type Sel } from "../../../../lib/text/editing";
+import { applyEdit, caretAt, isCaret, letterStep, lineAround, Lines, mapThrough, paragraphStep, selected, selFrom, selTo, wordAround, wordStep, type Edit, type Sel } from "../../../../lib/text/editing";
 import type { Command, Unit } from "../../../../lib/text/keys";
+import { typedChanges, wordEnded, type Change } from "../../../../lib/text/smartWords";
 import type { Composing } from "../../TextEditor/editor";
 import type { FieldBox, FieldHost } from "../../TextEditor/typingField";
 
@@ -37,6 +43,22 @@ export type WordsLayout = {
 /** How long a run of typing is one step to undo, in ms, while it goes on. */
 const RUN_MS = 1000;
 
+/** A part of the words, `[from, to)`. */
+type Span = { from: number; to: number };
+/**
+ * The words as they were before a step: what was selected, and the parts
+ * left as typed, as those words had them; and, the step having written
+ * what was typed as it is meant, the parts it wrote.
+ */
+type Step = { text: string; sel: Sel; declined: Span[]; wrote?: Span[] };
+
+/** Where a part is after an edit: moved with what is before it - or, the edit in it, none, as it is written again. */
+function spanThrough(s: Span, e: Edit): Span | null {
+  if (e.from < s.to && e.to > s.from) return null;
+  if (s.from < e.from && e.from < s.to) return null;
+  return { from: mapThrough(s.from, e), to: mapThrough(s.to, e, false) };
+}
+
 export class WordsEditor implements FieldHost {
   lines: Lines;
   sel: Sel;
@@ -47,11 +69,17 @@ export class WordsEditor implements FieldHost {
   layout: WordsLayout | null = null;
   /** Told when anything drawn has changed. */
   onChange: () => void = () => {};
+  /** Whether what is typed is written as it is meant: not, unless said. */
+  smart: () => boolean = () => false;
   /** Where up and down keep the caret across, until it is moved across. */
   private goalX: number | null = null;
-  private undone: { text: string; sel: Sel }[] = [];
-  private redone: { text: string; sel: Sel }[] = [];
+  private undone: Step[] = [];
+  private redone: Step[] = [];
   private lastTyped: { at: number; kind: "insert" | "delete" } | null = null;
+  /** The parts written as they were meant and then undone: left as typed until they are written again. */
+  private declined: Span[] = [];
+  /** Where the last letters typed end - none once the caret is moved, or the words are pasted into or undone. */
+  private typedTo: number | null = null;
 
   constructor(text: string) {
     this.lines = new Lines(text);
@@ -65,44 +93,91 @@ export class WordsEditor implements FieldHost {
 
   private moved(sel: Sel, keepGoal = false): void {
     this.sel = sel;
+    this.typedTo = null;
     if (!keepGoal) this.goalX = null;
     this.stirred = performance.now();
     this.onChange();
   }
 
-  edit(e: Edit, sel?: Sel): void {
+  /** An edit - typed, unless said otherwise: then written as it is meant, if it is to be. */
+  edit(e: Edit, sel?: Sel, typed = true): void {
     // (one step to undo for a run of typing, or of deleting: each run its own)
     const kind = e.insert ? "insert" : "delete";
     const now = performance.now();
     const run = this.lastTyped && this.lastTyped.kind === kind && now - this.lastTyped.at < RUN_MS && !e.insert.includes("\n");
-    if (!run) this.undone.push({ text: this.text, sel: this.sel });
+    if (!run) this.undone.push(this.asNow());
     this.redone = [];
     this.lastTyped = { at: now, kind };
+    this.declined = this.declined.flatMap((s) => spanThrough(s, e) ?? []);
     this.lines = new Lines(applyEdit(this.text, e));
     this.moved(sel ?? caretAt(e.from + e.insert.length));
+    if (!typed || !e.insert) return;
+    this.typedTo = e.from + e.insert.length;
+    if (this.smart()) this.write(typedChanges(this.text, e.from, e.from + e.insert.length));
   }
 
-  /** The words as they were before the last run of typing; and again as they were after it. */
+  /** The words kept: the word last typed ended there - and written as it is meant, if it is to be. */
+  kept(): void {
+    if (this.typedTo == null || this.composing || !this.smart()) return;
+    this.write(wordEnded(this.text, this.typedTo));
+  }
+
+  /** What was typed written as it is meant - but for the parts left as typed: a step of its own, the words as typed undone to. */
+  private write(changes: Change[]): void {
+    const wrote = changes.filter((c) => !this.declined.some((d) => d.from === c.from && d.to === c.to));
+    if (!wrote.length) return;
+    this.undone.push({ ...this.asNow(), wrote: wrote.map(({ from, to }) => ({ from, to })) });
+    let text = this.text;
+    let { anchor, head } = this.sel;
+    let typedTo = this.typedTo;
+    // (from the last: each part where the words as typed have it)
+    for (const c of [...wrote].reverse()) {
+      text = applyEdit(text, c);
+      anchor = mapThrough(anchor, c);
+      head = mapThrough(head, c);
+      if (typedTo != null) typedTo = mapThrough(typedTo, c);
+      this.declined = this.declined.flatMap((s) => spanThrough(s, c) ?? []);
+    }
+    // (typing on, a run of its own)
+    this.lastTyped = null;
+    this.lines = new Lines(text);
+    this.moved({ anchor, head });
+    this.typedTo = typedTo;
+  }
+
+  /** The words as they are now, to come back to. */
+  private asNow(): Step {
+    return { text: this.text, sel: this.sel, declined: this.declined };
+  }
+
+  /**
+   * The words as they were before the last run of typing; and again as
+   * they were after it. What was typed and then written as it was meant
+   * comes back as typed, and those parts are left so.
+   */
   undo(): void {
     const was = this.undone.pop();
     if (!was) return;
-    this.redone.push({ text: this.text, sel: this.sel });
+    this.redone.push({ ...this.asNow(), wrote: was.wrote });
     this.restore(was);
+    if (was.wrote) this.declined = [...this.declined, ...was.wrote];
   }
   redo(): void {
     const was = this.redone.pop();
     if (!was) return;
-    this.undone.push({ text: this.text, sel: this.sel });
+    this.undone.push({ ...this.asNow(), declined: this.declined.filter((d) => !was.wrote?.includes(d)), wrote: was.wrote });
     this.restore(was);
   }
-  private restore(was: { text: string; sel: Sel }): void {
+  private restore(was: Step): void {
     this.lastTyped = null;
     this.lines = new Lines(was.text);
+    this.declined = was.declined;
     this.moved(was.sel);
   }
 
-  replaceSelection(insert: string): void {
-    this.edit({ from: selFrom(this.sel), to: selTo(this.sel), insert });
+  /** What is selected replaced - by what is typed, or, `pasted`, what is pasted, left as it is. */
+  replaceSelection(insert: string, pasted = false): void {
+    this.edit({ from: selFrom(this.sel), to: selTo(this.sel), insert }, undefined, !pasted);
   }
 
   selectedText(): string {
