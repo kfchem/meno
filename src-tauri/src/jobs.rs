@@ -30,7 +30,7 @@ use crate::pixienv;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions, TryLockError};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -42,6 +42,9 @@ pub const JOB_FLAG: &str = "--job";
 const SPEC: &str = "job.json";
 const RECORD: &str = "state.json";
 const LOG: &str = "log.txt";
+/// What the programs run after its own say (`JobSpec::then`): kept apart
+/// from its log, which is its program's output, read as such.
+const AFTER_LOG: &str = "after.txt";
 const STOP: &str = "stop";
 const RUNNER_LOCK: &str = "runner.lock";
 const WORK: &str = "work";
@@ -84,6 +87,19 @@ pub struct JobSpec {
     pub slots: u32,
     /// When it was asked for, in milliseconds since 1970: the order jobs start in.
     pub created: u64,
+    /// Programs installed beside its own, run after it in turn where it ended
+    /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
+    /// in its work folder, given what it was given, what they say kept apart.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub then: Vec<Then>,
+}
+
+/// A program a job runs after its own (`JobSpec::then`): by its name, its full path, and its arguments.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Then {
+    pub name: String,
+    pub program: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -246,13 +262,48 @@ pub fn run_job(dir: &Path) -> i32 {
     let started = Some(now_ms());
 
     // its program, in its work folder, what it says going into its log
-    let mut program = match spawn_program(dir, &spec) {
+    let input = spec.stdin.as_deref();
+    let mut program = match spawn_program(dir, &spec.program, &spec.args, &spec.env, input, LOG) {
         Ok(p) => p,
         Err(e) => {
             end(JobState::Failed, started, None, Some(format!("{} could not be started: {e}", spec.name)));
             return 1;
         }
     };
+    let (status, stopped) = wait_program(dir, &mut program);
+    let code = status.and_then(|s| s.code());
+    if stopped {
+        end(JobState::Stopped, started, code, None);
+    } else if !status.is_some_and(|s| s.success()) {
+        end(JobState::Failed, started, code, None);
+    } else {
+        // then those beside it, in turn: what they make is a help, not the
+        // job - one that fails or cannot start leaves it done, saying so
+        // apart from its log
+        for then in &spec.then {
+            let mut after = match spawn_program(dir, &then.program, &then.args, &spec.env, None, AFTER_LOG) {
+                Ok(p) => p,
+                Err(e) => {
+                    let _ = OpenOptions::new().create(true).append(true).open(dir.join(AFTER_LOG)).and_then(|mut f| writeln!(f, "{} could not be started: {e}", then.name));
+                    continue;
+                }
+            };
+            if wait_program(dir, &mut after).1 {
+                end(JobState::Stopped, started, code, None);
+                drop(lock);
+                return 0;
+            }
+        }
+        end(JobState::Done, started, code, None);
+    }
+    drop(lock);
+    0
+}
+
+/// A program run until it ends - asked to stop where the job is, then made
+/// to - and what it started that is still there stopped with it: how it
+/// ended, and whether it was stopped.
+fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::ExitStatus>, bool) {
     let mut stopping: Option<Instant> = None;
     let status = loop {
         match program.child.try_wait() {
@@ -269,18 +320,8 @@ pub fn run_job(dir: &Path) -> i32 {
         }
         std::thread::sleep(RUN_STEP);
     };
-    // (what it started that is still there goes with it)
     program.stop(true);
-    let code = status.and_then(|s| s.code());
-    if stopping.is_some() {
-        end(JobState::Stopped, started, code, None);
-    } else if status.is_some_and(|s| s.success()) {
-        end(JobState::Done, started, code, None);
-    } else {
-        end(JobState::Failed, started, code, None);
-    }
-    drop(lock);
-    0
+    (status, stopping.is_some())
 }
 
 /// Whether it is this job's turn - the first waiting, with fewer running
@@ -358,16 +399,19 @@ impl Drop for Program {
     }
 }
 
-fn spawn_program(dir: &Path, spec: &JobSpec) -> std::io::Result<Program> {
-    let log = OpenOptions::new().create(true).append(true).open(dir.join(LOG))?;
-    let input = match &spec.stdin {
+/// A program started in the job's work folder, given `env`, reading
+/// `stdin` (a file in that folder) or nothing, what it says going to the
+/// job's file `log`.
+fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<String, String>, stdin: Option<&str>, log: &str) -> std::io::Result<Program> {
+    let log = OpenOptions::new().create(true).append(true).open(dir.join(log))?;
+    let input = match stdin {
         None => Stdio::null(),
         Some(name) if inside_name(name) => Stdio::from(File::open(dir.join(WORK).join(name))?),
         Some(name) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a file in its folder: {name}"))),
     };
-    let mut cmd = Command::new(&spec.program);
-    cmd.args(&spec.args)
-        .envs(&spec.env)
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .envs(env)
         .current_dir(dir.join(WORK))
         .stdin(input)
         .stdout(log.try_clone()?)
@@ -451,6 +495,8 @@ pub struct Found {
     pub program: PathBuf,
     pub activation: Option<pixienv::Activation>,
     pub env: Vec<(String, String)>,
+    /// Programs installed beside it that a job may run after it, by name: where each would be (`Installed::beside`).
+    pub beside: Vec<(String, PathBuf)>,
 }
 
 /// The program `name` of plugin `id` (its folder `plugin_dir`), from the
@@ -501,7 +547,7 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
         let scripts = plugin_dir.canonicalize().map_err(|e| format!("{id}'s folder: {e}"))?;
         crate::validate_sidecar(&program, args, &root, &[scripts])?;
     }
-    Ok(Found { program, activation, env: Vec::new() })
+    Ok(Found { program, activation, env: Vec::new(), beside: Vec::new() })
 }
 
 // --- a program installed separately ------------------------------------------
@@ -544,6 +590,10 @@ pub struct Installed {
     pub label: String,
     /// How it says its version, and the least Meno takes (`version`).
     pub version: Option<VersionRule>,
+    /// Programs installed with it, in its folder, that a job may run after it
+    /// (`beside`): each by its name and its file on this system - ORCA's
+    /// orca_2mkl.
+    pub beside: Vec<(String, String)>,
 }
 
 /// How a program installed separately says its version (`installed[].version`):
@@ -773,9 +823,7 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
         .and_then(|f| f.get(system))
         .and_then(|f| f.as_str())
         .ok_or_else(|| format!("{name} is not made for this system"))?;
-    let single = Path::new(file).file_name().and_then(|n| n.to_str()) == Some(file);
-    let stem = Path::new(file).file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_ascii_lowercase();
-    if !single || !inside_name(file) || NEVER.contains(&stem.as_str()) || stem.starts_with("python") {
+    if !program_file_ok(file) {
         return Err(format!("not a program a job runs: {file}"));
     }
     let places = |v: Option<&serde_json::Value>| -> Result<Vec<String>, String> {
@@ -820,7 +868,49 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
             Some(VersionRule { args, after, least })
         }
     };
-    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version }))
+    let mut beside = Vec::new();
+    if let Some(given) = decl.get("beside") {
+        let given = given.as_object().filter(|b| b.len() <= 4).ok_or_else(|| format!("not programs beside {name}"))?;
+        for (k, v) in given {
+            let ok_name = !k.is_empty() && k.len() <= 40 && k.chars().all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c)) && k.chars().next().is_some_and(|c| c.is_ascii_alphanumeric());
+            if !ok_name || !v.is_object() {
+                return Err(format!("not a program beside {name}: {k}"));
+            }
+            // (one not made for this system: none here)
+            let Some(f) = v.get(system) else { continue };
+            match f.as_str().filter(|f| program_file_ok(f)) {
+                Some(f) => beside.push((k.clone(), f.to_string())),
+                None => return Err(format!("not a program a job runs: {f}")),
+            }
+        }
+    }
+    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version, beside }))
+}
+
+/// Whether `file` is a program's file a job may run: a name alone, in its
+/// folder, never a shell or an interpreter.
+fn program_file_ok(file: &str) -> bool {
+    let single = Path::new(file).file_name().and_then(|n| n.to_str()) == Some(file);
+    let stem = Path::new(file).file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_ascii_lowercase();
+    single && inside_name(file) && !NEVER.contains(&stem.as_str()) && !stem.starts_with("python")
+}
+
+/// The programs a job asked to run after its own (`JobAsk::then`), each one
+/// declared beside it and there: where each is. Why not, where one is not.
+pub fn then_of(found: &Found, label: &str, asked: &[ThenAsk]) -> Result<Vec<Then>, String> {
+    if asked.len() > 4 {
+        return Err("a job runs at most four programs after its own".into());
+    }
+    asked
+        .iter()
+        .map(|t| {
+            let (_, path) = found.beside.iter().find(|(n, _)| *n == t.program).ok_or_else(|| format!("{label} has no {} beside it to run", t.program))?;
+            if !runnable(path) {
+                return Err(format!("{} is not found beside {label}", t.program));
+            }
+            Ok(Then { name: t.program.clone(), program: path.to_string_lossy().into_owned(), args: t.args.clone() })
+        })
+        .collect()
 }
 
 
@@ -978,7 +1068,9 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
     }
     let program = PathBuf::from(chosen.path);
     let env = installed_env(&decl, &program, path_var.as_deref())?;
-    Ok(Some(Found { program, activation: None, env }))
+    let folder = program.parent().map(Path::to_path_buf).unwrap_or_default();
+    let beside = decl.beside.iter().map(|(n, f)| (n.clone(), folder.join(f))).collect();
+    Ok(Some(Found { program, activation: None, env, beside }))
 }
 
 // --- a job's folder ----------------------------------------------------------
@@ -1124,6 +1216,17 @@ pub struct JobAsk {
     /// Where the chemist located its program, where it is one installed separately.
     #[serde(default)]
     pub path: Option<String>,
+    /// Programs installed beside its own to run after it (`JobSpec::then`), by their names there.
+    #[serde(default)]
+    pub then: Vec<ThenAsk>,
+}
+
+/// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
+#[derive(Deserialize, Clone, Debug)]
+pub struct ThenAsk {
+    pub program: String,
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 /// A job made and its runner started: its id. It waits its turn.
@@ -1141,6 +1244,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         Some(found) => found,
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };
+    let then = then_of(&found, &payload.program, &payload.then)?;
 
     // what it is given: its environment's activation - or, installed
     // separately, its folders and variables - a network that refuses it
@@ -1170,6 +1274,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         env,
         slots: payload.slots.unwrap_or(1).clamp(1, 64),
         created: now_ms(),
+        then,
     };
     let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
     let started = std::env::current_exe().and_then(|exe| start_runner(&exe, &dir));
@@ -1323,6 +1428,7 @@ mod tests {
             env: BTreeMap::from([("MENO_JOB_SAYS".into(), "hello".into())]),
             slots,
             created: now_ms(),
+            then: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
     }
@@ -1373,6 +1479,84 @@ mod tests {
     const READS: &str = "cat";
     #[cfg(windows)]
     const READS: &str = "sort";
+
+    /// The system's shell, and the flag that gives it a script.
+    fn shell_program() -> (String, &'static str) {
+        #[cfg(unix)]
+        return ("/bin/sh".to_string(), "-c");
+        #[cfg(windows)]
+        return (std::env::var("ComSpec").unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".into()), "/C");
+    }
+
+    #[cfg(unix)]
+    const AFTER: &str = "echo made > after.txt; echo after it";
+    #[cfg(windows)]
+    const AFTER: &str = "echo made>after.txt&echo after it";
+
+    #[test]
+    fn runs_the_programs_beside_its_own_after_it_where_it_ended_well_what_they_say_kept_apart() {
+        let root = temp();
+        let (program, flag) = shell_program();
+        let then = |script: &str| Then { name: "after".into(), program: program.clone(), args: vec![flag.into(), script.into()] };
+        let with = |dir: &Path, then: Vec<Then>| {
+            let spec = JobSpec { then, ..read_spec(dir).unwrap() };
+            fs::write(dir.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+        };
+        let ok = shell(&root, ECHO, 1);
+        with(&ok, vec![then(AFTER)]);
+        assert_eq!(run_job(&ok), 0);
+        assert_eq!(current_record(&ok).unwrap().state, JobState::Done);
+        assert_eq!(read_work_file(&ok, "after.txt").unwrap().trim_end(), "made");
+        // (its log is its own program's output alone)
+        assert_eq!(read_log(&ok, 0, LOG_MOST).0.replace('\r', ""), "input\nhello\n");
+        assert_eq!(fs::read_to_string(ok.join(AFTER_LOG)).unwrap().trim_end(), "after it");
+
+        // one that fails, or cannot start, leaves the job done
+        let failing = shell(&root, ECHO, 1);
+        let missing = Then { name: "gone".into(), program: root.join("no-such-program").to_string_lossy().into_owned(), args: vec![] };
+        with(&failing, vec![then(FAIL), missing, then(AFTER)]);
+        run_job(&failing);
+        assert_eq!(current_record(&failing).unwrap().state, JobState::Done);
+        assert!(fs::read_to_string(failing.join(AFTER_LOG)).unwrap().contains("gone could not be started"));
+        assert!(read_work_file(&failing, "after.txt").is_ok());
+
+        // after its own failed: none
+        let bad = shell(&root, FAIL, 1);
+        with(&bad, vec![then(AFTER)]);
+        run_job(&bad);
+        assert_eq!(current_record(&bad).unwrap().state, JobState::Failed);
+        assert!(read_work_file(&bad, "after.txt").is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn runs_after_its_own_only_a_program_declared_beside_it_and_there() {
+        let root = temp();
+        let (program, _) = shell_program();
+        let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside };
+        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
+        let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
+        assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
+        assert!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap_err().contains("no orca_2aim beside it"));
+        let gone = found(vec![("orca_2mkl".into(), root.join("orca_2mkl"))]);
+        assert!(then_of(&gone, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("not found beside orca"));
+        assert!(then_of(&there, "orca", &vec![ask("orca_2mkl"); 5]).is_err());
+        assert_eq!(then_of(&there, "orca", &[]).unwrap(), vec![]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn reads_the_programs_installed_beside_one_for_this_system() {
+        let m = |beside: serde_json::Value| serde_json::json!({"installed": [{"name": "orca", "files": {"macos": "orca", "windows": "orca.exe"}, "beside": beside}]});
+        let orca = installed_named(&m(serde_json::json!({"orca_2mkl": {"macos": "orca_2mkl", "windows": "orca_2mkl.exe"}})), "orca", "windows").unwrap().unwrap();
+        assert_eq!(orca.beside, vec![("orca_2mkl".to_string(), "orca_2mkl.exe".to_string())]);
+        // (one not made for this system: none here)
+        assert_eq!(installed_named(&m(serde_json::json!({"orca_2mkl": {"windows": "orca_2mkl.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
+        // (never a path, a shell, or a name that is not one)
+        for bad in [serde_json::json!({"x": {"macos": "../x"}}), serde_json::json!({"x": {"macos": "sh"}}), serde_json::json!({"../x": {"macos": "x"}}), serde_json::json!(["x"]), serde_json::json!({"x": "x"})] {
+            assert!(installed_named(&m(bad.clone()), "orca", "macos").is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn gives_its_program_a_file_of_its_own_to_read() {
@@ -1644,7 +1828,7 @@ mod tests {
     #[test]
     fn finds_a_program_installed_separately_where_it_was_located_or_where_programs_are() {
         let base = temp();
-        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None };
+        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None, beside: vec![] };
         let none = Bases::default();
         let installed = program_file(&base.join("apps").join("orca_6"), "orca");
         let on_path = program_file(&base.join("bin"), "orca");
@@ -1670,7 +1854,7 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_found_only_where_it_can_be_run() {
         let base = temp();
-        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None };
+        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
         let p = base.join("g16");
         fs::create_dir_all(&base).unwrap();
         fs::write(&p, "").unwrap();
@@ -1738,7 +1922,7 @@ mod tests {
         let file = if cfg!(windows) { "blender.exe" } else { "blender" };
         let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
         let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
-        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None };
+        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![] };
         let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
         assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
         assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
@@ -1753,7 +1937,7 @@ mod tests {
         let base = temp();
         let app = base.join("Blender.app");
         let inside = program_file(&app.join("Contents").join("MacOS"), "Blender");
-        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None };
+        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
         assert_eq!(installed_where(&decl, app.to_str(), None, &Bases::default()), Some(inside));
         // an app that holds no such program
         let other = base.join("Other.app");
@@ -1813,6 +1997,7 @@ mod tests {
             places,
             label: "Blender".into(),
             version: Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }),
+            beside: vec![],
         };
         let bases = Bases { home: None, programs: Some(base.clone()) };
         let everywhere = decl(vec!["{programs}/Blender Foundation/Blender *".into()]);

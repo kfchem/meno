@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -10,7 +10,7 @@
     {"id": "orca-input", "name": "ORCA input", "extensions": [".inp"], "lines": ["!", "%", "*"], "grammar": {"file": "orca-input.grammar", "tones": {"Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword", "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"}}}
   ],
   "installed": [
-    {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"]}
+    {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"], "beside": {"orca_2mkl": {"macos": "orca_2mkl", "linux": "orca_2mkl", "windows": "orca_2mkl.exe"}}}
   ],
   "steps": [
     {
@@ -46,7 +46,8 @@
           {"value": "2-propanol", "label": "2-Propanol"}
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "min": 0, "step": 500}
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "min": 0, "step": 500},
+        {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     }
   ]

@@ -322,8 +322,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)
     const kinds = plugin.steps.find((s) => s.kind === step.kind)?.files ?? [];
-    const sourceOf = (id: number | undefined) => input.molecules.find((m) => m.id === id)?.calc?.source;
-    const given = await Promise.all(entries.map((e) => entryFiles(e, sourceOf(e.from), kinds, heldOutput)));
+    const sourcesOf = (id: number | undefined) => {
+      const calc = input.molecules.find((m) => m.id === id)?.calc;
+      return [calc?.source, calc?.wavefunction];
+    };
+    const given = await Promise.all(entries.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
     let prepared;
     try {
       const client = await pluginClient(plugin);
@@ -337,7 +340,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       for (const p of prepared) {
         const path = paths.get(p.program);
-        const ask = { plugin: plugin.id, program: p.program, args: p.args, files: p.files, ...(p.stdin ? { stdin: p.stdin } : {}), slots, cores, ...(path ? { path } : {}) };
+        const ask = {
+          plugin: plugin.id,
+          program: p.program,
+          args: p.args,
+          files: p.files,
+          ...(p.stdin ? { stdin: p.stdin } : {}),
+          ...(p.then ? { then: p.then } : {}),
+          slots,
+          cores,
+          ...(path ? { path } : {}),
+        };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
       }
     } catch (e) {
@@ -466,8 +479,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             }
             const made =
               kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source);
-            if (typeof made === "string") whys.push(made);
-            else worked.push(...(Array.isArray(made) ? made : [made]));
+            if (typeof made === "string") {
+              whys.push(made);
+              continue;
+            }
+            // (the wavefunction it wrote besides, where it did: kept with what was read, for a step that takes one)
+            const wrote = r.wavefunction && files[r.wavefunction.file];
+            const kept = wrote ? await rememberOutput(r.wavefunction!.name, wrote, r.wavefunction!.kind) : undefined;
+            const withIt = (w: Worked): Worked => (kept && w.calc ? { ...w, calc: { ...w.calc, wavefunction: kept } } : w);
+            worked.push(...(Array.isArray(made) ? made : [made]).map(withIt));
           }
           continue;
         }

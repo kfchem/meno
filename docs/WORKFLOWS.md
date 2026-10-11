@@ -726,7 +726,11 @@ Decided while building it, for the maintainer to confirm:
   files, its program and arguments, the entries it is for, and the files
   `collect` will want - and, where its program reads one of its files as
   its standard input, which (`stdin`; added with the real runs of
-  2026-10-09, for Gaussian); **`collect {step, entries, options, files, log,
+  2026-10-09, for Gaussian) - and the programs installed beside its own
+  run after it, in turn, where it ended well (`then`; added 2026-10-11,
+  for ORCA's orca_2mkl: what they print kept apart from the job's log,
+  which is its program's output; one that fails leaves the job done);
+  **`collect {step, entries, options, files, log,
   ended}`** gives an output for each entry in the readers' output form
   (lib/calc/output) - or, for a job that did not end done, why, in the
   program's words. Meno asks `collect` of a failed job too, so that the
@@ -939,8 +943,19 @@ Decided while building it, for the maintainer to confirm:
   folder), its scratch files where it runs. Why a run failed is read from
   its output.
 - **The options** are the method and basis set as text - as *Export*'s
-  are - the dispersion, the solvation and its solvent, more keywords, and
-  the memory; the cores come from Settings, *Calculations*, as xTB's do.
+  are - the dispersion, the solvation and its solvent, more keywords, the
+  memory, and whether to keep the wavefunction (on unless turned off); the
+  cores come from Settings, *Calculations*, as xTB's do.
+- **The wavefunction is kept** (2026-10-11) with each molecule a step
+  gives, as the output is - kept in the workspace's file, and given to a
+  later step that takes it (a step's `files`: Multiwfn's NCI). ORCA's: its
+  job then runs orca_2mkl, installed beside ORCA, as its manual has it -
+  `orca_2mkl input -molden`, writing `input.molden.input`, a Molden file.
+  Gaussian's: `Output=WFX` in the route, and the file's name on a line of
+  its own after the molecule ("read from the input stream, on a separate
+  line", gaussian.com, *Output*): a WFX file, at the last geometry, in
+  Gaussian's standard orientation, as the molecule read from its output
+  is. A job that wrote none gives its molecules without one.
 
 Not yet, and where it comes:
 

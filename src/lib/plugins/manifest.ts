@@ -132,8 +132,10 @@ export type System = (typeof SYSTEMS)[number];
  * name for any text, a version's, the newest found first; and how it says
  * its version, and the least Meno takes (`version`: run with `args`, options
  * alone, it prints a line beginning `after`, then the version) - the newest
- * copy new enough then taken. Meno's backend reads and checks the same
- * (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).
+ * copy new enough then taken; and the programs installed with it, in its
+ * folder, that a job may run after it (`beside`: each by its name, and its
+ * file on each system - ORCA's orca_2mkl). Meno's backend reads and checks
+ * the same (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).
  */
 export type InstalledDecl = {
   name: string;
@@ -143,6 +145,7 @@ export type InstalledDecl = {
   env: Record<string, string[]>;
   places: Partial<Record<System, string[]>>;
   version?: VersionRule;
+  beside?: Record<string, Partial<Record<System, string>>>;
 };
 
 /** How a program installed separately says its version, and the least Meno takes. */
@@ -345,8 +348,27 @@ function installedOf(v: unknown): InstalledDecl | null {
     else placesOk = false;
   }
   const version = d?.version === undefined ? undefined : versionRuleOf(d.version);
-  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one, a version it cannot be asked for - is none)
-  return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null ? { name, label, files, path, env, places, ...(version ? { version } : {}) } : null;
+  const beside = d?.beside === undefined ? undefined : besideOf(d.beside);
+  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one, a version it cannot be asked for, a program beside it that is not one - is none)
+  return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null && beside !== null
+    ? { name, label, files, path, env, places, ...(version ? { version } : {}), ...(beside ? { beside } : {}) }
+    : null;
+}
+
+/** The programs beside one installed separately, as a manifest gives them: a few, each by a program's name, its file's name on each system; null where they are not. */
+function besideOf(v: unknown): Record<string, Partial<Record<System, string>>> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).length > 4) return null;
+  const out: Record<string, Partial<Record<System, string>>> = {};
+  for (const [k, given] of Object.entries(v as Record<string, unknown>)) {
+    if (!PROGRAM.test(k) || !given || typeof given !== "object" || Array.isArray(given)) return null;
+    const files: Partial<Record<System, string>> = {};
+    for (const [sys, f] of Object.entries(given as Record<string, unknown>)) {
+      if (!SYSTEMS.includes(sys as System) || typeof f !== "string" || !FILE.test(f)) return null;
+      files[sys as System] = f;
+    }
+    out[k] = files;
+  }
+  return out;
 }
 
 /** How long a guide's words may be: a title, a step's text. */

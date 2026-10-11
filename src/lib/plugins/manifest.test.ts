@@ -185,6 +185,16 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "gaussian")?.installed[0]).toMatchObject({ name: "g16", path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] } });
   });
 
+  it("may say the programs installed beside one installed separately, that a job may run after it - as the backend reads them", () => {
+    const orca = (beside: unknown) =>
+      acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }], installed: [{ name: "orca", label: "ORCA", files: { macos: "orca" }, beside }] })?.installed;
+    expect(orca({ orca_2mkl: { macos: "orca_2mkl", windows: "orca_2mkl.exe" } })?.[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", windows: "orca_2mkl.exe" } });
+    expect(orca(undefined)?.[0]).not.toHaveProperty("beside");
+    for (const bad of [{ "../x": { macos: "x" } }, { x: { macos: "../x" } }, { x: { amiga: "x" } }, { x: "x" }, ["x"], { a: {}, b: {}, c: {}, d: {}, e: {} }]) expect(orca(bad)).toEqual([]);
+    // (ORCA's, as Meno carries it)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
+  });
+
   it("may say how a program installed separately says its version, and the least Meno takes - as the backend reads it", () => {
     const blender = (version: unknown) =>
       acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: ["blender"] }], installed: [{ name: "blender", label: "Blender", files: { macos: "Blender" }, version }] })?.installed;

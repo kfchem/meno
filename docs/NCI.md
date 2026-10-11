@@ -32,9 +32,10 @@ each with its surfaces. Two plugins fill it:
 - **The Multiwfn interface** - from a calculation's wavefunction: a
   Molden file, a Gaussian formatted checkpoint, a WFN or a WFX, the one
   the molecule was read from - opened (read by cclib or PySCF), or
-  written by another plugin's step. Its options: the grid (low, medium,
-  high: about 125 000, 512 000 or 1 728 000 points over the whole system),
-  the RDG the surface is drawn at (0.5), and the colour scale's ends
+  kept by another plugin's step (ORCA's and Gaussian's keep theirs:
+  WORKFLOWS.md, *The wavefunction is kept*). Its options: the grid (low,
+  medium, high: about 125 000, 512 000 or 1 728 000 points over the whole
+  system), the RDG the surface is drawn at (0.5), and the colour scale's ends
   (-0.035 to 0.02 a.u., as Multiwfn's own plotting script has them).
 
 The results come in as the molecules, each with a list, *Non-covalent
@@ -104,10 +105,6 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 
 ## Not yet
 
-- **A wavefunction written by a step**: ORCA's and Gaussian's steps do
-  not keep one yet (ORCA writes one with its own utilities, orca_2mkl or
-  orca_2aim, after its run; Gaussian with `Output=WFX`) - so Multiwfn's NCI
-  takes a molecule read from a wavefunction file opened, for now.
 - No reader of WFN or WFX files yet: those kinds are named for when one
   comes.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).

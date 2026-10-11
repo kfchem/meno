@@ -8,16 +8,19 @@ chemist located it (the manifest's `installed`). One JSON object per line
 each way, as every plugin's:
 
     {"id": 4, "op": "prepare", "step": "optimise", "entries": [...], "options": {...}, "cores": 4}
-    {"id": 4, "ok": true, "result": {"jobs": [{"entries": [0], "program": "orca", "args": ["input.inp"], "files": [...], "reads": []}]}}
+    {"id": 4, "ok": true, "result": {"jobs": [{"entries": [0], "program": "orca", "args": ["input.inp"], "files": [...],
+        "then": [{"program": "orca_2mkl", "args": ["input", "-molden"]}], "reads": ["input.molden.input"]}]}}
     {"id": 5, "op": "collect", "step": "optimise", "entries": [...], "options": {...}, "files": {...}, "log": "...", "ended": "done"}
-    {"id": 5, "ok": true, "result": {"read": [{"kind": "orca", "log": true, "name": "water.out"}]}}
+    {"id": 5, "ok": true, "result": {"read": [{"kind": "orca", "log": true, "name": "water.out",
+        "wavefunction": {"kind": "molden", "file": "input.molden.input", "name": "water.molden"}}]}}
 
 It fills three kinds of step - Optimise, Energy, Frequencies - and runs
 nothing itself: `prepare` writes each job's input and says the command
 Meno runs, apart from Meno, in the job's folder; `collect` reads nothing
 either, but says that what ORCA printed is ORCA's output, for Meno's
-readers to read as one opened is - or, where the job failed, why. One job
-for each entry.
+readers to read as one opened is - and, where the job kept it, that the
+wavefunction is kept with the molecule, for a step that takes one
+(Multiwfn's NCI) - or, where the job failed, why. One job for each entry.
 
 The input is written as ORCA's own manual has it (ORCA 6.1 Manual,
 faccts.de: "General Structure of the Input File", "Parallel and
@@ -33,7 +36,10 @@ else:
   element and x, y, z in angstroms - and "*" at their end.
 
 ORCA is run as the manual says: by its full path, given the input file,
-printing its output.
+printing its output. To keep the wavefunction, the job then runs
+orca_2mkl, installed beside ORCA, as the manual's "orca_2mkl" has it:
+`orca_2mkl BaseName -molden`, writing ORCA's orbitals (BaseName.gbw) in
+Molden's format - which it names BaseName.molden.input.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -43,9 +49,14 @@ import math
 import re
 import sys
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 PROGRAM = "orca"
 INPUT = "input.inp"
+# the wavefunction a job keeps: orca_2mkl, beside ORCA, writing its orbitals as a Molden file
+BASE = "input"
+TO_MOLDEN = {"program": "orca_2mkl", "args": [BASE, "-molden"]}
+WAVEFUNCTION = f"{BASE}.molden.input"
+WAVEFUNCTION_KIND = "molden"
 # what ORCA's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "orca"
 
@@ -136,9 +147,17 @@ def orca_input(step, entry, options, cores):
     return "\n".join(lines) + "\n"
 
 
+def keeps_wavefunction(options):
+    keep = options.get("wavefunction", True)
+    if not isinstance(keep, bool):
+        raise Refused("Whether to keep the wavefunction is neither on nor off")
+    return keep
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
+    keep = keeps_wavefunction(options)
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
@@ -146,7 +165,8 @@ def op_prepare(m):
             "program": PROGRAM,
             "args": [INPUT],
             "files": [{"name": INPUT, "text": orca_input(step, entry, options, m.get("cores"))}],
-            "reads": [],
+            **({"then": [TO_MOLDEN]} if keep else {}),
+            "reads": [WAVEFUNCTION] if keep else [],
         })
     if not jobs:
         raise Refused("nothing came in")
@@ -175,7 +195,14 @@ def op_collect(m):
         raise Refused(f"this plugin does no {step!r}")
     if m.get("ended") != "done":
         return {"why": why_of(m.get("log") or "")}
-    return {"read": [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []]}
+    # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
+    wrote = WAVEFUNCTION in (m.get("files") or {})
+    return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
+
+
+def wavefunction_of(entry):
+    """The wavefunction an entry's job wrote, as Meno keeps it: its kind, its file, and the name it goes by, after the entry."""
+    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".out")] + ".molden"}
 
 
 OPS = {"prepare": op_prepare, "collect": op_collect}

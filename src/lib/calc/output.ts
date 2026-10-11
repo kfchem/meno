@@ -61,6 +61,12 @@ export type CalcInfo = {
   results?: Result[];
   /** The output it was read from: its name, kind and SHA-256, and where it was - what a promise is asked for again from (./asks). */
   source?: CalcSource;
+  /**
+   * The wavefunction the calculation wrote besides, kept with it - a Molden
+   * file, a WFX - its name, kind and SHA-256: given to a step that takes
+   * one (a step's `files`: Multiwfn's NCI), as the output is.
+   */
+  wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */
   unread?: { from: string; why: string }[];
 };
@@ -131,7 +137,7 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
         return typeof v?.from === "string" && typeof v.why === "string" ? [{ from: v.from, why: v.why.slice(0, 500) }] : [];
       })
     : [];
-  return calcOf(
+  const calc = calcOf(
     {
       program: text(c.program),
       version: text(c.version),
@@ -148,6 +154,11 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
     sourceOf(c.source),
     unread,
   );
+  // (its wavefunction, kept by Meno: never found where it was, so no place)
+  const wavefunction = sourceOf(c.wavefunction);
+  if (!wavefunction) return calc;
+  const { path: _, ...kept } = wavefunction;
+  return { ...calc, wavefunction: kept };
 }
 
 /**
