@@ -494,8 +494,12 @@ All hover-based, as above.
      drawn on the left (the maintainer, 2026-10-11): HO, ho and oh are all
      OH; AcO, aco and OAc all OAc; NC and nc CN. What reads as something
      as it is written is that, not turned round: hcl is HCl, as HCl typed
-     is. An element with its H, typed H first, comes before an element the
-     same letters spell: ho is OH; holmium is typed Ho.
+     is; and only what is written in words is turned round: MES stays MES.
+     Of letters typed small, a heteroatom with its H or with a group, as
+     it is drawn on the left, comes before any other reading of them (the
+     maintainer, 2026-10-12): ho is HO, kept OH, not holmium; mes is MeS,
+     kept SMe, not mesityl - Mes typed so is mesityl. A charge typed last
+     stays last: ho- and HO- are OH-, h3n+ NH3+.
   4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
      iPr stays.
   5. What reads as nothing stays exactly as typed - no capital made.

@@ -16,9 +16,12 @@
  *    CO2H, NH2, NHFmoc. So what is kept is the same however it was typed -
  *    small, as it is written or as it is drawn on the left (the maintainer,
  *    2026-10-11): HO, ho and oh are OH; AcO, aco and OAc OAc. What reads
- *    as something as it is written is that, not turned round (hcl is HCl);
- *    an element with its H, typed H first, comes before an element the
- *    same letters spell (ho is OH; holmium is typed Ho).
+ *    as something as it is written is that, not turned round (hcl is HCl),
+ *    and only what is written in words is (MES is no SEM). Of letters typed
+ *    small, a heteroatom with its H or a group, as drawn on the left, comes
+ *    before any other reading (the maintainer, 2026-10-12): ho is HO, kept
+ *    OH, not holmium; mes MeS, kept SMe, not mesityl (Mes, typed so). A
+ *    charge typed last stays last: ho- is OH-.
  * 4. A prefix set in italics gets its hyphen: tBu is t-Bu, CO2tBu CO2t-Bu.
  * 5. What reads as nothing stays as typed.
  *
@@ -26,7 +29,7 @@
  * letters, where they were typed, so that the caret stays where it is;
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
-import { labelUnitNames, reversedLabel } from "./abbreviations";
+import { labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { elements } from "../../utils/atomUtils";
 
 /**
@@ -44,22 +47,20 @@ const HEAVY = new Set(elements.filter((e) => e.number >= AFTER_URANIUM).map((e) 
 
 type Token = { text: string };
 
-let tokens: { from: readonly string[]; words: Token[] } | null = null;
+let tokens: { from: readonly string[]; words: Token[]; names: Set<string> } | null = null;
 /** What a label is read into: element symbols, and the groups' names (the user's own among them, as they are now) - each as it is written. */
-function vocabulary(): Token[] {
+function vocabulary(): { words: Token[]; names: Set<string> } {
   const units = labelUnitNames();
   if (tokens?.from !== units) {
-    tokens = {
-      from: units,
-      words: [
-        ...elements.map((e) => ({ text: e.symbol })),
-        ...units.map((text) => ({ text })),
-        // (an Rgroup's R)
-        { text: "R" },
-      ],
-    };
+    const words = [
+      ...elements.map((e) => ({ text: e.symbol })),
+      ...units.map((text) => ({ text })),
+      // (an Rgroup's R)
+      { text: "R" },
+    ];
+    tokens = { from: units, words, names: new Set(words.map((w) => w.text)) };
   }
-  return tokens.words;
+  return tokens;
 }
 
 const small = (c: string) => c >= "a" && c <= "z";
@@ -75,7 +76,7 @@ type Writing = { text: string; cost: number; words: number; loose: number };
 function writings(typed: string, most = 400): Writing[] {
   const at: Map<string, Omit<Writing, "text">>[] = [new Map([["", { cost: 0, words: 0, loose: 0 }]])];
   for (let i = 1; i <= typed.length; i++) at.push(new Map());
-  const words = vocabulary();
+  const { words } = vocabulary();
   const better = (a: Omit<Writing, "text">, b: Omit<Writing, "text">) => a.cost - b.cost || a.loose - b.loose || a.words - b.words;
   for (let i = 0; i < typed.length; i++) {
     const here = at[i];
@@ -110,12 +111,18 @@ function writings(typed: string, most = 400): Writing[] {
   return [...at[typed.length]].map(([text, w]) => ({ text, ...w })).sort((a, b) => better(a, b) || (a.text < b.text ? -1 : 1));
 }
 
+/** A charge typed at a label's end: N+, O-, O−. */
+const CHARGE = /[+\u2212-]+$/;
+
 /**
  * A label typed as it is drawn on a bond's left, or with HN before a group,
  * as it reads from the bond - those that read as part of a structure, from
  * letters each in a word (`whole` false).
  */
 function forwards(label: string): string[] {
+  // (a charge typed last stays last: HO- is OH-, H3N+ NH3+)
+  const sign = CHARGE.exec(label);
+  if (sign && sign.index > 0) return forwards(label.slice(0, sign.index)).map((f) => f + sign[0]);
   const out: string[] = [];
   const back = reversedLabel(label);
   if (back !== label) out.push(back);
@@ -123,6 +130,37 @@ function forwards(label: string): string[] {
   const hn = /^H(\d*)([A-Z][a-z]?)(?=[A-Z(]|$)/.exec(label);
   if (hn && hn[2] !== "H") out.push(`${hn[2]}H${hn[1]}${label.slice(hn[0].length)}`);
   return out;
+}
+
+/** The atoms a group hangs from as a label reads from its bond: OAc, SMe, NHBoc. */
+const HETEROATOM = /^(N|O|P|S|Se)$/;
+
+/**
+ * Whether a label kept is a heteroatom with its H, or with one group behind
+ * it - OH, NH2, SMe, OAc, NHBoc - its charge, if it has one, aside.
+ */
+function onHeteroatom(kept: string, reads: Reads): boolean {
+  const [first, ...rest] = labelUnits(kept.replace(CHARGE, ""));
+  if (!first || !HETEROATOM.test(first)) return false;
+  const after = rest[0] && /^H\d*$/.test(rest[0]) ? rest.slice(1) : rest;
+  if (after.length !== 1) return after.length === 0 && rest.length > 0;
+  const group = reads(after[0].replace(/\d+$/, ""));
+  return !!group && !group.whole && !group.element;
+}
+
+/**
+ * Whether every unit of a writing is a word - an element, a group, R - with
+ * its count, or no letter at all: what may be read the other way round, as
+ * drawn on a bond's left (MES is no MeS, nor SEM).
+ */
+function inWords(text: string, reads: Reads): boolean {
+  const { names } = vocabulary();
+  return labelUnits(text).every((u) => {
+    const held = /^\((.*)\)\d*$/.exec(u);
+    if (held) return inWords(held[1], reads);
+    const word = u.replace(/\d+$/, "");
+    return !/[A-Za-z]/.test(word) || names.has(u) || names.has(word) || !!reads(u) || !!reads(word);
+  });
 }
 
 /** Whether a reading of what was typed may stand: no element after uranium read from letters typed small. */
@@ -139,8 +177,9 @@ function before(a: readonly number[], b: readonly number[]): boolean {
 /**
  * The reading chosen for what was typed: the writing shown, and the label it
  * is kept as. Part of a structure before a whole molecule - a label stands
- * for part of one - then an element with its H typed H first (ho is HO, OH
- * - not holmium), then the fewest letters made capitals.
+ * for part of one - then a heteroatom with its H or a group, as drawn on a
+ * bond's left (ho is HO, OH - not holmium; mes MeS, SMe - not mesityl),
+ * then the fewest letters made capitals.
  */
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
@@ -149,9 +188,9 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   let best: { shown: string; kept: string; rank: number[] } | null = null;
   const consider = (shown: string, kept: string, r: Reading, w: Writing) => {
     if (!r || !allowed(typed, kept, r)) return;
-    // (an element with its H, typed H first: HO, H2N)
-    const hFirst = kept !== shown && !!r.element && shown.startsWith("H");
-    const rank = [r.whole ? 1 : 0, hFirst ? 0 : 1, w.cost, w.loose, w.words];
+    // (typed as drawn on a bond's left, a heteroatom with its H or a group: HO, MeS)
+    const drawn = kept !== shown && onHeteroatom(kept, reads);
+    const rank = [r.whole ? 1 : 0, drawn ? 0 : 1, w.cost, w.loose, w.words];
     if (!best || before(rank, best.rank)) best = { shown, kept, rank };
   };
   let tried = 0;
@@ -164,7 +203,7 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
     }
     // (as drawn on a bond's left - HO, AcO as typed, or aco - only what reads
     // as nothing as it is written, from letters each in a word: hcl is HCl)
-    if (!r && w.loose === 0)
+    if (!r && w.loose === 0 && inWords(w.text, reads))
       for (const f of forwards(w.text)) {
         // (a group, drawn the other way round: never a whole molecule)
         const back = reads(f);

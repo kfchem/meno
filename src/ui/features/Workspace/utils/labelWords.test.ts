@@ -99,6 +99,7 @@ describe("a label typed in place", () => {
       ["OBn", "BnO", "OBn", "obn", "BnO", "bno"],
       ["NHAc", "AcHN", "NHAc", "nhac", "AcHN", "achn", "HNAc", "hnac"],
       ["CO2Me", "MeO2C", "CO2Me", "co2me", "MeO2C", "meo2c"],
+      ["SMe", "MeS", "SMe", "sme", "MeS", "mes"],
     ]) {
       // (its atom right of a carbon, the bond leaving to the left; then left of it)
       for (const side of [1, -1]) {
@@ -135,5 +136,10 @@ describe("a label typed in place", () => {
     expect(s().model.atoms[0].el).toBe("HO");
     doc.undo();
     expect(s().model.atoms[0]).toMatchObject({ el: "O", typed: "HO" });
+    // (ho- typed small: hydroxide, its charge kept - not holmium)
+    s().beginLabelEdit(id, "");
+    s().setLabelEditValue(keptLabel("ho-", labelReading));
+    s().commitLabelEdit("ho-");
+    expect(s().model.atoms[0]).toMatchObject({ el: "O", charge: -1, typed: "ho-" });
   });
 });

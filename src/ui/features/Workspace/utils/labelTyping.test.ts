@@ -106,10 +106,34 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     for (const typed of ["Ot-Bu", "t-BuO"]) expect(kept(typed), typed).toBe("Ot-Bu");
   });
 
-  it("reads ho as OH - an element with its H, typed H first - and holmium as its symbol is written", () => {
+  it("reads letters typed small as a heteroatom with its H or a group, as drawn on a bond's left, before any other reading (the maintainer, 2026-10-12)", () => {
+    // (ho: the hydroxy group, not holmium - which is typed Ho)
     expect(live("ho")).toBe("HO");
     expect(kept("ho")).toBe("OH");
     expect(kept("Ho")).toBe("Ho");
+    // (mes: MeS, the methylthio group - not mesityl, which is typed Mes)
+    expect(live("mes")).toBe("MeS");
+    expect(kept("mes")).toBe("SMe");
+    for (const typed of ["MeS", "SMe", "sme"]) expect(kept(typed), typed).toBe("SMe");
+    expect(kept("Mes")).toBe("Mes");
+    // (typed in capitals, M and E are no word: nothing to read, nor to turn round - MES is no SEM)
+    expect(live("MES")).toBe("MES");
+    expect(kept("MES")).toBe("MES");
+    // (what the letters spell drawn the other way round on no heteroatom, or of two elements, does not come first)
+    for (const [typed, label] of [["fmoc", "Fmoc"], ["alloc", "Alloc"], ["troc", "Troc"], ["sn", "Sn"], ["sb", "Sb"], ["co", "Co"]])
+      expect(kept(typed), typed).toBe(label);
+  });
+
+  it("keeps a charge typed last where it was, turned round or not", () => {
+    for (const typed of ["ho-", "HO-", "oh-", "OH-"]) {
+      expect(kept(typed), typed).toBe("OH-");
+      expect(live(typed).toLowerCase(), typed).toBe(typed.toLowerCase());
+    }
+    expect(live("ho-")).toBe("HO-");
+    for (const typed of ["h3n+", "H3N+", "nh3+", "NH3+"]) expect(kept(typed), typed).toBe("NH3+");
+    for (const typed of ["hs-", "HS-", "sh-"]) expect(kept(typed), typed).toBe("SH-");
+    // (holmium, typed as its symbol is written)
+    expect(kept("Ho-")).toBe("Ho-");
   });
 
   it("leaves what reads as it is written as it is: CO, Co, NH and every element's symbol", () => {
