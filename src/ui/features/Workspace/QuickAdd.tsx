@@ -8,7 +8,7 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
 
 /** What opens below Quick Add's row: nothing, the calculations, or the field a SMILES is typed in. */
 type QuickPanel = "none" | "calculations" | "smiles";
@@ -24,7 +24,8 @@ const SMILES_H = 32 + 9;
 /**
  * The row's icons, in order: what draws a structure - a bond, a chain, a
  * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
- * - and an electron-pushing arrow, begun at the first atom or bond pressed.
+ * - and an electron-pushing arrow, begun at the first atom or bond pressed;
+ * then a slide of what is seen (docs/PRESENTING.md).
  */
 const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactNode }[] = [
   {
@@ -76,6 +77,17 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles"; name: string; icon: ReactN
       <>
         <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
         <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+      </>
+    ),
+  },
+  {
+    id: "slide",
+    name: "Slide",
+    // (a frame, its number at its corner, as the page shows a slide)
+    icon: (
+      <>
+        <rect x="3.5" y="5.5" width="14" height="10" rx="1" />
+        <circle cx="3.5" cy="5.5" r="2.4" fill="currentColor" />
       </>
     ),
   },

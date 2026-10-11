@@ -9,6 +9,7 @@ import {
   ClipboardIcon,
   CubeIcon,
   DocumentDuplicateIcon,
+  EyeIcon,
   ForwardIcon,
   PencilIcon,
   PhotoIcon,
@@ -55,6 +56,16 @@ export const MENU_ICONS = {
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
   colour: hero(SwatchIcon),
+  // (a slide's: its talk given from it, earlier or later in it, the page about it shown)
+  present: own(
+    <>
+      <rect x="2.5" y="4" width="15" height="11" rx="1.5" />
+      <path d="M8.5 7.5v5l4.2-2.5z" fill="currentColor" />
+    </>,
+  ),
+  earlier: hero(ChevronLeftIcon),
+  later: hero(ChevronRightIcon),
+  around: hero(EyeIcon),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>

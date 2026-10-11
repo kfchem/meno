@@ -176,6 +176,18 @@ export type PictureItem = {
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
 export type PictureFrom = { sha256: string; page: number; box: [number, number, number, number] };
 
+/**
+ * A slide (docs/PRESENTING.md): a frame on the page round what a talk shows
+ * at one point of it - where its middle is, and how wide and tall it is, in
+ * the page's units. What lies in it is the page's own; the slide says only
+ * what is shown. The slides' order is the talk's. `around`: while it is
+ * shown, the page about it is seen too, not veiled.
+ */
+export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
+
+/** A talk being given from the slides: the slide shown, by its place in their order. */
+export type Presenting = { at: number };
+
 /** A box drawn on a PDF's page, to be taken out as a picture: the PDF, the page, and the box, in points from its top left. */
 export type PdfBox = { id: number; page: number; box: [number, number, number, number] };
 
@@ -451,6 +463,8 @@ export type Drawn = Model & {
   pdfs?: PdfItem[];
   /** Texts' sheets carried: each text whole, where its sheet lies. */
   sheets?: WorkspaceText[];
+  /** Slides carried, in their order (docs/PRESENTING.md). */
+  slides?: Slide[];
 };
 
 export type EditorState = {
@@ -768,6 +782,27 @@ export type EditorState = {
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;
+  /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
+  slides: Slide[];
+  selSlides: Set<number>;
+  hoveredSlide: number | null;
+  setHoveredSlide: (id: number | null) => void;
+  selectSlides: (ids: Iterable<number>, add?: boolean) => void;
+  toggleSlideSel: (id: number) => void;
+  /** A slide put on the page, last in the talk's order; its id. */
+  addSlide: (slide: Omit<Slide, "id">) => number | null;
+  /** A slide moved, made larger or smaller, given other proportions, or shown with the page about it. */
+  updateSlide: (id: number, patch: Partial<Pick<Slide, "x" | "y" | "w" | "h">> & { around?: boolean }, gesture?: string) => void;
+  /** A slide put at `to` in the talk's order (from 0), the others moving up or down one. */
+  orderSlide: (id: number, to: number) => void;
+  removeSlide: (id: number) => void;
+  /** What is on a slide selected, the slide with it: all of it whose middle lies in it, as a box selects. */
+  selectOnSlide: (id: number) => void;
+  /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
+  presenting: Presenting | null;
+  present: (from: number) => void;
+  presentAt: (at: number) => void;
+  endPresenting: () => void;
   setHoveredCaption: (id: number | null) => void;
   /** Words on the page selected, each as one thing (a long press on them): deleted, copied and moved with the rest of the selection. */
   selCaptions: Set<number>;
