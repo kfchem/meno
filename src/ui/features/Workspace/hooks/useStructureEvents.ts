@@ -8,7 +8,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { takeOpening, useEditorStore } from "../store";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { clickClock, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
+import { clickClock, clickEditHeldOff, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { schemeOf, type ImportedScheme } from "../document";
@@ -398,7 +398,7 @@ export function useStructureEvents(
       const st = store.getState();
       const now =
         typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (st.extend.active || st.moveDrag.active) return;
+      if (clickEditHeldOff(st)) return;
       if (st.suppressDblClickUntil && now < st.suppressDblClickUntil) return;
       const p = clientToWorld(e.clientX, e.clientY);
       if (!p) return;

@@ -37,6 +37,16 @@ export function clickStillEdits(since: number): boolean {
   return !doubleClickedSince(since) && pressed < since;
 }
 
+/**
+ * Whether a click's label edit, its time come, is held off by what is
+ * going on: a bond or a chain being drawn, an atom moved, or a label being
+ * written already - typed over another atom since the click, which the
+ * click's edit would take the place of, the letters typed lost.
+ */
+export function clickEditHeldOff(st: { extend: { active: boolean }; moveDrag: { active: boolean }; labelEdit: { active: boolean } }): boolean {
+  return st.extend.active || st.moveDrag.active || st.labelEdit.active;
+}
+
 /** Now, as `doubleClickedSince` takes it. */
 export function clickClock(): number {
   return now();

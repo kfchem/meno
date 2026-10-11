@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickClock, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnEmpty } from "./clickCount";
+import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnEmpty } from "./clickCount";
 
 describe("clickCount", () => {
   it("tells a double-click's second click that came after a moment", () => {
@@ -32,6 +32,16 @@ describe("a click on an atom, waiting to edit its label", () => {
     const since = clickClock();
     noteClick(2);
     expect(clickStillEdits(since)).toBe(false);
+  });
+});
+
+describe("a click's label edit, its time come", () => {
+  const idle = { extend: { active: false }, moveDrag: { active: false }, labelEdit: { active: false } };
+  it("is held off by a label typed over another atom since, as by a bond drawn or an atom moved", () => {
+    expect(clickEditHeldOff(idle)).toBe(false);
+    expect(clickEditHeldOff({ ...idle, labelEdit: { active: true } })).toBe(true);
+    expect(clickEditHeldOff({ ...idle, extend: { active: true } })).toBe(true);
+    expect(clickEditHeldOff({ ...idle, moveDrag: { active: true } })).toBe(true);
   });
 });
 
