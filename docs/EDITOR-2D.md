@@ -716,6 +716,37 @@ All hover-based, as above.
   a pause - one undo step. An arrow sets its own line and head, as above.
   They come from an RXN file too, and are saved - as an RXN file - copied
   and in an exported picture: docs/CTFILE.md, "Reaction schemes".)
+- **Arrows** (the maintainer, 2026-10-12: one arrow, a reaction's and any
+  other - a presentation's shapes draw it too): the reaction arrow, with
+  what else it can be (`lib/chem/reactionArrow` `ArrowForm`, `arrowPieces`).
+  - **Kinds**, ticked in its menu: a reaction's; an equilibrium's - two
+    lines, a half head on the outer side of each, pointing either way, or
+    full heads; a retrosynthetic arrow - two lines and an open head across
+    them; and a reaction that does not go, crossed out at its middle.
+  - **Heads**, a reaction's and a crossed-out one's: at its point, or at
+    both ends (a resonance arrow). A plain line with no head is a shape
+    (docs/PRESENTING.md, *Shapes*).
+  - **Dashed**, any kind; **thin, regular or thick** - six tenths and
+    twice the regular, as a shape's lines are - its heads growing with a
+    thick line; and **a colour**, from the colour card its menu opens, as
+    an electron-pushing arrow's.
+  - **Corners**, any kind (the maintainer, 2026-10-12: corners anywhere,
+    not curves): the arrow under the pointer shows a handle at each corner
+    and a smaller one in the middle of each stretch. One dragged moves its
+    corner, or makes one there; a corner let go in line with what is
+    either side of it is taken away; *Straighten* in its menu takes them
+    all away. A corner is kept as a share along the arrow and a distance
+    across it, so that it goes with the arrow as it is moved, drawn out by
+    an end or grown by its words. Its words go over its longest stretch.
+  - **Drawn from point to point**: pressed on Quick Add's arrow and dragged,
+    from where Quick Add was opened to where the pointer is let go - Shift
+    to steps of 15 degrees - as one step; a click puts one as before.
+  - **Saved** with all of it in the .meno and in Meno's own copies; an RXN
+    file holds no arrow's kind, and writes a plain reaction whatever it is
+    - only for an arrow with a structure drawn near its tail or its point:
+    an arrow alone shows no reaction. Pictures - SVG, EMF, those copied -
+    fill each line or dash, head and cross as a shape of its own, in the
+    arrow's colour.
 - **Text** (the maintainer, 2026-10-08: reagents' labels): words on the
   page - a reaction's reagents and conditions, or anything else
   (`lib/chem/captions`, `Captions2D`, `CaptionTyping2D`).
