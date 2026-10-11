@@ -124,8 +124,9 @@ words, a width they break into lines at, and how their lines lie.
   ranges, so that copying, smart words and searching are as they were.
 - **Lists**: a line starting "• " is a list's item, its lines after the
   first hanging under its words; "- " typed at a line's start becomes "• ",
-  Enter starts the next item, Enter on an empty one ends the list, Tab and
-  Shift+Tab a level down or up; "1. " starts a numbered list.
+  Shift+Enter starts the next item (Enter keeps the words, as it does),
+  Shift+Enter on an empty one ends the list, Tab and Shift+Tab a level down
+  or up; "1. " starts a numbered list.
 - **A box given a width keeps its top** as it grows, rather than growing up
   and down; words over a reaction's arrow stay as they are.
 - **Colours from the palette** (Settings, *General*, *Colours*), chosen in
