@@ -807,8 +807,8 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 `utils/drawnLink`), so that hover is shared and a changed drawing is seen.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
-coordinates gave none - and it has its hydrogens, without which they are
-not found (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
+coordinates gave none - where it has its hydrogens, which the method
+works from (docs/WORKSPACE.md, *Hydrogens and bond orders*) - for Meno's
 engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its

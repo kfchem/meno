@@ -934,13 +934,14 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** Tried with RDKit 2026.03: a ligand
-  without its hydrogens (biotin, from entry 1STP) has no orders found, and
-  with them its orders are exact; benzoic acid without them has orders
-  found that are wrong. So a molecule, or a ligand, without hydrogens is
-  not sought at all, and says its orders are unknown; nor is one of more
-  than 400 atoms. Such a molecule's orders can be estimated from its
-  distances, asked for (below).
+- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
+  a molecule's full set of atoms, hydrogens included (tried with RDKit
+  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
+  orders; without them, it finds none, and given benzoic acid without
+  them, it does not find benzoic acid's. So Meno does not seek the orders
+  of a molecule, or a ligand, without hydrogens, and says they are
+  unknown; nor of one of more than 400 atoms. Such a molecule's orders
+  can be estimated from its distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without
