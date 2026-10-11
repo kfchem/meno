@@ -6,7 +6,7 @@
  * All lengths are taken against the layout's own typical bond (the median),
  * so the scale it was drawn at does not matter.
  */
-import { drawnVolume } from "./geometry";
+import { drawnVolume, insidePolygon } from "./geometry";
 import { atomDepth, boxesDepth, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND } from "./perceive";
 import { smallestRings, type Edge } from "./rings";
@@ -704,12 +704,47 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       }
     });
   }
+  // (the ring systems with a bridge in them: two rings sharing three atoms
+  // or more anywhere among rings fused to each other)
+  const bridgedAt = new Set<number>();
+  {
+    const system = rings.map((_, i) => i);
+    const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
+    const bridged = new Set<number>();
+    rings.forEach((r, i) =>
+      rings.forEach((q, j) => {
+        if (j <= i) return;
+        const shared = q.filter((v) => r.includes(v)).length;
+        if (shared >= 2) system[root(j)] = root(i);
+        if (shared >= 3) bridged.add(i);
+      }),
+    );
+    const bridgedSystems = new Set([...bridged].map(root));
+    rings.forEach((r, i) => {
+      if (bridgedSystems.has(root(i))) r.forEach((v) => bridgedAt.add(v));
+    });
+  }
   let subSum = 0;
   let subCount = 0;
   for (let a = 0; a < n; a++) {
     const inside = ringNeighbours[a];
     const outside = neighbours[a].filter((b) => !inside.includes(b));
-    if (inside.length < 2 || outside.length === 0) continue;
+    // (a stereocentre at a fusion of rings, its H not drawn yet - while the
+    // engine sets the parts - is measured by where placeStereo will put
+    // that H: a frame that leaves it no room upright is the worse for it,
+    // lovastatin's turned with its rings aslant. Only where rings of five
+    // to eight are fused, as a steroid's are - not bridged, not on a
+    // macrocycle, an epoxide or a beta-lactam - and not in a solid, whose
+    // drawing shows its configuration without one)
+    const atRings = rings.filter((r) => r.includes(a));
+    const hidden =
+      outside.length === 0 &&
+      inside.length >= 3 &&
+      !persp?.[a] &&
+      !!g.tetra?.[a]?.neighbours.includes(-1) &&
+      !bridgedAt.has(a) &&
+      atRings.every((r) => r.length >= 5 && r.length <= 8);
+    if (inside.length < 2 || (outside.length === 0 && !hidden)) continue;
     const dir = (b: number) => Math.atan2(y[b] - y[a], x[b] - x[a]);
     const ringDirs = inside.map(dir).sort((p, q) => p - q);
     // the widest gap no ring lies in: at a fusion of three rings every gap
@@ -737,8 +772,63 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if (gap < 0) continue;
     // an H drawn at a fusion of rings stands straight up or down, as a
     // steroid's do: measured against upright
-    if (inside.length >= 3 && outside.length === 1 && isH(outside[0])) {
-      const t = deg(dir(outside[0]));
+    if (hidden || (inside.length >= 3 && outside.length === 1 && isH(outside[0]))) {
+      let along = hidden ? start + gap / 2 : dir(outside[0]);
+      if (hidden) {
+        // (where placeStereo will put it, by its measure of room: clear of
+        // atoms and bonds, 35 degrees from its own, into one of its rings
+        // only as a steroid's goes, upright first among equals)
+        const own = atRings.map((r) => ({
+          polygon: r.map((v) => ({ x: x[v], y: y[v] })),
+          unsaturated: r.some((v, k) => {
+            const w = r[(k + 1) % r.length];
+            return (orderOf.get(pair(v, w)) ?? 1) >= 2 && !rings.some((q) => q !== r && q.includes(v) && q.includes(w));
+          }),
+        }));
+        // (what is near enough to matter: room is counted only up to 0.85)
+        const near = new Uint8Array(n);
+        const atoms: number[] = [];
+        for (let b = 0; b < n; b++) {
+          const dx = x[b] - x[a];
+          const dy = y[b] - y[a];
+          if (b !== a && !isH(b) && dx * dx + dy * dy < 9 * L * L) {
+            near[b] = 1;
+            atoms.push(b);
+          }
+        }
+        const bonds = edges.filter(([u, v]) => u !== a && v !== a && (near[u] || near[v]) && !isH(u) && !isH(v));
+        // (upright, or somewhere outside its rings: aslant into one of them
+        // it goes only where nothing else will do)
+        const ways = [Math.PI / 2, (3 * Math.PI) / 2];
+        for (let k = 0; k < 24; k++) {
+          const t = (k * Math.PI) / 12;
+          const u = (((t - start) % TAU) + TAU) % TAU;
+          if (u > 0 && u < gap && !ways.includes(t)) ways.push(t);
+        }
+        let best = -Infinity;
+        for (const t of ways) {
+          const p = { x: x[a] + L * Math.cos(t), y: y[a] + L * Math.sin(t) };
+          let r = Infinity;
+          for (const b of atoms) r = Math.min(r, (Math.hypot(x[b] - p.x, y[b] - p.y) - (g.labelled?.[b] ? 0.2 * L : 0)) / L);
+          for (const [u, v] of bonds) {
+            r = Math.min(r, pointToSegment(p.x, p.y, x[u], y[u], x[v], y[v]) / L + 0.15);
+            if (segmentsCross(x[a], y[a], p.x, p.y, x[u], y[u], x[v], y[v])) r = Math.min(r, 0);
+          }
+          for (const b of neighbours[a]) {
+            const d = Math.abs(Math.atan2(Math.sin(dir(b) - t), Math.cos(dir(b) - t)));
+            if (d < (35 * Math.PI) / 180) r = Math.min(r, d);
+          }
+          const upright = Math.abs(Math.sin(t)) > 0.97;
+          const into = own.length <= 2 && own.some((q) => (q.unsaturated || !upright) && insidePolygon(p, q.polygon));
+          const lean = Math.min(Math.abs(t - Math.PI / 2), Math.abs(t - (3 * Math.PI) / 2));
+          const score = Math.min(r, 0.85) - (into ? 0.3 : 0) - 0.02 * lean;
+          if (score > best + 1e-9) {
+            best = score;
+            along = t;
+          }
+        }
+      }
+      const t = deg(Math.atan2(Math.sin(along), Math.cos(along)));
       subSum += Math.min(Math.abs(t - 90), Math.abs(t + 90));
       subCount++;
       continue;

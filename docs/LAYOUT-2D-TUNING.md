@@ -264,8 +264,10 @@ and the held-out list takes new ones. What it showed, by kind:
 - large molecules of two parts, or a macrocycle round an aromatic system
   (vinblastine, rifampicin), crammed;
 - orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
-  drawn everywhere - done, by the 2- or 3-aryl chromane it is), berberine,
-  colchicine, lovastatin.
+  drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
+  (done: the turn is chosen counting the fusion H it will carry, which
+  `layoutMetrics` places as `placeStereo` will before it is drawn);
+  berberine, colchicine.
 
 ## Open
 

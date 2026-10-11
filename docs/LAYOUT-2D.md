@@ -196,6 +196,13 @@ lie level either way round - the drawing takes the one that reads best
   right of it. Phenanthrene's third ring goes up and to the right; a
   steroid's A and B rings form the row, with C and D above and to the right
   - the way steroids are always drawn.
+- **A fusion H upright.** A stereocentre where rings of five to eight are
+  fused (not bridged, not on a macrocycle) gets its H drawn last (section
+  6), but the way the molecule is turned is chosen counting it where it
+  will go: a turn that leaves it no room to stand upright is the worse for
+  it. So lovastatin's hexahydronaphthalene lies in a row with its 8a-H
+  straight up, as it is always drawn, rather than aslant with the H
+  squeezed beside its ester.
 - **A biaryl hung anti**: a ring system hung from a ring's atom by a
   bond, where both have something beside the bond, is hung the way round
   that puts the heavier of each on opposite sides - BINOL's two OH, BINAP's
