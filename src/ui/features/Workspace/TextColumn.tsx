@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import TextBody from "../TextEditor";
-import { columnText } from "../TextEditor/columnText";
+import { columnText, markdownReaderOf, setShowsSource, useShowsSource } from "../TextEditor/columnText";
+import MarkdownBody from "../TextEditor/MarkdownBody";
+import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import type { PdfFind, PdfItem, WordPlace, WorkspaceText } from "./store/types";
@@ -140,6 +142,9 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
   const editText = useEditor((s) => s.editText);
   const closeTexts = useEditor((s) => s.closeTexts);
   const [error, setError] = useState<string | null>(null);
+  // (a Markdown text read formatted, or its source written)
+  const markdown = !!shown && isMarkdown(shown.name);
+  const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -164,6 +169,17 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
           ))}
         </div>
+        {shown && markdown && (
+          <button
+            onClick={() => setShowsSource(store, shown.id, !source, shown.text)}
+            aria-label="Source"
+            aria-pressed={source}
+            title={source ? "Show formatted" : "Show source"}
+            className={clsx("h-7 w-7 shrink-0 rounded-md flex items-center justify-center transition-colors duration-150 ease-meno", source ? "bg-gh-base text-gh-black" : "hover:bg-gh-base")}
+          >
+            <CodeBracketIcon className="h-4 w-4" />
+          </button>
+        )}
         {shown && (
           <button
             onClick={() => void exportText(shown)}
@@ -197,8 +213,12 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
         <AnimatePresence initial={false}>
           {shown && (
             // (see-through: the canvas draws the text under it, in the column's pass - components/ColumnText)
-            <div key={`text-${shown.id}`} className="absolute inset-0">
-              <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} onChange={(v) => editText(shown.id, v)} />
+            <div key={`text-${shown.id}-${markdown && !source ? "read" : "write"}`} className="absolute inset-0">
+              {markdown && !source ? (
+                <MarkdownBody entry={columnText(store, shown.id, shown.text)} reader={markdownReaderOf(columnText(store, shown.id, shown.text), shown.text)} value={shown.text} />
+              ) : (
+                <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} onChange={(v) => editText(shown.id, v)} />
+              )}
             </div>
           )}
         </AnimatePresence>

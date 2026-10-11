@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { manifestOf, OFFERED, PLUGINS, type PythonPlugin } from "../../../lib/calc/catalog";
+import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, REFUSED, runs, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { showGuide } from "../../../lib/plugins/guides";
 import { addedReaders, addPlugin, removePlugin, useReaders } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
@@ -14,30 +15,31 @@ const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k
 /**
  * Plugins in Settings: every plugin on offer, added or not - what it
  * is, the kinds of file it reads, its version, licence and home - each added
- * or taken away here. Meno itself is not among them: what it reads and
- * writes is in Files.
+ * or taken away here; one that brings a guide shows it again here. Meno
+ * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
   useEffect(() => {
-    void addedReaders(PLUGINS);
+    void addedReaders(ALL_PLUGINS);
     // (where the programs installed separately are, looked for afresh as Plugins is shown)
     void lookForAll(PLUGINS);
   }, []);
   return (
     <div className="space-y-3">
-      {PLUGINS.map((p) => (
+      {/* (those that come with Meno, running nothing, first) */}
+      {[...ALL_PLUGINS.filter((p) => !runs(p)), ...ALL_PLUGINS.filter(runs)].map((p) => (
         <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} />
       ))}
     </div>
   );
 }
 
-/** A plugin: what it is and reads, whether it is added, and the button that adds it or takes it away. */
-function Plugin({ plugin: p, state, problem }: { plugin: PythonPlugin; state?: string; problem?: string }) {
+/** A plugin: what it is and does, whether it is added, and the button that adds it or takes it away. */
+function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: string; problem?: string }) {
   const [busy, setBusy] = useState(false);
-  const run = (job: (p: PythonPlugin) => Promise<void>) => {
+  const run = (job: (p: AnyPlugin) => Promise<void>) => {
     setBusy(true);
     job(p)
       .catch(() => {}) // (said by the plugin's problem)
@@ -45,7 +47,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: PythonPlugin; state?: s
   };
   const status =
     state === "added" ? "Added" : state === "adding" ? "Adding…" : state === "removing" ? "Removing…" : state === "absent" ? "Not added" : "";
-  const refused = OFFERED.refused.filter((r) => r.plugin === p.id);
+  const refused = REFUSED.filter((r) => r.plugin === p.id);
   // (the kinds it reads by the names it gives them, or Meno's)
   const named = (id: string) => manifestOf(p.id)?.kinds.find((k) => k.id === id)?.name ?? kindById(id)?.name ?? id;
   return (
@@ -55,15 +57,23 @@ function Plugin({ plugin: p, state, problem }: { plugin: PythonPlugin; state?: s
           {p.name} <span className="text-gh-gray">{p.version}</span>
         </div>
         <p className="text-xs text-gh-gray mt-0.5">{p.description}</p>
-        {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1">Reads {p.reads.map(named).join(", ")}.</p>}
-        {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
-        {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
-        {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1">In a workflow: {stepNames(p).join(", ")}.</p>}
-        {p.installed.map((d) => (
-          <Installed key={d.name} plugin={p.id} decl={d} />
-        ))}
+        {runs(p) && (
+          <>
+            {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1">Reads {p.reads.map(named).join(", ")}.</p>}
+            {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
+            {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
+            {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1">In a workflow: {stepNames(p).join(", ")}.</p>}
+            {p.installed.map((d) => (
+              <Installed key={d.name} plugin={p.id} decl={d} />
+            ))}
+          </>
+        )}
+        {p.suggests.length > 0 && (
+          <p className="text-xs text-gh-gray mt-1">Suggests {p.suggests.map((s) => anyPluginById(s.plugin)?.name ?? s.plugin).join(", ")}.</p>
+        )}
         <p className="text-xs text-gh-gray mt-1">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
+          {!runs(p) && " · Comes with Meno: nothing to download."}
         </p>
         {refused.length > 0 && (
           <p className="text-xs text-gh-gray mt-1">
@@ -79,13 +89,23 @@ function Plugin({ plugin: p, state, problem }: { plugin: PythonPlugin; state?: s
         {state === "absent" && !forThisSystem(p) ? (
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">For {p.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only</span>
         ) : (state === "added" || state === "absent") && (
-          <button
-            disabled={busy}
-            onClick={() => run(state === "added" ? removePlugin : addPlugin)}
-            className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
-          >
-            {state === "added" ? "Remove" : "Add"}
-          </button>
+          <div className="flex gap-1.5">
+            {state === "added" && p.guide.length > 0 && (
+              <button
+                onClick={() => showGuide(p.id)}
+                className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base"
+              >
+                Show
+              </button>
+            )}
+            <button
+              disabled={busy}
+              onClick={() => run(state === "added" ? removePlugin : addPlugin)}
+              className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+            >
+              {state === "added" ? "Remove" : "Add"}
+            </button>
+          </div>
         )}
       </div>
     </div>

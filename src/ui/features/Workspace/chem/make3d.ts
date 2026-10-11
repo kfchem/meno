@@ -16,7 +16,7 @@ import { editorModelOf, processFileContent } from "../utils/io";
 import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
-import { solidOf } from "../utils/molecule3d";
+import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
@@ -116,7 +116,7 @@ export type Turned = { turn: Turn3D; start: { x: number; y: number }; reach: Box
 export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style: Style3D): Turned {
   const solid = solidOf({ ...m, id: 0, at: { x: 0, y: 0 } }, style);
   const places = solid.frames[0];
-  const radii = solid.radii.balls;
+  const radii = solid.radii[lookOf(m)];
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   const from: number[] = [];
   const to: number[] = [];
@@ -164,7 +164,7 @@ export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style
     reach.y0 = Math.min(reach.y0, v.y - radii[i]);
     reach.y1 = Math.max(reach.y1, v.y + radii[i]);
   }
-  return { turn, start, reach, flat, height: solid.reach.balls };
+  return { turn, start, reach, flat, height: solid.reach[lookOf(m)] };
 }
 
 /** Where a drawn structure is on the page: its atoms' box, a little round them. */
@@ -383,5 +383,5 @@ export function formulaPlace(m: Molecule3D, formula: Model, style: Style3D): { x
   const solid = solidOf(m, style);
   const xs = formula.atoms.map((a) => a.x);
   const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
-  return { x: m.at.x - solid.reach.balls - GAP - width / 2, y: m.at.y };
+  return { x: m.at.x - solid.reach[lookOf(m)] - GAP - width / 2, y: m.at.y };
 }

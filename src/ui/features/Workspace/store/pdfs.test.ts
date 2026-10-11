@@ -2,7 +2,24 @@ import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { ICON_HEIGHT, ICON_NAME_PT, ICON_NAME_WIDTH, ICON_TO_NAME, iconScale, pdfBounds, POINT, shownSheet, spreadColumns, spreadSheets, stackSheets, topSheet, UNDER_MOST } from "../../../../lib/pdf/layout";
+import {
+  ICON_HEIGHT,
+  ICON_NAME_PT,
+  ICON_NAME_WIDTH,
+  ICON_TO_NAME,
+  iconScale,
+  pdfBounds,
+  POINT,
+  rowSheets,
+  shownSheet,
+  spreadColumns,
+  spreadOrder,
+  spreadPageAt,
+  spreadSheets,
+  stackSheets,
+  topSheet,
+  UNDER_MOST,
+} from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 const SHA = "a".repeat(64);
@@ -110,6 +127,46 @@ describe("PDFs on the page", () => {
     expect(again().pdfs).toEqual([{ id: 1, name: "paper.pdf", sha256: SHA, pages: [A4, [612, 792]], x: 3, y: 4, page: 1, spread: true }]);
   });
 
+  it("spread, have a page put in a place of its own, going with the PDF, kept while gathered, and put back in their rows - each one step, and saved so", () => {
+    const { doc, state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: SHA, pages: [A4, A4, A4] }], { x: 0, y: 0 });
+    state().spreadPdf(1, true);
+    const rows = spreadSheets(state().pdfs[0]);
+    // (a drag: one step, the page where it was let go, on top)
+    for (const x of [100, 200, 300]) state().placePdfPage(1, 1, x, -50, "drag");
+    expect(doc.history().undoDepth).toBe(3);
+    expect(state().pdfs[0].placed).toEqual([{ page: 1, x: 300, y: -50 }]);
+    expect(spreadSheets(state().pdfs[0])[1]).toMatchObject({ x: 300, y: -50 });
+    expect(spreadSheets(state().pdfs[0])[2]).toEqual(rows[2]);
+    // (another put down after it lies over it)
+    state().placePdfPage(1, 0, 310, -50, "drag2");
+    state().placePdfPage(1, 1, 290, -40, "drag3");
+    expect(state().pdfs[0].placed!.map((q) => q.page)).toEqual([0, 1]);
+    // (the PDF moved, they go with it)
+    state().movePdf(1, 10, 0);
+    expect(spreadSheets(state().pdfs[0])[1]).toMatchObject({ x: 300, y: -40 });
+    // (gathered, and spread again: where they were put)
+    state().spreadPdf(1, false);
+    expect(state().pdfs[0].placed).toHaveLength(2);
+    // (saved from where the PDF lies)
+    expect(readWorkspace(workspaceText(state()))?.pdfs[0].placed).toEqual([
+      { page: 0, x: 310, y: -50 },
+      { page: 1, x: 290, y: -40 },
+    ]);
+    state().spreadPdf(1, true);
+    expect(spreadSheets(state().pdfs[0])[0]).toMatchObject({ x: 320, y: -50 });
+    // (put back in their rows: one step, undone)
+    const depth = doc.history().undoDepth;
+    state().pdfPagesInRows(1);
+    expect(state().pdfs[0].placed).toBeUndefined();
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(state().pdfs[0].placed).toHaveLength(2);
+    // (no page it has not)
+    state().placePdfPage(1, 3, 0, 0);
+    expect(state().pdfs[0].placed).toHaveLength(2);
+  });
+
   it("are read from a workspace as far as they read", () => {
     const text = JSON.stringify({
       format: "meno-workspace",
@@ -124,10 +181,23 @@ describe("PDFs on the page", () => {
         { name: "bad sha", sha256: "../x", pages: [A4], x: 0, y: 0, page: 0 },
         { name: "bad pages", sha256: SHA, pages: [[0, 1]], x: 0, y: 0, page: 0 },
         { name: "bad place", sha256: SHA, pages: [A4], x: "0", y: 0, page: 0 },
+        {
+          name: "placed.pdf",
+          sha256: SHA,
+          pages: [A4, A4],
+          x: 0,
+          y: 0,
+          page: 0,
+          spread: true,
+          placed: [{ page: 1, x: 5, y: 6 }, { page: 2, x: 0, y: 0 }, { page: 0, x: "1", y: 0 }, { page: 1, x: 7, y: 8 }],
+        },
       ],
     });
-    // (a page past the last is the first)
-    expect(readWorkspace(text)?.pdfs).toEqual([{ name: "ok.pdf", sha256: SHA, pages: [A4], x: 0, y: 0, page: 0 }]);
+    // (a page past the last is the first; a page placed as far as it reads, once, at its last place)
+    expect(readWorkspace(text)?.pdfs).toEqual([
+      { name: "ok.pdf", sha256: SHA, pages: [A4], x: 0, y: 0, page: 0 },
+      { name: "placed.pdf", sha256: SHA, pages: [A4, A4], x: 0, y: 0, page: 0, spread: true, placed: [{ page: 1, x: 7, y: 8 }] },
+    ]);
   });
 });
 
@@ -287,5 +357,20 @@ describe("where a PDF's pages lie", () => {
     expect(s[4].y).toBeLessThan(s[0].y - s[0].h);
     const b = pdfBounds({ ...p, spread: true });
     expect(b.x1 - b.x0).toBeGreaterThan(4 * s[0].w);
+  });
+
+  it("spread, a page in a place of its own: there, its row's place empty, lying over the others in the order they were put there", () => {
+    const placed = { ...p, spread: true, placed: [{ page: 5, x: -1000, y: 0 }, { page: 2, x: -990, y: 5 }] };
+    const s = spreadSheets(placed);
+    expect(s[5]).toMatchObject({ x: -1000, y: 0 });
+    expect(s[2]).toMatchObject({ x: -990, y: 5 });
+    expect(s[0]).toEqual(rowSheets(p)[0]);
+    expect(spreadOrder(placed)).toEqual([0, 1, 3, 4, 6, 5, 2]);
+    // (the one on top where they lie over one another; none, off them all)
+    expect(spreadPageAt(placed, { x: -995, y: 2 })).toBe(2);
+    expect(spreadPageAt(placed, { x: -1000 - s[5].w / 2 + 1, y: 0 })).toBe(5);
+    expect(spreadPageAt(placed, rowSheets(p)[5])).toBeNull();
+    expect(spreadPageAt(placed, rowSheets(p)[4])).toBe(4);
+    expect(pdfBounds(placed).x0).toBeLessThan(-1000);
   });
 });

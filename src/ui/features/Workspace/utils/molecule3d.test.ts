@@ -24,6 +24,7 @@ import {
   turnedInPlane,
   turnedTogether,
   WORLD_PER_ANGSTROM,
+  RIBBON_REACH,
   coveredLength,
   labelSpot,
   populations,
@@ -48,60 +49,60 @@ describe("a molecule in 3D as it is drawn", () => {
     const s = solidOf(ethane(), STYLE_3D);
     expect(Array.from(s.frames[0])).toEqual([-0.75 * WORLD_PER_ANGSTROM, 0, 0, 0.75 * WORLD_PER_ANGSTROM, 0, 0].map((v) => expect.closeTo(v, 6)));
     // a carbon's ball: a fifth of its van der Waals radius (1.7 Å); space-filling, all of it
-    expect(s.radii.balls[0]).toBeCloseTo(0.34 * WORLD_PER_ANGSTROM, 6);
-    expect(s.radii.space[0]).toBeCloseTo(1.7 * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.balls).toBeCloseTo((0.75 + 0.34) * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.space).toBeCloseTo((0.75 + 1.7) * WORLD_PER_ANGSTROM, 6);
+    expect(s.radii.primary[0]).toBeCloseTo(0.34 * WORLD_PER_ANGSTROM, 6);
+    expect(s.radii.secondary[0]).toBeCloseTo(1.7 * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.primary).toBeCloseTo((0.75 + 0.34) * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.secondary).toBeCloseTo((0.75 + 1.7) * WORLD_PER_ANGSTROM, 6);
   });
 
   it("stands as high as it reaches, so that no turn takes it behind the page", () => {
     const s = solidOf(ethane(), STYLE_3D);
-    expect(standingHeight(s)).toBeCloseTo(s.reach.balls, 9);
-    expect(standingHeight(s, "space")).toBeCloseTo(s.reach.space, 9);
+    expect(standingHeight(s)).toBeCloseTo(s.reach.primary, 9);
+    expect(standingHeight(s, "secondary")).toBeCloseTo(s.reach.secondary, 9);
   });
 
   it("stands as high as a turn of several put it, where one did", () => {
     const m = ethane({ x: 0, y: 0, z: 7 } as Molecule3D["at"]);
-    expect(poseOf(m, solidOf(m, STYLE_3D), "balls").height).toBe(7);
+    expect(poseOf(m, solidOf(m, STYLE_3D), "primary").height).toBe(7);
   });
 
   it("is seen straight from above by an orthographic camera - the canvas's - as large as it is, however high", () => {
     const m = ethane();
     const s = solidOf(m, STYLE_3D);
-    const seen = seenOnPage(poseOf(m, s, "balls"));
+    const seen = seenOnPage(poseOf(m, s, "primary"));
     expect(seen[1].x).toBeCloseTo(0.75 * WORLD_PER_ANGSTROM, 6);
-    expect(seen[1].r).toBeCloseTo(s.radii.balls[1], 6);
+    expect(seen[1].r).toBeCloseTo(s.radii.primary[1], 6);
     expect(seen[1].z).toBeCloseTo(standingHeight(s), 6);
     // end on: one atom over the other, and the higher the one seen there
     const quarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
     const turn: [number, number, number, number] = [quarter.x, quarter.y, quarter.z, quarter.w];
-    const end = seenOnPage(poseOf(m, s, "balls", turn));
+    const end = seenOnPage(poseOf(m, s, "primary", turn));
     expect(end[0].x).toBeCloseTo(end[1].x, 6);
-    expect(atomAt(poseOf(m, s, "balls", turn), undefined, 0, 0)).toBe(end[0].z > end[1].z ? 0 : 1);
+    expect(atomAt(poseOf(m, s, "primary", turn), undefined, 0, 0)).toBe(end[0].z > end[1].z ? 0 : 1);
     // and off to the side, as large and as far out as it is
-    const aside = seenBounds(poseOf(ethane({ x: 20, y: 0 }), s, "balls"));
+    const aside = seenBounds(poseOf(ethane({ x: 20, y: 0 }), s, "primary"));
     expect((aside.minX + aside.maxX) / 2).toBeCloseTo(20, 6);
   });
 
   it("is seen larger than it would be lying on the page, being nearer the camera, in perspective", () => {
     const m = ethane();
     const s = solidOf(m, STYLE_3D);
-    const seen = seenOnPage(poseOf(m, s, "balls"), new THREE.Vector3(0, 0, 60));
+    const seen = seenOnPage(poseOf(m, s, "primary"), new THREE.Vector3(0, 0, 60));
     const k = 60 / (60 - standingHeight(s));
     expect(seen[1].x).toBeCloseTo(0.75 * WORLD_PER_ANGSTROM * k, 6);
-    expect(seen[1].r).toBeCloseTo(s.radii.balls[1] * k, 6);
+    expect(seen[1].r).toBeCloseTo(s.radii.primary[1] * k, 6);
     // turned a quarter about y, it is end on: one atom over the other
     const quarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-    const end = seenOnPage(poseOf(m, s, "balls", [quarter.x, quarter.y, quarter.z, quarter.w]), new THREE.Vector3(0, 0, 60));
+    const end = seenOnPage(poseOf(m, s, "primary", [quarter.x, quarter.y, quarter.z, quarter.w]), new THREE.Vector3(0, 0, 60));
     expect(end[0].x).toBeCloseTo(0, 6);
     expect(end[1].x).toBeCloseTo(0, 6);
     // and the nearer of the two is the one seen there
-    expect(atomAt(poseOf(m, s, "balls", [quarter.x, quarter.y, quarter.z, quarter.w]), new THREE.Vector3(0, 0, 60), 0, 0)).toBe(end[0].z > end[1].z ? 0 : 1);
+    expect(atomAt(poseOf(m, s, "primary", [quarter.x, quarter.y, quarter.z, quarter.w]), new THREE.Vector3(0, 0, 60), 0, 0)).toBe(end[0].z > end[1].z ? 0 : 1);
   });
 
   it("reaches further out on the page seen from off to its side, as perspective has it", () => {
     const m = ethane({ x: 20, y: 0 });
-    const pose = poseOf(m, solidOf(m, STYLE_3D), "balls");
+    const pose = poseOf(m, solidOf(m, STYLE_3D), "primary");
     const above = seenBounds(pose, { x: 20, y: 0, z: 60 });
     const aside = seenBounds(pose, { x: 0, y: 0, z: 60 });
     // the same size seen straight on, but out from the eye by its height's share
@@ -115,7 +116,7 @@ describe("a molecule in 3D as it is drawn", () => {
     const s = solidOf(m, STYLE_3D);
     expect(s.frames).toHaveLength(2);
     expect(s.frames[1][0]).toBeCloseTo(-1.5 * WORLD_PER_ANGSTROM, 6);
-    expect(s.reach.balls).toBeCloseTo((1.5 + 0.34) * WORLD_PER_ANGSTROM, 6);
+    expect(s.reach.primary).toBeCloseTo((1.5 + 0.34) * WORLD_PER_ANGSTROM, 6);
     expect([frameOf(s, undefined), frameOf(s, 1), frameOf(s, 7), frameOf(s, -1)]).toEqual([0, 1, 1, 0]);
   });
 });
@@ -189,9 +190,9 @@ describe("what a point is to a molecule in 3D", () => {
 
   it("is on it on an atom, on a bond, and within a ring", () => {
     const m = benzene();
-    const pose = poseOf(m, solidOf(m, STYLE_3D), "balls");
+    const pose = poseOf(m, solidOf(m, STYLE_3D), "primary");
     const seen = seenOnPage(pose, camera);
-    const on = (x: number, y: number) => onMolecule(m, pose, camera, x, y, zoom, STYLE_3D.bondRadius);
+    const on = (x: number, y: number) => onMolecule(m, pose, camera, x, y, zoom, STYLE_3D.primary.bondRadius);
     expect(on(seen[0].x, seen[0].y)).toBe(true);
     expect(on((seen[0].x + seen[1].x) / 2, (seen[0].y + seen[1].y) / 2)).toBe(true);
     expect(on(0, 0)).toBe(true);
@@ -199,9 +200,9 @@ describe("what a point is to a molecule in 3D", () => {
 
   it("is on it within BODY_PX outside its outline - room to take hold of it - and not beyond", () => {
     const m = benzene();
-    const pose = poseOf(m, solidOf(m, STYLE_3D), "balls");
+    const pose = poseOf(m, solidOf(m, STYLE_3D), "primary");
     const seen = seenOnPage(pose, camera);
-    const on = (x: number, y: number) => onMolecule(m, pose, camera, x, y, zoom, STYLE_3D.bondRadius);
+    const on = (x: number, y: number) => onMolecule(m, pose, camera, x, y, zoom, STYLE_3D.primary.bondRadius);
     const edge = seen[0].x + seen[0].r;
     expect(on(edge + 2 / zoom, 0)).toBe(true);
     expect(on(edge + (BODY_PX - 1) / zoom, 0)).toBe(true);
@@ -210,12 +211,12 @@ describe("what a point is to a molecule in 3D", () => {
 
   it("finds the bond under a point between two atoms, and none on an atom's ball or within the ring", () => {
     const m = benzene();
-    const pose = poseOf(m, solidOf(m, STYLE_3D), "balls");
+    const pose = poseOf(m, solidOf(m, STYLE_3D), "primary");
     const seen = seenOnPage(pose, camera);
     const mid = { x: (seen[0].x + seen[1].x) / 2, y: (seen[0].y + seen[1].y) / 2 };
-    expect(bondAt(m, pose, camera, mid.x, mid.y, STYLE_3D.bondRadius)).toBe(0);
+    expect(bondAt(m, pose, camera, mid.x, mid.y, STYLE_3D.primary.bondRadius)).toBe(0);
     expect(atomAt(pose, camera, mid.x, mid.y)).toBeNull();
-    expect(bondAt(m, pose, camera, 0, 0, STYLE_3D.bondRadius)).toBeNull();
+    expect(bondAt(m, pose, camera, 0, 0, STYLE_3D.primary.bondRadius)).toBeNull();
   });
 });
 
@@ -320,8 +321,88 @@ describe("a molecule in 3D in a picture", () => {
   });
 
   it("is balls alone, space-filling", () => {
-    const marks = pictureMarks({ ...ethane(), look: "space" }, STYLE_3D);
+    const marks = pictureMarks({ ...ethane(), look: "secondary" }, STYLE_3D);
     expect(marks.every((x) => x.kind === "ball")).toBe(true);
+  });
+});
+
+describe("a molecule in 3D drawn without the hydrogens on its carbons", () => {
+  // methanol: H3C-OH, the carbon's hydrogens out along -x, the oxygen's along +x
+  const methanol = (): Molecule3D => ({
+    id: 1,
+    atoms: [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "O", x: 1.43, y: 0, z: 0 },
+      { el: "H", x: -0.4, y: 1, z: 0 },
+      { el: "H", x: -0.4, y: -0.5, z: 0.9 },
+      { el: "H", x: -0.4, y: -0.5, z: -0.9 },
+      { el: "H", x: 2.4, y: 0, z: 0 },
+    ],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+      { a1: 1, a2: 5, order: 1 },
+    ],
+    at: { x: 0, y: 0 },
+  });
+  const hiding = { ...STYLE_3D, primary: { ...STYLE_3D.primary, hydrogens: "carbonHidden" as const } };
+
+  it("draws them at no size in the look that hides them, and reaches only as far as what it draws", () => {
+    const s = solidOf(methanol(), hiding);
+    expect([...s.hidden.primary]).toEqual([0, 0, 1, 1, 1, 0]);
+    expect([...s.hidden.secondary]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect([0, 1, 2, 3, 4, 5].map((i) => s.radii.primary[i] > 0)).toEqual([true, true, false, false, false, true]);
+    expect(s.reach.primary).toBeLessThan(solidOf(methanol(), STYLE_3D).reach.primary + 1e-9);
+  });
+
+  it("leaves them and their bonds out of a picture, and out of where it reaches on the page", () => {
+    const m = methanol();
+    const marks = pictureMarks(m, hiding);
+    expect(marks.filter((x) => x.kind === "ball")).toHaveLength(3);
+    expect(marks.filter((x) => x.kind === "stick")).toHaveLength(2);
+    const all = seenBounds(poseOf(m, solidOf(m, STYLE_3D), "primary"));
+    const some = seenBounds(poseOf(m, solidOf(m, hiding), "primary"));
+    // (the carbon's hydrogens out to the left: it reaches less far that way)
+    expect(some.minX).toBeGreaterThan(all.minX);
+    expect(some.maxX).toBeCloseTo(all.maxX, 6);
+    // and the pointer finds nothing where one of them would be
+    const h = seenOnPage(poseOf(m, solidOf(m, hiding), "primary"))[2];
+    expect(atomAt(poseOf(m, solidOf(m, hiding), "primary"), undefined, h.x + 0.01, h.y)).not.toBe(2);
+  });
+});
+
+describe("a biopolymer's molecule in 3D, its chains as ribbons", () => {
+  // three residues of a chain, an alpha carbon each, 3.8 A apart
+  const chain = (): Molecule3D => ({
+    id: 1,
+    atoms: [0, 1, 2].map((k) => ({ el: "C", x: 3.8 * k, y: 0, z: 0 })),
+    bonds: [],
+    at: { x: 0, y: 0 },
+    biopolymer: {
+      names: ["CA", "CA", "CA"],
+      residueOf: [0, 1, 2],
+      residues: [1, 2, 3].map((seq) => ({ name: "ALA", chain: "A", seq, iCode: "", standard: true })),
+      structure: ["helix", "helix", null],
+    },
+  });
+
+  it("draws none of the chain's atoms, but reaches - and is found under the pointer - as far as its ribbon does", () => {
+    const m = chain();
+    const s = solidOf(m, STYLE_3D);
+    expect(s.ribbons).toEqual({ primary: true, secondary: false });
+    expect([...s.radii.primary]).toEqual([0, 0, 0]);
+    expect(s.extent.primary[0]).toBeCloseTo(RIBBON_REACH * WORLD_PER_ANGSTROM, 6);
+    expect(s.hidesH.primary).toBe(false);
+    const pose = poseOf(m, s, "primary");
+    expect(atomAt(pose, undefined, 0, 0)).toBe(1);
+  });
+
+  it("is drawn in a picture as sticks along its ribbon, in the ribbon's colours", () => {
+    const marks = pictureMarks(chain(), STYLE_3D);
+    expect(marks.length).toBeGreaterThan(2);
+    expect(marks.every((x) => x.kind === "stick")).toBe(true);
   });
 });
 

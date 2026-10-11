@@ -282,11 +282,7 @@ def op_write(m):
     return {"text": gaussian_input(m.get("name", ""), molecules[0], m.get("options") or {})}
 
 
-def op_ping(_m):
-    return {"version": VERSION}
-
-
-OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect, "ping": op_ping}
+OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect}
 
 
 def answer(line):

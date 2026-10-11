@@ -111,6 +111,9 @@ stops being part of the work.
   - The right-click menu has *Spread pages*. The pages lift off the
     stack one after another and lie side by side on the page, in rows,
     to be read and compared at once. *Gather pages* puts them back.
+  - Spread, each page can be put where it is wanted - beside a structure
+    drawn from it, or next to another page to compare - and gathered
+    again (*Pages placed one by one*, below).
 - **It comes onto the page as an icon**, its top page on it and its name
   under it. The name is set in the drawing's type, at the size of its
   labels, and the icon is five times as tall as it, as a file's icon is
@@ -266,6 +269,68 @@ stops being part of the work.
     warnings and errors - so that Meno knows no program's format of
     itself. What does not read as the grammar says - a block left open,
     a molecule with no charge - is marked.
+- **A Markdown text is read formatted** (*Markdown*, below), and written
+  in its source.
+
+### Markdown
+
+A text whose name ends `.md` or `.markdown` is read as what it says, not
+as its marks (the maintainer asked that Markdown files open formatted, to
+be read).
+
+- **As CommonMark 0.31.2 reads it, with GitHub's tables, task lists,
+  strikethrough and autolinks** (GitHub Flavored Markdown 0.29, its
+  extensions). Markdown is a general text format, not a program's, so it
+  is Meno's own, as Python, JSON and XML are, not a plugin's. Lezer's
+  Markdown parser (`@lezer/markdown`, MIT) reads it; what each part means
+  is as the two specifications say, and Meno sets it.
+- **In the column, and on its sheet**: formatted in both, from one layout
+  - in the column as wide as the column, on the page as wide as a
+  sheet's 80 letters, its first rows, its type as much smaller as the
+  sheet's monospaced type is. An icon shows them too, made small.
+- **Set as GitHub sets Markdown, in Meno's type**: IBM Plex Sans, its
+  code in IBM Plex Mono, on the palette the column's look is taken from.
+  - Headings in six sizes, the first two ruled under.
+  - Strong, emphasised and struck-through words, inline code on its
+    ground.
+  - Lists, ordered from their first number or marked by a disc - a ring
+    deeper in, then a square - tight or loose as CommonMark says; a
+    task's box, checked or not.
+  - Block quotes in grey beside a bar.
+  - Code blocks on their ground, coloured as a text is where their
+    language is known: Python, JSON and XML by Lezer's grammars, a
+    calculation's input by its plugin's, by the language named as a
+    file's name ends (`inp`, `gjf`). On a sheet they are black, as a
+    sheet's lines are.
+  - Tables, their columns as wide as their cells, aligned as the
+    delimiter row says, shared out where too wide, every other row on a
+    ground.
+  - Rules.
+- **Lines broken as a reader expects**: after a word and its spaces, and
+  between Chinese and Japanese letters, never before a closing mark nor
+  after an opening one; a word wider than the column between its
+  letters; a line's end in a paragraph a space, a break where it says.
+- **Links**: a click follows one - to a heading of the text's, by the
+  name GitHub gives it (`#results`), the text moving there; to the web or
+  to mail (`http`, `https`, `mailto`), opened by the system, as a PDF's
+  are; any other, not followed. Over a link, the system's hand.
+- **Nothing a text names is fetched**: an image is its description in a
+  frame. Meno reaches no network for a text, and the text's place on the
+  disk is not kept (*Texts*, WORKSPACE.md), so a picture beside it could
+  not be found again.
+- **HTML is shown as it is written**, grey, never drawn as HTML; its
+  comments are left out, and `<br>` breaks the line.
+- **Read**: the wheel moves it; a drag selects its words, two clicks a
+  word, three a paragraph; Cmd/Ctrl+C copies them as they read -
+  paragraphs and list items on lines of their own, a table's cells apart
+  by tabs - and Cmd/Ctrl+A selects it all. The arrows, Page Up and Down
+  and the space bar, Home and End move it.
+- **Written in its source**: *Source*, at the column's top (the brackets),
+  shows the text as it is written, typed as any text is, IME and all, its
+  marks coloured - headings, code, addresses, and its marks grey - and
+  its code in Python, JSON or XML as those are. Pressed again, it is read
+  formatted. Either way, what was at the top stays there, as near as the
+  two allow.
 
 ## Movement
 
@@ -281,7 +346,7 @@ together, in short eased transitions.
   goes up and over, and lies under the others; or comes back.
 - **Spreading and gathering**: the pages lift off one after another and
   go to their places in a short wave; gathered, they come back the same
-  way.
+  way. Pages put back in their rows, or moved by an undo, glide there.
 - **Into the column and back**: a page or a sheet rises from where it
   lies and goes into the column as it opens, growing to the column's
   width; closed, it goes back down to its place.
@@ -724,7 +789,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 
 **Colouring** (`lib/text/colouring.ts`):
 - **A Python script, JSON or XML**, told by its name (`.py`, `.json`, `.xml`), is coloured by Lezer's grammar for it: keywords, strings, numbers, comments, and what a definition names, a JSON object's keys, an XML element's names and attributes. It is parsed as far as the lines shown, 128 KB on at a time, and after an edit from where it changed, the rest of the tree kept: a long file opens and is typed in at once.
-- **A calculation's input or output** is coloured by its plugin's grammar for its kind (`grammar` on a kind it brings or writes, or on a kind of text it knows, `texts`; docs/PLUGINS.md): a grammar in Lezer's form, in a file in the plugin's folder, and the tone each of its parts is drawn in, by the name the grammar gives it.
+- **A calculation's input or output** is coloured by its plugin's grammar for its kind (`grammar` on a kind it knows - one it reads, writes, or only colours, told by its files' names and what its lines begin with: `kinds`, docs/PLUGINS.md): a grammar in Lezer's form, in a file in the plugin's folder, and the tone each of its parts is drawn in, by the name the grammar gives it.
   - The grammar is made into a parser as it is first wanted (`lib/text/grammars.ts`): tried in a worker within 5 s, then made on the page and kept. A grammar asking for code (`@external`, `@context`) is refused, so a plugin gives Meno data alone, and no text can hold the page up: Lezer's tokenizer reads each letter once and its parser never goes back.
   - A *value*, as a grammar's tones say, Meno colours as a number where it is one (a sign, a point, an exponent, a Fortran D's) and leaves as it is where it is not: 6-31G, def2-SVP.
   - Which grammar: a kind a plugin brings is told by what the text holds, as a file is (lib/io/kinds); a kind it writes, or knows besides, by the text's name and, where it says, what one of its first lines begins with (an ORCA input's `!`, `%` or `*`). Of two plugins that bring a kind, the first's grammar. A plugin not added colours nothing.
@@ -765,6 +830,48 @@ Not yet, and where it comes:
 - **Copying and pasting sheets**, and turning them with the selection's handle (it carries them not).
 - **A step's card lies over the canvas**, in HTML, as all a workflow's cards do: a log's lines come out from under its step's card, and pass under the other cards on their way, as a PDF's page does.
 - **More grammars**: a language Lezer has a grammar for is a line here and its few tens of kilobytes; Python, JSON and XML for now, as the specification lists.
+
+### Markdown read formatted (2026-10-10)
+
+Built (lane L9), as *Markdown*, above, says:
+- **Read**: `lib/text/markdown.ts` reads a text into blocks and runs, each rule citing its section of CommonMark 0.31.2 or GFM 0.29; `TextEditor/markdownLayout.ts` lays them out at a width, in rows, each a line of words and what is drawn under and round it; `TextEditor/markdownReader.ts` holds where it is read and what is selected, in its words read as one text.
+- **In the column**: `components/MarkdownText.tsx` draws each row in view as a picture drawn by the canvas in IBM Plex (`TextEditor/markdownPictures.ts`), its HTML half `TextEditor/MarkdownBody.tsx` taking the wheel, the pointer and the keys.
+- **On the page**: a Markdown text's sheet (`utils/textSheets`) shows its first rows laid out as a sheet is wide (`components/MarkdownRows.tsx`), in troika's type: IBM Plex Sans and Mono, a strong part thickened by an outline of its own colour and an emphasised one slanted, each stretched to the width its own face sets it at - the page's type has one face of each. Far off, its words are grey strokes, as a sheet's lines are.
+- **On the way between them**: rising, its sheet's rows fade, and the column's come up in their place, both growing with it (`MarkdownFlight` in `components/TextFlight.tsx`); going back down, the other way.
+- **Its source**: *Source* in the column's header switches a Markdown text between read and written (`TextEditor/columnText.ts`, not saved: a Markdown text opens formatted); the source coloured by Lezer's Markdown grammar, its code by Python's, JSON's or XML's (`lib/text/colouring.ts`).
+
+Decided while building it, for the maintainer to confirm:
+- **The look is GitHub's**, as the column's colours already are: body 15 pixels on 24, headings 2 to 0.85 times it, code 13 pixels, lists 30 pixels in.
+- **A sheet is as wide as 80 letters of a sheet's type**, about six inches, as a page's text is; its rows' type as much smaller than the column's as the sheet's monospaced type is.
+- **A sheet's code is black**, as a sheet's lines are; the column colours it.
+- **Selected words copy as they read**, not as they are written; the source is there to copy the marks.
+- **The source shown is not saved**: a Markdown text opens formatted.
+- **Rising to the column, the sheet's rows fade before the column's come**, the two laid out at different widths: shown at once, both together read as a blur.
+
+Not yet, and where it comes:
+- **Editing in the formatted text** (the maintainer chose read formatted, written in the source).
+- **Pictures in a Markdown text**, and links to other texts: Meno does not keep where a text was opened from, and reaches no network.
+- **A letter no typeface of Meno's has on a sheet** - a superscript minus, as in mol⁻¹ - is a white square there, as on any sheet; the column draws it in the system's type.
+- **Math** (`$...$`), footnotes and other extensions GitHub draws but GFM 0.29 does not specify are shown as written.
+- **Searching a text** (Cmd/Ctrl+F looks in PDFs).
+
+### Pages placed one by one (2026-10-10)
+
+Built (lane L9):
+- **A page spread is moved alone.** Held still a moment on its rim - or anywhere on it, where its words are too small to read - a page spread is taken hold of, the selection's shade spreading over it alone from the pointer, and the drag moves it to a place of its own, as one step. It then lies over the other pages; of those put in places of their own, the last put there lies on top. Held so on its name, the PDF is taken hold of whole, and all its pages move together.
+- **Where each lies is kept from the PDF's place** (`placed` in `workspace.json`'s `pdfs`: each page's middle from where the PDF lies, in the order they were put there), so the pages go with the PDF wherever it is moved. A page in a place of its own leaves its place in its row empty; the others keep theirs.
+- **Gathered, they go back to the stack's own place**, as before, and their places are kept: spread again, each page goes back to where it was put. *Put pages in rows*, in the PDF's menu while some lie in places of their own, puts them all back in their rows, as one step.
+- **A page in a place of its own shows its number under it** (*3 / 12*), as small on the screen as the PDF's name, which stays under the pages left in their rows - under the first page, where none is left there.
+- **The light, hovered or taken hold of, lies round each page**, not round all of them, since they may lie far apart.
+- **They glide.** Put back in their rows, or moved by an undo or a redo, the pages glide to where they now lie (320 ms), lying over one another as they did until they are there, a page's number fading as it leaves its own place or comes to one; the one being dragged follows the pointer, on top.
+
+Decided while building it, for the maintainer to confirm:
+- **A page is taken hold of as the stack is**, by a long press on its rim; its words are still selected by a long press on them, and a box drawn in a figure.
+- **The number under a page is *3 / 12***, as the column's page number reads.
+
+Not yet, and where it comes:
+- **A stack moved by an undo still jumps** there, as before; only pages spread glide.
+- **Selecting PDFs, or pages, with others**, to be moved, copied or deleted together (*Not yet* in step 1).
 
 ## In order
 

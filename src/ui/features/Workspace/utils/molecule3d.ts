@@ -1,11 +1,16 @@
 import * as THREE from "three";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { atomColour, atomRadius, type Style3D } from "../../../../lib/chem/style3d";
-import type { SolidMark } from "../../../../lib/chem/layout2d";
+import { atomColour, atomRadius, bondRadiusOf, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
+import { chainRuns } from "../../../../lib/chem/biopolymer";
+import { ribbonPoints } from "./ribbon";
+import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondsByDistance } from "../../../../utils/structureParsers";
+
+/** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
+export const RIBBON_REACH = 1.3;
 
 /** World units to the ångström: a bond of 1.5 Å as long as a drawn bond. */
 export const WORLD_PER_ANGSTROM = NOMINAL_BOND_LENGTH / 1.5;
@@ -152,21 +157,34 @@ export function populations(energies: readonly number[]): number[] {
   return w.map((x) => x / sum);
 }
 
-/** How a molecule in 3D is drawn: balls and sticks, or space-filling. */
-export type Look = "balls" | "space";
+/** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */
+export type Look = Role3D;
 
-/** A molecule's own look, or the style's. */
-export function lookOf(m: Molecule3D, style: Style3D): Look {
-  return m.look ?? style.atoms;
+/** The look a molecule is drawn in: its secondary, where it has been switched to it; else the primary. */
+export function lookOf(m: Pick<Molecule3D, "look">): Look {
+  return m.look ?? "primary";
 }
 
 /** A molecule in 3D as it is drawn, frame by frame: about its centre, in world units. */
 export type Solid = {
   /** Each frame's atoms about that frame's own centre: x, y and z in turn. */
   frames: Float32Array[];
-  /** Each atom's radius as drawn, balls and sticks or space-filling. */
+  /** Each atom's radius as each look draws it: none, where the look leaves it out (`hidden`). */
   radii: Record<Look, Float32Array>;
-  /** How far it reaches from its centre in any frame, its atoms and all. */
+  /** The atoms each look leaves out - those its ribbons stand for, the hydrogens on carbon where it hides them: 1, left out. */
+  hidden: Record<Look, Uint8Array>;
+  /** Whether each look leaves out hydrogens on carbon it would draw: the molecule says so (`HIDDEN_MARK`). */
+  hidesH: Record<Look, boolean>;
+  /** Whether each look draws its chains as ribbons (Ribbon3D). */
+  ribbons: Record<Look, boolean>;
+  /**
+   * How far each atom reaches as each look draws it - its ball; or, a
+   * chain's backbone atom where the chain is a ribbon, the ribbon's half
+   * width about it: what the molecule is found by under the pointer, and
+   * what room it takes.
+   */
+  extent: Record<Look, Float32Array>;
+  /** How far it reaches from its centre in any frame, all each look draws. */
   reach: Record<Look, number>;
 };
 
@@ -206,18 +224,27 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
   // (a frame that does not hold every atom is left out)
   const frames = [first, ...(m.frames ?? []).filter((f) => f.length === 3 * n)].map((f) => placesOf(f, n));
   const k = WORLD_PER_ANGSTROM;
-  const radii = {
-    balls: Float32Array.from(m.atoms, (a) => atomRadius(a.el, { ...style, atoms: "balls" }) * k),
-    space: Float32Array.from(m.atoms, (a) => atomRadius(a.el, { ...style, atoms: "space" }) * k),
+  const hidden = { primary: hiddenAtoms(m, style.primary), secondary: hiddenAtoms(m, style.secondary) };
+  const radiiOf = (look: Look) => Float32Array.from(m.atoms, (a, i) => (hidden[look][i] ? 0 : atomRadius(a.el, style[look]) * k));
+  const radii = { primary: radiiOf("primary"), secondary: radiiOf("secondary") };
+  const ribbons = { primary: ribbonsOf(m, style.primary), secondary: ribbonsOf(m, style.secondary) };
+  // (a ribbon's backbone atoms reach as far as the ribbon does about them)
+  const traces = m.biopolymer && (ribbons.primary || ribbons.secondary) ? chainRuns(m.biopolymer, m.atoms).flatMap((r) => r.trace) : [];
+  const extentOf = (look: Look) => {
+    const e = Float32Array.from(radii[look]);
+    if (ribbons[look]) for (const i of traces) e[i] = Math.max(e[i], RIBBON_REACH * k);
+    return e;
   };
+  const extent = { primary: extentOf("primary"), secondary: extentOf("secondary") };
   const reachOf = (r: Float32Array) => {
     let reach = 0;
     for (const f of frames) {
-      for (let i = 0; i < n; i++) reach = Math.max(reach, Math.hypot(f[3 * i], f[3 * i + 1], f[3 * i + 2]) + r[i]);
+      for (let i = 0; i < n; i++) if (r[i] > 0) reach = Math.max(reach, Math.hypot(f[3 * i], f[3 * i + 1], f[3 * i + 2]) + r[i]);
     }
     return reach;
   };
-  const solid = { frames, radii, reach: { balls: reachOf(radii.balls), space: reachOf(radii.space) } };
+  const hidesH = { primary: hidesCarbonHydrogens(m, style.primary), secondary: hidesCarbonHydrogens(m, style.secondary) };
+  const solid = { frames, radii, hidden, hidesH, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
   byStyle.set(style, { frames: m.frames, solid });
   return solid;
 }
@@ -279,7 +306,7 @@ export function frameOf(s: Solid, frame: number | undefined): number {
  * How high above the page a molecule's centre stands: as far as it reaches,
  * so that however it is turned none of it passes behind the page.
  */
-export function standingHeight(s: Solid, look: Look = "balls"): number {
+export function standingHeight(s: Solid, look: Look = "primary"): number {
   return s.reach[look];
 }
 
@@ -287,7 +314,7 @@ export function standingHeight(s: Solid, look: Look = "balls"): number {
  * How high above the page a molecule's centre is: where a turn of several as
  * one body put it, or else as high as it reaches.
  */
-export function heightOf(m: Pick<Molecule3D, "at">, s: Solid, look: Look = "balls"): number {
+export function heightOf(m: Pick<Molecule3D, "at">, s: Solid, look: Look = "primary"): number {
   return m.at.z ?? standingHeight(s, look);
 }
 
@@ -305,11 +332,11 @@ export type Pose = {
 
 /** A molecule as it stands in a frame, in a look, turned as it is. */
 export function poseOf(m: Molecule3D, s: Solid, look: Look, turn?: Turn3D, frame?: number): Pose {
-  return { at: m.at, height: heightOf(m, s, look), turn, places: s.frames[frameOf(s, frame)], radii: s.radii[look] };
+  return { at: m.at, height: heightOf(m, s, look), turn, places: s.frames[frameOf(s, frame)], radii: s.extent[look] };
 }
 
-/** An atom or a bond's end as the camera sees it, taken back to the page: where, how large, and how high. */
-type Seen = { x: number; y: number; r: number; z: number };
+/** An atom or a bond's end as the camera sees it, taken back to the page: where, how large, how high, and how much larger than it is (`seenAt`). */
+type Seen = { x: number; y: number; r: number; z: number; k: number };
 
 /**
  * Each atom as the camera sees it, taken back to the page (`seenAt`):
@@ -325,7 +352,7 @@ export function seenOnPage(pose: Pose, eye?: Eye): Seen[] {
     p.set(pose.places[3 * i], pose.places[3 * i + 1], pose.places[3 * i + 2]).applyQuaternion(q);
     const z = pose.height + p.z;
     const at = seenAt(pose.at.x + p.x, pose.at.y + p.y, z, eye);
-    seen.push({ x: at.x, y: at.y, r: pose.radii[i] * at.k, z });
+    seen.push({ x: at.x, y: at.y, r: pose.radii[i] * at.k, z, k: at.k });
   }
   return seen;
 }
@@ -337,6 +364,8 @@ export function seenOnPage(pose: Pose, eye?: Eye): Seen[] {
 export function seenBounds(pose: Pose, eye?: Eye): { minX: number; maxX: number; minY: number; maxY: number } {
   const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
   for (const { x, y, r } of seenOnPage(pose, eye)) {
+    // (an atom its look leaves out takes no room)
+    if (r <= 0) continue;
     b.minX = Math.min(b.minX, x - r);
     b.maxX = Math.max(b.maxX, x + r);
     b.minY = Math.min(b.minY, y - r);
@@ -352,7 +381,7 @@ export function seenBounds(pose: Pose, eye?: Eye): { minX: number; maxX: number;
  */
 export function reachOverFrames(m: Molecule3D, style: Style3D, turn?: Turn3D): { x0: number; x1: number; y0: number; y1: number } {
   const solid = solidOf(m, style);
-  const look = lookOf(m, style);
+  const look = lookOf(m);
   const r = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
   for (let f = 0; f < solid.frames.length; f++) {
     const b = seenBounds(poseOf({ ...m, at: { x: 0, y: 0 } }, solid, look, turn, f));
@@ -529,11 +558,13 @@ export function onMolecule(
   // (quickly: nothing near enough to the molecule at all)
   const reach = BODY_PX / zoom;
   let d = Infinity;
-  for (const a of seen) d = Math.min(d, Math.hypot(x - a.x, y - a.y) - a.r);
+  for (const a of seen) if (a.r > 0) d = Math.min(d, Math.hypot(x - a.x, y - a.y) - a.r);
   if (d > reach + 2 * NOMINAL_BOND_LENGTH) return false;
   for (const b of m.bonds) {
     const a1 = seen[b.a1], a2 = seen[b.a2];
-    const r = bondRadius * WORLD_PER_ANGSTROM * ((a1.r / pose.radii[b.a1] + a2.r / pose.radii[b.a2]) / 2);
+    // (a bond to an atom its look leaves out is left out with it)
+    if (!(pose.radii[b.a1] > 0 && pose.radii[b.a2] > 0)) continue;
+    const r = bondRadius * WORLD_PER_ANGSTROM * ((a1.k + a2.k) / 2);
     d = Math.min(d, toSegment(x, y, a1, a2) - r);
   }
   if (d > 0 && ringsOf(m).some((ring) => inPolygon(x, y, ring.map((i) => seen[i])))) d = 0;
@@ -550,7 +581,8 @@ export function bondAt(m: Molecule3D, pose: Pose, eye: Eye | undefined, x: numbe
   let z = -Infinity;
   m.bonds.forEach((b, i) => {
     const a1 = seen[b.a1], a2 = seen[b.a2];
-    const r = bondRadius * WORLD_PER_ANGSTROM * ((a1.r / pose.radii[b.a1] + a2.r / pose.radii[b.a2]) / 2);
+    if (!(pose.radii[b.a1] > 0 && pose.radii[b.a2] > 0)) return;
+    const r = bondRadius * WORLD_PER_ANGSTROM * ((a1.k + a2.k) / 2);
     const mid = (a1.z + a2.z) / 2;
     if (toSegment(x, y, a1, a2) <= r && mid > z) {
       best = i;
@@ -566,7 +598,7 @@ export function nearestAtom(pose: Pose, eye: Eye | undefined, x: number, y: numb
   let far = Infinity;
   seenOnPage(pose, eye).forEach((a, i) => {
     const d = Math.hypot(x - a.x, y - a.y);
-    if (d < far) {
+    if (d < far && a.r > 0) {
       far = d;
       best = i;
     }
@@ -716,7 +748,8 @@ export function asSeen(
  * so that one going back into a ball does not show over it.
  */
 export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark[] {
-  const look = lookOf(m as Molecule3D, style);
+  const look = lookOf(m);
+  const drawn = style[look];
   const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
   const places = solid.frames[frameOf(solid, m.frame)];
   const radii = solid.radii[look];
@@ -728,16 +761,20 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
     const s = seen(at(i));
     return { kind: "ball" as const, c: { x: s.x, y: s.y }, r: radii[i] * s.k, color: atomColour(a.el), z: s.z };
   });
-  const marks: (SolidMark & { z: number })[] = [...balls];
-  if (look === "balls") {
+  // (an atom its look leaves out is not drawn, nor a bond to it)
+  const left = solid.hidden[look];
+  const shown = balls.filter((_, i) => !left[i]);
+  const marks: (SolidMark & { z: number })[] = [...shown];
+  if (drawn.atoms === "balls") {
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
-    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds: bondsAt(m, frameOf(solid, m.frame)) }, turned, style.bondRadius * WORLD_PER_ANGSTROM)) {
+    const bonds = bondsAt(m, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);
+    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM)) {
       const a = seen(line.a);
       const b = seen(line.b);
       // (which atoms the line runs between: the nearest at each end)
       const end = (p: { x: number; y: number }) =>
-        balls.reduce((best, ball) => (Math.hypot(ball.c.x - p.x, ball.c.y - p.y) < Math.hypot(best.c.x - p.x, best.c.y - p.y) ? ball : best));
+        shown.reduce((best, ball) => (Math.hypot(ball.c.x - p.x, ball.c.y - p.y) < Math.hypot(best.c.x - p.x, best.c.y - p.y) ? ball : best));
       const ra = end(a).r;
       const rb = end(b).r;
       const len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -748,11 +785,48 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
         a: { x: a.x + ux * ra * 0.9, y: a.y + uy * ra * 0.9 },
         b: { x: b.x - ux * rb * 0.9, y: b.y - uy * rb * 0.9 },
         width: 2 * line.r * ((a.k + b.k) / 2),
-        color: style.bondColor,
+        color: drawn.bondColor,
         // (behind a ball as deep as its middle)
         z: (a.z + b.z) / 2 - 1e-4,
       });
     }
   }
+  // its chains as ribbons, where its look draws them so: sticks along each
+  // ribbon, as wide as it is - what a picture without WebGL shows of it,
+  // and the room it takes in any picture
+  if (solid.ribbons[look] && m.biopolymer) {
+    const turned = new Float32Array(places.length);
+    for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
+    for (const run of chainRuns(m.biopolymer, m.atoms)) {
+      const line = ribbonPoints(turned, run, m.biopolymer, style.ribbonColours, 1, WORLD_PER_ANGSTROM, 2);
+      for (let j = 0; j + 1 < line.length; j++) {
+        const a = seen(line[j].at);
+        const b = seen(line[j + 1].at);
+        marks.push({ kind: "stick", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, width: line[j].w * ((a.k + b.k) / 2), color: `#${line[j].colour.getHexString()}`, z: (a.z + b.z) / 2 });
+      }
+    }
+  }
   return marks.sort((x, y) => x.z - y.z).map(({ z: _z, ...mark }) => mark as SolidMark);
+}
+
+/**
+ * What a picture of a molecule drawn without the hydrogens on its carbons
+ * says over it, as the canvas does: "C-H hidden", `size` high, centred over
+ * its highest atom, on a white ground as a measurement's value is (the
+ * maintainer, 2026-10-10: a picture of it carries the mark too). Null for
+ * one drawn with them all.
+ */
+export function hiddenPictureMark(m: Carried3D, style: Style3D, size: number, eye?: Eye): MeasureMark | null {
+  const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
+  if (!solid.hidesH[lookOf(m)]) return null;
+  let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const k of pictureMarks(m, style, eye)) {
+    if (k.kind !== "ball") continue;
+    x0 = Math.min(x0, k.c.x - k.r);
+    x1 = Math.max(x1, k.c.x + k.r);
+    y1 = Math.max(y1, k.c.y + k.r);
+  }
+  if (!Number.isFinite(y1)) return null;
+  // (half its height above the atom, its ground half its height again)
+  return { lines: [], fan: [], width: 0, fanOpacity: 0, label: { x: (x0 + x1) / 2, y: y1 + 1.15 * size }, text: HIDDEN_MARK, size, color: HIDDEN_MARK_COLOUR };
 }

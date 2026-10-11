@@ -378,3 +378,103 @@ describe("a molecule's calculation's lists", () => {
     expect(again.state().lists3d).toEqual({});
   });
 });
+
+describe("a molecule in 3D switched to its other look", () => {
+  it("goes to the secondary and back, one undo step each - alone, or with those selected with it", () => {
+    const { doc, state } = editor();
+    state().switchLook3d(1);
+    expect(state().molecules3d.map((m) => m.look)).toEqual(["secondary", undefined]);
+    expect(doc.history().undoLabel).toBe("secondary style");
+    state().switchLook3d(1);
+    expect(state().molecules3d.map((m) => m.look)).toEqual([undefined, undefined]);
+    // selected together, both go over to the other look of the one switched
+    state().switchLook3d(2);
+    state().selectMolecules3d([1, 2], false);
+    state().switchLook3d(1);
+    expect(state().molecules3d.map((m) => m.look)).toEqual(["secondary", "secondary"]);
+    state().switchLook3d(2);
+    expect(state().molecules3d.map((m) => m.look)).toEqual([undefined, undefined]);
+    doc.undo();
+    expect(state().molecules3d.map((m) => m.look)).toEqual(["secondary", "secondary"]);
+  });
+});
+
+describe("a measurement on a molecule in 3D set to a value", () => {
+  /** Propane, C0-C1-C2, with a hydrogen on C2 (3): a molecule of its own, or a conformer set's. */
+  const propane = (extra: object = {}) => ({
+    atoms: [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "C", x: 1.5, y: 0, z: 0 },
+      { el: "C", x: 2, y: 1.4, z: 0 },
+      { el: "H", x: 3, y: 1.5, z: 0.3 },
+    ],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 1 },
+      { a1: 2, a2: 3, order: 1 },
+    ],
+    at: { x: 0, y: 0 },
+    measures: [{ id: 1, atoms: [0, 1, 2] }],
+    ...extra,
+  });
+  const store = (m: object) => {
+    const doc = createWorkspaceDocument();
+    doc.edit("add", (d) => addMolecule3d(d, m as Parameters<typeof addMolecule3d>[1]));
+    const s = createEditorStore(doc);
+    connectStoreToDocument(s, doc);
+    return { doc, state: () => s.getState() };
+  };
+  const angle = (xyz: { x: number; y: number; z: number }[]) => {
+    const u = [xyz[0].x - xyz[1].x, xyz[0].y - xyz[1].y, xyz[0].z - xyz[1].z];
+    const v = [xyz[2].x - xyz[1].x, xyz[2].y - xyz[1].y, xyz[2].z - xyz[1].z];
+    const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    return (Math.acos(dot / (Math.hypot(...u) * Math.hypot(...v))) * 180) / Math.PI;
+  };
+
+  it("moves a molecule of its own in place, the last atom's side, one undo step for a whole drag", () => {
+    const { doc, state } = store(propane());
+    expect(state().setMeasure3d(1, 1, 120, "drag")).toBe(1);
+    expect(state().setMeasure3d(1, 1, 112, "drag")).toBe(1);
+    const m = state().molecules3d[0];
+    expect(angle(m.atoms)).toBeCloseTo(112, 6);
+    expect(m.atoms[0]).toEqual({ el: "C", x: 0, y: 0, z: 0 });
+    expect(doc.history().undoLabel).toBe("set angle");
+    doc.undo();
+    expect(state().molecules3d[0].atoms[2]).toEqual({ el: "C", x: 2, y: 1.4, z: 0 });
+  });
+
+  it("never edits a result: the edit is a copy beside it, saying what it was made from - one undo step with it", () => {
+    const frames = [[0, 0, 0, 1.5, 0, 0, 2.1, 1.3, 0, 3.1, 1.4, 0.3]];
+    const { doc, state } = store(propane({ conformerSet: true, frames, energies: [-1, -1.001], numbers: [4, 9] }));
+    state().setFrame3d(1, 1);
+    const id = state().setMeasure3d(1, 1, 125, "drag");
+    expect(id).toBe(2);
+    // (dragged on, the copy goes on being edited)
+    expect(state().setMeasure3d(id!, 1, 118, "drag")).toBe(2);
+    const [orig, copy] = state().molecules3d;
+    expect(orig.frames).toEqual(frames);
+    expect(copy.edited).toEqual({ from: "conformer 9" });
+    expect(copy.frames).toBeUndefined();
+    expect(copy.energies).toBeUndefined();
+    expect(copy.conformerSet).toBeUndefined();
+    expect(angle(copy.atoms)).toBeCloseTo(118, 6);
+    expect(copy.at.x).toBeGreaterThan(orig.at.x);
+    doc.undo();
+    expect(state().molecules3d).toHaveLength(1);
+  });
+
+  it("measures what is chosen, in the order chosen, and opens its value to be typed", () => {
+    const { state } = store(propane());
+    // (measured already the other way along: put in the order chosen)
+    for (const a of [2, 1, 0]) state().chooseAtom3d(1, a);
+    state().setChosen3d();
+    expect(state().molecules3d[0].measures).toEqual([{ id: 1, atoms: [2, 1, 0] }]);
+    expect(state().measureEdit3d).toEqual({ id: 1, measure: 1 });
+    expect(state().chosen3d).toBeNull();
+    // and a new one, measured
+    for (const a of [0, 1]) state().chooseAtom3d(1, a);
+    state().setChosen3d();
+    expect(state().molecules3d[0].measures?.[1]).toEqual({ id: 2, atoms: [0, 1] });
+    expect(state().measureEdit3d).toEqual({ id: 1, measure: 2 });
+  });
+});

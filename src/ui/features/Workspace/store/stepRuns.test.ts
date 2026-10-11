@@ -89,6 +89,11 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
 import { readWorkspace, workspaceText } from "../utils/workspace";
+import { registerKinds } from "../../../../lib/io/kinds";
+import { MANIFESTS } from "../../../../lib/plugins/known";
+
+// (the plugins Meno carries, added: the kinds their outputs are read as registered)
+registerKinds(MANIFESTS);
 
 /** A page with water in a set, wired into a step that optimises it, done by xTB. */
 function editor() {

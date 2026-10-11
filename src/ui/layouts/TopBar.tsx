@@ -67,6 +67,7 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
         <OfflineToggle />
         <button
           aria-label="Save"
+          data-guide="save"
           title={`Save (${shortcutLabel("S")})`}
           disabled={!save}
           onMouseDown={stop}
@@ -77,6 +78,7 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
         </button>
         <button
           aria-label="Settings"
+          data-guide="settings"
           title="Settings"
           onMouseDown={stop}
           onClick={() => openByKind?.("settings", { label: "Settings" })}

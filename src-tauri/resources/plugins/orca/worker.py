@@ -178,11 +178,7 @@ def op_collect(m):
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []]}
 
 
-def op_ping(_m):
-    return {"version": VERSION}
-
-
-OPS = {"prepare": op_prepare, "collect": op_collect, "ping": op_ping}
+OPS = {"prepare": op_prepare, "collect": op_collect}
 
 
 def answer(line):

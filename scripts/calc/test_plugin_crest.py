@@ -67,7 +67,7 @@ def ask(op, **m):
 
 def defaults():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    step = next(s for s in manifest["steps"] if s["kind"] == "conformers")
+    step = next(s for s in manifest["steps"] if "conformers" in s["kinds"])
     return {o["id"]: o["default"] for o in step["options"]}
 
 
@@ -121,14 +121,14 @@ class Prepare(unittest.TestCase):
 
     def test_every_option_offered_is_one_it_takes(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        step = next(s for s in manifest["steps"] if s["kind"] == "conformers")
+        step = next(s for s in manifest["steps"] if "conformers" in s["kinds"])
         offered = {o["id"]: {c["value"] for c in o.get("choices", [])} for o in step["options"]}
         self.assertEqual(offered["solvent"] - {"none"}, worker.SOLVENTS)
         self.assertEqual(offered["method"], set(worker.METHODS))
         self.assertEqual(offered["search"], set(worker.SEARCHES))
         # (a search starts from 3D; an optimisation is done with one method)
         self.assertEqual(step["takes"], ["molecules", "conformers"])
-        optimise = next(s for s in manifest["steps"] if s["kind"] == "optimise")
+        optimise = next(s for s in manifest["steps"] if "optimise" in s["kinds"])
         offered = {o["id"]: {c["value"] for c in o.get("choices", [])} for o in optimise["options"]}
         self.assertEqual(offered["solvent"] - {"none"}, worker.SOLVENTS)
         self.assertEqual(offered["method"], set(worker.METHODS) - {"gfn2//gfnff"})

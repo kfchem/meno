@@ -8,13 +8,14 @@ import type { AsideEntry, StepJob, StepRan, StepRunKept, StepRunning, Wire, Wire
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetKind, type StepKind } from "./kinds";
+import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isId = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
-const SETS: readonly SetKind[] = ["structures", "molecules", "conformers"];
+const SETS: readonly SetKind[] = SET_KINDS;
 
 const asideIn = (v: unknown): AsideEntry[] =>
   (Array.isArray(v) ? v : []).flatMap((a: Partial<Record<keyof AsideEntry, unknown>>): AsideEntry[] =>

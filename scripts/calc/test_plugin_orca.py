@@ -45,7 +45,7 @@ def ask(op, **m):
 
 def defaults(kind):
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    step = next(s for s in manifest["steps"] if s["kind"] == kind)
+    step = next(s for s in manifest["steps"] if kind in s["kinds"])
     return {o["id"]: o["default"] for o in step["options"]}
 
 

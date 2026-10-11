@@ -165,7 +165,7 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
   const molecule = { ...m, id: 0 } as Molecule3D;
   const solid = solidOf(molecule, style);
   const places = solid.frames[frameOf(solid, m.frame)];
-  const look = lookOf(molecule, style);
+  const look = lookOf(molecule);
   const height = heightOf(m, solid, look);
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
   const seenK = (v: THREE.Vector3) => {

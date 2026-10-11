@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { registerKinds } from "../io/kinds";
+import { MANIFESTS } from "../plugins/known";
 import {
   alsoReadersFor,
   anyKindById,
   MENO,
-  OFFERED,
+  REFUSED,
   PLUGINS,
   pluginsFilling,
   READER_PLUGINS,
@@ -51,7 +53,7 @@ describe("the readers Meno knows of", () => {
     expect(PLUGINS.map((p) => p.id)).toEqual(["cclib", "crest", "gaussian", "orca", "pyscf", "rdkit", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
-    expect(rdkit.roles).toEqual(["smiles", "checks", "stereo-labels", "stereoisomers", "conformers", "drawing"]);
+    expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
     expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf"]);
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
@@ -65,8 +67,8 @@ describe("the readers Meno knows of", () => {
       ["energy", ["orca"]],
       ["frequencies", ["orca"]],
     ]);
-    expect(orca.installed).toEqual([{ name: "orca", label: "ORCA", files: { macos: "orca", windows: "orca.exe", linux: "orca" } }]);
-    expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" } }]);
+    expect(orca.installed).toEqual([{ name: "orca", label: "ORCA", files: { macos: "orca", windows: "orca.exe", linux: "orca" }, path: ["{folder}"], env: {} }]);
+    expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] } }]);
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     // (and those that fill kinds of step: xTB, made by pixi - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
@@ -92,25 +94,27 @@ describe("the readers Meno knows of", () => {
       description: "",
       licence: "",
       homepage: "",
-      environment: { maker: "uv", lock: "requirements.lock" },
-      worker: "worker.py",
+      environment: "uv",
       reads: ["nbo-47", "xyz", "gaussian"],
       roles: [],
-      roleOptions: {},
       steps: [],
       systems: [],
       installed: [],
       writes: [],
-      texts: [],
-      kinds: [{ id: "nbo-47", name: "NBO input", program: "NBO", extensions: [".47"], marks: [{ text: "$GENNBO" }] }],
+      guide: [],
+      suggests: [],
+      files: [],
+      kinds: [{ id: "nbo-47", name: "NBO input", program: "NBO", extensions: [".47"], marks: [{ text: "$GENNBO" }], lines: [] }],
     });
     expect(nbo).toMatchObject({ reads: ["nbo-47", "xyz"], lock: "resources/plugins/nbo/requirements.lock", worker: "resources/plugins/nbo/worker.py" });
+    // (each kind it reads one it brings, or Meno's: registered while it is added)
+    registerKinds(MANIFESTS);
     for (const p of READER_PLUGINS) {
       for (const id of p.reads) expect(anyKindById(id), `${p.id} reads ${id}`).toBeDefined();
     }
-    // (the kinds of every plugin on offer, Meno's with them: what a file nothing added reads would be read as)
-    expect(OFFERED.kinds.map((k) => k.id)).toEqual(expect.arrayContaining(["mol", "cube", "orca", "molden", "nwchem"]));
-    expect(OFFERED.refused).toEqual([]);
+    registerKinds([]);
+    // (no mark of the plugins Meno carries - their kinds', their catalogues' - claims a file of Meno's own)
+    expect(REFUSED).toEqual([]);
   });
 
   it("are known by id - a molecule keeps each as its id and version - and named by it", () => {

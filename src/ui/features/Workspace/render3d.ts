@@ -1,10 +1,12 @@
 import * as THREE from "three";
-import { atomColour, KEY_LIGHT_FROM, type Style3D } from "../../../lib/chem/style3d";
+import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
 import { bondLines, bondsAt, frameOf, heightOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
+import { chainRuns } from "../../../lib/chem/biopolymer";
+import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 
 /** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely. */
@@ -70,11 +72,15 @@ export function rendered3d(
     toneMapped: false,
   });
   const fans: THREE.BufferGeometry[] = [];
-  const material = (color: string) => {
-    let mat = materials.get(color);
+  const ribbons: THREE.BufferGeometry[] = [];
+  const ribbonMats: THREE.Material[] = [];
+  // (one for each colour in each finish: a molecule's look's)
+  const material = (color: string, look: MoleculeLook) => {
+    const key = `${color} ${look.roughness} ${look.metalness}`;
+    let mat = materials.get(key);
     if (!mat) {
-      mat = new THREE.MeshStandardMaterial({ color, roughness: style.roughness, metalness: style.metalness });
-      materials.set(color, mat);
+      mat = new THREE.MeshStandardMaterial({ color, roughness: look.roughness, metalness: look.metalness });
+      materials.set(key, mat);
     }
     return mat;
   };
@@ -92,30 +98,48 @@ export function rendered3d(
       // the molecule, about its centre, as high as it stands and turned as it is
       const molecule = { ...m, id: 0 } as Molecule3D;
       const solid = solidOf(molecule, style);
-      const look = lookOf(molecule, style);
+      const look = lookOf(molecule);
+      const drawn = style[look];
       const places = solid.frames[frameOf(solid, m.frame)];
       const radii = solid.radii[look];
+      // (an atom its look leaves out is not drawn, nor a bond to it)
+      const left = solid.hidden[look];
       const group = new THREE.Group();
       group.position.set(0, 0, heightOf(molecule, solid, look));
       if (m.turn) group.quaternion.set(...m.turn);
       m.atoms.forEach((a, i) => {
-        const mesh = new THREE.Mesh(ball, material(atomColour(a.el)));
+        if (left[i]) return;
+        const mesh = new THREE.Mesh(ball, material(atomColour(a.el), drawn));
         mesh.position.set(places[3 * i], places[3 * i + 1], places[3 * i + 2]);
         mesh.scale.setScalar(radii[i]);
         group.add(mesh);
       });
-      if (look === "balls") {
+      if (drawn.atoms === "balls") {
         // (the bonds the frame shown has, where they go frame by frame)
-        for (const line of bondLines({ ...molecule, bonds: bondsAt(molecule, frameOf(solid, m.frame)) }, places, style.bondRadius * WORLD_PER_ANGSTROM)) {
+        const bonds = bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);
+        for (const line of bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM)) {
           const along = line.b.clone().sub(line.a);
           const length = along.length();
           if (length < 1e-9) continue;
-          const mesh = new THREE.Mesh(stick, material(style.bondColor));
+          const mesh = new THREE.Mesh(stick, material(drawn.bondColor, drawn));
           mesh.position.copy(line.a).add(line.b).multiplyScalar(0.5);
           mesh.quaternion.setFromUnitVectors(up, along.divideScalar(length));
           mesh.scale.set(line.r, length, line.r);
           group.add(mesh);
         }
+      }
+      // its chains as ribbons, where its look draws them so
+      if (solid.ribbons[look] && m.biopolymer) {
+        const made = ribbonMesh(places, chainRuns(m.biopolymer, m.atoms), m.biopolymer, style.ribbonColours, 1, WORLD_PER_ANGSTROM);
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(made.positions, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(made.normals, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(made.colours, 3));
+        geometry.setIndex(new THREE.BufferAttribute(made.indices, 1));
+        ribbons.push(geometry);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: drawn.roughness, metalness: drawn.metalness });
+        ribbonMats.push(mat);
+        group.add(new THREE.Mesh(geometry, mat));
       }
       // its measurements, as the canvas draws them: lines - a distance's
       // dashed - and an angle's faint fan, in depth among its atoms, so that
@@ -189,6 +213,8 @@ export function rendered3d(
     measureLine.dispose();
     measureFan.dispose();
     for (const g of fans) g.dispose();
+    for (const g of ribbons) g.dispose();
+    for (const mat of ribbonMats) mat.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
   }

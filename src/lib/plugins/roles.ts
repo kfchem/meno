@@ -11,14 +11,15 @@ export type Role = {
   name: string;
   /** Where in Settings who fills it is chosen. */
   where: "chemistry" | "molecules3d";
+  /** Whether it takes options - the plugin's that fills it, drawn in Settings where it is chosen and sent with each request. */
+  options?: true;
 };
 
 export const ROLES = {
   smiles: { name: "SMILES to a structure, and back", where: "chemistry" },
-  checks: { name: "Hydrogens, valence and aromatic rings", where: "chemistry" },
-  "stereo-labels": { name: "R and S, E and Z", where: "chemistry" },
+  checks: { name: "Hydrogens, valence, aromatic rings, R and S, E and Z", where: "chemistry" },
   stereoisomers: { name: "Stereoisomers of what is drawn without a configuration", where: "molecules3d" },
-  conformers: { name: "Structures in 3D, and their conformers", where: "molecules3d" },
+  conformers: { name: "Structures in 3D, and their conformers", where: "molecules3d", options: true },
   drawing: { name: "A molecule in 3D drawn as a formula", where: "molecules3d" },
 } as const satisfies Record<string, Role>;
 

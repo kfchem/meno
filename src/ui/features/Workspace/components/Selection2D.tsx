@@ -33,7 +33,7 @@ const turningOf =
   (turns: Record<number, Turn3D>, style: Style3D) =>
   (m: Molecule3D): Turning3D => {
     const solid = solidOf(m, style);
-    return { id: m.id, at: m.at, turn: turns[m.id], standing: standingHeight(solid, lookOf(m, style)) };
+    return { id: m.id, at: m.at, turn: turns[m.id], standing: standingHeight(solid, lookOf(m)) };
   };
 
 /**
@@ -63,7 +63,7 @@ function selectionExtent(
   }
   for (const m of molecules) {
     if (!sel3d.has(m.id)) continue;
-    const pose = poseOf(m, solidOf(m, style), lookOf(m, style), turns[m.id], frames[m.id]);
+    const pose = poseOf(m, solidOf(m, style), lookOf(m), turns[m.id], frames[m.id]);
     const b = seenBounds(pose, eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
     xs.push(b.minX, b.maxX);
     ys.push(b.minY, b.maxY);
@@ -164,7 +164,7 @@ export default function Selection2D() {
         s.selectMolecules3d(molecules3dIn(s.molecules3d, kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
         // (and texts' sheets, by their middles)
-        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text) }] : [])), kind, points), add);
+        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -177,8 +177,17 @@ export default function Selection2D() {
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0 || e.target !== gl.domElement) return;
       const st = store.getState();
-      // (on an arrow, a "+", words, a workflow's wire, a PDF, a picture or a text's sheet: theirs)
-      const onMark = st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null || st.hoveredWire != null || st.hoveredPdf != null || st.hoveredPicture != null || st.hoveredText != null || st.hoveredMark != null;
+      // (on an arrow, a "+", words, a workflow's wire, a PDF, a picture, a text's sheet or a measurement's value: theirs)
+      const onMark =
+        st.hoveredArrow != null ||
+        st.hoveredPlus != null ||
+        st.hoveredCaption != null ||
+        st.hoveredWire != null ||
+        st.hoveredPdf != null ||
+        st.hoveredPicture != null ||
+        st.hoveredText != null ||
+        st.hoveredMark != null ||
+        st.hoveredMeasure3d != null;
       if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || onMark || st.labelEdit.active || st.extend.active || st.captionEdit) return;
       const add = addsToSelection(e);
       const count = pressOnEmpty(lastEmpty, { t: e.timeStamp, x: e.clientX, y: e.clientY }, DOUBLE_CLICK_MS);

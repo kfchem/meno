@@ -455,7 +455,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (its log kept with the workspace, as an output it was read from)
         const { kind: _kind, ...source } = await rememberOutput(`${kindInfo(kind).name} ${k + 1}.log`, log, "");
         for (const [i, out] of said.entries()) {
-          const readers = [`${plugin.id} ${plugin.version}`];
+          // (by the version its worker said it runs, as a reader's is kept)
+          const readers = [`${plugin.id} ${client.version || plugin.version}`];
           const made = kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined) : workedOf(kind, mine[i], out, readers, log ? source : undefined);
           if (typeof made === "string") whys.push(made);
           else worked.push(...(Array.isArray(made) ? made : [made]));
@@ -478,7 +479,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** An output a job wrote, read by Meno's readers as one opened is (lib/calc/read) - every reader of its kind added, put together - and kept, by its kind, as what the molecules it gave were read from; why not, where nothing added reads it. */
   async function readWithReaders(r: ToRead, text: string): Promise<{ output: ReaderOutput; readers: string[]; source: CalcSource } | string> {
     const kind = anyKindById(r.kind);
-    if (!kind) return `${r.name} is read by no reader Meno knows of`;
+    if (!kind) return `No plugin added reads ${r.name}`;
     const source = await rememberOutput(r.name, text, kind.id);
     try {
       const { output, readers } = await readOutput(r.name, text, kind, source.sha256);

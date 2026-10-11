@@ -3,7 +3,11 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
-import { chosenPath } from "../../utils/molecule3d";
+import { chosenPath, lookOf, solidOf, bondsAt } from "../../utils/molecule3d";
+import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
+import { kindOf } from "../../utils/measure3d";
+import { currentStyle3D } from "../../style3d";
+import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
@@ -196,8 +200,16 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     removeMolecule3d: (id: number) => {
       doc.edit("delete molecule", (d) => ops.removeMolecule3d(d, id));
     },
-    setLook3d: (id: number, look: Look3D) => {
-      doc.edit(look === "space" ? "space-filling" : "balls and sticks", (d) => ops.setLook3d(d, id, look));
+    setLook3d: (ids: number[], look: Look3D) => {
+      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) => ops.setLook3d(d, ids, look));
+    },
+    switchLook3d: (id: number) => {
+      const { molecules3d, sel3d } = get();
+      const m = molecules3d.find((x) => x.id === id);
+      if (!m) return;
+      // (selected with others, they all go over with it: to its other look)
+      const ids = sel3d.has(id) ? molecules3d.filter((x) => sel3d.has(x.id)).map((x) => x.id) : [id];
+      get().setLook3d(ids, (m.look ?? "primary") === "primary" ? "secondary" : "primary");
     },
     measureChosen3d: () => {
       const { chosen3d: chosen, molecules3d } = get();
@@ -207,6 +219,56 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const label = ["", "", "measure distance", "measure angle", "measure torsion angle"][atoms.length];
       doc.edit(label, (d) => ops.addMeasure3d(d, chosen.id, atoms));
       set((prev) => ({ ...prev, chosen3d: null }));
+    },
+    editMeasure3d: (x: { id: number; measure: number } | null) =>
+      set((prev) => (prev.measureEdit3d?.id === x?.id && prev.measureEdit3d?.measure === x?.measure ? prev : { ...prev, measureEdit3d: x })),
+    setMeasure3d: (id: number, measure: number, value: number, gesture?: string): number | null => {
+      const st = get();
+      const m = st.molecules3d.find((x) => x.id === id);
+      const x = m?.measures?.find((k) => k.id === measure);
+      if (!m || !x) return null;
+      // (in the frame shown, with the bonds that frame has)
+      const frame = Math.min(Math.max(0, Math.round(st.frames3d[id] ?? 0)), m.frames?.length ?? 0);
+      const bonds = bondsAt(m, frame);
+      const moving = movingAtoms({ atoms: m.atoms, bonds }, x.atoms);
+      if (!moving) return null;
+      const before = placesOf(m, frame);
+      const after = withValue(before, x.atoms, value, moving);
+      const stereo = stereoAfter({ ...m, bonds }, before, after);
+      const kind = kindOf(x.atoms);
+      const label = `set ${kind === "torsion" ? "torsion angle" : kind}`;
+      const meta = gesture ? { coalesceKey: gesture } : undefined;
+      if (!isResult(m)) {
+        doc.edit(label, (d) => ops.setPlaces3d(d, id, frame, after, stereo), meta);
+        return id;
+      }
+      // a result is never edited: the edit is a copy of it, beside it -
+      // out of any set it would fall in - turned as it is
+      const copy = editedCopy(m, frame, after, stereo, { x: 0, y: 0 });
+      const style = currentStyle3D();
+      const reach = (k: Molecule3D) => solidOf(k, style).reach[lookOf(k)];
+      const own = reach({ ...copy, id: 0 });
+      const y = m.at.y;
+      let left = m.at.x + reach(m) + NOMINAL_BOND_LENGTH + own;
+      for (const b of doc.getState().sets ?? []) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
+      const newId = doc.getState().nextMolecule3dId ?? 1;
+      doc.edit(label, (d) => ops.addMolecule3d(d, { ...copy, at: { x: left, y } }), meta);
+      const turn = get().turns3d[id];
+      if (turn) set((prev) => ({ ...prev, turns3d: { ...prev.turns3d, [newId]: turn } }));
+      return newId;
+    },
+    setChosen3d: () => {
+      const { chosen3d: chosen, molecules3d } = get();
+      const m = chosen && molecules3d.find((x) => x.id === chosen.id);
+      const atoms = m && chosenPath(m, chosen);
+      if (!chosen || !m || !atoms) return;
+      // (measured already, either way along: that one, put in the order chosen - the side moved is the last atom's)
+      const same = (xs: number[]) => xs.join() === atoms.join() || xs.join() === [...atoms].reverse().join();
+      const had = (m.measures ?? []).find((x) => same(x.atoms));
+      const label = ["", "", "measure distance", "measure angle", "measure torsion angle"][atoms.length];
+      doc.edit(label, (d) => (had ? ops.orderMeasure3d(d, m.id, had.id, atoms) : ops.addMeasure3d(d, m.id, atoms)));
+      const x = get().molecules3d.find((k) => k.id === m.id)?.measures?.find((k) => same(k.atoms));
+      set((prev) => ({ ...prev, chosen3d: null, measureEdit3d: x ? { id: m.id, measure: x.id } : null }));
     },
     removeMeasure3d: (id: number, measure: number) => {
       doc.edit("delete measurement", (d) => ops.removeMeasure3d(d, id, measure));
@@ -256,6 +318,8 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     !c || (by.has(c.id) && c.atoms.every((a) => a < by.get(c.id)!.atoms.length) && c.bonds.every((b) => b < by.get(c.id)!.bonds.length));
   const hm = prev.hoveredMeasure3d;
   const measureStays = !hm || (by.get(hm.id)?.measures ?? []).some((x) => x.id === hm.measure);
+  const em = prev.measureEdit3d;
+  const editStays = !em || (by.get(em.id)?.measures ?? []).some((x) => x.id === em.measure);
   // (a list open for a molecule that has it still, the rows chosen and pointed at among its rows)
   const open = Object.entries(prev.lists3d).filter(([id, l]) => {
     const list = by.get(Number(id))?.calc?.results?.find((r) => r.on === "list" && resultKey(r) === l.list);
@@ -265,6 +329,7 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
   const lists3d = open.length === Object.keys(prev.lists3d).length ? prev.lists3d : Object.fromEntries(open);
   return {
     hoveredMeasure3d: measureStays ? hm : null,
+    measureEdit3d: editStays ? em : null,
     lists3d,
     turns3d: keep(prev.turns3d),
     frames3d: keep(prev.frames3d),

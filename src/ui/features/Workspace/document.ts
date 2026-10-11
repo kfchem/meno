@@ -919,9 +919,17 @@ function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule
   return next === all[i] ? doc : { ...doc, molecules3d: all.map((m, k) => (k === i ? next : m)) };
 }
 
-/** A molecule in 3D drawn balls and sticks, or space-filling. */
-export function setLook3d(doc: WorkspaceDocument, id: number, look: Look3D): WorkspaceDocument {
-  return withMolecule3d(doc, id, (m) => ((m.look ?? "balls") === look ? m : { ...m, look }));
+/** Molecules in 3D drawn in the 3D style's primary look, or its secondary. */
+export function setLook3d(doc: WorkspaceDocument, ids: readonly number[], look: Look3D): WorkspaceDocument {
+  return ids.reduce(
+    (d, id) =>
+      withMolecule3d(d, id, (m) => {
+        if ((m.look ?? "primary") === look) return m;
+        const { look: _was, ...rest } = m;
+        return look === "primary" ? rest : { ...rest, look };
+      }),
+    doc,
+  );
 }
 
 /**
@@ -937,6 +945,32 @@ export function addMeasure3d(doc: WorkspaceDocument, id: number, atoms: number[]
     if (measures.some((x) => key(x.atoms) === key(atoms))) return m;
     const next = measures.reduce((n, x) => Math.max(n, x.id + 1), 1);
     return { ...m, measures: [...measures, { id: next, atoms: [...atoms] }] };
+  });
+}
+
+/** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */
+export function orderMeasure3d(doc: WorkspaceDocument, id: number, measure: number, atoms: number[]): WorkspaceDocument {
+  return withMolecule3d(doc, id, (m) => {
+    const x = (m.measures ?? []).find((k) => k.id === measure);
+    // (the same atoms, either way along: the same measurement)
+    const same = !!x && (x.atoms.join() === atoms.join() || x.atoms.join() === [...atoms].reverse().join());
+    if (!x || !same || x.atoms.join() === atoms.join()) return m;
+    return { ...m, measures: m.measures!.map((k) => (k.id === measure ? { ...k, atoms: [...atoms] } : k)) };
+  });
+}
+
+/**
+ * A molecule in 3D's atoms put in new places in one of its frames - its
+ * shape edited (utils/edit3d) - and its stereo labels as they now are.
+ */
+export function setPlaces3d(doc: WorkspaceDocument, id: number, frame: number, xyz: readonly number[], stereo?: Molecule3D["stereo"]): WorkspaceDocument {
+  return withMolecule3d(doc, id, (m) => {
+    if (xyz.length !== 3 * m.atoms.length) return m;
+    const next =
+      frame <= 0 || !m.frames?.[frame - 1]
+        ? { ...m, atoms: m.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })) }
+        : { ...m, frames: m.frames.map((f, k) => (k === frame - 1 ? [...xyz] : f)) };
+    return stereo ? { ...next, stereo } : next;
   });
 }
 
@@ -1195,22 +1229,43 @@ export function addPdf(doc: WorkspaceDocument, pdf: Omit<PdfItem, "id">): Worksp
   return { ...doc, pdfs: [...(doc.pdfs ?? []), { ...pdf, id }], nextPdfId: id + 1 };
 }
 
-/** `doc` with a PDF moved, turned to another page, spread, or made an icon - unchanged where it has no such PDF, or the page is none of its. */
+/** `doc` with a PDF moved, turned to another page, spread, its pages put back in their rows (`placed: null`), or made an icon - unchanged where it has no such PDF, or the page is none of its. */
 export function updatePdf(
   doc: WorkspaceDocument,
   id: number,
-  patch: Partial<Pick<PdfItem, "x" | "y" | "page" | "spread" | "icon">> & { reading?: PdfItem["reading"] | null },
+  patch: Partial<Pick<PdfItem, "x" | "y" | "page" | "spread" | "icon">> & { reading?: PdfItem["reading"] | null; placed?: null },
 ): WorkspaceDocument {
   const pdf = doc.pdfs?.find((p) => p.id === id);
   if (!pdf) return doc;
   if (patch.page != null && (!Number.isInteger(patch.page) || patch.page < 0 || patch.page >= pdf.pages.length)) return doc;
-  const { reading, ...rest } = patch;
+  const { reading, placed, ...rest } = patch;
   const next: PdfItem = { ...pdf, ...rest };
   if (next.spread === false) delete next.spread;
   if (next.icon === false) delete next.icon;
+  if (placed === null) {
+    if (!pdf.placed) return doc;
+    delete next.placed;
+  }
   // (read no longer; or read from where it was, no further than its last page, neither far smaller nor far larger)
   if (reading === null) delete next.reading;
   else if (reading) next.reading = readingOf(reading, pdf.pages.length);
+  return { ...doc, pdfs: doc.pdfs!.map((p) => (p.id === id ? next : p)) };
+}
+
+/**
+ * `doc` with a page of a PDF put in a place of its own, its middle at
+ * (x, y) on the page - kept from where the PDF lies, so that it goes with
+ * it - on top of its other pages: unchanged where it has no such PDF or
+ * page, or the page lies there already.
+ */
+export function placePdfPage(doc: WorkspaceDocument, id: number, page: number, x: number, y: number): WorkspaceDocument {
+  const pdf = doc.pdfs?.find((p) => p.id === id);
+  if (!pdf || !Number.isInteger(page) || page < 0 || page >= pdf.pages.length || !Number.isFinite(x) || !Number.isFinite(y)) return doc;
+  const was = pdf.placed ?? [];
+  const at = { page, x: x - pdf.x, y: y - pdf.y };
+  const last = was[was.length - 1];
+  if (last && last.page === page && last.x === at.x && last.y === at.y) return doc;
+  const next: PdfItem = { ...pdf, placed: [...was.filter((q) => q.page !== page), at] };
   return { ...doc, pdfs: doc.pdfs!.map((p) => (p.id === id ? next : p)) };
 }
 
@@ -1449,7 +1504,7 @@ export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly 
   const step = ICON_NAME_WIDTH + NOMINAL_BOND_LENGTH;
   // (each by its top left, its middle where it goes)
   const row = texts.map((t, i) => {
-    const s = sheetOf(t.text);
+    const s = sheetOf(t.text, t.name);
     return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const };
   });
   const taken = [

@@ -15,6 +15,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
+import { useGuide } from "./plugins/guides";
 
 /** The purpose Meno's network knows updating by. */
 export const UPDATE_PURPOSE = "app-update";
@@ -102,12 +103,23 @@ export function startUpdates(): () => void {
     useUpdate.setState(state, true);
     if (stopped || state.phase === "unavailable") return;
     const heard = await listen<UpdateState>("update:state", (e) => useUpdate.setState(e.payload, true));
-    const ask = setTimeout(() => {
+    const askNow = () => {
       const settings = useAppSettings.getState();
       const net = useNetwork.getState();
       if (net.offline || net.granted.includes(UPDATE_PURPOSE) || settings.updates.asked) return;
       settings.setUpdates({ asked: true });
       void askToConnect(CONSENT);
+    };
+    let unguided: (() => void) | null = null;
+    // (not over a guide being gone through: once it is closed)
+    const ask = setTimeout(() => {
+      if (!useGuide.getState().open) return askNow();
+      unguided = useGuide.subscribe((g) => {
+        if (g.open || stopped) return;
+        unguided?.();
+        unguided = null;
+        askNow();
+      });
     }, ASK_AFTER_MS);
     const first = setTimeout(() => void checkForUpdate(), FIRST_LOOK_MS);
     const every = setInterval(() => void checkForUpdate(), EVERY_MS);
@@ -118,6 +130,7 @@ export function startUpdates(): () => void {
     });
     stops.push(() => {
       heard();
+      unguided?.();
       clearTimeout(ask);
       clearTimeout(first);
       clearInterval(every);

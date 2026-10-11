@@ -4,8 +4,8 @@ import { locate, lookFor, lookForAll, useInstalled, whereIs } from "./installed"
 
 vi.mock("./here", () => ({ systemHere: () => "macos" }));
 
-const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" } };
-const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" } };
+const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" }, path: [], env: {} };
+const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" }, path: [], env: {} };
 
 /** Meno's backend, as a test has it: a program is where it was located, if that is it; else where `onPath` says. */
 function backend(onPath: Record<string, string> = {}) {

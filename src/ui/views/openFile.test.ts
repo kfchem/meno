@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openedAs, openedTexts, OPENABLE, textsOf } from "./openFile";
+import { openable, openedAs, openedTexts, textsOf } from "./openFile";
 import { registerKinds } from "../../lib/io/kinds";
 import { MANIFESTS } from "../../lib/plugins/known";
 
@@ -51,15 +51,22 @@ describe("openedAs", () => {
     expect(openedTexts([{ name: "", text: "" }])).toEqual({ kind: "workspace", label: "Untitled.txt", data: { texts: [{ name: "", text: "" }] } });
   });
 
-  it("offers chemical files, calculations' output - of the plugins on offer, added or not - and text to Open, and no kind nothing reads", () => {
-    for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".out", ".log", ".fchk", ".cube", ".txt", ".py"]) expect(OPENABLE).toContain(ext);
-    expect(OPENABLE).toContain(".pdb");
-    // (what a plugin on offer writes, a calculation's input, as text to change)
-    expect(OPENABLE).toEqual(expect.arrayContaining([".gjf", ".com"]));
+  it("offers chemical files, calculations' output - of the plugins added, and those their catalogues name - and text to Open, and no kind nothing reads", () => {
+    registerKinds([]);
+    for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".pdb", ".cube", ".log", ".txt", ".py"]) expect(openable()).toContain(ext);
+    // (nothing added that reads, writes or names them: no calculation's files)
+    expect(openable()).not.toContain(".out");
+    expect(openable()).not.toContain(".gjf");
+    registerKinds(MANIFESTS.filter((m) => m.id === "getting-started"));
+    expect(openable()).toEqual(expect.arrayContaining([".out", ".fchk", ".molden"]));
+    // (what a plugin added writes, a calculation's input, as text to change)
+    registerKinds(MANIFESTS.filter((m) => m.id === "gaussian"));
+    expect(openable()).toEqual(expect.arrayContaining([".gjf", ".com"]));
     expect(textsOf(openedAs("job.gjf", "# B3LYP/6-31G(d) Opt\n"))).toHaveLength(1);
-    expect(OPENABLE).not.toContain(".ket");
+    registerKinds(MANIFESTS);
+    expect(openable()).not.toContain(".ket");
     // (each once)
-    expect(new Set(OPENABLE).size).toBe(OPENABLE.length);
+    expect(new Set(openable()).size).toBe(openable().length);
   });
 
   describe("with plugins added that read calculations' output", () => {

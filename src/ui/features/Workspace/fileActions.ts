@@ -13,7 +13,7 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
 import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
-import { bondsAt, pictureMarks } from "./utils/molecule3d";
+import { bondsAt, hiddenPictureMark, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
 import { currentStyle3D } from "./style3d";
@@ -276,6 +276,11 @@ export function drawingLayout(
   const markSize = (opts.units === "px" ? opts.fontPx / layout.zoom : opts.fontPx) * MARK_SCALE;
   const family = labelSetOf(opts).fontFamily;
   const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, currentStyle3D(), markSize, undefined, family));
+  // and over each drawn without the hydrogens on its carbons, a word saying so
+  for (const m of model.molecules3d ?? []) {
+    const said = hiddenPictureMark(m, currentStyle3D(), markSize);
+    if (said) measures.push(said);
+  }
   if (measures.length) {
     layout.measures = measures;
     const xs: number[] = [];

@@ -15,6 +15,7 @@ CI, which is why nothing in the workflow calls it.
 .EXAMPLE
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms -Out .gui-runs/before
+pwsh scripts/gui/run.ps1 -Scenario open-and-look -Guide
 #>
 [CmdletBinding()]
 param(
@@ -25,7 +26,11 @@ param(
     [string] $Exe,
     [int] $Width = 1280,
     [int] $Height = 860,
-    [switch] $KeepOpen
+    [switch] $KeepOpen,
+    # Show the guides a fresh install shows (the first-run guide): by
+    # default each run counts them as shown already, so that none is in the
+    # way of a scenario.
+    [switch] $Guide
 )
 
 Set-StrictMode -Version Latest
@@ -83,17 +88,57 @@ function Get-MenoApp {
     }
 }
 
+# The guides a fresh install shows, by the id of the plugin each is part of
+# (src-tauri/resources/plugins): the first-run guide, over the canvas.
+$script:Guides = @("getting-started")
+
+function Get-MenoSettingsPath {
+    <#
+      .SYNOPSIS
+      Where the app keeps its settings: settings.json in its data folder,
+      named for its identifier (src-tauri/tauri.conf.json).
+    #>
+    if ($IsWindows) { return Join-Path $env:APPDATA "com.kfchem.meno/settings.json" }
+    return Join-Path $HOME "Library/Application Support/com.kfchem.meno/settings.json"
+}
+
+function Set-GuidesShown {
+    <#
+      .SYNOPSIS
+      Count the guides a fresh install shows as shown already, in the
+      settings the app is about to read (`plugins.guided`): the first-run
+      guide would otherwise lie over the canvas and take the scenario's
+      clicks - on every run, where settings.json is put back after each.
+      The rest of the file is left as it is.
+    #>
+    $path = Get-MenoSettingsPath
+    $settings = if (Test-Path $path) { Get-Content -Raw $path | ConvertFrom-Json -AsHashtable } else { $null }
+    if ($null -eq $settings) { $settings = [ordered]@{} }
+    if (-not $settings.Contains("plugins") -or $settings["plugins"] -isnot [System.Collections.IDictionary]) { $settings["plugins"] = [ordered]@{} }
+    $plugins = $settings["plugins"]
+    $guided = @(if ($plugins.Contains("guided")) { $plugins["guided"] } else { @() })
+    $missing = @($script:Guides | Where-Object { $guided -notcontains $_ })
+    if (-not $missing.Count) { return }
+    $plugins["guided"] = @($guided + $missing)
+    New-Item -ItemType Directory -Force (Split-Path $path) | Out-Null
+    $settings | ConvertTo-Json -Depth 64 | Set-Content -Path $path -Encoding utf8NoBOM
+    Write-Host "  counting as shown: $($missing -join ', ') (-Guide shows them)"
+}
+
 function Start-Meno {
     <#
       .SYNOPSIS
       Start the app under test, and see off any copy already running: a
-      second instance would put its window over the one being driven.
+      second instance would put its window over the one being driven. The
+      guides a fresh install shows are counted as shown first, unless the
+      run was asked to show them (-Guide).
     #>
     Get-MenoApp | ForEach-Object {
         Write-Host "  closing a Meno that was already running (pid $($_.Id))"
         Close-MenoProcess -Process $_
     }
     Start-Sleep -Milliseconds 500
+    if (-not $Guide) { Set-GuidesShown }
     Write-Host "  starting $Exe"
     Start-MenoProcess -Path $Exe
     Get-MenoWindow -ProcessName Meno -TimeoutSec 40 | Out-Null

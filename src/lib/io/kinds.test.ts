@@ -139,9 +139,9 @@ describe("kinds a plugin registers", () => {
       id: "nbo",
       name: "NBO",
       version: "7",
-      environment: { maker: "uv", lock: "requirements.lock" },
-      worker: "worker.py",
-      reads: ["nbo-out", "gaussian"],
+      environment: "uv",
+      // (every kind it brings, read: one it only colours is no file Meno takes in)
+      reads: ["gaussian", ...kinds.map((k) => (k as { id: string }).id)],
       kinds,
     })!;
 
@@ -195,7 +195,11 @@ describe("kinds a plugin registers", () => {
   });
 
   it("may not be told by marks too short to tell anything: what a molfile holds, say", () => {
-    expect(nbo([{ id: "short", name: "Short", program: "S", extensions: [], marks: [{ text: "V2000" }, { text: "M  END" }] }]).kinds).toEqual([]);
+    // (marks that short are not read; a kind it reads that is told no other way is not read either)
+    const short = nbo([{ id: "short", name: "Short", program: "S", extensions: [], marks: [{ text: "V2000" }, { text: "M  END" }] }]);
+    expect(short.kinds[0].marks).toEqual([]);
+    expect(short.reads).toEqual(["gaussian"]);
+    expect(registered([short]).kinds.map((k) => k.id)).not.toContain("short");
   });
 
   it("told only by asking their plugin, are asked about only for files of their names", () => {
@@ -203,5 +207,34 @@ describe("kinds a plugin registers", () => {
     expect(kindOf("job.47", "$GENNBO NATOMS=3 $END", all)).toBeNull();
     expect(probeCandidates("job.47", all).map((k) => k.id)).toEqual(["nbo-47"]);
     expect(probeCandidates("job.out", all)).toEqual([]);
+  });
+});
+
+describe("kinds a plugin's catalogue names", () => {
+  const guide = (id: string, files: unknown[]): Manifest => acceptManifest({ id, name: id, version: "1", guide: [{ title: "Hi", text: "Hello." }], files })!;
+
+  it("are told by their own marks, each with the plugins suggested to read it - two catalogues' of one id one kind", () => {
+    const { catalogued, kinds: brought } = registered([
+      guide("a", [{ id: "nbo-out", name: "NBO output", extensions: [".nbo"], marks: [{ text: "N A T U R A L   A T O M I C" }], suggest: ["nbo"] }]),
+      guide("b", [{ id: "nbo-out", name: "NBO's", extensions: [".47"], marks: [{ text: "$GENNBO NATOMS" }], suggest: ["nbo", "nbo-lite"] }]),
+    ]);
+    expect(catalogued).toEqual([
+      {
+        id: "nbo-out",
+        name: "NBO output",
+        extensions: [".nbo", ".47"],
+        output: {},
+        marks: [{ text: "N A T U R A L   A T O M I C" }, { text: "$GENNBO NATOMS" }],
+        suggest: ["nbo", "nbo-lite"],
+      },
+    ]);
+    // (registered for no reader: Meno reads them with none)
+    expect(brought.map((k) => k.id)).not.toContain("nbo-out");
+  });
+
+  it("may not take one of Meno's own files for theirs, as a plugin's kinds may not", () => {
+    const { catalogued, refused } = registered([guide("a", [{ id: "greedy", name: "Greedy", extensions: [], marks: [{ text: "RDKit 2D" }], suggest: ["x"] }])]);
+    expect(catalogued).toEqual([]);
+    expect(refused).toEqual([{ plugin: "a", kind: "greedy", mark: "RDKit 2D" }]);
   });
 });

@@ -129,7 +129,7 @@ describe("a measurement in a picture", () => {
       const y = solid.frames[0][3 * i + 1] + m.at.y;
       const dx = Math.max(box.min.x - x, x - box.max.x, 0);
       const dy = Math.max(box.min.y - y, y - box.max.y, 0);
-      return Math.hypot(dx, dy) < solid.radii.balls[i];
+      return Math.hypot(dx, dy) < solid.radii.primary[i];
     });
   };
 

@@ -46,7 +46,10 @@ src/
                           (menoFileWorker.ts) - docs/FILE-IO.md, *The workspace file*
   lib/roles/              the roles' workers (RDKit's, for now): client, sidecar, the MOL blocks they are asked about
   lib/calc/               readers of calculation output: the catalog, reading, promises, Meno's own reading
-  lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno carries, found in their folders
+  lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno carries, found in their folders;
+                          the roles and kinds of step Meno defines; each plugin's one worker (process.ts); guides
+                          and catalogues (guide.ts, guides.ts)
+  ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
@@ -355,10 +358,12 @@ What is left before the editor counts as finished, and in what order, is in
   always-on loop.
 
 - **Molecules in 3D** (`Molecules3D`, `Molecule3DView`, `Frames3D`,
-  `utils/molecule3d.ts`, `utils/measure3d.ts`):
+  `utils/molecule3d.ts`, `utils/measure3d.ts`, `utils/edit3d.ts` - a
+  distance, an angle or a torsion angle set: docs/WORKSPACE.md, *Editing
+  in 3D*):
   - What they are: the document's `molecules3d`. Each has its atoms in
-    ångströms, its other frames and their energies, its look (ball and
-    stick or space-filling), its measurements, and where on the page its
+    ångströms, its other frames and their energies, its look (the 3D
+    style's primary, or its secondary), its measurements, and where on the page its
     centre stands. How each is turned and which frame it shows are the
     store's (`turns3d`, `frames3d`), not the document's, and so are what
     is selected of them (`sel3d`) and the atoms and bonds chosen in one
@@ -373,10 +378,13 @@ What is left before the editor counts as finished, and in what order, is in
     page and depth-tested; double and triple bonds are two and three
     lines. Another frame, another look, or a place set by an undo is gone
     over to, not jumped to. Its look is a style (`lib/chem/style3d.ts`):
-    presets, the old 3D viewer's first, and a choice of one with changes,
-    kept in the app's settings (`style3d`) and edited in Settings by
-    `StyleEditor/Style3DEditor`; the canvas reads it through
-    `Workspace/style3d.ts`. A 1.5 Å bond is as long as a drawn one.
+    a list of styles, the old 3D viewer's first, two of them given the
+    roles of primary and secondary, each with its own changes, and the
+    light and turning they share - kept in the app's settings (`style3d`)
+    and edited in Settings by `StyleEditor/Style3DEditor`; the canvas
+    reads it through `Workspace/style3d.ts`. `solidOf` works out each
+    atom's radius in both looks (none for an atom a look leaves out), and
+    the view eases between them (docs/WORKSPACE.md, *Styles in 3D*). A 1.5 Å bond is as long as a drawn one.
   - The pointer: hovered, its outline lights up faintly and the atom under
     the pointer swells on a spring. A drag on it - its atoms, bonds or
     within its rings - turns it, with inertia; on one selected, it moves
@@ -540,8 +548,10 @@ worker ──ensurePyEnv(profile)──▶ py_env_python_path_uv / py_env_setup_
           ext_kill(id)
 ```
 
-The workers are the chemistry roles' (`lib/roles/worker.ts`) and the
-readers' (`lib/calc/workers.ts`).
+Each plugin has one worker, its one process (`lib/plugins/process.ts`),
+asked for its roles (`lib/roles/worker.ts`) and for the files it reads and
+writes and the steps it does (`lib/calc/workers.ts`), each through a client
+of its own sharing the process's question ids.
 
 The chemistry roles (`lib/plugins/roles.ts`: SMILES, the checks, R and S,
 stereoisomers, conformers, a formula of a molecule in 3D) are filled by a
@@ -550,8 +560,9 @@ like any plugin (`resources/plugins/rdkit/`, its environment
 `plugin-rdkit`). Its worker is a sidecar, started by `lib/roles/worker.ts`
 (`chemWorker(role)`: the plugin chosen for the role in Settings, else the
 first that fills it) and asked through `lib/roles/client.ts`: JSON lines, a
-fixed set of requests (ping, to_smiles, from_smiles, analyse, and for 3D
-open_stereo, conformers and drawing_of), MOL blocks in (written by
+fixed set of requests (to_smiles, from_smiles, analyse, and for 3D
+open_stereo, conformers and drawing_of; the worker says its version in its
+first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
 blocks or coordinates out. It is set up the first time a role it fills is
 needed, asking first, unless the chemist took it away in Settings, Plugins
@@ -564,17 +575,20 @@ profile each, named `plugin-<id>` as every plugin's is. Each is a folder
 of its own, `resources/plugins/<id>/`, and stands alone: it knows of no
 other plugin, and Meno names none of them. Its manifest (`lib/plugins/manifest.ts`;
 the folders found by `lib/plugins/known.ts`, the plugins Meno carries for
-now) is data saying what it is, its lock and worker in its folder, the
-kinds it brings - each told by marks, text, never a pattern - and the kinds
-it reads by id, its own or Meno's; it is checked as data however it came.
+now) is data saying what it is, what makes its environment (its lock and
+`worker.py` in its folder), every kind of file it knows - each it reads
+told by marks, text, never a pattern - and the kinds it reads by id, its
+own or Meno's; it is checked as data however it came (docs/PLUGINS.md,
+*The manifest*).
 `lib/calc/catalog.ts` makes the readers of the manifests, with Meno's own
 reading (`MENO`) first. Meno's core knows no program (the maintainer,
 2026-10-06): `lib/io/kinds.ts` knows Meno's own kinds only, and registers
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
-- refusing a mark that one of Meno's own sample files holds. The kinds of
-the plugins on offer, added or not (`OFFERED`), are looked at only to say
-which plugin would read a file no plugin added reads
-(`lib/calc/probe.ts` `kindOfFile`).
+- refusing a mark that one of Meno's own sample files holds. A plugin not
+added is never looked at: a file no plugin added reads is told only by the
+kinds the catalogues of the plugins added name (`catalogued`, Getting
+started's), to say which plugin would read it (`lib/calc/probe.ts`
+`kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
@@ -591,9 +605,9 @@ which plugin would read a file no plugin added reads
   Like the chemistry worker, it runs no code it is sent and is kept off the
   network. A reader is known by its id: a molecule keeps its readers as
   "id version" (`readerIdOfLine`), its results their reader's id.
-- A plugin that writes a kind declares it in its manifest's `writes` (the
-  kind, its files' extensions, what it takes, its options as data, checked
-  by `acceptOptions`). Export offers it while the plugin is added, for
+- A plugin that writes a kind declares it in its manifest's `writes` (one
+  of its `kinds`, by id - its name and files' extensions the kind's - and
+  its options as data, checked by `acceptOptions`). Export offers it while the plugin is added, for
   molecules in 3D: the molecules chosen become one `WrittenMolecule`
   (`Workspace/utils/written.ts`; several as they stand on the page),
   the worker is asked `{"op": "write", "kind", "name", "molecules",
@@ -793,7 +807,8 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   those the view has moved on from.
 - **On the page** (`components/Pdfs2D.tsx`, `lib/pdf/layout`): each PDF a
   stack at the size it is printed - a 14.4-point bond is a bond - or its
-  pages spread; a small picture of each page shown at once, tiles at the
+  pages spread, in rows or each in a place of its own kept from the PDF's
+  (`placed`); a small picture of each page shown at once, tiles at the
   screen's resolution asked for once the view is still, each fading in.
   The pictures are the canvas's, shared by the stacks and the column
   (`components/pdfPictures.tsx`): a tile drawn for one is drawn for both.
@@ -823,6 +838,19 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   EditContext on Windows, a textarea elsewhere; what it holds and how a
   change in it is read is `lib/text/field.ts`, an editor's keys
   `lib/text/keys.ts`, moving and selecting `lib/text/editing.ts`.
+- **A Markdown text read formatted** (`components/MarkdownText.tsx`, docs/
+  PDF.md, *Markdown*): read into blocks by `lib/text/markdown.ts` (Lezer's
+  Markdown parser with GitHub's extensions), laid out in rows at the
+  column's width by `TextEditor/markdownLayout.ts` - its words measured by
+  the canvas in IBM Plex (`TextEditor/markdownType.ts`), its code coloured
+  as a text is (`TextEditor/markdownCode.ts`) - and each row in view drawn
+  as a picture (`TextEditor/markdownPictures.ts`). Its HTML half
+  (`TextEditor/MarkdownBody.tsx`) and the canvas share its reader
+  (`TextEditor/markdownReader.ts`: where it is read, what is selected).
+  *Source* in the column's header shows it written, as any text
+  (`TextEditor/columnText.ts`, `showsSource`). Its sheet on the page, and
+  its way between the sheet and the column, draw the same layout in
+  troika's type (`components/MarkdownRows.tsx`).
 - **Texts' sheets on the page** (`components/TextSheets2D.tsx`,
   `utils/textSheets.ts`): a text with a place (`WorkspaceText.at`) lies on
   the page, its first lines in troika's signed-distance type (IBM Plex Mono,
@@ -890,9 +918,9 @@ window decodes; nothing of it goes through Rust but the clipboard.
 | --- | --- | --- |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
-| `ext_spawn_sidecar` | `lib/roles/worker.ts`, `lib/calc/workers.ts` | Spawn a process with piped stdio; returns an id. |
-| `ext_stdin` | `lib/roles/worker.ts`, `lib/calc/workers.ts` | Write to a sidecar's stdin. |
-| `ext_kill` | `lib/roles/worker.ts`, `lib/calc/workers.ts` | Kill a sidecar and emit `ext:exit`. |
+| `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
+| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
+| `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
 | `pdf_hold_path`, `pdf_hold_bytes` | `lib/pdf/reader.ts` | A PDF held in Meno's cache by its SHA-256; its pages' sizes (`pdf.rs`). |
 | `pdf_bytes` | `utils/workspace.ts` | A PDF held, as its bytes, for a workspace's file. |
 | `pdf_render` | `lib/pdf/reader.ts` | A part of a page drawn by PDFium, as a PNG. |
@@ -1059,10 +1087,10 @@ who reads and writes each kind: [`FILE-IO.md`](./FILE-IO.md); what plugins
 do beyond files, and which are kept running: [`PLUGINS.md`](./PLUGINS.md).
 
 The kinds, as the table of kinds has them (`lib/io/kinds.ts`, `MENO_KINDS`),
-with the kinds Meno writes (`lib/io/writers.ts`, `WRITERS`) and those the
-plugins Meno carries bring and write (their manifests,
-`src-tauri/resources/plugins/*/manifest.json`). A plugin's kinds are
-registered only while it is added. `src/lib/io/architecture.test.ts` checks
+with the kinds Meno writes (`lib/io/writers.ts`, `WRITERS`) and every kind
+the plugins Meno carries know - those they read, write, or only colour as
+text (their manifests' `kinds`, `src-tauri/resources/plugins/*/manifest.json`).
+A plugin's kinds are registered only while it is added. `src/lib/io/architecture.test.ts` checks
 that every kind of these is in this table, by its id, and no other.
 
 | Kind | Id | Files | Told by | Read by | Written by | Becomes |
@@ -1079,6 +1107,7 @@ that every kind of these is in this table, by its id, and no other.
 | Calculation programs' outputs (cclib's) | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as cclib's manifest brings it | cclib (plugin, uv); `orca`, `gaussian` and `gaussian-fchk` also PySCF | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
 | Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]`, as PySCF's manifest brings it | PySCF (plugin, pixi) | never | a molecule in 3D, its orbitals and densities promises |
 | Gaussian input | `gaussian-input` | `.gjf`, `.com` | - | never | Export, by the Gaussian plugin (uv, Python alone) | - |
+| ORCA input | `orca-input` | `.inp` | its name, and what its lines begin with (`!`, `%`, `*`), as the ORCA interface's manifest brings it | the workspace, as text coloured by the plugin's grammar, while it is added | never | a text in the workspace's column |
 | KET | - | `.ket` | - | not read | never | Open does not offer it; one dropped says "not supported yet" |
 | Text | - | anything not told otherwise | its name, or nothing else telling it; dropped, no NUL in its start (`opensAsText`) | the workspace, as it is | Export, from the column of texts (`TextColumn.tsx`) | a text the workspace holds, in its column; saved in `.meno` |
 

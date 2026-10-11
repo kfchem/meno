@@ -73,6 +73,9 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), { ...(gesture ? { coalesceKey: `pdf:${id}:${gesture}` } : {}) }),
     turnPdf: (id: number, page: number) => doc.edit("turn page", (d) => ops.updatePdf(d, id, { page })),
     spreadPdf: (id: number, spread: boolean) => doc.edit(spread ? "spread pages" : "gather pages", (d) => ops.updatePdf(d, id, { spread, ...(spread ? { icon: false } : {}) })),
+    placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) =>
+      doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), { ...(gesture ? { coalesceKey: `pdf-page:${id}:${page}:${gesture}` } : {}) }),
+    pdfPagesInRows: (id: number) => doc.edit("put pages in rows", (d) => ops.updatePdf(d, id, { placed: null })),
     // (made an icon, its pages gathered first)
     iconPdf: (id: number, icon: boolean) =>
       doc.edit(icon ? "minimize PDF" : "expand PDF", (d) => ops.updatePdf(d, id, { icon, ...(icon ? { spread: false } : {}) })),

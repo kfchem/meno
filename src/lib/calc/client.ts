@@ -45,8 +45,13 @@ const TIMEOUT_MS = 120_000;
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
 
+/** Ids counted from 1: a worker's, for the clients that share it. */
+export function counter(): () => number {
+  let next = 1;
+  return () => next++;
+}
+
 export class ReaderClient implements Reader {
-  private next = 1;
   private pending = new Map<number, Pending>();
   private stop: () => void;
   /** The reader's version, once its worker has said it is ready. */
@@ -58,6 +63,8 @@ export class ReaderClient implements Reader {
     private name: string,
     private transport: ReaderTransport,
     private timeoutMs = TIMEOUT_MS,
+    /** Where its questions' ids come from: shared with the other clients of the same worker, so that each hears only its own answers. */
+    private ids: () => number = counter(),
   ) {
     let markReady!: (v: string) => void;
     this.ready = new Promise((resolve) => (markReady = resolve));
@@ -127,7 +134,7 @@ export class ReaderClient implements Reader {
   }
 
   private request(question: Record<string, unknown>, what: string): Promise<unknown> {
-    const id = this.next++;
+    const id = this.ids();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);

@@ -365,6 +365,7 @@ export const createModelSlice = (
       frames3d: {},
       hovered3d: null,
       hoveredMeasure3d: null,
+      measureEdit3d: null,
       hovered: { atomId: null, bondId: null },
       labelEdit: { active: false, atomId: null, value: "" },
       moveDrag: {

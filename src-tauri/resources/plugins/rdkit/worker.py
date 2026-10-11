@@ -66,10 +66,6 @@ def read(molblock, sanitize=True):
     return mol
 
 
-def op_ping(_):
-    return {"version": rdBase.rdkitVersion}
-
-
 def op_to_smiles(m):
     # an H drawn to carry a wedge says its centre's configuration, which
     # the SMILES says without it
@@ -594,7 +590,6 @@ def op_run(m):
 
 
 OPS = {
-    "ping": op_ping,
     "prepare": op_prepare,
     "collect": op_collect,
     "run": op_run,

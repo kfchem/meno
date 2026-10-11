@@ -118,7 +118,7 @@ export default function FitToContent2D({
     const { turns3d, frames3d } = store.getState();
     const style3d = currentStyle3D();
     const poses = molecules3d.map((m) =>
-      poseOf(m, solidOf(m, style3d), lookOf(m, style3d), turns3d[m.id], frames3d[m.id]),
+      poseOf(m, solidOf(m, style3d), lookOf(m), turns3d[m.id], frames3d[m.id]),
     );
     // (what can be seen: the column, over the canvas's right side, left out)
     const cover = Math.min(store.getState().cover, size.width * 0.8);

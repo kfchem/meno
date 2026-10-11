@@ -11,84 +11,107 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import type { InstalledDecl, Manifest, StepDecl, System, WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type InstalledDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
+import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
-import { isRole, type RoleId } from "../plugins/roles";
+import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
-import { kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
+import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
 
-type ReaderBase = {
+type Described = {
   id: string;
   name: string;
-  /** The version its environment's lock pins; Meno's own, none. */
+  /** The version of what it brings; Meno's own, none. */
   version: string;
   /** One line on what it is. */
   description: string;
   licence: string;
   homepage: string;
+};
+type ReaderBase = Described & {
   /** The kinds it reads, by id. */
   reads: readonly string[];
 };
-/** A plugin: what it is, what it reads and writes, the roles it fills besides, and what it runs - a worker in a Python environment of its own. */
-export type PythonPlugin = ReaderBase & {
-  builtin?: undefined;
-  /** The roles it fills besides reading files (lib/plugins/roles). */
-  roles: readonly RoleId[];
-  /** The kinds it writes (lib/io/writers): none of Meno's, which Meno writes itself. */
-  writes: readonly WriteDecl[];
-  /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
-  roleOptions: Partial<Record<RoleId, readonly Option[]>>;
-  /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
-  steps: readonly StepDecl[];
+/** What any plugin may bring besides what it runs: a guide, shown once; the plugins it suggests; the kinds of file it names, and the plugins it suggests for each (lib/plugins/guide). */
+type Brings = {
   /** The systems it can be added on; none, every one. */
   systems: readonly System[];
-  /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
-  installed: readonly InstalledDecl[];
-  /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
-  profile: `plugin-${string}`;
-  lock: string;
-  worker: string;
-  /** What makes its environment: uv from PyPI (unsaid), or pixi - its lock a pixi.lock - where it needs conda-forge. */
-  env?: "pixi";
+  guide: readonly GuideStep[];
+  suggests: readonly Suggestion[];
+  files: readonly CatalogueFile[];
 };
+/** A plugin that runs something: what it reads and writes, the roles it fills besides, and what it runs - a worker in a Python environment of its own. */
+export type PythonPlugin = ReaderBase &
+  Brings & {
+    builtin?: undefined;
+    /** The roles it fills besides reading files (lib/plugins/roles). */
+    roles: readonly RoleId[];
+    /** The kinds it writes (lib/io/writers): none of Meno's, which Meno writes itself. */
+    writes: readonly WriteDecl[];
+    /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
+    roleOptions: Partial<Record<RoleId, readonly Option[]>>;
+    /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
+    steps: readonly StepDecl[];
+    /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
+    installed: readonly InstalledDecl[];
+    /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
+    profile: `plugin-${string}`;
+    lock: string;
+    worker: string;
+    /** What makes its environment: uv from PyPI (unsaid), or pixi - its lock a pixi.lock - where it needs conda-forge. */
+    env?: "pixi";
+  };
+/** A plugin that runs nothing: what it brings is data - a guide, a catalogue - shown by Meno. Nothing to download, nothing to start; added or taken away at once. */
+export type DataPlugin = Described & Brings & { builtin?: undefined; data: true };
+/** A plugin, whether it runs something or not. */
+export type Plugin = PythonPlugin | DataPlugin;
 /** Meno itself, reading what it reads under the readers' contract: nothing to add or take away, nothing downloaded. */
 export type MenoReader = ReaderBase & { builtin: true };
 export type ReaderPlugin = PythonPlugin | MenoReader;
 
+/** Whether a plugin runs something - a worker in an environment of its own - rather than bring data alone. */
+export const runs = (p: Plugin): p is PythonPlugin => !("data" in p);
+
 const MENO_IDS: ReadonlySet<string> = new Set(Object.values(MENO_KINDS).map((k) => k.id));
 
-/** A plugin, from its manifest. */
-export const pluginOf = (m: Manifest): PythonPlugin => ({
-  id: m.id,
-  name: m.name,
-  version: m.version,
-  description: m.description,
-  licence: m.licence,
-  homepage: m.homepage,
-  // (its own kinds, and Meno's: never another plugin's, which it does not know)
-  reads: m.reads.filter((id) => MENO_IDS.has(id) || m.kinds.some((k) => k.id === id)),
-  // (the roles Meno defines, of those it says it fills)
-  roles: m.roles.filter(isRole),
-  writes: m.writes.filter((w) => !MENO_IDS.has(w.id)),
-  steps: m.steps,
-  systems: m.systems,
-  installed: m.installed,
-  roleOptions: Object.fromEntries(Object.entries(m.roleOptions).filter(([role]) => isRole(role))),
-  profile: `plugin-${m.id}`,
-  lock: `${PLUGINS_ROOT}/${m.id}/${m.environment.lock}`,
-  worker: `${PLUGINS_ROOT}/${m.id}/${m.worker}`,
-  ...(m.environment.maker === "pixi" ? { env: "pixi" as const } : {}),
-});
+const brings = (m: Manifest): Brings => ({ systems: m.systems, guide: m.guide, suggests: m.suggests, files: m.files });
 
-/** The plugins Meno knows of, in Meno's order: each that reads or writes something, or fills a role or a kind of step. */
-export const PLUGINS: readonly PythonPlugin[] = MANIFESTS.map(pluginOf).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
+/** A plugin, from its manifest. */
+export const pluginOf = (m: Manifest): Plugin => {
+  const described = { id: m.id, name: m.name, version: m.version, description: m.description, licence: m.licence, homepage: m.homepage };
+  if (!m.environment) return { ...described, ...brings(m), data: true };
+  return {
+    ...described,
+    ...brings(m),
+    // (its own kinds, and Meno's: never another plugin's, which it does not know)
+    reads: m.reads.filter((id) => MENO_IDS.has(id) || m.kinds.some((k) => k.id === id)),
+    roles: m.roles.map((r) => r.role),
+    writes: m.writes.filter((w) => !MENO_IDS.has(w.id)),
+    steps: m.steps,
+    installed: m.installed,
+    roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
+    profile: `plugin-${m.id}`,
+    lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,
+    worker: `${PLUGINS_ROOT}/${m.id}/${WORKER}`,
+    ...(m.environment === "pixi" ? { env: "pixi" as const } : {}),
+  };
+};
+
+/** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
+export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.map(pluginOf);
+
+/** The plugins Meno knows of that run something, in Meno's order: each that reads or writes something, or fills a role or a kind of step. */
+export const PLUGINS: readonly PythonPlugin[] = ALL_PLUGINS.filter(runs).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
 
 /** The plugins that read files. */
 export const READER_PLUGINS: readonly PythonPlugin[] = PLUGINS.filter((p) => p.reads.length);
 
 /** The plugins that write files. */
 export const WRITER_PLUGINS: readonly PythonPlugin[] = PLUGINS.filter((p) => p.writes.length);
+
+/** A plugin of that id, whether it runs something or not. */
+export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.find((p) => p.id === id);
 
 /** The plugin of that id. */
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
@@ -99,18 +122,14 @@ export const pluginsFilling = (role: RoleId): PythonPlugin[] => PLUGINS.filter((
 /** The manifest of a plugin Meno knows of. */
 export const manifestOf = (id: string): Manifest | undefined => MANIFESTS.find((m) => m.id === id);
 
-const offered = registered(MANIFESTS);
-
 /**
- * The kinds the plugins on offer bring, added or not, with Meno's own: what
- * a file nothing added reads would be read as, by which plugin - said, so
- * that the plugin can be added. Also the marks refused as they were
- * registered, each of which would have claimed one of Meno's own files.
+ * The marks of the plugins Meno carries refused - each would have claimed
+ * one of Meno's own files - added or not: said in Settings, Plugins.
  */
-export const OFFERED = { kinds: offered.kinds as readonly Kind[], refused: offered.refused };
+export const REFUSED = registered(MANIFESTS).refused;
 
-/** The kind of that id: registered, or else one a plugin on offer brings. */
-export const anyKindById = (id: string): Kind | undefined => kindById(id) ?? kindById(id, OFFERED.kinds);
+/** The kind of that id: registered, or else one the catalogue of a plugin added names. */
+export const anyKindById = (id: string): Kind | undefined => kindById(id) ?? kindById(id, cataloguedKinds());
 
 /**
  * Meno's own reading, as a reader: what it reads under the contract, in its

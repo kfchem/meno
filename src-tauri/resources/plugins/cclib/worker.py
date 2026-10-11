@@ -11,7 +11,7 @@ every reader's:
 It reads what it is sent and nothing else - no file of its own choosing,
 no network - and says when cclib has been imported:
 
-    {"event": "ready", "reader": "cclib", "version": "1.9rc1"}
+    {"event": "ready", "version": "1.9rc1"}
 
 What it reads goes back as Meno's own plain data, whatever the program
 (src/lib/calc/output.ts): the atoms, each geometry it went through (an
@@ -235,10 +235,6 @@ def vibrations(data, n):
     return [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": columns, "rows": rows}]
 
 
-def op_ping(_m):
-    return {"reader": "cclib", "version": cclib.__version__}
-
-
 def op_read(m):
     name = os.path.basename(str(m.get("name") or "output"))
     text = m.get("text")
@@ -285,7 +281,7 @@ def op_read(m):
     return result
 
 
-OPS = {"ping": op_ping, "read": op_read}
+OPS = {"read": op_read}
 
 
 def answer(line):
@@ -304,7 +300,7 @@ def answer(line):
 
 
 def main():
-    print(json.dumps({"event": "ready", "reader": "cclib", "version": cclib.__version__}), flush=True)
+    print(json.dumps({"event": "ready", "version": cclib.__version__}), flush=True)
     for line in sys.stdin:
         line = line.strip()
         if line:

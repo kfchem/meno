@@ -37,13 +37,17 @@ import { ease, SETTLE_MS } from "./Pdfs2D";
 import WordsFlight from "./WordsFlight";
 import PictureFlight from "./PictureFlight";
 import ColumnText from "./ColumnText";
-import TextFlight from "./TextFlight";
+import MarkdownText from "./MarkdownText";
+import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
 import { drawnSheetBox, iconScaleOf, sheetOf } from "../utils/textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { currentStyle3D } from "../style3d";
 import { CARD_H, CARD_W } from "../workflow/look";
-import { keepColumnTexts } from "../../TextEditor/columnText";
+import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
+import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
+import { layOut } from "../../TextEditor/markdownLayout";
+import { measureText } from "../../TextEditor/markdownType";
 
 /** How long a page takes between the page and the column, in ms; and a text's lines, once settled, to hand over to the column's own. */
 export const FLIGHT_MS = 420;
@@ -70,7 +74,7 @@ function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number;
   const m = st.molecules3d.find((x) => x.id === of.molecule);
   if (!m) return null;
   const style = currentStyle3D();
-  const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m, style), st.turns3d[m.id], st.frames3d[m.id]));
+  const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]));
   return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
 }
 
@@ -191,6 +195,9 @@ function ColumnPass({
 }) {
   const store = useEditorStore();
   const { gl, size, invalidate, camera } = useThree();
+  // (a Markdown text read formatted, unless its source is being written)
+  const source = useShowsSource(store, text?.id ?? null);
+  const formatted = !!text && isMarkdown(text.name) && !source;
   const cover = useEditor((s) => s.cover);
   const width = useEditor((s) => s.columnWidth);
   // (words selected, and places found, marked on the pages)
@@ -457,7 +464,7 @@ function ColumnPass({
     if (!b) return null;
     const c = camera as THREE.OrthographicCamera;
     const z = c.zoom || 1;
-    const s = sheetOf(flownText.text);
+    const s = sheetOf(flownText.text, flownText.name);
     const onPage = { x: size.width / 2 + (b.x0 - c.position.x) * z, y: size.height / 2 - (b.y1 - c.position.y) * z, w: (b.x1 - b.x0) * z, h: (b.y1 - b.y0) * z };
     // (from a molecule or a step, not a sheet: coming up out of it, and going down into it, fading)
     const outOfBody = !flownText.at;
@@ -474,6 +481,24 @@ function ColumnPass({
       textBegun.current = { start: flightStart, at: performance.now() };
       redraw();
     };
+    // (a Markdown text's rows formatted, its sheet's growing into the column's - as the column lays it out, from where it is read)
+    if (s.md && !outOfBody) {
+      const r = markdownReaderOf(columnText(store, flownText.id, flownText.text), flownText.text);
+      const laid = r.viewW ? r.layout : layOut(readMarkdown(flownText.text).blocks, Math.max(120, Math.round(width - 1)), measureText);
+      return (
+        <MarkdownFlight
+          key={flightStart}
+          sheet={onPage}
+          column={inColumn}
+          k={k}
+          lift={Math.sin(Math.PI * t)}
+          seen={seen}
+          onSheet={{ laid: s.md.laid, rows: s.md.rows }}
+          inColumn={{ laid, top: r.viewW ? r.scrollTop : 0 }}
+          onReady={onReady}
+        />
+      );
+    }
     // (from an icon, its lines as small as it shows them)
     const set = outOfBody ? columnSettingAt(onPage.w, inColumn) : sheetSetting(z * (flownText.icon ? iconScaleOf(s) : 1));
     return <TextFlight key={flightStart} sheet={onPage} column={inColumn} set={set} k={k} lift={Math.sin(Math.PI * t)} seen={seen} lines={s.lines} onReady={onReady} />;
@@ -496,7 +521,10 @@ function ColumnPass({
   return (
     <>
       {createPortal(<>{column}</>, scene)}
-      {createPortal(<>{text && <ColumnText key={text.id} text={text} hidden={textHidden} />}</>, textScene)}
+      {createPortal(
+        <>{text && (formatted ? <MarkdownText key={`md${text.id}`} text={text} hidden={textHidden} /> : <ColumnText key={text.id} text={text} hidden={textHidden} />)}</>,
+        textScene,
+      )}
       {createPortal(
         <>
           {flying}

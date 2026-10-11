@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
+import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 
@@ -119,6 +120,8 @@ export default function QuickAdd({
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
   const calcOpen = open === "calculations";
   const ref = useRef<HTMLDivElement>(null);
+  // (opened: a guide's step waiting for it goes on)
+  useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
     const outside = (e: Event) => {
       if (!ref.current?.contains(e.target as Node)) onClose();
@@ -165,6 +168,7 @@ export default function QuickAdd({
       {...RISE}
       role="toolbar"
       aria-label="Add"
+      data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
       style={{ left: place.left, top: place.top, transformOrigin: place.origin }}
     >

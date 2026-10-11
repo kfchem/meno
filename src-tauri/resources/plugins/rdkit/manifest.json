@@ -5,34 +5,30 @@
   "description": "Makes sense of a structure as it is drawn - its hydrogens, valence, aromatic rings, and R and S, E and Z - reads and writes SMILES, and makes structures in 3D and their conformers.",
   "licence": "BSD-3-Clause",
   "homepage": "https://www.rdkit.org",
-  "environment": {"maker": "uv", "lock": "requirements.lock"},
-  "worker": "worker.py",
-  "roles": ["smiles", "checks", "stereo-labels", "stereoisomers", "conformers", "drawing"],
-  "roleOptions": {
-    "conformers": [
-      {"id": "count", "label": "Conformers sought", "type": "number", "default": 30, "min": 1, "max": 500, "step": 1},
-      {"id": "field", "label": "Force field", "type": "choice", "choices": [
-        {"value": "MMFF94", "label": "MMFF94"},
-        {"value": "MMFF94s", "label": "MMFF94s"},
-        {"value": "UFF", "label": "UFF"}
-      ], "default": "MMFF94"},
-      {"id": "iters", "label": "Optimisation steps, at most", "type": "number", "default": 2000, "min": 10, "max": 100000, "step": 10},
-      {"id": "same", "label": "The same shape within (heavy atoms' RMSD)", "type": "number", "default": 0.5, "min": 0.05, "max": 5, "step": 0.05, "unit": "Å"},
-      {"id": "seed", "label": "Random seed", "type": "number", "default": 19781, "min": 0, "max": 2147483647, "step": 1}
-    ]
-  },
-  "reads": [],
-  "kinds": [],
+  "environment": "uv",
+  "roles": [
+    {"role": "smiles"},
+    {"role": "checks"},
+    {"role": "stereoisomers"},
+    {
+      "role": "conformers",
+      "options": [
+        {"id": "count", "label": "Conformers sought", "type": "number", "default": 30, "min": 1, "max": 500, "step": 1},
+        {"id": "field", "label": "Force field", "type": "choice", "choices": [{"value": "MMFF94", "label": "MMFF94"}, {"value": "MMFF94s", "label": "MMFF94s"}, {"value": "UFF", "label": "UFF"}], "default": "MMFF94"},
+        {"id": "iters", "label": "Optimisation steps, at most", "type": "number", "default": 2000, "min": 10, "max": 100000, "step": 10},
+        {"id": "same", "label": "The same shape within (heavy atoms' RMSD)", "type": "number", "default": 0.5, "min": 0.05, "max": 5, "step": 0.05, "unit": "Å"},
+        {"id": "seed", "label": "Random seed", "type": "number", "default": 19781, "min": 0, "max": 2147483647, "step": 1}
+      ]
+    },
+    {"role": "drawing"}
+  ],
   "steps": [
-    {"kind": "conformers", "programs": ["python"], "options": [
-      {"id": "count", "label": "Conformers sought", "type": "number", "default": 30, "min": 1, "max": 500, "step": 1},
-      {"id": "field", "label": "Force field", "type": "choice", "choices": [{"value": "MMFF94", "label": "MMFF94"}, {"value": "MMFF94s", "label": "MMFF94s"}, {"value": "UFF", "label": "UFF"}], "default": "MMFF94"},
-      {"id": "iters", "label": "Optimisation steps, at most", "type": "number", "default": 2000, "min": 10, "max": 100000, "step": 10},
-      {"id": "same", "label": "The same shape within (heavy atoms' RMSD)", "type": "number", "default": 0.5, "min": 0.05, "max": 5, "step": 0.05, "unit": "Å"},
-      {"id": "seed", "label": "Random seed", "type": "number", "default": 19781, "min": 0, "max": 2147483647, "step": 1}
-    ]},
-    {"kind": "duplicates", "options": [
-      {"id": "rmsd", "label": "Alike within (heavy atoms' RMSD, over symmetries)", "type": "number", "default": 0.125, "min": 0, "step": 0.025, "unit": "Å"}
-    ]}
+    {"kinds": ["conformers"], "programs": ["python"]},
+    {
+      "kinds": ["duplicates"],
+      "options": [
+        {"id": "rmsd", "label": "Alike within (heavy atoms' RMSD, over symmetries)", "type": "number", "default": 0.125, "min": 0, "step": 0.025, "unit": "Å"}
+      ]
+    }
   ]
 }

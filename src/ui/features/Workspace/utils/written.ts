@@ -44,7 +44,7 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = curr
       // (as it stands: about its centre, turned, where on the page and how high - in ångströms)
       const c = [0, 0, 0];
       for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) c[j] += xyz[3 * i + j] / n;
-      const height = heightOf(m, solidOf({ ...m, id: 0 }, style), lookOf({ ...m, id: 0 }, style)) / k;
+      const height = heightOf(m, solidOf({ ...m, id: 0 }, style), lookOf(m)) / k;
       const q = m.turn ?? [0, 0, 0, 1];
       place = (i) => {
         const [x, y, z] = turned(q, [xyz[3 * i] - c[0], xyz[3 * i + 1] - c[1], xyz[3 * i + 2] - c[2]]);

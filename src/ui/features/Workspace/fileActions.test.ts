@@ -14,6 +14,7 @@ import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
+import { useAppSettings } from "../../../lib/settings/appSettings";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -186,6 +187,31 @@ describe("drawingSvg", () => {
     // from the plus on the left to the arrow's point on the right
     expect(box[0]).toBeLessThan(-L);
     expect(box[0] + box[2]).toBeGreaterThan(4 * L);
+  });
+
+  it("says under a molecule in 3D drawn without the hydrogens on its carbons that it is - and under no other", () => {
+    const methane = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.63, y: 0.63, z: 0.63 },
+        { el: "H", x: -0.63, y: -0.63, z: 0.63 },
+        { el: "H", x: -0.63, y: 0.63, z: -0.63 },
+        { el: "H", x: 0.63, y: -0.63, z: -0.63 },
+      ],
+      bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
+      at: { x: 6 * L, y: 0 },
+    };
+    const was = useAppSettings.getState().style3d;
+    try {
+      expect(drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996)).not.toContain("hidden");
+      useAppSettings.setState({ style3d: { ...was, looks: { [was.primary]: { hydrogens: "carbonHidden" } } } });
+      const hidden = drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996);
+      expect(hidden).toContain(">C\u2013H hidden</text>");
+      // (its other look, the secondary, keeps them)
+      expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, aromatic, ACS_1996)).not.toContain("hidden");
+    } finally {
+      useAppSettings.setState({ style3d: was });
+    }
   });
 
   it("writes the label in Arial", () => {

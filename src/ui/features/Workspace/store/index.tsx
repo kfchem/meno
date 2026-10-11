@@ -184,6 +184,7 @@ export function createEditorStore(
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
     chosen3d: null,
     hoveredMeasure3d: null,
+    measureEdit3d: null,
     hoveredArrow: null,
     hoveredPlus: null,
     hoveredCaption: null,

@@ -28,6 +28,7 @@
     "@lezer/highlight": "^1.2.4",
     "@lezer/json": "^1.0.3",
     "@lezer/lr": "^1.4.10",
+    "@lezer/markdown": "^1.7.2",
     "@lezer/python": "^1.1.19",
     "@lezer/xml": "^1.0.6",
     "@react-three/drei": "^10.7.9",

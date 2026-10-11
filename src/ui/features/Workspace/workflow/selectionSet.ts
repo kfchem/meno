@@ -62,7 +62,7 @@ export function selectionFrame(
   }
   for (const m of molecules) {
     if (!sel3d.has(m.id)) continue;
-    const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m, style), turns[m.id], frames[m.id]));
+    const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), turns[m.id], frames[m.id]));
     // (and its frames chip below it, where it has one)
     const chip = hasChip(m) ? CHIP : 0;
     xs.push(b.minX - SET_PAD, b.maxX + SET_PAD);

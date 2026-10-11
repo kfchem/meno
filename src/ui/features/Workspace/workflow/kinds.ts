@@ -5,20 +5,10 @@
  * own.
  */
 import type { Option } from "../../../../lib/options";
+import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 
-/** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
-export type SetKind = "structures" | "molecules" | "conformers";
-
-export type StepKind =
-  | "conformers"
-  | "optimise"
-  | "energy"
-  | "frequencies"
-  | "energy-window"
-  | "duplicates"
-  | "populations"
-  | "as-conformers"
-  | "choose";
+/** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
+export type { SetKind, StepKind };
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
 export type StepIcon = "rings" | "curve" | "level" | "wave" | "band" | "twins" | "bars" | "grouped" | "pointer";

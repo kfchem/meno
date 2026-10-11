@@ -117,8 +117,9 @@ export default function SettingsPanel() {
             </h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               How molecules in 3D look, on the canvas and in exported pictures,
-              and how they turn under the pointer. Changes are saved as you
-              make them.
+              and how they turn under the pointer. A molecule is drawn in the
+              primary style; a double-click takes it to the secondary and back.
+              Changes are saved as you make them.
             </p>
             <Style3DEditor
               choice={style3d}
@@ -176,8 +177,8 @@ export default function SettingsPanel() {
           <section className="mt-6 max-w-4xl">
             <h2 className="text-base font-semibold text-gh-black">Plugins</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
-              Programs that do for Meno what it does not do itself: read files, make sense of a structure, make it in 3D.
-              A plugin is downloaded when it is added, or first needed - Meno asks first - and can be taken away again.
+              What Meno does beyond itself: read files, make sense of a structure, make it in 3D, run calculations - and its first steps.
+              A plugin that runs a program is downloaded when it is added, or first needed - Meno asks first - and any can be taken away again.
             </p>
             <PluginSettings />
           </section>

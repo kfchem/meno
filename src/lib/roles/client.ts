@@ -9,10 +9,10 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
+import { counter } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
-  ping: { args: Record<string, never>; result: { version: string } };
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
@@ -109,7 +109,6 @@ type Pending = {
 const TIMEOUT_MS = 30_000;
 
 export class ChemClient {
-  private next = 1;
   private pending = new Map<number, Pending>();
   private stop: () => void;
   /** The plugin's version, once the worker has said it is ready. */
@@ -121,6 +120,8 @@ export class ChemClient {
     private timeoutMs = TIMEOUT_MS,
     /** What the plugin is called, in what is said of it. */
     private name = "The plugin",
+    /** Where its questions' ids come from: shared with the other clients of the same worker (lib/calc/client `counter`). */
+    private ids: () => number = counter(),
   ) {
     let markReady!: (v: string) => void;
     this.ready = new Promise((resolve) => (markReady = resolve));
@@ -163,7 +164,7 @@ export class ChemClient {
     args: ChemRequests[Op]["args"],
     timeoutMs = this.timeoutMs,
   ): Promise<ChemRequests[Op]["result"]> {
-    const id = this.next++;
+    const id = this.ids();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);

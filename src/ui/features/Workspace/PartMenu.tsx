@@ -3,6 +3,7 @@ import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { MENU_ICONS } from "./menuIcons";
+import { guideNotice } from "../../../lib/plugins/guides";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -31,6 +32,9 @@ export type MenuTarget = {
   y: number;
   within: { width: number; height: number };
 };
+
+/** What setting a measurement of two, three or four atoms is called. */
+const SET_NAME = ["", "", "Set distance…", "Set angle…", "Set torsion angle…"];
 
 const MAC =
   typeof navigator !== "undefined" &&
@@ -68,12 +72,17 @@ export type CanvasCommand = { name: string; keys: string; run: () => void; divid
 
 /** What can be done to a molecule in 3D from the menu. */
 export type MenuMolecule3D = {
-  /** How it is drawn: the menu offers the other. */
-  look: "balls" | "space";
+  /**
+   * Its other look - the 3D style's secondary, or back to its primary - one
+   * step away: that style's name, whether it draws balls and sticks or
+   * space-filling (its icon), and the switch.
+   */
+  otherLook: { name: string; atoms: "balls" | "space"; run: () => void };
   /** How many atoms what is chosen of it measures: two, three or four make a measurement. */
   chosen: number;
   onMeasure: () => void;
-  onLook: (look: "balls" | "space") => void;
+  /** What is chosen measured and its value opened to be typed, to set it; unset, where it cannot be set (a torsion angle about a ring's bond). */
+  onSetChosen?: () => void;
   /** Turned back to face as its file has it. */
   onResetTurn: () => void;
   /** It alone, cut or copied. */
@@ -131,6 +140,7 @@ export default function PartMenu({
   canvas = [],
   clipboard,
   molecule3d,
+  measure3d,
   onClose,
 }: {
   target: MenuTarget;
@@ -172,6 +182,8 @@ export default function PartMenu({
     spread: boolean;
     icon: boolean;
     onSpread: () => void;
+    /** Its pages spread, some in places of their own: all put back in their rows. */
+    onRows?: () => void;
     onIcon: () => void;
     onNext?: () => void;
     onPrevious?: () => void;
@@ -198,6 +210,8 @@ export default function PartMenu({
   clipboard: MenuClipboard;
   /** The molecule in 3D right-clicked, when it is one. */
   molecule3d?: MenuMolecule3D;
+  /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
+  measure3d?: { atoms: number; onSet: () => void };
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -208,6 +222,8 @@ export default function PartMenu({
     const w = ref.current?.offsetWidth;
     if (w) setWidth(w);
   }, [target, radical]);
+  // (opened: a guide's step waiting for it goes on)
+  useEffect(() => guideNotice("menu"), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -246,10 +262,8 @@ export default function PartMenu({
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
     ? [
-        // (the other look, one step away: where the 3D style's second goes, lane L5)
-        molecule3d.look === "space"
-          ? { name: "Ball and stick", keys: "", run: () => molecule3d.onLook("balls"), icon: MENU_ICONS.balls }
-          : { name: "Space-filling", keys: "", run: () => molecule3d.onLook("space"), icon: MENU_ICONS.space },
+        // (the other look, one step away: the 3D style's secondary, or back to its primary)
+        { name: molecule3d.otherLook.name, keys: "", run: molecule3d.otherLook.run, icon: MENU_ICONS[molecule3d.otherLook.atoms] },
         { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn, icon: MENU_ICONS.resetTurn },
       ]
     : [];
@@ -257,6 +271,9 @@ export default function PartMenu({
     ? [
         ...(molecule3d.chosen >= 2 && molecule3d.chosen <= 4
           ? [{ name: measureName[molecule3d.chosen], keys: "", run: molecule3d.onMeasure }]
+          : []),
+        ...(molecule3d.chosen >= 2 && molecule3d.chosen <= 4 && molecule3d.onSetChosen
+          ? [{ name: SET_NAME[molecule3d.chosen], keys: "", run: molecule3d.onSetChosen }]
           : []),
         ...(molecule3d.overlay
           ? [
@@ -278,7 +295,7 @@ export default function PartMenu({
   // Delete at its right end, always - and the rest listed under them.
   const items: Item[] =
     target.kind === "measure3d"
-      ? [del("Delete measurement")]
+      ? [del("Delete measurement"), ...(measure3d ? [{ name: SET_NAME[measure3d.atoms], keys: "", run: measure3d.onSet }] : [])]
       : target.kind === "molecule3d" && target.selection !== "here" && molecule3d
       ? [
           { name: "Cut", keys: keys ? shortcut("X") : "", run: molecule3d.onCut, icon: MENU_ICONS.cut },
@@ -328,6 +345,7 @@ export default function PartMenu({
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
+          ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
         ]
       : target.kind === "text"
       ? [
@@ -425,6 +443,7 @@ export default function PartMenu({
       ref={ref}
       {...RISE}
       role="menu"
+      data-guide="menu"
       aria-label={
         target.selection === "here"
           ? "Selection"

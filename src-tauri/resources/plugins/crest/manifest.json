@@ -6,15 +6,10 @@
   "licence": "LGPL-3.0",
   "homepage": "https://crest-lab.github.io/crest-docs",
   "systems": ["macos", "linux"],
-  "environment": {"maker": "pixi", "lock": "pixi.lock"},
-  "worker": "worker.py",
-  "reads": [],
-  "roles": [],
-  "kinds": [],
-  "writes": [],
+  "environment": "pixi",
   "steps": [
     {
-      "kind": "conformers",
+      "kinds": ["conformers"],
       "takes": ["molecules", "conformers"],
       "programs": ["crest"],
       "options": [
@@ -61,14 +56,10 @@
       ]
     },
     {
-      "kind": "optimise",
+      "kinds": ["optimise"],
       "programs": ["crest"],
       "options": [
-        {"id": "method", "label": "Method", "type": "choice", "choices": [
-          {"value": "gfn2", "label": "GFN2-xTB"},
-          {"value": "gfn1", "label": "GFN1-xTB"},
-          {"value": "gfnff", "label": "GFN-FF"}
-        ], "default": "gfn2"},
+        {"id": "method", "label": "Method", "type": "choice", "choices": [{"value": "gfn2", "label": "GFN2-xTB"}, {"value": "gfn1", "label": "GFN1-xTB"}, {"value": "gfnff", "label": "GFN-FF"}], "default": "gfn2"},
         {"id": "solvent", "label": "Solvent (ALPB)", "type": "choice", "choices": [
           {"value": "none", "label": "None"},
           {"value": "acetone", "label": "Acetone"},

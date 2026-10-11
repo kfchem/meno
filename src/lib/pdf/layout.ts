@@ -12,8 +12,23 @@ export const POINT = NOMINAL_BOND_LENGTH / 14.4;
 /** A rectangle on the page: its middle, and its width and height. */
 export type Sheet = { x: number; y: number; w: number; h: number };
 
-/** What of a PDF its layout needs: its pages' sizes, in points, where its top page's middle lies, which page is on top, whether they are spread, and whether it is made an icon. */
-export type PdfPlace = { pages: readonly (readonly [number, number])[]; x: number; y: number; page: number; spread?: boolean; icon?: boolean };
+/**
+ * A page of a PDF put in a place of its own among its pages spread: where
+ * its middle lies, from where the PDF lies (its top page's middle,
+ * stacked), in the page's units.
+ */
+export type PagePlace = { page: number; x: number; y: number };
+
+/** What of a PDF its layout needs: its pages' sizes, in points, where its top page's middle lies, which page is on top, whether they are spread - and where those put in places of their own lie - and whether it is made an icon. */
+export type PdfPlace = {
+  pages: readonly (readonly [number, number])[];
+  x: number;
+  y: number;
+  page: number;
+  spread?: boolean;
+  placed?: readonly PagePlace[];
+  icon?: boolean;
+};
 
 /**
  * The type a PDF's name is set in under its icon, in points: the drawing's
@@ -74,9 +89,17 @@ export const spreadColumns = (n: number) => Math.max(1, Math.min(4, n));
 /**
  * Each page's sheet where the pages are spread: in rows, left to right, the
  * first where the top page lay - its top left where the stack's was - each
- * row as tall as its tallest page.
+ * row as tall as its tallest page; a page put in a place of its own, there,
+ * its place in its row left empty.
  */
 export function spreadSheets(p: PdfPlace): Sheet[] {
+  const out = rowSheets(p);
+  for (const q of p.placed ?? []) if (out[q.page]) out[q.page] = { ...out[q.page], x: p.x + q.x, y: p.y + q.y };
+  return out;
+}
+
+/** Each page's sheet in the rows its pages are spread in, as though none were put in a place of its own. */
+export function rowSheets(p: PdfPlace): Sheet[] {
   const top = topSheet(p);
   const left = top.x - top.w / 2;
   let y = top.y + top.h / 2;
@@ -93,6 +116,23 @@ export function spreadSheets(p: PdfPlace): Sheet[] {
     y -= tall + SPREAD_GAP;
   }
   return out;
+}
+
+/** Whether a page of a PDF spread lies in a place of its own, not in its row. */
+export const placedOwn = (p: PdfPlace, page: number) => !!p.placed?.some((q) => q.page === page);
+
+/** The order a PDF's pages spread are drawn in, the lowest first: those in their rows, then those put in places of their own, as they were put there - the last on top. */
+export function spreadOrder(p: PdfPlace): number[] {
+  const own = (p.placed ?? []).map((q) => q.page).filter((i) => i >= 0 && i < p.pages.length);
+  return [...[...p.pages.keys()].filter((i) => !own.includes(i)), ...own];
+}
+
+/** The page of a PDF spread under a point of the page, the one on top where they lie over one another - none, off them all. */
+export function spreadPageAt(p: PdfPlace, q: { x: number; y: number }): number | null {
+  const sheets = spreadSheets(p);
+  const order = spreadOrder(p);
+  for (let k = order.length - 1; k >= 0; k--) if (onSheet(sheets[order[k]], q)) return order[k];
+  return null;
 }
 
 /** What a PDF covers on the page, as it lies: its stack, its pages spread, or its icon. */

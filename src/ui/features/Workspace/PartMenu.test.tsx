@@ -85,10 +85,39 @@ describe("the right-click menu", () => {
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
   });
 
+  it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {
+    const spread = { spread: true, icon: false, onSpread: none, onIcon: none, onRead: none };
+    expect(menu(target({ kind: "pdf", id: 1 }), { pdf: spread }).listed).not.toContain("Put pages in rows");
+    expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
+  });
+
   it("marks the words' alignment as it is, among their icons", () => {
     const { icons, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none } });
     expect(icons).toEqual(["Edit text", "Align left", "Align centre", "Align right", "Justify", "Delete text"]);
     expect(html).toMatch(/aria-label="Align right" aria-pressed="true"/);
     expect(html).toMatch(/aria-label="Align left" aria-pressed="false"/);
+  });
+});
+
+describe("the menu of a molecule in 3D, and of a measurement on one", () => {
+  const molecule3d = (extra: object = {}) => ({
+    otherLook: { name: "Space-filling", atoms: "space" as const, run: none },
+    chosen: 3,
+    onMeasure: none,
+    onResetTurn: none,
+    onCut: none,
+    onCopy: none,
+    ...extra,
+  });
+  it("offers to set what is chosen, beside measuring it, where it can be set", () => {
+    const t = target({ kind: "molecule3d", id: 1 });
+    expect(menu(t, { molecule3d: molecule3d({ onSetChosen: none }) }).listed).toEqual(["Measure angle", "Set angle…"]);
+    // (a torsion angle about a ring's bond cannot be set: measured only)
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 4 }) }).listed).toEqual(["Measure torsion angle"]);
+  });
+  it("offers to set a measurement right-clicked, where it can be set", () => {
+    const t = target({ kind: "measure3d", id: 1, measure: 1 });
+    expect(menu(t, { measure3d: { atoms: 2, onSet: none } })).toMatchObject({ icons: ["Delete measurement"], listed: ["Set distance…"] });
+    expect(menu(t).listed).toEqual([]);
   });
 });

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { calcLine, calcOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
 import { combine, whoReads, checked } from "./read";
-import { OFFERED, READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
-import { kindById } from "../io/kinds";
+import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { kindById, registered } from "../io/kinds";
+import { MANIFESTS } from "../plugins/known";
 
 // water, as a reader hands back an optimisation of it: written by hand,
 // in Meno's own form - no program's output is in the repository
@@ -87,8 +88,9 @@ describe("what a reader hands back", () => {
 });
 
 describe("reading an output", () => {
-  // (a kind the plugins on offer bring: registered or not, it is the same kind)
-  const orca = kindById("orca", OFFERED.kinds)!;
+  // (a kind the plugins Meno carries bring, all added)
+  const carried = registered(MANIFESTS).kinds;
+  const orca = kindById("orca", carried)!;
   // a second reader of ORCA's output
   const other: ReaderPlugin = { ...(READER_PLUGINS[0] as PythonPlugin), id: "orca-own", name: "Meno's ORCA reader", reads: ["orca"], profile: "plugin-orca-own" };
   const readers = [...READERS, other];
@@ -103,14 +105,14 @@ describe("reading an output", () => {
     ]);
   });
 
-  it("says which plugin to add, where none that reads it is", () => {
+  it("says no plugin added reads it, where none that reads it is - naming none of its own accord (catalogues do: lib/calc/probe)", () => {
     const why = whoReads(orca, "job.out", new Set(), { read: {}, also: {} });
     expect(why).toBeInstanceOf(Error);
-    expect((why as Error).message).toBe("To read job.out (ORCA output), add cclib or PySCF in Settings, Plugins.");
+    expect((why as Error).message).toBe("No plugin added reads job.out.");
   });
 
   it("says so where the output holds no geometry, as an xTB single point's does not", () => {
-    const xtb = kindById("xtb", OFFERED.kinds)!;
+    const xtb = kindById("xtb", carried)!;
     expect(() => checked({ atoms: ["O", "H", "H"], frames: [] }, xtb, "sp.out")).toThrow(/holds no geometry/);
     expect(checked(water, orca, "job.out")).toBe(water);
   });

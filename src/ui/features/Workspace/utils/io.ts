@@ -134,7 +134,7 @@ export function drawnOf(result: ProcessedFileResult): Drawn {
 function inRow(ms: Omit<Molecule3D, "id" | "at">[]): Carried3D[] {
   const placed = ms.map((m) => ({ ...m, id: 0, at: { x: 0, y: 0 } }));
   const style = currentStyle3D();
-  const at = rowAbout({ x: 0, y: 0 }, placed.map((m) => solidOf(m, style).reach[lookOf(m, style)]));
+  const at = rowAbout({ x: 0, y: 0 }, placed.map((m) => solidOf(m, style).reach[lookOf(m)]));
   return ms.map((m, i) => ({ ...m, at: at[i] }));
 }
 

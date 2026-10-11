@@ -13,6 +13,7 @@ import { acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
 import type { OptionValues } from "../options";
+import { isRole } from "../plugins/roles";
 
 /**
  * The application's own settings: what applies to every tab unless a tab
@@ -41,6 +42,8 @@ export type AppSettings = {
   pointer: PointerSettings;
   /** How an atom's label is read as it is typed. */
   labels: LabelSettings;
+  /** How words on the page are written as they are typed. */
+  words: WordSettings;
   /** How a workflow's jobs run (Settings, Calculations; docs/WORKFLOWS.md). */
   calculations: CalculationSettings;
   /** The procedures saved (docs/WORKFLOWS.md, *Procedures*): put down again from Quick Add. */
@@ -80,6 +83,12 @@ export type LabelSettings = {
   smart: boolean;
 };
 
+/** How words on the page are written as they are typed (Workspace/CaptionTyping2D; lib/text/smartWords). */
+export type WordSettings = {
+  /** As they are meant - 60dc as 60 °C, -78 as −78, 1-2 h as 1–2 h - or, off, exactly as typed. */
+  smart: boolean;
+};
+
 /** The resolutions a copied picture may be made at, in pixels to the inch. */
 export const PICTURE_DPIS = [300, 600, 1200] as const;
 
@@ -94,13 +103,16 @@ export type PictureSettings = { dpi: (typeof PICTURE_DPIS)[number] };
  * The plugins: those the chemist took away in Settings, Plugins - by id -
  * which are not set up again of themselves when a role they fill is
  * needed; who fills each role, where the chemist chose (lib/plugins/roles);
- * and where the chemist located each program installed separately that a
- * plugin's steps run, by "plugin:program" (lib/plugins/installed).
+ * where the chemist located each program installed separately that a
+ * plugin's steps run, by "plugin:program" (lib/plugins/installed); and
+ * those whose guide has been shown - once, gone through or skipped - by id
+ * (lib/plugins/guide).
  */
 export type PluginSettings = {
   removed: string[];
   roles: Record<string, string>;
   programs: Record<string, string>;
+  guided: string[];
 };
 
 /** Who reads each kind of file, by the kind's id: its reader - unset, Meno where Meno reads it, or else the first added that reads it - and the readers that read it as well. */
@@ -142,10 +154,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   options: {},
   abbreviations: [],
   files: { read: {}, also: {} },
-  plugins: { removed: [], roles: {}, programs: {} },
+  plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
   labels: { smart: true },
+  words: { smart: true },
   calculations: {},
   procedures: [],
 };
@@ -170,6 +183,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     pictures: acceptPictures(r.pictures),
     pointer: acceptPointer(r.pointer),
     labels: { smart: (r.labels as { smart?: unknown } | undefined)?.smart !== false },
+    words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
     procedures: acceptProcedures(r.procedures),
   };
@@ -236,14 +250,16 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
   return { read, also };
 }
 
-/** The plugins taken away, and the roles' choices, that read: ids only. */
+/** The plugins taken away, the roles' choices, the programs located and the guides shown, that read: ids only. */
 function acceptPlugins(raw: unknown): PluginSettings {
-  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown };
+  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown; guided?: unknown };
   const id = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
   const removed = Array.isArray(r.removed) ? [...new Set(r.removed.filter(id))] : [];
+  const guided = Array.isArray(r.guided) ? [...new Set(r.guided.filter(id))] : [];
   const roles: Record<string, string> = {};
   if (r.roles && typeof r.roles === "object" && !Array.isArray(r.roles)) {
-    for (const [role, plugin] of Object.entries(r.roles)) if (id(role) && id(plugin)) roles[role] = plugin;
+    // (the roles Meno defines only)
+    for (const [role, plugin] of Object.entries(r.roles)) if (isRole(role) && id(plugin)) roles[role] = plugin;
   }
   // (each a place the chemist located: a full path, of some length)
   const programs: Record<string, string> = {};
@@ -253,7 +269,7 @@ function acceptPlugins(raw: unknown): PluginSettings {
       if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/])/.test(path)) programs[key] = path;
     }
   }
-  return { removed, roles, programs };
+  return { removed, roles, programs, guided };
 }
 
 /** The options remembered that read: by a role's name, each a value that is a string, a number or a switch. Whether each still fits its option is asked when it is drawn (lib/options `valuesOf`). */
@@ -370,6 +386,7 @@ type SettingsState = AppSettings & {
   setPictures: (pictures: PictureSettings) => void;
   setPointer: (pointer: PointerSettings) => void;
   setLabels: (labels: LabelSettings) => void;
+  setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
   setProcedures: (procedures: SavedProcedure[]) => void;
 };
@@ -382,9 +399,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, calculations, procedures } = get();
+      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, calculations, procedures }),
+        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -429,6 +446,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setLabels: (labels) => {
       set({ labels });
+      scheduleSave();
+    },
+    setWords: (words) => {
+      set({ words });
       scheduleSave();
     },
     setCalculations: (calculations) => {

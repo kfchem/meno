@@ -12,7 +12,7 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openedAs, openedTexts, OPENABLE, textsOf, workspaceOfFile, type Opened } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, textsOf, workspaceOfFile, type Opened } from "./ui/views/openFile";
 import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
@@ -33,7 +33,9 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { MENO_KINDS } from "./lib/io/kinds";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
-import { PLUGINS, READERS } from "./lib/calc/catalog";
+import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
+import { showGuidesDue, useGuide } from "./lib/plugins/guides";
+import GuideCard from "./ui/guide/GuideCard";
 import { stopJob } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
 import ConfirmDiscard from "./ui/layouts/ConfirmDiscard";
@@ -97,7 +99,7 @@ export default function App() {
   // dropped or pasted, those they write offered by Export, and the kinds of
   // step they fill offered in Quick Add.
   useEffect(() => {
-    if (isTauri()) void addedReaders([...READERS, ...PLUGINS.filter((p) => !READERS.includes(p))]).catch(() => {});
+    if (isTauri()) void addedReaders([...READERS, ...ALL_PLUGINS.filter((p) => !READERS.some((r) => r.id === p.id))]).catch(() => {});
   }, []);
 
   // The application's settings - the drawing style among them - read once,
@@ -110,6 +112,8 @@ export default function App() {
       await startNetwork();
       await loadAppSettings();
       await applyNetworkSettings(useAppSettings.getState().network);
+      // a plugin's guide not shown yet - Getting started's, the first time Meno opens (lib/plugins/guides)
+      showGuidesDue();
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
     })();
@@ -244,7 +248,7 @@ export default function App() {
     const into = stateRef.current.activeId;
     const picked = await openDialog({
       multiple: true,
-      filters: [{ name: "Files Meno opens", extensions: OPENABLE.map((ext) => ext.slice(1)) }],
+      filters: [{ name: "Files Meno opens", extensions: openable().map((ext) => ext.slice(1)) }],
     }).catch(() => null);
     const texts: OpenedText[] = [];
     const pdfs: OpenedPdf[] = [];
@@ -328,7 +332,9 @@ export default function App() {
     const texts: OpenedText[] = [];
     for (const f of files) {
       const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
-      const opened = workspace != null ? openedAs(f.name, workspace, undefined, MENO_KINDS.workspace) : openedAs(f.name, await f.text());
+      const text = workspace == null ? await f.text() : "";
+      // (told as Open through the dialog tells it: a catalogue's kind too)
+      const opened = workspace != null ? openedAs(f.name, workspace, undefined, MENO_KINDS.workspace) : openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
       const asText = textsOf(opened);
       if (asText) texts.push(...asText);
       else openTab(opened);
@@ -508,6 +514,21 @@ export default function App() {
   useEffect(() => useSettingsAsked.subscribe(() => void ctlNow.current.openByKind?.("settings", { label: "Settings" })), []);
   // (Open… asked for from inside a view - the menu on empty space - as Ctrl/Cmd+O)
   useEffect(() => useOpenAsked.subscribe(() => void pickRef.current()), []);
+  // (a guide shown with no workspace in front - from Settings, Plugins - brought to one: what it points at is a workspace's)
+  const stateNow = useRef(state);
+  stateNow.current = state;
+  useEffect(
+    () =>
+      useGuide.subscribe((g, prev) => {
+        if (!g.open || prev.open) return;
+        const s = stateNow.current;
+        if (s.activeId && s.tabsById[s.activeId]?.content.kind === "workspace") return;
+        const workspace = [...s.tabOrder].reverse().find((id) => s.tabsById[id]?.content.kind === "workspace");
+        if (workspace) dispatch({ type: "SELECT_TAB", id: workspace });
+        else ctlNow.current.add();
+      }),
+    [],
+  );
 
   const resolveView = useCallback(
     (kind: string): ViewEntry | Promise<ViewEntry> => {
@@ -558,7 +579,7 @@ export default function App() {
         type="file"
         multiple
         className="hidden"
-        accept={OPENABLE.join(",")}
+        accept={openable().join(",")}
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];
           // (the same file can be picked again)
@@ -590,6 +611,7 @@ export default function App() {
           void ctl.openByKind?.("settings", { label: "Settings" });
         }}
       />
+      <GuideCard />
       <ConsentDialog />
       <UpdateNotice />
       <Deck

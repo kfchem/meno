@@ -1,6 +1,7 @@
 /**
  * A text coloured by what it is (docs/PDF.md, *A text*), by a grammar:
- * a Python script, JSON or XML by Lezer's (MIT); a calculation's input or
+ * a Python script, JSON, XML or Markdown by Lezer's (MIT) - Markdown's
+ * code in Python, JSON or XML by theirs too; a calculation's input or
  * output by its plugin's (lib/plugins/manifest `GrammarDecl`), made into a
  * parser as it is first wanted (./grammars). Each is parsed as far as it is
  * read, and from where it was changed, the rest kept. Meno knows no
@@ -16,6 +17,7 @@ import type { LRParser } from "@lezer/lr";
 import { parser as pythonParser } from "@lezer/python";
 import { parser as jsonParser } from "@lezer/json";
 import { parser as xmlParser } from "@lezer/xml";
+import { GFM, parseCode, parser as markdownParser } from "@lezer/markdown";
 import { folded, holdsMark, type GrammarDecl } from "../plugins/manifest";
 import { grammarText } from "../plugins/known";
 import { extensionOf, kindOf, kinds, textKinds, type Kind, type PluginGrammar, type TextKind } from "../io/kinds";
@@ -50,6 +52,34 @@ const SHARED = [
 const PYTHON = tagHighlighter([...SHARED, { tag: [t.function(t.definition(t.variableName)), t.definition(t.className)], class: "name" }]);
 const JSON_TONES = tagHighlighter([...SHARED, { tag: t.propertyName, class: "property" }]);
 const XML = tagHighlighter([...SHARED, { tag: t.tagName, class: "tag" }, { tag: t.attributeName, class: "attribute" }]);
+/**
+ * Markdown's (docs/PDF.md, *Markdown*): its headings as what a definition
+ * names, code as strings, addresses and labels as keys, its marks - a
+ * heading's, a list's, a quote's, emphasis's, code's, a task's, a rule - grey; and
+ * code in Python, JSON or XML as those are.
+ */
+const MARKDOWN = tagHighlighter([
+  { tag: [t.processingInstruction, t.atom], class: "comment" },
+  { tag: t.contentSeparator, class: "comment" },
+  { tag: t.heading, class: "name" },
+  { tag: t.monospace, class: "string" },
+  { tag: [t.url, t.labelName], class: "property" },
+  ...SHARED,
+  { tag: [t.function(t.definition(t.variableName)), t.definition(t.className)], class: "name" },
+  { tag: t.propertyName, class: "property" },
+  { tag: t.tagName, class: "tag" },
+  { tag: t.attributeName, class: "attribute" },
+]);
+/** Markdown's parser: CommonMark with GitHub's tables, task lists, strikethrough and autolinks; its code in Python, JSON or XML parsed as that. */
+const MARKDOWN_PARSER = markdownParser.configure([
+  ...GFM,
+  parseCode({
+    codeParser: (info) => {
+      const lang = info.trim().split(/\s+/)[0].toLowerCase();
+      return lang === "python" || lang === "py" ? pythonParser : lang === "json" ? jsonParser : lang === "xml" || lang === "svg" ? xmlParser : null;
+    },
+  }),
+]);
 
 /** A plugin's grammar's tones: a tag of Meno's for each, given to the parts the plugin names. */
 const TONE_TAGS = Object.fromEntries(TONE_NAMES.map((n) => [n, Tag.define()])) as Record<Tone, Tag>;
@@ -74,6 +104,8 @@ class GrammarColouring implements Colouring {
     parser: Parser | Promise<Parser | null>,
     private readonly highlighter: Highlighter,
     onReady?: () => void,
+    /** Whether a part takes its own tone over what it is in's - Markdown's marks in a heading - or the other way. */
+    private readonly inner = false,
   ) {
     // (Lezer's own at once; a plugin's once it is made)
     if (!(parser instanceof Promise)) {
@@ -134,7 +166,8 @@ class GrammarColouring implements Colouring {
         const f = Math.max(a, from);
         const e = Math.min(b, to);
         if (e <= f) return;
-        const tone = classes.split(" ")[0] as Tone;
+        const all = classes.split(" ");
+        const tone = (this.inner ? all[all.length - 1] : all[0]) as Tone;
         // (a value: a number where it is one, else as it is)
         if (tone === "value") {
           if (isNumber(lines.text.slice(f, e))) out.push({ from: f - from, to: e - from, tone: "number" });
@@ -171,10 +204,12 @@ class GrammarColouring implements Colouring {
 // --- which ------------------------------------------------------------------
 
 /** Lezer's grammars, by the names their files go by. */
-const GRAMMARS: Record<string, { parser: Parser; highlighter: Highlighter }> = {
+const GRAMMARS: Record<string, { parser: Parser; highlighter: Highlighter; inner?: true }> = {
   ".py": { parser: pythonParser, highlighter: PYTHON },
   ".json": { parser: jsonParser, highlighter: JSON_TONES },
   ".xml": { parser: xmlParser, highlighter: XML },
+  ".md": { parser: MARKDOWN_PARSER, highlighter: MARKDOWN, inner: true },
+  ".markdown": { parser: MARKDOWN_PARSER, highlighter: MARKDOWN, inner: true },
 };
 
 /** How far into a text its lines are looked at, for what a kind of text's lines begin with. */
@@ -209,7 +244,7 @@ export function colouringFor(
 ): Colouring | null {
   const ext = extensionOf(name);
   const lezer = GRAMMARS[ext];
-  if (lezer) return new GrammarColouring(lezer.parser, lezer.highlighter);
+  if (lezer) return new GrammarColouring(lezer.parser, lezer.highlighter, undefined, lezer.inner);
   const kind = kindOf(name, text, among);
   if (kind?.grammar) return pluginColouring(kind.grammar, grammarOf, onReady);
   if (!ext) return null;

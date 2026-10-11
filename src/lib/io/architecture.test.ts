@@ -27,7 +27,7 @@ describe("ARCHITECTURE.md's table of kinds", () => {
     const kinds = new Set<string>([
       ...Object.values(MENO_KINDS).map((k) => k.id),
       ...Object.values(WRITERS).map((w) => w.id),
-      ...MANIFESTS.flatMap((m) => [...m.kinds.map((k) => k.id), ...m.writes.map((w) => w.id)]),
+      ...MANIFESTS.flatMap((m) => m.kinds.map((k) => k.id)),
     ]);
     const listed = body.flatMap((r) => ticked(r[col("Id")]));
     expect(new Set(listed)).toEqual(kinds);

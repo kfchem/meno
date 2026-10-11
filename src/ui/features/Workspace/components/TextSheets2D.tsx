@@ -32,6 +32,8 @@ import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { GRAY } from "./pdfPictures";
 import { ease } from "./Pdfs2D";
+import { MarkdownRows } from "./MarkdownRows";
+import { useMarkdownType } from "../../TextEditor/markdownType";
 import plexMono from "../../../../assets/fonts/IBMPlexMono-Regular.ttf?url";
 
 /** Over the PDFs, under the pictures and the drawing; each put there later a step over the one before. */
@@ -105,7 +107,9 @@ function Sheet({
   const { camera, invalidate } = useThree();
   const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
   const px = 1 / zoom;
-  const s = useMemo(() => sheetOf(t.text), [t.text]);
+  // (kept by its text - a Markdown text's laid out again once its type has come)
+  useMarkdownType();
+  const s = sheetOf(t.text, t.name);
   const [, setTick] = useState(0);
   const at = t.at!;
   const pad = SHEET_PAD_PT * POINT;
@@ -135,7 +139,7 @@ function Sheet({
   const mid = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
   // (its words as large on the screen as they are: strokes where too small to read, the words over them, coming up -
   // once the letters Meno's typefaces have are known, those they have not drawn as squares: lib/chem/labelFonts `STAND_IN`)
-  const lettersKnown = useLabelFontUrl(DEFAULT_LABEL_FAMILY, needsFallback(s.lines)) != null;
+  const lettersKnown = useLabelFontUrl(DEFAULT_LABEL_FAMILY, needsFallback(s.md ? [s.md.laid.plain.slice(0, 8000)] : s.lines)) != null;
   const wordsPx = SHEET_TYPE_PT * POINT * zoom * k;
   const words = lettersKnown ? Math.min(1, Math.max(0, (wordsPx - WORDS_FROM_PX) / (WORDS_AT_PX - WORDS_FROM_PX))) : 0;
 
@@ -264,8 +268,15 @@ function Sheet({
             <planeGeometry args={[1, 1]} />
             <meshBasicMaterial color={PAPER} toneMapped={false} />
           </mesh>
+          {/* a Markdown text's first rows, formatted, as the column shows them */}
+          {s.md && (
+            <group position={[0, 0, Z_STEP / 4]}>
+              <MarkdownRows laid={s.md.laid} rows={s.md.rows} scale={s.md.scale} words={words} />
+            </group>
+          )}
           {/* far off, or small, its lines as strokes */}
-          {words < 1 &&
+          {!s.md &&
+            words < 1 &&
             s.lines.map((l, i) => {
               const lead = l.length - l.trimStart().length;
               const len = l.trimEnd().length;
@@ -280,7 +291,8 @@ function Sheet({
               );
             })}
           {/* nearer, its words - a line at a time: a letter the type lacks, taken from another, takes no line but its own with it */}
-          {words > 0 &&
+          {!s.md &&
+            words > 0 &&
             s.lines.map((l, i) =>
               l.trim() ? (
                 <Text

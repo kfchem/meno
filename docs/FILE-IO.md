@@ -209,7 +209,7 @@ Each point is resolved by the plan below (see *Every point resolved*).
 
 PLUGINS.md's contract, with three requests for files:
 
-- **`read {kind, name, data}`** gives any of:
+- **`read {kind, name, text}`** gives any of:
   - **molecules in 3D** - atoms, geometries, each one's energy, and what
     the calculation was, with bonds where the file says them (an SDF's
     bond block, a PDB's `CONECT`). Where it does not, Meno finds the
@@ -217,13 +217,13 @@ PLUGINS.md's contract, with three requests for files:
   - **a drawing**, in the record's form, read by Meno's own record reader
     with its checks;
   - **results** in the general form, any of them a promise.
-- **`ask {kind, key, name, data}`** gives a promise's value.
+- **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.
 
 In each:
 
-- **`data`** is text for a text kind and bytes for a binary one.
+- **`text`** is the file's text: every kind a plugin reads so far is text (a binary kind, when one comes, will need its own field).
 - **The kind is decided by Meno** before anyone is asked; a reader may
   answer that it cannot read the file.
 - **Each reader and writer is known by its id.** Names kept by
@@ -321,10 +321,12 @@ How these behave:
   flavour is already a kind.
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
-  text, and the kinds something reads: Meno, or a plugin on offer, added
-  or not. A file whose reader is not added says which plugin to add.
-  What a plugin on offer writes - a Gaussian input - it offers as text,
-  to be read and changed in a workspace's column (2026-10-07).
+  text, and the kinds something reads: Meno, or a plugin added - and,
+  since 2026-10-10, the kinds the catalogues of the plugins added name
+  (PLUGINS.md, *A plugin's catalogue*). A file whose reader is not added
+  says which plugin the catalogue suggests, with Add. What a plugin added
+  writes or colours - a Gaussian or ORCA input - it offers as text, to be
+  read and changed in a workspace's column (2026-10-07).
 - **Office's record is handed to the canvas as the record**, not under a
   made-up name.
 
@@ -576,7 +578,8 @@ Each step is a pull request from main.
 3. **Readers by the table** (built with this step's pull request):
    - kinds registered: Meno's own, and each added plugin's from its
      manifest while it is added; marks as data, tried on Meno's samples;
-     `probe`; a file no plugin added reads naming the plugin that would;
+     `probe`; a file no plugin added reads naming the plugin that would
+     (since 2026-10-10, as a catalogue suggests: PLUGINS.md);
    - each plugin a folder of its own, found by Meno and named by none of
      its code;
    - ids, and the kind sent with each request;
@@ -635,14 +638,18 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     both atoms of - from distances, as an XYZ file's: a standard
     residue's own bonds are in the Chemical Component Dictionary, not in
     the file;
-  - HEADER's ID code and TITLE, kept for later.
-  No ribbons; mmCIF later. A big structure is read quickly: a 58,870-atom
+  - HEADER's ID code and TITLE, kept for later;
+  - HELIX and SHEET records (Secondary Structure Section, since lane L5,
+    2026-10-10), every field kept, and with them each atom's name and
+    residue on the molecule in 3D: its chains drawn as ribbons
+    (docs/WORKSPACE.md, *Ribbons*).
+  mmCIF later. A big structure is read quickly: a 58,870-atom
   entry in about 0.2 s, its bonds found cube by cube
   (`bondsByDistance`).
 - **What is read can grow.** Each record read has a handler of its own;
-  every other record is counted by name. Reading one more - SEQRES,
-  HELIX, SHEET for ribbons, LINK and SSBOND - is a handler more, and what
-  the atoms already keep is there for it.
+  every other record is counted by name. Reading one more - SEQRES, LINK
+  and SSBOND - is a handler more, and what the atoms already keep is there
+  for it.
 - **What is written** (Export, molecules in 3D only): HETATM records, each
   molecule a residue of its own named UNL - the Chemical Component
   Dictionary's unknown ligand - in chain A; every bond in CONECT records;

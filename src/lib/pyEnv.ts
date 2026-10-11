@@ -115,6 +115,9 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
   const useDefault = await exists(defaultLock, {
     baseDir: BaseDirectory.Resource,
   });
+  // (a plugin's environment from its own lock, or none: never from another's)
+  const plugin = pluginOf(profile);
+  if (!useDefault && plugin && !opts?.lockPath) throw new Error(`${plugin.name}'s lock is not in its folder.`);
   const lockPath = opts?.lockPath ?? (useDefault ? defaultLock : fallbackLock);
 
   const info = await baseInfo(profile, lockPath, opts?.pythonVersion ?? "3.12");

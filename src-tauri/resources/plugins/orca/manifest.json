@@ -5,130 +5,22 @@
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
-  "environment": {"maker": "uv", "lock": "requirements.lock"},
-  "worker": "worker.py",
-  "reads": [],
-  "roles": [],
-  "kinds": [],
-  "writes": [],
-  "texts": [
-    {
-      "id": "orca-input", "name": "ORCA input", "extensions": [".inp"],
-      "marks": [{"text": "!", "at": "line-start"}, {"text": "%", "at": "line-start"}, {"text": "*", "at": "line-start"}],
-      "grammar": {"file": "orca-input.grammar", "tones": {
-        "Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword",
-        "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"
-      }}
-    }
+  "environment": "uv",
+  "kinds": [
+    {"id": "orca-input", "name": "ORCA input", "extensions": [".inp"], "lines": ["!", "%", "*"], "grammar": {"file": "orca-input.grammar", "tones": {"Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword", "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"}}}
   ],
   "installed": [
     {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"]}
   ],
   "steps": [
     {
-      "kind": "optimise",
+      "kinds": ["optimise", "energy", "frequencies"],
       "programs": ["orca"],
       "options": [
         {"id": "method", "label": "Method", "type": "text", "default": "B3LYP"},
         {"id": "basis", "label": "Basis set", "type": "text", "default": "def2-SVP"},
-        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"},
-          {"value": "D4", "label": "D4"}
-        ], "default": "D3BJ"},
-        {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "CPCM", "label": "C-PCM"},
-          {"value": "SMD", "label": "SMD"}
-        ], "default": "none"},
-        {"id": "solvent", "label": "Solvent", "type": "choice", "choices": [
-          {"value": "water", "label": "Water"},
-          {"value": "acetonitrile", "label": "Acetonitrile"},
-          {"value": "acetone", "label": "Acetone"},
-          {"value": "benzene", "label": "Benzene"},
-          {"value": "chloroform", "label": "Chloroform"},
-          {"value": "dichloromethane", "label": "Dichloromethane"},
-          {"value": "dimethylformamide", "label": "DMF"},
-          {"value": "dimethylsulfoxide", "label": "DMSO"},
-          {"value": "diethylether", "label": "Diethyl ether"},
-          {"value": "ethanol", "label": "Ethanol"},
-          {"value": "ethylacetate", "label": "Ethyl acetate"},
-          {"value": "hexane", "label": "Hexane"},
-          {"value": "methanol", "label": "Methanol"},
-          {"value": "tetrahydrofuran", "label": "THF"},
-          {"value": "toluene", "label": "Toluene"},
-          {"value": "1,4-dioxane", "label": "1,4-Dioxane"},
-          {"value": "ccl4", "label": "Carbon tetrachloride"},
-          {"value": "pyridine", "label": "Pyridine"},
-          {"value": "nitromethane", "label": "Nitromethane"},
-          {"value": "cyclohexane", "label": "Cyclohexane"},
-          {"value": "1-octanol", "label": "1-Octanol"},
-          {"value": "2-propanol", "label": "2-Propanol"}
-        ], "default": "water"},
-        {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "min": 0, "step": 500}
-      ]
-    },
-    {
-      "kind": "energy",
-      "programs": ["orca"],
-      "options": [
-        {"id": "method", "label": "Method", "type": "text", "default": "B3LYP"},
-        {"id": "basis", "label": "Basis set", "type": "text", "default": "def2-SVP"},
-        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"},
-          {"value": "D4", "label": "D4"}
-        ], "default": "D3BJ"},
-        {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "CPCM", "label": "C-PCM"},
-          {"value": "SMD", "label": "SMD"}
-        ], "default": "none"},
-        {"id": "solvent", "label": "Solvent", "type": "choice", "choices": [
-          {"value": "water", "label": "Water"},
-          {"value": "acetonitrile", "label": "Acetonitrile"},
-          {"value": "acetone", "label": "Acetone"},
-          {"value": "benzene", "label": "Benzene"},
-          {"value": "chloroform", "label": "Chloroform"},
-          {"value": "dichloromethane", "label": "Dichloromethane"},
-          {"value": "dimethylformamide", "label": "DMF"},
-          {"value": "dimethylsulfoxide", "label": "DMSO"},
-          {"value": "diethylether", "label": "Diethyl ether"},
-          {"value": "ethanol", "label": "Ethanol"},
-          {"value": "ethylacetate", "label": "Ethyl acetate"},
-          {"value": "hexane", "label": "Hexane"},
-          {"value": "methanol", "label": "Methanol"},
-          {"value": "tetrahydrofuran", "label": "THF"},
-          {"value": "toluene", "label": "Toluene"},
-          {"value": "1,4-dioxane", "label": "1,4-Dioxane"},
-          {"value": "ccl4", "label": "Carbon tetrachloride"},
-          {"value": "pyridine", "label": "Pyridine"},
-          {"value": "nitromethane", "label": "Nitromethane"},
-          {"value": "cyclohexane", "label": "Cyclohexane"},
-          {"value": "1-octanol", "label": "1-Octanol"},
-          {"value": "2-propanol", "label": "2-Propanol"}
-        ], "default": "water"},
-        {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "min": 0, "step": 500}
-      ]
-    },
-    {
-      "kind": "frequencies",
-      "programs": ["orca"],
-      "options": [
-        {"id": "method", "label": "Method", "type": "text", "default": "B3LYP"},
-        {"id": "basis", "label": "Basis set", "type": "text", "default": "def2-SVP"},
-        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"},
-          {"value": "D4", "label": "D4"}
-        ], "default": "D3BJ"},
-        {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [
-          {"value": "none", "label": "None"},
-          {"value": "CPCM", "label": "C-PCM"},
-          {"value": "SMD", "label": "SMD"}
-        ], "default": "none"},
+        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"}, {"value": "D4", "label": "D4"}], "default": "D3BJ"},
+        {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "CPCM", "label": "C-PCM"}, {"value": "SMD", "label": "SMD"}], "default": "none"},
         {"id": "solvent", "label": "Solvent", "type": "choice", "choices": [
           {"value": "water", "label": "Water"},
           {"value": "acetonitrile", "label": "Acetonitrile"},

@@ -10,6 +10,7 @@ import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
+import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -27,6 +28,8 @@ export type FileMolecule3D = {
   frame?: number;
   /** Its bonds are where its atoms stand close enough, frame by frame: its file gives none (an XYZ file). */
   bondsFrom?: "distance";
+  /** Its atoms' names and residues, and its secondary structure: a PDB entry's chains (lib/chem/biopolymer). */
+  biopolymer?: Biopolymer;
 };
 
 /**
@@ -217,6 +220,11 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
   const [first, ...rest] = models;
   const alike = rest.every((atoms) => atoms.length === first.length && atoms.every((a, i) => a.element === first[i].element));
   const named = filename ? { name: filename } : {};
+  // (its chains, residues and secondary structure: what it is drawn as a biopolymer by)
+  const biopolymer = (atoms: readonly PdbAtom[]) => {
+    const bp = biopolymerOf(atoms, entry.helices, entry.strands);
+    return bp ? { biopolymer: bp } : {};
+  };
   if (alike) {
     return [
       {
@@ -224,10 +232,11 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         bonds: pdbBonds(first, entry.conect),
         ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
         ...named,
+        ...biopolymer(first),
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named }));
+  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms) }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);

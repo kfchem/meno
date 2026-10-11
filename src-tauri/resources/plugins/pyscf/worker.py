@@ -255,11 +255,6 @@ def orbital_lists(orbitals, frame):
     return out
 
 
-def op_ping(_m):
-    import pyscf
-    return {"reader": "pyscf", "version": pyscf.__version__}
-
-
 def op_read(m):
     orbitals, result = load(m)
     if result is None:
@@ -348,7 +343,7 @@ def op_ask(m):
     }
 
 
-OPS = {"ping": op_ping, "read": op_read, "ask": op_ask}
+OPS = {"read": op_read, "ask": op_ask}
 
 
 def answer(line):
@@ -368,7 +363,7 @@ def answer(line):
 
 def main():
     import pyscf
-    print(json.dumps({"event": "ready", "reader": "pyscf", "version": pyscf.__version__}), flush=True)
+    print(json.dumps({"event": "ready", "version": pyscf.__version__}), flush=True)
     for line in sys.stdin:
         line = line.strip()
         if line:

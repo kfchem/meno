@@ -97,9 +97,9 @@ export const WRITERS = {
 /** A kind Meno writes itself. */
 export type WriterId = keyof typeof WRITERS;
 
-/** The writers of plugins - those added, say - each kind they write a writer. */
+/** The writers of plugins - those added, say - each kind they write a writer, given one molecule (lib/plugins/manifest `WriteDecl`). */
 export function pluginWriters(plugins: readonly { id: string; writes: readonly WriteDecl[] }[]): Writer[] {
-  return plugins.flatMap((p) => p.writes.map((w) => ({ id: w.id, name: w.name, extensions: w.extensions, takes: w.takes, options: w.options, by: p.id })));
+  return plugins.flatMap((p) => p.writes.map((w) => ({ id: w.id, name: w.name, extensions: w.extensions, takes: "molecule" as const, options: w.options, by: p.id })));
 }
 
 /** A writer's files' extension, without its dot: the one Export gives. */

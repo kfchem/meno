@@ -5,13 +5,12 @@
   "description": "Works out orbitals and densities on a grid, from a calculation's output (read with cclib) or a Molden file.",
   "licence": "Apache-2.0",
   "homepage": "https://pyscf.org",
-  "environment": {"maker": "pixi", "lock": "pixi.lock"},
-  "worker": "worker.py",
-  "reads": ["orca", "gaussian", "gaussian-fchk", "molden"],
+  "environment": "pixi",
   "kinds": [
     {"id": "gaussian", "name": "Gaussian output", "program": "Gaussian", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System", "at": "line-start"}], "grammar": {"file": "gaussian-output.grammar", "tones": {"WarningLine": "warning", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}},
     {"id": "gaussian-fchk", "name": "Gaussian formatted checkpoint", "program": "Gaussian", "extensions": [".fchk", ".fch"], "marks": [{"text": "Number of atoms I", "at": "line-start"}]},
     {"id": "molden", "name": "Molden file", "extensions": [".molden", ".mld"], "marks": [{"text": "[Molden Format]", "at": "line-start", "anyCase": true}]},
     {"id": "orca", "name": "ORCA output", "program": "ORCA", "extensions": [".out", ".log"], "marks": [{"text": "* O R C A *"}], "grammar": {"file": "orca-output.grammar", "tones": {"ErrorLine": "error", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}}
-  ]
+  ],
+  "reads": ["orca", "gaussian", "gaussian-fchk", "molden"]
 }

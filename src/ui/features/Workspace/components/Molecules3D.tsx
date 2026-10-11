@@ -3,13 +3,16 @@ import { setCursor } from "../../../theme/cursors";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { KEY_LIGHT_FROM, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
+import { bondRadiusOf, KEY_LIGHT_FROM, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import { LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
-import type { Molecule3D, Turn3D } from "../store/types";
+import type { EditorState, Molecule3D, Turn3D } from "../store/types";
 import { atomAt, bondAt, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
+import { movingFor, placesOf, valueOf } from "../utils/edit3d";
+import { kindOf, type MeasureKind } from "../utils/measure3d";
 import { setViewGoal } from "./viewGoal";
 import { Remake3D } from "./remake3d";
+import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { eyeOf, pageAt } from "../utils/page";
@@ -98,6 +101,12 @@ type Going = Exclude<Gesture, { kind: "press" }>;
  * - A click on an atom or a bond chooses it, for a measurement, or lets it
  *   go; with Ctrl (⌘ on a Mac), it takes the molecule into the selection,
  *   or out of it.
+ * - A double-click switches it to its other look - the 3D style's
+ *   secondary, or back to its primary - and those selected with it; what
+ *   its first click chose is let go again (the maintainer, 2026-10-10).
+ * - A measurement's value, pointed at, lights the atoms setting it moves; a
+ *   drag across it sets it, as the pointer goes, in one undo step; a
+ *   double-click opens it to type a value (utils/edit3d).
  * The page itself never tilts, so a drawing beside it stays as drawn.
  */
 export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
@@ -145,10 +154,21 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // connected to, as drei's Html has it
   const connected = useThree((s) => s.events.connected) as HTMLElement | undefined;
   const valuesHost = useRef<Element | null>(null);
-  valuesHost.current = connected ?? dom.parentElement?.parentElement ?? null;
+  // (in the layer the page's HTML goes in, where there is one: PageHtml)
+  const layer = useContext(PageHtmlLayer);
+  valuesHost.current = layer ?? connected ?? dom.parentElement?.parentElement ?? null;
   // molecules turning on by themselves: about which axis, how fast (rad/s)
   const spins = useRef(new Map<number, { axis: THREE.Vector3; speed: number }>());
   const gesture = useRef<Gesture | null>(null);
+  // a measurement's value being dragged across, to set it: which, where the
+  // drag began and the value then, and the undo step it makes - the
+  // molecule edited being a copy, once a result has been edited
+  const scrub = useRef<{ id: number; measure: number; pointerId: number; sx: number; start: number; kind: MeasureKind; key: string; moved: boolean } | null>(null);
+  const [scrubbing, setScrubbing] = useState<{ id: number; measure: number } | null>(null);
+  const measureEdit = useEditor((s) => s.measureEdit3d);
+  // what was chosen before each of the last two presses on a molecule: a
+  // double-click puts back what its first click changed
+  const chosenBefore = useRef<EditorState["chosen3d"][]>([null, null]);
   const [active, setActive] = useState<{ kind: "turn" | "move"; group: number[] } | null>(null);
   // a press being held on a molecule: the atom its selection spreads from, and since when
   const [hold, setHold] = useState<{ id: number; from: number; start: number } | null>(null);
@@ -176,7 +196,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     };
     const poseNow = (m: Molecule3D) => {
       const st = store.getState();
-      return poseOf(m, solidOf(m, style), lookOf(m, style), st.turns3d[m.id], st.frames3d[m.id]);
+      return poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]);
     };
     // the molecule the pointer is on: the last placed, on top
     const hit = (e: PointerEvent): { id: number } | null => {
@@ -184,7 +204,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const st = store.getState();
       for (let i = st.molecules3d.length - 1; i >= 0; i--) {
         const m = st.molecules3d[i];
-        if (onMolecule(m, poseNow(m), eyeOf(camera), p.x, p.y, camera.zoom, style.bondRadius)) return { id: m.id };
+        if (onMolecule(m, poseNow(m), eyeOf(camera), p.x, p.y, camera.zoom, bondRadiusOf(style[lookOf(m)]))) return { id: m.id };
       }
       return null;
     };
@@ -217,6 +237,24 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     };
 
     const onMove = (e: PointerEvent) => {
+      const s = scrub.current;
+      if (s) {
+        if (e.pointerId !== s.pointerId) return;
+        e.stopPropagation();
+        const dx = e.clientX - s.sx;
+        if (!s.moved && Math.abs(dx) < MOV_PX) return;
+        s.moved = true;
+        // (to a hundredth of an ångström, or half a degree, a pixel's worth each)
+        const step = s.kind === "distance" ? SCRUB_ANGSTROM : SCRUB_DEGREES;
+        const value = Math.round((s.start + dx * step) / step) * step;
+        const id = store.getState().setMeasure3d(s.id, s.measure, value, s.key);
+        if (id != null && id !== s.id) {
+          s.id = id;
+          setScrubbing({ id, measure: s.measure });
+        }
+        invalidate();
+        return;
+      }
       const g = gesture.current;
       if (!g) {
         // (nothing new is hovered while a button is held for something else)
@@ -320,11 +358,30 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       // under a pointer that has not moved since - opened, say - and the menu
       // a right press asks for is that molecule's
       store.getState().setHovered3d(hit(e));
-      store.getState().setHoveredMeasure3d(labelAt(e));
+      const label = labelAt(e);
+      store.getState().setHoveredMeasure3d(label);
       if (e.button !== 0) return;
+      // on a measurement's value that can be set: a drag across it sets it
+      if (label) {
+        const st = store.getState();
+        const m = st.molecules3d.find((x) => x.id === label.id);
+        const x = m?.measures?.find((k) => k.id === label.measure);
+        const frame = st.frames3d[label.id] ?? 0;
+        if (m && x && movingFor(m, x.id, frame)) {
+          e.stopPropagation();
+          try {
+            dom.setPointerCapture(e.pointerId);
+          } catch {}
+          const start = valueOf(placesOf(m, frame), x.atoms);
+          scrub.current = { ...label, pointerId: e.pointerId, sx: e.clientX, start, kind: kindOf(x.atoms), key: `set-measure-${label.id}-${x.id}-${e.timeStamp}`, moved: false };
+          setScrubbing(label);
+          return;
+        }
+      }
       const h = store.getState().hovered3d;
       if (!h) return;
       const st = store.getState();
+      chosenBefore.current = [chosenBefore.current[1], st.chosen3d];
       const m = st.molecules3d.find((x) => x.id === h.id);
       if (!m) return;
       e.stopPropagation();
@@ -334,8 +391,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const p = pageOf(e);
       const pose = poseNow(m);
       const atom = atomAt(pose, eyeOf(camera), p.x, p.y);
-      const look = lookOf(m, style);
-      const bond = atom == null && look === "balls" ? bondAt(m, pose, eyeOf(camera), p.x, p.y, style.bondRadius) : null;
+      const look = lookOf(m);
+      const bond = atom == null && style[look].atoms === "balls" ? bondAt(m, pose, eyeOf(camera), p.x, p.y, style[look].bondRadius) : null;
       const press: Press = { id: m.id, group: [m.id], pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, atom, bond, add: addsToSelection(e), moved: false };
       // held still, it selects the molecule - spreading out from the atom pressed on
       const selected = st.sel3d.has(m.id);
@@ -357,6 +414,17 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     };
 
     const onUp = (e: PointerEvent) => {
+      const s = scrub.current;
+      if (s && e.pointerId === s.pointerId) {
+        e.stopPropagation();
+        try {
+          dom.releasePointerCapture(e.pointerId);
+        } catch {}
+        scrub.current = null;
+        setScrubbing(null);
+        swallowClick();
+        return;
+      }
       const g = gesture.current;
       if (!g || e.pointerId !== g.pointerId) return;
       e.stopPropagation();
@@ -389,6 +457,28 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       invalidate();
     };
 
+    // a double-click: on a measurement's value that can be set, typed; on
+    // a molecule, it - and those selected with it - in its other look
+    const onDouble = (e: MouseEvent) => {
+      if (addsToSelection(e) || e.shiftKey) return;
+      const p = e as PointerEvent;
+      const label = labelAt(p);
+      const st = store.getState();
+      if (label) {
+        const m = st.molecules3d.find((x) => x.id === label.id);
+        if (!m || !movingFor(m, label.measure, st.frames3d[label.id] ?? 0)) return;
+        e.stopPropagation();
+        st.editMeasure3d(label);
+        return;
+      }
+      const h = hit(p);
+      if (!h) return;
+      e.stopPropagation();
+      store.setState({ chosen3d: chosenBefore.current[0] });
+      st.switchLook3d(h.id);
+      invalidate();
+    };
+
     const onLeave = () => {
       if (gesture.current) return;
       store.getState().setHovered3d(null);
@@ -400,7 +490,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     dom.addEventListener("pointerup", onUp);
     dom.addEventListener("pointercancel", onUp);
     dom.addEventListener("pointerleave", onLeave);
+    dom.addEventListener("dblclick", onDouble);
     return () => {
+      dom.removeEventListener("dblclick", onDouble);
       dom.removeEventListener("pointermove", onMove);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointerup", onUp);
@@ -421,10 +513,21 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
 
   // the pointer says what a drag does: a molecule selected moves, another
   // turns - Meno's own pointers (theme/cursors)
+  // (a measurement's value that can be set, pointed at or dragged across: the
+  // atoms setting it moves, lit; and a drag across it slides sideways)
+  const settingOn = scrubbing ?? hoveredMeasure;
+  const settingMoves = useMemo(() => {
+    if (!settingOn) return null;
+    const m = molecules.find((x) => x.id === settingOn.id);
+    const atoms = m ? movingFor(m, settingOn.measure, frames[settingOn.id] ?? 0) : null;
+    return atoms ? { id: settingOn.id, atoms } : null;
+  }, [settingOn, molecules, frames]);
   useEffect(() => {
     setCursor(
       dom,
-      active?.kind === "turn"
+      settingMoves && !active
+        ? "sideways"
+        : active?.kind === "turn"
         ? "turning"
         : active?.kind === "move" || (hovered && sel3d.has(hovered.id))
           ? "move"
@@ -432,7 +535,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             ? "turn"
             : null,
     );
-  }, [dom, hovered, active, sel3d]);
+  }, [dom, hovered, active, sel3d, settingMoves]);
 
   // a molecule let go while turning turns on, slowing to a stop
   useFrame((_, dt) => {
@@ -457,7 +560,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     const r = dom.getBoundingClientRect();
     if (bottom <= r.bottom - ROOM_PX) return;
     const st = store.getState();
-    const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m, style), st.turns3d[m.id], st.frames3d[m.id]), eyeOf(camera));
+    const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]), eyeOf(camera));
     // (how far below the molecule the list reaches, which no zoom changes)
     const under = bottom - (r.top + r.height / 2 - (b.minY - cam.position.y) * cam.zoom);
     const zoom = Math.max(cam.zoom / 4, Math.min(cam.zoom, (r.height - 2 * ROOM_PX - under) / Math.max(b.maxY - b.minY, 1e-3)));
@@ -494,7 +597,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             key={m.id}
             m={m}
             style={style}
-            look={lookOf(m, style)}
+            look={lookOf(m)}
             frame={frames[m.id] ?? 0}
             turn={turns[m.id]}
             lit={litOf(m.id)}
@@ -517,7 +620,14 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
-            marked={pointed?.atoms ?? row?.atoms ?? NONE}
+            marked={settingMoves?.id === m.id ? settingMoves.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
+            editingMeasure={measureEdit?.id === m.id ? measureEdit.measure : null}
+            onSetMeasure={(measure, value) => {
+              const st = store.getState();
+              st.editMeasure3d(null);
+              st.setMeasure3d(m.id, measure, value);
+            }}
+            onEditDone={() => store.getState().editMeasure3d(null)}
             list={
               list ? (
                 <CalcList3D
@@ -553,7 +663,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           key={`leaving-${m.id}`}
           m={m}
           style={style}
-          look={lookOf(m, style)}
+          look={lookOf(m)}
           frame={frame}
           turn={turn}
           lit={0}
@@ -575,6 +685,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
 }
 
 const NONE: number[] = [];
+/** How much a measurement's value changes for each pixel a drag across it goes: in ångströms, and in degrees. */
+const SCRUB_ANGSTROM = 0.01;
+const SCRUB_DEGREES = 0.5;
 /** The value a surface is drawn at where its grid says none. */
 const DEFAULT_ISO = 0.05;
 

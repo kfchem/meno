@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { kindOfFile } from "./probe";
-import { whoReads } from "./read";
+import { NotRead, whoReads } from "./read";
 import { kindById, registerKinds } from "../io/kinds";
 import { MANIFESTS } from "../plugins/known";
 
@@ -17,23 +17,32 @@ describe("what a file opened or dropped is", () => {
   afterEach(() => registerKinds([]));
 
   it("is a kind a plugin added brings, by what it holds", async () => {
-    registerKinds(MANIFESTS);
+    registerKinds(MANIFESTS.filter((m) => m.id === "cclib"));
     const kind = await kindOfFile("job.out", ORCA);
     expect(kind?.id).toBe("orca");
     expect(kindById("orca")).toBe(kind);
   });
 
-  it("is, where no plugin added brings it, what a plugin on offer would read it as - so that Meno says which to add", async () => {
+  it("is, where no plugin added brings it, what the catalogue of a plugin added names it - so that Meno says which plugin it suggests", async () => {
+    registerKinds(MANIFESTS.filter((m) => m.id === "getting-started"));
     const kind = (await kindOfFile("job.out", ORCA))!;
     expect(kind.id).toBe("orca");
     expect(kindById("orca")).toBeUndefined();
+    expect(kind.suggest).toEqual(["cclib", "pyscf"]);
     const why = whoReads(kind, "job.out", new Set(["meno"]), { read: {}, also: {} });
-    expect((why as Error).message).toBe("To read job.out (ORCA output), add cclib or PySCF in Settings, Plugins.");
+    expect(why).toBeInstanceOf(NotRead);
+    expect((why as NotRead).message).toBe("job.out (ORCA output): cclib or PySCF would read it.");
+    expect((why as NotRead).suggest).toEqual(["cclib", "pyscf"]);
     // (a banner is stronger evidence than a molfile's markers, added or not)
     expect((await kindOfFile("job.out", ORCA + MOL))?.id).toBe("orca");
   });
 
-  it("is Meno's own, or text, where no plugin on offer would read it either", async () => {
+  it("is told by no plugin not added: with no catalogue, a file no plugin added reads is what Meno itself makes of it", async () => {
+    registerKinds([]);
+    expect(await kindOfFile("job.out", ORCA)).toBeNull();
+  });
+
+  it("is Meno's own, or text, where no catalogue names it either", async () => {
     expect((await kindOfFile("ethane.mol", MOL))?.id).toBe("mol");
     expect(await kindOfFile("build.log", "compiled in 3 s\n")).toBeNull();
   });

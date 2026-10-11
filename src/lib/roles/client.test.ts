@@ -62,10 +62,10 @@ describe("the chemistry client", () => {
     try {
       const w = fakeWorker();
       const c = new ChemClient(w.transport, 1000);
-      const r = c.request("ping", {});
+      const r = c.request("to_smiles", { molblock: "A" });
       const caught = r.catch((e: Error) => e.message);
       vi.advanceTimersByTime(1001);
-      await expect(caught).resolves.toMatch(/did not answer ping in time/);
+      await expect(caught).resolves.toMatch(/did not answer to_smiles in time/);
       // a late answer is ignored
       w.say({ id: 1, ok: true, result: { rdkit: "x" } });
     } finally {

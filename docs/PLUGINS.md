@@ -2,7 +2,9 @@
 
 What Meno does through plugins and what it does itself, how the chemist
 chooses which plugin does what, and when plugins run. This is a plan,
-written on 2026-10-06 with the maintainer, and its decisions are made. How files come in and go out under it is in
+written on 2026-10-06 with the maintainer, and its decisions are made; the
+manifest, the guide and the catalogue were tidied and added on 2026-10-10
+(*The manifest* and after). How files come in and go out under it is in
 [`FILE-IO.md`](./FILE-IO.md).
 
 ## The maintainer's direction (2026-10-06)
@@ -36,7 +38,12 @@ written on 2026-10-06 with the maintainer, and its decisions are made. How files
   which roles it fills and which kinds of file it brings, reads and
   writes, read when it is added (FILE-IO.md). It shares no code with
   another plugin, and knows of none (the maintainer, 2026-10-06).
-  Examples: RDKit, cclib, PySCF.
+  Examples: RDKit, cclib, PySCF. A plugin may also run nothing and bring
+  data alone - a guide, a catalogue: Getting started.
+- **Guide** - steps a plugin brings, shown once in a card of Meno's
+  (*A plugin's guide*).
+- **Catalogue** - the plugins a plugin suggests, and the kinds of file it
+  suggests them for (*A plugin's catalogue*).
 - **Meno's own parts** - what comes with Meno and fills roles too: its
   readers and writers of MOL, SDF, RXN, XYZ and cube, its SVG, its 2D
   layout. Meno's own parts are not plugins and are not listed as plugins.
@@ -51,8 +58,7 @@ written on 2026-10-06 with the maintainer, and its decisions are made. How files
 | --- | --- | --- |
 | Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG), cclib, PySCF - see FILE-IO.md |
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
-| Chemistry (core) | the checks: hydrogens, valence, aromatic rings | RDKit (`analyse`) |
-| Chemistry (core) | stereo labels: R/S, E/Z | RDKit (`analyse`, CIP labeller) |
+| Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D | RDKit (`drawing_of`) |
@@ -71,50 +77,31 @@ Everything a plugin is lives in one folder, named by its id:
 
 ```
 <id>/
-  manifest.json      what it is, its version, licence and home; what makes
-                     its environment and runs its worker; the kinds of file
-                     it brings (id, name, extensions, marks) and those it
-                     reads, by id - its own, or Meno's; the kinds it writes,
-                     each with what it takes and its options (`writes`);
-                     how a text of a kind it brings or writes is coloured
-                     (`grammar`: a grammar file in its folder, and the
-                     tone of each of its parts), and the kinds of text it
-                     knows besides - an input to its program - each with
-                     its files' names, what its lines begin with and its
-                     grammar (`texts`);
-                     the kinds of a workflow's step it fills, each with the
-                     programs it runs and its options - and what it takes,
-                     where less than the kind takes (`takes`) - (`steps`); the
-                     systems it can be added on, where not every one
-                     (`systems`: macos, windows, linux); and the programs
-                     installed separately its steps run (`installed`)
-  worker.py          its worker, spoken to in JSON lines under the contract
+  manifest.json      what it is, and all it does, as data (*The manifest*)
+  worker.py          its worker, spoken to in JSON lines under the contract -
+                     where it runs anything
   requirements.lock  its environment, made by uv from PyPI - or, where it
   (or pixi.toml and  needs conda-forge, by pixi
    pixi.lock)
+  <name>.grammar     how a text of a kind it knows is coloured, where it says
+  LICENSE            its licence's text, where it is not Meno's (*Licences*)
 ```
 
-- **A plugin's step may take less than its kind does**: `takes` in its
-  `steps` names what may flow into it - `structures` (drawn),
-  `molecules` (in 3D), `conformers` (sets) - of what the kind takes. CREST's
+A plugin that runs nothing - Getting started, which brings a guide and a
+catalogue - has a manifest alone.
+
+- **A plugin's step may take less than its kind does** (`takes`): CREST's
   conformer search starts from a molecule in 3D, so it takes `molecules`
   and `conformers`; RDKit's says nothing, and takes structures drawn as
-  well, making them in 3D as its `conformers` role does. None said, a step
-  takes all its kind takes.
-- **A plugin may be for some systems only**: its manifest's `systems`
-  names them - CREST, whose program conda-forge builds for macOS and
-  Linux - and elsewhere Settings, *Plugins*, says so in place of *Add*.
-  None named, it is for every one.
+  well, making them in 3D as its `conformers` role does.
+- **A plugin may be for some systems only** (`systems`): CREST, whose
+  program conda-forge builds for macOS and Linux; elsewhere Settings,
+  *Plugins*, says so in place of *Add*.
 - **A plugin may run a program installed separately** - ORCA, Gaussian -
-  which Meno never fetches or ships: its manifest's `installed` says, for
-  each, its name as its steps name it, what it is called, its file on each
-  system, the folders put first where programs are looked for and the
-  variables it is given - each a place in its installation, `{folder}`
-  (where its file is) or `{parent}` (the folder above), with a path inside
-  it. Meno finds it where the system finds programs, or where the chemist
-  locates it in Settings, *Plugins*. Such a plugin is named as an
-  interface (the *ORCA interface*), and its steps by the program's name
-  (*ORCA*).
+  which Meno never fetches or ships (`installed`). Meno finds it where the
+  system finds programs, or where the chemist locates it in Settings,
+  *Plugins*. Such a plugin is named as an interface (the *ORCA
+  interface*), and its steps by the program's name (*ORCA*).
 - **Meno carries some for now**, in `src-tauri/resources/plugins/`, and
   finds them there: no code of Meno's names one. Those fetched over the
   internet later will be folders of the same kind; how Meno trusts a list
@@ -135,6 +122,146 @@ Everything a plugin is lives in one folder, named by its id:
   bring a kind each carry a grammar for it, as they do its marks; Meno
   uses the first's.
 
+## The manifest
+
+As tidied on 2026-10-10 (the maintainer agreed the spec as proposed: each
+thing said one way, checked one way). Read as data, whoever wrote it
+(`lib/plugins/manifest.ts`, `acceptManifest`): what reads wrong in it is
+left out, and what it cannot do without makes it none. What it does not
+say, it has none of. Meno's backend reads the parts it acts on - a step's
+programs, a program installed separately - from the same file, and checks
+them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
+
+| Field | Form | What it says, and how it is checked |
+| --- | --- | --- |
+| `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
+| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; its licence (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
+| `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
+| `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
+| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own files and refused where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
+| `reads` | ids | The kinds it reads: its own, or Meno's. |
+| `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
+| `roles` | list of `{role, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; options only for a role that takes them (*Structures in 3D, and their conformers*). |
+| `steps` | list of `{kinds, programs?, options?, takes?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. |
+| `installed` | list of `{name, label, files, path?, env?}` | The programs installed separately its steps run: its name as the steps name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it. Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step runs. |
+| `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
+| `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
+| `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
+
+A plugin that does nothing - reads, writes, fills, colours, guides and
+suggests nothing - is none. Options are in the general form (`lib/options`:
+a choice, a number, a text or a switch, each with a label and a default it
+takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
+charge, multiplicity or name, for a writer's).
+
+**Reserved for what comes next** (lane L7; not read yet): a step's
+`files`, the kinds of file made upstream that it takes besides molecules,
+by their ids - `{"kinds": ["nci"], "programs": ["multiwfn"], "files":
+["molden", "fchk"]}`, the kind *NCI* to come - so that a step can be given
+a wavefunction another plugin's step wrote, the two joined by a kind's id
+and sharing no code.
+
+## A plugin's guide
+
+A plugin may bring a guide (`guide`): steps of plain text Meno shows one at
+a time, in a card in Meno's own look (`ui/guide/GuideCard.tsx`), beside
+the part of the window a step points at, with a ring round that part.
+Nothing else is dimmed or held: the chemist does what a step says on the
+page itself.
+
+- **Where a step points** (`at`) is a part Meno names, never how the
+  window is built: `page`, `quick-add` (once open), `structure` (the one
+  selected, else the last drawn), `menu` (a right-click menu, once open),
+  `save`, `settings`. None, or a part not there now, and the card sits
+  low in the middle of the page.
+- **What a step waits for** (`until`), Meno names too: `quick-add` opened,
+  a structure `selected`, a `menu` opened. A moment after the chemist does
+  it, the guide goes on by itself; Next does as well.
+- **A step may offer plugins to add** (`suggest`, by id), each with what
+  its plugin's catalogue says it is for, and Add, which asks for the
+  network as adding always does.
+- **Once.** A plugin's guide is shown the first time the plugin is there:
+  on Meno's first start for one that comes added, or as soon as one that
+  brings a guide is added. Gone through or skipped, it is kept as shown
+  (settings `plugins.guided`). Settings, *Plugins*, shows it again
+  (*Show*), with a workspace brought to the front.
+- **Meno's question about keeping itself up to date** waits until a guide
+  is closed.
+
+**Getting started** (`resources/plugins/getting-started`) is the guide
+Meno comes with (the maintainer, 2026-10-10: a plugin, there from the
+start, that can be removed like any other). It runs nothing. Its steps:
+double-click on empty space for Quick Add; Chain and SMILES there; press
+and hold to select a structure; a right-click menu and its row of icons;
+Save, with Settings beside it; the plugins to add first - RDKit, cclib,
+xTB. It is shown once to everyone, those who used Meno before included.
+Taken away, no guide is shown, and no plugin is suggested for a file
+(*A plugin's catalogue*).
+
+## A plugin's catalogue
+
+Meno names no plugin and knows no program: only plugins know what other
+plugins and outside programs do (the maintainer, 2026-10-06 and
+2026-10-10). So the plugins to suggest are a plugin's data, its catalogue:
+
+- `suggests` - the plugins it suggests, each with what it is for: shown in
+  its guide and in Settings, *Plugins*.
+- `files` - the kinds of file it names, each told by the catalogue's own
+  marks, with the plugins it suggests to read it. A file no plugin added
+  reads, of one of these kinds, is told as it, and Meno says which plugins
+  would read it ("water.out (ORCA output): cclib or PySCF would read
+  it."), each with Add, the file read again once one is added.
+
+Only the catalogues of the plugins added are looked at, and the manifests
+of plugins not added never are: their marks are not to be trusted before
+the chemist adds them (the maintainer, 2026-10-10). With no catalogue, a
+file no plugin added reads is what Meno makes of it - text, say - and no
+plugin is named. Getting started's catalogue names the plugins Meno
+carries; a test keeps its kinds and the kinds those plugins read in step.
+
+## Licences
+
+A plugin carries its own licence (`licence`; its text, `LICENSE`, in its
+folder where it is not Meno's). Meno is Apache-2.0. A plugin whose code
+must be under another licence - a script for Blender, which uses Blender's
+own Python API and so is GPL - may come with Meno while it stands apart
+(the maintainer, 2026-10-10; to be distributed apart later, if those using
+Meno in companies make that worthwhile):
+
+- it is a folder of its own, with its licence's text, and says it
+  (`licence: "GPL-3.0-or-later"`);
+- Meno's code and other plugins never take anything from it, and it
+  speaks to Meno only through files and arguments - a separate program,
+  not a part of Meno;
+- it is listed with its licence wherever Meno lists the licences of what
+  it carries.
+
+A plugin Meno stops carrying leaves its files behind on Windows unless the
+installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
+`NSIS_HOOK_PREINSTALL`), as was done for the Gaussian input plugin once it
+became the Gaussian interface.
+
+## Room for what comes next
+
+What lane L7 brings fits this spec as it is; the rest comes with it:
+
+- **Blender** (real pictures and films of molecules in 3D): a role and a
+  kind of step Meno defines, *Render*, given the scene as Meno writes it -
+  glTF 2.0, from the Khronos specification: the molecules in view in
+  their looks (the primary and secondary looks, the scene's light), their
+  surfaces, the camera, and for a film its frames - and giving pictures or
+  a film, which Meno saves or puts on the page. Its plugin runs as the
+  interfaces do: a worker that writes the job, and Blender, installed
+  separately and located (`installed`), running a script of the plugin's
+  in Blender's own Python. A render may leave out the mark Meno puts on a
+  picture of molecules shown without their hydrogens (the maintainer,
+  2026-10-10). Its licence: *Licences*.
+- **NCI** (NCIPLOT, or an interface to Multiwfn): a kind of step, *NCI*,
+  whose result is a general form - one grid's surface coloured by another
+  grid's values, with a scale - not one for NCI alone. NCIPLOT can work
+  from a molecule in 3D alone; Multiwfn takes a wavefunction another
+  step wrote, through a step's `files` (*The manifest*, reserved).
+
 ## Several plugins, one role
 
 - **One plugin fills a role at a time**: the one assigned. The others that
@@ -149,12 +276,14 @@ Everything a plugin is lives in one folder, named by its id:
   and a default. Meno draws them and remembers the chemist's last
   choices. The form, its drawing and the remembering are in place, used
   first by Meno's own writers in Export (`lib/options.ts`, FILE-IO.md).
-  A plugin declares a role's options in its manifest (`roleOptions`, by
-  role); Settings draws them under the role, where it is chosen, and the
-  plugin is sent them with each request for the role (`options`). RDKit
-  declares its conformer search's (0.1.8): how many sought, the force
-  field (MMFF94, MMFF94s, UFF), the steps an optimisation may take, the
-  RMSD within which two are the same shape, the random seed.
+  A plugin declares a role's options in its manifest, with the role
+  (`roles: [{role, options}]`, for a role that takes them); Settings draws
+  them under the role, where it is chosen, and the plugin is sent them
+  with each request for the role (`options`). RDKit declares its conformer
+  search's (0.1.8): how many sought, the force field (MMFF94, MMFF94s,
+  UFF), the steps an optimisation may take, the RMSD within which two are
+  the same shape, the random seed - and its *Conformers* step takes the
+  same, said once.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
@@ -192,6 +321,14 @@ only when taken away or when Meno quits. Every plugin's environment is
 named for it, `plugin-<id>` (the maintainer, 2026-10-06); those made before
 under other names are left where they were.
 
+**One worker for each plugin** (2026-10-10, `lib/plugins/process.ts`):
+whatever asks it first - a role it fills, a file it reads or writes, a
+step it does - starts its one process, and all of them ask that one, each
+through a client of its own that shares the process's question ids, so
+that each hears only its own answers. Before, RDKit could run twice: once
+for its roles, once for its steps. Meno's backend lets a plugin's
+`worker.py` run only in that plugin's own environment.
+
 **As planned, the same for every plugin** (the maintainer, 2026-10-06:
 no plugin is kept running ahead of need):
 
@@ -228,11 +365,24 @@ The same for every plugin and for Meno's own parts:
 - **Known by its id.** It also has a version and a shown name. What a
   plugin gave - results, files - keeps the id and the version. The name is
   looked up only to show it.
-- **Requests, one answer each, an error an answer:**
-  - `ping` - its name and version;
-  - `read`, `ask`, `write` - the file roles, and `probe` - whether a file
-    is of a kind it registered (FILE-IO.md);
-  - `run {role, input, options}` - every other role;
+- **It says it is ready, and its version**, in its first line:
+  `{"event": "ready", "version": "..."}` - the version of what it brings,
+  as it runs, which what it gives keeps. (`ping`, never sent, is gone:
+  2026-10-10.)
+- **Requests, one a line - `{id, op, ...}` - one answer each - `{id, ok,
+  result}`, or `{id, ok: false, error}`, an error an answer:**
+  - `read {kind, name, text}`, `ask {kind, key, name, text}`, `write
+    {kind, name, molecules, options}` (answered `{text}`) - the file
+    roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
+    file is of a kind it registered (FILE-IO.md);
+  - each role's own requests, by the role (*Roles*): `from_smiles
+    {molblock}` and `to_smiles {smiles}` (SMILES); `analyse {molblock}`
+    (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
+    (stereoisomers); `conformers {molblock, isomers?, like?, options}`
+    (structures in 3D and their conformers, with the role's options);
+    `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D).
+    (A general `run {role, input, options}`, planned at first, was never
+    needed: a new role comes with Meno, and with it its requests);
   - `prepare {step, entries, options, cores}` and `collect {step,
     entries, options, files, log, ended}` - a kind of step its program
     does (WORKFLOWS.md, *What changes in the contract*): the jobs Meno is
@@ -268,11 +418,13 @@ The same for every plugin and for Meno's own parts:
 
 ## Settings
 
-- **Plugins.** A tab of its own that lists every plugin on offer, added or not:
+- **Plugins.** A tab of its own that lists every plugin on offer, added or
+  not - those that come with Meno and run nothing first:
   - what roles it fills, by name - the kinds of file it reads and writes
-    among them;
-  - its version, licence and home;
-  - Add, and Remove.
+    among them - and the plugins it suggests;
+  - its version, licence and home; "Comes with Meno: nothing to download"
+    for one that runs nothing;
+  - Add, and Remove; and Show, for one that brings a guide.
 
   Meno is not in it.
 - **Files.** The tab named for files (FILE-IO.md) holds, for each kind
@@ -315,6 +467,28 @@ By the maintainer, 2026-10-06:
    to take them in.
 8. **A file no plugin added reads, but one on offer would, names that
    plugin** - against the ideal, but needed for those new to Meno.
+   *Revised on 2026-10-10 (9-12 below):* the plugin is named by a
+   catalogue, never by the marks of a plugin not added.
+
+By the maintainer, 2026-10-10 (lane L6):
+
+9. **One manifest spec**, as proposed (*The manifest*): every kind of file
+   in one list; roles and steps as objects, a step's several kinds in one;
+   fixed file names; `stereo-labels` folded into the checks; `ping` gone;
+   one worker for each plugin; the same checks in Meno and its backend.
+   The plugins Meno carries were rewritten in it, and behave as before.
+10. **The first-run guide is a plugin**, Getting started, there from the
+    start and removable like any other; its guide is shown once to
+    everyone (*A plugin's guide*).
+11. **The plugins to suggest are a catalogue's**, Getting started's: what
+    a file is, where no plugin added reads it, is told only by the
+    catalogues of the plugins added - their own marks - never by the
+    manifest of a plugin not added, whose marks the chemist has not
+    consented to (*A plugin's catalogue*). The suggestion offers Add, and
+    the file is read again once a plugin is added.
+12. **A plugin may carry its own licence**; one that must be GPL - for
+    Blender - comes with Meno while it stands strictly apart, and may be
+    distributed apart later (*Licences*).
 
 ## In order
 

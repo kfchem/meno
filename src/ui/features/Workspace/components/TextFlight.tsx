@@ -15,6 +15,8 @@ import { COLUMN_SETTING, type Rect, type Setting } from "./textFlightSetting";
 import { DEFAULT_LABEL_FAMILY, labelFont } from "../../../../lib/chem/labelFonts";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import plexMono from "../../../../assets/fonts/IBMPlexMono-Regular.ttf?url";
+import { MarkdownRows } from "./MarkdownRows";
+import { rowAt, type Laid } from "../../TextEditor/markdownLayout";
 
 const PAPER = "#ffffff";
 const EDGE = "rgb(209, 217, 224)";
@@ -26,6 +28,11 @@ const SHADOW_PX = 10;
 
 const noRaycast = () => null;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+/** How far between `a` and `b` a share is, eased at both ends: one layout fading as the other comes, each mostly alone. */
+const smooth = (a: number, b: number, k: number) => {
+  const t = Math.min(1, Math.max(0, (k - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 /**
  * The text on its way: `sheet` where its body lies on the screen - its
@@ -143,6 +150,86 @@ export default function TextFlight({
           </Text>
         ) : null,
       )}
+    </group>
+  );
+}
+
+/**
+ * A Markdown text on its way between its sheet and the column (docs/PDF.md,
+ * *Markdown*): as it rises, its sheet's rows - laid out as wide as a sheet -
+ * fade, and then the column's rows - laid out as wide as the column, from
+ * where it is read - come up in their place, both growing with it from the sheet's
+ * size to the column's; going back down, the other way. In the page's type
+ * on the way (MarkdownRows), as a text's lines are; once settled, the
+ * column's own pictures of its rows take their place.
+ */
+export function MarkdownFlight({
+  sheet,
+  column,
+  k,
+  lift,
+  seen,
+  onSheet,
+  inColumn,
+  onReady,
+}: {
+  sheet: Rect;
+  column: Rect;
+  k: number;
+  lift: number;
+  seen: number;
+  /** The text as its sheet shows it: laid out, and how many rows. */
+  onSheet: { laid: Laid; rows: number };
+  /** As the column shows it: laid out, and how far down it is read. */
+  inColumn: { laid: Laid; top: number };
+  onReady: () => void;
+}) {
+  const r: Rect = { x: lerp(sheet.x, column.x, k), y: lerp(sheet.y, column.y, k), w: lerp(sheet.w, column.w, k), h: lerp(sheet.h, column.h, k) };
+  const at = (x: number, y: number, w: number, h: number): [number, number, number] => [x + w / 2, -(y + h / 2), 0];
+  // (each layout fitted to its width as it goes; as many rows as it shows at its tallest laid out once, those it shows now seen)
+  const a = onSheet.laid;
+  const b = inColumn.laid;
+  const sa = r.w / a.width;
+  const sb = r.w / b.width;
+  // (as many rows as it shows at its tallest laid out once, those within it now seen)
+  const firstB = rowAt(b, inColumn.top);
+  const tallest = Math.max(sheet.h / (sheet.w / b.width), column.h / (column.w / b.width));
+  const lastB = rowAt(b, (b.rows[firstB]?.y ?? 0) + tallest) + 1;
+  const half = useRef(0);
+  const ready = useRef(onReady);
+  ready.current = onReady;
+  const one = () => {
+    if (++half.current === 2) ready.current();
+  };
+  return (
+    <group>
+      {lift > 0.001 && (
+        <mesh position={at(r.x - SHADOW_PX * lift * 0.5, r.y + SHADOW_PX * lift, r.w + SHADOW_PX * lift, r.h)} scale={[r.w + SHADOW_PX * lift, r.h, 1]} renderOrder={1} raycast={noRaycast}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color="#000000" transparent opacity={SHADOW * lift * seen} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
+      <mesh position={at(r.x, r.y, r.w, r.h)} scale={[r.w, r.h, 1]} renderOrder={2} raycast={noRaycast}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color={PAPER} transparent opacity={seen} depthTest={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {[
+        [r.x, r.y, r.w, 1],
+        [r.x, r.y + r.h - 1, r.w, 1],
+        [r.x, r.y, 1, r.h],
+        [r.x + r.w - 1, r.y, 1, r.h],
+      ].map(([x, y, w, h], i) => (
+        <mesh key={`edge${i}`} position={at(x, y, w, h)} scale={[w, h, 1]} renderOrder={4} raycast={noRaycast}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color={EDGE} transparent opacity={seen * (1 - k)} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+      <group position={[r.x, -r.y, 0]}>
+        <MarkdownRows laid={a} rows={onSheet.rows} scale={sa} words={1} opacity={seen * (1 - smooth(0.28, 0.5, k))} order={5} reach={r.h / sa} onReady={one} />
+      </group>
+      <group position={[r.x, -r.y, 0]}>
+        <MarkdownRows laid={b} first={firstB} rows={lastB} scale={sb} words={1} opacity={seen * smooth(0.5, 0.72, k)} order={6} reach={r.h / sb} onReady={one} />
+      </group>
     </group>
   );
 }

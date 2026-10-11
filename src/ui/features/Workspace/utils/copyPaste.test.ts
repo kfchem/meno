@@ -127,7 +127,7 @@ describe("molecules in 3D on the clipboard", () => {
     ],
     at: { x: 4, y: 2 },
     frames: [[1, 1, 1, 1.8, 1.6, 1, 0.2, 1.6, 1]],
-    look: "space" as const,
+    look: "secondary" as const,
     measures: [{ id: 1, atoms: [1, 0, 2] }],
     name: "water.xyz",
     turn: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as [number, number, number, number],
@@ -156,6 +156,8 @@ describe("molecules in 3D on the clipboard", () => {
       bondsFrom: "distance" as const,
       made: { how: [{ label: "Optimised", text: "MMFF94, at most 2000 steps" }] },
       stereo: { atoms: { 0: "R" }, bonds: {}, chosen: { atoms: [0], bonds: [] } },
+      // (an edited copy of a result says what it was made from: utils/edit3d)
+      edited: { from: "conformer 7" },
     };
     const back = readRecord(recordText({ atoms: [], bonds: [], molecules3d: [made] }));
     expect(back?.molecules3d).toEqual([made]);

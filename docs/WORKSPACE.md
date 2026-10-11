@@ -257,6 +257,8 @@ Taken on 2026-10-03:
     and the pictures for other programs all take the look from there. A
     document of its own look, as a drawing can have its own style, is not
     there yet.
+  - Since 2026-10-10 it is two looks, a primary and a secondary, each a
+    style chosen from a list: *Styles in 3D* below.
 
 Taken while stage 1 was built, on 2026-10-03:
 
@@ -275,7 +277,8 @@ Taken while stage 1 was built, on 2026-10-03:
     selected moves all of it, drawing and molecules, as one step.
 - **The right-click menu on a 3D molecule:**
   - a measurement of what is chosen of it (two, three or four atoms);
-  - ball and stick or space-filling, for that molecule;
+  - its other look, the 3D style's secondary or back to the primary (since
+    2026-10-10: *Styles in 3D*);
   - reset orientation;
   - cut, copy and delete.
 - **Measurements** are the document's:
@@ -664,6 +667,156 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 2. **3d-2.** Grids, promises, surfaces, the value's slider, the colours in
    Settings, and cube files.
 3. **3d-3.** The PySCF plugin.
+
+## Styles in 3D
+
+Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
+has two looks, a thin one and a thick one, and goes from one to the other
+in a single step - seeing a molecule as ball and stick and as
+space-filling side by side is better science than either alone.
+
+- **A list of styles.** Ball and stick (the 3D viewer's look, Meno's
+  first), Glossy and Space-filling. Each is set on its own in Settings,
+  under Molecules in 3D: whether it draws balls and sticks or
+  space-filling, ball size, bond thickness and colour, the surface, and
+  whether the hydrogens on carbon are shown. Changes are kept per style,
+  marked, and taken back one at a time or all at once.
+- **Two roles.** One style is the primary - every molecule's look to
+  begin with - and one the secondary. Each style's card in Settings says
+  which it is; giving a style the other's role swaps the two, so the
+  secondary is never the primary again.
+- **What they share.** The light (from all round and from above right),
+  how a molecule turns and coasts, and an orbital's colours are set once
+  for all styles: lights light the whole scene, so two molecules side by
+  side cannot be lit two ways. Glossy is told apart by its surface and its
+  grey bonds.
+- **A molecule holds its role, not a style.** `look: "secondary"` in the
+  document, unset for the primary: a style changed in Settings changes
+  every molecule shown in it. Copies and the saved workspace carry it.
+- **One step.** A double-click on a molecule switches it to its other
+  look; with others selected with it, they all go to the clicked one's
+  other look, in one undo step. What the double-click's first click chose
+  is let go again. A double-click on a measurement's value is the
+  measurement's. The right-click menu's icon row has the same switch,
+  named after the style it goes to and drawn as balls or as spheres.
+- **No jump.** Going over, each atom's ball grows or shrinks between its
+  two radii, the bonds thicken or give way, the bond colour and the
+  surface's gloss go over, and the molecule rises or sinks to stand as
+  high as it now reaches - all on one 80 ms time constant.
+- **Hydrogens on carbon, hidden only past a warning** (the maintainer's
+  ruling and wording, 2026-10-10). Many synthetic chemists like them out
+  of the way; but a molecule without them looks smaller, flatter and more
+  open than it is, so a picture of it misleads. A style hides them only
+  when set to in Settings, never by default, and only after a box in the
+  way says so in strong words: a box ticked to say the chemist
+  understands, before *Hide hydrogens anyway* can be pressed; *Keep
+  hydrogens* is what Enter and Escape give. Only hydrogens on carbon go:
+  those on a heteroatom take part in hydrogen bonds and in reactions.
+  Every molecule drawn so says *C–H hidden* over it, on the canvas and in
+  every picture made of it (SVG, PNG, EMF), for as long as it is. On the
+  canvas it is not one of the page's chips, which go when their words are
+  too small to read: it stays at any zoom, between three quarters and one
+  and a half times its size, and folds away as the molecule goes over to a
+  look that keeps the hydrogens.
+- **Not read from before.** A settings file from before keeps none of
+  its 3D look (pre-alpha: no migration).
+
+## Editing in 3D
+
+Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+a molecule in 3D is edited as a quantum-chemistry program's builder edits
+one, by setting a distance, an angle or a torsion angle to a value. Only
+its shape changes; what it is made of stays the drawing's business (draw
+it, then *Make again*). Holding values fixed while a force field tidies
+the rest is for later, through a plugin.
+
+- **Picking.** As before: atoms (or bonds) clicked in order choose what is
+  measured. With two, three or four chosen, the right-click menu has *Set
+  distance…*, *Set angle…* or *Set torsion angle…* beside *Measure …*: it
+  measures them, in the order chosen, and opens the value to be typed. A
+  measurement right-clicked has the same item.
+- **The value.** A double-click on a measurement's value opens it to type
+  a number (a comma and a true minus are read too): Enter sets it, Escape
+  or leaving the field lets it go. A drag across the value sets it as the
+  pointer goes - a hundredth of an ångström, or half a degree, a pixel -
+  in one undo step; the pointer turns to the sideways one over it.
+  Distances go from 0.5 to 20 Å, angles from 1 to 179°, and a torsion
+  angle goes round (IUPAC's sign, as it is measured).
+- **What moves.** The side of the last atom chosen - for a torsion angle,
+  of the third - cut off at the bond before it: along the bond for a
+  distance, about the middle atom in the three atoms' plane for an angle,
+  about the middle bond for a torsion angle. Where that bond is in a ring,
+  and cutting it parts nothing, the last atom moves with only what hangs on
+  it alone (a methyl's hydrogens); a torsion angle about a ring's bond is
+  not offered. Atoms bonded to none of the others (a complex's two
+  molecules) take their whole piece with them. Pointing at a value lights
+  the atoms setting it would move, as does dragging it.
+- **Which frame.** The frame shown, with the bonds that frame has.
+- **Results are never edited.** A conformer set, a trajectory, what a
+  calculation or a step gave, or a molecule whose file gives its energy is
+  a result, and an edited result is no longer that result. The first edit
+  of one makes a copy of the frame shown, beside it (out of any set it
+  would fall in) and turned as it is: its own molecule, with no other
+  frames, energies, populations, numbers or calculation, its drawing,
+  look and measurements kept, saying *Edited from conformer 7* (or *frame
+  12*, or the output's name) under it. A drag that began on the result
+  goes on editing the copy, and the copy and the drag are one undo step.
+  A molecule of its own is edited in place.
+- **Stereo labels follow.** A centre turned inside out has its R and S
+  swapped, and a double bond turned past square its E and Z (the
+  priorities round them are as they were). The drawing is not told: a 3D
+  turned to the other configuration no longer matches it, which the link
+  to the drawing does not yet say.
+- **Found on the way.** The measurements' values are in the page's HTML
+  layer (the one cut off where the column begins) since the column came;
+  the molecules looked for them where the canvas's events are, so the
+  value under the pointer was never found - no highlight, no menu, no
+  keeping values apart. They now look in that layer.
+
+## Ribbons
+
+Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+a protein's or a nucleic acid's chains drawn as ribbons, from what the PDB
+entry itself says - written from the wwPDB's format (v3.3), as every PDB
+reading in Meno is.
+
+- **Read.** HELIX and SHEET records (Secondary Structure Section), every
+  field kept (`lib/chem/pdb.ts`). Each atom's name and residue are kept
+  on the molecule in 3D with each residue's secondary structure
+  (`lib/chem/biopolymer.ts`): a helix's or a strand's residues are those
+  from its first to its last, as the chain lists them. Meno does not work
+  secondary structure out itself: an entry without HELIX or SHEET records
+  is drawn as a tube all along (a plugin could assign it, later).
+- **The chains.** A run is consecutive residues of one chain whose
+  backbone atoms - a protein's alpha carbon (named CA, a carbon: calcium
+  is named CA too), a nucleic acid's phosphorus - stand near enough (4.5
+  and 8.5 Å); further apart, the chain is broken there. A lone residue is
+  drawn as its atoms.
+- **The ribbon** (`utils/ribbon.ts`). A smooth curve along a run's
+  backbone atoms - a cubic B-spline they are the control points of, so a
+  helix winds smoothly within its alpha carbons rather than corner to
+  corner through them; round it a band, its face turned as each peptide's plane
+  is (its carbonyl oxygen says which way, each turned as the one before so
+  it never flips): flat and 1.6 Å wide through a helix, so it winds round
+  the helix's axis; 1.7 Å through a strand, ending in an arrowhead to its
+  C-terminal end; a 0.5 Å tube elsewhere, and all along a nucleic acid.
+- **Colour.** By helix and strand (muted rose and yellow, the rest grey),
+  by chain, or along the sequence from blue to red: Settings, Molecules in
+  3D, *Every style*, *Ribbons*.
+- **With the styles.** Each style says how it draws a PDB entry's chains:
+  as ribbons - what is bound to them (ligands, ions) as atoms, with the
+  side chains of the residues within 4.5 Å of them, drawn from their alpha
+  carbons, so that what holds a ligand shows; water left out - or every
+  atom. Ball and stick and Glossy draw ribbons;
+  Space-filling every atom, so a double-click goes from the fold to the
+  protein's surface and its pockets, and back. Going over, the ribbon
+  shrinks to its line as the atoms grow, and back.
+- **Pointing.** A ribbon lights its outline as a molecule's does; pointed
+  at, a residue says its name, number and chain. A click on a ribbon
+  chooses the residue's backbone atom, which can be measured.
+- **Pictures.** An exported picture draws the ribbons as the canvas does
+  (the bitmap); where there is no WebGL, as sticks along each ribbon.
+  NMR models and trajectories: the ribbon follows each frame.
 
 ## Risks
 

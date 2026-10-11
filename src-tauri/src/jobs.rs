@@ -420,9 +420,9 @@ fn job_object_for(child: &std::process::Child) -> windows_sys::Win32::Foundation
 
 // --- what a job may run ------------------------------------------------------
 
-/// Whether `id` could be a plugin's id: letters, digits and hyphens.
+/// Whether `id` could be a plugin's id (lib.rs `plugin_id_ok`).
 fn plugin_id(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    crate::plugin_id_ok(id)
 }
 
 /// Whether `name` is a path inside a folder: relative, and never above it.
@@ -431,14 +431,14 @@ pub fn inside_name(name: &str) -> bool {
 }
 
 /// The programs a plugin's manifest names: those its steps need (`steps`,
-/// each with its `programs` - a name, or an object with one).
+/// each with its `programs`, by name).
 fn programs_named(manifest: &serde_json::Value) -> Vec<String> {
     let steps = manifest.get("steps").and_then(|s| s.as_array()).map(Vec::as_slice).unwrap_or_default();
     steps
         .iter()
         .filter_map(|s| s.get("programs")?.as_array())
         .flatten()
-        .filter_map(|p| p.as_str().or_else(|| p.get("name")?.as_str()))
+        .filter_map(|p| p.as_str())
         .map(str::to_string)
         .collect()
 }
@@ -1227,7 +1227,7 @@ mod tests {
         let base = temp();
         let plugin = base.join("plugins").join("demo");
         fs::create_dir_all(&plugin).unwrap();
-        fs::write(plugin.join("manifest.json"), format!(r#"{{"id": "demo", "steps": [{{"kind": "optimise", "programs": {programs}}}]}}"#)).unwrap();
+        fs::write(plugin.join("manifest.json"), format!(r#"{{"id": "demo", "steps": [{{"kinds": ["optimise"], "programs": {programs}}}]}}"#)).unwrap();
         fs::write(plugin.join("worker.py"), "").unwrap();
         let data = base.join("data");
         let bin = data.join("uv").join("plugin-demo").join("venv").join(if cfg!(windows) { "Scripts" } else { "bin" });
@@ -1241,13 +1241,14 @@ mod tests {
     #[test]
     fn runs_only_a_program_its_plugin_names_from_the_plugin_s_environment() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
-        let (data, dir) = plugin(r#"["xtb", {"name": "crest"}, "bash"]"#, &[&exe("xtb"), &exe("crest"), &exe("bash"), &exe("other")]);
+        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("other")]);
         let found = plugin_program(&data, &dir, "demo", "xtb", &["in.xyz".into(), "--opt".into()]).unwrap();
         assert!(found.program.ends_with(exe("xtb")));
         assert!(found.activation.is_none());
         assert!(plugin_program(&data, &dir, "demo", "crest", &[]).is_ok());
-        // not named; never a shell, named or not; a name, not a path
+        // not named - by name, as the manifest's reader takes them; never a shell, named or not; a name, not a path
         assert!(plugin_program(&data, &dir, "demo", "other", &[]).is_err());
+        assert!(plugin_program(&data, &dir, "demo", "named", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "bash", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "../xtb", &[]).is_err());
         assert!(plugin_program(&data, &dir, "../demo", "xtb", &[]).is_err());
@@ -1373,7 +1374,7 @@ mod tests {
                 {"name": "unused", "files": {system(): "unused"}},
                 {"name": "nowhere", "files": {system(): "meno-test-not-a-program"}}
             ],
-            "steps": [{"kind": "energy", "programs": ["orca", "nowhere"]}]
+            "steps": [{"kinds": ["energy"], "programs": ["orca", "nowhere"]}]
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), exe);
@@ -1390,8 +1391,9 @@ mod tests {
 
     #[test]
     fn reads_the_programs_a_manifest_names() {
-        let m: serde_json::Value = serde_json::from_str(r#"{"steps": [{"programs": ["a", {"name": "b", "version": "x"}]}, {"kind": "energy"}, {"programs": [3]}]}"#).unwrap();
-        assert_eq!(programs_named(&m), vec!["a", "b"]);
+        let m: serde_json::Value = serde_json::from_str(r#"{"steps": [{"kinds": ["optimise", "energy"], "programs": ["a", {"name": "b"}]}, {"kinds": ["energy"]}, {"programs": [3, "c"]}]}"#).unwrap();
+        // (by name only, as the manifest's reader takes them)
+        assert_eq!(programs_named(&m), vec!["a", "c"]);
         assert!(programs_named(&serde_json::json!({})).is_empty());
     }
 }

@@ -376,11 +376,7 @@ def op_collect(m):
     return {"outputs": [output_of(step, e, m.get("options") or {}, files, log) for e in entries]}
 
 
-def op_ping(_m):
-    return {"version": VERSION}
-
-
-OPS = {"prepare": op_prepare, "collect": op_collect, "ping": op_ping}
+OPS = {"prepare": op_prepare, "collect": op_collect}
 
 
 def answer(line):

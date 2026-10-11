@@ -59,8 +59,9 @@ def integral(grid, f):
 
 class Protocol(unittest.TestCase):
     def test_says_what_it_is_and_answers_a_failure_rather_than_crashing(self):
+        # (it says its version in its ready line, not when asked)
         a = worker.answer(json.dumps({"id": 3, "op": "ping"}))
-        self.assertEqual((a["id"], a["ok"], a["result"]["reader"]), (3, True, "pyscf"))
+        self.assertEqual((a["id"], a["ok"]), (3, False))
         self.assertFalse(worker.answer(json.dumps({"id": 4, "op": "read", "name": "x.out", "text": "nothing\n"}))["ok"])
         self.assertFalse(worker.answer(json.dumps({"id": 5, "op": "run", "code": "1"}))["ok"])
 

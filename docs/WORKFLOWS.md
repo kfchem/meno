@@ -512,15 +512,18 @@ gave), and one can be shown again.
 
 ### What changes in the contract
 
-- **The manifest says which kinds of step a plugin fills** (`steps`): for
-  each, the kind (one of Meno's), its options in the general form, the
-  programs it needs, and whether it takes all its entries in one job.
-  Meno shows a kind only where something added fills it.
+- **The manifest says which kinds of step a plugin fills** (`steps`): the
+  kinds (each one of Meno's), their options in the general form, the
+  programs they need, and what they take where less than the kind does
+  (PLUGINS.md, *The manifest*). Whether a job is for one entry or several
+  is the plugin's to say, in `prepare`'s answer. Meno shows a kind only
+  where something added fills it.
 - **Two new requests** (PLUGINS.md, *The contract*):
-  - `prepare {step, entries, options}` - each job's files and the command
-    that runs it;
-  - `collect {step, files}` - what a job gave, read from its files, in
-    Meno's own forms.
+  - `prepare {step, entries, options, cores?}` - each job's files, the
+    program and arguments that run it, the entries it is for, and the
+    files it reads back;
+  - `collect {step, entries, options, files, log, ended}` - what a job
+    gave, read from its files, in Meno's own forms.
 - **Meno runs the jobs, not the plugin**: its own executable in a job
   mode, started apart from Meno so that it outlives it, runs the command
   in the job's folder - in the plugin's environment, or with the program
@@ -530,7 +533,7 @@ gave), and one can be shown again.
   and Linux, a job object on Windows).
 - **Steps on entries alone** (*Energy window*...), done by a plugin
   rather than by Meno, are a plain request, `run {step, entries,
-  options}`, answered at once, no job made.
+  options, holds}`, answered at once, no job made.
 - **Jobs reach no network**, as the plugins' workers do not.
 - **A job's folder** is in Meno's data folder (`jobs/<id>/`; decided):
   its input, its log, its outputs, Meno's record of it. *Show files*
@@ -667,10 +670,11 @@ finished jobs' files, cleared. How it works: ARCHITECTURE.md, *Jobs*.
 Decided while building it, for the maintainer to confirm:
 
 - **A job runs only a program its plugin's manifest names** (`steps`,
-  each kind with the `programs` it needs: a name, or an object with one
-  for a program installed separately, step 6), from that plugin's
-  environment - never a shell, and Python only running a script of the
-  plugin's. Meno's page names a plugin and a program, never a path.
+  each kind with the `programs` it needs, by name - a program installed
+  separately is named so too, and declared under `installed`: step 6), from
+  that plugin's environment - never a shell, and Python only running a
+  script of the plugin's. Meno's page names a plugin and a program, never
+  a path.
 - **Cores for each, unset, are the computer's shared among the jobs at
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's

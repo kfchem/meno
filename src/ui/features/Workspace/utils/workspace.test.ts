@@ -21,7 +21,7 @@ const water3d = {
     { a1: 0, a2: 2, order: 1 },
   ],
   frames: [[0, 0, 0, 0.8, 0.6, 0, -0.8, 0.6, 0]],
-  look: "space" as const,
+  look: "secondary" as const,
   measures: [{ id: 1, atoms: [1, 0, 2] }],
 };
 
@@ -57,7 +57,7 @@ describe("a workspace file", () => {
     expect(first.turn).toBeUndefined();
     expect(second.turn).toEqual([0, 0, Math.SQRT1_2, Math.SQRT1_2]);
     expect(second.frame).toBe(1);
-    expect(second.look).toBe("space");
+    expect(second.look).toBe("secondary");
     expect(second.measures).toEqual([{ id: 1, atoms: [1, 0, 2] }]);
     expect(second.frames).toEqual(water3d.frames);
   });

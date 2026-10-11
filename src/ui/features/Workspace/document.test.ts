@@ -387,11 +387,35 @@ describe("molecules in 3D on the page", () => {
     expect(ops.removeMolecules3d(d, [7])).toBe(d);
   });
 
-  it("are drawn space-filling, or balls and sticks, each its own way", () => {
-    const d = ops.addMolecule3d(doc(), { ...water, at: { x: 0, y: 0 } });
-    const space = ops.setLook3d(d, 1, "space");
-    expect(space.molecules3d![0].look).toBe("space");
-    expect(ops.setLook3d(d, 1, "balls")).toBe(d);
+  it("are drawn in the 3D style's primary look or its secondary, each its own way - several at once", () => {
+    let d = ops.addMolecule3d(doc(), { ...water, at: { x: 0, y: 0 } });
+    d = ops.addMolecule3d(d, { ...water, at: { x: 9, y: 0 } });
+    const second = ops.setLook3d(d, [1, 2], "secondary");
+    expect(second.molecules3d!.map((m) => m.look)).toEqual(["secondary", "secondary"]);
+    expect(ops.setLook3d(d, [1, 2], "primary")).toBe(d);
+    // (back to the primary: no look of its own left)
+    expect("look" in ops.setLook3d(second, [1], "primary").molecules3d![0]).toBe(false);
+  });
+
+  it("take new places in the frame shown - an edit of their shape - with their stereo labels as they now are", () => {
+    let d = ops.addMolecule3d(doc(), { ...water, at: { x: 0, y: 0 }, frames: [[0, 0, 0, 1, 0, 0, 0, 1, 0]] });
+    const moved = [0, 0, 0, 2, 0, 0, 0, 2, 0];
+    d = ops.setPlaces3d(d, 1, 1, moved, { atoms: { 0: "S" }, bonds: {} });
+    expect(d.molecules3d![0].frames).toEqual([moved]);
+    expect(d.molecules3d![0].atoms).toEqual(water.atoms);
+    expect(d.molecules3d![0].stereo).toEqual({ atoms: { 0: "S" }, bonds: {} });
+    d = ops.setPlaces3d(d, 1, 0, moved);
+    expect(d.molecules3d![0].atoms[1]).toMatchObject({ el: "H", x: 2, y: 0, z: 0 });
+    // (too few places: as it was)
+    expect(ops.setPlaces3d(d, 1, 0, [1, 2])).toBe(d);
+  });
+
+  it("keep a measurement's atoms in another order - the same measurement - and no other", () => {
+    let d = ops.addMolecule3d(doc(), { ...water, at: { x: 0, y: 0 } });
+    d = ops.addMeasure3d(d, 1, [1, 0, 2]);
+    d = ops.orderMeasure3d(d, 1, 1, [2, 0, 1]);
+    expect(d.molecules3d![0].measures).toEqual([{ id: 1, atoms: [2, 0, 1] }]);
+    expect(ops.orderMeasure3d(d, 1, 1, [0, 1, 2])).toBe(d);
   });
 
   it("keep measurements of two, three or four of their atoms, each once", () => {

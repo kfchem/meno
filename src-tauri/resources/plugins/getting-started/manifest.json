@@ -1,0 +1,45 @@
+{
+  "id": "getting-started",
+  "name": "Getting started",
+  "version": "1.0.0",
+  "description": "Shows the first steps in Meno when it first opens, and suggests plugins to add - for a file no plugin added reads, too.",
+  "licence": "Apache-2.0",
+  "homepage": "https://kfchem.github.io/meno",
+  "guide": [
+    {"title": "Welcome to Meno", "text": "Double-click on empty space to add something: a bond, a chain, a structure from its SMILES, text or an arrow.", "at": "page", "until": "quick-add"},
+    {"title": "Quick Add", "text": "Press Chain and move: a carbon chain follows the pointer, closing a ring where it comes round. SMILES makes a structure from its SMILES.", "at": "quick-add"},
+    {"title": "Hold to select", "text": "Press and hold on a structure to select all of it. Keep holding and drag to move it.", "at": "structure", "until": "selected"},
+    {"title": "Right-click", "text": "Right-click anything for what can be done with it. The icons along the top are those used most.", "at": "menu"},
+    {"title": "Save", "text": "Save keeps the whole workspace - drawings, molecules in 3D, results - as one .meno file. Settings is beside it.", "at": "save"},
+    {"title": "Plugins", "text": "Meno does more with plugins. These are a good start; each is downloaded only when you add it, after Meno asks.", "suggest": ["rdkit", "cclib", "xtb"]}
+  ],
+  "suggests": [
+    {"plugin": "rdkit", "for": "SMILES, R and S, and structures in 3D"},
+    {"plugin": "cclib", "for": "Reads what ORCA, Gaussian, xTB and many more programs wrote"},
+    {"plugin": "pyscf", "for": "Orbitals and densities from a calculation's output"},
+    {"plugin": "xtb", "for": "Optimises molecules, and works out their energies and vibrations, quickly"},
+    {"plugin": "crest", "for": "Searches for a molecule's conformers"},
+    {"plugin": "orca", "for": "Runs ORCA, installed separately"},
+    {"plugin": "gaussian", "for": "Runs Gaussian 16, installed separately"}
+  ],
+  "files": [
+    {"id": "adf", "name": "ADF output", "extensions": [".out", ".log"], "marks": [{"text": "Amsterdam Density Functional", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "cfour", "name": "CFOUR output", "extensions": [".out", ".log"], "marks": [{"text": "CFOUR Coupled-Cluster techniques for Computational Chemistry", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "dalton", "name": "Dalton output", "extensions": [".out", ".log"], "marks": [{"text": "Dalton - An Electronic Structure Program", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "gamess", "name": "GAMESS output", "extensions": [".log", ".out"], "marks": [{"text": "GAMESS VERSION", "anyCase": true}, {"text": "Firefly (PC GAMESS)", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "gamess-uk", "name": "GAMESS-UK output", "extensions": [".out", ".log"], "marks": [{"text": "G A M E S S - U K", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "gaussian", "name": "Gaussian output", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System", "at": "line-start"}], "suggest": ["cclib", "pyscf"]},
+    {"id": "gaussian-fchk", "name": "Gaussian formatted checkpoint", "extensions": [".fchk", ".fch"], "marks": [{"text": "Number of atoms I", "at": "line-start"}], "suggest": ["cclib", "pyscf"]},
+    {"id": "jaguar", "name": "Jaguar output", "extensions": [".out", ".log"], "marks": [{"text": "Jaguar version", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "molcas", "name": "Molcas output", "extensions": [".log", ".out"], "marks": [{"text": "MOLCAS", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "molpro", "name": "Molpro output", "extensions": [".out", ".log"], "marks": [{"text": "PROGRAM SYSTEM MOLPRO", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "mopac", "name": "MOPAC output", "extensions": [".out"], "marks": [{"text": "MOPAC20", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "nwchem", "name": "NWChem output", "extensions": [".out", ".log", ".nwo"], "marks": [{"text": "Northwest Computational Chemistry Package", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "orca", "name": "ORCA output", "extensions": [".out", ".log"], "marks": [{"text": "* O R C A *"}], "suggest": ["cclib", "pyscf"]},
+    {"id": "psi4", "name": "Psi4 output", "extensions": [".out", ".dat"], "marks": [{"text": "Psi4: An Open-Source Ab Initio Electronic Structure Package", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "qchem", "name": "Q-Chem output", "extensions": [".out", ".log", ".qcout"], "marks": [{"text": "A Quantum Leap Into The Future Of Chemistry", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "turbomole", "name": "Turbomole output", "extensions": [".out", ".log"], "marks": [{"text": "TURBOMOLE", "anyCase": true}], "suggest": ["cclib"]},
+    {"id": "xtb", "name": "xTB output", "extensions": [".out", ".log"], "marks": [{"text": "| x T B |"}, {"text": "* xtb version", "at": "line-start"}], "suggest": ["cclib"]},
+    {"id": "molden", "name": "Molden file", "extensions": [".molden", ".mld"], "marks": [{"text": "[Molden Format]", "at": "line-start", "anyCase": true}], "suggest": ["pyscf"]}
+  ]
+}

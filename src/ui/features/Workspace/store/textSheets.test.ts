@@ -4,7 +4,20 @@ import { createWorkspaceDocument } from "../document";
 import * as ops from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { ICON_HEIGHT, ICON_NAME_WIDTH, POINT } from "../../../../lib/pdf/layout";
-import { drawnSheetBox, iconScaleOf, SHEET_LEAST_COLS, SHEET_LINE_PT, SHEET_MOST_COLS, SHEET_MOST_LINES, SHEET_PAD_PT, sheetOf, sheetRoom } from "../utils/textSheets";
+import {
+  drawnSheetBox,
+  iconScaleOf,
+  SHEET_LEAST_COLS,
+  SHEET_LETTER,
+  SHEET_LINE_PT,
+  SHEET_MD_PX,
+  SHEET_MOST_COLS,
+  SHEET_MOST_LINES,
+  SHEET_PAD_PT,
+  SHEET_TYPE_PT,
+  sheetOf,
+  sheetRoom,
+} from "../utils/textSheets";
 
 function editor(data?: unknown) {
   const doc = createWorkspaceDocument(data);
@@ -25,6 +38,21 @@ describe("a text's sheet", () => {
     expect(big.lines[0]).toHaveLength(SHEET_MOST_COLS);
     // (a tab to its next stop)
     expect(sheetOf("a\tb").lines[0]).toBe("a   b");
+  });
+
+  it("of a Markdown text shows it formatted, as wide as a sheet's 80 letters, its first rows, a long text's no taller", () => {
+    const md = sheetOf("# Title\n\nSome *words*.\n", "notes.md");
+    expect(md.md).toBeDefined();
+    expect(md.md!.rows).toBe(md.md!.laid.rows.length);
+    expect(md.md!.laid.width).toBe(SHEET_MD_PX);
+    expect(md.w).toBeCloseTo(md.md!.laid.width * md.md!.scale);
+    // (its text as wide as a sheet's 80 letters, its margins about a sheet's)
+    expect((SHEET_MD_PX - 40) * md.md!.scale).toBeCloseTo(SHEET_MOST_COLS * SHEET_LETTER * SHEET_TYPE_PT * POINT, 0);
+    const long = sheetOf(Array.from({ length: 400 }, (_, i) => `Paragraph ${i}.`).join("\n\n"), "long.md");
+    expect(long.md!.rows).toBeLessThan(long.md!.laid.rows.length);
+    expect(long.h).toBeLessThanOrEqual((SHEET_MOST_LINES * SHEET_LINE_PT + 2 * SHEET_PAD_PT) * POINT + 1e-9);
+    // (by its name: the same text named otherwise, its lines)
+    expect(sheetOf("# Title\n", "notes.txt").md).toBeUndefined();
   });
 
   it("is put on the page an icon, where asked, a row of them, clear of a sheet already there and its name", () => {

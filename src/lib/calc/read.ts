@@ -7,33 +7,51 @@
  * so that a slow one never holds the file up. Every reader's results are
  * kept, each its own; Meno's own forms - the geometries, what the
  * calculation was - are the reader's. What nothing added reads says what
- * would.
+ * would, as the catalogues of the plugins added suggest.
  */
 import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
-import { alsoReadersFor, READERS, readerFor, readersOf, type FileChoices, type ReaderPlugin } from "./catalog";
+import { alsoReadersFor, anyPluginById, READERS, readerFor, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
+import { forThisSystem } from "../plugins/here";
 import { OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
 import { addedReaders, readerClient, useReaders } from "./workers";
 import { publishReading } from "./readings";
 import { checkedStructures, type StructureRead } from "../io/structures";
 
-/** Who reads a file of `kind`: its reader, and those that read it as well; or why no one can - no reader added reads it. */
+/**
+ * Why a file is not read: no plugin added reads it. `suggest` holds the
+ * plugins a catalogue of a plugin added suggests for it, by id - those
+ * Meno has and that are made for this system - each to add.
+ */
+export class NotRead extends Error {
+  constructor(
+    message: string,
+    readonly suggest: readonly string[] = [],
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Who reads a file of `kind`: its reader, and those that read it as well;
+ * or why no one can - no reader added reads it - with the plugins the
+ * catalogues of the plugins added suggest for it (`kind.suggest`). Meno
+ * itself names none.
+ */
 export function whoReads(
   kind: Kind,
   name: string,
   added: ReadonlySet<string>,
   choices: FileChoices,
   readers: readonly ReaderPlugin[] = READERS,
-): { reader: ReaderPlugin; also: ReaderPlugin[] } | Error {
+): { reader: ReaderPlugin; also: ReaderPlugin[] } | NotRead {
   const reader = readerFor(kind.id, added, choices, readers);
   if (reader) return { reader, also: alsoReadersFor(kind.id, added, choices, readers) };
-  const could = readersOf(kind.id, readers).map((p) => p.name);
-  return new Error(
-    could.length
-      ? `To read ${name} (${kind.name}), add ${could.join(" or ")} in Settings, Plugins.`
-      : `${name} (${kind.name}) is read by no reader Meno knows of.`,
-  );
+  const could = (kind.suggest ?? []).map(anyPluginById).filter((p): p is Plugin => !!p && !added.has(p.id) && forThisSystem(p));
+  return could.length
+    ? new NotRead(`${name} (${kind.name}): ${could.map((p) => p.name).join(" or ")} would read it.`, could.map((p) => p.id))
+    : new NotRead(`No plugin added reads ${name}.`);
 }
 
 /** What was read, where it has a geometry to stand on the page; or why it is no use. */

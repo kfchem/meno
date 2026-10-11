@@ -1,21 +1,19 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { resolveResource } from "@tauri-apps/api/path";
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady } from "../pyEnv";
-import { pluginsFilling, type PythonPlugin } from "../calc/catalog";
+import { pluginById, pluginsFilling, type PythonPlugin } from "../calc/catalog";
 import { ROLES, type RoleId } from "../plugins/roles";
 import { useAppSettings } from "../settings/appSettings";
-import { ChemClient } from "./client";
+import { onWorkerStopped, workerOf, workerRunning } from "../plugins/process";
+import type { ChemClient } from "./client";
 
 /**
  * The worker of the plugin that fills a role (lib/plugins/roles,
- * docs/PLUGINS.md), run as a sidecar: the plugin chosen for the role where
- * it is used - else the first that fills it - set up the first time a role it
- * fills is needed, asking before it downloads, and started once, then kept
- * for the session. One the chemist took away in Settings, Plugins is not
- * set up again of itself: the role says to add it. A worker has no business
- * on the network, and the app keeps it off it.
+ * docs/PLUGINS.md): the plugin chosen for the role where it is used - else
+ * the first that fills it - set up the first time a role it fills is
+ * needed, asking before it downloads, and started once, then kept for the
+ * session: the one process the plugin has (lib/plugins/process). One the
+ * chemist took away in Settings, Plugins is not set up again of itself:
+ * the role says to add it.
  */
 
 export type ChemState =
@@ -26,9 +24,6 @@ export type ChemState =
   | { state: "failed"; message: string };
 
 export const useChem = create<ChemState>(() => ({ state: "idle" }));
-
-/** How long a worker's first import may take: a cold start is slow. */
-const READY_MS = 90_000;
 
 /** The plugin that fills a role: the one chosen, where it fills it; else the first that does. */
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
@@ -43,9 +38,15 @@ export class TakenAway extends Error {}
 /** Whether the chemist took a plugin away, so that it is not set up again of itself. */
 const takenAway = (p: PythonPlugin) => useAppSettings.getState().plugins.removed.includes(p.id);
 
-const running = new Map<string, Promise<ChemClient>>();
-/** Each running plugin's sidecar, by plugin id. */
-const sidecars = new Map<string, string>();
+const starting = new Map<string, Promise<ChemClient>>();
+
+// (a worker that stops - taken away, or gone of itself - is said to be no more)
+onWorkerStopped((id) => {
+  starting.delete(id);
+  const now = useChem.getState();
+  // (another plugin's worker, running still, is left as it is said to be)
+  if ("plugin" in now && now.plugin === pluginById(id)?.name) useChem.setState({ state: "idle" });
+});
 
 /** The worker of the plugin that fills `role`, started the first time it is asked for. */
 export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
@@ -54,17 +55,23 @@ export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   return pluginWorker(plugin);
 }
 
-/** A plugin's worker, asked under the roles' contract - for a kind of step it fills, say - started the first time it is asked for. */
+/** A plugin's worker, asked under the roles' contract - for a kind of step it fills, say - set up and started the first time it is asked for. */
 export function pluginWorker(plugin: PythonPlugin): Promise<ChemClient> {
-  let worker = running.get(plugin.id);
+  // (started already - by a file it reads, a step it does: said to be ready, as asked for a role)
+  if (workerRunning(plugin.id) && !starting.has(plugin.id))
+    return workerOf(plugin).then((w) => {
+      useChem.setState({ state: "ready", plugin: plugin.name, version: w.version });
+      return w.chem;
+    });
+  let worker = starting.get(plugin.id);
   if (!worker) {
     worker = start(plugin).catch((e: unknown) => {
-      running.delete(plugin.id);
+      starting.delete(plugin.id);
       const message = e instanceof Error ? e.message : String(e);
       useChem.setState(e instanceof TakenAway ? { state: "idle" } : { state: "failed", message });
       throw e;
     });
-    running.set(plugin.id, worker);
+    starting.set(plugin.id, worker);
   }
   return worker;
 }
@@ -78,83 +85,18 @@ export function pluginWorker(plugin: PythonPlugin): Promise<ChemClient> {
 export async function chemAtHand(role: RoleId = "checks"): Promise<boolean> {
   const plugin = rolePlugin(role);
   if (!plugin) return false;
-  return running.has(plugin.id) || (await pyEnvReady(plugin.profile));
+  return workerRunning(plugin.id) || (await pyEnvReady(plugin.profile));
 }
-
-/** Stops a plugin's worker, where it runs: as the plugin is taken away. */
-export async function stopRoleWorker(pluginId: string): Promise<void> {
-  const worker = running.get(pluginId);
-  running.delete(pluginId);
-  const sidecar = sidecars.get(pluginId);
-  sidecars.delete(pluginId);
-  if (worker) await worker.then((c) => c.close(), () => undefined);
-  if (sidecar) await invoke("ext_kill", { id: sidecar }).catch(() => undefined);
-  // (another plugin's worker, running still, is left as it is said to be)
-  if (worker || sidecar) useChem.setState({ state: "idle" });
-}
-
-type Line = { id: string; line: string };
 
 async function start(plugin: PythonPlugin): Promise<ChemClient> {
   if (takenAway(plugin) && !(await pyEnvReady(plugin.profile))) {
     throw new TakenAway(`${plugin.name} was taken away: add it in Settings, Plugins.`);
   }
   useChem.setState({ state: "setting-up", plugin: plugin.name });
-  const python = await ensurePyEnv(plugin.profile);
+  await ensurePyEnv(plugin.profile);
   useChem.setState({ state: "starting", plugin: plugin.name });
-  const script = await resolveResource(plugin.worker);
-
-  // Heard from before the worker's id is known, so that nothing it says
-  // first is missed; kept to its own lines once it is.
-  let id: string | null = null;
-  const early: Line[] = [];
-  const onLine = new Set<(line: string) => void>();
-  const hear = (m: Line) => {
-    if (id === null) early.push(m);
-    else if (m.id === id) onLine.forEach((f) => f(m.line));
-  };
-  // Nothing asks it anything before it is ready: chemWorker resolves then.
-  const client = new ChemClient(
-    {
-      send: (line) => {
-        if (id !== null) void invoke("ext_stdin", { id, data: line + "\n" });
-      },
-      listen: (f) => {
-        onLine.add(f);
-        return () => onLine.delete(f);
-      },
-    },
-    undefined,
-    plugin.name,
-  );
-  const stopOut = await listen<string>("ext:stdout", (e) => hear(JSON.parse(e.payload)));
-  const stopExit = await listen<string>("ext:exit", (e) => {
-    if (JSON.parse(e.payload).id !== id) return;
-    client.close(`${plugin.name} stopped`);
-    running.delete(plugin.id);
-    sidecars.delete(plugin.id);
-    useChem.setState({ state: "idle" });
-    stopOut();
-    stopExit();
-  });
-
-  id = await invoke<string>("ext_spawn_sidecar", {
-    payload: { entry: python, args: ["-u", script] },
-  });
-  const worker = id;
-  sidecars.set(plugin.id, worker);
-  for (const m of early.splice(0)) if (m.id === worker) onLine.forEach((f) => f(m.line));
-
-  let version: string;
-  try {
-    version = await Promise.race([
-      client.ready,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${plugin.name} did not start in time`)), READY_MS)),
-    ]);
-  } catch (e) {
-    void invoke("ext_kill", { id: worker }).catch(() => undefined);
-    throw e;
-  }
-  useChem.setState({ state: "ready", plugin: plugin.name, version });
-  return client;
+  const worker = await workerOf(plugin);
+  starting.delete(plugin.id);
+  useChem.setState({ state: "ready", plugin: plugin.name, version: worker.version });
+  return worker.chem;
 }

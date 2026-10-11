@@ -2,28 +2,42 @@ import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { setCursor } from "../../theme/cursors";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import clsx from "clsx";
+import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import {
   KEY_LIGHT_FROM,
-  preset3dById,
-  STYLE_3D_FIELDS,
-  STYLE_3D_PRESETS,
+  LOOK_3D_FIELDS,
+  LOOK_3D_PRESETS,
+  look3dPreset,
+  lookOfStyle,
+  SCENE_3D,
+  SCENE_3D_FIELDS,
   style3dOf,
-  with3dSetting,
+  withLookSetting,
+  withRole,
+  withSharedSetting,
+  type MoleculeLook,
+  type Role3D,
+  type Scene3D,
   type Style3D,
   type Style3DChoice,
   type Style3DField,
 } from "../../../lib/chem/style3d";
 import type { Turn3D } from "../Workspace/store/types";
 import Molecule3DView from "../Workspace/components/Molecule3DView";
-import { lookOf, solidOf } from "../Workspace/utils/molecule3d";
+import { solidOf } from "../Workspace/utils/molecule3d";
+import HideHydrogensAsk from "./HideHydrogensAsk";
 import { SAMPLE_3D } from "./sample3d";
 
 /**
- * How molecules in 3D look and turn: a preset and what was changed from it,
- * as the drawing style is chosen (./StyleEditor), with a molecule beside it
- * drawn in the look - one that can be turned, to try how turning feels.
+ * How molecules in 3D look and turn (docs/WORKSPACE.md, *Styles in 3D*): a
+ * list of styles, each set as the drawing style is (./StyleEditor), of
+ * which one is the primary - every molecule's look to begin with - and one
+ * the secondary, a double-click away; and what they all share, the light
+ * and the turning. Beside them a molecule drawn in the style being set,
+ * which can be turned, to try how turning feels, and double-clicked, to go
+ * over to the other look as a molecule on the canvas does.
  */
 export default function Style3DEditor({
   choice,
@@ -36,29 +50,88 @@ export default function Style3DEditor({
   children?: ReactNode;
 }) {
   const style = useMemo(() => style3dOf(choice), [choice]);
-  const changed = Object.keys(choice.changes).length;
-  const groups = [...new Set(STYLE_3D_FIELDS.map((f) => f.group))];
+  // the style being set - and shown - and the one asking to hide its hydrogens
+  const [editing, setEditing] = useState(choice.primary);
+  const [asking, setAsking] = useState<string | null>(null);
+  const edited = look3dPreset(editing);
+  const look = lookOfStyle(choice, editing);
+  const changes = choice.looks[editing] ?? {};
+  const changed = Object.keys(changes).length;
+  const sharedChanged = Object.keys(choice.shared).length;
+  // (shown as a molecule on the canvas is: in its role's look, going over to
+  // the other's - or, a style with no role, on its own)
+  const role: Role3D | null = editing === choice.primary ? "primary" : editing === choice.secondary ? "secondary" : null;
+  const shownStyle = useMemo(() => (role ? style : { ...style, primary: look }), [role, style, look]);
+  const shownLook: Role3D = role ?? "primary";
+  const other: Role3D = shownLook === "primary" ? "secondary" : "primary";
+  const setLook = <K extends keyof MoleculeLook>(key: K, value: MoleculeLook[K]) => {
+    // (hiding the hydrogens is asked first, every time)
+    if (key === "hydrogens" && value === "carbonHidden" && look.hydrogens !== "carbonHidden") setAsking(editing);
+    else onChange(withLookSetting(choice, editing, key, value));
+  };
+  const lookGroups = [...new Set(LOOK_3D_FIELDS.map((f) => f.group))];
+  const sharedGroups = [...new Set(SCENE_3D_FIELDS.map((f) => f.group))];
   return (
     <div className="flex gap-8 items-start">
       <div className="min-w-0 flex-1">
-        <Presets choice={choice} onChange={onChange} />
-        {changed > 0 && (
-          <div className="mt-4 flex justify-end">
+        <Styles choice={choice} editing={editing} onEdit={setEditing} onChange={onChange} />
+        <div className="mt-6 flex items-center gap-2">
+          <h3 className="flex-1 text-sm font-semibold text-gh-black">{edited.name}</h3>
+          {changed > 0 && (
             <button
-              onClick={() => onChange({ preset: choice.preset, changes: {} })}
+              onClick={() => onChange({ ...choice, looks: Object.fromEntries(Object.entries(choice.looks).filter(([id]) => id !== editing)) })}
               className="h-8 px-3 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base whitespace-nowrap"
-              title={`Take all ${changed} changes back to ${preset3dById(choice.preset).name}`}
+              title={`Take all ${changed} changes to ${edited.name} back`}
             >
-              Reset all ({changed})
+              Reset {edited.name} ({changed})
             </button>
-          </div>
-        )}
-        {groups.map((group) => (
-          <section key={group} className="mt-6">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">{group}</h3>
+          )}
+        </div>
+        {lookGroups.map((group) => (
+          <section key={group} className="mt-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">{group}</h4>
             <div className="mt-2 rounded-lg border border-gh-line divide-y divide-gh-line bg-white">
-              {STYLE_3D_FIELDS.filter((f) => f.group === group).map((f) => (
-                <Row key={f.key} field={f} choice={choice} style={style} onChange={onChange} />
+              {LOOK_3D_FIELDS.filter((f) => f.group === group).map((f) => (
+                <Row
+                  key={f.key}
+                  field={f}
+                  value={look[f.key]}
+                  changed={f.key in changes}
+                  was={{ value: edited.look[f.key], from: edited.name }}
+                  onSet={(v) => setLook(f.key, v as never)}
+                  warn={f.key === "hydrogens" && look.hydrogens === "carbonHidden"}
+                  // (what space-filling has none of: there, but faint)
+                  faint={look.atoms === "space" && STICKS_ONLY.has(f.key)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+        <div className="mt-8 flex items-center gap-2">
+          <h3 className="flex-1 text-sm font-semibold text-gh-black">Every style</h3>
+          {sharedChanged > 0 && (
+            <button
+              onClick={() => onChange({ ...choice, shared: {} })}
+              className="h-8 px-3 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base whitespace-nowrap"
+              title={`Take all ${sharedChanged} changes back to Meno's`}
+            >
+              Reset ({sharedChanged})
+            </button>
+          )}
+        </div>
+        {sharedGroups.map((group) => (
+          <section key={group} className="mt-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">{group}</h4>
+            <div className="mt-2 rounded-lg border border-gh-line divide-y divide-gh-line bg-white">
+              {SCENE_3D_FIELDS.filter((f) => f.group === group).map((f) => (
+                <Row
+                  key={f.key}
+                  field={f}
+                  value={style[f.key]}
+                  changed={f.key in choice.shared}
+                  was={{ value: SCENE_3D[f.key], from: "Meno" }}
+                  onSet={(v) => onChange(withSharedSetting(choice, f.key, v as Scene3D[typeof f.key]))}
+                />
               ))}
             </div>
           </section>
@@ -67,76 +140,96 @@ export default function Style3DEditor({
       </div>
       <div className="w-[26rem] shrink-0 sticky top-4">
         <div className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Preview</div>
-        <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label="A molecule drawn in this look">
-          <Preview style={style} />
+        <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label={`A molecule drawn in ${edited.name}`}>
+          <Preview style={shownStyle} look={shownLook} onDouble={() => setEditing(choice[other])} />
         </div>
-        <p className="mt-1.5 text-[11px] text-gh-gray">Drag the molecule to turn it.</p>
+        <p className="mt-1.5 text-[11px] text-gh-gray">Drag the molecule to turn it; double-click it for {look3dPreset(choice[other]).name}.</p>
       </div>
+      <AnimatePresence>
+        {asking && (
+          <HideHydrogensAsk
+            onKeep={() => setAsking(null)}
+            onHide={() => {
+              onChange(withLookSetting(choice, asking, "hydrogens", "carbonHidden"));
+              setAsking(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// --- Presets -------------------------------------------------------------------
+/** A style's settings for its balls and sticks, which space-filling draws none of. */
+const STICKS_ONLY = new Set<string>(["ballScale", "bondRadius", "bondColor"]);
 
-function Presets({ choice, onChange }: { choice: Style3DChoice; onChange: (next: Style3DChoice) => void }) {
-  // Picking another preset with changes made asks what to do with them.
-  const [asking, setAsking] = useState<string | null>(null);
-  const changes = Object.keys(choice.changes).length;
-  const pick = (id: string) => {
-    if (id === choice.preset) return;
-    if (changes > 0) setAsking(id);
-    else onChange({ preset: id, changes: {} });
-  };
+// --- The styles ----------------------------------------------------------------
+
+/**
+ * The list of styles: each with what it looks like, chosen to be set by a
+ * click; and which is the primary and which the secondary, each given by a
+ * press on its name in the style's card - which sets and shows that style
+ * too; given the other's, the two change places.
+ */
+function Styles({
+  choice,
+  editing,
+  onEdit,
+  onChange,
+}: {
+  choice: Style3DChoice;
+  editing: string;
+  onEdit: (id: string) => void;
+  onChange: (next: Style3DChoice) => void;
+}) {
   return (
-    <div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
-        {STYLE_3D_PRESETS.map((p) => {
-          const on = p.id === choice.preset;
-          return (
-            <button
-              key={p.id}
-              onClick={() => pick(p.id)}
-              aria-pressed={on}
-              className={clsx(
-                "text-left rounded-lg border px-3 py-2 transition-colors",
-                on ? "border-accel-base bg-accel-lightbase/40 ring-1 ring-accel-base" : "border-gh-line bg-white hover:bg-gh-base",
-              )}
-            >
-              <div className="text-sm font-medium text-gh-black">{p.name}</div>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2" role="list" aria-label="Styles">
+      {LOOK_3D_PRESETS.map((p) => {
+        const on = p.id === editing;
+        const changed = Object.keys(choice.looks[p.id] ?? {}).length > 0;
+        return (
+          <div
+            key={p.id}
+            role="listitem"
+            onClick={() => onEdit(p.id)}
+            className={clsx(
+              "text-left rounded-lg border px-3 pt-2 pb-2.5 cursor-pointer transition-colors",
+              on ? "border-accel-base bg-accel-lightbase/40 ring-1 ring-accel-base" : "border-gh-line bg-white hover:bg-gh-base",
+            )}
+          >
+            <button className="block w-full text-left" aria-pressed={on} onClick={() => onEdit(p.id)}>
+              <div className="text-sm font-medium text-gh-black">
+                {p.name}
+                {changed && <span className="ml-1 text-accel-base" title="Changed">•</span>}
+              </div>
               <div className="text-[11px] leading-snug text-gh-gray line-clamp-2">{p.description}</div>
             </button>
-          );
-        })}
-      </div>
-      {asking && (
-        <div role="alertdialog" className="mt-2 rounded-lg border border-gh-line bg-gh-base px-3 py-2 text-sm flex flex-wrap items-center gap-2">
-          <span className="flex-1 min-w-[12rem] text-gh-black">
-            {changes === 1 ? "One setting is" : `${changes} settings are`} changed from {preset3dById(choice.preset).name}. Keep{" "}
-            {changes === 1 ? "it" : "them"} on {preset3dById(asking).name}?
-          </span>
-          <button
-            onClick={() => {
-              onChange({ preset: asking, changes: choice.changes });
-              setAsking(null);
-            }}
-            className="h-7 px-2.5 rounded-md border border-gh-line bg-white text-xs hover:bg-gray-100"
-          >
-            Keep changes
-          </button>
-          <button
-            onClick={() => {
-              onChange({ preset: asking, changes: {} });
-              setAsking(null);
-            }}
-            className="h-7 px-2.5 rounded-md bg-accel-base text-white text-xs hover:opacity-90"
-          >
-            Use {preset3dById(asking).name} as it is
-          </button>
-          <button onClick={() => setAsking(null)} className="h-7 px-2 rounded-md text-xs text-gh-gray hover:text-gh-black">
-            Cancel
-          </button>
-        </div>
-      )}
+            <div className="mt-2 flex gap-1" role="group" aria-label={`${p.name}'s role`}>
+              {(["primary", "secondary"] as const).map((role) => {
+                const is = choice[role] === p.id;
+                return (
+                  <button
+                    key={role}
+                    aria-pressed={is}
+                    onClick={(e) => {
+                      // (and it is the style set and shown)
+                      e.stopPropagation();
+                      onChange(withRole(choice, role, p.id));
+                      onEdit(p.id);
+                    }}
+                    className={clsx(
+                      "h-6 px-2 rounded-full border text-[11px] transition-colors",
+                      is ? "border-accel-base bg-accel-base text-white" : "border-gh-line bg-white text-gh-gray hover:text-gh-black hover:bg-gh-base",
+                    )}
+                  >
+                    {role === "primary" ? "Primary" : "Secondary"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -145,34 +238,47 @@ function Presets({ choice, onChange }: { choice: Style3DChoice; onChange: (next:
 
 function Row({
   field,
-  choice,
-  style,
-  onChange,
+  value,
+  changed,
+  was,
+  onSet,
+  warn,
+  faint,
 }: {
   field: Style3DField;
-  choice: Style3DChoice;
-  style: Style3D;
-  onChange: (next: Style3DChoice) => void;
+  value: unknown;
+  changed: boolean;
+  /** What it is unchanged, and whose value that is. */
+  was: { value: unknown; from: string };
+  onSet: (v: unknown) => void;
+  /** Set as it misleads: marked so. */
+  warn?: boolean;
+  /** Of nothing the style draws: shown faintly. */
+  faint?: boolean;
 }) {
-  const key = field.key;
-  const changed = key in choice.changes;
-  const preset = preset3dById(choice.preset);
-  const set = (value: Style3D[typeof key]) => onChange(with3dSetting(choice, key, value));
   return (
-    <div className={clsx("px-3 py-2.5 relative", changed && "bg-accel-lightbase/15")}>
-      {changed && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-accel-base" />}
+    <div
+      className={clsx(
+        "px-3 py-2.5 relative transition-opacity duration-150 ease-meno",
+        warn ? "bg-accel-lightaccent/40" : changed && "bg-accel-lightbase/15",
+        faint && "opacity-50",
+      )}
+    >
+      {(changed || warn) && (
+        <span aria-hidden className={clsx("absolute left-0 top-2 bottom-2 w-0.5 rounded-full", warn ? "bg-accel-accent" : "bg-accel-base")} />
+      )}
       <div className="flex gap-3 items-start">
         <div className="min-w-0 flex-1">
-          <div className="text-sm text-gh-black">{field.label}</div>
+          <div className={clsx("text-sm", warn ? "text-accel-accent font-medium" : "text-gh-black")}>{field.label}</div>
           <p className="text-xs leading-snug text-gh-gray mt-0.5">{field.description}</p>
         </div>
         <div className="shrink-0 flex items-center gap-1.5 pt-0.5">
-          <Control field={field} value={style[key]} onSet={set as (v: unknown) => void} />
+          <Control field={field} value={value} onSet={onSet} />
           <button
-            onClick={() => set(preset.style[key] as never)}
+            onClick={() => onSet(was.value)}
             disabled={!changed}
             aria-label={`Reset ${field.label}`}
-            title={changed ? `Back to ${preset.name}'s value` : "Not changed"}
+            title={changed ? `Back to ${was.from}'s value` : "Not changed"}
             className="h-6 w-6 rounded-md flex items-center justify-center text-gh-gray hover:bg-gh-base hover:text-gh-black disabled:opacity-0"
           >
             <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
@@ -260,14 +366,15 @@ const FIRST_TURN = (() => {
 const FOV = 30;
 const FRAMING_TAU = 0.12;
 
-function Preview({ style }: { style: Style3D }) {
-  const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.space * 8, [style]);
+function Preview({ style, look, onDouble }: { style: Style3D; look: Role3D; onDouble: () => void }) {
+  // (far enough back for a molecule twice the size of its space-filling self)
+  const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.secondary * 16, [style]);
   return (
-    <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }}>
+    <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }} onDoubleClick={onDouble}>
       <ambientLight intensity={style.ambientLight} />
       <directionalLight position={KEY_LIGHT_FROM as [number, number, number]} intensity={style.keyLight} />
-      <Framing style={style} />
-      <Turnable style={style} />
+      <Framing style={style} look={look} />
+      <Turnable style={style} look={look} />
     </Canvas>
   );
 }
@@ -276,10 +383,9 @@ function Preview({ style }: { style: Style3D }) {
  * The camera, as far off as the sample needs in its look to fit however it
  * is turned - going there, not jumping, when the look changes.
  */
-function Framing({ style }: { style: Style3D }) {
+function Framing({ style, look }: { style: Style3D; look: Role3D }) {
   const { camera, invalidate } = useThree();
   const solid = useMemo(() => solidOf(SAMPLE_3D, style), [style]);
-  const look = lookOf(SAMPLE_3D, style);
   const placed = useRef(false);
   useEffect(() => invalidate(), [look, invalidate]);
   useFrame((_, dt) => {
@@ -297,7 +403,7 @@ function Framing({ style }: { style: Style3D }) {
 }
 
 /** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
-function Turnable({ style }: { style: Style3D }) {
+function Turnable({ style, look }: { style: Style3D; look: Role3D }) {
   const [turn, setTurn] = useState<Turn3D>(FIRST_TURN);
   const { gl, invalidate } = useThree();
   const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
@@ -369,7 +475,7 @@ function Turnable({ style }: { style: Style3D }) {
     <Molecule3DView
       m={SAMPLE_3D}
       style={style}
-      look={lookOf(SAMPLE_3D, style)}
+      look={look}
       frame={0}
       turn={turn}
       lit={0}

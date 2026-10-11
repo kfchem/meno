@@ -23,10 +23,15 @@ import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
 import type { DropZone, Dropped } from "../../../../lib/drop";
 
 import { readRecord } from "../utils/copyPaste";
-import { kindOf, MARK_REACH, MENO_KINDS } from "../../../../lib/io/kinds";
+import { kindOf, MARK_REACH, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
+import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+
+
+/** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
+export type ImportError = { text: string; suggest?: readonly string[]; again?: () => void };
 
 export function useStructureEvents(
   initialPayload?: string,
@@ -48,11 +53,14 @@ export function useStructureEvents(
   const pressRef = useRef<Press | null>(null);
   // Where the pointer is over the drawing, in the window; null off it
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
-  // Last import failure, shown in the canvas until dismissed or replaced.
-  const [importError, setImportError] = useState<string | null>(null);
-  const reportImportError = (what: string, err: unknown) => {
+  // Last import failure, shown in the canvas until dismissed or replaced:
+  // where no plugin added reads the file, with the plugins a catalogue
+  // suggests, each to add - and the file read again once one is.
+  const [importError, setImportError] = useState<ImportError | null>(null);
+  const reportImportError = (what: string, err: unknown, again?: () => void) => {
     console.warn(`${what} import failed`, err);
-    setImportError(err instanceof Error ? err.message : String(err));
+    const text = err instanceof Error ? err.message : String(err);
+    setImportError(err instanceof NotRead && err.suggest.length && again ? { text, suggest: err.suggest, again } : { text });
   };
 
   // Helper: Client to World conversion
@@ -85,7 +93,7 @@ export function useStructureEvents(
     const a = result.arrow;
     const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
     const style = currentStyle3D();
-    const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m, style)]);
+    const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
     // (beside a drawing the same file brings, to its right)
     const drawn = result.model?.atoms ?? [];
     const places = drawn.length
@@ -147,6 +155,14 @@ export function useStructureEvents(
         else reportImportError("initial payload", new Error("The structure could not be read."));
         return;
       }
+      await openPayload(kind);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The file the tab was opened with, read as its kind - again, once a plugin that reads it is added.
+  const openPayload = async (kind: Kind | null) => {
+      if (!initialPayload) return;
       try {
         const result = await processFileContent(
           initialFilename || "",
@@ -171,12 +187,11 @@ export function useStructureEvents(
             importedScheme(result, -result.centroid.x, -result.centroid.y),
           );
         if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);
+        setImportError(null);
       } catch (e) {
-        reportImportError("initial payload", e);
+        reportImportError("initial payload", e, () => void openPayload(kind && (anyKindById(kind.id) ?? kind)));
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   // Effect: Keydown Listener
   useEffect(() => {
@@ -211,8 +226,8 @@ export function useStructureEvents(
       clickTimerRef.current = null;
     }
     if (!camRef.current || !domRef.current) return;
-    // (twice on a molecule in 3D: nothing drawn on the page under it - nor on a mark, put back by it)
-    if (store.getState().hovered3d || store.getState().hoveredMark) return;
+    // (twice on a molecule in 3D: nothing drawn on the page under it - nor on a mark, put back by it, nor on a measurement's value)
+    if (store.getState().hovered3d || store.getState().hoveredMark || store.getState().hoveredMeasure3d) return;
     // (Ctrl or ⌘, or Shift, clicked twice: the selection's, not a bond drawn)
     if (addsToSelection(e) || e.shiftKey) return;
     const stNow = store.getState();
@@ -411,7 +426,8 @@ export function useStructureEvents(
     drop: (d) => void dropAppend(d),
   };
 
-  const dropAppend = async ({ x, y, files }: Dropped) => {
+  const dropAppend = async (drop: Dropped) => {
+    const { x, y, files } = drop;
     const reading = dropReading.current;
     dropReading.current = null;
     const dropped = files[0];
@@ -509,7 +525,7 @@ export function useStructureEvents(
         .appendModel(toModel(shifted), importedScheme(result, dx, dy, at));
       setImportError(null);
     } catch (err) {
-      reportImportError("append", err);
+      reportImportError("append", err, () => void dropAppend(drop));
     }
   };
 

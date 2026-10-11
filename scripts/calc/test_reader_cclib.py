@@ -48,9 +48,10 @@ def sample(rel):
 
 
 class Protocol(unittest.TestCase):
-    def test_says_what_it_is(self):
+    def test_answers_only_what_it_does(self):
+        # (it says its version in its ready line, not when asked)
         a = worker.answer(json.dumps({"id": 3, "op": "ping"}))
-        self.assertEqual((a["id"], a["ok"], a["result"]["reader"]), (3, True, "cclib"))
+        self.assertEqual((a["id"], a["ok"]), (3, False))
 
     def test_answers_a_failure_rather_than_crashing(self):
         a = worker.answer(json.dumps({"id": 4, "op": "read", "name": "x.out", "text": "nothing a program wrote\n"}))
