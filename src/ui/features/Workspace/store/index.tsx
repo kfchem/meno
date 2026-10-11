@@ -181,6 +181,7 @@ export function createEditorStore(
     hovered: { atomId: null, bondId: null },
     hovered3d: null,
     hoveredAtom3d: null,
+    figureLit: null,
     turns3d: {},
     rising3d: {},
     overlay3d: {},

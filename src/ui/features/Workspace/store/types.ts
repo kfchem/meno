@@ -42,7 +42,19 @@ export type Atom = EditorAtom & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
   highlight?: string;
+  /** Where it was drawn in a PDF's figure it was read from (docs/PDF.md, *Stage 5*): lit there while it is under the pointer, and it while that place is. */
+  seen?: FigureSpot;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
+/**
+ * A place on a PDF's page: the PDF, by its SHA-256, the page, and the
+ * point, in points from its top left - and how long the bonds of the figure
+ * there are drawn, in points, which says how near is near.
+ */
+export type FigureSpot = { sha256: string; page: number; x: number; y: number; bond: number };
+/** What Meno said was unsure of a part as it read it from a figure, and what the part was then (utils/figures `partAs`): marked while it is still that. */
+export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
 export type Bond = BondChem & {
@@ -69,6 +81,8 @@ export type Bond = BondChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
   highlight?: string;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -467,6 +481,8 @@ export type EditorState = {
   hovered3d: { id: number } | null;
   /** The atom of a molecule in 3D under the pointer, by index: lit in its drawing too. */
   hoveredAtom3d: { id: number; atom: number } | null;
+  /** The drawing's atom read from a figure whose place there is under the pointer, by id: lit in the drawing too. */
+  figureLit: number | null;
   /** The molecules in 3D on the page. */
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
@@ -636,6 +652,9 @@ export type EditorState = {
   setHovered3d: (h: { id: number } | null) => void;
   /** The atom of molecule `id` under the pointer; null, none of its atoms. */
   setHoveredAtom3d: (id: number, atom: number | null) => void;
+  setFigureLit: (atom: number | null) => void;
+  /** A structure read from a figure put on the page - selected - as one step. */
+  putRead: (model: Model) => void;
   setTurn3d: (id: number, turn: Turn3D) => void;
   /**
    * Molecules in 3D made from a drawing, as one undo step: each where it is

@@ -30,7 +30,7 @@ export const FADE_MS = 160;
 const KEEP_MS = 4000;
 
 /** Marks on a page: boxes, in points from its top left, in a colour - words selected, or found. */
-export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean };
+export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean; ring?: boolean };
 
 /** A picture of a page or a part of one, as WebGL has it, and when it came. */
 export type Pic = { tex: THREE.Texture; born: number };
@@ -257,7 +257,14 @@ export function Page(props: {
         );
       })}
       {props.marks?.flatMap((m, k) =>
-        m.rects.map(([x0, y0, x1, y1], i) => (
+        m.rects.map(([x0, y0, x1, y1], i) =>
+          m.ring ? (
+            // (a ring round a place: an atom read from a figure there, lit as the drawing lights it)
+            <mesh key={`${k}:${i}`} position={[left + ((x0 + x1) / 2) * unit, topY - ((y0 + y1) / 2) * unit, 0.0026]} scale={[((x1 - x0) / 2) * unit, ((x1 - x0) / 2) * unit, 1]}>
+              <ringGeometry args={[0.82, 1, 48]} />
+              <meshBasicMaterial color={m.color} transparent opacity={m.opacity * opacity} depthWrite={false} toneMapped={false} />
+            </mesh>
+          ) : (
           <group key={`${k}:${i}`} position={[left + ((x0 + x1) / 2) * unit, topY - ((y0 + y1) / 2) * unit, 0.0025]}>
             <mesh scale={[(x1 - x0) * unit, (y1 - y0) * unit, 1]}>
               <planeGeometry args={[1, 1]} />
@@ -270,7 +277,8 @@ export function Page(props: {
               </lineSegments>
             )}
           </group>
-        )),
+          ),
+        ),
       )}
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
         <lineBasicMaterial color={LINE} transparent opacity={opacity} toneMapped={false} />

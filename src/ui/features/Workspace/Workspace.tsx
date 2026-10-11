@@ -129,6 +129,7 @@ import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
+import { pdfRoom } from "../../../lib/pdf/layout";
 import { writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
@@ -144,6 +145,8 @@ import { PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
+import { pictureRegion, readStructure } from "./components/readStructure";
+import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
@@ -275,6 +278,7 @@ function WorkspaceContent({
   const marks = useChemMarks(model, active);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsure = useMemo(() => unsureOf(model), [model]);
+  const readUnsure = useMemo(() => readMarks(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
   const setChemistry = useAppSettings((s) => s.setChemistry);
@@ -1396,6 +1400,19 @@ function WorkspaceContent({
             store.getState().addSet(frame);
             store.getState().clearSel();
           } : undefined}
+          onReadStructure={(() => {
+            const st = store.getState();
+            const ui = { working: setWorking3d, say: setChemError, view: viewBox, fit: requestFit };
+            // (the figure in a box drawn on a PDF: the structure beside the PDF)
+            const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
+            const box = st.pdfBox;
+            if (pdf && box?.id === pdf.id) return () => void readStructure(store, { sha256: pdf.sha256, page: box.page, box: box.box }, pdfRoom(pdf), ui);
+            // (a picture cut out of a PDF here: the structure beside the picture)
+            const pic = menu.kind === "picture" ? st.pictures.find((x) => x.id === menu.id) : undefined;
+            const from = pic?.from;
+            if (pic && from && st.pdfs.some((p) => p.sha256 === from.sha256)) return () => void readStructure(store, from, pictureRegion(pic), ui);
+            return undefined;
+          })()}
           onShowSource={(() => {
             const st = store.getState();
             // (a picture cut out of a PDF: its box there)
@@ -1627,7 +1644,7 @@ function WorkspaceContent({
             <Labels2D />
           </Suspense>
           {/* the plugin's marks: valence problems, R/S and E/Z */}
-          <ChemMarks2D marks={marks} unsure={unsure} />
+          <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
           <ChargeHolds2D />
           {/* the atom a molecule in 3D under the pointer was made from */}
