@@ -124,8 +124,6 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 - No reader of WFN or WFX files yet: those kinds are named for when one
   comes.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).
-- Renders (RENDER.md) of coloured surfaces: the glTF scene carries a
-  surface's own colours, not yet another grid's.
 - Integrated NCI properties, and the RDG against sign(λ2)ρ plot.
 - Interactions between molecules alone by Multiwfn (NCIPLOT's
   `INTERMOLECULAR`): Multiwfn's IGM analyses (its manual, 3.23.5) part
