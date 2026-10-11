@@ -14,11 +14,32 @@ import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion 
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { fitShadow, lightBoxOf } from "./utils/shadows3d";
 
-/** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely. */
+/** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely - a ball finer still where it is large in it (`ballSegmentsFor`). */
 const BALL_SEGMENTS = 48;
 const BOND_SEGMENTS = 16;
 /** The shadow map a picture's molecule casts its shadow in, in texels a side: finer than the canvas's, for print. */
 const PICTURE_SHADOW_MAP = 4096;
+/** How far a ball's outline in a picture may stray from a circle, in pixels: too little to see. */
+const OUTLINE_PX = 0.15;
+/** The most segments round a ball, and the most triangles a picture's balls come to, all told, before they are drawn coarser. */
+const MOST_SEGMENTS = 256;
+const MOST_TRIANGLES = 20_000_000;
+
+/**
+ * How many segments round a ball in a picture, its largest ball
+ * `radiusPx` pixels across its radius, `atoms` of them: enough that its
+ * outline - and where two balls cut each other - strays from a circle by
+ * under `OUTLINE_PX` (at 1200 dpi a ball can be hundreds of pixels across,
+ * and a 48-sided one shows its sides), at least `BALL_SEGMENTS`, and no
+ * more than keeps them all within `MOST_TRIANGLES`.
+ */
+export function ballSegmentsFor(radiusPx: number, atoms: number): number {
+  const fine = radiusPx > OUTLINE_PX ? Math.PI / Math.acos(1 - OUTLINE_PX / radiusPx) : 0;
+  // (a ball of n segments round and n / 2 from pole to pole is n * n triangles)
+  const budget = Math.sqrt(MOST_TRIANGLES / Math.max(atoms, 1));
+  const n = Math.ceil(Math.min(fine, budget, MOST_SEGMENTS) / 2) * 2;
+  return Math.max(BALL_SEGMENTS, n);
+}
 
 type Bounds = { min: { x: number; y: number }; max: { x: number; y: number } };
 
@@ -26,6 +47,21 @@ type Bounds = { min: { x: number; y: number }; max: { x: number; y: number } };
 function unionOf(a: Bounds | null, b: Bounds | null): Bounds | null {
   if (!a || !b) return a ?? b;
   return { min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y) }, max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y) } };
+}
+
+/**
+ * The most pixels a picture's molecule is drawn in at once, either way:
+ * past it, in tiles, each its part of the view, however large the picture
+ * - a GPU's canvas has its limits, and quietly draws a smaller picture past
+ * them.
+ */
+const TILE = 2048;
+
+/** A picture `w` by `h` pixels cut into tiles at most `most` pixels either way: each its place and size, left to right, top to bottom. */
+export function tilesOf(w: number, h: number, most: number): { x: number; y: number; w: number; h: number }[] {
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  for (let y = 0; y < h; y += most) for (let x = 0; x < w; x += most) out.push({ x, y, w: Math.min(most, w - x), h: Math.min(most, h - y) });
+  return out;
 }
 
 /**
@@ -39,7 +75,8 @@ function unionOf(a: Bounds | null, b: Bounds | null): Bounds | null {
  * `eyeHeight`, in perspective from that far straight above its centre - as
  * a picture lays them out (utils/molecule3d's pictureMarks), on a canvas
  * covering where they all reach on the page, `pxPerWorld` pixels to the
- * page's unit, transparent round them. Null where there are none, or no
+ * page's unit, transparent round them - each drawn in tiles at most `tile`
+ * pixels either way where it is larger. Null where there are none, or no
  * WebGL to draw them with.
  */
 export function rendered3d(
@@ -47,6 +84,7 @@ export function rendered3d(
   style: Style3D,
   pxPerWorld: number,
   eyeHeight?: number,
+  tile = TILE,
 ): { canvas: HTMLCanvasElement; bounds: Bounds } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
@@ -76,11 +114,17 @@ export function rendered3d(
   }
   // (as the canvas draws: its tone mapping and its colours)
   renderer.setPixelRatio(1);
+  // (no larger than this GPU draws)
+  const gl = renderer.getContext();
+  const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array | null;
+  const most = Math.max(1, Math.min(tile, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || tile, dims?.[0] || tile, dims?.[1] || tile));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = style.shadows > 0;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // (cast once for each molecule, not again for each of its tiles: every tile the same shadow)
+  renderer.shadowMap.autoUpdate = false;
   const made: { dispose(): void }[] = [];
   // (a measurement's lines and fan as the canvas's: unlit, in its blue)
   const measureLine = new THREE.MeshBasicMaterial({ color: COLORS.highlight, toneMapped: false });
@@ -107,7 +151,6 @@ export function rendered3d(
     for (const { m, surface, bounds: b } of each) {
       const w = Math.max(1, Math.round((b.max.x - b.min.x) * pxPerWorld));
       const h = Math.max(1, Math.round((b.max.y - b.min.y) * pxPerWorld));
-      renderer.setSize(w, h, false);
       const scene = new THREE.Scene();
       scene.add(new THREE.AmbientLight(0xffffff, style.ambientLight));
       const key = new THREE.DirectionalLight(0xffffff, style.keyLight);
@@ -120,6 +163,8 @@ export function rendered3d(
       const drawn = style[look];
       const places = solid.frames[frameOf(solid, m.frame)];
       const radii = solid.radii[look];
+      // (as smooth as it is large in the picture)
+      const segments = ballSegmentsFor(radii.reduce((most, r) => Math.max(most, r), 0) * pxPerWorld, m.atoms.length);
       // (an atom its look leaves out is not drawn, nor a bond to it)
       const left = solid.hidden[look];
       const group = new THREE.Group();
@@ -132,7 +177,7 @@ export function rendered3d(
       const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM);
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };
-      const ball = new THREE.SphereGeometry(1, BALL_SEGMENTS, BALL_SEGMENTS);
+      const ball = new THREE.SphereGeometry(1, segments, segments / 2);
       const atomsMat = new THREE.MeshStandardMaterial(finish);
       const ao = occludedMaterial(atomsMat, "atoms");
       const atomsMesh = new THREE.InstancedMesh(ball, atomsMat, m.atoms.length);
@@ -229,49 +274,41 @@ export function rendered3d(
           key.shadow.mapSize.set(PICTURE_SHADOW_MAP, PICTURE_SHADOW_MAP);
           key.shadow.intensity = style.shadows;
           fitShadow(key, box);
+          renderer.shadowMap.needsUpdate = true;
           made.push(key);
         }
       }
       // seen as the canvas sees it - straight from above, or in perspective
       // from eyeHeight above its centre - the view cut to where it reaches
-      // on the page
-      let camera: THREE.Camera;
-      if (eyeHeight == null) {
-        camera = new THREE.OrthographicCamera(
-          b.min.x - m.at.x,
-          b.max.x - m.at.x,
-          b.max.y - m.at.y,
-          b.min.y - m.at.y,
-          0.1,
-          2 * EYE_HEIGHT,
-        );
-        camera.position.set(0, 0, EYE_HEIGHT);
-        camera.updateMatrixWorld();
-      } else {
-        const near = 1;
-        const D = eyeHeight;
-        camera = new THREE.Camera();
-        camera.position.set(0, 0, D);
-        camera.updateMatrixWorld();
-        const k = near / D;
-        camera.projectionMatrix.makePerspective(
-          (b.min.x - m.at.x) * k,
-          (b.max.x - m.at.x) * k,
-          (b.max.y - m.at.y) * k,
-          (b.min.y - m.at.y) * k,
-          near,
-          D * 2,
-        );
-        camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+      // on the page, and each tile to its part of that (from the top left)
+      // (an orthographic camera as such, as the canvas's is: the light shows on a glossy ball as it does there)
+      const ortho = eyeHeight == null ? new THREE.OrthographicCamera() : null;
+      const camera = ortho ?? new THREE.Camera();
+      const D = eyeHeight ?? EYE_HEIGHT;
+      camera.position.set(0, 0, D);
+      camera.updateMatrixWorld();
+      // (in perspective, the view as it is on the near plane)
+      const near = eyeHeight == null ? 0.1 : 1;
+      const k = eyeHeight == null ? 1 : near / D;
+      const view = { left: (b.min.x - m.at.x) * k, right: (b.max.x - m.at.x) * k, top: (b.max.y - m.at.y) * k, bottom: (b.min.y - m.at.y) * k };
+      const x0 = Math.round((b.min.x - bounds.min.x) * pxPerWorld);
+      const y0 = Math.round((bounds.max.y - b.max.y) * pxPerWorld);
+      for (const t of tilesOf(w, h, most)) {
+        const left = view.left + ((view.right - view.left) * t.x) / w;
+        const right = view.left + ((view.right - view.left) * (t.x + t.w)) / w;
+        const top = view.top - ((view.top - view.bottom) * t.y) / h;
+        const bottom = view.top - ((view.top - view.bottom) * (t.y + t.h)) / h;
+        if (ortho) {
+          Object.assign(ortho, { left, right, top, bottom, near, far: 2 * EYE_HEIGHT });
+          ortho.updateProjectionMatrix();
+        } else {
+          camera.projectionMatrix.makePerspective(left, right, top, bottom, near, D * 2);
+          camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        }
+        renderer.setSize(t.w, t.h, false);
+        renderer.render(scene, camera);
+        ctx.drawImage(renderer.domElement, 0, 0, t.w, t.h, x0 + t.x, y0 + t.y, t.w, t.h);
       }
-      renderer.render(scene, camera);
-      ctx.drawImage(
-        renderer.domElement,
-        Math.round((b.min.x - bounds.min.x) * pxPerWorld),
-        Math.round((bounds.max.y - b.max.y) * pxPerWorld),
-        w,
-        h,
-      );
     }
   } finally {
     for (const d of made) d.dispose();
@@ -290,15 +327,20 @@ export function rendered3d(
   return { canvas: out, bounds };
 }
 
-/** The most pixels across a picture's molecules in 3D take, either way, for each 300 dpi they are drawn at. */
-const PICTURE_MOST_PX = 1600;
+/**
+ * The most pixels a picture's molecules in 3D are drawn in, all told: past
+ * it, at a lower resolution, to fit (as a copied picture is: ./picture's
+ * MOST_PIXELS).
+ */
+const PICTURE_MOST_PIXELS = 48_000_000;
 
 /**
  * A picture's molecules in 3D (`ms`, laid out in `layout`) drawn as the
- * canvas draws them, at `dpi` (a copied picture's, as Settings says) or at
- * most 1600 px across for each 300 of it: set on the layout, for its SVG
- * and anything drawn from that, and given as a bitmap, for an EMF. Null,
- * the layout as it was, where there are none or no WebGL.
+ * canvas draws them, at `dpi` (a copied picture's, as Settings says) -
+ * lower only where that would come to more than `PICTURE_MOST_PIXELS`: set
+ * on the layout, for its SVG and anything drawn from that, and given as a
+ * bitmap, for an EMF. Null, the layout as it was, where there are none or
+ * no WebGL.
  */
 export function withSolidsImage(
   ms: readonly Carried3D[],
@@ -309,8 +351,8 @@ export function withSolidsImage(
   const marks = solidsBounds(layout.solids ?? []);
   if (!marks || !ms.length) return null;
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
-  const across = Math.max(marks.max.x - marks.min.x, marks.max.y - marks.min.y) * zoom;
-  const scale = Math.min(dpi / 96, (PICTURE_MOST_PX * dpi) / 300 / Math.max(across, 1));
+  const area = Math.max((marks.max.x - marks.min.x) * zoom, 1) * Math.max((marks.max.y - marks.min.y) * zoom, 1);
+  const scale = Math.min(dpi / 96, Math.sqrt(PICTURE_MOST_PIXELS / area));
   const drawn = rendered3d(ms, style, zoom * scale);
   if (!drawn) return null;
   const { canvas, bounds } = drawn;

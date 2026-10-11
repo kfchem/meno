@@ -148,7 +148,15 @@ for each topic (one pull request per dependent chain).
 - Pictures: in a copy's EMF, SVG and PNG, molecules in 3D are drawn as the
   canvas draws them - lit, in depth - each seen from straight above its
   centre, a bitmap at the resolution copied pictures are made at (Settings,
-  Files; 600 dpi unless changed). A structure opened from Word or PowerPoint
+  Files; 600 dpi unless changed) - drawn in tiles of at most 2048 pixels a
+  side, each its part of the view, so that a picture is as sharp as asked
+  however large (a GPU's canvas has its limits, and quietly draws a smaller
+  picture past them; until lane L11, 2026-10-11, the bitmap was held to
+  1600 pixels across for each 300 dpi). Only past 48 million pixels, as a
+  copied picture is, is it made at a lower resolution. Its balls are as
+  smooth as they are large in it - at 1200 dpi a ball can be hundreds of
+  pixels across, and one of a fixed 48 sides showed them - within twenty
+  million triangles for all of them. A structure opened from Word or PowerPoint
   goes back with its molecules in 3D, turned as they are, and one holding
   only molecules in 3D is updated too.
 - Opening: XYZ files, and 3D MOL and SD records, by Open, a drop or a new
