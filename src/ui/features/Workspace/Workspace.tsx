@@ -92,6 +92,7 @@ import {
   shortcutLabel,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
+import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
@@ -146,6 +147,7 @@ import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import { pictureRegion, readStructure } from "./components/readStructure";
+import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
@@ -283,6 +285,8 @@ function WorkspaceContent({
   const procedures = useAppSettings((s) => s.procedures);
   const setChemistry = useAppSettings((s) => s.setChemistry);
   const chem = useChem();
+  // (a plugin's files besides its packages, as they come while it is set up)
+  const chemShare = useDownloads((s) => (chem.state === "setting-up" ? s[chem.id] : undefined));
   const [chemError, setChemError] = useState<string | null>(null);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
@@ -1182,7 +1186,7 @@ function WorkspaceContent({
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : "working"} {...FADE} className="block">
                 {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…`
+                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
                   : chem.state === "starting"
                     ? `Starting ${chem.plugin}…`
                     : working3d}
@@ -1423,6 +1427,8 @@ function WorkspaceContent({
             const pic = menu.kind === "picture" ? st.pictures.find((x) => x.id === menu.id) : undefined;
             const from = pic?.from;
             if (pic && from && st.pdfs.some((p) => p.sha256 === from.sha256)) return () => void readStructure(store, from, pictureRegion(pic), ui);
+            // (any other picture: read by the plugin that reads pictures, the structure beside it)
+            if (pic && !isFilm(pic.media)) return () => void readStructure(store, { picture: pic }, pictureRegion(pic), ui);
             return undefined;
           })()}
           onShowSource={(() => {
