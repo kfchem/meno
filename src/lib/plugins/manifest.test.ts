@@ -31,6 +31,8 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest(said)).toEqual(good);
     // (each plugin Meno carries, from its folder: Meno names none of them)
     expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
+    // (each saying what it does: a description too long is none)
+    expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
 
   it("knows each kind of file in one list: those it reads told by their marks, those it only colours by their names and lines", () => {

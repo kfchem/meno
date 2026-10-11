@@ -8,8 +8,9 @@ by them - so these run anywhere; CI runs them:
 What the programs are given is checked against their own manuals
 (NCIPLOT-4.2's NCIPLOT_MANUAL.pdf; the Multiwfn 2026.10.1 manual). Where
 a program is installed and named - NCIPLOT_BIN with NCIPLOT_HOME, or
-MULTIWFN_BIN, with MULTIWFN_WFN a wavefunction to read - a job is run too,
-and its cube files looked for; elsewhere those tests are skipped. No output
+MULTIWFN_BIN, with MULTIWFN_WFN a wavefunction to read for the run from
+one - a job is run too, and its cube files looked for; elsewhere those
+tests are skipped. No output
 of a real run is kept.
 """
 
@@ -122,23 +123,48 @@ class Multiwfn(unittest.TestCase):
         self.assertEqual((job["program"], job["args"], job["stdin"]), ("multiwfn", ["wavefunction.molden", "-nt", "4", "-silent"], "nci.txt"))
         files = {f["name"]: f["text"] for f in job["files"]}
         self.assertEqual(files["wavefunction.molden"], "[Molden Format]\n")
-        # (weak interaction, NCI, the grid, the cubes, back, back, quit)
+        # (weak interaction, NCI, the grid, the cubes, back, back, quit - read back, for collect to know which NCI it was)
         self.assertEqual(files["nci.txt"].splitlines(), ["20", "1", "3", "3", "0", "0", "q"])
+        self.assertEqual(job["reads"], ["nci.txt"])
         # (each kind under the extension Multiwfn tells it by)
         for kind, ext in [("gaussian-fchk", ".fch"), ("wfn", ".wfn"), ("wfx", ".wfx")]:
             entry = {**DIMER, "files": [{"kind": kind, "name": "x", "text": "x"}]}
             self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "wavefunction" + ext)
 
-    def test_needs_a_wavefunction(self):
-        said = ask(multiwfn, "prepare", entries=[DIMER], options={})
-        self.assertFalse(said["ok"])
-        self.assertIn("wavefunction", said["error"])
-        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}], options={})["ok"])
+    def test_works_from_the_geometry_alone_where_there_is_no_wavefunction_or_promolecular_is_asked_for(self):
+        orca = {**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}
+        for entry, options in [(DIMER, {}), (orca, {}), (self.WFN, {"density": "promolecular"})]:
+            said = ask(multiwfn, "prepare", entries=[entry], options={**options, "grid": "low"}, cores=2)
+            self.assertTrue(said["ok"], said)
+            [job] = said["result"]["jobs"]
+            self.assertEqual(job["args"], ["molecule.xyz", "-nt", "2", "-silent"])
+            files = {f["name"]: f["text"] for f in job["files"]}
+            self.assertNotIn("wavefunction.molden", files)
+            # (NCI based on promolecular density: the same steps after it, 3.23.2)
+            self.assertEqual(files["nci.txt"].splitlines(), ["20", "2", "1", "3", "0", "0", "q"])
+            lines = files["molecule.xyz"].splitlines()
+            self.assertEqual((lines[0], lines[1]), ("6", "water dimer"))
+            self.assertEqual(lines[2].split(), ["O", "-1.55100700", "-0.11452000", "0.00000000"])
+        # (a step's entries each as they can be: one with a wavefunction from it, one from its geometry)
+        jobs = ask(multiwfn, "prepare", entries=[self.WFN, DIMER], options={})["result"]["jobs"]
+        self.assertEqual([j["args"][0] for j in jobs], ["wavefunction.molden", "molecule.xyz"])
+
+    def test_refuses_what_it_cannot_do(self):
+        self.assertFalse(ask(multiwfn, "prepare", entries=[DIMER], options={"density": "exact"})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": []}], options={})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": [{"el": "c 1", "x": 0, "y": 0, "z": 0}]}], options={})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[], options={})["ok"])
 
     def test_says_which_cube_is_the_surface_and_which_colours_it(self):
-        said = ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log="", ended="done")
+        said = ask(multiwfn, "collect", entries=[self.WFN], options={}, files={"nci.txt": "20\n1\n2\n3\n0\n0\nq\n"}, log="", ended="done")
         [row] = said["result"]["surfaces"][0]["rows"]
-        self.assertEqual((row["file"], row["iso"], row["colour"]["file"], row["colour"]["from"], row["colour"]["to"]), ("func2.cub", 0.5, "func1.cub", -0.035, 0.02))
+        self.assertEqual((row["label"], row["file"], row["iso"], row["colour"]["file"], row["colour"]["from"], row["colour"]["to"]), ("Wavefunction's density", "func2.cub", 0.5, "func1.cub", -0.035, 0.02))
+        # (of the promolecular density, as Multiwfn was told: its own surface's RDG)
+        said = ask(multiwfn, "collect", entries=[DIMER], options={}, files={"nci.txt": "20\n2\n2\n3\n0\n0\nq\n"}, log="", ended="done")
+        [row] = said["result"]["surfaces"][0]["rows"]
+        self.assertEqual((row["label"], row["iso"]), ("Promolecular density", 0.3))
+        said = ask(multiwfn, "collect", entries=[DIMER], options={"isovalue-promolecular": 0.25}, files={"nci.txt": "20\n2\n2\n3\n0\n0\nq\n"}, log="", ended="done")
+        self.assertEqual(said["result"]["surfaces"][0]["rows"][0]["iso"], 0.25)
         self.assertIn("why", ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log=" Error: cannot read\n", ended="failed")["result"])
         self.assertFalse(ask(multiwfn, "collect", entries=[self.WFN], options={"from": 0.01, "to": 0.0}, files={}, log="", ended="done")["ok"])
 
@@ -152,10 +178,19 @@ class Multiwfn(unittest.TestCase):
         self.assertIn("func1.cub", files)
         self.assertIn("func2.cub", files)
 
+    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN"), "Multiwfn is not named here")
+    def test_multiwfn_writes_the_cubes_it_says_from_the_geometry_alone(self):
+        job = ask(multiwfn, "prepare", entries=[DIMER], options={"grid": "low"}, cores=2)["result"]["jobs"][0]
+        done, files = run(job, os.environ["MULTIWFN_BIN"], {"Multiwfnpath": str(pathlib.Path(os.environ["MULTIWFN_BIN"]).parent)})
+        self.assertEqual(done.returncode, 0, done.stdout[-2000:])
+        self.assertIn("has been exported to func2.cub", done.stdout)
+        self.assertIn("func1.cub", files)
+        self.assertIn("func2.cub", files)
+
 
 class Manifests(unittest.TestCase):
     def test_declare_what_the_workers_read(self):
-        for name, ids in [("nciplot", {"grid", "between", "isovalue", "range"}), ("multiwfn", {"grid", "isovalue", "from", "to"})]:
+        for name, ids in [("nciplot", {"grid", "between", "isovalue", "range"}), ("multiwfn", {"density", "grid", "isovalue", "isovalue-promolecular", "from", "to"})]:
             m = json.loads((ROOT / f"src-tauri/resources/plugins/{name}/manifest.json").read_text(encoding="utf-8"))
             self.assertEqual({o["id"] for o in m["steps"][0]["options"]}, ids, name)
             self.assertEqual(m["steps"][0]["kinds"], ["nci"])
