@@ -89,6 +89,7 @@ export type Bond = BondChem & {
 };
 
 import type { FlowParts } from "../workflow/parts";
+import type { GuideMarks } from "../presenting/guides";
 
 export type Sel = { atoms: Set<number>; bonds: Set<number> };
 /** A workflow's parts selected, as the drawing's are (docs/WORKFLOWS.md, *Copying*): sets and steps, by id - the wires among them with them. */
@@ -903,6 +904,9 @@ export type EditorState = {
   removeShape: (id: number) => void;
   /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
   presenting: Presenting | null;
+  /** What a move or a resize under way lines up with, shown as guides (presenting/guides) - the view's. */
+  guides: GuideMarks | null;
+  setGuides: (guides: GuideMarks | null) => void;
   present: (from: number) => void;
   presentAt: (at: number) => void;
   endPresenting: () => void;

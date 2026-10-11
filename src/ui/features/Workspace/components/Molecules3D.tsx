@@ -18,6 +18,7 @@ import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { eyeOf, pageAt } from "../utils/page";
+import { guideMove } from "../utils/guiding";
 import { schemeAmong } from "../utils/copyPaste";
 import { setMembers } from "../workflow/entries";
 import CalcList3D from "./CalcList3D";
@@ -87,6 +88,8 @@ type Gesture =
         steps: { id: number; x: number; y: number }[];
       };
       key: string;
+      /** What it lines up with as it goes (docs/PRESENTING.md, *Guides*). */
+      guide: ReturnType<typeof guideMove>;
     });
 
 /** A press that has travelled: turning a molecule, or moving what is selected. */
@@ -296,8 +299,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         gesture.current = { ...g, x: e.clientX, y: e.clientY, t: e.timeStamp, axis, recent };
       } else {
         const p = pageOf(e);
-        const dx = p.x - g.from.x;
-        const dy = p.y - g.from.y;
+        const d = g.guide.step(p.x - g.from.x, p.y - g.from.y, e);
+        const dx = d.x;
+        const dy = d.y;
         const by = <T extends { id: number; x: number; y: number }>(t: T) => ({ id: t.id, x: t.x + dx, y: t.y + dy });
         const solids = g.ats.map(({ id, at }) => ({ id, at: { x: at.x + dx, y: at.y + dy } }));
         // (the drawing selected with it goes with it, and a workflow's sets and steps, in the same step)
@@ -352,6 +356,10 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           steps: st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y })),
         },
         key: `move-3d-${g.id}-${e.timeStamp}`,
+        guide: guideMove(store, (cx, cy) => {
+          const q = pageAt(((cx - r.left) / r.width) * 2 - 1, -(((cy - r.top) / r.height) * 2 - 1), camera);
+          return { x: q.x, y: q.y };
+        }, { x: g.sx, y: g.sy }),
       };
     };
 
@@ -435,6 +443,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         dom.releasePointerCapture(e.pointerId);
       } catch {}
       gesture.current = null;
+      if (g.kind === "move") g.guide.end();
       setActive(null);
       setHold(null);
       const st = store.getState();

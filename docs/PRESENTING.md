@@ -280,7 +280,36 @@ Shift+Enter, since Enter keeps the words, as it did before.
   and under it, its own styles, written into an RXN file - and the two are
   kept apart in the code too (`Shape` here, `Arrow` there).
 
-Not yet, and where it comes: everything under *Guides* and *Handwriting*
-(their own pull requests, in that order); a slide's notes, with the
+### Guides (lane L8, fourth part, 2026-10-11)
+
+- `presenting/guides.ts`: where something moved by so much goes as it
+  lines up - its left, middle or right with another's, its top, middle or
+  bottom likewise, within 6 pixels of the screen, each way on its own and
+  the nearest first - or as a space in its row or column comes to the same
+  as another: halfway between the nearest either side of it, or as far
+  from its neighbour as that is from the one beyond. A box made larger or
+  smaller, its proportions kept, takes another's width or height; words
+  made wider or narrower take another's width. Lines run from end to end
+  of all that line up; a mark, ticked at each end, lies across each space
+  or size made the same.
+- `utils/guiding.ts` (`guideMove`, `guideScale`, `guideWidth`): what moves
+  is the box round what is selected (`utils/extent.ts` `selectedBox`);
+  what it lines up with is what is near it, not selected, each in its own
+  box (`besidesBoxes`): each structure (its atoms, and half a label round
+  those that show one), arrows, "+" signs and words, molecules in 3D as
+  seen, pictures, PDFs, texts' sheets, slides and shapes - as far off as
+  three of its larger side and 200 pixels more.
+- Where: a drag of the selection (`dragSelection`: a structure, words, a
+  picture, a PDF, a text's sheet, a slide, a workflow's steps), molecules
+  in 3D moved (`Molecules3D`), words moved alone (`Captions2D`), a slide's
+  and a picture's corners, words' edges. An atom dragged alone keeps its
+  own snapping to the drawing's lengths and angles.
+- Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
+  move across or up and down, the way it has gone most.
+- `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
+  pixel on the screen at any zoom, coming and going in a short ease.
+
+Not yet, and where it comes: everything under *Handwriting* (its own pull
+request); shapes' handles taking another's size; a slide's notes, with the
 presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.

@@ -29,6 +29,7 @@ import { setCursor } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pageAt } from "../utils/page";
 import { cornersOf } from "../utils/selection";
+import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { setViewGoal } from "./viewGoal";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
@@ -407,15 +408,23 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
     const gesture = `scale-${performance.now()}`;
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
+    // (as wide or as tall as something near, where it comes near - upright, as most are: docs/PRESENTING.md, *Guides*)
+    const placeAt = (f: number) => ({ w: p.w * f, h: p.h * f, x: fixed.x + (dir.x * len * f) / 2, y: fixed.y + (dir.y * len * f) / 2 });
+    const boxAt = (f: number) => {
+      const q = cornersOf({ ...p, ...placeAt(f) });
+      return { x0: Math.min(...q.map((v) => v.x)), y0: Math.min(...q.map((v) => v.y)), x1: Math.max(...q.map((v) => v.x)), y1: Math.max(...q.map((v) => v.y)) };
+    };
+    const guide = guideScale(store, toWorld, { x: ev.clientX, y: ev.clientY }, boxAt(1));
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
       const along = Math.max(least, (q.x - fixed.x) * dir.x + (q.y - fixed.y) * dir.y);
-      const f = along / len;
-      store.getState().updatePicture(p.id, { w: p.w * f, h: p.h * f, x: fixed.x + (dir.x * along) / 2, y: fixed.y + (dir.y * along) / 2 }, gesture);
+      const f = Math.max(least / len, guide.step(along / len, m, boxAt));
+      store.getState().updatePicture(p.id, placeAt(f), gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      guide.end();
       const s = store.getState();
       s.endPanHold(u.pointerId);
       s.suppressDoubleClick(DOUBLE_CLICK_MS);

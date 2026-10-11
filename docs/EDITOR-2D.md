@@ -199,6 +199,15 @@ workspace is done by selecting all of it first.
 | Everything | Ctrl+A | ⌘A |
 | Nothing | click empty space, or Esc | the same |
 
+**Guides** (docs/PRESENTING.md, *Guides*). Whatever is moved whole - the
+selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
+- lines up as it goes with what is near: its edges and middle with theirs,
+and a space in a row or a column with another there, within 6 pixels, a
+thin line in Meno's accent showing each. A slide or a picture made larger
+takes another's width or height, and words made wider another's width.
+Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
+atom dragged alone snaps as before, to the drawing's lengths and angles.
+
 **A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
 first press only: the second of a double-click held still waits to be
 dragged. It is counted while the button is held, so a click's label edit,

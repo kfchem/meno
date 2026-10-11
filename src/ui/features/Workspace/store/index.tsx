@@ -220,6 +220,8 @@ export function createEditorStore(
     hoveredShape: null,
     shapeDraft: null,
     presenting: null,
+    guides: null,
+    setGuides: (guides: EditorState["guides"]) => set({ guides }),
     hoveredMark: null,
     captionEdit: null,
     captionLeft: null,
