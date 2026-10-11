@@ -247,11 +247,13 @@ export function drawingLayout(
     drawn = true;
   };
   // (the electron-pushing arrows, drawn as the canvas draws them, with their lone pairs' dots)
-  const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout.texts, opts, opts.fontPx, pushMeasures(style, NOMINAL_BOND_LENGTH));
+  const pm = pushMeasures(style, NOMINAL_BOND_LENGTH);
+  const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout, opts, opts.fontPx, pm);
   for (const { push, shape } of pushed) {
-    const polys = pushOutlines(shape, !!push.half, pushMeasures(style, NOMINAL_BOND_LENGTH));
-    layout.polys.push(...polys.map((points) => ({ points })));
-    layout.fills.push(...shape.dots);
+    const polys = pushOutlines(shape, !!push.half, pm);
+    // (in the bonds' ink, unless the arrow is given its own colour)
+    layout.polys.push(...polys.map((points) => ({ points, ...(push.color ? { color: push.color } : {}) })));
+    layout.fills.push(...shape.dots.map((d) => ({ ...d, ...(push.color ? { color: push.color } : {}) })));
     const pts = [...polys.flat(), ...shape.dots.flatMap((d) => [{ x: d.c.x - d.r, y: d.c.y - d.r }, { x: d.c.x + d.r, y: d.c.y + d.r }])];
     take(
       pts.map((p) => p.x),

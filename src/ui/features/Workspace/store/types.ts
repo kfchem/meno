@@ -101,10 +101,11 @@ export type PushEnd = { atom: number } | { bond: number } | { gap: [number, numb
 /**
  * An electron-pushing arrow: from where to where, its head half - a
  * fishhook, one electron - or full, its bend (lib/chem/pushArrow
- * `PushBend`; unset, as Meno bends it), and a lone pair's dots left off its
- * tail (`noPair`).
+ * `PushBend`; unset, as Meno bends it), a lone pair's dots left off its
+ * tail (`noPair`), and the colour it is drawn in, where it is given one
+ * (#rrggbb; else the bonds' ink).
  */
-export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true };
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; color?: string };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -887,7 +888,7 @@ export type EditorState = {
    * The atoms and bonds named given a colour - drawn in it (`which` "color"),
    * or highlighted in it - or (null) none: one step.
    */
-  colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
   /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */

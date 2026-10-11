@@ -109,7 +109,7 @@ export default function PushDraw2D() {
   const preview = useMemo(() => {
     if (!draw?.from || !draw.pointer) return null;
     const push: PushArrow = { id: -1, from: draw.from, to: draw.to ?? draw.from, ...(draw.half ? { half: true as const } : {}) };
-    const [one] = pushShapes([push], atoms, bonds, layout.texts, opts, opts.fontPx, m, draw.to ? undefined : { of: -1, end: "to", at: draw.pointer });
+    const [one] = pushShapes([push], atoms, bonds, layout, opts, opts.fontPx, m, draw.to ? undefined : { of: -1, end: "to", at: draw.pointer });
     if (!one) return null;
     const positions: number[] = [];
     const polys = [...pushOutlines(one.shape, draw.half, m), ...one.shape.dots.map((d) => Array.from({ length: 20 }, (_, k) => ({ x: d.c.x + d.r * Math.cos((k * Math.PI) / 10), y: d.c.y + d.r * Math.sin((k * Math.PI) / 10) })))];
@@ -117,7 +117,7 @@ export default function PushDraw2D() {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     return g;
-  }, [draw, atoms, bonds, layout.texts, opts, m]);
+  }, [draw, atoms, bonds, layout, opts, m]);
   useEffect(() => {
     invalidate();
     return () => preview?.dispose();

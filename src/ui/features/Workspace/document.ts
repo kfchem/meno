@@ -1505,11 +1505,12 @@ function withoutArrowsOf(doc: WorkspaceDocument, gone: ReadonlySet<number>): Wor
 
 /**
  * `doc` with the atoms and bonds `parts` names given `color` - drawn in it
- * (`which` "color"), or highlighted in it - or (null) none.
+ * (`which` "color"), or highlighted in it - or (null) none; and its
+ * electron-pushing arrows drawn in it.
  */
 export function colourParts(
   doc: WorkspaceDocument,
-  parts: { atoms: Iterable<number>; bonds: Iterable<number> },
+  parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> },
   which: "color" | "highlight",
   color: string | null,
 ): WorkspaceDocument {
@@ -1524,7 +1525,9 @@ export function colourParts(
   };
   const atoms = doc.model.atoms.map((a) => paint(a, atomIds));
   const bonds = doc.model.bonds.map((b) => paint(b, bondIds));
-  return changed ? { ...doc, model: { atoms, bonds } } : doc;
+  const pushIds = new Set(which === "color" ? (parts.pushes ?? []) : []);
+  const pushes = pushIds.size ? (doc.pushes ?? []).map((p) => paint(p, pushIds)) : doc.pushes;
+  return changed ? { ...doc, model: { atoms, bonds }, ...(pushes ? { pushes } : {}) } : doc;
 }
 
 /** `doc` with the rings `keys` filled with `color`, or (null) not. */

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { bendThrough, curveAt, endBase, pushMeasures, pushOutlines, type PushShape } from "../../../../lib/chem/pushArrow";
+import { bendThrough, endBase, pointAt, pushMeasures, pushOutlines, type PushShape } from "../../../../lib/chem/pushArrow";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS } from "../constants";
@@ -58,14 +58,23 @@ export default function PushArrows2D() {
   // an end being drawn out: where the pointer is
   const [moving, setMoving] = useState<{ of: number; end: "from" | "to"; at: P } | null>(null);
   const shapes = useMemo(
-    () => pushShapes(pushes, atoms, bonds, layout.texts, opts, opts.fontPx, m, moving ?? undefined),
-    [pushes, atoms, bonds, layout.texts, opts, m, moving],
+    () => pushShapes(pushes, atoms, bonds, layout, opts, opts.fontPx, m, moving ?? undefined),
+    [pushes, atoms, bonds, layout, opts, m, moving],
   );
+  // (one mesh for each colour they are drawn in: the bonds' ink, unless an arrow is given its own)
+  const ink = opts.bondColor ?? "black";
   const drawn = useMemo(() => {
-    const polys = shapes.flatMap(({ push, shape }) => pushOutlines(shape, !!push.half, m));
-    return shapesGeometry(polys, shapes.flatMap(({ shape }) => shape.dots));
-  }, [shapes, m]);
-  useEffect(() => () => drawn.dispose(), [drawn]);
+    const byColour = new Map<string, typeof shapes>();
+    for (const one of shapes) byColour.set(one.push.color ?? ink, [...(byColour.get(one.push.color ?? ink) ?? []), one]);
+    return [...byColour].map(([color, these]) => ({
+      color,
+      geometry: shapesGeometry(
+        these.flatMap(({ push, shape }) => pushOutlines(shape, !!push.half, m)),
+        these.flatMap(({ shape }) => shape.dots),
+      ),
+    }));
+  }, [shapes, m, ink]);
+  useEffect(() => () => drawn.forEach((d) => d.geometry.dispose()), [drawn]);
 
   const toWorld = (cx: number, cy: number): P => {
     const r = gl.domElement.getBoundingClientRect();
@@ -161,9 +170,11 @@ export default function PushArrows2D() {
   const k = HANDLE_PX / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6);
   return (
     <group>
-      <mesh geometry={drawn} renderOrder={21} frustumCulled={false} raycast={() => {}}>
-        <meshBasicMaterial color={opts.bondColor ?? "black"} toneMapped={false} depthTest={false} depthWrite={false} transparent side={THREE.DoubleSide} />
-      </mesh>
+      {drawn.map(({ color, geometry }) => (
+        <mesh key={color} geometry={geometry} renderOrder={21} frustumCulled={false} raycast={() => {}}>
+          <meshBasicMaterial color={color} toneMapped={false} depthTest={false} depthWrite={false} transparent side={THREE.DoubleSide} />
+        </mesh>
+      ))}
       {shapes.map(({ push, shape }) => (
         <PushHold
           key={push.id}
@@ -205,11 +216,11 @@ function PushHold({
 }) {
   const band = useMemo(() => {
     const L = NOMINAL_BOND_LENGTH;
-    const [line] = pushOutlines(shape, false, { thickness: 2 * HOLD * L, headLength: 0, headWidth: 0, round: true, bondLength: L });
+    const [line] = pushOutlines(shape, false, { thickness: 2 * HOLD * L, headLength: 0, headWidth: 0, headInset: 0, round: true, bondLength: L });
     return shapesGeometry([line]);
   }, [shape]);
   useEffect(() => () => band.dispose(), [band]);
-  const middle = curveAt(shape.start, shape.control, shape.end, 0.5);
+  const middle = pointAt(shape, 0.5);
   const handles: [string, P, (e: { nativeEvent: PointerEvent; stopPropagation: () => void }) => void][] = [
     ["from", shape.start, (e) => onEnd("from", e)],
     ["middle", middle, onBend],

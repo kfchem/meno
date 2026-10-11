@@ -129,7 +129,7 @@ export function createUiSlice(
       );
     },
 
-    colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => {
+    colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => {
       doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? { coalesceKey: `colour:${which}:${gesture}` } : undefined);
     },
 

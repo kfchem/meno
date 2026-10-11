@@ -504,6 +504,13 @@ export const STYLE_FIELDS: StyleField[] = [
     description: "How wide the head of a curved arrow showing electrons moving is, across its back corners; a fishhook is the one side of it.",
     kind: length(0.5, 20),
   },
+  {
+    key: "electronArrowHeadInset",
+    group: "Electron-pushing arrows",
+    label: "Electron-pushing arrow: notch",
+    description: "How far the back of the head is drawn in towards its point, as a share of the head's length: none draws a triangle, more a barbed head.",
+    kind: share("arrowhead length", 0, 0.8, 0.01),
+  },
 ];
 
 const FIELD_BY_KEY = new Map(STYLE_FIELDS.map((f) => [f.key, f]));

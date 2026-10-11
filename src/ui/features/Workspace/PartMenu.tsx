@@ -430,6 +430,7 @@ export default function PartMenu({
         ? [
             { name: "Full head", keys: "", run: () => push.setHalf(false), icon: MENU_ICONS.pushArrow, checked: !push.half },
             { name: "Fishhook (half head)", keys: "", run: () => push.setHalf(true), icon: MENU_ICONS.fishhook, checked: push.half },
+            ...colour,
             del("Delete arrow", keys),
             ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
             ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),

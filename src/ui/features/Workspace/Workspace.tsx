@@ -1412,6 +1412,8 @@ function WorkspaceContent({
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
                     ? { atoms: [], bonds: [menu.id], rings: [] }
+                    : menu.kind === "push" && menu.id != null
+                    ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
                     : menu.kind === "ring" && menu.ring
                       ? (() => {
                           const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);

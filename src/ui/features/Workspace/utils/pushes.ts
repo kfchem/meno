@@ -1,5 +1,5 @@
-import { labelBox, labelSetOf, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
-import { pushShape, type PushEndAt, type PushMeasures, type PushShape } from "../../../../lib/chem/pushArrow";
+import { labelBox, labelSetOf, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
+import { pointAt, pushShape, type PushEndAt, type PushMeasures, type PushScene, type PushShape } from "../../../../lib/chem/pushArrow";
 import type { Bond, PushArrow, PushEnd } from "../store/types";
 
 /**
@@ -10,6 +10,10 @@ import type { Bond, PushArrow, PushEnd } from "../store/types";
  */
 
 type P = { x: number; y: number };
+const unit = (a: P): P => {
+  const l = Math.hypot(a.x, a.y);
+  return l > 1e-12 ? { x: a.x / l, y: a.y / l } : { x: 1, y: 0 };
+};
 type AtomAt = { id: number; x: number; y: number; el: string; charge?: number };
 
 /** The elements an arrow leaves from a lone pair of: those that have one to give in a neutral structure. */
@@ -36,34 +40,19 @@ function clearOf(label: TextItem | undefined, fontSize: number, opts: LayoutOpti
   };
 }
 
-/** The atoms joined to `ids` by bonds - their structures - by index. */
-function structuresOf(ids: readonly number[], atoms: readonly AtomAt[], bonds: readonly Pick<Bond, "a" | "b">[]): P[] {
-  const next = new Map<number, number[]>();
-  for (const b of bonds) {
-    next.set(b.a, [...(next.get(b.a) ?? []), b.b]);
-    next.set(b.b, [...(next.get(b.b) ?? []), b.a]);
-  }
-  const seen = new Set(ids);
-  const queue = [...ids];
-  while (queue.length)
-    for (const n of next.get(queue.pop()!) ?? []) {
-      if (seen.has(n)) continue;
-      seen.add(n);
-      queue.push(n);
-    }
-  return atoms.filter((a) => seen.has(a.id));
-}
-
 /**
  * Each arrow's curve, by its id - from and to its ends among `atoms` (in
- * the order the layout's `labels` number them), bent as it says or away
- * from its structures - its head half or full: those whose ends are drawn.
+ * the order the layout's `labels` number them), bent as it says or laid as
+ * Meno lays it, clear of the bonds and labels, coming onto an atom from
+ * behind any bond another arrow takes from it - its head half or full:
+ * those whose ends are drawn.
  */
 export function pushShapes(
   pushes: readonly PushArrow[],
   atoms: readonly AtomAt[],
   bonds: readonly Pick<Bond, "id" | "a" | "b">[],
-  labels: readonly TextItem[],
+  /** The drawing they are laid on: its labels, and its lines - the bonds as drawn, a double bond's second line with them. */
+  drawn: Pick<Layout, "texts" | "lines">,
   opts: LayoutOptions,
   fontSize: number,
   m: PushMeasures,
@@ -71,6 +60,7 @@ export function pushShapes(
   pointer?: { of: number; end: "from" | "to"; at: P },
 ): { push: PushArrow; shape: PushShape; from: PushEndAt; to: PushEndAt }[] {
   if (!pushes.length) return [];
+  const labels = drawn.texts;
   const index = new Map(atoms.map((a, i) => [a.id, i]));
   const labelOf = new Map(labels.filter((t) => t.atom != null).map((t) => [t.atom!, t]));
   const bondOf = new Map(bonds.map((b) => [b.id, b]));
@@ -78,27 +68,112 @@ export function pushShapes(
     const i = index.get(id);
     return i == null ? null : atoms[i];
   };
+  // which way each atom's bonds leave it
+  const ways = new Map<number, { to: number; u: P }[]>();
+  for (const b of bonds) {
+    const p = atomAt(b.a);
+    const q = atomAt(b.b);
+    if (!p || !q) continue;
+    const u = unit({ x: q.x - p.x, y: q.y - p.y });
+    ways.set(b.a, [...(ways.get(b.a) ?? []), { to: b.b, u }]);
+    ways.set(b.b, [...(ways.get(b.b) ?? []), { to: b.a, u: { x: -u.x, y: -u.y } }]);
+  }
+  // what the arrows keep clear of: the bonds' lines, the labels' boxes, the atoms
+  const set = labelSetOf(opts);
+  const scene: PushScene = {
+    segments: bonds.flatMap((b) => {
+      const p = atomAt(b.a);
+      const q = atomAt(b.b);
+      return p && q ? [[p, q] as const] : [];
+    }),
+    boxes: labels.map((t) => {
+      const box = labelBox(t, fontSize, set);
+      const on = t.atom != null ? atoms[t.atom] : t.markOf != null ? atoms[t.markOf] : undefined;
+      return { min: { x: t.x - box.left, y: t.y - box.bottom }, max: { x: t.x + box.right, y: t.y + box.top }, ...(on ? { at: on } : {}) };
+    }),
+    atoms,
+  };
+  // (the bonds the arrows take electrons from, and so break)
+  const broken = pushes.flatMap((q) => ("bond" in q.from && bondOf.get(q.from.bond) ? [bondOf.get(q.from.bond)!] : []));
   const endAt = (e: PushEnd, tail: boolean, noPair: boolean): PushEndAt | null => {
     if ("atom" in e) {
       const a = atomAt(e.atom);
       if (!a) return null;
-      return { atom: a, clear: clearOf(labelOf.get(index.get(e.atom)!), fontSize, opts, m.bondLength), pair: tail && !noPair && hasLonePair(a) };
+      const out = ways.get(e.atom) ?? [];
+      // (the side its label's H's are written on is taken, as a bond's is: a lone pair goes beside the symbol)
+      const label = labelOf.get(index.get(e.atom)!);
+      const written: P[] = [];
+      if (label) {
+        const box = labelBox(label, fontSize, set);
+        const more = 0.3 * fontSize;
+        if (box.right > box.left + more) written.push({ x: 1, y: 0 });
+        if (box.left > box.right + more) written.push({ x: -1, y: 0 });
+        if (box.top > box.bottom + more) written.push({ x: 0, y: 1 });
+        if (box.bottom > box.top + more) written.push({ x: 0, y: -1 });
+      }
+      // (at its head, the bonds another arrow breaks there: it comes in from behind them)
+      const losing = tail ? [] : broken.flatMap((b) => (b.a === e.atom || b.b === e.atom ? out.filter((w) => w.to === (b.a === e.atom ? b.b : b.a)).map((w) => w.u) : []));
+      return {
+        atom: a,
+        clear: clearOf(labelOf.get(index.get(e.atom)!), fontSize, opts, m.bondLength),
+        pair: tail && !noPair && hasLonePair(a),
+        bonds: [...out.map((w) => w.u), ...written],
+        ...(losing.length ? { losing } : {}),
+      };
     }
     const ends = "bond" in e ? bondOf.get(e.bond) && [bondOf.get(e.bond)!.a, bondOf.get(e.bond)!.b] : e.gap;
     const p = ends && atomAt(ends[0]);
     const q = ends && atomAt(ends[1]);
     if (!p || !q) return null;
-    return "bond" in e ? { bond: [p, q] } : { gap: [p, q] };
+    if (!("bond" in e)) return { gap: [p, q] };
+    // the bond as drawn: its lines along it, near its axis - its middle, and how far they reach either side
+    const axis = unit({ x: q.x - p.x, y: q.y - p.y });
+    const normal = { x: -axis.y, y: axis.x };
+    const length = Math.hypot(q.x - p.x, q.y - p.y);
+    const along = (x: number, y: number) => (x - p.x) * axis.x + (y - p.y) * axis.y;
+    const off = (x: number, y: number) => (x - p.x) * normal.x + (y - p.y) * normal.y;
+    const lines = drawn.lines.filter((l) => {
+      const dx = l.x2 - l.x1;
+      const dy = l.y2 - l.y1;
+      const dl = Math.hypot(dx, dy);
+      if (dl < 1e-9 || Math.abs(dx * axis.y - dy * axis.x) / dl > 0.09) return false;
+      const t = along((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2);
+      return t > 0 && t < length && Math.abs(off((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2)) < 0.35 * m.bondLength;
+    });
+    let middle: P | undefined;
+    const reach = { left: m.thickness / 2, right: m.thickness / 2 };
+    if (lines.length) {
+      // (the middle of the line nearest its axis - shortened where a label stands at an end)
+      const main = lines.reduce((b, l) => (Math.abs(off((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2)) < Math.abs(off((b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2)) ? l : b));
+      const t = (along(main.x1, main.y1) + along(main.x2, main.y2)) / 2;
+      middle = { x: p.x + axis.x * t, y: p.y + axis.y * t };
+      for (const l of lines) {
+        const o = off((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2);
+        reach.left = Math.max(reach.left, o + m.thickness / 2);
+        reach.right = Math.max(reach.right, -o + m.thickness / 2);
+      }
+    }
+    // (the side of the bond away from the rest of its structure: where its other bonds do not go)
+    const [ia, ib] = ends;
+    const others = [...(ways.get(ia) ?? []).filter((w) => w.to !== ib), ...(ways.get(ib) ?? []).filter((w) => w.to !== ia)];
+    const n = unit({ x: -(q.y - p.y), y: q.x - p.x });
+    const lean = others.reduce((sum, w) => sum + w.u.x * n.x + w.u.y * n.y, 0);
+    return { bond: [p, q], ...(middle ? { middle } : {}), reach, ...(Math.abs(lean) > 1e-6 ? { outside: lean > 0 ? { x: -n.x, y: -n.y } : n } : {}) };
   };
-  const ids = (e: PushEnd) => ("atom" in e ? [e.atom] : "gap" in e ? e.gap : bondOf.get(e.bond) ? [bondOf.get(e.bond)!.a, bondOf.get(e.bond)!.b] : []);
   const free = (at: P): PushEndAt => ({ gap: [at, at] });
+  // (each arrow keeps clear of those laid before it, as of the bonds: a leaving group's curl on the far side from the attack)
+  const laid: (readonly [P, P])[] = [];
+  const marks: P[] = [];
   return pushes.flatMap((push) => {
     const from = pointer?.of === push.id && pointer.end === "from" ? free(pointer.at) : endAt(push.from, true, !!push.noPair);
     const to = pointer?.of === push.id && pointer.end === "to" ? free(pointer.at) : endAt(push.to, false, true);
     if (!from || !to) return [];
-    const around = push.bend ? [] : structuresOf([...ids(push.from), ...ids(push.to)], atoms, bonds);
-    const shape = pushShape(from, to, push.bend, around, m);
-    return shape ? [{ push, shape, from, to }] : [];
+    const shape = pushShape(from, to, push.bend, { ...scene, segments: [...scene.segments, ...laid], arrows: marks }, m);
+    if (!shape) return [];
+    const pts = Array.from({ length: 13 }, (_, i) => pointAt(shape, i / 12));
+    for (let i = 1; i < pts.length; i++) laid.push([pts[i - 1], pts[i]]);
+    marks.push(...pts);
+    return [{ push, shape, from, to }];
   });
 }
 

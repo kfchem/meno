@@ -266,7 +266,7 @@ export function readDrawn(data: unknown): Drawn | null {
     const to = endOf(p.to);
     if (!isNum(p.id) || !from || !to) return [];
     const bend = p.bend && isNum(p.bend.along) && isNum(p.bend.out) && Math.abs(p.bend.along) < 10 && Math.abs(p.bend.out) < 10 ? { along: p.bend.along, out: p.bend.out } : undefined;
-    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}) }];
+    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) }];
   });
   // (colours only as colours: what is not one is left out - it would go into a picture's markup)
   const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
