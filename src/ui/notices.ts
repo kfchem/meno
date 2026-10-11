@@ -5,6 +5,7 @@
  * once.
  */
 import { create } from "zustand";
+import { usePresentingWindow } from "./presenting";
 
 /** How long a notice stays, unless it is dismissed. */
 const NOTICE_MS = 9000;
@@ -15,9 +16,16 @@ type Notices = { notices: Notice[]; show: (n: Notice) => void; dismiss: (id: str
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
+/** Notices given while a talk is given: shown, each for its while, once it ends (./presenting). */
+const held: Notice[] = [];
+
 export const useNotices = create<Notices>((set, get) => ({
   notices: [],
   show: (n) => {
+    if (usePresentingWindow.getState().on) {
+      held.splice(0, held.length, ...held.filter((x) => x.id !== n.id), n);
+      return;
+    }
     set((s) => ({ notices: [...s.notices.filter((x) => x.id !== n.id), n] }));
     clearTimeout(timers.get(n.id));
     timers.set(
@@ -31,3 +39,8 @@ export const useNotices = create<Notices>((set, get) => ({
     set((s) => ({ notices: s.notices.filter((x) => x.id !== id) }));
   },
 }));
+
+usePresentingWindow.subscribe((s, was) => {
+  if (s.on || !was.on) return;
+  for (const n of held.splice(0)) useNotices.getState().show(n);
+});

@@ -60,7 +60,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
-import { hasLonePair } from "./utils/pushes";
+import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
@@ -91,6 +91,8 @@ import {
   isDeselectKey,
   isFindKey,
   isSelectAllKey,
+  IS_MAC,
+  presentIntent,
   saveIntent,
   shortcutLabel,
 } from "../../../lib/doc/shortcuts";
@@ -133,6 +135,7 @@ import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
+import { pdfRoom } from "../../../lib/pdf/layout";
 import { writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
@@ -148,6 +151,8 @@ import { PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
+import { pictureRegion, readStructure } from "./components/readStructure";
+import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
@@ -157,6 +162,11 @@ import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
+import Slides2D from "./components/Slides2D";
+import Presenter from "./presenting/Presenter";
+import PresentLayer from "./presenting/PresentLayer";
+import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
+import { selectedBox } from "./utils/extent";
 
 function WorkspaceContent({
   active,
@@ -251,6 +261,8 @@ function WorkspaceContent({
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
+  // (no menu over a talk)
+  const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
@@ -279,6 +291,7 @@ function WorkspaceContent({
   const marks = useChemMarks(model, active);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsure = useMemo(() => unsureOf(model), [model]);
+  const readUnsure = useMemo(() => readMarks(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
   const setChemistry = useAppSettings((s) => s.setChemistry);
@@ -313,6 +326,12 @@ function WorkspaceContent({
     const covered = store.getState().cover / cam.zoom;
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
+  // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)
+  const presentHere = useCallback(() => {
+    const st = store.getState();
+    const seen = viewBox();
+    st.present(seen ? Math.max(0, slideInView(st.slides, seen)) : 0);
+  }, [store, viewBox]);
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
@@ -628,7 +647,13 @@ function WorkspaceContent({
       const id = kind === "atom" ? hovered.atomId : hovered.bondId;
       const { drawing: drawingSelected, any: selected } = selectedOf(st);
       const busy = st.labelEdit.active || st.moveDrag.active || st.extend.active;
-      if (isCleanUpKey(e)) {
+      const talk = presentIntent(e);
+      if (talk && st.slides.length && !busy && !st.presenting) {
+        // a talk given from the slides: from the first, or from the one in view
+        e.preventDefault();
+        if (talk === "first") st.present(0);
+        else presentHere();
+      } else if (isCleanUpKey(e)) {
         e.preventDefault();
         runCleanUp(drawingSelected ? sel.atoms : structureAt(kind, id));
       } else if (isFitKey(e)) {
@@ -683,6 +708,10 @@ function WorkspaceContent({
         // a text's sheet under the pointer, likewise
         e.preventDefault();
         st.removeTexts([st.hoveredText]);
+      } else if (isDeleteKey(e) && !busy && st.hoveredSlide != null && st.slides.some((x) => x.id === st.hoveredSlide)) {
+        // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
+        e.preventDefault();
+        st.removeSlide(st.hoveredSlide);
       } else if (isDeleteKey(e) && !busy && st.hoveredPicture != null && st.pictures.some((p) => p.id === st.hoveredPicture)) {
         // a picture under the pointer, likewise
         e.preventDefault();
@@ -726,9 +755,12 @@ function WorkspaceContent({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords]);
+  }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
+  useEffect(() => {
+    if (talking) setMenu(null);
+  }, [talking]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
@@ -944,7 +976,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -956,7 +988,7 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
@@ -968,7 +1000,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -980,10 +1012,22 @@ function WorkspaceContent({
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
     const pdfWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
     })();
     if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise a slide's edge or number, unless it is selected with more (docs/PRESENTING.md)
+    const { hoveredSlide, slides, selSlides } = store.getState();
+    const slideWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selSlides: new Set() }).any || selSlides.size > 1;
+    })();
+    if (!kind && hoveredSlide != null && slides.some((x) => x.id === hoveredSlide) && !(selSlides.has(hoveredSlide) && slideWithMore)) {
+      const target: MenuTarget = { kind: "slide", id: hoveredSlide, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1105,6 +1149,7 @@ function WorkspaceContent({
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
   const pdfsHeld = useEditor((s) => s.pdfs.length > 0);
+  const slideCount = useEditor((s) => s.slides.length);
   // (`at`: where on the page the menu was opened - where a new text's sheet goes)
   const canvasCommands = (at: { x: number; y: number }): CanvasCommand[] => [
     // (a tab's own workspace: not one in a document's object, which keeps its own)
@@ -1116,6 +1161,8 @@ function WorkspaceContent({
           ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().addTexts([{ name: "", text: "" }], at) }] : []),
         ]
       : []),
+    // (a talk given from the slides on the page: docs/PRESENTING.md)
+    ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
     { name: chemistry.stereoLabels ? "Hide R and S" : "Show R and S", keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
@@ -1326,6 +1373,11 @@ function WorkspaceContent({
               else if (what === "arrow") st.addArrow(at.x, at.y);
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
+              // (a slide of what is seen: Quick Add only says when, not where)
+              else if (what === "slide") {
+                const seen = viewBox();
+                if (seen) st.addSlide(slideOfView(seen, WIDE));
+              }
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -1442,6 +1494,19 @@ function WorkspaceContent({
             store.getState().addSet(frame);
             store.getState().clearSel();
           } : undefined}
+          onReadStructure={(() => {
+            const st = store.getState();
+            const ui = { working: setWorking3d, say: setChemError, view: viewBox, fit: requestFit };
+            // (the figure in a box drawn on a PDF: the structure beside the PDF)
+            const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
+            const box = st.pdfBox;
+            if (pdf && box?.id === pdf.id) return () => void readStructure(store, { sha256: pdf.sha256, page: box.page, box: box.box }, pdfRoom(pdf), ui);
+            // (a picture cut out of a PDF here: the structure beside the picture)
+            const pic = menu.kind === "picture" ? st.pictures.find((x) => x.id === menu.id) : undefined;
+            const from = pic?.from;
+            if (pic && from && st.pdfs.some((p) => p.sha256 === from.sha256)) return () => void readStructure(store, from, pictureRegion(pic), ui);
+            return undefined;
+          })()}
           onShowSource={(() => {
             const st = store.getState();
             // (a picture cut out of a PDF: its box there)
@@ -1500,6 +1565,35 @@ function WorkspaceContent({
               onSave: () => void savePictureFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
             };
           })()}
+          slide={(() => {
+            const st = store.getState();
+            const i = menu.kind === "slide" ? st.slides.findIndex((x) => x.id === menu.id) : -1;
+            if (i < 0) return undefined;
+            const s = st.slides[i];
+            return {
+              onPresent: () => st.present(i),
+              ...(i > 0 ? { onEarlier: () => st.orderSlide(s.id, i - 1) } : {}),
+              ...(i < st.slides.length - 1 ? { onLater: () => st.orderSlide(s.id, i + 1) } : {}),
+              around: !!s.around,
+              onAround: () => st.updateSlide(s.id, { around: !s.around }),
+              standard: isStandard(s),
+              onShape: () => {
+                const r = reshaped(s, isStandard(s) ? WIDE : STANDARD);
+                st.updateSlide(s.id, { w: r.w, h: r.h });
+              },
+              onSelectOn: () => st.selectOnSlide(s.id),
+            };
+          })()}
+          onSlideAround={
+            menu.selection === "here"
+              ? () => {
+                  const st = store.getState();
+                  const cam = camRef.current;
+                  const b = selectedBox(st, style, (cam as { zoom?: number } | null)?.zoom ?? 1, cam ? eyeOf(cam)?.z : undefined);
+                  if (b) st.addSlide(slideAround(b));
+                }
+              : undefined
+          }
           onRender={(() => {
             if (!renderer()) return undefined;
             if (menu.kind === "molecule3d" && menu.selection !== "here" && menuMolecule) return () => askRender([menuMolecule.id]);
@@ -1587,7 +1681,9 @@ function WorkspaceContent({
             return {
               half: !!p.half,
               setHalf: (half: boolean) => st.updatePush(p.id, { half }),
-              ...(tail && hasLonePair(tail) ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
+              // (from an anion: from its charge, or from a lone pair - its dots then shown or not; a fishhook from a radical, from its dot)
+              ...(tail && (tail.charge ?? 0) < 0 && tailOf(tail, p) !== "radical" ? { source: { fromPair: !!p.fromPair, set: (fromPair: boolean) => st.updatePush(p.id, { fromPair }) } } : {}),
+              ...(tail && hasLonePair(tail) && tailOf(tail, p) === "pair" ? { pair: { shown: !p.noPair, set: (shown: boolean) => st.updatePush(p.id, { noPair: !shown }) } } : {}),
               ...(p.bend ? { onUnbend: () => st.updatePush(p.id, { bend: null }) } : {}),
             };
           })()}
@@ -1698,7 +1794,7 @@ function WorkspaceContent({
             <Labels2D />
           </Suspense>
           {/* the plugin's marks: valence problems, R/S and E/Z */}
-          <ChemMarks2D marks={marks} unsure={unsure} />
+          <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
           <ChargeHolds2D />
           {/* the atom a molecule in 3D under the pointer was made from */}
@@ -1725,6 +1821,8 @@ function WorkspaceContent({
           </Suspense>
           {/* A workflow on the page: its sets, steps and wires (within the drawing's layout: an input set is made round its labels) */}
           <Workflow2D />
+          {/* Slides: frames round what a talk shows, over everything on the page (docs/PRESENTING.md) */}
+          <Slides2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />
@@ -1733,14 +1831,18 @@ function WorkspaceContent({
         {/* Molecules in 3D standing on the page (before PanZoom2D: a press on one is theirs) */}
         <Molecules3D style={style3d} />
         <PanZoom2D />
+        {/* a talk given from the slides: the view, the molecules turned in it, the keys (docs/PRESENTING.md) */}
+        <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} className="absolute inset-0 pointer-events-none" style={{ clipPath: cover > 0 ? `inset(0 ${cover}px 0 0)` : undefined }} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={{ clipPath: cover > 0 ? `inset(0 ${cover}px 0 0)` : undefined }} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
+      {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}
+      <PresentLayer />
       </Remake3D.Provider>
     </div>
   );

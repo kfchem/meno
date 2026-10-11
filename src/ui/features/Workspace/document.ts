@@ -13,7 +13,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
@@ -72,6 +72,9 @@ export type WorkspaceDocument = {
   /** The pictures on the page (docs/PDF.md, *A picture*). */
   pictures?: PictureItem[];
   nextPictureId?: number;
+  /** The slides on the page, in the order a talk shows them (docs/PRESENTING.md). */
+  slides?: Slide[];
+  nextSlideId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -85,6 +88,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.texts?.length &&
     !doc.pdfs?.length &&
     !doc.pictures?.length &&
+    !doc.slides?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -1119,21 +1123,30 @@ export function addPush(doc: WorkspaceDocument, from: PushEnd, to: PushEnd, half
   return { ...doc, nextPushId: id + 1, pushes: [...(doc.pushes ?? []), { id, from, to, ...(half ? { half: true as const } : {}) }] };
 }
 
-/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots. */
+/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots, whether an anion's arrow leaves from a lone pair. */
 export function updatePush(
   doc: WorkspaceDocument,
   id: number,
-  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean },
+  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean; fromPair?: boolean },
 ): WorkspaceDocument {
   const pushes = doc.pushes ?? [];
   const i = pushes.findIndex((p) => p.id === id);
   if (i < 0) return doc;
   const was = pushes[i];
-  const { half: _h, bend: _b, noPair: _n, ...rest } = was;
+  const { half: _h, bend: _b, noPair: _n, fromPair: _f, ...rest } = was;
   const half = patch.half ?? !!was.half;
   const bend = patch.bend === undefined ? was.bend : (patch.bend ?? undefined);
   const noPair = patch.noPair ?? !!was.noPair;
-  const next: PushArrow = { ...rest, from: patch.from ?? was.from, to: patch.to ?? was.to, ...(half ? { half: true } : {}), ...(bend ? { bend } : {}), ...(noPair ? { noPair: true } : {}) };
+  const fromPair = patch.fromPair ?? !!was.fromPair;
+  const next: PushArrow = {
+    ...rest,
+    from: patch.from ?? was.from,
+    to: patch.to ?? was.to,
+    ...(half ? { half: true } : {}),
+    ...(bend ? { bend } : {}),
+    ...(noPair ? { noPair: true } : {}),
+    ...(fromPair ? { fromPair: true } : {}),
+  };
   if (!endIsThere(doc, next.from) || !endIsThere(doc, next.to) || JSON.stringify(next.from) === JSON.stringify(next.to)) return doc;
   if (JSON.stringify(next) === JSON.stringify(was)) return doc;
   const out = pushes.slice();
@@ -1188,6 +1201,8 @@ export type MarkPlaces = {
   /** A workflow's sets and steps moved with the rest: where each set's frame, and each step's card, now stands. */
   sets?: { id: number; x0: number; y0: number; x1: number; y1: number }[];
   steps?: { id: number; x: number; y: number }[];
+  /** Slides moved with the rest: where each one's middle now is. */
+  slides?: { id: number; x: number; y: number }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
   markAts?: MarksAt;
 };
@@ -1203,6 +1218,11 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
     const at = new Map(places.pdfs.map((p) => [p.id, p]));
     const placed = { ...doc, pdfs: (doc.pdfs ?? []).map((p) => (at.has(p.id) ? { ...p, x: at.get(p.id)!.x, y: at.get(p.id)!.y } : p)) };
     return placeMarks(placed, { ...places, pdfs: [] });
+  }
+  if (places?.slides?.length) {
+    const at = new Map(places.slides.map((p) => [p.id, p]));
+    const placed = { ...doc, slides: (doc.slides ?? []).map((s) => (at.has(s.id) ? { ...s, x: at.get(s.id)!.x, y: at.get(s.id)!.y } : s)) };
+    return placeMarks(placed, { ...places, slides: [] });
   }
   if (places?.texts?.length) {
     const at = new Map(places.texts.map((t) => [t.id, t]));
@@ -1514,6 +1534,43 @@ export function markCaptions(doc: WorkspaceDocument, ids: Iterable<number>, mark
     return marks.length ? { ...kept, marks } : kept;
   });
   return changed ? { ...doc, captions } : doc;
+}
+
+// --- slides ----------------------------------------------------------------------
+
+/** `doc` with a slide put on the page, last in the talk's order; it is numbered `nextSlideId`. */
+export function addSlide(doc: WorkspaceDocument, slide: Omit<Slide, "id">): WorkspaceDocument {
+  if (![slide.x, slide.y, slide.w, slide.h].every(Number.isFinite) || !(slide.w > 0) || !(slide.h > 0)) return doc;
+  const id = doc.nextSlideId ?? 1;
+  return { ...doc, slides: [...(doc.slides ?? []), { ...slide, id }], nextSlideId: id + 1 };
+}
+
+/** `doc` with the slide `id` moved, made larger or smaller - never to nothing - or shown with the page about it, or not. */
+export function updateSlide(doc: WorkspaceDocument, id: number, patch: Partial<Pick<Slide, "x" | "y" | "w" | "h">> & { around?: boolean }): WorkspaceDocument {
+  const was = doc.slides?.find((s) => s.id === id);
+  if (!was) return doc;
+  const { around, ...place } = patch;
+  const { around: _, ...kept } = was;
+  const next: Slide = { ...kept, ...place, ...((around ?? was.around) ? { around: true as const } : {}) };
+  if (!(next.w > 0) || !(next.h > 0) || ![next.x, next.y, next.w, next.h].every(Number.isFinite)) return doc;
+  return { ...doc, slides: doc.slides!.map((s) => (s.id === id ? next : s)) };
+}
+
+/** `doc` with the slide `id` at `to` in the talk's order, from 0 - the others moving up or down one. */
+export function orderSlide(doc: WorkspaceDocument, id: number, to: number): WorkspaceDocument {
+  const slides = doc.slides ?? [];
+  const from = slides.findIndex((s) => s.id === id);
+  const at = Math.max(0, Math.min(slides.length - 1, Math.round(to)));
+  if (from < 0 || at === from) return doc;
+  const rest = slides.filter((s) => s.id !== id);
+  return { ...doc, slides: [...rest.slice(0, at), slides[from], ...rest.slice(at)] };
+}
+
+/** `doc` without the slides `ids`. */
+export function removeSlides(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  if (!doc.slides?.some((s) => gone.has(s.id))) return doc;
+  return { ...doc, slides: doc.slides.filter((s) => !gone.has(s.id)) };
 }
 
 export function removeCaption(doc: WorkspaceDocument, id: number): WorkspaceDocument {

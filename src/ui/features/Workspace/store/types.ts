@@ -42,7 +42,19 @@ export type Atom = EditorAtom & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
   highlight?: string;
+  /** Where it was drawn in a PDF's figure it was read from (docs/PDF.md, *Stage 5*): lit there while it is under the pointer, and it while that place is. */
+  seen?: FigureSpot;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
+/**
+ * A place on a PDF's page: the PDF, by its SHA-256, the page, and the
+ * point, in points from its top left - and how long the bonds of the figure
+ * there are drawn, in points, which says how near is near.
+ */
+export type FigureSpot = { sha256: string; page: number; x: number; y: number; bond: number };
+/** What Meno said was unsure of a part as it read it from a figure, and what the part was then (utils/figures `partAs`): marked while it is still that. */
+export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
 export type Bond = BondChem & {
@@ -69,6 +81,8 @@ export type Bond = BondChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
   highlight?: string;
+  /** What was unsure of it as it was read from a figure: marked until it is changed. */
+  unsure?: Unsure;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -102,10 +116,11 @@ export type PushEnd = { atom: number } | { bond: number } | { gap: [number, numb
  * An electron-pushing arrow: from where to where, its head half - a
  * fishhook, one electron - or full, its bend (lib/chem/pushArrow
  * `PushBend`; unset, as Meno bends it), a lone pair's dots left off its
- * tail (`noPair`), and the colour it is drawn in, where it is given one
- * (#rrggbb; else the bonds' ink).
+ * tail (`noPair`), from an atom with a negative charge, from a lone pair
+ * rather than its charge's mark (`fromPair`), and the colour it is drawn
+ * in, where it is given one (#rrggbb; else the bonds' ink).
  */
-export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; color?: string };
+export type PushArrow = { id: number; from: PushEnd; to: PushEnd; half?: true; bend?: { along: number; out: number }; noPair?: true; fromPair?: true; color?: string };
 /** A press on words on the page that opens them to be written: where on the page, where on the screen and when - and whether a drag goes on from it. */
 export type CaptionPress = { at: { x: number; y: number }; client: { x: number; y: number }; t: number; drag: boolean };
 
@@ -205,6 +220,18 @@ export type PictureItem = {
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
 export type PictureFrom = { sha256: string; page: number; box: [number, number, number, number] };
+
+/**
+ * A slide (docs/PRESENTING.md): a frame on the page round what a talk shows
+ * at one point of it - where its middle is, and how wide and tall it is, in
+ * the page's units. What lies in it is the page's own; the slide says only
+ * what is shown. The slides' order is the talk's. `around`: while it is
+ * shown, the page about it is seen too, not veiled.
+ */
+export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
+
+/** A talk being given from the slides: the slide shown, by its place in their order. */
+export type Presenting = { at: number };
 
 /** A box drawn on a PDF's page, to be taken out as a picture: the PDF, the page, and the box, in points from its top left. */
 export type PdfBox = { id: number; page: number; box: [number, number, number, number] };
@@ -481,6 +508,8 @@ export type Drawn = Model & {
   pdfs?: PdfItem[];
   /** Texts' sheets carried: each text whole, where its sheet lies. */
   sheets?: WorkspaceText[];
+  /** Slides carried, in their order (docs/PRESENTING.md). */
+  slides?: Slide[];
 };
 
 export type EditorState = {
@@ -498,6 +527,8 @@ export type EditorState = {
   hovered3d: { id: number } | null;
   /** The atom of a molecule in 3D under the pointer, by index: lit in its drawing too. */
   hoveredAtom3d: { id: number; atom: number } | null;
+  /** The drawing's atom read from a figure whose place there is under the pointer, by id: lit in the drawing too. */
+  figureLit: number | null;
   /** The molecules in 3D on the page. */
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
@@ -667,6 +698,9 @@ export type EditorState = {
   setHovered3d: (h: { id: number } | null) => void;
   /** The atom of molecule `id` under the pointer; null, none of its atoms. */
   setHoveredAtom3d: (id: number, atom: number | null) => void;
+  setFigureLit: (atom: number | null) => void;
+  /** A structure read from a figure put on the page - selected - as one step. */
+  putRead: (model: Model) => void;
   setTurn3d: (id: number, turn: Turn3D) => void;
   /**
    * Molecules in 3D made from a drawing, as one undo step: each where it is
@@ -746,7 +780,7 @@ export type EditorState = {
   /** An electron-pushing arrow added, as one step; its id. */
   addPush: (from: PushEnd, to: PushEnd, half: boolean) => number;
   /** An electron-pushing arrow changed - its head, its bend (null: as Meno bends it), its ends, its lone pair - a run of changes in one gesture one step. */
-  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean }, gesture?: string) => void;
+  updatePush: (id: number, patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean; fromPair?: boolean }, gesture?: string) => void;
   removePush: (id: number) => void;
   /** The reaction arrow under the pointer: its menu is the one a right-click opens. */
   hoveredArrow: number | null;
@@ -784,6 +818,8 @@ export type EditorState = {
   pictures: PictureItem[];
   /** The picture under the pointer: its menu is the one a right-click opens. */
   hoveredPicture: number | null;
+  /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
+  picturesLaid: ReadonlySet<number>;
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;
@@ -798,6 +834,27 @@ export type EditorState = {
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;
+  /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
+  slides: Slide[];
+  selSlides: Set<number>;
+  hoveredSlide: number | null;
+  setHoveredSlide: (id: number | null) => void;
+  selectSlides: (ids: Iterable<number>, add?: boolean) => void;
+  toggleSlideSel: (id: number) => void;
+  /** A slide put on the page, last in the talk's order; its id. */
+  addSlide: (slide: Omit<Slide, "id">) => number | null;
+  /** A slide moved, made larger or smaller, given other proportions, or shown with the page about it. */
+  updateSlide: (id: number, patch: Partial<Pick<Slide, "x" | "y" | "w" | "h">> & { around?: boolean }, gesture?: string) => void;
+  /** A slide put at `to` in the talk's order (from 0), the others moving up or down one. */
+  orderSlide: (id: number, to: number) => void;
+  removeSlide: (id: number) => void;
+  /** What is on a slide selected, the slide with it: all of it whose middle lies in it, as a box selects. */
+  selectOnSlide: (id: number) => void;
+  /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
+  presenting: Presenting | null;
+  present: (from: number) => void;
+  presentAt: (at: number) => void;
+  endPresenting: () => void;
   setHoveredCaption: (id: number | null) => void;
   /** Words on the page selected, each as one thing (a long press on them): deleted, copied and moved with the rest of the selection. */
   selCaptions: Set<number>;

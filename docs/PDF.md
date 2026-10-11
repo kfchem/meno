@@ -896,6 +896,121 @@ Not yet, and where it comes:
 - **A stack moved by an undo still jumped** there, as before; only pages spread glided. Done since (*With the rest of the page*, above).
 - **Selecting PDFs, or pages, with others**, to be moved, copied or deleted together: done since for PDFs, whole (*With the rest of the page*, above).
 
+## Stage 5: figures read as structures
+
+A figure in a paper is most often a structure, and a chemist who reads it
+wants it as a structure: to look at in 3D, to calculate, to change. Meno
+reads it and draws it beside where it came from, tied to it atom by atom,
+for the chemist to check and put right (WORKSPACE.md, *Stages*, 5).
+
+Two kinds of figure, read two ways:
+- **A figure drawn with lines and letters** - as drawing programs export
+  them, and as most journals print them - is read from what it is drawn
+  with: PDFium gives its paths and its letters, and Meno reads those as
+  bonds and labels. Nothing is guessed from a picture of it, and no model
+  is needed: it is Meno's own, built in (part A, below).
+- **A figure that is a picture** - a scanned page, a screenshot, a bitmap
+  a journal printed - is read by a model that has learnt structures from
+  pictures, as a plugin, its weights fetched with the chemist's consent
+  (part B, planned).
+
+### Decided by the maintainer (2026-10-11)
+
+1. **The structure keeps the figure's shape**: its atoms where the figure
+   has them, its bonds as long as Meno draws a bond and drawn in Meno's
+   style. Clean-up is there to lay it out as Meno would.
+2. **Read from a box drawn on a PDF's page, the structure is put beside
+   the PDF**, tied to where on the page each atom was drawn. Read from a
+   picture cut out of a PDF, it is put beside the picture, tied the same
+   way - the picture keeps where it came from.
+3. **What Meno is unsure of is marked**, as a stereocentre the drawing
+   shows only by luck is (LAYOUT-2D.md): a dashed ring, saying what is
+   unsure while the pointer is on it. A mark goes once that atom or bond
+   is changed.
+4. **Structures first.** A reaction scheme's arrows, plus signs,
+   conditions and compound numbers, and letters drawn as outlines, come
+   after.
+
+### A figure read (part A, built 2026-10-11)
+
+*Read as structure* is in the PDF's menu when a box is drawn on it (a click
+in a figure in the column, or a long press in one on the stack, draws the
+figure's box), and in a picture's menu when it was cut out of a PDF this
+workspace holds.
+
+**What is read** (`pdf_figure`; `lib/figure`):
+- **What the figure is drawn with**: within the box, each path's steps -
+  lines and curves - filled or stroked and how thick; each letter with
+  its box, where its line starts and its size; through a form, a figure
+  a journal placed whole, under the matrices that placed it.
+- **How long its bonds are drawn**: the length most of its lines that
+  meet another share; a ring's inner lines and a hash's strokes, which
+  meet none, do not count, nor a line shorter than its letters are tall.
+- **Bonds**:
+  - a line stroked, or a thin box filled, is a single bond, and a line
+    much thicker than the rest a bold one;
+  - lines side by side, a fifth of a bond or so apart, are a double or a
+    triple bond - its ends the longer line's where one is longer, as a
+    ring's second line is drawn inside it, else the middle line's;
+  - a filled wedge is a bond in front, narrow at its stereocentre;
+  - short strokes side by side across a line, evenly spaced, are a bond
+    behind, narrow where they are shortest;
+  - a curve that goes to and fro along a line is a wavy bond;
+  - a bond broken where another passes in front of it - a bridge's - is
+    joined again;
+  - a ring with a circle drawn in it is given its double bonds, as an
+    aromatic ring is;
+  - a short dash between two labels, as between S and O in a sulfonyl, is
+    a bond between them, two side by side a double one.
+- **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
+  word, the word is its atom's label, read as a label typed is read - an
+  element with its hydrogens and charge, or a group's name - and turned
+  round where it is written on its bond's left (HO is OH, TBSO is OTBS,
+  MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
+  a charge. A lone H takes one bond: its wedge's, where it has one. A word
+  with a charge beside the structure, at no bond's end, is an ion.
+- **Marked as unsure**, rather than guessed silently:
+  - a label nothing reads ("Xq" was not read as an element or a group);
+  - a label that writes more or fewer hydrogens than its atom's bonds leave
+    it;
+  - hashes as wide at both ends, where both ends could be a stereocentre or
+    neither could (where only one could, it is that one);
+  - more bonds meeting at a carbon than it has;
+  - a bond drawn twice over.
+
+**What is put on the page**: the structure, beside the PDF or the picture -
+its left two bonds past their right edge, its top level with theirs, and on
+to the right past whatever lies there - selected, as one step. Where it
+lies out of view, the view takes it in.
+
+**Tied to the figure, atom by atom**: each atom keeps where on its PDF's
+page it was drawn (`seen`: the PDF's SHA-256, the page, the point, and how
+long the figure's bonds are there). As a molecule in 3D and its drawing
+are:
+- an atom under the pointer in the drawing is ringed where it was drawn -
+  on the PDF's stack and its pages spread, in the column, and on a picture
+  cut out of it - as the drawing rings it, the ring coming and going;
+- a place under the pointer in the figure, within a third of a bond of
+  where an atom was drawn, rings that atom in the drawing.
+
+The tie is kept with the drawing - saved in the workspace, copied and
+pasted with it - and goes with the atom when it is deleted.
+
+**How well**: on PDFs made for it - twenty structures (stereocentres,
+wedges and hashes, double and triple bonds, charges, ions, groups written
+on either side, an aromatic ring drawn with its circle), drawn four ways
+(lines stroked; every bond a filled shape; aromatic rings as circles; end
+methyls written CH3), each placed in a page as a journal places a figure -
+every structure is read right, its stereochemistry with it, in about 35 ms
+for the figure of twenty.
+
+Not yet, and where it comes:
+- **Letters drawn as outlines**, as some journals print figures: read as
+  shapes, matched against the shapes of letters (a part of its own).
+- **Reaction schemes**: arrows, plus signs, conditions and compound
+  numbers, read as Meno's own arrows and words (a part of its own).
+- **A figure that is a picture**: part B, a plugin.
+
 ## In order
 
 0. **A trial, kept off main** (done, 2026-10-09; *The trial*, above):
@@ -927,11 +1042,11 @@ Not yet, and where it comes:
    be kept (the maintainer, 2026-10-09).
 
 Each step is a pull request of its own, checked in the built app on the
-Mac (and on Windows for steps 0, 1 and 5). Then stage 5: a picture read
-as a structure (MolScribe or DECIMER, in the sidecar, with consent for
-their weights), and the paths and text a PDF's vector figure is made of
-read straight from PDFium, each drawn by Meno's engine beside it, tied
-to it.
+Mac (and on Windows for steps 0, 1 and 5). Then stage 5 (*Stage 5*,
+above): the paths and letters a PDF's vector figure is made of read
+straight from PDFium (part A, built), and a picture read as a structure by
+a model, as a plugin with consent for its weights (part B, planned), each
+drawn beside its figure and tied to it.
 
 ## Not yet
 

@@ -23,8 +23,11 @@ export default function PluginSettings() {
   const problems = useReaders((s) => s.problem);
   useEffect(() => {
     void addedReaders(ALL_PLUGINS);
-    // (where the programs installed separately are, looked for afresh as Plugins is shown)
-    void lookForAll(PLUGINS);
+    // (where the programs installed separately are, and their versions: looked for afresh as Plugins is shown - and as Meno is come back to, one installed or updated meanwhile)
+    const look = () => void lookForAll(PLUGINS);
+    look();
+    window.addEventListener("focus", look);
+    return () => window.removeEventListener("focus", look);
   }, []);
   return (
     <div className="space-y-3">
@@ -121,10 +124,15 @@ const runsOn = (decl: InstalledDecl) =>
 /**
  * A program installed separately that a plugin's steps run - ORCA,
  * Gaussian - never downloaded by Meno: where it is, found where the system
- * finds programs or located here; or that it is found nowhere.
+ * finds programs or located here, and its version where it says; or that it
+ * is found nowhere, or only too old, and why.
  */
 function Installed({ plugin, decl }: { plugin: string; decl: InstalledDecl }) {
   const where = useInstalled((s) => s.where[programKey(plugin, decl.name)]);
+  const chosen = useInstalled((s) => s.chosen[programKey(plugin, decl.name)]);
+  // (only too old: the copy found, said, and why it will not do)
+  const old = where === null && chosen?.why ? chosen : undefined;
+  const shown = where ?? old?.path;
   const [problem, setProblem] = useState<string>();
   const here = systemHere();
   const made = here == null || !!decl.files[here];
@@ -136,16 +144,17 @@ function Installed({ plugin, decl }: { plugin: string; decl: InstalledDecl }) {
     <div className="mt-2 text-xs">
       <div className="flex items-center gap-2 min-w-0">
         <span className="shrink-0 text-gh-gray">{decl.label}, installed separately:</span>
-        <span key={where ?? String(where)} className={`meno-fade-in min-w-0 truncate ${where ? "font-mono text-gh-black" : "text-gh-gray"}`} title={where ?? undefined}>
-          {!made ? `run on ${runsOn(decl)} only` : where === undefined ? "Looking…" : (where ?? "Not found")}
+        <span key={shown ?? String(where)} className={`meno-fade-in min-w-0 truncate ${where ? "font-mono text-gh-black" : old ? "font-mono text-gh-gray" : "text-gh-gray"}`} title={shown}>
+          {!made ? `run on ${runsOn(decl)} only` : where === undefined ? "Looking…" : (shown ?? "Not found")}
         </span>
+        {made && shown && chosen?.version && <span className="meno-fade-in shrink-0 tabular-nums text-gh-gray">{chosen.version}</span>}
         {made && (
           <button onClick={pick} className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base">
             Locate…
           </button>
         )}
       </div>
-      {problem && <p className="mt-1 text-accel-accent meno-fade-in">{problem}</p>}
+      {(problem ?? old?.why) && <p className="mt-1 text-accel-accent meno-fade-in">{problem ?? `${old!.why}.`}</p>}
     </div>
   );
 }

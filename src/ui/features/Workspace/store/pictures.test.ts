@@ -119,6 +119,10 @@ describe("pictures on the page", () => {
     expect(state().pictures[0]).toMatchObject({ id, media: "video/mp4", x: 30, y: 40, w: 16, h: 9 });
     // (one step to undo, as any picture put down)
     expect(state().selPictures.size).toBe(0);
+    // (landing as the view is: it eased to it as the render was begun, and moves no more)
+    expect(state().picturesLaid.has(id!)).toBe(true);
+    const [pasted] = state().addPictures([await held("figure.png", 10, 10, 9)], { x: 0, y: 0 });
+    expect(state().picturesLaid.has(pasted)).toBe(false);
     const file = readMenoFile(await workspaceFile(store.getState()));
     expect(file.files.find((f) => f.media === "video/mp4")?.sha256).toBe(film.sha256);
     holdPicturesOf(file);

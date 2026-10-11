@@ -540,7 +540,100 @@ pub struct Installed {
     /// each from `/`, `{home}` or `{programs}`; a `*` in a folder's name
     /// stands for any text - a version's, say.
     pub places: Vec<String>,
+    /// What it is called, as Meno says it to the chemist.
+    pub label: String,
+    /// How it says its version, and the least Meno takes (`version`).
+    pub version: Option<VersionRule>,
 }
+
+/// How a program installed separately says its version (`installed[].version`):
+/// run with `args` - each an option, never a file - it prints a line beginning
+/// `after`, then the version, digits and dots; `least` is the version Meno
+/// needs, or later.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VersionRule {
+    pub args: Vec<String>,
+    pub after: String,
+    pub least: String,
+}
+
+/// Whether `v` is a version as a rule says one: digits, dots between them.
+fn version_ok(v: &str) -> bool {
+    !v.is_empty() && v.len() <= 20 && v.split('.').all(|p| !p.is_empty() && p.len() <= 6 && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// Versions compared part by part, as numbers; a part not given, 0.
+pub fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let parts = |v: &str| v.split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
+    let (x, y) = (parts(a), parts(b));
+    (0..x.len().max(y.len())).map(|i| x.get(i).unwrap_or(&0).cmp(y.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+/// The version a program printed, as its rule reads it: after `after` at a
+/// line's start, digits and dots.
+pub fn version_in(printed: &str, rule: &VersionRule) -> Option<String> {
+    printed.lines().find_map(|line| {
+        let rest = line.trim_start().strip_prefix(&rule.after)?;
+        let v: String = rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+        let v = v.trim_end_matches('.').to_string();
+        version_ok(&v).then_some(v)
+    })
+}
+
+/// How long a program may take to say its version.
+const VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// What a program said of its version, by its file as it is (its size and
+/// when it was last changed) and how it was asked.
+type VersionsKnown = std::collections::HashMap<(PathBuf, u64, Option<std::time::SystemTime>, Vec<String>), Option<String>>;
+
+/// The version the program at `p` says, run as its rule says - asked once
+/// for each file as it is: none, where it says none it can be read by, or
+/// does not answer in time.
+pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
+    use std::sync::{Mutex, OnceLock};
+    static KNOWN: OnceLock<Mutex<VersionsKnown>> = OnceLock::new();
+    let meta = fs::metadata(p).ok()?;
+    let key = (p.to_path_buf(), meta.len(), meta.modified().ok(), rule.args.clone());
+    if let Some(v) = KNOWN.get_or_init(Default::default).lock().ok()?.get(&key) {
+        return v.clone();
+    }
+    let mut cmd = Command::new(p);
+    cmd.args(&rule.args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = cmd.spawn().ok()?;
+    let mut out = child.stdout.take()?;
+    // (what it prints read apart, so that a full pipe never holds it)
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = out.read_to_string(&mut text);
+        text
+    });
+    let start = std::time::Instant::now();
+    let ended = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break true,
+            Ok(None) if start.elapsed() < VERSION_WAIT => std::thread::sleep(std::time::Duration::from_millis(30)),
+            _ => break false,
+        }
+    };
+    if !ended {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    let printed = reader.join().unwrap_or_default();
+    let v = if ended { version_in(&printed, rule) } else { None };
+    if let Ok(mut known) = KNOWN.get_or_init(Default::default).lock() {
+        known.insert(key, v.clone());
+    }
+    v
+}
+
 
 /// Where a usual place starts, as Meno has it: the home folder, and the
 /// folder programs are installed in (Windows' Program Files).
@@ -712,8 +805,24 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
             env.push((k.clone(), places(Some(v))?));
         }
     }
-    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual }))
+    let label = decl.get("label").and_then(|l| l.as_str()).map(str::trim).filter(|l| !l.is_empty() && l.len() <= 60).unwrap_or(name).to_string();
+    let version = match decl.get("version") {
+        None => None,
+        Some(v) => {
+            let args: Vec<String> = v.get("args").and_then(|a| a.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let after = v.get("after").and_then(|a| a.as_str()).unwrap_or_default().to_string();
+            let least = v.get("least").and_then(|a| a.as_str()).unwrap_or_default().to_string();
+            // (options alone, never a file or a path; text to find; a version)
+            let arg_ok = |a: &String| a.starts_with('-') && a.len() <= 40 && a.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+            if args.is_empty() || args.len() > 4 || !args.iter().all(arg_ok) || after.is_empty() || after.len() > 40 || after.contains(['\n', '\r']) || !version_ok(&least) {
+                return Err(format!("not a way to read {name}'s version"));
+            }
+            Some(VersionRule { args, after, least })
+        }
+    };
+    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version }))
 }
+
 
 /// Whether `p` is a program that can be run: a file, executable where that is said.
 fn runnable(p: &Path) -> bool {
@@ -728,23 +837,90 @@ fn runnable(p: &Path) -> bool {
     }
 }
 
-/// Where a program installed separately is: where the chemist located it,
-/// where that is still a program of its file's name - or a macOS app that
-/// holds it (`Blender.app`: its `Contents/MacOS`); else the first of its
-/// file's name where the system finds programs (`path_var`: PATH, as Meno
-/// was given it); else in the folders it is usually installed in, the
-/// newest first.
-pub fn installed_where(decl: &Installed, located: Option<&str>, path_var: Option<&std::ffi::OsStr>, bases: &Bases) -> Option<PathBuf> {
+/// Every copy of a program installed separately there is, in order: where
+/// the chemist located it, where that is still a program of its file's name -
+/// or a macOS app that holds it (`Blender.app`: its `Contents/MacOS`) - that
+/// alone, `exact`; then each of its file's name where the system finds
+/// programs (`path_var`: PATH, as Meno was given it); then in the folders it
+/// is usually installed in, the newest first.
+pub fn installed_found(decl: &Installed, located: Option<&str>, path_var: Option<&std::ffi::OsStr>, bases: &Bases, exact: bool) -> Vec<PathBuf> {
     let is_it = |p: &Path| p.is_absolute() && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&decl.file)) && runnable(p);
+    let mut out: Vec<PathBuf> = Vec::new();
     if let Some(p) = located.map(Path::new) {
         let inside = p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")) && p.is_dir();
         let p = if inside { p.join("Contents").join("MacOS").join(&decl.file) } else { p.to_path_buf() };
         if is_it(&p) {
-            return Some(p);
+            out.push(p);
         }
     }
-    let on_path = path_var.and_then(|v| std::env::split_paths(v).filter(|d| d.is_absolute()).map(|d| d.join(&decl.file)).find(|p| runnable(p)));
-    on_path.or_else(|| decl.places.iter().flat_map(|t| usual_folders(t, bases)).map(|d| d.join(&decl.file)).find(|p| runnable(p)))
+    if exact {
+        return out;
+    }
+    let on_path = path_var.into_iter().flat_map(std::env::split_paths).filter(|d| d.is_absolute()).map(|d| d.join(&decl.file));
+    let usual = decl.places.iter().flat_map(|t| usual_folders(t, bases)).map(|d| d.join(&decl.file));
+    for p in on_path.chain(usual) {
+        if runnable(&p) && !out.iter().any(|q| same_file(q, &p)) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Whether two paths are one file.
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b || matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
+}
+
+/// A program installed separately, chosen: where it is, its version where
+/// it says one, and why it cannot be run, where it is too old for Meno.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct Chosen {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+}
+
+/// The copy of a program installed separately a job runs - of those there
+/// are (`installed_found`), each asked its version by `probe` where its rule
+/// says how: where it was located, where that one is new enough; else the
+/// newest that is; else the first there is, with why it cannot be run. None,
+/// where there is none.
+pub fn installed_choice(
+    decl: &Installed,
+    located: Option<&str>,
+    path_var: Option<&std::ffi::OsStr>,
+    bases: &Bases,
+    exact: bool,
+    probe: &dyn Fn(&Path, &VersionRule) -> Option<String>,
+) -> Option<Chosen> {
+    let found = installed_found(decl, located, path_var, bases, exact);
+    let first = found.first()?.clone();
+    let chosen = |p: &Path, version: Option<String>, why: Option<String>| Chosen { path: p.to_string_lossy().into_owned(), version, why };
+    let Some(rule) = &decl.version else {
+        return Some(chosen(&first, None, None));
+    };
+    let fits = |v: &Option<String>| v.as_deref().is_some_and(|v| version_cmp(v, &rule.least).is_ge());
+    let versions: Vec<(PathBuf, Option<String>)> = found.into_iter().map(|p| {
+        let v = probe(&p, rule);
+        (p, v)
+    }).collect();
+    // (the one located, where it was found where it was located, and fits)
+    let located_here = located.map(Path::new).is_some_and(|l| first.starts_with(l));
+    if located_here && fits(&versions[0].1) {
+        return Some(chosen(&versions[0].0, versions[0].1.clone(), None));
+    }
+    let newest = versions.iter().filter(|(_, v)| fits(v)).max_by(|(_, a), (_, b)| version_cmp(a.as_deref().unwrap_or("0"), b.as_deref().unwrap_or("0")));
+    if let Some((p, v)) = newest {
+        return Some(chosen(p, v.clone(), None));
+    }
+    let (p, v) = &versions[0];
+    let why = match v {
+        Some(v) => format!("Meno needs {} {} or later; this one is {}", decl.label, rule.least, v),
+        None => format!("Meno needs {} {} or later, and cannot tell which version this one is", decl.label, rule.least),
+    };
+    Some(chosen(p, v.clone(), Some(why)))
 }
 
 /// What a program installed separately is given, found at `program`: its
@@ -795,7 +971,12 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
         return Err(format!("{id} names no program {name}"));
     }
     let path_var = std::env::var_os("PATH");
-    let program = installed_where(&decl, located, path_var.as_deref(), &Bases::here()).ok_or_else(|| format!("{name} is not found"))?;
+    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
+    // (one too old for Meno: said, not run)
+    if let Some(why) = chosen.why {
+        return Err(why);
+    }
+    let program = PathBuf::from(chosen.path);
     let env = installed_env(&decl, &program, path_var.as_deref())?;
     Ok(Some(Found { program, activation: None, env }))
 }
@@ -1000,18 +1181,25 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     Ok(id)
 }
 
-/// Where plugin `plugin`'s program `name`, installed separately, is: where
-/// the chemist located it (`located`), where that is still it, or where the
-/// system finds programs. None, where it is found nowhere.
+/// Where plugin `plugin`'s program `name`, installed separately, is, as a
+/// job would take it (`installed_choice`): where the chemist located it -
+/// that alone, `exact`, as Locate asks of what was picked - or where the
+/// system finds programs, or where it is usually installed; with its version
+/// and, where it is too old for Meno, why. None, where it is found nowhere.
 #[tauri::command]
-pub async fn program_where(app: AppHandle, plugin: String, name: String, located: Option<String>) -> Result<Option<String>, String> {
+pub async fn program_where(app: AppHandle, plugin: String, name: String, located: Option<String>, exact: Option<bool>) -> Result<Option<Chosen>, String> {
     if !plugin_id(&plugin) {
         return Err(format!("not a plugin: {plugin}"));
     }
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&plugin))?;
     let decl = installed_named(&manifest_of(&plugin_dir, &plugin)?, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
-    let path_var = std::env::var_os("PATH");
-    Ok(installed_where(&decl, located.as_deref(), path_var.as_deref(), &Bases::here()).map(|p| p.to_string_lossy().into_owned()))
+    // (a program asked its version runs a moment: not on the async runtime's own threads)
+    tauri::async_runtime::spawn_blocking(move || {
+        let path_var = std::env::var_os("PATH");
+        installed_choice(&decl, located.as_deref(), path_var.as_deref(), &Bases::here(), exact.unwrap_or(false), &version_of)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// A job, as Meno lists it.
@@ -1448,10 +1636,15 @@ mod tests {
         }
     }
 
+    /// The first copy of a program there is, as a job without a version to check takes it.
+    fn installed_where(decl: &Installed, located: Option<&str>, path_var: Option<&std::ffi::OsStr>, bases: &Bases) -> Option<PathBuf> {
+        installed_found(decl, located, path_var, bases, false).into_iter().next()
+    }
+
     #[test]
     fn finds_a_program_installed_separately_where_it_was_located_or_where_programs_are() {
         let base = temp();
-        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![] };
+        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None };
         let none = Bases::default();
         let installed = program_file(&base.join("apps").join("orca_6"), "orca");
         let on_path = program_file(&base.join("bin"), "orca");
@@ -1477,7 +1670,7 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_found_only_where_it_can_be_run() {
         let base = temp();
-        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![] };
+        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None };
         let p = base.join("g16");
         fs::create_dir_all(&base).unwrap();
         fs::write(&p, "").unwrap();
@@ -1545,7 +1738,7 @@ mod tests {
         let file = if cfg!(windows) { "blender.exe" } else { "blender" };
         let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
         let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
-        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()] };
+        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None };
         let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
         assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
         assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
@@ -1560,12 +1753,101 @@ mod tests {
         let base = temp();
         let app = base.join("Blender.app");
         let inside = program_file(&app.join("Contents").join("MacOS"), "Blender");
-        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![] };
+        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None };
         assert_eq!(installed_where(&decl, app.to_str(), None, &Bases::default()), Some(inside));
         // an app that holds no such program
         let other = base.join("Other.app");
         fs::create_dir_all(&other).unwrap();
         assert_eq!(installed_where(&decl, other.to_str(), None, &Bases::default()), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn reads_how_a_program_says_its_version() {
+        let m = serde_json::json!({"installed": [{"name": "blender", "label": "Blender", "files": {"linux": "blender"}, "version": {"args": ["--version"], "after": "Blender ", "least": "5.0"}}]});
+        let decl = installed_named(&m, "blender", "linux").unwrap().unwrap();
+        assert_eq!(decl.label, "Blender");
+        assert_eq!(decl.version, Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }));
+        // (an option, never a file or a path; something to find; a version)
+        let one = |v: serde_json::Value| installed_named(&serde_json::json!({"installed": [{"name": "p", "files": {"linux": "p"}, "version": v}]}), "p", "linux");
+        for bad in [
+            serde_json::json!({"args": ["scene.blend"], "after": "P ", "least": "1"}),
+            serde_json::json!({"args": ["--python=/tmp/x.py"], "after": "P ", "least": "1"}),
+            serde_json::json!({"args": [], "after": "P ", "least": "1"}),
+            serde_json::json!({"args": ["-v"], "after": "", "least": "1"}),
+            serde_json::json!({"args": ["-v"], "after": "P ", "least": "five"}),
+        ] {
+            assert!(one(bad.clone()).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn reads_and_compares_versions() {
+        let rule = VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() };
+        assert_eq!(version_in("Blender 5.2.2 LTS\n\tbuild date: 2026-09-15\n", &rule), Some("5.2.2".into()));
+        assert_eq!(version_in("Read prefs\n  Blender 4.1.1\n", &rule), Some("4.1.1".into()));
+        assert_eq!(version_in("Blender\nno version\n", &rule), None);
+        assert!(version_cmp("5.2.2", "5.0").is_gt());
+        assert!(version_cmp("5.0", "5.0.0").is_eq());
+        assert!(version_cmp("4.10", "5.0").is_lt());
+        assert!(version_cmp("10.0", "5.2").is_gt());
+    }
+
+    #[test]
+    fn chooses_the_newest_copy_new_enough_and_says_why_an_old_one_is_not() {
+        let base = temp();
+        let file = if cfg!(windows) { "blender.exe" } else { "blender" };
+        let old = program_file(&base.join("Blender Foundation").join("Blender 4.1"), file);
+        let new = program_file(&base.join("Blender Foundation").join("Blender 5.2"), file);
+        let newer_unsupported_name = program_file(&base.join("elsewhere"), file);
+        // (each copy says its version by where it is: as the probe would run it)
+        let said = |p: &Path, _: &VersionRule| -> Option<String> {
+            let s = p.to_string_lossy();
+            if s.contains("Blender 4.1") { Some("4.1.1".into()) } else if s.contains("Blender 5.2") { Some("5.2.2".into()) } else { None }
+        };
+        let decl = |places: Vec<String>| Installed {
+            name: "blender".into(),
+            file: file.into(),
+            path: vec![],
+            env: vec![],
+            places,
+            label: "Blender".into(),
+            version: Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }),
+        };
+        let bases = Bases { home: None, programs: Some(base.clone()) };
+        let everywhere = decl(vec!["{programs}/Blender Foundation/Blender *".into()]);
+        // the newest new enough, of those found
+        let c = installed_choice(&everywhere, None, None, &bases, false, &said).unwrap();
+        assert_eq!((PathBuf::from(&c.path), c.version.as_deref(), c.why.as_deref()), (new.clone(), Some("5.2.2"), None));
+        // one too old, located: passed over for one new enough; asked of alone (Locate), why it will not do
+        let c = installed_choice(&everywhere, old.to_str(), None, &bases, false, &said).unwrap();
+        assert_eq!(PathBuf::from(&c.path), new);
+        let c = installed_choice(&everywhere, old.to_str(), None, &bases, true, &said).unwrap();
+        assert_eq!(c.why.as_deref(), Some("Meno needs Blender 5.0 or later; this one is 4.1.1"));
+        // only one too old there: it, and why
+        let only_old = decl(vec!["{programs}/Blender Foundation/Blender 4.1".into()]);
+        let c = installed_choice(&only_old, None, None, &bases, false, &said).unwrap();
+        assert_eq!((PathBuf::from(&c.path), c.why.as_deref()), (old.clone(), Some("Meno needs Blender 5.0 or later; this one is 4.1.1")));
+        // one that says no version it can be read by
+        let c = installed_choice(&only_old, newer_unsupported_name.to_str(), None, &bases, true, &said).unwrap();
+        assert!(c.why.unwrap().contains("cannot tell which version"));
+        // none there: none
+        assert_eq!(installed_choice(&decl(vec![]), None, None, &Bases::default(), false, &said), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn asks_a_program_its_version_once_for_each_file_as_it_is() {
+        let base = temp();
+        let p = program_file(&base, "blender");
+        fs::write(&p, "#!/bin/sh\necho \"Blender 5.2.2 LTS\"\n").unwrap();
+        let rule = VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() };
+        assert_eq!(version_of(&p, &rule), Some("5.2.2".into()));
+        // (one that says nothing it can be read by)
+        let q = program_file(&base.join("other"), "blender");
+        fs::write(&q, "#!/bin/sh\necho hello\n").unwrap();
+        assert_eq!(version_of(&q, &rule), None);
         let _ = fs::remove_dir_all(base);
     }
 
