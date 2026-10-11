@@ -19,6 +19,7 @@ import { cardGroupsOf } from "../../../../lib/calc/sources";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
+import { frameCentre } from "../utils/surfaceMesh";
 import { useShading3d } from "./shading3d";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
@@ -350,13 +351,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
   const shownFrame = frameOf(solid, frame);
-  const centre = useMemo((): [number, number, number] => {
-    const xyz = shownFrame === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : (m.frames?.[shownFrame - 1] ?? []);
-    const c: [number, number, number] = [0, 0, 0];
-    const count = Math.floor(xyz.length / 3) || 1;
-    for (let i = 0; i + 2 < xyz.length; i += 3) for (let x = 0; x < 3; x++) c[x] += xyz[i + x] / count;
-    return c;
-  }, [m.atoms, m.frames, shownFrame]);
+  const centre = useMemo(() => frameCentre({ atoms: m.atoms, frames: m.frames }, shownFrame), [m.atoms, m.frames, shownFrame]);
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
   const stereoMarks = useMemo(() => {
     const st = m.stereo;

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meno - a workspace for chemists</title>
+<meta name="description" content="Draw a molecule, see it in 3D, look through its conformers and run calculations on it, with the paper you are reading beside it. Free and open source, for Windows and Mac.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6fafc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1217" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-256.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Meno">
+<meta property="og:description" content="A workspace for chemists: draw it, see it in 3D, calculate it. On one page.">
+<link rel="preload" href="assets/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script>document.documentElement.classList.add("js")</script>
+</head>
+<body>
+<div class="honeycomb" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Meno">
+      <svg viewBox="0 0 2464 399" aria-hidden="true"><use href="assets/wordmark.svg#mark"/></svg>
+    </a>
+    <nav aria-label="Site">
+      <a href="#download">Download</a>
+      <a href="https://github.com/kfchem/meno">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="float-layer" aria-hidden="true">
+      <!-- benzene -->
+      <div class="mol" style="left:5%;top:110px;width:116px;--depth:-0.35;--rot:-8deg"><svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M50 10 84.6 30v40L50 90 15.4 70V30z"/><path d="M50 20.5 75.5 35.2M75.5 64.8 50 79.5M24.5 64.8V35.2"/></g></svg></div>
+      <!-- butan-1-ol -->
+      <div class="mol" style="right:6%;top:80px;width:176px;--depth:-0.55;--rot:6deg"><svg viewBox="0 0 160 60"><path d="M10 45 40 28 70 45 100 28 122 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><text x="124" y="48" font-size="20" fill="currentColor">OH</text></svg></div>
+      <!-- cyclohexanone -->
+      <div class="mol" style="left:11%;top:410px;width:92px;--depth:-0.8;--rot:14deg"><svg viewBox="0 0 100 120"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M50 30 84.6 50v40L50 110 15.4 90V50z"/><path d="M46 30V4M54 30V4"/></g></svg></div>
+      <!-- methyl acetate -->
+      <div class="mol" style="right:12%;top:460px;width:136px;--depth:-0.25;--rot:-4deg"><svg viewBox="0 0 140 80"><path d="M10 60 45 40 80 60M41 40V8M49 40V8" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><text x="82" y="68" font-size="20" fill="currentColor">OMe</text></svg></div>
+    </div>
+    <div class="wrap hero-text">
+      <span class="eyebrow">A workspace for chemists</span>
+      <h1 id="hero-h">Draw it, see it in&nbsp;3D, <b>calculate&nbsp;it.</b> On one page.</h1>
+      <p class="lead">A structure you draw rises into three dimensions, opens into its conformers and runs through calculations, with the paper you are reading beside it. Meno keeps them together, so the next idea starts where the last result ended.</p>
+      <div class="cta" id="cta">
+        <a class="btn primary" data-asset="mac" href="https://github.com/kfchem/meno/releases/latest">Download for Mac <small>Apple silicon</small></a>
+        <a class="btn" data-asset="windows" href="https://github.com/kfchem/meno/releases/latest">Download for Windows <small>64-bit</small></a>
+      </div>
+      <p class="fine"><span data-release="version">The latest version</span> · <span class="nb">free and open source</span> · <span class="nb">pre-alpha</span> · <a href="#download">installing</a></p>
+    </div>
+    <div class="wrap hero-stage">
+      <div class="window" id="hero-window">
+        <div class="screen"><img src="frames/hero.avif" width="1600" height="1000" alt="Cholesterol drawn in Meno, with its 3D structure beside it"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="story" id="story" aria-label="Working in Meno">
+    <div class="stage wrap">
+      <div class="chapters">
+        <article class="chapter on" data-film="frames/draw">
+          <div class="n">1 · Draw</div>
+          <h2>Draw the way you think.</h2>
+          <p>Lead a chain across the honeycomb, round a ring and on, and type the label you mean. Step back, and the page holds the molecules you work with.</p>
+          <p class="datum">ACS 1996 proportions <span>bond 14.4 pt · line 0.6 pt</span></p>
+        </article>
+        <article class="chapter" data-film="frames/3d">
+          <div class="n">2 · In 3D</div>
+          <h2>Raise it off the page.</h2>
+          <p>The drawing rises into three dimensions and steps aside to stand beside it. Turn it under the pointer.</p>
+          <p class="datum">C<sub>47</sub>H<sub>51</sub>NO<sub>14</sub> <span>11 stereocentres</span></p>
+        </article>
+        <article class="chapter" data-film="frames/conformers">
+          <div class="n">3 · Conformers</div>
+          <h2>See every shape it takes.</h2>
+          <p>It comes as a set of conformers, each with its energy. Run along the bars to step through them in place.</p>
+          <p class="datum">29 conformers <span>from the drawing</span></p>
+        </article>
+        <article class="chapter" data-film="frames/calculate">
+          <div class="n">4 · Calculate</div>
+          <h2>Put the calculation on the page.</h2>
+          <p>Pull a wire out of a structure and add steps to it: a conformer search, the conformer you choose, an optimisation. They run as jobs on your computer, and each result lands beside its step.</p>
+          <p class="datum">Conformers <span>→ Choose one → Optimise</span></p>
+        </article>
+        <article class="chapter" data-film="frames/read">
+          <div class="n">5 · Read</div>
+          <h2>Keep the paper beside the molecule.</h2>
+          <p>Open a PDF on the page and read it in a column. Take a figure out onto the page; it remembers where it came from.</p>
+          <p class="datum">Figure 1 <span>taken at 600 dpi</span></p>
+        </article>
+      </div>
+      <div class="window" id="story-window">
+        <div class="screen film" id="screen"><img src="frames/draw.avif" width="1280" height="800" alt="Meno at work: a structure drawn on the page"></div>
+      </div>
+      <nav class="rail" id="rail" aria-label="Chapters"></nav>
+    </div>
+    <div class="track" aria-hidden="true"></div>
+  </section>
+
+  <section class="plain" aria-labelledby="traits-h">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">How it behaves</span>
+        <h2 id="traits-h">A research instrument you can trust.</h2>
+      </div>
+      <div class="traits">
+        <div class="trait"><span class="k">Network</span><h3>Nothing goes out unasked</h3><p>Meno asks before anything reaches the internet, shows every connection as it is made, and works offline whenever you switch it off.</p></div>
+        <div class="trait"><span class="k">Plugins</span><h3>Programs you choose</h3><p>Chemistry tools come as plugins, set up the first time they are needed, after Meno asks. Calculation programs you have installed are used where they are.</p></div>
+        <div class="trait"><span class="k">.meno</span><h3>One file for the work</h3><p>A workspace keeps its drawings, models, results and PDFs together in one file you can save, send and open again.</p></div>
+        <div class="trait"><span class="k">Apache-2.0</span><h3>Free and open source</h3><p>The code is on GitHub. Meno is pre-alpha: what it saves may still change between versions.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="plain" id="download" aria-labelledby="dl-h">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Download</span>
+        <h2 id="dl-h">Install Meno.</h2>
+        <p><span data-release="version">The latest version</span><span data-release="date"></span>. Both downloads come from the project's <a href="https://github.com/kfchem/meno/releases/latest">releases on GitHub</a>.</p>
+      </div>
+      <div class="downloads">
+        <article class="dl" id="windows" aria-labelledby="windows-h">
+          <h3 id="windows-h">Windows</h3>
+          <p class="req">Windows 10 or 11, 64-bit</p>
+          <a class="btn primary" data-asset="windows" href="https://github.com/kfchem/meno/releases/latest">Download the installer</a>
+          <p class="file"><span data-asset-name="windows">Meno_&lt;version&gt;_x64-setup.exe</span><span data-asset-size="windows"></span></p>
+          <ol>
+            <li>Open the installer you downloaded.</li>
+            <li>If Windows says it protected your PC, choose <i>More info</i>, then <i>Run anyway</i>. Windows says this because Meno's installer is not yet signed with a certificate it knows.</li>
+            <li>Follow the installer. It installs Meno for your account alone, so it needs no administrator's password.</li>
+            <li>Open Meno from the Start menu.</li>
+          </ol>
+        </article>
+        <article class="dl" id="mac" aria-labelledby="mac-h">
+          <h3 id="mac-h">Mac</h3>
+          <p class="req">Apple silicon (M1 or later), macOS 13 or later</p>
+          <a class="btn primary" data-asset="mac" href="https://github.com/kfchem/meno/releases/latest">Download the disk image</a>
+          <p class="file"><span data-asset-name="mac">Meno_&lt;version&gt;_aarch64.dmg</span><span data-asset-size="mac"></span></p>
+          <ol>
+            <li>Open the disk image and drag Meno into Applications.</li>
+            <li>Open Meno from Applications. The first time, macOS says it could not verify that Meno is free of malware. Choose <i>Done</i>.</li>
+            <li>Open System Settings, then Privacy &amp; Security. Under Security, choose <i>Open Anyway</i> beside the line about Meno, and give your password when asked.</li>
+            <li>Open Meno again. If macOS asks once more, choose <i>Open Anyway</i>. It remembers this, so you do it once.</li>
+          </ol>
+          <p class="note">macOS asks because Meno is not yet notarised by Apple. Open it from Applications, not from the disk image, so that it can update itself.</p>
+        </article>
+      </div>
+      <div class="update">
+        <div class="glyph" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 10a6.5 6.5 0 1 1-2-4.7"/><path d="M16.5 3.5v3.3h-3.3"/></svg></div>
+        <div>
+          <h3>It keeps itself up to date</h3>
+          <p>The first time it starts, Meno asks whether it may look for new versions. If you agree, it downloads them in the background and installs them when you quit, or at once with <i>Restart now</i>. You can change your mind in Settings, Network. To uninstall, or to find where Meno keeps its settings, see the <a href="https://github.com/kfchem/meno#uninstalling">README</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <svg class="foot-mark" viewBox="0 0 2464 399" role="img" aria-label="Meno"><use href="assets/wordmark.svg#mark"/></svg>
+    <p>Meno is pre-alpha: its interface and the files it saves may change without notice. It is free and open source under the Apache License 2.0, at <a href="https://github.com/kfchem/meno">github.com/kfchem/meno</a>.</p>
+    <p>Set in IBM Plex. The wordmark's letters are drawn from Orbitron. Both are under the SIL Open Font License 1.1 (<a href="assets/fonts/IBM-Plex-OFL.txt">IBM Plex</a>, <a href="assets/fonts/Orbitron-OFL.txt">Orbitron</a>).</p>
+    <section class="disclaimer" aria-labelledby="disclaimer-h">
+      <h2 id="disclaimer-h">Disclaimer</h2>
+      <p>Meno is provided "as is", without warranty of any kind, express or implied, and its authors accept no liability for any loss or damage arising from its use, as sections 7 and 8 of the Apache License 2.0 set out.</p>
+      <p>Meno is pre-alpha research software. The structures, 3D structures, conformers, energies and other results it makes or reads may be wrong: check them before relying on them. It is not meant for clinical, diagnostic, regulatory or safety-critical use.</p>
+      <p>Plugins, and the calculation programs they run, are their own authors' work under their own licences and terms; whether to install and use them is yours to decide. Names of other software, systems and companies that appear on this site or in Meno belong to their owners, and do not mean that they are affiliated with Meno or endorse it.</p>
+      <p>The pictures on this page were taken from Meno itself. Their structures come from PubChem; the paper shown in them was written for this page, and its values are illustrative.</p>
+    </section>
+  </div>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>

@@ -16,6 +16,15 @@ type SetState = StoreApi<EditorState>["setState"];
 export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: () => EditorState) {
   return {
     setHoveredPdf: (id: number | null) => set({ hoveredPdf: id }),
+    // (selected with the rest, as a whole: its words or a box drawn on one let go - one selection)
+    selectPdfs: (ids: Iterable<number>, add = false) =>
+      set((prev: EditorState) => ({ ...prev, selPdfs: new Set([...(add ? prev.selPdfs : []), ...ids]), pdfSel: null, pdfBox: null })),
+    togglePdfSel: (id: number) =>
+      set((prev: EditorState) => {
+        const selPdfs = new Set(prev.selPdfs);
+        if (!selPdfs.delete(id)) selPdfs.add(id);
+        return { ...prev, selPdfs, pdfSel: null, pdfBox: null };
+      }),
     setLitPdf: (id: number | null) => set({ litPdf: id }),
     setColumnWidth: (px: number) => set({ columnWidth: px }),
     setPdfColumnWidth: (px: number) => set({ pdfColumnWidth: px }),
@@ -49,7 +58,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     setPdfSel: (sel: EditorState["pdfSel"]) =>
       set((prev: EditorState) =>
         sel
-          ? { ...prev, pdfSel: sel, pdfBox: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null }
+          ? { ...prev, pdfSel: sel, pdfBox: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPdfs: new Set<number>() }
           : prev.pdfSel
             ? { ...prev, pdfSel: null }
             : prev,
@@ -59,7 +68,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     setPdfBox: (box: EditorState["pdfBox"]) =>
       set((prev: EditorState) =>
         box
-          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>() }
+          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>() }
           : prev.pdfBox
             ? { ...prev, pdfBox: null }
             : prev,

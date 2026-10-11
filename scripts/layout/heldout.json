@@ -1,0 +1,789 @@
+{
+  "//": "Natural products held out of the benchmark (molecules.json): none of them is tuned for, so they show how the engine does on structures nobody has drawn for it. Filled in and drawn as molecules.json is (fetch.ts, baselines.py, sheet.ts with --list=heldout): SMILES and CID from PubChem, the reference the Wikipedia article leads with - linked, never copied, its licence and author kept with it.",
+  "molecules": [
+    {
+      "name": "Galantamine",
+      "category": "alkaloid",
+      "pubchem": "Galantamine",
+      "wikipedia": "Galantamine",
+      "cid": 9651,
+      "smiles": "CN1CC[C@@]23C=C[C@@H](C[C@@H]2OC4=C(C=CC(=C34)C1)OC)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/71/Galantamine.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Galantamine.svg",
+        "licence": "Public domain",
+        "author": "Harbin"
+      }
+    },
+    {
+      "name": "Yohimbine",
+      "category": "alkaloid",
+      "pubchem": "Yohimbine",
+      "wikipedia": "Yohimbine",
+      "cid": 8969,
+      "smiles": "COC(=O)[C@H]1[C@H](CC[C@@H]2[C@@H]1C[C@H]3C4=C(CCN3C2)C5=CC=CC=C5N4)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/73/Yohimbine_structure.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Yohimbine_structure.svg",
+        "licence": "CC BY-SA 3.0",
+        "author": "Acdx"
+      }
+    },
+    {
+      "name": "Berberine",
+      "category": "alkaloid",
+      "pubchem": "Berberine",
+      "wikipedia": "Berberine",
+      "cid": 2353,
+      "smiles": "COC1=C(C2=C[N+]3=C(C=C2C=C1)C4=CC5=C(C=C4CC3)OCO5)OC",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Berberin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Berberin.svg",
+        "licence": "Public domain",
+        "author": "NEUROtiker"
+      }
+    },
+    {
+      "name": "Colchicine",
+      "category": "alkaloid",
+      "pubchem": "Colchicine",
+      "wikipedia": "Colchicine",
+      "cid": 6167,
+      "smiles": "CC(=O)N[C@H]1CCC2=CC(=C(C(=C2C3=CC=C(C(=O)C=C13)OC)OC)OC)OC",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Colchicin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Colchicin.svg",
+        "licence": "Public domain",
+        "author": "unknown"
+      }
+    },
+    {
+      "name": "Camptothecin",
+      "category": "alkaloid",
+      "pubchem": "Camptothecin",
+      "wikipedia": "Camptothecin",
+      "cid": 24360,
+      "smiles": "CC[C@@]1(C2=C(COC1=O)C(=O)N3CC4=CC5=CC=CC=C5N=C4C3=C2)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ec/Camptothecin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Camptothecin.svg",
+        "licence": "Public domain",
+        "author": "Fvasconcellos"
+      }
+    },
+    {
+      "name": "Scopolamine",
+      "category": "alkaloid",
+      "pubchem": "Scopolamine",
+      "wikipedia": "Scopolamine",
+      "cid": 3000322,
+      "smiles": "CN1[C@@H]2CC(C[C@H]1[C@H]3[C@@H]2O3)OC(=O)[C@H](CO)C4=CC=CC=C4",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/L-Scopolamin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:L-Scopolamin.svg",
+        "licence": "Public domain",
+        "author": "NEUROtiker"
+      }
+    },
+    {
+      "name": "Ibogaine",
+      "category": "alkaloid",
+      "pubchem": "Ibogaine",
+      "wikipedia": "Ibogaine",
+      "cid": 197060,
+      "smiles": "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/cf/Ibogaine.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Ibogaine.svg",
+        "licence": "Public domain",
+        "author": "Calvero."
+      }
+    },
+    {
+      "name": "Vinblastine",
+      "category": "alkaloid",
+      "pubchem": "Vinblastine",
+      "wikipedia": "Vinblastine",
+      "cid": 13342,
+      "smiles": "CC[C@@]1(C[C@H]2C[C@@](C3=C(CCN(C2)C1)C4=CC=CC=C4N3)(C5=C(C=C6C(=C5)[C@]78CCN9[C@H]7[C@@](C=CC9)([C@H]([C@@]([C@@H]8N6C)(C(=O)OC)O)OC(=O)C)CC)OC)C(=O)OC)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e9/Vinblastine2DCSD.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Vinblastine2DCSD.svg",
+        "licence": "CC BY-SA 4.0",
+        "author": "Fuse809"
+      }
+    },
+    {
+      "name": "Huperzine A",
+      "category": "alkaloid",
+      "pubchem": "Huperzine A",
+      "wikipedia": "Huperzine A",
+      "cid": 854026,
+      "smiles": "C/C=C/1\\[C@@H]2CC3=C([C@]1(CC(=C2)C)N)C=CC(=O)N3",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/72/Huperzine_A.png",
+        "page": "https://commons.wikimedia.org/wiki/File:Huperzine_A.png",
+        "licence": "Public domain",
+        "author": "User Edgar181 on en.wikipedia"
+      }
+    },
+    {
+      "name": "Sparteine",
+      "category": "alkaloid",
+      "pubchem": "Sparteine",
+      "wikipedia": "Sparteine",
+      "cid": 644020,
+      "smiles": "C1CCN2C[C@@H]3C[C@H]([C@H]2C1)CN4[C@H]3CCCC4",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/dc/%28%E2%88%92%29-Sparteine.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:(%E2%88%92)-Sparteine.svg",
+        "licence": "Public domain",
+        "author": "Fvasconcellos (talk · contribs)"
+      }
+    },
+    {
+      "name": "Gelsemine",
+      "category": "alkaloid",
+      "pubchem": "Gelsemine",
+      "wikipedia": "Gelsemine",
+      "cid": 5390854,
+      "smiles": "CN1C[C@]2([C@@H]3C[C@@H]4[C@]5([C@H]2[C@H]1[C@H]3CO4)C6=CC=CC=C6NC5=O)C=C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Gelsemine.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Gelsemine.svg",
+        "licence": "Public domain",
+        "author": "User:Innerstream"
+      }
+    },
+    {
+      "name": "Aconitine",
+      "category": "alkaloid",
+      "pubchem": "Aconitine",
+      "wikipedia": "Aconitine",
+      "cid": 245005,
+      "smiles": "CCN1C[C@@]2([C@@H](C[C@@H]([C@@]34[C@@H]2[C@H]([C@@H](C31)[C@@]5([C@@H]6[C@H]4C[C@@]([C@@H]6OC(=O)C7=CC=CC=C7)([C@H]([C@@H]5O)OC)O)OC(=O)C)OC)OC)O)COC",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Aconitine.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Aconitine.svg",
+        "licence": "Public domain",
+        "author": "Fvasconcellos"
+      }
+    },
+    {
+      "name": "Lysergic acid",
+      "category": "alkaloid",
+      "pubchem": "Lysergic acid",
+      "wikipedia": "Lysergic acid",
+      "cid": 6717,
+      "smiles": "CN1C[C@@H](C=C2[C@H]1CC3=CNC4=CC=CC2=C34)C(=O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Lysergic_acid_chemical_structure.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lysergic_acid_chemical_structure.svg",
+        "licence": "Public domain",
+        "author": "Maciejo93"
+      }
+    },
+    {
+      "name": "Forskolin",
+      "category": "terpenoid",
+      "pubchem": "Forskolin",
+      "wikipedia": "Forskolin",
+      "cid": 47936,
+      "smiles": "CC(=O)O[C@H]1[C@H]([C@@H]2[C@]([C@H](CCC2(C)C)O)([C@@]3([C@@]1(O[C@@](CC3=O)(C)C=C)C)O)C)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Forskolin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Forskolin.svg",
+        "licence": "Public domain",
+        "author": "Fvasconcellos (talk · contribs)"
+      }
+    },
+    {
+      "name": "Ginkgolide B",
+      "category": "terpenoid",
+      "pubchem": "Ginkgolide B",
+      "wikipedia": "Ginkgolide",
+      "cid": 11973122,
+      "smiles": "C[C@@H]1C(=O)O[C@@H]2[C@]1([C@@]34C(=O)O[C@H]5[C@]3([C@@H]2O)[C@@]6([C@@H](C5)C(C)(C)C)[C@H](C(=O)O[C@H]6O4)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/ACSformatstructureofginkolideb.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:ACSformatstructureofginkolideb.svg",
+        "licence": "Public domain",
+        "author": "Mmcarden0402 (talk)"
+      }
+    },
+    {
+      "name": "Picrotoxinin",
+      "category": "terpenoid",
+      "pubchem": "Picrotoxinin",
+      "wikipedia": "Picrotoxinin",
+      "cid": 442292,
+      "smiles": "CC(=C)[C@@H]1[C@@H]2[C@@H]3[C@@]4([C@]([C@H]1C(=O)O2)(C[C@@H]5[C@]4(O5)C(=O)O3)O)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/99/Picrotoxinin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Picrotoxinin.svg",
+        "licence": "Public domain",
+        "author": "NEUROtiker"
+      }
+    },
+    {
+      "name": "Gibberellic acid",
+      "category": "terpenoid",
+      "pubchem": "Gibberellic acid",
+      "wikipedia": "Gibberellic acid",
+      "cid": 6466,
+      "smiles": "C[C@@]12[C@H](C=C[C@@]3([C@@H]1[C@@H]([C@]45[C@H]3CC[C@](C4)(C(=C)C5)O)C(=O)O)OC2=O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Gibberellic_acid.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Gibberellic_acid.svg",
+        "licence": "Public domain",
+        "author": "created by Minutemen using BKchem 0.12"
+      }
+    },
+    {
+      "name": "Abietic acid",
+      "category": "terpenoid",
+      "pubchem": "Abietic acid",
+      "wikipedia": "Abietic acid",
+      "cid": 10569,
+      "smiles": "CC(C)C1=CC2=CC[C@@H]3[C@@]([C@H]2CC1)(CCC[C@@]3(C)C(=O)O)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Abietic_acid.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Abietic_acid.svg",
+        "licence": "Public domain",
+        "author": "Ayacop"
+      }
+    },
+    {
+      "name": "Ingenol",
+      "category": "terpenoid",
+      "pubchem": "Ingenol",
+      "wikipedia": "Ingenol",
+      "cid": 442042,
+      "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]3C=C([C@H]([C@]4([C@@]1(C3=O)C=C([C@@H]4O)C)O)O)CO",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Ingenol_3-angelate.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Ingenol_3-angelate.svg",
+        "licence": "Public domain",
+        "author": "Charlesy"
+      }
+    },
+    {
+      "name": "Phorbol",
+      "category": "terpenoid",
+      "pubchem": "Phorbol",
+      "wikipedia": "Phorbol",
+      "cid": 442070,
+      "smiles": "C[C@@H]1[C@H]([C@@]2([C@@H](C2(C)C)[C@H]3[C@]1([C@@H]4C=C(C(=O)[C@]4(CC(=C3)CO)O)C)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/Phorbol.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Phorbol.svg",
+        "licence": "Public domain",
+        "author": "Charlesy"
+      }
+    },
+    {
+      "name": "Paeoniflorin",
+      "category": "terpenoid",
+      "pubchem": "Paeoniflorin",
+      "wikipedia": "Paeoniflorin",
+      "cid": 442534,
+      "smiles": "C[C@]12C[C@@]3([C@@H]4C[C@]1([C@@]4([C@H](O2)O3)COC(=O)C5=CC=CC=C5)O[C@H]6[C@@H]([C@H]([C@@H]([C@H](O6)CO)O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d7/Paeoniflorin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Paeoniflorin.svg",
+        "licence": "Public domain",
+        "author": "Ed (Edgar181)"
+      }
+    },
+    {
+      "name": "Bilobalide",
+      "category": "terpenoid",
+      "pubchem": "Bilobalide",
+      "wikipedia": "Bilobalide",
+      "cid": 73581,
+      "smiles": "CC(C)(C)[C@@]1(C[C@H]2[C@@]3([C@]14[C@H](C(=O)O[C@H]4OC3=O)O)CC(=O)O2)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/77/Bilobalide.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Bilobalide.svg",
+        "licence": "Public domain",
+        "author": "Leyo"
+      }
+    },
+    {
+      "name": "Menthol",
+      "category": "terpenoid",
+      "pubchem": "(-)-Menthol",
+      "wikipedia": "Menthol",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/a0/Menthol_skeletal.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Menthol_skeletal.svg",
+        "licence": "Public domain",
+        "author": "Daveryan at en.wikipedia"
+      },
+      "cid": 16666,
+      "smiles": "C[C@@H]1CC[C@H]([C@@H](C1)O)C(C)C"
+    },
+    {
+      "name": "Lovastatin",
+      "category": "polyketide",
+      "pubchem": "Lovastatin",
+      "wikipedia": "Lovastatin",
+      "cid": 53232,
+      "smiles": "CC[C@H](C)C(=O)O[C@H]1C[C@H](C=C2[C@H]1[C@H]([C@H](C=C2)C)CC[C@@H]3C[C@H](CC(=O)O3)O)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/50/Lovastatin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lovastatin.svg",
+        "licence": "CC BY-SA 3.0",
+        "author": "Panoramix303"
+      }
+    },
+    {
+      "name": "Tetracycline",
+      "category": "polyketide",
+      "pubchem": "Tetracycline",
+      "wikipedia": "Tetracycline",
+      "cid": 54675776,
+      "smiles": "C[C@@]1([C@H]2C[C@H]3[C@@H](C(=O)C(=C([C@]3(C(=O)C2=C(C4=C1C=CC=C4O)O)O)O)C(=O)N)N(C)C)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/15/Tetracycline_skeletal.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Tetracycline_skeletal.svg",
+        "licence": "Public domain",
+        "author": "Vaccinationist"
+      }
+    },
+    {
+      "name": "Doxorubicin",
+      "category": "polyketide",
+      "pubchem": "Doxorubicin",
+      "wikipedia": "Doxorubicin",
+      "cid": 31703,
+      "smiles": "C[C@H]1[C@H]([C@H](C[C@@H](O1)O[C@H]2C[C@@](CC3=C2C(=C4C(=C3O)C(=O)C5=C(C4=O)C(=CC=C5)OC)O)(C(=O)CO)O)N)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Doxorubicin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Doxorubicin.svg",
+        "licence": "Public domain",
+        "author": "Fvasconcellos 23:30, 4 May 2007 (UTC)"
+      }
+    },
+    {
+      "name": "Rifampicin",
+      "category": "polyketide",
+      "pubchem": "Rifampicin",
+      "wikipedia": "Rifampicin",
+      "cid": 135398735,
+      "smiles": "C[C@H]1/C=C/C=C(\\C(=O)NC2=C(C(=C3C(=C2O)C(=C(C4=C3C(=O)[C@](O4)(O/C=C/[C@@H]([C@H]([C@H]([C@@H]([C@@H]([C@@H]([C@H]1O)C)O)C)OC(=O)C)C)OC)C)C)O)O)/C=N/N5CCN(CC5)C)/C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/15/Rifampicin_structure.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Rifampicin_structure.svg",
+        "licence": "Public domain",
+        "author": "Vaccinationist"
+      }
+    },
+    {
+      "name": "Monensin",
+      "category": "polyketide",
+      "pubchem": "Monensin",
+      "wikipedia": "Monensin",
+      "cid": 441145,
+      "smiles": "CC[C@]1(CC[C@@H](O1)[C@@]2(CC[C@@]3(O2)C[C@@H]([C@H]([C@H](O3)[C@@H](C)[C@H]([C@H](C)C(=O)O)OC)C)O)C)[C@H]4[C@H](C[C@@H](O4)[C@@H]5[C@H](C[C@H]([C@@](O5)(CO)O)C)C)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Monensin_A.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Monensin_A.svg",
+        "licence": "Public domain",
+        "author": "User:CaZeRillo"
+      }
+    },
+    {
+      "name": "Brefeldin A",
+      "category": "polyketide",
+      "pubchem": "Brefeldin A",
+      "wikipedia": "Brefeldin A",
+      "cid": 5287620,
+      "smiles": "C[C@H]1CCC/C=C/[C@@H]2C[C@@H](C[C@H]2[C@@H](/C=C/C(=O)O1)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/Brefeldin_A_Structural_Formula_V1.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Brefeldin_A_Structural_Formula_V1.svg",
+        "licence": "Public domain",
+        "author": "Schmiddi98"
+      }
+    },
+    {
+      "name": "Zearalenone",
+      "category": "polyketide",
+      "pubchem": "Zearalenone",
+      "wikipedia": "Zearalenone",
+      "cid": 5281576,
+      "smiles": "C[C@H]1CCCC(=O)CCC/C=C/C2=C(C(=CC(=C2)O)O)C(=O)O1",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Zearalenone.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Zearalenone.svg",
+        "licence": "Public domain",
+        "author": "Yikrazuul"
+      }
+    },
+    {
+      "name": "Discodermolide",
+      "category": "polyketide",
+      "pubchem": "Discodermolide",
+      "wikipedia": "Discodermolide",
+      "cid": 643668,
+      "smiles": "C[C@H]1[C@@H](OC(=O)[C@@H]([C@H]1O)C)C[C@@H](/C=C\\[C@H](C)[C@@H]([C@@H](C)/C=C(/C)\\C[C@H](C)[C@H]([C@H](C)[C@H]([C@@H](C)/C=C\\C=C)OC(=O)N)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Discodermolide.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Discodermolide.svg",
+        "licence": "CC0",
+        "author": "Hbf878"
+      }
+    },
+    {
+      "name": "Mycophenolic acid",
+      "category": "polyketide",
+      "pubchem": "Mycophenolic acid",
+      "wikipedia": "Mycophenolic acid",
+      "cid": 446541,
+      "smiles": "CC1=C2COC(=O)C2=C(C(=C1OC)C/C=C(\\C)/CCC(=O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/0b/Mycophenolicacid.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Mycophenolicacid.svg",
+        "licence": "Public domain",
+        "author": "The original uploader was Meodipt at English Wikipedia."
+      }
+    },
+    {
+      "name": "Aflatoxin B1",
+      "category": "polyketide",
+      "pubchem": "Aflatoxin B1",
+      "wikipedia": "Aflatoxin B1",
+      "cid": 186907,
+      "smiles": "COC1=C2C3=C(C(=O)CC3)C(=O)OC2=C4[C@@H]5C=CO[C@@H]5OC4=C1",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ee/%28%E2%80%93%29-Aflatoxin_B1_Structural_Formulae_V.1.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:(%E2%80%93)-Aflatoxin_B1_Structural_Formulae_V.1.svg",
+        "licence": "Public domain",
+        "author": "Jü"
+      }
+    },
+    {
+      "name": "Digoxin",
+      "category": "steroid",
+      "pubchem": "Digoxin",
+      "wikipedia": "Digoxin",
+      "cid": 2724385,
+      "smiles": "C[C@@H]1[C@H]([C@H](C[C@@H](O1)O[C@@H]2[C@H](O[C@H](C[C@@H]2O)O[C@@H]3[C@H](O[C@H](C[C@@H]3O)O[C@H]4CC[C@]5([C@@H](C4)CC[C@@H]6[C@@H]5C[C@H]([C@]7([C@@]6(CC[C@@H]7C8=CC(=O)OC8)O)C)O)C)C)C)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Digoxin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Digoxin.svg",
+        "licence": "CC BY-SA 3.0",
+        "author": "Mrgreen71"
+      }
+    },
+    {
+      "name": "Ouabain",
+      "category": "steroid",
+      "pubchem": "Ouabain",
+      "wikipedia": "Ouabain",
+      "cid": 439501,
+      "smiles": "C[C@H]1[C@@H]([C@H]([C@H]([C@@H](O1)O[C@H]2C[C@H]([C@@]3([C@@H]4[C@@H](CC[C@@]3(C2)O)[C@]5(CC[C@@H]([C@]5(C[C@H]4O)C)C6=CC(=O)OC6)O)CO)O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Ouabain.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Ouabain.svg",
+        "licence": "Public domain",
+        "author": "Xplus1"
+      }
+    },
+    {
+      "name": "Cholic acid",
+      "category": "steroid",
+      "pubchem": "Cholic acid",
+      "wikipedia": "Cholic acid",
+      "cid": 221493,
+      "smiles": "C[C@H](CCC(=O)O)[C@H]1CC[C@@H]2[C@@]1([C@H](C[C@H]3[C@H]2[C@@H](C[C@H]4[C@@]3(CC[C@H](C4)O)C)O)O)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/6e/Cholic_acid.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Cholic_acid.svg",
+        "licence": "Public domain",
+        "author": "User:Innerstream"
+      }
+    },
+    {
+      "name": "Ecdysterone",
+      "category": "steroid",
+      "pubchem": "20-Hydroxyecdysone",
+      "wikipedia": "Ecdysterone",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/20-Hydroxyecdysone.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:20-Hydroxyecdysone.svg",
+        "licence": "Public domain",
+        "author": "User:Edgar181"
+      },
+      "cid": 5459840,
+      "smiles": "C[C@]12CC[C@H]3C(=CC(=O)[C@H]4[C@@]3(C[C@@H]([C@@H](C4)O)O)C)[C@@]1(CC[C@@H]2[C@](C)([C@@H](CCC(C)(C)O)O)O)O"
+    },
+    {
+      "name": "Withaferin A",
+      "category": "steroid",
+      "pubchem": "Withaferin A",
+      "wikipedia": "Withaferin A",
+      "cid": 265237,
+      "smiles": "CC1=C(C(=O)O[C@H](C1)[C@@H](C)[C@H]2CC[C@@H]3[C@@]2(CC[C@H]4[C@H]3C[C@@H]5[C@]6([C@@]4(C(=O)C=C[C@@H]6O)C)O5)C)CO",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Withaferin_A.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Withaferin_A.svg",
+        "licence": "Public domain",
+        "author": "unknown"
+      }
+    },
+    {
+      "name": "Quercetin",
+      "category": "flavonoid",
+      "pubchem": "Quercetin",
+      "wikipedia": "Quercetin",
+      "cid": 5280343,
+      "smiles": "C1=CC(=C(C=C1C2=C(C(=O)C3=C(C=C(C=C3O2)O)O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/Quercetin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Quercetin.svg",
+        "licence": "Public domain",
+        "author": "Yikrazuul"
+      }
+    },
+    {
+      "name": "Catechin",
+      "category": "flavonoid",
+      "pubchem": "Catechin",
+      "wikipedia": "Catechin",
+      "cid": 9064,
+      "smiles": "C1[C@@H]([C@H](OC2=CC(=CC(=C21)O)O)C3=CC(=C(C=C3)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Catechin_structure.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Catechin_structure.svg",
+        "licence": "Public domain",
+        "author": "unknown"
+      }
+    },
+    {
+      "name": "Genistein",
+      "category": "flavonoid",
+      "pubchem": "Genistein",
+      "wikipedia": "Genistein",
+      "cid": 5280961,
+      "smiles": "C1=CC(=CC=C1C2=COC3=CC(=CC(=C3C2=O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Genistein.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Genistein.svg",
+        "licence": "Public domain",
+        "author": "unknown"
+      }
+    },
+    {
+      "name": "Naringenin",
+      "category": "flavonoid",
+      "pubchem": "Naringenin",
+      "wikipedia": "Naringenin",
+      "cid": 439246,
+      "smiles": "C1[C@H](OC2=CC(=CC(=C2C1=O)O)O)C3=CC=C(C=C3)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Naringenin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Naringenin.svg",
+        "licence": "Public domain",
+        "author": "Yikrazuul"
+      }
+    },
+    {
+      "name": "Amygdalin",
+      "category": "glycoside and sugar",
+      "pubchem": "Amygdalin",
+      "wikipedia": "Amygdalin",
+      "cid": 656516,
+      "smiles": "C1=CC=C(C=C1)[C@H](C#N)O[C@H]2[C@@H]([C@H]([C@@H]([C@H](O2)CO[C@H]3[C@@H]([C@H]([C@@H]([C@H](O3)CO)O)O)O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/02/Amygdalin_structure.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Amygdalin_structure.svg",
+        "licence": "Public domain",
+        "author": "Yikrazuul"
+      }
+    },
+    {
+      "name": "Salicin",
+      "category": "glycoside and sugar",
+      "pubchem": "Salicin",
+      "wikipedia": "Salicin",
+      "cid": 439503,
+      "smiles": "C1=CC=C(C(=C1)CO)O[C@H]2[C@@H]([C@H]([C@@H]([C@H](O2)CO)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Salicin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Salicin.svg",
+        "licence": "Public domain",
+        "author": "Harbin"
+      }
+    },
+    {
+      "name": "Kanamycin A",
+      "category": "glycoside and sugar",
+      "pubchem": "Kanamycin A",
+      "wikipedia": "Kanamycin A",
+      "cid": 6032,
+      "smiles": "C1[C@H]([C@@H]([C@H]([C@@H]([C@H]1N)O[C@@H]2[C@@H]([C@H]([C@@H]([C@H](O2)CN)O)O)O)O)O[C@@H]3[C@@H]([C@H]([C@@H]([C@H](O3)CO)O)N)O)N",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d6/Kanamycin_A.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Kanamycin_A.svg",
+        "licence": "Public domain",
+        "author": "NEUROtiker"
+      }
+    },
+    {
+      "name": "Actinomycin D",
+      "category": "peptide",
+      "pubchem": "Actinomycin D",
+      "wikipedia": "Actinomycin D",
+      "cid": 457193,
+      "smiles": "C[C@@H]1[C@@H](C(=O)N[C@@H](C(=O)N2CCC[C@H]2C(=O)N(CC(=O)N([C@H](C(=O)O1)C(C)C)C)C)C(C)C)NC(=O)C3=C4C(=C(C=C3)C)OC5=C(C(=O)C(=C(C5=N4)C(=O)N[C@H]6[C@H](OC(=O)[C@@H](N(C(=O)CN(C(=O)[C@@H]7CCCN7C(=O)[C@H](NC6=O)C(C)C)C)C)C(C)C)C)N)C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Actinomycin_C1.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Actinomycin_C1.svg",
+        "licence": "Public domain",
+        "author": "User:Calmkelp"
+      }
+    },
+    {
+      "name": "Cephalosporin C",
+      "category": "peptide",
+      "pubchem": "Cephalosporin C",
+      "wikipedia": "Cephalosporin C",
+      "cid": 65536,
+      "smiles": "CC(=O)OCC1=C(N2[C@@H]([C@@H](C2=O)NC(=O)CCC[C@H](C(=O)O)N)SC1)C(=O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/61/Cephalosporin_C.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Cephalosporin_C.svg",
+        "licence": "Public domain",
+        "author": "Ed (Edgar181)"
+      }
+    },
+    {
+      "name": "Microcystin-LR",
+      "category": "peptide",
+      "pubchem": "Microcystin-LR",
+      "wikipedia": "Microcystin-LR",
+      "cid": 445434,
+      "smiles": "C[C@H]1[C@@H](NC(=O)[C@@H](NC(=O)[C@H]([C@@H](NC(=O)[C@@H](NC(=O)[C@H](NC(=O)C(=C)N(C(=O)CC[C@@H](NC1=O)C(=O)O)C)C)CC(C)C)C(=O)O)C)CCCN=C(N)N)/C=C/C(=C/[C@H](C)[C@H](CC2=CC=CC=C2)OC)/C",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Microcystin-LR.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Microcystin-LR.svg",
+        "licence": "Public domain",
+        "author": "Charlesy"
+      }
+    },
+    {
+      "name": "Tetrodotoxin",
+      "category": "other",
+      "pubchem": "Tetrodotoxin",
+      "wikipedia": "Tetrodotoxin",
+      "cid": 11174599,
+      "smiles": "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4b/Tetrodotoxin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Tetrodotoxin.svg",
+        "licence": "Public domain",
+        "author": "No machine-readable author provided. Ayacop assumed (based on copyright claims)."
+      }
+    },
+    {
+      "name": "Saxitoxin",
+      "category": "other",
+      "pubchem": "Saxitoxin",
+      "wikipedia": "Saxitoxin",
+      "cid": 56947150,
+      "smiles": "C1CN2C(=N[C@H]([C@H]3[C@]2(C1(O)O)NC(=N3)N)COC(=O)N)N",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c1/Saxitoxin_neutral.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Saxitoxin_neutral.svg",
+        "licence": "Public domain",
+        "author": "Ed (Edgar181)"
+      }
+    },
+    {
+      "name": "Leukotriene B4",
+      "category": "other",
+      "pubchem": "Leukotriene B4",
+      "wikipedia": "Leukotriene B4",
+      "cid": 5280492,
+      "smiles": "CCCCC/C=C\\C[C@H](/C=C/C=C/C=C\\[C@H](CCCC(=O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/77/Leukotriene_B4.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Leukotriene_B4.svg",
+        "licence": "Public domain",
+        "author": "Calvero."
+      }
+    },
+    {
+      "name": "Shikimic acid",
+      "category": "other",
+      "pubchem": "Shikimic acid",
+      "wikipedia": "Shikimic acid",
+      "cid": 8742,
+      "smiles": "C1[C@H]([C@@H]([C@@H](C=C1C(=O)O)O)O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/Shikimi.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Shikimi.svg",
+        "licence": "Public domain",
+        "author": "Xplus1"
+      }
+    },
+    {
+      "name": "Kainic acid",
+      "category": "other",
+      "pubchem": "Kainic acid",
+      "wikipedia": "Kainic acid",
+      "cid": 10255,
+      "smiles": "CC(=C)[C@H]1CN[C@@H]([C@H]1CC(=O)O)C(=O)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/50/Kainic_acid.png",
+        "page": "https://commons.wikimedia.org/wiki/File:Kainic_acid.png",
+        "licence": "Public domain",
+        "author": "Edgar181"
+      }
+    },
+    {
+      "name": "Podophyllotoxin",
+      "category": "other",
+      "pubchem": "Podophyllotoxin",
+      "wikipedia": "Podophyllotoxin",
+      "cid": 10607,
+      "smiles": "COC1=CC(=CC(=C1OC)OC)[C@H]2[C@@H]3[C@H](COC3=O)[C@H](C4=CC5=C(C=C24)OCO5)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Podophyllotoxin2DCSD.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Podophyllotoxin2DCSD.svg",
+        "licence": "Public domain",
+        "author": "Fuse809 (talk)"
+      }
+    },
+    {
+      "name": "Capsaicin",
+      "category": "other",
+      "pubchem": "Capsaicin",
+      "wikipedia": "Capsaicin",
+      "cid": 1548943,
+      "smiles": "CC(C)/C=C/CCCCC(=O)NCC1=CC(=C(C=C1)O)OC",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/68/Capsaicin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Capsaicin.svg",
+        "licence": "CC0",
+        "author": "Pyrovalerone"
+      }
+    },
+    {
+      "name": "Curcumin",
+      "category": "other",
+      "pubchem": "Curcumin",
+      "wikipedia": "Curcumin",
+      "cid": 969516,
+      "smiles": "COC1=C(C=CC(=C1)/C=C/C(=O)CC(=O)/C=C/C2=CC(=C(C=C2)O)OC)O",
+      "reference": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/Curcumin.svg",
+        "page": "https://commons.wikimedia.org/wiki/File:Curcumin.svg",
+        "licence": "Public domain",
+        "author": "Ronhjones (Talk)"
+      }
+    }
+  ]
+}

@@ -14,9 +14,11 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | null;
-  /** Its id: for a measurement, its molecule's. */
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "ring" | null;
+  /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
+  /** A ring right-clicked inside: its key (utils/rings). */
+  ring?: string;
   /** A measurement's own id. */
   measure?: number;
   /**
@@ -137,6 +139,7 @@ export default function PartMenu({
   onUseAsInput,
   onSaveAbbreviation,
   onExport,
+  onColour,
   canvas = [],
   clipboard,
   molecule3d,
@@ -205,6 +208,8 @@ export default function PartMenu({
   onSaveAbbreviation: () => void;
   /** The selection exported - written as a file of another kind - where the menu is the selection's. */
   onExport?: () => void;
+  /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
+  onColour?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -258,6 +263,8 @@ export default function PartMenu({
   const keys = target.selection === "none";
   const drawing = target.drawing !== false;
   const del = (name: string, withKey = true): Item => ({ name, keys: withKey ? deleteKey : "", run: onDelete, icon: MENU_ICONS.delete, del: true });
+  // (a colour, a highlight or a ring's fill, for what is drawn)
+  const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -390,6 +397,7 @@ export default function PartMenu({
             ? [
                 { name: "Clean up these structures", keys: cleanUpKey, run: onCleanUp, icon: MENU_ICONS.cleanUp },
                 { name: "3D structures", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+                ...colour,
               ]
             : []),
           del("Delete selection"),
@@ -405,6 +413,8 @@ export default function PartMenu({
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
+      : target.kind === "ring"
+        ? [...colour, { name: "Select this structure", keys: "", run: onSelectStructure }]
       : target.kind == null
         ? [
             { name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste },
@@ -421,6 +431,7 @@ export default function PartMenu({
             : []),
           { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
           { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+          ...colour,
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -473,6 +484,8 @@ export default function PartMenu({
                     ? "Molecule"
                     : target.kind === "measure3d"
                       ? "Measurement"
+                    : target.kind === "ring"
+                      ? "Ring"
                       : "Canvas"
       }
       tabIndex={-1}

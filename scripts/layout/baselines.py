@@ -14,6 +14,7 @@ data folder, at uv/plugin-rdkit/venv.
 
 import json
 import pathlib
+import sys
 import time
 
 from rdkit import Chem, RDLogger
@@ -119,7 +120,9 @@ def laid_out(mol, coordgen):
 
 
 def main():
-    listed = json.loads((here / "molecules.json").read_text())["molecules"]
+    # --list=heldout: another list beside molecules.json, into .layout/heldout/
+    name = next((a[7:] for a in sys.argv[1:] if a.startswith("--list=")), "molecules")
+    listed = json.loads((here / f"{name}.json").read_text())["molecules"]
     out = []
     for m in listed:
         mol = Chem.MolFromSmiles(m.get("smiles") or "")
@@ -136,8 +139,8 @@ def main():
         }
         out.append(entry)
         print(f"{m['name']:28} {mol.GetNumAtoms():4} atoms")
-    dest = root / ".layout"
-    dest.mkdir(exist_ok=True)
+    dest = root / ".layout" if name == "molecules" else root / ".layout" / name
+    dest.mkdir(parents=True, exist_ok=True)
     (dest / "baselines.json").write_text(json.dumps({"molecules": out}))
     print(f"{len(out)} molecules -> {dest / 'baselines.json'}")
 

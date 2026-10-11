@@ -9,6 +9,7 @@ Runs in the environment of the chem lock (RDKit):
 """
 
 import json
+import sys
 import pathlib
 
 from rdkit import Chem, RDLogger
@@ -27,7 +28,10 @@ def labels(mol):
 
 
 def main():
-    data = json.loads((root / ".layout" / "stereo.json").read_text())["molecules"]
+    # --list=heldout: the list beside molecules.json, in .layout/heldout/
+    name = next((a[7:] for a in sys.argv[1:] if a.startswith("--list=")), "molecules")
+    folder = root / ".layout" if name == "molecules" else root / ".layout" / name
+    data = json.loads((folder / "stereo.json").read_text())["molecules"]
     wrong = 0
     for m in data:
         ref = Chem.MolFromSmiles(m["smiles"])
