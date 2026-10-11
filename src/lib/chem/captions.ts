@@ -48,8 +48,8 @@ export function captionRuns(line: string): TextRun[] {
   return runs;
 }
 
-/** A number, and a unit after one: kept together on a line, as 60 °C, 12 h, 2 equiv, 10 mol% are. */
-const NUMBER = /^[−-]?\d+([.,]\d+)?$/;
+/** A number - or a range - and a unit after one: kept together on a line, as 60 °C, 12 h, 2 equiv, 10 mol%, 0–25 °C are. */
+const NUMBER = /^[−-]?\d+([.,]\d+)?([–-][−-]?\d+([.,]\d+)?)?$/;
 const UNIT = /^(°\S*|[\p{L}%µ][\p{L}%µ]{0,4}[.,;)]?)$/u;
 
 /** A typed line's words as they are kept on a line: its words, a number with the unit after it as one. */
@@ -339,4 +339,66 @@ export function captionPlace(
     out = Math.max(out, there + reach(o.halfW, o.halfH) + 0.25 * fontSize + reach(half.w, half.h));
   }
   return { x: a.x + nx * out, y: a.y + ny * out, arrow: a.id };
+}
+
+/** How far an arrow reaches past the words over it or under it, at either end, in ems. */
+export const ARROW_PAST_WORDS = 0.75;
+
+/** Words over or under an arrow (`arrow`), where their middle is and how far they reach either way of it. */
+export type ArrowWords = { arrow?: number; x: number; y: number; halfW: number; halfH: number };
+
+/**
+ * How long each arrow's words need it to be, by its id: long enough, its
+ * middle where it is, to reach `ARROW_PAST_WORDS` ems past the words over it
+ * and under it at either end - each word's reach along it, wherever it
+ * stands. An arrow with no words needs nothing, and is not named.
+ */
+export function wordsNeed(
+  arrows: readonly (SchemeArrow & { id: number })[],
+  words: readonly ArrowWords[],
+  fontSize: number,
+): Map<number, number> {
+  const need = new Map<number, number>();
+  for (const a of arrows) {
+    const ux = Math.cos(a.angle);
+    const uy = Math.sin(a.angle);
+    for (const w of words) {
+      if (w.arrow !== a.id) continue;
+      const along = Math.abs((w.x - a.x) * ux + (w.y - a.y) * uy) + Math.abs(ux) * w.halfW + Math.abs(uy) * w.halfH;
+      need.set(a.id, Math.max(need.get(a.id) ?? 0, 2 * (along + ARROW_PAST_WORDS * fontSize)));
+    }
+  }
+  return need;
+}
+
+/**
+ * The arrows as they are drawn: each as long as it was made, or - its
+ * words needing more - as long as they need (`wordsNeed`), its middle where
+ * it is (the maintainer, 2026-10-11).
+ */
+export function withWordsNeed<A extends SchemeArrow & { id: number }>(arrows: readonly A[], need: ReadonlyMap<number, number>): A[] {
+  return arrows.map((a) => {
+    const n = need.get(a.id) ?? 0;
+    return n > a.length ? { ...a, length: n } : a;
+  });
+}
+
+/**
+ * The arrows as they are drawn with their words as `captionSet` sets them,
+ * in the labels' size `fontSize` and their set `set` (`withWordsNeed`).
+ */
+export function arrowsWithWords<A extends SchemeArrow & { id: number }>(
+  arrows: readonly A[],
+  captions: readonly { arrow?: number; x: number; y: number; text: string; width?: number; align?: CaptionAlign }[],
+  fontSize: number,
+  set: LabelSet = ACS_LABEL_SET,
+): A[] {
+  if (!arrows.length || !captions.some((c) => c.arrow != null)) return arrows.slice();
+  const words = captions
+    .filter((c) => c.arrow != null)
+    .map((c) => {
+      const s = captionSet(c.text, c.x, c.y, fontSize, set, c.width, c.align);
+      return { arrow: c.arrow, x: c.x, y: c.y, halfW: s.halfW, halfH: s.halfH };
+    });
+  return withWordsNeed(arrows, wordsNeed(arrows, words, fontSize));
 }

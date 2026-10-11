@@ -638,14 +638,18 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     both atoms of - from distances, as an XYZ file's: a standard
     residue's own bonds are in the Chemical Component Dictionary, not in
     the file;
-  - HEADER's ID code and TITLE, kept for later.
-  No ribbons; mmCIF later. A big structure is read quickly: a 58,870-atom
+  - HEADER's ID code and TITLE, kept for later;
+  - HELIX and SHEET records (Secondary Structure Section, since lane L5,
+    2026-10-10), every field kept, and with them each atom's name and
+    residue on the molecule in 3D: its chains drawn as ribbons
+    (docs/WORKSPACE.md, *Ribbons*).
+  mmCIF later. A big structure is read quickly: a 58,870-atom
   entry in about 0.2 s, its bonds found cube by cube
   (`bondsByDistance`).
 - **What is read can grow.** Each record read has a handler of its own;
-  every other record is counted by name. Reading one more - SEQRES,
-  HELIX, SHEET for ribbons, LINK and SSBOND - is a handler more, and what
-  the atoms already keep is there for it.
+  every other record is counted by name. Reading one more - SEQRES, LINK
+  and SSBOND - is a handler more, and what the atoms already keep is there
+  for it.
 - **What is written** (Export, molecules in 3D only): HETATM records, each
   molecule a residue of its own named UNL - the Chemical Component
   Dictionary's unknown ligand - in chain A; every bond in CONECT records;

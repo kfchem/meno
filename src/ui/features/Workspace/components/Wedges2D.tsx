@@ -19,16 +19,23 @@ export default function Wedges2D() {
   const { layout, opts } = useDrawnLayout();
   const geometry = useMemo(() => {
     const positions: number[] = [];
+    // (each shape in its own colour, where it has one)
+    const colors: number[] = [];
+    const base = new THREE.Color(opts.bondColor ?? "black");
+    const c = new THREE.Color();
     for (const p of layout.polys) {
       if (p.points.length < 3) continue;
+      const col = p.color ? c.set(p.color) : base;
       for (const i of polyTriangles(p.points)) {
         positions.push(p.points[i].x, p.points[i].y, 0);
+        colors.push(col.r, col.g, col.b);
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     return g;
-  }, [layout]);
+  }, [layout, opts.bondColor]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
@@ -40,7 +47,8 @@ export default function Wedges2D() {
       raycast={() => {}}
     >
       <meshBasicMaterial
-        color={opts.bondColor ?? "black"}
+        color="#ffffff"
+        vertexColors
         toneMapped={false}
         depthTest={false}
         depthWrite={false}

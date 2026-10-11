@@ -16,6 +16,7 @@ import {
   ScissorsIcon,
   SparklesIcon,
   StopIcon,
+  SwatchIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, ReactNode, SVGProps } from "react";
@@ -53,6 +54,7 @@ export const MENU_ICONS = {
   edit: hero(PencilIcon),
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
+  colour: hero(SwatchIcon),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>

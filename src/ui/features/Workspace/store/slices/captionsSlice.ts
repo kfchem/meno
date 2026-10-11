@@ -29,6 +29,14 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         return { ...prev, captionEdit: null, captionLeft: id != null ? { id, n, at: edit.at } : prev.captionLeft };
       }),
     captionShown: (id: number) => set((prev: EditorState) => (prev.captionLeft?.id === id ? { ...prev, captionLeft: null } : prev)),
+    setWordsWriting: (words: EditorState["wordsWriting"], n?: number) =>
+      set((prev: EditorState) => {
+        if (!words) return prev.wordsWriting && (n == null || prev.wordsWriting.n === n) ? { ...prev, wordsWriting: null } : prev;
+        const w = prev.wordsWriting;
+        // (the same words, where they were: nothing to draw again)
+        if (w && w.n === words.n && w.arrow === words.arrow && w.x === words.x && w.y === words.y && w.halfW === words.halfW && w.halfH === words.halfH) return prev;
+        return { ...prev, wordsWriting: words };
+      }),
     setQuickAdd: (q: EditorState["quickAdd"]) => set({ quickAdd: q }),
     addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"]) => {
       const id = doc.getState().nextCaptionId ?? 1;

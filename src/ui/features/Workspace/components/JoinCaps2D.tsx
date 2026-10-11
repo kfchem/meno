@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { colorInstances } from "./instances";
 
 /**
  * The round caps where bonds meet and where they end, from the shared layout.
@@ -35,7 +36,9 @@ export default function JoinCaps2D() {
       m.setMatrixAt(i, tmpM);
     }
     m.instanceMatrix.needsUpdate = true;
-  }, [layout, countCap, tmpM]);
+    // (each in its own colour, where it has one)
+    colorInstances(m, fills.map((c) => c.color), opts.bondColor ?? "black");
+  }, [layout, countCap, tmpM, opts.bondColor]);
 
   return (
     <instancedMesh
@@ -48,7 +51,7 @@ export default function JoinCaps2D() {
     >
       <circleGeometry args={[1, 24]} />
       <meshBasicMaterial
-        color={opts.bondColor ?? "black"}
+        color="#ffffff"
         toneMapped={false}
         transparent
         opacity={1}

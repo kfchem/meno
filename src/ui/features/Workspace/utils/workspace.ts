@@ -11,6 +11,7 @@
  * and its pictures.
  */
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
+import { fillsAmong } from "./rings";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { Carried3D, Drawn, EditorState, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { pdfBytes } from "../../../../lib/pdf/reader";
@@ -54,6 +55,7 @@ type Saved = Pick<
   "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "lists3d" | "docStyle" | "aromaticEnabled" | "aromaticRings"
 > &
   Partial<Pick<EditorState, "pushes">> &
+  Partial<Pick<EditorState, "ringFills">> &
   Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures">>;
 
 /**
@@ -102,6 +104,10 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       atoms: state.model.atoms,
       bonds: state.model.bonds,
       ...(state.pushes?.length ? { pushes: state.pushes } : {}),
+      // (the fills of rings still drawn)
+      ...(Object.keys(fillsAmong(state.ringFills, new Set(state.model.atoms.map((a) => a.id)))).length
+        ? { ringFills: fillsAmong(state.ringFills, new Set(state.model.atoms.map((a) => a.id))) }
+        : {}),
       arrows: state.arrows,
       pluses: state.pluses,
       ...(state.captions.length ? { captions: state.captions } : {}),

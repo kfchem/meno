@@ -24,6 +24,7 @@ import {
   turnedInPlane,
   turnedTogether,
   WORLD_PER_ANGSTROM,
+  RIBBON_REACH,
   coveredLength,
   labelSpot,
   populations,
@@ -369,6 +370,39 @@ describe("a molecule in 3D drawn without the hydrogens on its carbons", () => {
     // and the pointer finds nothing where one of them would be
     const h = seenOnPage(poseOf(m, solidOf(m, hiding), "primary"))[2];
     expect(atomAt(poseOf(m, solidOf(m, hiding), "primary"), undefined, h.x + 0.01, h.y)).not.toBe(2);
+  });
+});
+
+describe("a biopolymer's molecule in 3D, its chains as ribbons", () => {
+  // three residues of a chain, an alpha carbon each, 3.8 A apart
+  const chain = (): Molecule3D => ({
+    id: 1,
+    atoms: [0, 1, 2].map((k) => ({ el: "C", x: 3.8 * k, y: 0, z: 0 })),
+    bonds: [],
+    at: { x: 0, y: 0 },
+    biopolymer: {
+      names: ["CA", "CA", "CA"],
+      residueOf: [0, 1, 2],
+      residues: [1, 2, 3].map((seq) => ({ name: "ALA", chain: "A", seq, iCode: "", standard: true })),
+      structure: ["helix", "helix", null],
+    },
+  });
+
+  it("draws none of the chain's atoms, but reaches - and is found under the pointer - as far as its ribbon does", () => {
+    const m = chain();
+    const s = solidOf(m, STYLE_3D);
+    expect(s.ribbons).toEqual({ primary: true, secondary: false });
+    expect([...s.radii.primary]).toEqual([0, 0, 0]);
+    expect(s.extent.primary[0]).toBeCloseTo(RIBBON_REACH * WORLD_PER_ANGSTROM, 6);
+    expect(s.hidesH.primary).toBe(false);
+    const pose = poseOf(m, s, "primary");
+    expect(atomAt(pose, undefined, 0, 0)).toBe(1);
+  });
+
+  it("is drawn in a picture as sticks along its ribbon, in the ribbon's colours", () => {
+    const marks = pictureMarks(chain(), STYLE_3D);
+    expect(marks.length).toBeGreaterThan(2);
+    expect(marks.every((x) => x.kind === "stick")).toBe(true);
   });
 });
 

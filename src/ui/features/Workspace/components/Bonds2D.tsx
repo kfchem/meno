@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { colorInstances } from "./instances";
 
 /** The drawing's lines, from the shared layout: bonds, hashes, waves. */
 export function Bonds2D() {
@@ -48,7 +49,9 @@ export function Bonds2D() {
       m.setMatrixAt(i, tmpM);
     }
     m.instanceMatrix.needsUpdate = true;
-  }, [layout, countCap, tmpM, tmpQ]);
+    // (each in its own colour, where it has one)
+    colorInstances(m, segs.map((s) => s.color), opts.bondColor ?? "black");
+  }, [layout, countCap, tmpM, tmpQ, opts.bondColor]);
 
   return (
     <instancedMesh
@@ -58,11 +61,7 @@ export function Bonds2D() {
       frustumCulled={false}
     >
       <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial
-        color={opts.bondColor ?? "black"}
-        vertexColors={false}
-        toneMapped={false}
-      />
+      <meshBasicMaterial color="#ffffff" vertexColors={false} toneMapped={false} />
     </instancedMesh>
   );
 }

@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -41,6 +41,7 @@ function mirrorOf(doc: WorkspaceDocument) {
     pushes: doc.pushes ?? NO_PUSHES,
     aromaticEnabled: doc.aromaticEnabled,
     aromaticRings: doc.aromaticRings,
+    ringFills: doc.ringFills ?? NO_FILLS,
     nextId: doc.nextId,
     nextArrowId: doc.nextArrowId,
     nextPlusId: doc.nextPlusId ?? 1,
@@ -92,6 +93,7 @@ function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Se
 }
 const NO_CAPTIONS: Caption[] = [];
 const NO_PUSHES: PushArrow[] = [];
+const NO_FILLS: RingFills = {};
 const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
@@ -199,6 +201,7 @@ export function createEditorStore(
     hoveredMark: null,
     captionEdit: null,
     captionLeft: null,
+    wordsWriting: null,
     quickAdd: null,
     hoveredSet: null,
     chosenSet: null,

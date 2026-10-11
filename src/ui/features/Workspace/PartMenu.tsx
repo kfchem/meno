@@ -14,9 +14,11 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | null;
-  /** Its id: for a measurement, its molecule's. */
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | null;
+  /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
+  /** A ring right-clicked inside: its key (utils/rings). */
+  ring?: string;
   /** A measurement's own id. */
   measure?: number;
   /**
@@ -139,6 +141,7 @@ export default function PartMenu({
   onExport,
   onPush,
   push,
+  onColour,
   canvas = [],
   clipboard,
   molecule3d,
@@ -211,6 +214,8 @@ export default function PartMenu({
   onPush?: (half: boolean, press?: React.PointerEvent) => void;
   /** What an electron-pushing arrow right-clicked can do: its head made full or half, its lone pair's dots shown or left off (where it leaves one), bent as Meno bends it. */
   push?: { half: boolean; setHalf: (half: boolean) => void; pair?: { shown: boolean; set: (shown: boolean) => void }; onUnbend?: () => void };
+  /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
+  onColour?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
   clipboard: MenuClipboard;
@@ -271,6 +276,8 @@ export default function PartMenu({
         { name: "Fishhook arrow", keys: "", run: () => onPush(true), press: (e) => onPush(true, e), icon: MENU_ICONS.fishhook },
       ]
     : [];
+  // (a colour, a highlight or a ring's fill, for what is drawn)
+  const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -403,6 +410,7 @@ export default function PartMenu({
             ? [
                 { name: "Clean up these structures", keys: cleanUpKey, run: onCleanUp, icon: MENU_ICONS.cleanUp },
                 { name: "3D structures", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+                ...colour,
               ]
             : []),
           del("Delete selection"),
@@ -426,6 +434,8 @@ export default function PartMenu({
             ...(push.pair ? [{ name: "Lone pair", keys: "", run: () => push.pair!.set(!push.pair!.shown), checked: push.pair.shown }] : []),
             ...(push.onUnbend ? [{ name: "Bend as Meno does", keys: "", run: push.onUnbend }] : []),
           ]
+      : target.kind === "ring"
+        ? [...colour, { name: "Select this structure", keys: "", run: onSelectStructure }]
       : target.kind == null
         ? [
             { name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste },
@@ -443,6 +453,7 @@ export default function PartMenu({
           { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
           { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
           ...pushFrom,
+          ...colour,
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -497,6 +508,8 @@ export default function PartMenu({
                       ? "Measurement"
                     : target.kind === "push"
                       ? "Electron-pushing arrow"
+                    : target.kind === "ring"
+                      ? "Ring"
                       : "Canvas"
       }
       tabIndex={-1}

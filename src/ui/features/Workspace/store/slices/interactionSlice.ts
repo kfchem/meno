@@ -259,6 +259,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         captionEdit: null,
         captionLeft: null,
         pushDraw: null,
+        wordsWriting: null,
         quickAdd: null,
         workflowMenu: null,
         pdfWords: null,

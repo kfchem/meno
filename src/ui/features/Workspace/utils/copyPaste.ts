@@ -3,8 +3,10 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { pushAtoms } from "../document";
+import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowEnds } from "../../../../lib/chem/reactionScheme";
@@ -33,9 +35,10 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
       ? fragmentOf(model, around)
       : new Set<number>();
   if (!atoms.size) return null;
-  // (the electron-pushing arrows wholly on it, with it)
+  // (the electron-pushing arrows wholly on it, and the fills of the rings it holds whole, with it)
   const pushes = (drawn.pushes ?? []).filter((p) => pushAtoms({ model }, p).every((id) => atoms.has(id)) && [p.from, p.to].every((e) => !("bond" in e) || model.bonds.some((b) => b.id === e.bond)));
-  const part = { ...partOf(model, atoms), ...(pushes.length ? { pushes } : {}) };
+  const fills = fillsAmong(drawn.ringFills, atoms);
+  const part = { ...partOf(model, atoms), ...(pushes.length ? { pushes } : {}), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
   if (!sel.atoms.size) return part;
   const { arrows, pluses, captions } = schemeAmong(drawn, atoms);
   return {
@@ -140,6 +143,7 @@ export function recordText(part: Drawn): string {
     atoms: part.atoms,
     bonds: part.bonds,
     ...(part.pushes?.length ? { pushes: part.pushes } : {}),
+    ...(part.ringFills && Object.keys(part.ringFills).length ? { ringFills: part.ringFills } : {}),
     ...(part.arrows?.length ? { arrows: part.arrows } : {}),
     ...(part.pluses?.length ? { pluses: part.pluses } : {}),
     ...(part.captions?.length ? { captions: part.captions } : {}),
@@ -153,6 +157,8 @@ export function recordText(part: Drawn): string {
 export const hasFlow = (part: Pick<Drawn, "flow">) => !!(part.flow?.sets.length || part.flow?.steps.length);
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** A colour as Meno keeps one: #rrggbb. */
+export const isColour = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
 /** The structure in Meno's own record, or null if `text` is not one this version reads. */
 export function readRecord(text: string): Drawn | null {
@@ -179,6 +185,7 @@ export function readDrawn(data: unknown): Drawn | null {
     atoms?: unknown;
     bonds?: unknown;
     pushes?: unknown;
+    ringFills?: unknown;
     arrows?: unknown;
     pluses?: unknown;
     captions?: unknown;
@@ -261,10 +268,23 @@ export function readDrawn(data: unknown): Drawn | null {
     const bend = p.bend && isNum(p.bend.along) && isNum(p.bend.out) && Math.abs(p.bend.along) < 10 && Math.abs(p.bend.out) < 10 ? { along: p.bend.along, out: p.bend.out } : undefined;
     return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}) }];
   });
+  // (colours only as colours: what is not one is left out - it would go into a picture's markup)
+  const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
+    const out = { ...x };
+    for (const k of ["color", "highlight"] as const) if (!isColour(x[k])) delete out[k];
+    return out;
+  };
+  // (a ring's fill where its key and its colour read)
+  const ringFills = Object.fromEntries(
+    Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
+      ([key, color]) => /^\d+(-\d+){2,}$/.test(key) && key.split("-").every((id) => ids.has(Number(id))) && isColour(color),
+    ),
+  ) as Record<string, string>;
   return {
-    atoms: atoms.map((a) => withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]) as Atom),
-    bonds: bonds.map((b) => withMarks(b, ["stereoAt"])) as Bond[],
+    atoms: atoms.map((a) => withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])) as Atom),
+    bonds: bonds.map((b) => withColours(withMarks(b, ["stereoAt"]))) as Bond[],
     ...(pushes.length ? { pushes } : {}),
+    ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),
     ...(pluses.length ? { pluses } : {}),
     ...(captions.length ? { captions } : {}),
@@ -352,6 +372,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
       ? (m.drawnFrom as (number | null)[])
       : undefined;
   const stereo = readStereo(m.stereo, n, bonds.length);
+  const biopolymer = readBiopolymer(m.biopolymer, n);
   const calc = readCalc(m.calc, n, 1 + frames.length);
   return {
     atoms: atoms as Carried3D["atoms"],
@@ -368,6 +389,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(biopolymer ? { biopolymer } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
