@@ -25,7 +25,7 @@ import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, openIntent, undoIntent } from "./lib/doc/shortcuts";
 import { saverOf } from "./lib/doc/savers";
-import { useOpenAsked } from "./ui/layouts/commands";
+import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
@@ -517,6 +517,10 @@ export default function App() {
   useEffect(() => useSettingsAsked.subscribe(() => void ctlNow.current.openByKind?.("settings", { label: "Settings" })), []);
   // (Open… asked for from inside a view - the menu on empty space - as Ctrl/Cmd+O)
   useEffect(() => useOpenAsked.subscribe(() => void pickRef.current()), []);
+  // (files asked to be opened from inside a view - a workspace file dropped onto a canvas - as Open opens them)
+  const openFilesRef = useRef(openFiles);
+  openFilesRef.current = openFiles;
+  useEffect(() => useFilesAsked.subscribe((s, prev) => s.asked !== prev.asked && void openFilesRef.current([...s.files])), []);
   // (a guide shown with no workspace in front - from Settings, Plugins - brought to one: what it points at is a workspace's)
   const stateNow = useRef(state);
   stateNow.current = state;
