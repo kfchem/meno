@@ -330,36 +330,18 @@ export function useStructureEvents(
       return;
     }
     pointerRef.current = { x: e.clientX, y: e.clientY };
-    hoverAt(e.clientX, e.clientY);
-  };
-
-  // The atom under the pointer, at this place in the window
-  const hoverAt = (clientX: number, clientY: number) => {
-    const st = store.getState();
     // A molecule in 3D stands over the page: what is drawn under it is not
     // under the pointer.
     if (st.hovered3d) {
       st.clearAtomHover();
       return;
     }
-    const p = clientToWorld(clientX, clientY);
+    const p = clientToWorld(e.clientX, e.clientY);
     if (!p) return;
     const tol = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
     const id = st.findAtomNear(p.x, p.y, tol, null);
     if (id != null) st.setHoveredFromId(id);
     else st.clearAtomHover();
-  };
-
-  /**
-   * What is under the pointer found again where it rests, the view having
-   * moved under it (`raycast`: the canvas's own things, as a move of the
-   * pointer finds them) - nothing, where it is not over the drawing.
-   */
-  const hoverAgain = (raycast: () => void) => {
-    const at = pointerRef.current;
-    if (!at) return;
-    raycast();
-    hoverAt(at.x, at.y);
   };
 
   const handleWrapperMouseLeave = () => {
@@ -608,7 +590,6 @@ export function useStructureEvents(
     handleDoubleClick,
     handleWrapperMouseMove,
     handleWrapperMouseLeave,
-    hoverAgain,
     handleWrapperClick,
     dropZone,
     openFilesAt,
