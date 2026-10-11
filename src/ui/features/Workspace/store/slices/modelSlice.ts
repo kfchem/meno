@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -537,9 +538,7 @@ export const createModelSlice = (
   },
 
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {
-    doc.edit("move arrow", (d) => ops.updateArrow(d, id, patch), {
-      coalesceKey: `arrow:${id}:${gesture ?? ""}`,
-    });
+    doc.edit("move arrow", (d) => ops.updateArrow(d, id, patch), gesture ? gestureStep(`arrow:${id}:${gesture}`) : { coalesceKey: `arrow:${id}:` });
   },
 
   addPlus: (x: number, y: number) => {
@@ -553,7 +552,7 @@ export const createModelSlice = (
   },
 
   movePlus: (id: number, x: number, y: number, gesture?: string) => {
-    doc.edit("move plus", (d) => ops.movePlus(d, id, x, y), { coalesceKey: `plus:${id}:${gesture ?? ""}` });
+    doc.edit("move plus", (d) => ops.movePlus(d, id, x, y), gesture ? gestureStep(`plus:${id}:${gesture}`) : { coalesceKey: `plus:${id}:` });
   },
 
   removePlus: (id: number) => {
