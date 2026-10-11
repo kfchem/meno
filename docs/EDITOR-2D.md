@@ -747,7 +747,12 @@ All hover-based, as above.
     either side of it is taken away; *Straighten* in its menu takes them
     all away. A corner is kept as a share along the arrow and a distance
     across it, so that it goes with the arrow as it is moved, drawn out by
-    an end or grown by its words. Its words go over its longest stretch.
+    an end or grown by its words. Words put by it go over its longest
+    stretch. Words already by it go with the point of its line they are
+    by, as a corner is made, moved or taken away, or an end is drawn
+    out. They keep the same share of the way along the line, and the
+    same distance from that point, measured along and across its
+    tail-to-point line.
   - **Drawn from point to point**: pressed on Quick Add's arrow and dragged,
     from where Quick Add was opened to where the pointer is let go - Shift
     to steps of 15 degrees - as one step; a click puts one as before.

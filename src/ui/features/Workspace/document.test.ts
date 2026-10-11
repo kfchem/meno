@@ -258,6 +258,39 @@ describe("structure document operations", () => {
     expect(pasted.arrows[1]).toMatchObject({ kind: "equilibrium", corners: [{ along: 0.5, across: 1 }], color: "#c44848" });
   });
 
+  it("takes the words by an arrow along with its line as it is bent, the corner moved, and straightened", () => {
+    // an arrow from (0, 0) to (8, 0), words over its middle and under its first quarter
+    let d = ops.addArrow(ethane(), 4, 0, 0, 8);
+    d = ops.addCaption(d, { x: 4, y: 0.8, text: "NaH", arrow: 1 });
+    d = ops.addCaption(d, { x: 2, y: -0.8, text: "THF", arrow: 1 });
+    // bent up at its middle: the words over the middle stay over it, over the corner, as far off
+    d = ops.updateArrow(d, 1, { corners: [{ along: 0.5, across: 2 }] });
+    expect(d.captions![0].x).toBeCloseTo(4, 6);
+    expect(d.captions![0].y).toBeCloseTo(2.8, 6);
+    // (those under the first quarter, by the first stretch, halfway along it)
+    expect(d.captions![1].x).toBeCloseTo(2, 6);
+    expect(d.captions![1].y).toBeCloseTo(0.2, 6);
+    // the corner moved on, frame by frame as a drag moves it: they go with it, and do not wander
+    for (const across of [2.2, 2.6, 3, -1, 2.4, 2]) d = ops.updateArrow(d, 1, { corners: [{ along: 0.5, across }] });
+    expect(d.captions![0].x).toBeCloseTo(4, 6);
+    expect(d.captions![0].y).toBeCloseTo(2.8, 6);
+    // its point drawn up to (8, 4): the words over the corner go with it, as far off it, across the arrow as it now runs
+    const turned = ops.updateArrow(d, 1, { x: 4, y: 2, angle: Math.atan2(4, 8), length: Math.hypot(8, 4) });
+    const n = { x: -4 / Math.hypot(8, 4), y: 8 / Math.hypot(8, 4) };
+    expect(turned.captions![0].x).toBeCloseTo(4 + n.x * 2.8, 6);
+    expect(turned.captions![0].y).toBeCloseTo(2 + n.y * 2.8, 6);
+    // straightened from the menu: back where they began
+    d = ops.setArrowForm(d, [1], { corners: null });
+    expect(d.captions![0].x).toBeCloseTo(4, 6);
+    expect(d.captions![0].y).toBeCloseTo(0.8, 6);
+    expect(d.captions![1].x).toBeCloseTo(2, 6);
+    expect(d.captions![1].y).toBeCloseTo(-0.8, 6);
+    // a straight arrow moved takes them with its middle, as before
+    d = ops.updateArrow(d, 1, { x: 5, y: 1 });
+    expect(d.captions![0].x).toBeCloseTo(5, 6);
+    expect(d.captions![0].y).toBeCloseTo(1.8, 6);
+  });
+
   it("toggles aromatic circles", () => {
     let d = ops.setAromaticEnabled(doc(), true);
     expect(d.aromaticEnabled).toBe(true);
