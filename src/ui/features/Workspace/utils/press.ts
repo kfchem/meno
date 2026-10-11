@@ -32,3 +32,14 @@ export function endsDrag(p: Press | null, x: number, y: number): boolean {
   if (!p) return false;
   return movePress(p, x, y).travelled;
 }
+
+/**
+ * Whether a right press came while the primary button was held - a chorded
+ * press, in the middle of a drag - as the menu's event says, or the last
+ * pointer event did. A Ctrl-click on a Mac, the primary button alone, is a
+ * right-click of its own and is not one.
+ */
+export function chordedPress(buttons: number, lastButtons: number): boolean {
+  const both = (b: number) => (b & 1) !== 0 && (b & 2) !== 0;
+  return both(buttons) || both(lastButtons);
+}

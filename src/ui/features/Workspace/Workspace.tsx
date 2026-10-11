@@ -31,6 +31,7 @@ import {
 } from "./components";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { chordedPress } from "./utils/press";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -905,6 +906,19 @@ function WorkspaceContent({
     moved: boolean;
     pending: MenuTarget | null;
   } | null>(null);
+  // The buttons held, as the last pointer event had them: a right press
+  // while the primary button is held - an atom, the selection or the view
+  // being dragged - comes as a move with both held (a chorded press), and
+  // opens no menu: it would be the menu of what lies under what is dragged,
+  // and letting go over it would choose one of its items.
+  const buttonsHeld = useRef(0);
+  useEffect(() => {
+    const note = (e: PointerEvent) => (buttonsHeld.current = e.buttons);
+    for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.addEventListener(type, note, true);
+    return () => {
+      for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.removeEventListener(type, note, true);
+    };
+  }, []);
   const onRightDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 2) {
       rightPress.current = null; // a Ctrl-click on a Mac starts afresh
@@ -934,6 +948,8 @@ function WorkspaceContent({
     // A card's text field keeps the system's own menu - cut, copy, paste.
     if (e.target !== domRef.current) return;
     e.preventDefault(); // no browser menu over the drawing
+    // (none in the middle of a drag: pressed with the primary button held)
+    if (chordedPress(e.buttons, buttonsHeld.current)) return;
     const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d, hoveredAtom3d } = store.getState();
     const box = e.currentTarget.getBoundingClientRect();
     const place = {
