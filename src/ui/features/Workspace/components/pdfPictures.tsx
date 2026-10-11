@@ -14,6 +14,9 @@ import * as THREE from "three";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { drawPart, type DrawnPart } from "../../../../lib/pdf/reader";
 import type { Sheet } from "../../../../lib/pdf/layout";
+import { INK_WIDTHS_PT, inkColour, MARKER_OPACITY } from "../../../../lib/chem/ink";
+import type { PdfInk } from "../store/types";
+import { strokesGeometry } from "./inkGeometry";
 
 /** Meno's hairline and its grey (App.css: --color-gh-line, --color-gh-gray, --color-gh-base). */
 export const LINE = "#d1d9e0";
@@ -214,6 +217,8 @@ export function Page(props: {
   preview: Pic | null;
   tiles: Tile[];
   marks?: readonly Mark[];
+  /** Writing by hand on it, in its points (docs/PRESENTING.md, *Handwriting*). */
+  ink?: readonly PdfInk[];
 }) {
   const { s, lift, now, preview, tiles } = props;
   const opacity = props.opacity ?? 1;
@@ -280,9 +285,42 @@ export function Page(props: {
           ),
         ),
       )}
+      {props.ink?.length ? <PageInk ink={props.ink} left={left} topY={topY} unit={unit} opacity={opacity} /> : null}
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
         <lineBasicMaterial color={LINE} transparent opacity={opacity} toneMapped={false} />
       </lineSegments>
     </group>
+  );
+}
+
+/** Writing on a page: over its pictures (tiles up to about 0.0024) and under its marks (0.0025, a ring's 0.0026) - each piece in its pen, its points the page's. */
+function PageInk({ ink, left, topY, unit, opacity }: { ink: readonly PdfInk[]; left: number; topY: number; unit: number; opacity: number }) {
+  const pieces = useMemo(
+    () =>
+      ink.map((k) => {
+        const strokes = k.strokes.map((s) => {
+          const points = s.points.slice();
+          for (let i = 0; i + 1 < points.length; i += 3) {
+            points[i] = left + points[i] * unit;
+            points[i + 1] = topY - points[i + 1] * unit;
+          }
+          return { ...s, points };
+        });
+        return { k, geometry: strokesGeometry(strokes, INK_WIDTHS_PT[k.pen][k.width] * unit, k.pen !== "marker") };
+      }),
+    [ink, left, topY, unit],
+  );
+  useEffect(() => () => pieces.forEach((p) => p.geometry.dispose()), [pieces]);
+  return (
+    <>
+      {pieces.map(({ k, geometry }, i) => {
+        const o = (k.pen === "marker" ? MARKER_OPACITY : 1) * opacity;
+        return (
+          <mesh key={i} geometry={geometry} position={[0, 0, 0.00245]} frustumCulled={false} raycast={() => {}}>
+            <meshBasicMaterial color={inkColour(k, "#000000")} transparent={o < 1} opacity={o} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
+          </mesh>
+        );
+      })}
+    </>
   );
 }

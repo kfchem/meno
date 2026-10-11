@@ -480,7 +480,9 @@ work.meno (zip)
   (`captions[].shape`; docs/PRESENTING.md, *Shapes*). Writing by hand is
   listed in `inks`, each piece with its pen, width, colour and strokes -
   each stroke's points as x, y and pressure, three numbers to a point
-  (docs/PRESENTING.md, *Handwriting*).
+  (docs/PRESENTING.md, *Handwriting*); writing on a PDF's page is kept with
+  the PDF (`pdfs[].inks`, each piece with its page, its points the page's
+  from its top left).
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.

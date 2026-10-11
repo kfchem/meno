@@ -83,13 +83,14 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.letGo();
       st.clearSel();
       st.setWorkflowView({ openStep: null, chosenSet: null, workflowMenu: null });
-      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) } }));
+      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) }, talkInk: [] }));
     },
     presentAt: (at: number) =>
       set((prev: EditorState) => {
         if (!prev.presenting || at < 0 || at >= prev.slides.length || at === prev.presenting.at) return prev;
-        return { ...prev, presenting: { at } };
+        // (a pen's writing over the slide goes as the slide does)
+        return { ...prev, presenting: { at }, talkInk: [] };
       }),
-    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null } : prev)),
+    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null, talkInk: [] } : prev)),
   };
 }

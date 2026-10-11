@@ -107,4 +107,43 @@ describe("writing by hand on the page", () => {
     expect(layout.inks).toHaveLength(2);
     expect(layoutEmf(layout, opts).emf.length).toBeGreaterThan(0);
   });
+
+  it("is kept on a PDF's page in its points, a stroke at a time, rubbed out there, and saved and read back with the PDF", () => {
+    const { doc, state } = editor();
+    doc.edit("add pdf", (d) => ({ ...d, pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792], [612, 792]], x: 0, y: 0, page: 0 }], nextPdfId: 2 }));
+    expect(state().writePdfStroke(1, 0, PEN, stroke(10))).toBe(0);
+    expect(state().writePdfStroke(1, 0, PEN, stroke(20), 0)).toBe(0);
+    // (on another page: a piece of its own, though asked to join)
+    expect(state().writePdfStroke(1, 1, PEN, stroke(30), 0)).toBe(1);
+    // (a page it has not: nothing)
+    expect(state().writePdfStroke(1, 5, PEN, stroke(30))).toBeNull();
+    expect(state().pdfs[0].inks?.map((k) => [k.page, k.strokes.length])).toEqual([
+      [0, 2],
+      [1, 1],
+    ]);
+    const text = workspaceText(state());
+    const back = readWorkspace(text)!;
+    expect(back.pdfs[0].inks?.[0].strokes).toHaveLength(2);
+    state().erasePdfStrokes([{ pdf: 1, piece: 1, index: 0 }], "rub");
+    expect(state().pdfs[0].inks?.map((k) => k.page)).toEqual([0]);
+  });
+
+  it("over a slide in a talk, is the view's alone and goes as the slide does", () => {
+    const { doc, state } = editor();
+    state().addSlide({ x: 0, y: 0, w: 32, h: 18 });
+    state().addSlide({ x: 50, y: 0, w: 32, h: 18 });
+    state().present(0);
+    const depth = doc.history().undoDepth;
+    state().writeTalkStroke(PEN, stroke(0));
+    state().writeTalkStroke(PEN, stroke(5));
+    expect(state().talkInk).toHaveLength(2);
+    expect(doc.history().undoDepth).toBe(depth);
+    state().eraseTalkStrokes([0]);
+    expect(state().talkInk).toHaveLength(1);
+    state().presentAt(1);
+    expect(state().talkInk).toEqual([]);
+    state().writeTalkStroke(PEN, stroke(0));
+    state().endPresenting();
+    expect(state().talkInk).toEqual([]);
+  });
 });

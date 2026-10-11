@@ -232,6 +232,8 @@ export default function PartMenu({
     /** A box drawn on it put on the page as a picture, or copied as one. */
     onPutBox?: () => void;
     onCopyBox?: () => void;
+    /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
+    onWrite?: () => void;
   };
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
@@ -467,6 +469,7 @@ export default function PartMenu({
           ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
+          ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
         ]
       : target.kind === "text"
       ? [

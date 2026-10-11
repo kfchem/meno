@@ -194,6 +194,8 @@ export type PdfItem = {
   placed?: PagePlace[];
   /** Made small, an icon about a benzene ring's size, its top page on it (lib/pdf/layout `ICON_HEIGHT`). */
   icon?: boolean;
+  /** Writing by hand on its pages, each piece on the page it was begun on and going wherever that goes (docs/PRESENTING.md, *Handwriting*). */
+  inks?: PdfInk[];
   /**
    * Read in the column, its name among the texts' (docs/PDF.md, *In the
    * column*): where the column's top was, in pages from the first's top -
@@ -269,6 +271,8 @@ export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: 
  * none, a pen's is the drawing's ink and a marker's `MARKER_COLOUR`.
  */
 export type Ink = { id: number; pen: InkPen; width: 0 | 1 | 2; color?: string; strokes: InkStroke[] };
+/** A piece of writing by hand on a PDF's page: as one on the page (`Ink`, but numbered by its place among its PDF's), on page `page`, its strokes' points in that page's points from its top left. */
+export type PdfInk = Omit<Ink, "id"> & { page: number };
 /** What a stroke is written in: the pen, its width, its colour. */
 export type InkLook = Pick<Ink, "pen" | "width" | "color">;
 /** Writing with a mouse or a trackpad, its card open: what writes - a pen, a marker or the eraser - in what colour and width. */
@@ -936,6 +940,14 @@ export type EditorState = {
   /** The pieces `ids` given a colour of their own, or none; one step for all a chooser gives (`gesture`). */
   colourInks: (ids: readonly number[], color: string | null, gesture?: string) => void;
   removeInk: (id: number) => void;
+  /** A stroke written on a PDF's page, one step: on the piece there `join` (by its place) where it is in the same pen, else a piece of its own; the piece's place. */
+  writePdfStroke: (pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null) => number | null;
+  /** Strokes rubbed out of PDFs' pages - each by its PDF, its piece's place and its own - one step for a rub (`gesture`). */
+  erasePdfStrokes: (cuts: readonly { pdf: number; piece: number; index: number }[], gesture?: string) => void;
+  /** A pen's writing over the slide while a talk is given: gone as the slide goes (docs/PRESENTING.md, *Handwriting*) - the view's, never the document's. */
+  talkInk: { look: InkLook; stroke: InkStroke }[];
+  writeTalkStroke: (look: InkLook, stroke: InkStroke) => void;
+  eraseTalkStrokes: (indices: readonly number[]) => void;
   /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
   presenting: Presenting | null;
   /** What a move or a resize under way lines up with, shown as guides (presenting/guides) - the view's. */

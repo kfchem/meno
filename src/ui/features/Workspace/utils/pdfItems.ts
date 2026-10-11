@@ -8,6 +8,7 @@
 import type { PdfItem } from "../store/types";
 import type { PagePlace } from "../../../../lib/pdf/layout";
 import { readingOf } from "../document";
+import { readInkPiece } from "./inkRecord";
 
 const SHA = /^[0-9a-f]{64}$/;
 
@@ -35,6 +36,15 @@ export function readPdfs(v: unknown): Omit<PdfItem, "id">[] {
       ...(placed.length ? { placed } : {}),
       ...(p.icon === true ? { icon: true } : {}),
       ...(reading ? { reading } : {}),
+      ...(() => {
+        // (writing on its pages, each piece on a page it has)
+        const inks = (Array.isArray(p.inks) ? (p.inks as unknown[]) : []).flatMap((raw) => {
+          const page = (raw as { page?: unknown } | null)?.page;
+          const piece = Number.isInteger(page) && (page as number) >= 0 && (page as number) < pages.length ? readInkPiece(raw) : null;
+          return piece ? [{ ...piece, page: page as number }] : [];
+        });
+        return inks.length ? { inks } : {};
+      })(),
     });
   }
   return out;

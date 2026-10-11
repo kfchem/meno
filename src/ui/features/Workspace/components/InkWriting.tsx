@@ -9,6 +9,11 @@
  * where that was written in the same pen within a second and a half and
  * near it. The eraser rubs out a stroke at a time, one step for a rub.
  *
+ * A stroke begun on a PDF's page is that page's, kept in its points, and
+ * goes wherever the page goes; the eraser rubs out what is written there as
+ * well. While a talk is given, a pen writes over the slide - nothing of it
+ * the document's - and what it wrote goes as the slide does.
+ *
  * The press is the writing's alone: nothing else on the page sees it. The
  * other buttons and the wheel still move and zoom the view.
  */
@@ -17,8 +22,11 @@ import { useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { InkLook } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inkWidth, OneEuro, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { INK_WIDTHS_PT, inkWidth, OneEuro, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { shownSheet } from "../../../../lib/pdf/layout";
 import { pageAt } from "../utils/page";
+import { pageUnder, pointsOnPage, toPagePoint } from "../utils/pdfInk";
+import { stageOf } from "../presenting/stage";
 import { DOUBLE_CLICK_MS } from "../constants";
 import { useDrawnLayout } from "./drawnLayoutContext";
 
@@ -32,8 +40,8 @@ const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 type Pt = { x: number; y: number };
 type Box = { x0: number; y0: number; x1: number; y1: number };
 
-/** The stroke written last: its piece, when it ended, its look and the box round its piece - what the next may join. */
-let last: { id: number; t: number; look: InkLook; box: Box } | null = null;
+/** The stroke written last: its piece - on the page, or on a PDF's page, by its place there - when it ended, its look and the box round its piece (in a PDF's points, on one) - what the next may join. */
+let last: { on: { id: number } | { pdf: number; page: number; piece: number }; t: number; look: InkLook; box: Box } | null = null;
 
 export default function InkWriting() {
   const store = useEditorStore();
@@ -68,24 +76,27 @@ export default function InkWriting() {
     };
 
     const onDown = (ev: PointerEvent) => {
-      if (ev.target !== dom) return;
       const st = store.getState();
-      if (st.presenting) return;
       const pen = ev.pointerType === "pen";
-      const mode = st.inkMode;
+      // (a talk: a pen on the surface it is given on, only)
+      const talk = st.presenting != null;
+      if (talk ? !pen || ev.target !== stageOf(store).layer : ev.target !== dom) return;
+      const mode = talk ? null : st.inkMode;
       if (!pen && !(mode && ev.button === 0)) return;
       // (a pen's eraser end, or its button, rubs out; so does the card's eraser)
       const rubs = (pen && (ev.button === 5 || (ev.buttons & 32) !== 0 || ev.button === 2)) || mode?.tool === "eraser";
       ev.stopImmediatePropagation();
       ev.preventDefault();
-      st.clearSel();
-      if (rubs) erase(ev);
-      else write(ev, pen);
+      if (!talk) st.clearSel();
+      if (rubs) erase(ev, talk);
+      else write(ev, pen, talk);
     };
 
-    const write = (down: PointerEvent, pen: boolean) => {
-      const mode = store.getState().inkMode;
+    const write = (down: PointerEvent, pen: boolean, talk: boolean) => {
+      const mode = talk ? null : store.getState().inkMode;
       const look: InkLook = mode && mode.tool !== "eraser" ? { pen: mode.tool, width: mode.width, ...(mode.color ? { color: mode.color } : {}) } : { pen: "pen", width: 1 };
+      // (begun on a PDF's page: that page's)
+      const on = talk ? null : pageUnder(store.getState().pdfs, toPage(down.clientX, down.clientY));
       const fx = new OneEuro();
       const fy = new OneEuro();
       const points: number[] = [];
@@ -116,20 +127,36 @@ export default function InkWriting() {
         const st = store.getState();
         st.setInkDraft(null);
         st.suppressDoubleClick(DOUBLE_CLICK_MS);
-        const stroke: InkStroke = { points: thinned(points, LEAST_PX * pixel()), ...(pen ? { pressure: true as const } : {}) };
-        const width = inkWidth(look, pointPx);
+        const thin = thinned(points, LEAST_PX * pixel());
+        const stroke: InkStroke = { points: on ? pointsOnPage(on.sheet, on.pt, thin) : thin, ...(pen ? { pressure: true as const } : {}) };
+        if (talk) {
+          st.writeTalkStroke(look, stroke);
+          invalidate();
+          return;
+        }
+        // (its width and an em in the units it is kept in: a PDF's points, or the page's)
+        const width = on ? INK_WIDTHS_PT[look.pen][look.width] : inkWidth(look, pointPx);
+        const nearBy = on ? em / pointPx : em;
         const box = strokesBounds([stroke], width / 2);
         if (!box) return;
-        // (joining the piece before it: in the same pen, soon after, and near it)
-        const near = 6 * width + em;
-        const join =
-          last && e.timeStamp - last.t < JOIN_MS && last.look.pen === look.pen && last.look.width === look.width && (last.look.color ?? null) === (look.color ?? null) && box.x0 <= last.box.x1 + near && box.x1 >= last.box.x0 - near && box.y0 <= last.box.y1 + near && box.y1 >= last.box.y0 - near
-            ? last.id
-            : null;
-        const id = st.writeStroke(look, stroke, join);
-        if (id == null) return;
-        const piece = store.getState().inks.find((k) => k.id === id);
-        last = { id, t: e.timeStamp, look, box: (piece && strokesBounds(piece.strokes, width / 2)) ?? box };
+        // (joining the piece before it: in the same pen, on the same page, soon after, and near it)
+        const near = 6 * width + nearBy;
+        const sameOn = (a: NonNullable<typeof last>["on"]) => (on ? "pdf" in a && a.pdf === on.pdf && a.page === on.page : "id" in a);
+        const joins =
+          last && sameOn(last.on) && e.timeStamp - last.t < JOIN_MS && last.look.pen === look.pen && last.look.width === look.width && (last.look.color ?? null) === (look.color ?? null) && box.x0 <= last.box.x1 + near && box.x1 >= last.box.x0 - near && box.y0 <= last.box.y1 + near && box.y1 >= last.box.y0 - near;
+        if (on) {
+          const prev = joins && last && "pdf" in last.on ? last.on.piece : null;
+          const piece = st.writePdfStroke(on.pdf, on.page, look, stroke, prev);
+          if (piece == null) return;
+          const kept = store.getState().pdfs.find((p) => p.id === on.pdf)?.inks?.[piece];
+          last = { on: { pdf: on.pdf, page: on.page, piece }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+        } else {
+          const prev = joins && last && "id" in last.on ? last.on.id : null;
+          const id = st.writeStroke(look, stroke, prev);
+          if (id == null) return;
+          const kept = store.getState().inks.find((k) => k.id === id);
+          last = { on: { id }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+        }
         invalidate();
       };
       window.addEventListener("pointermove", onMove, true);
@@ -137,14 +164,32 @@ export default function InkWriting() {
       window.addEventListener("pointercancel", onUp, true);
     };
 
-    const erase = (down: PointerEvent) => {
+    const erase = (down: PointerEvent, talk: boolean) => {
       const gesture = `erase-${down.timeStamp}`;
       const rub = (e: PointerEvent) => {
         const st = store.getState();
         const p = toPage(e.clientX, e.clientY);
         const reach = ERASE_PX * pixel();
+        if (talk) {
+          st.eraseTalkStrokes(st.talkInk.flatMap((k, i) => (strokeHit(k.stroke, p, reach, inkWidth(k.look, pointPx)) ? [i] : [])));
+          invalidate();
+          return;
+        }
         const cuts = st.inks.flatMap((k) => k.strokes.flatMap((s, index) => (strokeHit(s, p, reach, inkWidth(k, pointPx)) ? [{ id: k.id, index }] : [])));
         if (cuts.length) st.eraseStrokes(cuts, gesture);
+        // (and what is written on PDFs' pages there, in their points)
+        const onPdfs = st.pdfs.flatMap((pdf) =>
+          pdf.icon
+            ? []
+            : (pdf.inks ?? []).flatMap((k, piece) => {
+                const sheet = shownSheet(pdf, k.page);
+                if (!sheet) return [];
+                const unit = sheet.w / pdf.pages[k.page][0];
+                const q = toPagePoint(sheet, pdf.pages[k.page], p);
+                return k.strokes.flatMap((s, index) => (strokeHit(s, q, reach / unit, INK_WIDTHS_PT[k.pen][k.width]) ? [{ pdf: pdf.id, piece, index }] : []));
+              }),
+        );
+        if (onPdfs.length) st.erasePdfStrokes(onPdfs, gesture);
       };
       rub(down);
       const onMove = (e: PointerEvent) => {

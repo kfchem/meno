@@ -17,6 +17,7 @@ import { notOneReaction, reactionFileText } from "../chem/reactionFile";
 import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
+import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
@@ -357,19 +358,9 @@ export function readDrawn(data: unknown): Drawn | null {
 
 /** A piece of writing as a copy or a workspace carries it, where it reads: its pen, width and colour, and the strokes whose points read - three numbers to a point. */
 function readInk(raw: unknown): Ink | null {
-  const k = raw as Partial<Record<keyof Ink, unknown>> | null;
-  if (!k || !isNum(k.id) || (k.pen !== "pen" && k.pen !== "marker") || !Array.isArray(k.strokes)) return null;
-  const strokes = (k.strokes as { points?: unknown; pressure?: unknown }[]).flatMap((s) =>
-    s && Array.isArray(s.points) && s.points.length >= 3 && s.points.length % 3 === 0 && s.points.every(isNum) ? [{ points: s.points as number[], ...(s.pressure === true ? { pressure: true as const } : {}) }] : [],
-  );
-  if (!strokes.length) return null;
-  return {
-    id: k.id,
-    pen: k.pen,
-    width: k.width === 0 || k.width === 2 ? k.width : 1,
-    ...(typeof k.color === "string" && COLOUR.test(k.color) ? { color: k.color.toLowerCase() } : {}),
-    strokes,
-  };
+  const id = (raw as { id?: unknown } | null)?.id;
+  const piece = isNum(id) ? readInkPiece(raw) : null;
+  return piece && isNum(id) ? { id, ...piece } : null;
 }
 
 const COLOUR = /^#[0-9a-f]{6}$/i;

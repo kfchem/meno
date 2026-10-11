@@ -1700,6 +1700,40 @@ export function addInk(doc: WorkspaceDocument, piece: Omit<Ink, "id">): Workspac
   return { ...doc, inks: [...(doc.inks ?? []), { ...piece, id }], nextInkId: id + 1 };
 }
 
+/** `doc` with a stroke written on page `page` of the PDF `pdf`: on its piece `join` (by place) where that is on the same page in the same pen, else a piece of its own. */
+export function addPdfInkStroke(doc: WorkspaceDocument, pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null): WorkspaceDocument {
+  const p = doc.pdfs?.find((x) => x.id === pdf);
+  if (!p || page < 0 || page >= p.pages.length || stroke.points.length < 3 || !stroke.points.every(Number.isFinite)) return doc;
+  const inks = p.inks ?? [];
+  const piece = join != null ? inks[join] : undefined;
+  const next =
+    piece && piece.page === page && sameLook(piece, look)
+      ? inks.map((k, i) => (i === join ? { ...k, strokes: [...k.strokes, stroke] } : k))
+      : [...inks, { page, pen: look.pen, width: look.width, ...(look.color ? { color: look.color } : {}), strokes: [stroke] }];
+  return { ...doc, pdfs: doc.pdfs!.map((x) => (x.id === pdf ? { ...x, inks: next } : x)) };
+}
+
+/** `doc` without the strokes `cuts` names on PDFs' pages - a piece left with none, gone. */
+export function removePdfInkStrokes(doc: WorkspaceDocument, cuts: readonly { pdf: number; piece: number; index: number }[]): WorkspaceDocument {
+  if (!cuts.length || !doc.pdfs?.length) return doc;
+  let changed = false;
+  const pdfs = doc.pdfs.map((p) => {
+    const mine = cuts.filter((c) => c.pdf === p.id);
+    if (!mine.length || !p.inks?.length) return p;
+    const inks = p.inks.flatMap((k, i) => {
+      const gone = new Set(mine.filter((c) => c.piece === i).map((c) => c.index));
+      if (!gone.size) return [k];
+      changed = true;
+      const strokes = k.strokes.filter((_, j) => !gone.has(j));
+      return strokes.length ? [{ ...k, strokes }] : [];
+    });
+    if (inks.length === p.inks.length && !changed) return p;
+    const { inks: _was, ...rest } = p;
+    return inks.length ? { ...rest, inks } : rest;
+  });
+  return changed ? { ...doc, pdfs } : doc;
+}
+
 /** `doc` without the strokes `cuts` names - a piece left with none, gone. */
 export function removeInkStrokes(doc: WorkspaceDocument, cuts: readonly { id: number; index: number }[]): WorkspaceDocument {
   if (!cuts.length || !doc.inks?.length) return doc;

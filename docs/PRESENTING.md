@@ -345,8 +345,24 @@ Shift+Enter, since Enter keeps the words, as it did before.
   SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
   everything.
 
-Not yet, and where it comes: writing on a PDF's page, kept with that page,
-and in the column; a pen's writing over a slide while a talk is given (the
-second half of *Handwriting*, its own pull request); a slide's notes, with
-the presenter's view. Words in a shape do not make it taller: words longer
+### Handwriting on PDFs and in a talk (lane L8, fifth part, second half, 2026-10-12)
+
+- A stroke begun on a PDF's page - the top one of a stack, or one spread,
+  not an icon - is that page's (`utils/pdfInk.ts` `pageUnder`): kept with
+  the PDF (`PdfItem.inks`, each piece on its page, its points the page's,
+  from its top left), and drawn with the page (`pdfPictures` `Page`, at
+  0.00245 - over its pictures, under the marks a search or a box puts on it
+  and a ring round an atom read from a figure, as agreed with lane L12) -
+  so it goes wherever the page goes: stacked, spread, put in a place of its
+  own, made an icon and back, and read in the column. A stroke joins a
+  piece on the same page only. The eraser rubs out what is written on the
+  pages under it too. A PDF's menu has *Write on it*, which opens the pen's
+  card. Saved and copied with the PDF.
+- While a talk is given, a pen - not the mouse - writes over the slide
+  (`talkInk`, the view's, never the document's: no step to undo), its
+  eraser end rubbing out; what it wrote goes as the slide does, and when
+  the talk ends.
+
+Not yet, and where it comes: writing in the column itself (what is written
+on the page shows there); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.

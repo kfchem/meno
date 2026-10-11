@@ -1704,6 +1704,7 @@ function WorkspaceContent({
               spread: !!p.spread,
               icon: !!p.icon,
               onSpread: () => st.spreadPdf(p.id, !p.spread),
+              onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 1 }),
               ...(p.spread && p.placed?.length ? { onRows: () => st.pdfPagesInRows(p.id) } : {}),
               onIcon: () => st.iconPdf(p.id, !p.icon),
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),

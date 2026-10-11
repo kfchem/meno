@@ -19,7 +19,8 @@ import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inkColour, inkWidth, MARKER_OPACITY, strokeHit, strokesBounds, strokeTriangles, type InkStroke } from "../../../../lib/chem/ink";
+import { inkColour, inkWidth, MARKER_OPACITY, strokeHit, strokesBounds, type InkStroke } from "../../../../lib/chem/ink";
+import { strokesGeometry } from "./inkGeometry";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
@@ -30,6 +31,8 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
 const Z_PEN = 0.3;
 const Z_MARKER = -0.12;
+/** A pen's writing while a talk is given: over everything on the page. */
+const Z_TALK = 0.7;
 const Z_STEP = 1e-4;
 /** On the screen, in pixels: how far off a stroke a press still takes it; how far round its strokes the light reaches. */
 const EDGE_PX = 5;
@@ -41,22 +44,6 @@ const PAN_PX = 3;
 const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 
 type Pt = { x: number; y: number };
-
-/** Strokes `width` wide as triangles, in one geometry. */
-function strokesGeometry(strokes: readonly InkStroke[], width: number, taper: boolean): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const indices: number[] = [];
-  for (const s of strokes) {
-    const t = strokeTriangles(s, width, taper);
-    const base = positions.length / 3;
-    for (let i = 0; i < t.positions.length; i += 2) positions.push(t.positions[i], t.positions[i + 1], 0);
-    for (const i of t.indices) indices.push(base + i);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  g.setIndex(indices);
-  return g;
-}
 
 /** Strokes as they are drawn, in a piece's look. */
 function StrokesLook({ look, strokes, pointPx, ink, extra = 0, color, opacity }: { look: InkLook; strokes: readonly InkStroke[]; pointPx: number; ink: string; extra?: number; color?: string; opacity?: number }) {
@@ -77,6 +64,7 @@ export default function Inks2D() {
   const selInks = useEditor((s) => s.selInks);
   const hovered = useEditor((s) => s.hoveredInk);
   const draft = useEditor((s) => s.inkDraft);
+  const talkInk = useEditor((s) => s.talkInk);
   const { opts } = useDrawnLayout();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const ink = opts.bondColor ?? "#000000";
@@ -91,11 +79,25 @@ export default function Inks2D() {
       {inks.map((k, i) => (
         <InkItem key={k.id} k={k} z={(k.pen === "marker" ? Z_MARKER : Z_PEN) + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selInks.has(k.id)} hovered={hovered === k.id} toWorld={toWorld} />
       ))}
+      {/* (a pen's writing over the slide while a talk is given, over everything) */}
+      {talkInk.map((k, i) => (
+        <TalkStroke key={`talk${i}`} k={k} z={Z_TALK + i * Z_STEP} pointPx={pointPx} ink={ink} />
+      ))}
       {draft && (
         <group position={[0, 0, (draft.look.pen === "marker" ? Z_MARKER : Z_PEN) + inks.length * Z_STEP]}>
           <StrokesLook look={draft.look} strokes={[draft.stroke]} pointPx={pointPx} ink={ink} />
         </group>
       )}
+    </group>
+  );
+}
+
+/** A stroke written over the slide in a talk: drawn up once. */
+function TalkStroke({ k, z, pointPx, ink }: { k: { look: InkLook; stroke: InkStroke }; z: number; pointPx: number; ink: string }) {
+  const strokes = useMemo(() => [k.stroke], [k.stroke]);
+  return (
+    <group position={[0, 0, z]}>
+      <StrokesLook look={k.look} strokes={strokes} pointPx={pointPx} ink={ink} />
     </group>
   );
 }

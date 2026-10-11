@@ -37,6 +37,22 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       doc.edit("rub out", (d) => ops.removeInkStrokes(d, cuts), gesture ? { coalesceKey: `erase:${gesture}` } : undefined),
     colourInks: (ids: readonly number[], color: string | null, gesture?: string) =>
       doc.edit("colour writing", (d) => ops.colourInks(d, ids, color), gesture ? { coalesceKey: `colour-inks:${gesture}` } : undefined),
+    writePdfStroke: (pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null) => {
+      const before = doc.getState().pdfs?.find((p) => p.id === pdf)?.inks ?? [];
+      if (!doc.edit("write", (d) => ops.addPdfInkStroke(d, pdf, page, look, stroke, join))) return null;
+      const after = doc.getState().pdfs?.find((p) => p.id === pdf)?.inks ?? [];
+      // (the piece it joined, or the one it made)
+      return after.length > before.length ? after.length - 1 : (join ?? null);
+    },
+    erasePdfStrokes: (cuts: readonly { pdf: number; piece: number; index: number }[], gesture?: string) =>
+      doc.edit("rub out", (d) => ops.removePdfInkStrokes(d, cuts), gesture ? { coalesceKey: `erase:${gesture}` } : undefined),
+    writeTalkStroke: (look: InkLook, stroke: InkStroke) => set((prev: EditorState) => ({ ...prev, talkInk: [...prev.talkInk, { look, stroke }] })),
+    eraseTalkStrokes: (indices: readonly number[]) =>
+      set((prev: EditorState) => {
+        if (!indices.length) return prev;
+        const gone = new Set(indices);
+        return { ...prev, talkInk: prev.talkInk.filter((_, i) => !gone.has(i)) };
+      }),
     removeInk: (id: number) => {
       if (doc.edit("delete writing", (d) => ops.removeInks(d, [id])))
         set((prev: EditorState) => ({ ...prev, hoveredInk: prev.hoveredInk === id ? null : prev.hoveredInk }));
