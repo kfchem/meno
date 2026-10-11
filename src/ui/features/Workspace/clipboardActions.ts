@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { clipboardFiles, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { styleOf } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { chemMolblock } from "../../../lib/roles/molblock";
@@ -98,7 +98,7 @@ export function useClipboardActions(
     };
   }, [store]);
 
-  const copy = useCallback(async (only?: number) => {
+  const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
     if (!taken || busy()) return false;
     const p = taken.part;
@@ -135,6 +135,8 @@ export function useClipboardActions(
       return false;
     }
   }, [part, busy, onError, store]);
+  // (what is selected now, put on the clipboard once its pictures are drawn: a paste meanwhile waits for it)
+  const copy = useCallback((only?: number) => copying(() => copyNow(only)), [copyNow]);
 
   const cut = useCallback(async (only?: number) => {
     const taken = part(only);
@@ -174,30 +176,35 @@ export function useClipboardActions(
     [busy, store, onError, openFiles],
   );
 
-  const copySmiles = useCallback(async () => {
-    const p = part()?.part;
-    if (!p?.atoms.length) return;
-    try {
-      const c = await chemWorker("smiles");
-      const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
-      await writeClipboard([{ flavor: "text", text: smiles }]);
-    } catch (e) {
-      onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [part, onError]);
+  const copySmiles = useCallback(
+    () =>
+      copying(async () => {
+        const p = part()?.part;
+        if (!p?.atoms.length) return;
+        try {
+          const c = await chemWorker("smiles");
+          const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          await writeClipboard([{ flavor: "text", text: smiles }]);
+        } catch (e) {
+          onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }),
+    [part, onError],
+  );
 
   // a picture on the page, alone: for Meno, and as itself for other programs
   const copyPicture = useCallback(
-    async (id: number) => {
-      const p = store.getState().pictures.find((x) => x.id === id);
-      if (!p) return;
-      try {
-        const png = await picturePng(p);
-        await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
-      } catch (e) {
-        onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    },
+    (id: number) =>
+      copying(async () => {
+        const p = store.getState().pictures.find((x) => x.id === id);
+        if (!p) return;
+        try {
+          const png = await picturePng(p);
+          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
+        } catch (e) {
+          onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }),
     [store, onError],
   );
 

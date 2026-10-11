@@ -52,6 +52,21 @@ function fromBase64(b64: string): Uint8Array {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 
+let making: Promise<unknown> = Promise.resolve();
+
+/**
+ * A copy being made: its pictures are drawn, which takes a moment, before
+ * anything goes on the clipboard. Every read of the clipboard waits till it
+ * is done, so that a paste straight after a copy takes what was copied, not
+ * what was there before.
+ */
+export function copying<T>(make: () => Promise<T>): Promise<T> {
+  const made = make();
+  const before = making;
+  making = Promise.all([before, made.catch(() => undefined)]);
+  return made;
+}
+
 /** Puts `items` on the clipboard, in place of whatever was there. */
 export async function writeClipboard(items: ClipItem[]): Promise<void> {
   if (!isTauri()) {
@@ -66,6 +81,7 @@ export async function writeClipboard(items: ClipItem[]): Promise<void> {
 
 /** The first of `flavors` the clipboard holds, if any. */
 export async function readClipboard(flavors: Flavor[]): Promise<ClipItem | null> {
+  await making;
   if (!isTauri()) {
     for (const f of flavors) {
       const item = own.find((i) => i.flavor === f);
@@ -82,6 +98,7 @@ export async function readClipboard(flavors: Flavor[]): Promise<ClipItem | null>
  * them, the page names no path. None, where it holds none.
  */
 export async function clipboardFiles(): Promise<File[]> {
+  await making;
   if (!isTauri()) return [];
   const names = await invoke<string[]>("clipboard_file_names").catch(() => [] as string[]);
   return Promise.all(names.map(async (name, index) => new File([new Uint8Array(await invoke<ArrayBuffer>("clipboard_file", { index }))], name)));

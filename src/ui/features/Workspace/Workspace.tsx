@@ -138,7 +138,7 @@ import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
-import { writeClipboard } from "../../../lib/clipboard";
+import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -598,14 +598,18 @@ function WorkspaceContent({
     [store],
   );
   // words selected in a PDF copied, as they read (utils/pdfSelection)
-  const copyWords = useCallback(async () => {
-    const st = store.getState();
-    const sel = st.pdfSel;
-    const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
-    if (!sel || !pdf) return;
-    const words = await selectedWords(sel, pdf);
-    if (words) await writeClipboard([{ flavor: "text", text: words }]);
-  }, [store]);
+  const copyWords = useCallback(
+    () =>
+      copying(async () => {
+        const st = store.getState();
+        const sel = st.pdfSel;
+        const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
+        if (!sel || !pdf) return;
+        const words = await selectedWords(sel, pdf);
+        if (words) await writeClipboard([{ flavor: "text", text: words }]);
+      }),
+    [store],
+  );
   // where words taken out of a PDF are let go (components/wordsDrag)
   useEffect(() => {
     setCanvasPlace(store, { canvas: () => domRef.current, worldAt: (x, y) => clientToWorld(x, y) });
