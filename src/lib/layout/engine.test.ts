@@ -133,6 +133,17 @@ describe("layout2D", () => {
     for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
   });
 
+  it("draws huperzine A with room for its ethylidene, no atom on another", () => {
+    // its one-atom bridge laid flat across a ring's face put the ethylidene's carbon on that ring
+    const s = readSmiles("CC=C1C2CC3=C(C1(CC(=C2)C)N)C=CC(=O)N3");
+    const input: LayoutInput = {
+      atoms: s.atoms.map((a) => ({ el: a.el })),
+      bonds: s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    };
+    const { x, y } = layout2D(input);
+    for (let i = 0; i < x.length; i++) for (let j = i + 1; j < x.length; j++) expect(Math.hypot(x[i] - x[j], y[i] - y[j])).toBeGreaterThan(0.3);
+  });
+
   it("fuses rings on a shared side", () => {
     const naphthalene = carbons(10, [...ring(0, 6), [1, 6], [6, 7], [7, 8], [8, 9], [9, 2]]);
     for (const l of bondLengths(naphthalene)) expect(l).toBeCloseTo(1, 6);

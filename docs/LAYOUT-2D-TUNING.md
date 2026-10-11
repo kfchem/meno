@@ -259,9 +259,13 @@ and the held-out list takes new ones. What it showed, by kind:
   so and the rest flat onto it (`cageCore`, `keepsConfigurations`); a
   solid is taken only with its stereocentres as given. Gelsemine,
   paeoniflorin and galantamine now read as their references; tetrodotoxin
-  and ibogaine are whole but small and close; ginkgolide B, aconitine,
-  picrotoxinin and gibberellic acid still flat, their solids failing the
-  stereo test or not clearly better;
+  and ibogaine are whole but small and close; ginkgolide B, aconitine
+  and gibberellic acid still flat, their solids failing the stereo test
+  or not clearly better. Part 2: a flat drawing that leaves an atom's
+  substituent no room is not one without a fault - huperzine A (a bridge
+  across a ring's face, its ethylidene on that ring) and scopolamine now
+  solids, picrotoxinin's rings laid with room (counted in choosing a
+  bridged system's regular ring, not in easing it: paclitaxel worsened);
 - two rings fused on neighbouring sides of a third, squeezed flat
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;

@@ -133,7 +133,10 @@ they hang from.
   between the rings, hemmed in.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
-  atom on another or on a bond, a bond crossing one not behind it - it is
+  atom on another or on a bond, a bond crossing one not behind it, or an
+  atom with a bond out of the system left no room for it, its way out of
+  its rings landing on another atom or bond (huperzine A's one-atom
+  bridge, laid across a ring's face, its ethylidene on that ring) - it is
   drawn as the solid it is, as a cage is, if it has twenty atoms or fewer:
   its atoms set in space by how far apart its bonds put them, and seen
   from the side that reads best (paeoniflorin's cage, rings fused round a
