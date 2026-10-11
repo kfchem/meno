@@ -27,6 +27,7 @@ import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingS
 import { extendRingSystem, misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, type CageView } from "./cage";
+import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
@@ -62,6 +63,24 @@ export type Layout2D = {
 } & Stereo;
 
 export function layout2D(input: LayoutInput): Layout2D {
+  // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system
+  // drawn as a solid whose stereocentres do not read as given - a bond out
+  // of it drawn nearer the other of the two ways the solid leaves free than
+  // the one it is - is drawn again, first without its view from the other
+  // side, then flat. Clean-up never hands back a solid of another molecule.
+  const redo: Redo = { alone: new Set(), flat: new Set() };
+  for (;;) {
+    const { out, mol } = laidOut(input, redo);
+    const wrong = [...misread(input, mol, out)].filter((i) => !redo.flat.has(i));
+    if (!wrong.length) return out;
+    for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
+  }
+}
+
+/** The ring systems drawn again: without their view from the other side, or flat. */
+type Redo = { alone: Set<number>; flat: Set<number> };
+
+function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule } {
   const mol = perceive(input);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
@@ -95,14 +114,14 @@ export function layout2D(input: LayoutInput): Layout2D {
   };
   mol.systems.forEach((sys, i) => {
     if (etaOf.has(i) || unitOf.has(i)) return setVariant(i, 0);
-    const laid = layoutSystem(mol, i);
+    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i);
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
     laid.hints?.forEach((m, a) => hints.set(a, m));
     if (laid.solid || laid.solidAtoms) {
       upright.add(i);
       for (const a of laid.solidAtoms ?? sys.atoms) solid[a] = true;
-      if (laid.other) others.set(i, laid.other);
+      if (laid.other && !redo.alone.has(i)) others.set(i, laid.other);
     }
   });
   // what is measured as drawn in perspective: a cage, and a ring bound
@@ -390,7 +409,46 @@ export function layout2D(input: LayoutInput): Layout2D {
     const ms = u.cluster.metals;
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
-  return { x, y, depth, solid, bold, toward, dashed, ...stereo };
+  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol };
+}
+
+/**
+ * The ring systems drawn as a solid, by index, with a stereocentre the
+ * drawing does not show as given, read as Meno reads a drawing (drawn.ts).
+ */
+function misread(input: LayoutInput, mol: Molecule, out: Layout2D): Set<number> {
+  const wrong = new Set<number>();
+  const centres = input.atoms.flatMap((a, i) => (a.tetra && out.solid[i] && mol.systemOf[i] >= 0 ? [i] : []));
+  if (!centres.length) return wrong;
+  const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({
+    x: out.x[i],
+    y: out.y[i],
+    el: a.el,
+    // (a centre's H as its configuration has it, however many the input gives)
+    hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(out.depth[i] != null ? { z: out.depth[i]! } : {}),
+    ...(out.solid[i] && a.tetra ? { centre: true } : {}),
+  }));
+  const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
+  const drawnH = new Map<number, number>();
+  for (const h of out.hydrogens) {
+    atoms.push({ ...h.at, el: "H", hs: 0 });
+    atoms[h.on] = { ...atoms[h.on], hs: atoms[h.on].hs - 1 };
+    bonds.push({ a: h.on, b: atoms.length - 1, order: 1 });
+    drawnH.set(h.on, atoms.length - 1);
+  }
+  for (const w of out.wedges) {
+    const to = w.to === -1 ? drawnH.get(w.from) : w.to;
+    const bond = bonds.find((b) => (b.a === w.from && b.b === to) || (b.b === w.from && b.a === to));
+    if (bond) bond.wedge = { narrow: w.from, stereo: w.stereo };
+  }
+  const read = readStereo(atoms, bonds);
+  for (const c of centres) {
+    const t = read.tetra.get(c);
+    const h = drawnH.get(c);
+    if (!t || !sameConfiguration(input.atoms[c].tetra!, t, (n) => (n === h ? -1 : n))) wrong.add(mol.systemOf[c]);
+  }
+  return wrong;
 }
 
 /**

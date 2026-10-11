@@ -178,7 +178,11 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     fourth would be in the solid fitted to a drawing that is not quite its
     projection (paeoniflorin with another sugar), and a bridgehead drawn
     all but flat by a hair (camphor's skeleton with one centre given).
-  The diastereomers are a test now.
+  The diastereomers are a test now. And the engine reads back every solid
+  it draws as Meno reads a drawing, last: one whose centres do not read as
+  given (a bond out of it drawn nearer the other of the two ways the
+  solid leaves free) is drawn again, without its view from the other
+  side, then flat - three tetrodotoxin and ibogaine isomers were so.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
