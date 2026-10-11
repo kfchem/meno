@@ -3,13 +3,17 @@ import {
   ArrowPathIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
+  BoldIcon,
   BookOpenIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardIcon,
   CubeIcon,
   DocumentDuplicateIcon,
+  EyeIcon,
   ForwardIcon,
+  ItalicIcon,
+  ListBulletIcon,
   PencilIcon,
   PhotoIcon,
   PlayIcon,
@@ -55,6 +59,26 @@ export const MENU_ICONS = {
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
   colour: hero(SwatchIcon),
+  // (words on the page: their size - a large letter and a small one - and their letters bold or in italics, their lines a list)
+  size: own(
+    <>
+      <path d="M2.5 15.5 L7 4.5 L11.5 15.5 M4.2 11.5 H9.8" />
+      <path d="M12.5 15.5 L15 9.5 L17.5 15.5 M13.4 13.3 H16.6" />
+    </>,
+  ),
+  bold: hero(BoldIcon),
+  italic: hero(ItalicIcon),
+  bullets: hero(ListBulletIcon),
+  // (a slide's: its talk given from it, earlier or later in it, the page about it shown)
+  present: own(
+    <>
+      <rect x="2.5" y="4" width="15" height="11" rx="1.5" />
+      <path d="M8.5 7.5v5l4.2-2.5z" fill="currentColor" />
+    </>,
+  ),
+  earlier: hero(ChevronLeftIcon),
+  later: hero(ChevronRightIcon),
+  around: hero(EyeIcon),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>

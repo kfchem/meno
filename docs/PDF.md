@@ -929,7 +929,7 @@ Two kinds of figure, read two ways:
    is changed.
 4. **Structures first.** A reaction scheme's arrows, plus signs,
    conditions and compound numbers, and letters drawn as outlines, come
-   after.
+   after (letters drawn as outlines: built, below).
 5. **Two plugins read pictures, each standing alone** - MolScribe and
    MolNexTR - and the chemist chooses which, as any role's plugin is
    chosen. Meno does not read a picture with both to see whether they
@@ -970,6 +970,17 @@ workspace holds.
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one.
+- **Letters drawn as outlines** - a figure whose labels were turned into
+  filled shapes, as some journals print them - are read from their shapes:
+  each shape as tall as a letter beside the bonds (its holes and an i's
+  dot with it, an upright bar as thick as a stem beside it or touching no
+  bond, a short level bar set high beside a letter a minus) is laid on a
+  grid and matched against the letters as the system's own typefaces draw
+  them - a sans serif and a serif, drawn by the window when first wanted:
+  no letter's shape is carried in Meno. A letter that could be another
+  (l or I, O or 0) is read as the one that makes its label read; one that
+  matched weakly is marked ("Its letters are drawn as shapes: read as
+  "Cl".").
 - **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
   word, the word is its atom's label, read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
@@ -1006,17 +1017,17 @@ pasted with it - and goes with the atom when it is deleted.
 
 **How well**: on PDFs made for it - twenty structures (stereocentres,
 wedges and hashes, double and triple bonds, charges, ions, groups written
-on either side, an aromatic ring drawn with its circle), drawn four ways
+on either side, an aromatic ring drawn with its circle), drawn seven ways
 (lines stroked; every bond a filled shape; aromatic rings as circles; end
-methyls written CH3), each placed in a page as a journal places a figure -
-every structure is read right, its stereochemistry with it, in about 35 ms
-for the figure of twenty.
+methyls written CH3; and the letters as outlines, in Helvetica, Arial and
+Times), each placed in a page as a journal places a figure - every
+structure is read right, its stereochemistry with it, in about 35 ms for
+the figure of twenty, 65-75 ms where its letters are outlines.
 
 Not yet, and where it comes:
-- **Letters drawn as outlines**, as some journals print figures: read as
-  shapes, matched against the shapes of letters (a part of its own).
 - **Reaction schemes**: arrows, plus signs, conditions and compound
   numbers, read as Meno's own arrows and words (a part of its own).
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures

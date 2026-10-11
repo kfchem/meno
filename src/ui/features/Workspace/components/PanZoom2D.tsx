@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, viewGoalOf } from "./viewGoal";
+import { letViewGoalGo, viewDriven, viewGoalOf } from "./viewGoal";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -84,6 +84,8 @@ export function PanZoom2D() {
   // orthographic - the canvas's - or in perspective, as PageCamera keeps it)
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
+      // (a talk given has the view: presenting/Presenter)
+      if (viewDriven(camera)) return;
       // (the user takes the view: a fit on its way gives way, and a pinch's glide)
       letViewGoalGo(camera);
       zoomGlide.current = 0;
@@ -250,6 +252,7 @@ export function PanZoom2D() {
     const readWheel = wheelReader();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (viewDriven(camera)) return;
       letViewGoalGo(camera);
       if (pinch !== null) return; // the gesture has it
       const cz = (camera as any).zoom || 1;
@@ -340,8 +343,21 @@ export function PanZoom2D() {
     return () => unsub();
   }, [store]);
 
+  // (a talk given: the view is its own, taken up again from where it left it)
+  const drivenBefore = useRef(false);
   useFrame((_, dt) => {
     const cam = camera as any;
+    if (viewDriven(camera)) {
+      drivenBefore.current = true;
+      return;
+    }
+    if (drivenBefore.current) {
+      drivenBefore.current = false;
+      pos.current.set(cam.position.x, cam.position.y);
+      vel.current.set(0, 0);
+      zoomLeft.current = 0;
+      zoomGlide.current = 0;
+    }
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one
     const goal = viewGoalOf(camera);

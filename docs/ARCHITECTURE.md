@@ -934,7 +934,9 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   *Stage 5*): what a figure within a box is drawn with - its paths' steps,
   filled or stroked and how thick, and its letters with where their lines
   start and their sizes, read through forms under their matrices - read in
-  the window as bonds and labels (`lib/figure/read.ts`), then as a
+  the window as bonds and labels (`lib/figure/read.ts`) - letters drawn as
+  outlines matched against the system's own letters, drawn once on a
+  canvas (`lib/figure/glyphs.ts`, `utils/glyphShapes.ts`) - then as a
   structure in Meno's units (`lib/figure/structure.ts`), its labels read
   as typed ones are (`utils/figures.ts` `figureLabels`). Each atom keeps
   where it was drawn (`Atom.seen`), and what was unsure of a part keeps
@@ -1146,7 +1148,9 @@ to be able to work with nothing going out at all.
   purpose's first use of the network waits on the user's yes
   (`askToConnect`, remembered in the settings until withdrawn); each task
   has a card in the corner while it runs; the top bar switches offline mode;
-  Settings › Network holds the allowed purposes and the record.
+  Settings › Network holds the allowed purposes and the record. While a
+  talk is given in the window (docs/PRESENTING.md), the cards and the
+  question wait until it ends; the record is kept as ever.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

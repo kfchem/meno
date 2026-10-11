@@ -63,6 +63,9 @@ import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } fr
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
+import SizeCard from "./SizeCard";
+import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
@@ -88,6 +91,8 @@ import {
   isDeselectKey,
   isFindKey,
   isSelectAllKey,
+  IS_MAC,
+  presentIntent,
   saveIntent,
   shortcutLabel,
 } from "../../../lib/doc/shortcuts";
@@ -102,7 +107,8 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } f
 import { setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
-import { startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
 import { useOfficeLink } from "./hooks/useOfficeLink";
@@ -153,11 +159,16 @@ import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf,
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
-import type { Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
+import Slides2D from "./components/Slides2D";
+import Presenter from "./presenting/Presenter";
+import PresentLayer from "./presenting/PresentLayer";
+import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
+import { selectedBox } from "./utils/extent";
 
 function WorkspaceContent({
   active,
@@ -252,6 +263,8 @@ function WorkspaceContent({
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
+  // (no menu over a talk)
+  const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
@@ -317,6 +330,12 @@ function WorkspaceContent({
     const covered = store.getState().cover / cam.zoom;
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
+  // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)
+  const presentHere = useCallback(() => {
+    const st = store.getState();
+    const seen = viewBox();
+    st.present(seen ? Math.max(0, slideInView(st.slides, seen)) : 0);
+  }, [store, viewBox]);
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
@@ -518,6 +537,8 @@ function WorkspaceContent({
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   // a colour card opened from a menu, where the menu was (ColourCard)
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
+  const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
   // the PDF it shows - or the one under the pointer, or read there, or the
   // first - with the words selected in it, if any
@@ -630,7 +651,13 @@ function WorkspaceContent({
       const id = kind === "atom" ? hovered.atomId : hovered.bondId;
       const { drawing: drawingSelected, any: selected } = selectedOf(st);
       const busy = st.labelEdit.active || st.moveDrag.active || st.extend.active;
-      if (isCleanUpKey(e)) {
+      const talk = presentIntent(e);
+      if (talk && st.slides.length && !busy && !st.presenting) {
+        // a talk given from the slides: from the first, or from the one in view
+        e.preventDefault();
+        if (talk === "first") st.present(0);
+        else presentHere();
+      } else if (isCleanUpKey(e)) {
         e.preventDefault();
         runCleanUp(drawingSelected ? sel.atoms : structureAt(kind, id));
       } else if (isFitKey(e)) {
@@ -685,6 +712,10 @@ function WorkspaceContent({
         // a text's sheet under the pointer, likewise
         e.preventDefault();
         st.removeTexts([st.hoveredText]);
+      } else if (isDeleteKey(e) && !busy && st.hoveredSlide != null && st.slides.some((x) => x.id === st.hoveredSlide)) {
+        // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
+        e.preventDefault();
+        st.removeSlide(st.hoveredSlide);
       } else if (isDeleteKey(e) && !busy && st.hoveredPicture != null && st.pictures.some((p) => p.id === st.hoveredPicture)) {
         // a picture under the pointer, likewise
         e.preventDefault();
@@ -728,9 +759,12 @@ function WorkspaceContent({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords]);
+  }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
+  useEffect(() => {
+    if (talking) setMenu(null);
+  }, [talking]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
@@ -946,7 +980,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -958,7 +992,7 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
@@ -970,7 +1004,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -982,10 +1016,22 @@ function WorkspaceContent({
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
     const pdfWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
     })();
     if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise a slide's edge or number, unless it is selected with more (docs/PRESENTING.md)
+    const { hoveredSlide, slides, selSlides } = store.getState();
+    const slideWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selSlides: new Set() }).any || selSlides.size > 1;
+    })();
+    if (!kind && hoveredSlide != null && slides.some((x) => x.id === hoveredSlide) && !(selSlides.has(hoveredSlide) && slideWithMore)) {
+      const target: MenuTarget = { kind: "slide", id: hoveredSlide, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1048,6 +1094,20 @@ function WorkspaceContent({
   const ownStyle = useEditor((s) => s.docStyle != null);
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
+  // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
+  const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
+  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
+    if (!c.width || c.arrow != null) return {};
+    const set = labelSetOf(layoutOpts);
+    const top = c.y + wordsSet(c, layoutOpts, set).halfH;
+    const after = { ...c, ...next };
+    return { y: top - wordsSet(after, layoutOpts, set).halfH };
+  };
+  const sizeWords = (id: number, pt: number | null) => {
+    const st = store.getState();
+    const c = st.captions.find((x) => x.id === id);
+    if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
+  };
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
@@ -1093,6 +1153,7 @@ function WorkspaceContent({
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
   const pdfsHeld = useEditor((s) => s.pdfs.length > 0);
+  const slideCount = useEditor((s) => s.slides.length);
   // (`at`: where on the page the menu was opened - where a new text's sheet goes)
   const canvasCommands = (at: { x: number; y: number }): CanvasCommand[] => [
     // (a tab's own workspace: not one in a document's object, which keeps its own)
@@ -1104,6 +1165,8 @@ function WorkspaceContent({
           ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().addTexts([{ name: "", text: "" }], at) }] : []),
         ]
       : []),
+    // (a talk given from the slides on the page: docs/PRESENTING.md)
+    ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
     { name: chemistry.stereoLabels ? "Hide R and S" : "Show R and S", keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
@@ -1314,6 +1377,11 @@ function WorkspaceContent({
               else if (what === "arrow") st.addArrow(at.x, at.y);
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
+              // (a slide of what is seen: Quick Add only says when, not where)
+              else if (what === "slide") {
+                const seen = viewBox();
+                if (seen) st.addSlide(slideOfView(seen, WIDE));
+              }
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -1342,6 +1410,20 @@ function WorkspaceContent({
               saveProcedure(name, naming);
               setNaming(null);
             }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {sizeCard && (
+          <SizeCard
+            key={`${sizeCard.x},${sizeCard.y}`}
+            now={store.getState().captions.find((c) => c.id === sizeCard.id)?.size ?? null}
+            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+            onSize={(pt) => sizeWords(sizeCard.id, pt)}
+            x={sizeCard.x}
+            y={sizeCard.y}
+            within={sizeCard.within}
+            onClose={() => setSizeCard(null)}
           />
         )}
       </AnimatePresence>
@@ -1446,6 +1528,29 @@ function WorkspaceContent({
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
             return c ? { now: c.align ?? "center", set: (align) => store.getState().updateCaption(c.id, { align }) } : undefined;
           })()}
+          words={(() => {
+            const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
+            if (!c) return undefined;
+            const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
+            const st = store.getState();
+            return {
+              onSize: () => setSizeCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              bold: styles.length > 0 && styles.every((x) => x?.bold),
+              italic: styles.length > 0 && styles.every((x) => x?.italic),
+              list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
+              onBold: () => st.styleWords([c.id], "bold"),
+              onItalic: () => st.styleWords([c.id], "italic"),
+              onSup: () => st.styleWords([c.id], "sup"),
+              onSub: () => st.styleWords([c.id], "sub"),
+              onList: () => {
+                // (as a list's lines are made so while written: all of them items, or plain again)
+                const ed = new WordsEditor(c.text, c.marks);
+                ed.sel = { anchor: 0, head: c.text.length };
+                ed.toggleList();
+                st.updateCaption(c.id, { text: ed.text, marks: ed.marks(), ...keepTop(c, { text: ed.text, marks: ed.marks() }) });
+              },
+            };
+          })()}
           onFitWords={(() => {
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
             return c?.width ? () => store.getState().updateCaption(c.id, { width: null }) : undefined;
@@ -1466,6 +1571,35 @@ function WorkspaceContent({
               onSave: () => void savePictureFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
             };
           })()}
+          slide={(() => {
+            const st = store.getState();
+            const i = menu.kind === "slide" ? st.slides.findIndex((x) => x.id === menu.id) : -1;
+            if (i < 0) return undefined;
+            const s = st.slides[i];
+            return {
+              onPresent: () => st.present(i),
+              ...(i > 0 ? { onEarlier: () => st.orderSlide(s.id, i - 1) } : {}),
+              ...(i < st.slides.length - 1 ? { onLater: () => st.orderSlide(s.id, i + 1) } : {}),
+              around: !!s.around,
+              onAround: () => st.updateSlide(s.id, { around: !s.around }),
+              standard: isStandard(s),
+              onShape: () => {
+                const r = reshaped(s, isStandard(s) ? WIDE : STANDARD);
+                st.updateSlide(s.id, { w: r.w, h: r.h });
+              },
+              onSelectOn: () => st.selectOnSlide(s.id),
+            };
+          })()}
+          onSlideAround={
+            menu.selection === "here"
+              ? () => {
+                  const st = store.getState();
+                  const cam = camRef.current;
+                  const b = selectedBox(st, style, (cam as { zoom?: number } | null)?.zoom ?? 1, cam ? eyeOf(cam)?.z : undefined);
+                  if (b) st.addSlide(slideAround(b));
+                }
+              : undefined
+          }
           onRender={(() => {
             if (!renderer()) return undefined;
             if (menu.kind === "molecule3d" && menu.selection !== "here" && menuMolecule) return () => askRender([menuMolecule.id]);
@@ -1560,13 +1694,15 @@ function WorkspaceContent({
             };
           })()}
           onColour={(() => {
-            // what is drawn: the selection, or the atom, bond or ring right-clicked
+            // what is drawn: the selection, or the atom, bond, ring or words right-clicked
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
                 ? menu.drawing !== false
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms) }
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions] }
                   : null
+                : menu.kind === "caption" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
@@ -1691,6 +1827,8 @@ function WorkspaceContent({
           </Suspense>
           {/* A workflow on the page: its sets, steps and wires (within the drawing's layout: an input set is made round its labels) */}
           <Workflow2D />
+          {/* Slides: frames round what a talk shows, over everything on the page (docs/PRESENTING.md) */}
+          <Slides2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />
@@ -1699,14 +1837,18 @@ function WorkspaceContent({
         {/* Molecules in 3D standing on the page (before PanZoom2D: a press on one is theirs) */}
         <Molecules3D style={style3d} />
         <PanZoom2D />
+        {/* a talk given from the slides: the view, the molecules turned in it, the keys (docs/PRESENTING.md) */}
+        <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} className="absolute inset-0 pointer-events-none" style={{ clipPath: cover > 0 ? `inset(0 ${cover}px 0 0)` : undefined }} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={{ clipPath: cover > 0 ? `inset(0 ${cover}px 0 0)` : undefined }} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
+      {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}
+      <PresentLayer />
       </Remake3D.Provider>
     </div>
   );

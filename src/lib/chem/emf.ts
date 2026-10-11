@@ -438,7 +438,7 @@ export function layoutEmf(
   const font = labelFont(family);
   const fonts = new Map<string, number>();
   let textColor: number | null = null;
-  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; text: string }, color: number) => {
+  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; bold?: boolean; text: string }, color: number) => {
     if (textColor == null) w.add(EMR.SETTEXTALIGN, 4, (v) => v.setUint32(0, 24, true)); // TA_BASELINE | TA_LEFT
     if (textColor !== color) {
       w.add(EMR.SETTEXTCOLOR, 4, (v) => v.setUint32(0, color, true));
@@ -446,7 +446,8 @@ export function layoutEmf(
     }
     const height = L(run.size);
     const italic = !!run.italic;
-    const key = `${height}${italic ? " italic" : ""}`;
+    const bold = !!run.bold;
+    const key = `${height}${italic ? " italic" : ""}${bold ? " bold" : ""}`;
     let h = fonts.get(key);
     if (h == null) {
       h = w.handle();
@@ -454,7 +455,7 @@ export function layoutEmf(
       w.add(EMR.EXTCREATEFONTINDIRECTW, 4 + 92, (v) => {
         v.setUint32(0, handle, true);
         v.setInt32(4, -height, true); // the em, not the cell
-        v.setInt32(20, 400, true); // FW_NORMAL
+        v.setInt32(20, bold ? 700 : 400, true); // FW_BOLD or FW_NORMAL
         if (italic) v.setUint8(24, 1); // lfItalic
         v.setUint8(27, 1); // DEFAULT_CHARSET
         v.setUint8(28, 4); // OUT_TT_PRECIS
@@ -488,7 +489,7 @@ export function layoutEmf(
         v.setUint32(0, PLUS_VERSION, true);
         v.setFloat32(4, px(height), true); // the em
         v.setUint32(8, 0, true); // in the drawing's own units
-        v.setUint32(12, italic ? 2 : 0, true); // FontStyleItalic, or regular
+        v.setUint32(12, (italic ? 2 : 0) | (bold ? 1 : 0), true); // FontStyleItalic, FontStyleBold, or regular
         v.setUint32(16, 0, true);
         v.setUint32(20, face.length, true);
         for (let i = 0; i < face.length; i++) v.setUint16(24 + 2 * i, face.charCodeAt(i), true);
@@ -532,9 +533,11 @@ export function layoutEmf(
     const fontSize = opts.units === "world" ? opts.fontPx : opts.fontPx / zoom;
     for (const t of layout.texts) {
       const color = t.color ? colorRef(t.color) : ink;
-      for (const run of placeLabel(t, fontSize, set)) {
+      // (words given a size of their own: at it)
+      const size = t.ownSize ? (opts.units === "world" ? t.fontPx : t.fontPx / zoom) : fontSize;
+      for (const run of placeLabel(t, size, set)) {
         if (run.mark || !run.text) continue; // (a mark is drawn with the lines and shapes)
-        writeRun(run, color);
+        writeRun(run, run.color ? colorRef(run.color) : color);
       }
     }
   }

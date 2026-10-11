@@ -2,7 +2,7 @@ import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } fro
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
-import type { ArrowWords } from "../../../../lib/chem/captions";
+import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -132,7 +132,37 @@ export type CaptionPress = { at: { x: number; y: number }; client: { x: number; 
  * `arrow`, going where it goes.
  */
 /** Words on the page: where their middle is, what they say, the arrow they are over, - made as wide as something - how wide they are, broken into lines at it, how their lines lie in it, centred unless said (lib/chem/captions), and - taken out of a PDF - where they came from. */
-export type Caption = { id: number; x: number; y: number; text: string; arrow?: number; width?: number; align?: "left" | "right" | "justify"; from?: WordsFrom };
+export type Caption = {
+  id: number;
+  x: number;
+  y: number;
+  text: string;
+  arrow?: number;
+  width?: number;
+  align?: "left" | "right" | "justify";
+  from?: WordsFrom;
+  /** Its own size, in points; unset, the drawing's labels' (lib/chem/captions `wordsFontPx`). */
+  size?: number;
+  /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
+  marks?: WordsMark[];
+};
+/**
+ * A change to words on the page: written anew, moved, put over an arrow or
+ * taken from one (`arrow` null), made as wide as something or as their
+ * words (`width` null), laid otherwise, given a size of their own or the
+ * labels' (`size` null), their letters marked otherwise (`marks`, none
+ * for plain).
+ */
+export type CaptionPatch = {
+  text?: string;
+  x?: number;
+  y?: number;
+  arrow?: number | null;
+  width?: number | null;
+  align?: "left" | "center" | "right" | "justify";
+  size?: number | null;
+  marks?: WordsMark[];
+};
 /** Where words taken out of a PDF came from (docs/PDF.md, *Taking things out*): the PDF, by its SHA-256, and the places they ran between. */
 export type WordsFrom = { sha256: string; from: WordPlace; to: WordPlace };
 /**
@@ -192,6 +222,18 @@ export type PictureItem = {
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
 export type PictureFrom = { sha256: string; page: number; box: [number, number, number, number] };
+
+/**
+ * A slide (docs/PRESENTING.md): a frame on the page round what a talk shows
+ * at one point of it - where its middle is, and how wide and tall it is, in
+ * the page's units. What lies in it is the page's own; the slide says only
+ * what is shown. The slides' order is the talk's. `around`: while it is
+ * shown, the page about it is seen too, not veiled.
+ */
+export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
+
+/** A talk being given from the slides: the slide shown, by its place in their order. */
+export type Presenting = { at: number };
 
 /** A box drawn on a PDF's page, to be taken out as a picture: the PDF, the page, and the box, in points from its top left. */
 export type PdfBox = { id: number; page: number; box: [number, number, number, number] };
@@ -468,6 +510,8 @@ export type Drawn = Model & {
   pdfs?: PdfItem[];
   /** Texts' sheets carried: each text whole, where its sheet lies. */
   sheets?: WorkspaceText[];
+  /** Slides carried, in their order (docs/PRESENTING.md). */
+  slides?: Slide[];
 };
 
 export type EditorState = {
@@ -792,6 +836,27 @@ export type EditorState = {
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
   removePicture: (id: number) => void;
+  /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
+  slides: Slide[];
+  selSlides: Set<number>;
+  hoveredSlide: number | null;
+  setHoveredSlide: (id: number | null) => void;
+  selectSlides: (ids: Iterable<number>, add?: boolean) => void;
+  toggleSlideSel: (id: number) => void;
+  /** A slide put on the page, last in the talk's order; its id. */
+  addSlide: (slide: Omit<Slide, "id">) => number | null;
+  /** A slide moved, made larger or smaller, given other proportions, or shown with the page about it. */
+  updateSlide: (id: number, patch: Partial<Pick<Slide, "x" | "y" | "w" | "h">> & { around?: boolean }, gesture?: string) => void;
+  /** A slide put at `to` in the talk's order (from 0), the others moving up or down one. */
+  orderSlide: (id: number, to: number) => void;
+  removeSlide: (id: number) => void;
+  /** What is on a slide selected, the slide with it: all of it whose middle lies in it, as a box selects. */
+  selectOnSlide: (id: number) => void;
+  /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
+  presenting: Presenting | null;
+  present: (from: number) => void;
+  presentAt: (at: number) => void;
+  endPresenting: () => void;
   setHoveredCaption: (id: number | null) => void;
   /** Words on the page selected, each as one thing (a long press on them): deleted, copied and moved with the rest of the selection. */
   selCaptions: Set<number>;
@@ -839,7 +904,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"]) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words
@@ -847,10 +912,14 @@ export type EditorState = {
    */
   updateCaption: (
     id: number,
-    patch: { text?: string; x?: number; y?: number; arrow?: number | null; width?: number | null; align?: "left" | "center" | "right" | "justify" },
+    patch: CaptionPatch,
     gesture?: string,
   ) => void;
   removeCaption: (id: number) => void;
+  /** All the letters of the words `ids` in a colour, or (null) in none of their own - a gesture's changes one step. */
+  colourWords: (ids: number[], color: string | null, gesture?: string) => void;
+  /** All the letters of the words `ids` set bold, in italics, raised or lowered - or, every one of them so already, not. */
+  styleWords: (ids: number[], side: "bold" | "italic" | "sup" | "sub") => void;
   /**
    * The icons a double-click on empty space opens there (QuickAdd): where,
    * on the page and in the canvas, and how big the canvas is, for them to
