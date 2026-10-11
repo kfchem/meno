@@ -13,7 +13,8 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, RingFills, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { ringKeyOf } from "./utils/rings";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { printedSize } from "../../../lib/picture/image";
@@ -39,6 +40,8 @@ export type WorkspaceDocument = {
   aromaticEnabled: boolean;
   /** Per-ring aromatic circle flags, keyed by ring key. */
   aromaticRings: Record<string, boolean>;
+  /** The rings filled with a colour, by ring key (`RingFills`). */
+  ringFills?: RingFills;
   /** Ids are handed out from one counter shared by atoms and bonds. */
   nextId: number;
   nextArrowId: number;
@@ -705,7 +708,7 @@ export function replaceDraggedAtomWith(
 /** Replaces the content, e.g. opening a file: one undo step for the import. */
 export function replaceModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { ringFills?: RingFills },
 ): WorkspaceDocument {
   const maxId = Math.max(
     0,
@@ -729,6 +732,7 @@ export function replaceModel(
     nextWorkflowId: 1,
     aromaticEnabled: false,
     aromaticRings: {},
+    ringFills: { ...(next.ringFills ?? {}) },
     nextId: Math.max(1, maxId + 1),
   };
 }
@@ -736,7 +740,7 @@ export function replaceModel(
 /** Adds another structure alongside the current one, renumbering its ids. */
 export function appendModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { ringFills?: RingFills },
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
   const idMap = new Map<number, number>();
@@ -768,6 +772,11 @@ export function appendModel(
     b: idMap.get(b.b) ?? b.b,
     ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
   }));
+  // (its rings' fills with it, by its atoms' new ids)
+  const fills = Object.entries(next.ringFills ?? {}).flatMap(([key, color]) => {
+    const ids = key.split("-").map((id) => idMap.get(Number(id)));
+    return ids.every((id) => id != null) ? [[ringKeyOf(ids as number[]), color] as const] : [];
+  });
   return {
     ...doc,
     nextId: cursor,
@@ -775,6 +784,7 @@ export function appendModel(
       atoms: [...doc.model.atoms, ...atoms],
       bonds: [...doc.model.bonds, ...bonds],
     },
+    ...(fills.length ? { ringFills: { ...(doc.ringFills ?? {}), ...Object.fromEntries(fills) } } : {}),
   };
 }
 
@@ -1394,6 +1404,43 @@ function withoutArrowsOf(doc: WorkspaceDocument, gone: ReadonlySet<number>): Wor
       return rest;
     }),
   };
+}
+
+// --- colour ----------------------------------------------------------------
+
+/**
+ * `doc` with the atoms and bonds `parts` names given `color` - drawn in it
+ * (`which` "color"), or highlighted in it - or (null) none.
+ */
+export function colourParts(
+  doc: WorkspaceDocument,
+  parts: { atoms: Iterable<number>; bonds: Iterable<number> },
+  which: "color" | "highlight",
+  color: string | null,
+): WorkspaceDocument {
+  const atomIds = new Set(parts.atoms);
+  const bondIds = new Set(parts.bonds);
+  let changed = false;
+  const paint = <T extends { id: number; color?: string; highlight?: string }>(x: T, named: ReadonlySet<number>): T => {
+    if (!named.has(x.id) || (x[which] ?? null) === color) return x;
+    changed = true;
+    const { [which]: _was, ...rest } = x;
+    return (color ? { ...rest, [which]: color } : rest) as T;
+  };
+  const atoms = doc.model.atoms.map((a) => paint(a, atomIds));
+  const bonds = doc.model.bonds.map((b) => paint(b, bondIds));
+  return changed ? { ...doc, model: { atoms, bonds } } : doc;
+}
+
+/** `doc` with the rings `keys` filled with `color`, or (null) not. */
+export function fillRings(doc: WorkspaceDocument, keys: readonly string[], color: string | null): WorkspaceDocument {
+  const was = doc.ringFills ?? {};
+  const next = { ...was };
+  for (const k of keys) {
+    if (color) next[k] = color;
+    else delete next[k];
+  }
+  return keys.every((k) => was[k] === next[k]) ? doc : { ...doc, ringFills: next };
 }
 
 // --- aromatic circles ------------------------------------------------------

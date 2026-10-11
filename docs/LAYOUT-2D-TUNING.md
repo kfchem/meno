@@ -154,6 +154,18 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   engine (WebKit's) came to another view from the last bits of the same
   sums. Such a bond now goes along its corner. A test turns every bond
   out of a cage 15 degrees each way and asks for the same reading.
+- **A wedge that reads by luck.** At a centre with two of its bonds in a
+  line, or every bond in one half of the page, a wedge says the
+  configuration only as the bonds happen to fall, and RDKit read two
+  held-out natural products the other way (ibogaine's bridgehead,
+  bilobalide's carbon between its lactones). A wedge is now first taken
+  only where it reads the same with any bond in the page turned 12 degrees
+  either way, and with the bonds spread round the centre; an H drawn and
+  wedged, or another bond, before that. Bilobalide is still read the other
+  way: no choice is sure there, its four bonds all in half the page - a
+  cage's drawing, not a wedge, is its answer. Until it has one, the canvas
+  marks such a centre (EDITOR-2D.md, *Stereochemistry drawn by luck*);
+  checking every centre of the bench's 700 takes about 5 ms.
 - **Speed.** One measure takes 0.1 to 0.3 ms; the calls multiply by frames,
   shapes and passes. The sheet takes about 8 s; ciclosporin, at about 1 s,
   is the slowest.
@@ -183,6 +195,9 @@ now kept by a rule in `LAYOUT-2D.md`:
   - no run of wedges (an H instead);
   - a steroid's fusion H drawn clear of the rings;
   - an H hemmed in by rings goes where there is room;
+  - (2026-10-11) an H pointing into a ring's middle reads badly
+    (lovastatin's, yohimbine's), but a steroid's straight up or down
+    stays as it is;
   - both of a ring atom's two groups marked.
 - **Chains**: gem-dimethyls drawn close together; symmetry kept. Lipids
   are straight, a cis double bond a step; prostaglandins drawn as their
@@ -225,13 +240,40 @@ Licences: a reference image (Wikipedia, IUPAC) is linked, never copied or
 traced into the repository, and no code is taken from RDKit, CoordGen or
 CDK.
 
+## Held out
+
+`scripts/layout/heldout.json` lists natural products nothing is tuned for
+(2026-10-11), drawn with `--list=heldout` (the bench's README). The
+maintainer found the engine much worse on them than on the benchmark:
+3.4 against 16.0 on main 2fde77d. Run it beside the benchmark after each
+change; a molecule that comes to be tuned for moves to `molecules.json`,
+and the held-out list takes new ones. What it showed, by kind:
+
+- cages and bridged systems beyond the chair and the boat (tetrodotoxin,
+  ginkgolide B, gelsemine, paeoniflorin, picrotoxinin, aconitine) - in
+  part: a system that will not lie flat is drawn as a solid, or its cage
+  so and the rest flat onto it (`cageCore`, `keepsConfigurations`); a
+  solid is taken only with its stereocentres as given. Gelsemine,
+  paeoniflorin and galantamine now read as their references; tetrodotoxin
+  and ibogaine are whole but small and close; ginkgolide B, aconitine,
+  picrotoxinin and gibberellic acid still flat, their solids failing the
+  stereo test or not clearly better;
+- two rings fused on neighbouring sides of a third, squeezed flat
+  (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
+  fused system eased once it has a fault;
+- large molecules of two parts, or a macrocycle round an aromatic system
+  (vinblastine, rifampicin), crammed;
+- orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
+  drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
+  (done: the turn is chosen counting the fusion H it will carry, which
+  `layoutMetrics` places as `placeStereo` will before it is drawn);
+  berberine, colchicine.
+
 ## Open
 
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.
-- **Flavonoids** have their ring O at the top, against the rule for a
-  ring fused to a benzene (none is on the sheet).
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).

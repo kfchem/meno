@@ -19,6 +19,7 @@ import {
   Pluses2D,
   AromaticCircles2D,
   Wedges2D,
+  Fills2D,
   Labels2D,
   LabelTyping2D,
   HoverOverlay2D,
@@ -27,7 +28,7 @@ import {
   Selection2D,
 } from "./components";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -54,6 +55,9 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { unsureOf } from "./chem/drawing";
+import ColourCard, { type ColourTarget } from "./ColourCard";
+import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
@@ -257,6 +261,8 @@ function WorkspaceContent({
   }, [store, sources]);
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
+  // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
+  const unsure = useMemo(() => unsureOf(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
   const setChemistry = useAppSettings((s) => s.setChemistry);
@@ -439,7 +445,7 @@ function WorkspaceContent({
   }, [store]);
   const structureAt = useCallback(
     (kind: MenuTarget["kind"] | null, id: number | null) => {
-      if (kind === "atom") return id;
+      if (kind === "atom" || kind === "ring") return id;
       const { model: m } = store.getState();
       return m.bonds.find((b) => b.id === id)?.a ?? null;
     },
@@ -455,6 +461,8 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // a colour card opened from a menu, where the menu was (ColourCard)
+  const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
   // the PDF it shows - or the one under the pointer, or read there, or the
   // first - with the words selected in it, if any
@@ -915,6 +923,15 @@ function WorkspaceContent({
     const onSelected =
       part &&
       (kind === "atom" ? sel.atoms.has(id) : sel.bonds.has(id));
+    // inside a ring, with nothing selected: the ring's own menu (its colour)
+    if (!part && !selected) {
+      const m = store.getState().model;
+      const ring = ringAt(m, place.at);
+      if (ring) {
+        open({ kind: "ring", id: Number(ring.split("-")[0]), ring, selection: "none", ...place });
+        return;
+      }
+    }
     const target: MenuTarget = {
       kind: part ? kind : null,
       id: part ? id : null,
@@ -1200,6 +1217,11 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {colourCard && (
+          <ColourCard key={`${colourCard.x},${colourCard.y}`} target={colourCard.target} x={colourCard.x} y={colourCard.y} within={colourCard.within} onClose={() => setColourCard(null)} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
       {menu && (
         <PartMenu
           key={`${menu.x},${menu.y}`}
@@ -1354,6 +1376,26 @@ function WorkspaceContent({
             const taken = clip.part();
             if (taken) startExport(taken);
           } : undefined}
+          onColour={(() => {
+            // what is drawn: the selection, or the atom, bond or ring right-clicked
+            const st = store.getState();
+            const target: ColourTarget | null =
+              menu.selection === "here"
+                ? menu.drawing !== false
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms) }
+                  : null
+                : menu.kind === "atom" && menu.id != null
+                  ? { atoms: [menu.id], bonds: [], rings: [] }
+                  : menu.kind === "bond" && menu.id != null
+                    ? { atoms: [], bonds: [menu.id], rings: [] }
+                    : menu.kind === "ring" && menu.ring
+                      ? (() => {
+                          const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
+                          return { atoms: [...ids], bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)).map((b) => b.id), rings: [menu.ring] };
+                        })()
+                      : null;
+            return target ? () => setColourCard({ target, x: menu.x, y: menu.y, within: menu.within }) : undefined;
+          })()}
           clipboard={{
             onCut: () => void clip.cut(),
             onCopy: () => void clip.copy(),
@@ -1406,6 +1448,8 @@ function WorkspaceContent({
           <TextSheets2D />
           {/* Pictures, over the PDFs and under the drawing (docs/PDF.md, *A picture*) */}
           <Pictures2D />
+          {/* Rings filled and parts highlighted with a colour, behind the drawing */}
+          <Fills2D />
           {/* Bonds */}
           <Bonds2D />
           <Atoms2D />
@@ -1430,7 +1474,7 @@ function WorkspaceContent({
             <Labels2D />
           </Suspense>
           {/* the plugin's marks: valence problems, R/S and E/Z */}
-          <ChemMarks2D marks={marks} />
+          <ChemMarks2D marks={marks} unsure={unsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
           <ChargeHolds2D />
           {/* the atom a molecule in 3D under the pointer was made from */}

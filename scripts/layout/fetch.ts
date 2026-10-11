@@ -17,7 +17,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const listPath = resolve(here, "molecules.json");
+// --list=heldout: another list beside molecules.json, filled in the same way
+const listPath = resolve(here, `${process.argv.find((a) => a.startsWith("--list="))?.slice(7) ?? "molecules"}.json`);
 
 // Wikimedia asks tools to say who they are.
 const AGENT = "Meno-layout-benchmark/1.0 (https://github.com/kfchem/Meno; dev tool)";

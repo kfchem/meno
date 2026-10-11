@@ -163,9 +163,10 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D; Delete | unpaired electron, expand an abbreviation, select its structure |
-| A bond | clean up, 3D; Delete | select its structure |
-| The selection | cut, copy, paste (opened on empty space), clean up, 3D; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
+| A bond | clean up, 3D, colour; Delete | select its structure |
+| The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
+| Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text, fit, R and S, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
 | Words on the page | edit, align left, centre, right, justify; Delete | show in the PDF, as wide as its words |
@@ -512,6 +513,17 @@ All hover-based, as above.
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas; both in Settings › Chemistry, and
   never in an exported picture.)
+  - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
+    stereocentre whose wedge says its configuration only as its bonds
+    happen to fall - two of them in a line, or all of them in one half of
+    the page - and a double bond with a group almost in line with it, which
+    a reader may take either way, are marked as a valence problem is, the
+    ring dashed: "This stereocentre can be read either way as drawn", "This
+    double bond can be read as cis or trans as drawn". Worked out by Meno
+    itself, with or without the plugin, whatever made the drawing - a
+    Clean-up, a SMILES, a hand - and never in an exported picture
+    (`unsureStereo`, `unsureOf`). The engine draws none so where it can
+    help it (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
   - How R, S, E and Z are written (2026-10-05, the maintainer: the
     parentheses looked clumsy, and a drawing's needs no colour; Meno's own
     style without parentheses, the journals' after IUPAC or their own
@@ -554,6 +566,32 @@ All hover-based, as above.
   anew; undo brings them back. A label's charge put by hand leaves the
   label, set beside it where it was put (`Atom.chargeAt`, `stereoAt`;
   `Bond.stereoAt`; `MarkHold2D`).
+- **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
+  a highlight's edge sharp, never a glow; rings filled too). *Colour…*, in
+  the menu of an atom, a bond, the selection or a ring - a right-click
+  inside one with nothing selected - opens a card where the menu was, of
+  a row for each thing it can give: *Colour*, the atoms' labels (their
+  charges too) and the bonds' lines; *Highlight*, a light tint of it laid
+  behind the drawing, a band along each bond and round each atom - round
+  its label, where it has one - flat, so that the pieces of one colour run
+  together into one shape with a sharp edge; and *Fill ring*, a lighter
+  tint over the inside of each ring it holds whole, or of the ring
+  right-clicked. Each row has none, Okabe and Ito's colours but black -
+  told apart by those who see colours otherwise - and any other, from the
+  system's chooser; the one given now is ringed. A swatch is given at
+  once, one step each (as long as the chooser is open, one step in all),
+  and the card stays open for the next; Escape, a press elsewhere or the
+  wheel closes it. A selection's colour goes to its atoms and the bonds
+  selected among them; a bond keeps its own colour, its atoms theirs.
+  R, S, E and Z are never coloured (2026-10-05), nor is anything Meno
+  marks on its own. A colour goes with its part as it moves, is turned
+  and is cleaned up; it is saved with the workspace, carried by a copy -
+  the fills of the rings it holds whole too - and drawn in an exported
+  SVG and in a copy's pictures (EMF, PNG), as on the canvas; a MOL, SD or
+  RXN file has no place for it. A colour read from a copy or a workspace
+  is taken only if it is one (#rrggbb), as it goes into a picture's
+  markup (`Atom.color`, `highlight`; `Bond.color`, `highlight`;
+  `ringFills`; layout2d `under`; `ColourCard`, `Fills2D`, `utils/rings`).
 - Everything a molfile, SDfile or Rxnfile can hold, read after CTfile Formats
   and drawn after IUPAC's recommendations: docs/CTFILE.md, step by step.
 - Abbreviations: Meno's own, those put together by rule (OTBS, 2,6-diMeBz)
@@ -586,6 +624,31 @@ All hover-based, as above.
     method composes drawn over them (docs/PDF.md, step 5). A click among
     them puts the caret, two select a word, three a line, a drag selects
     on; an editor's keys move and select as in the column of texts.
+  - **Written as they are meant** as they are typed (the maintainer,
+    2026-10-11: conditions; `lib/text/smartWords.ts`), as journals print
+    them. Only what is typed: what is pasted is left as it is.
+    1. **°C.** "dc", in either case, straight after a number or a range -
+       with a space or without - once what follows it is no letter or
+       digit: 60dc and 60 dc are 60 °C, -78dc is −78 °C. Always one space
+       between the number and °C. DCC, DCM, DCE and dCTP have no number
+       before them and stay.
+    2. **Minus.** A hyphen at a word's start - the words' start, after a
+       space or an opening bracket - is a minus sign (U+2212) as soon as a
+       digit is typed after it: -78 is −78, (-20 °C) (−20 °C). Hyphens
+       within words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6.
+    3. **Ranges.** A number, one hyphen and a number, a word of its own,
+       have an en dash (U+2013) once the word has ended - a space, a
+       bracket, a stop or a comma after it, or the words kept: 1-2 h is
+       1–2 h, 0-25dc 0–25 °C, compounds 3-5 3–5. Not before, as 7647-0 may
+       yet be a CAS number. Numbers joined by more hyphens are no range -
+       a CAS number (7647-01-0), a date (2026-10-10) - and stay; so does a
+       hyphen with a letter beside it (4-Å MS, Pd-118, 1,2-dichloroethane).
+
+    Each is a step of its own: one undo gives back the words as typed, and
+    that part is then left as typed until it is written again. Settings ›
+    General, *Write words on the page as they are meant*, turned off keeps
+    every word exactly as typed. Atoms' labels have rules of their own
+    (above), and the column's texts are never changed.
   - Drawn whole: the type draws a text's letters a frame or two after it
     is given them, and showed the old ones meanwhile - a letter deleted
     stayed on the page for a moment, the caret already before it (the
@@ -604,6 +667,16 @@ All hover-based, as above.
     its middle and half an em clear of it, beyond any words already there;
     and go where the arrow goes, moved or drawn out, until they are dragged
     off it. Put down elsewhere, they stay where they are put.
+  - An arrow is as long as its words need (the maintainer, 2026-10-11):
+    where the words over it or under it would run past it, it is drawn out
+    about its middle - nothing else moves - to reach three quarters of an
+    em past the longest at either end, and as they get shorter it goes back
+    to the length it was made, never shorter. It follows them as they are
+    written - new words near it as well, which will go over it - going over
+    to each length gently, and is drawn so in a copy's pictures and an
+    exported SVG. What is saved is the length it was made; drawn out by an
+    end, it is no shorter than its words need, the other end staying where
+    it is (`lib/chem/captions` `wordsNeed`, `components/drawnArrows`).
   - Lit from behind under the pointer. Held still a moment (a long press,
     as on a structure), they are taken hold of - lit from the pointer out -
     and selected, as one thing, with the selection's shade; a drag on from
@@ -618,10 +691,10 @@ All hover-based, as above.
     it, the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
     each as fit, each line still centred, a word wider alone on its line, a
-    number never parted from the unit after it (60 °C, 12 h, 2 equiv); a
-    drag is one undo step. Written anew, they are written at that width.
-    *As wide as its words*, in their menu, is a line for each line typed
-    again. The width is saved, copied and drawn with them.
+    number or a range never parted from the unit after it (60 °C, 12 h,
+    2 equiv, 0–25 °C); a drag is one undo step. Written anew, they are
+    written at that width. *As wide as its words*, in their menu, is a line
+    for each line typed again. The width is saved, copied and drawn with them.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align
     left*, *Align centre* (as they come), *Align right*, or *Justify* -
     spread to both edges, but for the last line of each line typed, which

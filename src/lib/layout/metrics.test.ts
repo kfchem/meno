@@ -11,6 +11,43 @@ function polygon(k: number, cx = 0, cy = 0, turn = 0) {
 }
 
 describe("layoutMetrics", () => {
+  it("measures a ring fusion's H before it is drawn, by where it will go", () => {
+    // a hexahydronaphthalene - a double bond in each ring of its own, as
+    // lovastatin's - its fusion atom 0 a stereocentre with an H: in a row,
+    // the fusion bond upright, the H stands straight up outside the rings;
+    // turned a quarter, it can only lie level
+    const at = (deg: number, o = { x: 0, y: 0 }) => ({
+      x: o.x + Math.cos((deg * Math.PI) / 180),
+      y: o.y + Math.sin((deg * Math.PI) / 180),
+    });
+    const left = { x: -Math.sqrt(3) / 2, y: 0 };
+    const right = { x: Math.sqrt(3) / 2, y: 0 };
+    const row = [
+      at(30, left), at(-30, left), at(-90, left), at(-150, left), at(150, left), at(90, left),
+      at(30, right), at(-30, right), at(-90, right), at(90, right),
+    ];
+    // 0 the top of the fusion bond, 1 its foot; 2-5 round the left ring, 6-9 the right,
+    // C2=C3 and C6=C7
+    const edges: [number, number][] = [
+      [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+      [1, 8], [8, 7], [7, 6], [6, 9], [9, 0],
+    ];
+    const orders = [1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1];
+    const tetra = [{ neighbours: [1, 5, 9, -1], volume: 1 }];
+    const measure = (turn: number) => {
+      const t = (turn * Math.PI) / 180;
+      return layoutMetrics({
+        x: row.map((p) => p.x * Math.cos(t) - p.y * Math.sin(t)),
+        y: row.map((p) => p.x * Math.sin(t) + p.y * Math.cos(t)),
+        edges,
+        orders,
+        tetra,
+      }).substituentError;
+    };
+    expect(measure(0)).toBeCloseTo(0, 6);
+    expect(measure(90)).toBeGreaterThan(30);
+  });
+
   it("finds nothing wrong with a regular hexagon", () => {
     const m = layoutMetrics(polygon(6));
     expect(m.bondSpread).toBeCloseTo(0, 9);
