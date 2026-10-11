@@ -3,6 +3,7 @@ import {
   ArrowPathIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
+  BoldIcon,
   BookOpenIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -10,6 +11,8 @@ import {
   CubeIcon,
   DocumentDuplicateIcon,
   ForwardIcon,
+  ItalicIcon,
+  ListBulletIcon,
   PencilIcon,
   PhotoIcon,
   PlayIcon,
@@ -55,6 +58,16 @@ export const MENU_ICONS = {
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
   colour: hero(SwatchIcon),
+  // (words on the page: their size - a large letter and a small one - and their letters bold or in italics, their lines a list)
+  size: own(
+    <>
+      <path d="M2.5 15.5 L7 4.5 L11.5 15.5 M4.2 11.5 H9.8" />
+      <path d="M12.5 15.5 L15 9.5 L17.5 15.5 M13.4 13.3 H16.6" />
+    </>,
+  ),
+  bold: hero(BoldIcon),
+  italic: hero(ItalicIcon),
+  bullets: hero(ListBulletIcon),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>

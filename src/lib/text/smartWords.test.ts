@@ -29,6 +29,14 @@ describe("words on the page typed as they are meant", () => {
     for (const w of ["DCC", "DCM, rt", "1,2-DCE", "dCTP", "pdc ", "Bu3SnH, AIBN, DCE"]) expect(typing(w)).toBe(w);
   });
 
+  it("begin a list's item with a bullet for a hyphen or a star typed at a line's start", () => {
+    expect(typing("- first")).toBe("• first");
+    expect(typing("* first")).toBe("• first");
+    expect(typing("one\n\t- deeper")).toBe("one\n\t• deeper");
+    // (not within a line, nor before a number)
+    for (const w of ["a - b", "x -", "-5 mL", "--"]) expect(typing(w)).toBe(w.replace("-5", "−5"));
+  });
+
   it("write a hyphen before a number at a word's start as a minus sign", () => {
     expect(typing("-78dc")).toBe("−78 °C");
     expect(typing("(-20 °C)")).toBe("(−20 °C)");
@@ -36,7 +44,9 @@ describe("words on the page typed as they are meant", () => {
     // (as soon as its digit is typed)
     expect(typing("-7", false)).toBe("−7");
     // (hyphens in words stay)
-    for (const w of ["2-propanol", "N-methyl", "t-BuOK", "18-crown-6", "1,2-dichloroethane", "- 5 mL", "-OH"]) expect(typing(w)).toBe(w);
+    for (const w of ["2-propanol", "N-methyl", "t-BuOK", "18-crown-6", "1,2-dichloroethane", "-OH"]) expect(typing(w)).toBe(w);
+    // (a hyphen and a space at a line's start begin a list's item instead)
+    expect(typing("- 5 mL")).toBe("• 5 mL");
   });
 
   it("write a range typed with a hyphen with an en dash, once its word has ended", () => {

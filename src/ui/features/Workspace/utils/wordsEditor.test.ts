@@ -128,3 +128,72 @@ describe("words written in place", () => {
     expect(m.text).toBe("x -78");
   });
 });
+
+describe("letters set otherwise, and lists, as words are written", () => {
+  it("set what is selected bold, and back; what is typed after it as the letter before", () => {
+    const ed = writing("dG kcal");
+    ed.sel = { anchor: 0, head: 2 };
+    ed.toggle("bold");
+    expect(ed.marks()).toEqual([{ from: 0, to: 2, bold: true }]);
+    ed.sel = caretAt(2);
+    ed.replaceSelection("‡");
+    expect(ed.marks()).toEqual([{ from: 0, to: 3, bold: true }]);
+    ed.sel = { anchor: 0, head: 3 };
+    ed.toggle("bold");
+    expect(ed.marks()).toEqual([]);
+    // (each a step to undo)
+    ed.undo();
+    expect(ed.marks()).toEqual([{ from: 0, to: 3, bold: true }]);
+  });
+
+  it("type raised at the caret once asked, until the caret moves", () => {
+    const ed = writing("mol");
+    ed.replaceSelection(" ");
+    ed.toggle("sup");
+    ed.replaceSelection("−");
+    ed.replaceSelection("1");
+    expect(ed.text).toBe("mol −1");
+    expect(ed.marks()).toEqual([{ from: 4, to: 6, script: "sup" }]);
+  });
+
+  it("keep their marks through what is written as it is meant", () => {
+    const ed = writing("");
+    ed.smart = () => true;
+    ed.toggle("bold");
+    for (const k of "-78") ed.replaceSelection(k);
+    expect(ed.text).toBe("−78");
+    expect(ed.marks()).toEqual([{ from: 0, to: 3, bold: true }]);
+  });
+
+  it("go on with a list's item on a new line, its number one on, and end it on an empty one", () => {
+    const ed = writing("1. first");
+    ed.newLine();
+    expect(ed.text).toBe("1. first\n2. ");
+    ed.replaceSelection("second");
+    ed.newLine();
+    ed.newLine();
+    expect(ed.text).toBe("1. first\n2. second\n");
+    const bullets = writing("\t• a");
+    bullets.newLine();
+    expect(bullets.text).toBe("\t• a\n\t• ");
+    // (not on a plain line)
+    const plain = writing("plain");
+    plain.newLine();
+    expect(plain.text).toBe("plain\n");
+  });
+
+  it("make lines a list, and plain again; take items in and out a level", () => {
+    const ed = writing("one\ntwo");
+    ed.sel = { anchor: 0, head: 7 };
+    ed.toggleList();
+    expect(ed.text).toBe("• one\n• two");
+    expect(ed.indent(1)).toBe(true);
+    expect(ed.text).toBe("\t• one\n\t• two");
+    ed.indent(-1);
+    expect(ed.text).toBe("• one\n• two");
+    ed.sel = { anchor: 0, head: ed.text.length };
+    ed.toggleList();
+    expect(ed.text).toBe("one\ntwo");
+    expect(writing("plain").indent(1)).toBe(false);
+  });
+});

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { captionSet, withWordsNeed, wordsNeed, type ArrowWords } from "../../../../lib/chem/captions";
+import { withWordsNeed, wordsNeed, wordsSet, type ArrowWords } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
 import { useEditor, useEditorStore } from "../store";
 import type { Arrow, EditorState } from "../store/types";
@@ -12,22 +12,25 @@ import { useDrawnLayout } from "./drawnLayoutContext";
  * written, in place of their caption's own.
  */
 
+/** The labels' size, and a point's, in the drawing's units: what words on the page are set at (lib/chem/captions `wordsFontPx`). */
+type Sizes = { fontPx: number; pointPx?: number };
+
 /** The words over arrows, set as the canvas sets them - but the caption `except`. */
-function wordsOver(captions: EditorState["captions"], fontSize: number, set: LabelSet, except?: number | null): ArrowWords[] {
+function wordsOver(captions: EditorState["captions"], sizes: Sizes, set: LabelSet, except?: number | null): ArrowWords[] {
   return captions
     .filter((c) => c.arrow != null && c.id !== except)
     .map((c) => {
-      const s = captionSet(c.text, c.x, c.y, fontSize, set, c.width, c.align);
+      const s = wordsSet(c, sizes, set);
       return { arrow: c.arrow, x: c.x, y: c.y, halfW: s.halfW, halfH: s.halfH };
     });
 }
 
 /** The arrows as they are drawn, with the words being written - in place of those of the caption `editing`, if any. */
-export function drawnArrows(s: Pick<EditorState, "arrows" | "captions" | "wordsWriting">, editing: number | null, fontSize: number, set: LabelSet): Arrow[] {
+export function drawnArrows(s: Pick<EditorState, "arrows" | "captions" | "wordsWriting">, editing: number | null, sizes: Sizes, set: LabelSet): Arrow[] {
   const writing = s.wordsWriting;
-  const words = wordsOver(s.captions, fontSize, set, writing ? editing : null);
+  const words = wordsOver(s.captions, sizes, set, writing ? editing : null);
   if (writing) words.push(writing);
-  return withWordsNeed(s.arrows, wordsNeed(s.arrows, words, fontSize));
+  return withWordsNeed(s.arrows, wordsNeed(s.arrows, words, sizes.fontPx));
 }
 
 /**
@@ -35,8 +38,8 @@ export function drawnArrows(s: Pick<EditorState, "arrows" | "captions" | "wordsW
  * `except` - words being put down or written, which are then placed by
  * them (lib/chem/captions `captionPlace`) and not by themselves.
  */
-export function arrowsBeside(s: Pick<EditorState, "arrows" | "captions">, fontSize: number, set: LabelSet, except?: number | null): Arrow[] {
-  return withWordsNeed(s.arrows, wordsNeed(s.arrows, wordsOver(s.captions, fontSize, set, except), fontSize));
+export function arrowsBeside(s: Pick<EditorState, "arrows" | "captions">, sizes: Sizes, set: LabelSet, except?: number | null): Arrow[] {
+  return withWordsNeed(s.arrows, wordsNeed(s.arrows, wordsOver(s.captions, sizes, set, except), sizes.fontPx));
 }
 
 /** The arrows as they are drawn (`drawnArrows`), for the drawing as it stands. */
@@ -48,8 +51,8 @@ export function useDrawnArrows(): Arrow[] {
   const { opts } = useDrawnLayout();
   const set = useMemo(() => labelSetOf(opts), [opts]);
   return useMemo(
-    () => drawnArrows({ arrows, captions, wordsWriting }, editing, opts.fontPx, set),
-    [arrows, captions, wordsWriting, editing, opts.fontPx, set],
+    () => drawnArrows({ arrows, captions, wordsWriting }, editing, opts, set),
+    [arrows, captions, wordsWriting, editing, opts, set],
   );
 }
 

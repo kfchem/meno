@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, wordsNeed } from "./captions";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, LIST_INDENT, listItem, marksOf, stylesOf, wordsNeed } from "./captions";
 import { labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
@@ -257,5 +257,80 @@ describe("an arrow and its words", () => {
   it("takes no words that are another arrow's, or none's", () => {
     const need = wordsNeed([arrow], [{ arrow: 3, x: 0, y: 8, halfW: 90, halfH: 5 }, { x: 0, y: 8, halfW: 90, halfH: 5 }], fs);
     expect(need.has(1)).toBe(false);
+  });
+});
+
+describe("letters marked in words on the page", () => {
+  it("are set as they were marked: bold, italic, coloured, raised or lowered - a formula's counts low all the same", () => {
+    const text = "dG kcal mol-1 K2CO3";
+    const marks = [
+      { from: 0, to: 2, bold: true as const },
+      { from: 11, to: 13, script: "sup" as const },
+      { from: 14, to: 19, color: "#cd4560" },
+    ];
+    const runs = captionRuns(text, stylesOf(text.length, marks));
+    expect(runs.map((r) => r.text).join("")).toBe(text);
+    expect(runs.find((r) => r.text === "dG")).toMatchObject({ bold: true });
+    expect(runs.find((r) => r.text === "-1")).toMatchObject({ sup: true });
+    // (the carbonate in its colour, its counts still low)
+    const red = runs.filter((r) => r.color === "#cd4560");
+    expect(red.map((r) => r.text).join("")).toBe("K2CO3");
+    expect(red.filter((r) => r.sub).map((r) => r.text)).toEqual(["2", "3"]);
+  });
+
+  it("keep their marks as letters set alike, apart and in order - none for plain letters", () => {
+    const styles = stylesOf(8, [
+      { from: 1, to: 3, bold: true },
+      { from: 2, to: 5, italic: true },
+    ]);
+    expect(marksOf(styles)).toEqual([
+      { from: 1, to: 2, bold: true },
+      { from: 2, to: 3, bold: true, italic: true },
+      { from: 3, to: 5, italic: true },
+    ]);
+    expect(marksOf(stylesOf(4, []))).toEqual([]);
+  });
+
+  it("lay out as wide as their runs are set: a raised part narrower", () => {
+    const plain = captionSet("x 10-3", 0, 0, 1);
+    const raised = captionSet("x 10-3", 0, 0, 1, undefined, undefined, "center", [{ from: 4, to: 6, script: "sup" }]);
+    expect(raised.halfW).toBeLessThan(plain.halfW);
+  });
+});
+
+describe("a list in words on the page", () => {
+  const width = 8;
+  it("is told by a bullet or a number at a line's start, after a tab for each level", () => {
+    expect(listItem("• first")).toEqual({ level: 0, mark: "•", head: 2 });
+    expect(listItem("\t\t– deeper")).toEqual({ level: 2, mark: "–", head: 4 });
+    expect(listItem("12. twelfth")).toEqual({ level: 0, mark: "12.", head: 4 });
+    expect(listItem("- a hyphen")).toBeNull();
+    expect(listItem("−78 °C")).toBeNull();
+  });
+
+  it("hangs its item's lines after the first under its words, and sets a level further in", () => {
+    const text = "• the carboxylic acid holds the aldehyde\n\t– a hydrogen bond";
+    const p = captionPlaces(text, 0, 0, 1, undefined, width, "left");
+    const box0 = -width / 2;
+    // (the bullet at the edge; the item's next line where its first word began)
+    expect(p.lines[0].x0).toBeCloseTo(box0);
+    const firstWord = p.at[2].x;
+    expect(p.lines[1].x0).toBeCloseTo(firstWord);
+    // (the second item a level in, its tab where its line begins)
+    const second = text.indexOf("\t");
+    const line = p.at[second].line;
+    expect(p.lines[line].x0).toBeCloseTo(box0 + LIST_INDENT);
+    expect(p.at[second].x).toBeCloseTo(box0 + LIST_INDENT);
+    expect(p.at).toHaveLength(text.length + 1);
+  });
+
+  it("keeps every place in order down its lines", () => {
+    const text = "1. one two three four five six\n2. seven";
+    const p = captionPlaces(text, 0, 0, 1, undefined, width, "left");
+    for (let k = 1; k < p.at.length; k++) {
+      const a = p.at[k - 1];
+      const b = p.at[k];
+      expect(b.line > a.line || (b.line === a.line && b.x >= a.x - 1e-9)).toBe(true);
+    }
   });
 });

@@ -63,6 +63,9 @@ import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } fr
 import { hasLonePair } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
+import SizeCard from "./SizeCard";
+import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { askToOpen } from "../../layouts/commands";
@@ -101,7 +104,8 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } f
 import { setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
-import { startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
 import { useOfficeLink } from "./hooks/useOfficeLink";
@@ -148,7 +152,7 @@ import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf,
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
-import type { Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
@@ -510,6 +514,8 @@ function WorkspaceContent({
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   // a colour card opened from a menu, where the menu was (ColourCard)
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
+  const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
   // the PDF it shows - or the one under the pointer, or read there, or the
   // first - with the words selected in it, if any
@@ -1040,6 +1046,20 @@ function WorkspaceContent({
   const ownStyle = useEditor((s) => s.docStyle != null);
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
+  // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
+  const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
+  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
+    if (!c.width || c.arrow != null) return {};
+    const set = labelSetOf(layoutOpts);
+    const top = c.y + wordsSet(c, layoutOpts, set).halfH;
+    const after = { ...c, ...next };
+    return { y: top - wordsSet(after, layoutOpts, set).halfH };
+  };
+  const sizeWords = (id: number, pt: number | null) => {
+    const st = store.getState();
+    const c = st.captions.find((x) => x.id === id);
+    if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
+  };
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
@@ -1338,6 +1358,20 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {sizeCard && (
+          <SizeCard
+            key={`${sizeCard.x},${sizeCard.y}`}
+            now={store.getState().captions.find((c) => c.id === sizeCard.id)?.size ?? null}
+            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+            onSize={(pt) => sizeWords(sizeCard.id, pt)}
+            x={sizeCard.x}
+            y={sizeCard.y}
+            within={sizeCard.within}
+            onClose={() => setSizeCard(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {colourCard && (
           <ColourCard key={`${colourCard.x},${colourCard.y}`} target={colourCard.target} x={colourCard.x} y={colourCard.y} within={colourCard.within} onClose={() => setColourCard(null)} />
         )}
@@ -1422,6 +1456,29 @@ function WorkspaceContent({
           captionAlign={(() => {
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
             return c ? { now: c.align ?? "center", set: (align) => store.getState().updateCaption(c.id, { align }) } : undefined;
+          })()}
+          words={(() => {
+            const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
+            if (!c) return undefined;
+            const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
+            const st = store.getState();
+            return {
+              onSize: () => setSizeCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              bold: styles.length > 0 && styles.every((x) => x?.bold),
+              italic: styles.length > 0 && styles.every((x) => x?.italic),
+              list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
+              onBold: () => st.styleWords([c.id], "bold"),
+              onItalic: () => st.styleWords([c.id], "italic"),
+              onSup: () => st.styleWords([c.id], "sup"),
+              onSub: () => st.styleWords([c.id], "sub"),
+              onList: () => {
+                // (as a list's lines are made so while written: all of them items, or plain again)
+                const ed = new WordsEditor(c.text, c.marks);
+                ed.sel = { anchor: 0, head: c.text.length };
+                ed.toggleList();
+                st.updateCaption(c.id, { text: ed.text, marks: ed.marks(), ...keepTop(c, { text: ed.text, marks: ed.marks() }) });
+              },
+            };
           })()}
           onFitWords={(() => {
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
@@ -1535,13 +1592,15 @@ function WorkspaceContent({
             };
           })()}
           onColour={(() => {
-            // what is drawn: the selection, or the atom, bond or ring right-clicked
+            // what is drawn: the selection, or the atom, bond, ring or words right-clicked
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
                 ? menu.drawing !== false
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms) }
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions] }
                   : null
+                : menu.kind === "caption" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
