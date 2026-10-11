@@ -127,6 +127,8 @@ export type LayoutOptions = {
   wavyAmpPx: number;
   /** One whole wave of a wavy bond: a turn to either side. */
   wavyPeriodPx: number;
+  /** How long a point is, in the same units: what words on the page given a size of their own in points are set at (lib/chem/captions `wordsFontPx`). */
+  pointPx?: number;
   fontPx: number;
   /**
    * How far a bond stops short of a label's letters. Left unset, it is 16%
@@ -195,6 +197,14 @@ export type LineSeg = {
   color?: string;
 };
 export type Poly = { points: Vec2[]; color?: string };
+/**
+ * A stroked curve: cubic Bezier segments end to end, its points the start
+ * then three for each segment (two controls and an end) - as EMF's
+ * PolyBezier takes them - its width in the drawing's units, its ends round
+ * or flat. A picture draws it as the curve it is, smooth however far it is
+ * enlarged (an electron-pushing arrow's line).
+ */
+export type Curve = { points: Vec2[]; width: number; round?: boolean; color?: string };
 /** What is drawn behind the drawing, filled flat, its edge sharp: a ring's fill, a part's highlight. */
 export type Under = { points: Vec2[]; color: string };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
@@ -233,6 +243,10 @@ export type TextRun = {
   part?: boolean;
   /** Set in italics: the t of t-Bu, the p of p-Ts (IUPAC's Table II). */
   italic?: boolean;
+  /** Set bold, as words on the page are marked (lib/chem/captions `WordsMark`). */
+  bold?: boolean;
+  /** Its colour, where it is not the text's (as #rrggbb): words on the page marked so. */
+  color?: string;
 };
 
 /**
@@ -336,6 +350,11 @@ export type TextItem = {
   markOf?: number;
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
+  /**
+   * Set at its own size - `fontPx` - in pictures too, not at the labels':
+   * words on the page given a size of their own (docs/EDITOR-2D.md, *Text*).
+   */
+  ownSize?: boolean;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -359,6 +378,9 @@ export type PlacedRun = {
   sub: boolean;
   /** In italics: see `TextRun`. */
   italic?: boolean;
+  /** Bold, and in a colour of its own: see `TextRun`. */
+  bold?: boolean;
+  color?: string;
   /** Drawn, not set in type: see `TextRun`. */
   mark?: "charge" | "radical";
   x: number;
@@ -527,6 +549,8 @@ export type Layout = {
   under?: Under[];
   lines: LineSeg[];
   polys: Poly[];
+  /** Curves stroked, over the filled shapes. */
+  curves?: Curve[];
   texts: TextItem[];
   circles: Circle[];
   fills: Circle[];
@@ -699,6 +723,8 @@ export function placeLabel(
     text: runs[i].text,
     sub: !!runs[i].sub,
     ...(runs[i].italic ? { italic: true } : {}),
+    ...(runs[i].bold ? { bold: true } : {}),
+    ...(runs[i].color ? { color: runs[i].color } : {}),
     ...(runs[i].mark ? { mark: runs[i].mark } : {}),
     x,
     y: runs[i].sub ? line - fontSize * set.subscriptDrop : runs[i].sup || runs[i].mark ? line + rise : line,
@@ -4334,7 +4360,7 @@ function svgLabel(
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""} fill="${fill}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${svgColor(run.color, fill)}" stroke="none"` +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4374,6 +4400,16 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const p of layout.polys) {
     s += `<path d="${toSvgPath(p)}" fill="${svgColor(p.color, stroke)}" stroke="none" />`;
   }
+  for (const c of layout.curves ?? []) {
+    if (c.points.length < 4) continue;
+    let d = `M${c.points[0].x} ${-c.points[0].y}`;
+    for (let i = 1; i + 2 < c.points.length; i += 3) {
+      const [p, q, r] = [c.points[i], c.points[i + 1], c.points[i + 2]];
+      d += `C${p.x} ${-p.y} ${q.x} ${-q.y} ${r.x} ${-r.y}`;
+    }
+    s += `<path d="${d}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${c.width}"` +
+      ` stroke-linecap="${c.round ? "round" : "butt"}" stroke-linejoin="round" />`;
+  }
   for (const c of layout.circles || []) {
     s +=
       c.squash != null && c.squash < 1
@@ -4389,7 +4425,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, fontSize, set, svgColor(t.color, fill));
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img

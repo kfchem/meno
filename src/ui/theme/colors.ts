@@ -3,6 +3,8 @@ export const COLORS = {
   highlight: "#1e90ff", // DodgerBlue
   // What asks for attention on the drawing: stereo left open (the app's accent, --color-accel-accent)
   attention: "#cd4560",
+  // Meno's own colour (--color-accel-base): what is the workspace's, not the drawing's - slides' frames
+  base: "#317689",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",

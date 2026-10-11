@@ -16,7 +16,7 @@ import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
 import { opensWith } from "./openingFit";
-import { captionSet } from "../../../../lib/chem/captions";
+import { wordsSet } from "../../../../lib/chem/captions";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { cornersOf } from "../utils/selection";
 import { sheetRoom } from "../utils/textSheets";
@@ -34,6 +34,7 @@ export default function FitToContent2D({
   const captions = useEditor((s) => s.captions);
   const pdfs = useEditor((s) => s.pdfs);
   const pictures = useEditor((s) => s.pictures);
+  const slides = useEditor((s) => s.slides);
   const texts = useEditor((s) => s.texts);
   const store = useEditorStore();
   const style = useDrawingStyle();
@@ -57,7 +58,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -87,7 +88,7 @@ export default function FitToContent2D({
       : { min: { x: Infinity, y: Infinity }, max: { x: -Infinity, y: -Infinity } };
     // and the words on the page, as they are set
     for (const c of captions) {
-      const set = captionSet(c.text, c.x, c.y, opts.fontPx, labelSetOf(opts), c.width, c.align);
+      const set = wordsSet(c, opts, labelSetOf(opts));
       bounds.min = { x: Math.min(bounds.min.x, c.x - set.halfW), y: Math.min(bounds.min.y, c.y - set.halfH) };
       bounds.max = { x: Math.max(bounds.max.x, c.x + set.halfW), y: Math.max(bounds.max.y, c.y + set.halfH) };
     }
@@ -101,6 +102,11 @@ export default function FitToContent2D({
     for (const q of pictures.flatMap(cornersOf)) {
       bounds.min = { x: Math.min(bounds.min.x, q.x), y: Math.min(bounds.min.y, q.y) };
       bounds.max = { x: Math.max(bounds.max.x, q.x), y: Math.max(bounds.max.y, q.y) };
+    }
+    // and the slides (docs/PRESENTING.md)
+    for (const sl of slides) {
+      bounds.min = { x: Math.min(bounds.min.x, sl.x - sl.w / 2), y: Math.min(bounds.min.y, sl.y - sl.h / 2) };
+      bounds.max = { x: Math.max(bounds.max.x, sl.x + sl.w / 2), y: Math.max(bounds.max.y, sl.y + sl.h / 2) };
     }
     // and the texts' sheets, and their names under them (an icon's room holds its name)
     for (const t of texts) {
@@ -168,6 +174,7 @@ export default function FitToContent2D({
     captions,
     pdfs,
     pictures,
+    slides,
     texts,
     style,
     camera,

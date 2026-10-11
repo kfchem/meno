@@ -23,6 +23,14 @@ export function playFilm(sha256: string, on: boolean): void {
   else v.pause();
 }
 
+/** A film on the page played from its beginning: as a talk comes to the slide it lies on (docs/PRESENTING.md). */
+export function restartFilm(sha256: string): void {
+  const v = textures.get(sha256)?.video;
+  if (!v) return;
+  v.currentTime = 0;
+  void v.play().catch(() => undefined);
+}
+
 /** A film's bytes as a video, playing over and over without sound, its texture made once its first frame is there; each new frame it shows drawn (`drawn`). */
 export function filmTexture(made: Shared, bytes: Uint8Array): () => void {
   const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "video/mp4" }));

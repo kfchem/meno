@@ -66,6 +66,8 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection, selectionMoving } from "../utils/dragSelection";
 import { heldShows } from "./held";
 import type { WordPlace } from "../store/types";
+import { spotMoving } from "./figureTie";
+import { atomAtSpot } from "../utils/figures";
 
 /** Eased in and out, cubic: what is lifted rises and settles. */
 export const ease = (u: number) => {
@@ -245,9 +247,10 @@ export default function Pdfs2D() {
       if (m.glide && now - m.glide.start < GLIDE_MS + 80) animating = true;
       if (m.shift && now - m.shift.start < GLIDE_MS + 80) animating = true;
     }
-    // (a place shown marked, fading)
+    // (a place shown marked, fading; a place an atom was read from, lit or let go)
     const flash = store.getState().pdfFlash;
     if (flash && now - flash.start < FLASH_MS + 80) animating = true;
+    if (spotMoving(now)) animating = true;
     for (const m of motion.current.values()) {
       if (m.lit && now - m.lit.start < FADE_MS + 80) animating = true;
       if (m.icon && now - m.icon.start < ICON_MS + 80) animating = true;
@@ -385,6 +388,10 @@ export default function Pdfs2D() {
     const want = p && q && linkOn(p, q) ? "pointer" : "";
     const dom = gl.domElement as HTMLCanvasElement;
     if (dom.style.cursor !== want) dom.style.cursor = want;
+    // (over where an atom read from a figure was drawn: that atom lit in the drawing)
+    const hit = p && q ? sheetUnder(p, q) : null;
+    const st = store.getState();
+    st.setFigureLit(p && q && hit ? atomAtSpot(st.model, p.sha256, hit.page, (q.x - (hit.s.x - hit.s.w / 2)) / POINT, (hit.s.y + hit.s.h / 2 - q.y) / POINT) : null);
   };
 
   /** Whether a point of a PDF is on its rim: not well inside a page of it - by its edges, on the pages under it, or its name. */

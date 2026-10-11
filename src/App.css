@@ -154,6 +154,12 @@ body {
   opacity: 0;
   pointer-events: none !important;
 }
+/* While a talk is given, what works a molecule - its frames, Make again -
+   goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
+[data-presenting] .meno-control-chip {
+  opacity: 0;
+  pointer-events: none !important;
+}
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;

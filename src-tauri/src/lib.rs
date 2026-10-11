@@ -20,6 +20,8 @@ mod jobs;
 mod pdf;
 mod net;
 mod pixienv;
+mod plugfiles;
+mod present;
 mod tools;
 mod update;
 #[cfg(windows)]
@@ -883,6 +885,7 @@ pub fn run() {
             pdf::pdf_links,
             pdf::pdf_text,
             pdf::pdf_objects,
+            pdf::pdf_figure,
             // the system clipboard, for structures
             clipboard::clipboard_write,
             clipboard::clipboard_read,
@@ -916,6 +919,9 @@ pub fn run() {
             net::net_note_blocked,
             // the wwPDB's chemical components, fetched once and kept
             ccd::ccd_components,
+            plugfiles::plugin_files,
+            // the window given over to a talk
+            present::present_window,
             // keeping Meno up to date
             update::update_state,
             update::update_check,

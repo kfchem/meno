@@ -930,6 +930,31 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   becomes a picture that keeps where it came from (`PictureItem.from`); as
   it is carried (`pdfPicture`), the column's last pass draws it
   (`components/PictureFlight.tsx`), its shadow worked out in a shader.
+- **Figures read as structures** (`pdf_figure`, `lib/figure`; docs/PDF.md,
+  *Stage 5*): what a figure within a box is drawn with - its paths' steps,
+  filled or stroked and how thick, and its letters with where their lines
+  start and their sizes, read through forms under their matrices - read in
+  the window as bonds and labels (`lib/figure/read.ts`) - letters drawn as
+  outlines matched against the system's own letters, drawn once on a
+  canvas (`lib/figure/glyphs.ts`, `utils/glyphShapes.ts`) - then as a
+  structure in Meno's units (`lib/figure/structure.ts`), its labels read
+  as typed ones are (`utils/figures.ts` `figureLabels`). Each atom keeps
+  where it was drawn (`Atom.seen`), and what was unsure of a part keeps
+  what the part was then (`unsure.as`), so that its mark goes once it is
+  changed (`readMarks`, drawn by `ChemMarks2D`). The place an atom under
+  the pointer was read from is ringed on the PDF's pages and on pictures
+  cut out of it (`components/figureTie.ts`), and an atom whose place is
+  under the pointer there is lit in the drawing (`figureLit`, drawn by
+  `LinkedHover2D`).
+- **Pictures read as structures** (docs/PDF.md, *A picture read*): a
+  figure that is a picture, drawn by PDFium (`boxPicture`), or a picture
+  on the page, sent to the plugin that fills the role *Structures read
+  from pictures* (`read_picture`, `lib/roles/client.ts`), and its answer
+  read as a figure read is (`lib/figure/picture.ts`) - the same structure,
+  marks and tie, the tie in the picture's own pixels where it came from
+  no PDF (`FigureSpot` without a page). The plugin's trained model is
+  fetched by Meno as the plugin is set up (`plugfiles.rs`, its manifest's
+  `downloads`), into its environment's folder, which its worker is given.
 
 ### Pictures
 
@@ -980,6 +1005,7 @@ the frames standing where renders will put what they make
 | --- | --- | --- |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
+| `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
 | `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
@@ -989,6 +1015,7 @@ the frames standing where renders will put what they make
 | `pdf_links` | `lib/pdf/reader.ts` | A page's links: where each lies, and where it goes. |
 | `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box. |
 | `pdf_objects` | `lib/pdf/figures.ts` | What a page is made of - words, paths, pictures, shadings, forms - each with its box. |
+| `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
 | `font_families` | `ui/fonts/typefaces.ts` | Every typeface installed (fontdb), for the label typeface picker. |
 | `font_file` | `ui/fonts/typefaces.ts` | One family's regular face as a font file of its own - out of its collection, its character map made plain (`fonts.rs`). |
 | `net_state` | `lib/net/network.ts` | Offline or not, what is allowed, tasks under way, recent connections. |
@@ -1121,7 +1148,9 @@ to be able to work with nothing going out at all.
   purpose's first use of the network waits on the user's yes
   (`askToConnect`, remembered in the settings until withdrawn); each task
   has a card in the corner while it runs; the top bar switches offline mode;
-  Settings › Network holds the allowed purposes and the record.
+  Settings › Network holds the allowed purposes and the record. While a
+  talk is given in the window (docs/PRESENTING.md), the cards and the
+  question wait until it ends; the record is kept as ever.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

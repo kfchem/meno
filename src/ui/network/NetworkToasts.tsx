@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { usePresentingWindow } from "../presenting";
 import { RISE } from "../theme/motion";
 import {
   ArrowDownTrayIcon,
@@ -28,6 +29,8 @@ const LINGER_MS = 6000;
  * opens the full record.
  */
 export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
+  // (none over a talk given in the window: what it would show comes when it ends - ../presenting)
+  const talk = usePresentingWindow();
   const notices = useNotices((s) => s.notices);
   const dismissNotice = useNotices((s) => s.dismiss);
   const tasks = useNetwork((s) => s.tasks);
@@ -50,24 +53,27 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       const conns = byTask.get(task.id) ?? [];
       // the user's own code shows only once it reaches out
       if (task.purpose === "python-code" && conns.length === 0) continue;
-      const lastActive = Math.max(
+      const active = Math.max(
         task.ended ?? now,
         ...conns.map((c) => c.ended ?? now),
       );
+      // (one that ran while a talk was given: shown for its while from when the talk ended)
+      const lastActive = talk.since != null && talk.ended != null && active >= talk.since && active <= talk.ended ? talk.ended : active;
       if (task.ended && now - lastActive > LINGER_MS) continue;
       out.push({ key: task.id, task, conns, at: task.started });
     }
     // a refusal of a task's own shows in the task's card
     for (const c of connections) {
       if (c.outcome !== "blocked" || c.taskId) continue;
-      if (now - (c.ended ?? c.started) > LINGER_MS) continue;
+      const at = c.ended ?? c.started;
+      if (now - (talk.since != null && talk.ended != null && at >= talk.since && at <= talk.ended ? talk.ended : at) > LINGER_MS) continue;
       out.push({ key: `blocked-${c.id}`, conns: [c], at: c.started });
     }
     return out
       .filter((c) => !dismissed.has(c.key))
       .sort((a, b) => a.at - b.at)
       .slice(-4);
-  }, [tasks, connections, now, dismissed]);
+  }, [tasks, connections, now, dismissed, talk.since, talk.ended]);
 
   // tick while anything is in view, so finished cards leave on time
   useEffect(() => {
@@ -81,7 +87,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       {/* each card comes in, and goes, softly; the others make room as it does */}
       <AnimatePresence initial={false}>
       {/* what Meno did of itself, with the way to have it otherwise (../notices) */}
-      {notices.map((n) => (
+      {!talk.on && notices.map((n) => (
         <motion.div
           key={`notice-${n.id}`}
           layout
@@ -113,7 +119,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
           )}
         </motion.div>
       ))}
-      {cards.map(({ key, task, conns }) => {
+      {!talk.on && cards.map(({ key, task, conns }) => {
         const blocked = !task;
         const hosts = [
           ...new Set(

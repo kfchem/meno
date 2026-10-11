@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { usePresentingWindow } from "../presenting";
 import { RISE } from "../theme/motion";
 import { useState } from "react";
 import { restartIntoUpdate, useUpdate } from "../../lib/update";
@@ -10,7 +11,9 @@ import { restartIntoUpdate, useUpdate } from "../../lib/update";
 export default function UpdateNotice() {
   const ready = useUpdate((s) => (s?.phase === "ready" ? s.version : null));
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const shown = !!ready && dismissed !== ready;
+  // (not over a talk given in the window: ../presenting)
+  const talking = usePresentingWindow((s) => s.on);
+  const shown = !!ready && dismissed !== ready && !talking;
   return (
     <AnimatePresence>
       {shown && (

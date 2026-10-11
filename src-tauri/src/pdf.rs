@@ -123,6 +123,94 @@ fn drawn_box(at: &impl Fn(f32, f32) -> (f32, f32), r: &PdfRect) -> [f32; 4] {
     [a.0.min(b.0), a.1.min(b.1), a.0.max(b.0), a.1.max(b.1)]
 }
 
+/// A transform as a PDF writes one, `[a b c d e f]`: a point (x, y) goes to (ax + cy + e, bx + dy + f).
+type Affine = [f32; 6];
+const IDENTITY: Affine = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+
+fn apply(m: &Affine, x: f32, y: f32) -> (f32, f32) {
+    (m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5])
+}
+
+/// `inner`, then `outer`.
+fn then(i: &Affine, o: &Affine) -> Affine {
+    [
+        o[0] * i[0] + o[2] * i[1],
+        o[1] * i[0] + o[3] * i[1],
+        o[0] * i[2] + o[2] * i[3],
+        o[1] * i[2] + o[3] * i[3],
+        o[0] * i[4] + o[2] * i[5] + o[4],
+        o[1] * i[4] + o[3] * i[5] + o[5],
+    ]
+}
+
+fn affine_of(m: &PdfMatrix) -> Affine {
+    [m.a(), m.b(), m.c(), m.d(), m.e(), m.f()]
+}
+
+/// The paths and pictures of a figure, each where it lies on the page as drawn (`figure`).
+struct Drawn {
+    paths: Vec<Value>,
+    pictures: Vec<[f32; 4]>,
+}
+
+impl Drawn {
+    /// A thing on the page, under the transforms of the forms it lies in; a form's own things, each in turn.
+    fn take(&mut self, obj: &PdfPageObject, outer: Affine, at: &impl Fn(f32, f32) -> (f32, f32), within: &[f32; 4]) {
+        let meets = |q: &[f32; 4]| q[0] <= within[2] && q[2] >= within[0] && q[1] <= within[3] && q[3] >= within[1];
+        let Ok(bounds) = obj.bounds() else { return };
+        let r = bounds.to_rect();
+        let corners = [(r.left().value, r.bottom().value), (r.right().value, r.top().value), (r.left().value, r.top().value), (r.right().value, r.bottom().value)];
+        let drawn: Vec<(f32, f32)> = corners.iter().map(|&(x, y)| { let p = apply(&outer, x, y); at(p.0, p.1) }).collect();
+        let q = [
+            drawn.iter().map(|p| p.0).fold(f32::MAX, f32::min),
+            drawn.iter().map(|p| p.1).fold(f32::MAX, f32::min),
+            drawn.iter().map(|p| p.0).fold(f32::MIN, f32::max),
+            drawn.iter().map(|p| p.1).fold(f32::MIN, f32::max),
+        ];
+        if !meets(&q) {
+            return;
+        }
+        if let Some(form) = obj.as_x_object_form_object() {
+            let inner = form.matrix().map(|m| affine_of(&m)).unwrap_or(IDENTITY);
+            let m = then(&inner, &outer);
+            for o in form.iter() {
+                self.take(&o, m, at, within);
+            }
+        } else if let Some(path) = obj.as_path_object() {
+            let m = then(&path.matrix().map(|m| affine_of(&m)).unwrap_or(IDENTITY), &outer);
+            let to = |x: f32, y: f32| { let p = apply(&m, x, y); at(p.0, p.1) };
+            let mut d = vec![];
+            for s in path.segments().raw().iter() {
+                let (x, y) = to(s.x().value, s.y().value);
+                let op = match s.segment_type() {
+                    PdfPathSegmentType::MoveTo => "M",
+                    PdfPathSegmentType::LineTo => "L",
+                    PdfPathSegmentType::BezierTo => "C",
+                    _ => continue,
+                };
+                d.push(json!([op, x, y]));
+                if s.is_close() {
+                    d.push(json!(["Z"]));
+                }
+            }
+            // (a stroke's width as the transforms make it: by how much they scale a length)
+            let (o, u, v) = (to(0.0, 0.0), to(1.0, 0.0), to(0.0, 1.0));
+            let k = (((u.0 - o.0) * (v.1 - o.1) - (u.1 - o.1) * (v.0 - o.0)).abs()).sqrt();
+            let fill = path.fill_mode().map(|f| f != PdfPathFillMode::None).unwrap_or(false);
+            let stroke = path.is_stroked().unwrap_or(false);
+            let colour = |c: Result<PdfColor, PdfiumError>| c.ok().map(|c| format!("#{:02x}{:02x}{:02x}{:02x}", c.red(), c.green(), c.blue(), c.alpha()));
+            self.paths.push(json!({
+                "fill": if fill { colour(path.fill_color()) } else { None },
+                "stroke": if stroke { colour(path.stroke_color()) } else { None },
+                "width": path.stroke_width().map(|w| w.value * k).unwrap_or(0.0),
+                "d": d,
+            }));
+        } else if obj.as_image_object().is_some() {
+            self.pictures.push(q);
+        }
+    }
+}
+
 /// A request answered: its JSON, and its bytes.
 fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
     let t = Instant::now();
@@ -239,6 +327,33 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                 }
             }
             Ok((json!({"n": bytes.len() / 20, "ms": ms(t)}), bytes))
+        }
+        "figure" => {
+            let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
+            let at = page_space(&page).ok_or("the page could not be measured")?;
+            let b: Vec<f32> = ask["box"].as_array().map(|v| v.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect()).unwrap_or_default();
+            let within = if b.len() == 4 { [b[0], b[1], b[2], b[3]] } else { [f32::MIN, f32::MIN, f32::MAX, f32::MAX] };
+            let mut drawn = Drawn { paths: vec![], pictures: vec![] };
+            for obj in page.objects().iter() {
+                drawn.take(&obj, IDENTITY, &at, &within);
+            }
+            let mut letters = vec![];
+            let text = page.text().map_err(|e| e.to_string())?;
+            for c in text.chars().iter() {
+                if c.is_generated().unwrap_or(false) || matches!(c.render_mode(), Ok(PdfPageTextRenderMode::Invisible)) {
+                    continue;
+                }
+                let Some(ch) = c.unicode_char().filter(|ch| !ch.is_whitespace()) else { continue };
+                let Ok(r) = c.tight_bounds() else { continue };
+                let bx = drawn_box(&at, &r);
+                let (mx, my) = ((bx[0] + bx[2]) / 2.0, (bx[1] + bx[3]) / 2.0);
+                if mx < within[0] || mx > within[2] || my < within[1] || my > within[3] {
+                    continue;
+                }
+                let o = c.origin().ok().map(|(x, y)| at(x.value, y.value));
+                letters.push(json!({"c": ch.to_string(), "box": bx, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name()}));
+            }
+            Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "ms": ms(t)}), vec![]))
         }
         "close" => {
             docs.remove(&sha);
@@ -482,6 +597,16 @@ pub async fn pdf_objects(app: tauri::AppHandle, sha: String, page: u32) -> Resul
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// What a figure on a page is drawn with, within a box (points from its top
+/// left): its paths, each its segments where they lie, filled or stroked
+/// and how thick; its letters, each with its box, where its baseline
+/// starts and its size; and its pictures' boxes (`figure`).
+#[tauri::command]
+pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f32; 4]) -> Result<Value, String> {
+    let (head, _) = ask(&app, json!({"op": "figure", "sha": sha, "page": page, "box": r#box})).await?;
+    Ok(head)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -522,6 +647,11 @@ mod tests {
         }
         objs.push((30, "<< /Type /Annot /Subtype /Link /Rect [70 692 292 716] /Dest [12 0 R /XYZ 0 470 null] >>".into()));
         objs.push((31, "<< /Type /Annot /Subtype /Link /Rect [70 652 202 676] /A << /S /URI /URI (https://example.com/) >> >>".into()));
+        pdf_of(objs)
+    }
+
+    /// A PDF of the objects given, numbered as they are, with its table of where each lies.
+    fn pdf_of(mut objs: Vec<(u32, String)>) -> Vec<u8> {
         objs.sort_by_key(|o| o.0);
         let mut out = String::from("%PDF-1.7\n");
         let mut at = std::collections::BTreeMap::new();
@@ -596,6 +726,67 @@ mod tests {
         let (_, b) = object(1);
         // (a stroke two points wide reaches a point beyond the path)
         assert!((b[0] - 99.0).abs() < 1.5 && (b[1] - (842.0 - 451.0)).abs() < 1.5 && (b[2] - 301.0).abs() < 1.5 && (b[3] - (842.0 - 299.0)).abs() < 1.5, "{b:?}");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    /// A page as a journal prints a figure: a figure's form - its own
+    /// matrix moving it 10 points along - placed at half its size, holding
+    /// a line 100 points long and an O; and a wedge drawn on the page.
+    fn figure_pdf() -> Vec<u8> {
+        let form = "0.6 w 0 0 m 100 0 l S BT /F1 10 Tf 0 20 Td (O) Tj ET";
+        let page = "q 0.5 0 0 0.5 100 400 cm /Fm1 Do Q 0 0 0 rg 300 300 m 320 298 l 320 302 l h f";
+        pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (5, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] /Matrix [1 0 0 1 10 0] /Resources << /Font << /F1 3 0 R >> >> /Length {} >>\nstream\n{form}\nendstream", form.len())),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Fm1 5 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ])
+    }
+
+    #[test]
+    fn a_figures_paths_and_letters_are_read_where_they_are_drawn() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-figure-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "d".repeat(64);
+        std::fs::write(cache.join(format!("{sha}.pdf")), figure_pdf()).unwrap();
+        let mut docs = HashMap::new();
+        let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0})).unwrap();
+        let paths = head["paths"].as_array().unwrap();
+        assert_eq!(paths.len(), 2);
+        let near = |v: &Value, want: f64| (v.as_f64().unwrap() - want).abs() < 0.05;
+        // the form's line: moved 10 by its own matrix, then halved and placed at (100, 400) - 442 from the top
+        let line = &paths[0];
+        assert!(line["fill"].is_null() && line["stroke"].is_string());
+        let d = line["d"].as_array().unwrap();
+        assert_eq!(d[0][0], json!("M"));
+        assert!(near(&d[0][1], 105.0) && near(&d[0][2], 442.0), "{d:?}");
+        assert_eq!(d[1][0], json!("L"));
+        assert!(near(&d[1][1], 155.0) && near(&d[1][2], 442.0), "{d:?}");
+        assert!(near(&line["width"], 0.3), "{line:?}");
+        // the wedge: filled, closed, where it was drawn
+        let wedge = &paths[1];
+        assert!(wedge["fill"].is_string() && wedge["stroke"].is_null());
+        let d = wedge["d"].as_array().unwrap();
+        assert!(near(&d[0][1], 300.0) && near(&d[0][2], 542.0), "{d:?}");
+        assert!(d.iter().any(|s| s[0] == json!("Z")));
+        // the O, half its size, its baseline where the form's matrices put it
+        let letters = head["letters"].as_array().unwrap();
+        assert_eq!(letters.len(), 1);
+        assert_eq!(letters[0]["c"], json!("O"));
+        assert!(near(&letters[0]["size"], 5.0), "{:?}", letters[0]);
+        assert!(near(&letters[0]["at"][0], 105.0) && near(&letters[0]["at"][1], 432.0), "{:?}", letters[0]);
+        // within a box round the wedge alone, the wedge alone
+        let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
+        assert_eq!(head["paths"].as_array().unwrap().len(), 1);
+        assert_eq!(head["letters"].as_array().unwrap().len(), 0);
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }

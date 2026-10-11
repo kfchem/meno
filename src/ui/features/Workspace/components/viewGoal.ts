@@ -20,3 +20,18 @@ export function viewGoalOf(camera: THREE.Camera): ViewGoal | undefined {
 export function letViewGoalGo(camera: THREE.Camera): void {
   goals.delete(camera);
 }
+
+/**
+ * Cameras a talk drives (presenting/Presenter): PanZoom2D stands aside
+ * while one does, and takes the view up from where the talk left it.
+ */
+const driven = new WeakSet<THREE.Camera>();
+
+export function setViewDriven(camera: THREE.Camera, on: boolean): void {
+  if (on) driven.add(camera);
+  else driven.delete(camera);
+}
+
+export function viewDriven(camera: THREE.Camera): boolean {
+  return driven.has(camera);
+}

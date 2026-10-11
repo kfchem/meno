@@ -12,21 +12,21 @@ const need = (text: string) => 2 * (captionSet(text, 0, 0, fs, ACS_LABEL_SET).ha
 
 describe("the arrows as they are drawn", () => {
   it("are as long as their kept words need", () => {
-    expect(drawnArrows({ arrows, captions, wordsWriting: null }, null, fs, ACS_LABEL_SET)[0].length).toBeCloseTo(need(long), 6);
+    expect(drawnArrows({ arrows, captions, wordsWriting: null }, null, { fontPx: fs }, ACS_LABEL_SET)[0].length).toBeCloseTo(need(long), 6);
   });
 
   it("follow the words being written in place of their caption's own", () => {
     const wordsWriting = { arrow: 1, x: 0, y: 8, halfW: 5, halfH: 5, n: 1 };
-    expect(drawnArrows({ arrows, captions, wordsWriting }, 7, fs, ACS_LABEL_SET)[0].length).toBe(40);
+    expect(drawnArrows({ arrows, captions, wordsWriting }, 7, { fontPx: fs }, ACS_LABEL_SET)[0].length).toBe(40);
   });
 
   it("take new words being written besides those kept", () => {
     const wordsWriting = { arrow: 1, x: 0, y: -8, halfW: 120, halfH: 5, n: 2 };
-    expect(drawnArrows({ arrows, captions, wordsWriting }, null, fs, ACS_LABEL_SET)[0].length).toBeCloseTo(2 * (120 + ARROW_PAST_WORDS * fs), 6);
+    expect(drawnArrows({ arrows, captions, wordsWriting }, null, { fontPx: fs }, ACS_LABEL_SET)[0].length).toBeCloseTo(2 * (120 + ARROW_PAST_WORDS * fs), 6);
   });
 
   it("are placed among without the words being put down", () => {
-    expect(arrowsBeside({ arrows, captions }, fs, ACS_LABEL_SET, 7)[0].length).toBe(40);
-    expect(arrowsBeside({ arrows, captions }, fs, ACS_LABEL_SET)[0].length).toBeCloseTo(need(long), 6);
+    expect(arrowsBeside({ arrows, captions }, { fontPx: fs }, ACS_LABEL_SET, 7)[0].length).toBe(40);
+    expect(arrowsBeside({ arrows, captions }, { fontPx: fs }, ACS_LABEL_SET)[0].length).toBeCloseTo(need(long), 6);
   });
 });

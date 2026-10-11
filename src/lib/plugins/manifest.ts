@@ -5,8 +5,9 @@
  * lock); every kind of file it knows (`kinds`) - those it reads (`reads`),
  * those it writes (`writes`), and the rest, texts it colours; the roles it
  * fills (`roles`) and the kinds of a workflow's step (`steps`), each with
- * its options; the systems it can be added on and the programs installed
- * separately its steps run; and, besides, a guide Meno shows once and a
+ * its options; the systems it can be added on, the programs installed
+ * separately its steps run, and the files it needs downloaded besides its
+ * environment (`downloads`); and, besides, a guide Meno shows once and a
  * catalogue of plugins it suggests - for files of the kinds it names, too.
  *
  * A plugin stands alone: it knows of no other, and Meno of no program. Two
@@ -129,8 +130,11 @@ export type System = (typeof SYSTEMS)[number];
  * `{parent}` (the folder above), with a path inside it; and the folders it
  * is usually installed in, on each system (`places`) - each from `/`,
  * `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's
- * name for any text, a version's, the newest found first. Meno's backend
- * reads and checks the same (src-tauri/src/jobs.rs `installed_named`).
+ * name for any text, a version's, the newest found first; and how it says
+ * its version, and the least Meno takes (`version`: run with `args`, options
+ * alone, it prints a line beginning `after`, then the version) - the newest
+ * copy new enough then taken. Meno's backend reads and checks the same
+ * (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).
  */
 export type InstalledDecl = {
   name: string;
@@ -139,7 +143,23 @@ export type InstalledDecl = {
   path: string[];
   env: Record<string, string[]>;
   places: Partial<Record<System, string[]>>;
+  version?: VersionRule;
 };
+
+/**
+ * A file a plugin needs besides its environment (docs/PLUGINS.md, *The
+ * manifest*, `downloads`) - a model's trained weights, say: what it is, in
+ * words, and under what licence; where it is fetched from, over HTTPS; its
+ * SHA-256 and size in bytes, which it is checked against before it is
+ * kept; and its name in the plugin's `files` folder, which the worker is
+ * given. Fetched as the plugin is set up, under the same leave - the user
+ * told of it and its size first. Meno's backend reads and checks the same
+ * (src-tauri/src/plugfiles.rs).
+ */
+export type DownloadDecl = { file: string; name: string; licence: string; url: string; sha256: string; bytes: number };
+
+/** How a program installed separately says its version, and the least Meno takes. */
+export type VersionRule = { args: string[]; after: string; least: string };
 
 /** A kind of file a plugin's catalogue names, and the plugins it suggests for one: told by its marks, as a kind a plugin reads is. */
 export type CatalogueFile = { id: string; name: string; extensions: string[]; marks: Mark[]; suggest: string[] };
@@ -178,6 +198,8 @@ export type Manifest = {
   systems: System[];
   /** The programs installed separately that its steps run. */
   installed: InstalledDecl[];
+  /** The files it needs downloaded besides its environment. */
+  downloads: DownloadDecl[];
   /** Its guide: shown once, the first time it is there. */
   guide: GuideStep[];
   /** The plugins it suggests. */
@@ -297,6 +319,18 @@ export function usualPlaceOk(t: unknown): t is string {
     .every((part) => part !== "" && part !== "." && part !== ".." && (part.match(/\*/g) ?? []).length <= 1 && !/[\\:{}]/.test(part));
 }
 
+/** Whether `v` is a version as a rule says one: digits, dots between them. */
+const versionOk = (v: unknown): v is string => typeof v === "string" && v.length <= 20 && /^\d{1,6}(\.\d{1,6})*$/.test(v);
+
+/** A version rule as a manifest gives it - options alone, never a file or a path; text to find; a version - or null where it is not one. */
+function versionRuleOf(v: unknown): VersionRule | null {
+  const r = v as Record<string, unknown> | null;
+  const args = Array.isArray(r?.args) ? r.args : [];
+  const argsOk = args.length > 0 && args.length <= 4 && args.every((a) => typeof a === "string" && /^-[A-Za-z0-9-]{0,39}$/.test(a));
+  const after = typeof r?.after === "string" && r.after && r.after.length <= 40 && !/[\n\r]/.test(r.after) ? r.after : null;
+  return argsOk && after && versionOk(r?.least) ? { args: [...(args as string[])], after, least: r.least } : null;
+}
+
 function installedOf(v: unknown): InstalledDecl | null {
   const d = v as Record<string, unknown> | null;
   const name = typeof d?.name === "string" && PROGRAM.test(d.name) ? d.name : null;
@@ -325,8 +359,31 @@ function installedOf(v: unknown): InstalledDecl | null {
     if (Array.isArray(given) && given.every(usualPlaceOk)) places[sys] = [...(given as string[])];
     else placesOk = false;
   }
-  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one - is none)
-  return name && label && Object.keys(files).length && path && envOk && placesOk ? { name, label, files, path, env, places } : null;
+  const version = d?.version === undefined ? undefined : versionRuleOf(d.version);
+  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one, a version it cannot be asked for - is none)
+  return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null ? { name, label, files, path, env, places, ...(version ? { version } : {}) } : null;
+}
+
+/** A kept file's name: a name, not a path. The backend's rule (`file_ok`). */
+const DOWNLOAD_FILE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/** The most a file may be: a model's weights, a few gigabytes at most. */
+const DOWNLOAD_MOST = 20e9;
+
+/** Whether a URL is one a file may be fetched from: HTTPS, with a host, and nothing in it that is not a URL's. The backend's rule (`url_ok`). */
+function downloadUrlOk(v: unknown): v is string {
+  if (typeof v !== "string" || v.length > 500 || !v.startsWith("https://") || !/^[\x21-\x7e]+$/.test(v)) return false;
+  const host = v.slice(8).split(/[/?#]/)[0];
+  return host !== "" && !host.includes("@");
+}
+
+function downloadOf(v: unknown): DownloadDecl | null {
+  const d = v as Record<string, unknown> | null;
+  const file = typeof d?.file === "string" && DOWNLOAD_FILE.test(d.file) && !d.file.endsWith(".part") ? d.file : null;
+  const name = text(d?.name, 80);
+  const licence = text(d?.licence, 60);
+  const sha256 = typeof d?.sha256 === "string" && /^[0-9a-f]{64}$/.test(d.sha256) ? d.sha256 : null;
+  const bytes = typeof d?.bytes === "number" && Number.isInteger(d.bytes) && d.bytes > 0 && d.bytes <= DOWNLOAD_MOST ? d.bytes : null;
+  return file && name && licence && downloadUrlOk(d?.url) && sha256 && bytes ? { file, name, licence, url: d!.url as string, sha256, bytes } : null;
 }
 
 /** How long a guide's words may be: a title, a step's text. */
@@ -431,6 +488,10 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
   // (each program installed separately once, and only one a step or a role runs)
   const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
+  // (files to download, where it runs something to use them: all as they must be, or the plugin is none - the backend refuses the list whole)
+  if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
+  const downloads = environment ? list(m.downloads).map(downloadOf) : [];
+  if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
   return {
     id,
     name,
@@ -446,6 +507,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     steps,
     systems,
     installed,
+    downloads: downloads as DownloadDecl[],
     guide,
     suggests,
     files,
