@@ -163,9 +163,10 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D; Delete | unpaired electron, expand an abbreviation, select its structure |
-| A bond | clean up, 3D; Delete | select its structure |
-| The selection | cut, copy, paste (opened on empty space), clean up, 3D; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
+| A bond | clean up, 3D, colour; Delete | select its structure |
+| The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, use as input, save as abbreviation |
+| Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text, fit, R and S, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
 | Words on the page | edit, align left, centre, right, justify; Delete | show in the PDF, as wide as its words |
@@ -548,6 +549,32 @@ All hover-based, as above.
   anew; undo brings them back. A label's charge put by hand leaves the
   label, set beside it where it was put (`Atom.chargeAt`, `stereoAt`;
   `Bond.stereoAt`; `MarkHold2D`).
+- **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
+  a highlight's edge sharp, never a glow; rings filled too). *Colour…*, in
+  the menu of an atom, a bond, the selection or a ring - a right-click
+  inside one with nothing selected - opens a card where the menu was, of
+  a row for each thing it can give: *Colour*, the atoms' labels (their
+  charges too) and the bonds' lines; *Highlight*, a light tint of it laid
+  behind the drawing, a band along each bond and round each atom - round
+  its label, where it has one - flat, so that the pieces of one colour run
+  together into one shape with a sharp edge; and *Fill ring*, a lighter
+  tint over the inside of each ring it holds whole, or of the ring
+  right-clicked. Each row has none, Okabe and Ito's colours but black -
+  told apart by those who see colours otherwise - and any other, from the
+  system's chooser; the one given now is ringed. A swatch is given at
+  once, one step each (as long as the chooser is open, one step in all),
+  and the card stays open for the next; Escape, a press elsewhere or the
+  wheel closes it. A selection's colour goes to its atoms and the bonds
+  selected among them; a bond keeps its own colour, its atoms theirs.
+  R, S, E and Z are never coloured (2026-10-05), nor is anything Meno
+  marks on its own. A colour goes with its part as it moves, is turned
+  and is cleaned up; it is saved with the workspace, carried by a copy -
+  the fills of the rings it holds whole too - and drawn in an exported
+  SVG and in a copy's pictures (EMF, PNG), as on the canvas; a MOL, SD or
+  RXN file has no place for it. A colour read from a copy or a workspace
+  is taken only if it is one (#rrggbb), as it goes into a picture's
+  markup (`Atom.color`, `highlight`; `Bond.color`, `highlight`;
+  `ringFills`; layout2d `under`; `ColourCard`, `Fills2D`, `utils/rings`).
 - Everything a molfile, SDfile or Rxnfile can hold, read after CTfile Formats
   and drawn after IUPAC's recommendations: docs/CTFILE.md, step by step.
 - Abbreviations: Meno's own, those put together by rule (OTBS, 2,6-diMeBz)

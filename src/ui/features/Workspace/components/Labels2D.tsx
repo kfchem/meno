@@ -143,7 +143,7 @@ export function Texts2D({
               <Text
                 font={font}
                 fontSize={run.size}
-                color={labelColor}
+                color={t.color ?? labelColor}
                 fillOpacity={fill}
                 anchorX="left"
                 anchorY="top-baseline"

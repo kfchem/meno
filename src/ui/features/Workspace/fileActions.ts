@@ -207,7 +207,17 @@ export function drawingLayout(
   aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings">,
   style: DrawingStyle,
 ): { layout: Layout; opts: LayoutOptions } {
-  const atoms = model.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.z != null ? { z: a.z } : {}), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}) }));
+  const atoms = model.atoms.map((a) => ({
+    id: a.id,
+    x: a.x,
+    y: a.y,
+    el: a.el,
+    ...chemistry(a),
+    ...(a.z != null ? { z: a.z } : {}),
+    ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    ...(a.color ? { color: a.color } : {}),
+    ...(a.highlight ? { highlight: a.highlight } : {}),
+  }));
   const index = new Map(model.atoms.map((a, i) => [a.id, i]));
   const bonds = layoutBonds(model.bonds, index);
   const enabled = Object.keys(aromatic.aromaticRings || {}).filter(
@@ -219,6 +229,7 @@ export function drawingLayout(
       : !!aromatic.aromaticEnabled;
   const opts = editorLayoutOptions(style, {
     aromaticCircle,
+    ...(model.ringFills ? { ringFills: model.ringFills } : {}),
     minLinePx: 0,
     paddingPx: 4,
   });
@@ -429,7 +440,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
-/** Everything the canvas draws: its structures, arrows and "+" signs. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions">): Drawn {
-  return { ...state.model, arrows: state.arrows, pluses: state.pluses, captions: state.captions };
+/** Everything the canvas draws: its structures - its rings' fills with them - arrows and "+" signs. */
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "ringFills">>): Drawn {
+  return { ...state.model, ...(state.ringFills && Object.keys(state.ringFills).length ? { ringFills: state.ringFills } : {}), arrows: state.arrows, pluses: state.pluses, captions: state.captions };
 }

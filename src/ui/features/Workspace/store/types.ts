@@ -38,6 +38,10 @@ export type Atom = EditorAtom & {
   stereoAt?: MarkAt;
   /** What was typed for its label, where it was read as something else (obz, read as OBz): had back from its menu. */
   typed?: string;
+  /** The colour its label - its charge too - is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb; drawn as a light tint). */
+  highlight?: string;
 };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
@@ -61,6 +65,10 @@ export type Bond = BondChem & {
   dative?: boolean;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
+  /** The colour it is drawn in, where it is given one (#rrggbb). */
+  color?: string;
+  /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
+  highlight?: string;
 };
 
 import type { FlowParts } from "../workflow/parts";
@@ -70,6 +78,8 @@ export type Sel = { atoms: Set<number>; bonds: Set<number> };
 export type SelFlow = { sets: Set<number>; steps: Set<number> };
 
 export type Model = { atoms: Atom[]; bonds: Bond[] };
+/** Rings filled with a colour (#rrggbb), behind the drawing, by each ring's key: its atoms' ids, ascending, joined by "-" (utils/rings). */
+export type RingFills = Record<string, string>;
 export type Arrow = {
   id: number;
   x: number;
@@ -399,7 +409,7 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
 export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
-export type Drawn = Model & { arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
+export type Drawn = Model & { ringFills?: RingFills; arrows?: Arrow[]; pluses?: Plus[]; captions?: Caption[]; molecules3d?: Carried3D[]; flow?: FlowParts; pictures?: PictureItem[] };
 
 export type EditorState = {
   model: Model;
@@ -840,6 +850,15 @@ export type EditorState = {
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
+  /** The rings filled with a colour (`RingFills`). */
+  ringFills: RingFills;
+  /**
+   * The atoms and bonds named given a colour - drawn in it (`which` "color"),
+   * or highlighted in it - or (null) none: one step.
+   */
+  colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
+  fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle?: StyleChoice;
   labelEdit: {
