@@ -31,7 +31,7 @@ import { boxOf, presentAct, slideFit, viewOf, zoomOf } from "./slides";
 import { easeInOut, flightMs, zoomPath, type ZoomPath } from "./zoomPath";
 import { bandsAbout, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
-import { usePresentingWindow, windowFullScreen } from "../../../presenting";
+import { setPresentingWindow, windowFullScreen } from "../../../presenting";
 import { filmPlaying, playFilm, restartFilm } from "../components/pictureTextures";
 import { currentStyle3D } from "../style3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
@@ -407,7 +407,7 @@ export default function Presenter() {
       turningBack.current = null;
       setViewDriven(cam, true);
       if (s.textsOpen) s.closeTexts();
-      usePresentingWindow.setState({ on: true });
+      setPresentingWindow(true);
       void windowFullScreen(true).then((made) => {
         if (run.current === r) r.madeFull = made;
         else if (made) void windowFullScreen(false);
@@ -433,7 +433,7 @@ export default function Presenter() {
       if (stage.screen) stage.screen.style.opacity = "0";
       if (stage.layer) stage.layer.style.cursor = "";
       setViewDriven(cam, false);
-      usePresentingWindow.setState({ on: false });
+      setPresentingWindow(false);
       if (r.madeFull) void windowFullScreen(false);
       if (!settle) return;
       // (back where it was - less the half of the column the view goes as the column opens again: FollowCover)

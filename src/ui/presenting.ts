@@ -7,8 +7,20 @@
 import { create } from "zustand";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
-/** Whether a talk is being given in the window. */
-export const usePresentingWindow = create<{ on: boolean }>(() => ({ on: false }));
+/**
+ * Whether a talk is being given in the window, and since when - or when
+ * the last one ended. What the window would say in its corners meanwhile -
+ * the network's cards, notices, a question about the network, an update
+ * ready - waits until it ends (the maintainer, 2026-10-11): nothing comes
+ * up over a talk, and nothing is missed.
+ */
+export const usePresentingWindow = create<{ on: boolean; since?: number; ended?: number }>(() => ({ on: false }));
+
+/** A talk begun in the window, or ended. */
+export function setPresentingWindow(on: boolean): void {
+  const now = Date.now();
+  usePresentingWindow.setState((s) => (on ? { on: true, since: now, ended: undefined } : { on: false, since: s.since, ended: now }));
+}
 
 /**
  * The window full screen for a talk, or back as it was: `on`, made full

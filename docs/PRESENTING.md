@@ -27,6 +27,8 @@ page; a talk is a way through it.
   time - **comes later, as a pull request of its own.**
 - **The order of the work**: slides and talks, then text boxes, shapes,
   guides, and handwriting.
+- **Nothing comes up over a talk**: what the window would say in its
+  corners meanwhile waits until the talk ends.
 
 ## Slides on the page
 
@@ -99,6 +101,10 @@ page; a talk is a way through it.
 - **Ended**, the view eases back to where it was, the molecules turned in
   the talk turn back as they were, the window is as it was and the column
   opens again on what it showed. A talk changes nothing in the workspace.
+- **Nothing comes up over it.** The network's cards, notices, a question
+  about the network and an update ready to go in wait until the talk ends,
+  and are shown then, each for its while; a question waited for holds
+  what asked it. Every connection is still recorded as it is made.
 - **What the presenter sees, with one screen**: what the audience sees.
   With two, the window is on the screen it is on; the presenter's view on
   the other screen comes later (see *Later*).
@@ -218,6 +224,10 @@ words, a width they break into lines at, and how their lines lie.
 - Chips that work a molecule (`meno-control-chip`: its frames, *Make
   again*) are hidden while a talk is given (`[data-presenting]` on the
   page's HTML layer).
+- The window's corners wait for a talk to end (`usePresentingWindow`'s
+  `since` and `ended`): NetworkToasts shows nothing meanwhile and then the
+  cards of what ran during it, `ui/notices.ts` holds notices given
+  meanwhile, ConsentDialog and UpdateNotice wait.
 
 Not yet, and where it comes: everything under *Text boxes*, *Shapes*,
 *Guides* and *Handwriting* (their own pull requests, in that order); a
