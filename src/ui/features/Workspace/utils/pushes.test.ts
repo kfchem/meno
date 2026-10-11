@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { addPush, appendModel, deleteParts, emptyWorkspaceDocument, relayout, removePush, replaceModel, turnPushesOver, updatePush, type WorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
 import { partToCopy, readRecord, recordText } from "./copyPaste";
-import { hasLonePair, partAt, pushTargetAt } from "./pushes";
+import { hasLonePair, partAt, pushShapes, pushTargetAt, tailOf } from "./pushes";
+import { layoutMolecule } from "../../../../lib/chem/layout2d";
+import { pushMeasures } from "../../../../lib/chem/pushArrow";
+import { styleOf, DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 
 // hydroxide and bromomethane, for an SN2: O(1)  C(2)-Br(3), C-H(4)
 const L = 1.5;
@@ -99,5 +104,32 @@ describe("where an arrow being drawn goes", () => {
     expect(hasLonePair({ el: "O" })).toBe(true);
     expect(hasLonePair({ el: "C", charge: -1 })).toBe(true);
     expect(hasLonePair({ el: "C" })).toBe(false);
+  });
+
+  it("leaves an anion from its charge, unless set to leave from a lone pair; a fishhook leaves a radical from its dot", () => {
+    expect(tailOf({ el: "O", charge: -1 }, {})).toBe("charge");
+    expect(tailOf({ el: "O", charge: -1 }, { fromPair: true })).toBe("pair");
+    expect(tailOf({ el: "N" }, {})).toBe("pair");
+    expect(tailOf({ el: "C", charge: -1, radical: 1 }, { half: true })).toBe("radical");
+    expect(tailOf({ el: "C", charge: -1, radical: 1 }, {})).toBe("charge");
+  });
+
+  it("draws an anion's arrow from beside its charge's mark, with no lone pair's dots", () => {
+    // HO- to the carbon: drawn as a picture lays it out
+    const style = styleOf(DEFAULT_STYLE_CHOICE);
+    const B = NOMINAL_BOND_LENGTH;
+    const atoms = model.atoms.map((a) => ({ id: a.id, el: a.el, x: (a.x / L) * B, y: (a.y / L) * B, ...(a.charge ? { charge: a.charge } : {}) }));
+    const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+    const opts = editorLayoutOptions(style, { minLinePx: 0, paddingPx: 4 });
+    const layout = layoutMolecule(atoms, layoutBonds(model.bonds, index), opts, (style.bondLengthPt * 96) / 72 / B);
+    const m = pushMeasures(style, B);
+    const shape = (fromPair: boolean) =>
+      pushShapes([{ id: 1, from: { atom: 1 }, to: { atom: 2 }, ...(fromPair ? { fromPair: true as const } : {}) }], atoms, model.bonds, layout, opts, opts.fontPx, m)[0].shape;
+    const fromCharge = shape(false);
+    expect(fromCharge.dots).toHaveLength(0);
+    // (its start near the mark: up and to the right of the O, where the charge is written)
+    expect(fromCharge.start.x).toBeGreaterThan(atoms[0].x);
+    expect(fromCharge.start.y).toBeGreaterThan(atoms[0].y);
+    expect(shape(true).dots).toHaveLength(2);
   });
 });

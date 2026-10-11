@@ -2,7 +2,7 @@
   "id": "blender",
   "name": "Blender interface",
   "version": "0.1.0",
-  "description": "Renders pictures and films of molecules in 3D with Blender - installed separately, under its own licence, and never downloaded by Meno.",
+  "description": "Renders pictures and films of molecules in 3D with Blender 5.0 or later - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "GPL-3.0-or-later",
   "homepage": "https://www.blender.org",
   "environment": "uv",
@@ -14,7 +14,8 @@
       "places": {
         "macos": ["/Applications/Blender.app/Contents/MacOS", "{home}/Applications/Blender.app/Contents/MacOS"],
         "windows": ["{programs}/Blender Foundation/Blender *"]
-      }
+      },
+      "version": {"args": ["--version"], "after": "Blender ", "least": "5.0"}
     }
   ],
   "roles": [

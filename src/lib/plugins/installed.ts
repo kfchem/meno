@@ -5,8 +5,9 @@
  * chemist located one in Settings, Plugins (`plugins.programs`, by
  * "plugin:program"). Meno's backend looks (src-tauri/src/jobs.rs
  * `program_where`), and takes a place located only where it is that
- * program; where each is, as Meno last looked, is kept here for a step's
- * card and Settings to say at once.
+ * program - and, where its plugin says how to ask, of a version Meno takes,
+ * the newest such copy found; where each is, as Meno last looked, and its
+ * version, are kept here for a step's card and Settings to say at once.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -18,23 +19,47 @@ import { systemHere } from "./here";
 /** A program installed separately, as it is known: by its plugin and its name there. */
 export const programKey = (plugin: string, name: string) => `${plugin}:${name}`;
 
-/** Where each program installed separately is, by key: its path, or null where it is found nowhere; unset, not looked for yet. */
-export const useInstalled = create<{ where: Record<string, string | null> }>(() => ({ where: {} }));
+/** A copy of a program installed separately, as the backend chose it (jobs.rs `Chosen`): where it is; its version, where it says; why it will not do, where it is too old for Meno. */
+export type Chosen = { path: string; version?: string; why?: string };
 
-/** Where Meno last found a program installed separately: its path; null, nowhere; undefined, not looked for yet. */
+const chosenOf = (v: unknown): Chosen | null => {
+  const c = v as Partial<Chosen> | null;
+  if (!c || typeof c.path !== "string") return null;
+  return { path: c.path, ...(typeof c.version === "string" ? { version: c.version } : {}), ...(typeof c.why === "string" ? { why: c.why } : {}) };
+};
+
+/**
+ * Where each program installed separately is, by key: its path, or null
+ * where none fit to run is found; unset, not looked for yet - and the copy
+ * chosen, as the backend said (`chosen`): its version, and why it will not
+ * do, where it is too old.
+ */
+export const useInstalled = create<{ where: Record<string, string | null>; chosen: Record<string, Chosen | null> }>(() => ({ where: {}, chosen: {} }));
+
+/** Where Meno last found a program installed separately: its path; null, nowhere fit to run; undefined, not looked for yet. */
 export const whereIs = (plugin: string, name: string): string | null | undefined => useInstalled.getState().where[programKey(plugin, name)];
 
-/** Looks for a program installed separately - where the chemist located it, else where the system finds programs - and keeps where it is. */
+/** Why a program installed separately will not do, as Meno last looked: the copy found is too old ("Meno needs Blender 5.0 or later; this one is 4.1"); undefined where it will, or none is found. */
+export const tooOld = (plugin: string, name: string): string | undefined => useInstalled.getState().chosen[programKey(plugin, name)]?.why;
+
+/**
+ * Looks for a program installed separately - where the chemist located it,
+ * else where the system finds programs, else where it is usually installed;
+ * where its plugin says how to ask, the newest copy of a version Meno takes -
+ * and keeps where it is: its path, or null where none will do (`tooOld` says
+ * why, where one is too old).
+ */
 export async function lookFor(plugin: string, name: string, ask: typeof invoke = invoke): Promise<string | null> {
   const key = programKey(plugin, name);
   const located = useAppSettings.getState().plugins.programs[key];
-  let where: string | null = null;
+  let chosen: Chosen | null = null;
   try {
-    where = (await ask<string | null>("program_where", { plugin, name, located: located ?? null })) ?? null;
+    chosen = chosenOf(await ask("program_where", { plugin, name, located: located ?? null }));
   } catch {
-    where = null;
+    chosen = null;
   }
-  useInstalled.setState((s) => ({ where: { ...s.where, [key]: where } }));
+  const where = chosen && !chosen.why ? chosen.path : null;
+  useInstalled.setState((s) => ({ where: { ...s.where, [key]: where }, chosen: { ...s.chosen, [key]: chosen } }));
   return where;
 }
 
@@ -47,9 +72,10 @@ export async function lookForAll(plugins: readonly { id: string; installed: read
 /**
  * Locates a program installed separately: the chemist picks its file - or,
  * on macOS, the app that holds it (Blender.app) - which is kept where it is
- * that program: its file's name, and one that can be run. Where it was
- * taken - the program, inside an app picked; null where nothing was picked;
- * throws, saying why, where what was picked is not it.
+ * that program: its file's name, and one that can be run - and, where its
+ * plugin says how to ask, of a version Meno takes. Where it was taken - the
+ * program, inside an app picked; null where nothing was picked; throws,
+ * saying why, where what was picked is not it, or is too old.
  */
 export async function locate(
   plugin: string,
@@ -63,13 +89,17 @@ export async function locate(
   const picked = await pick();
   if (!picked) return null;
   const file = systemHere() ? decl.files[systemHere()!] : undefined;
-  const where = await ask<string | null>("program_where", { plugin, name: decl.name, located: picked }).catch(() => null);
+  // (what was picked alone - never another copy found elsewhere)
+  const chosen = chosenOf(await ask("program_where", { plugin, name: decl.name, located: picked, exact: true }).catch(() => null));
+  const where = chosen?.path ?? null;
   // (an app picked: the program the backend found inside it)
   const app = picked.replace(/\/+$/, "");
   const inApp = !!where && /\.app$/i.test(app) && where.startsWith(`${app}/`);
-  if (!where || (where !== picked && !inApp)) throw new Error(`That is not ${decl.label}: its program is ${file ? `the file called ${file}` : "not made for this system"}, one that can be run.`);
+  if (!chosen || !where || (where !== picked && !inApp)) throw new Error(`That is not ${decl.label}: its program is ${file ? `the file called ${file}` : "not made for this system"}, one that can be run.`);
+  if (chosen.why) throw new Error(`${chosen.why}.`);
+  const key = programKey(plugin, decl.name);
   const settings = useAppSettings.getState();
-  settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [programKey(plugin, decl.name)]: where } });
-  useInstalled.setState((s) => ({ where: { ...s.where, [programKey(plugin, decl.name)]: where } }));
+  settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [key]: where } });
+  useInstalled.setState((s) => ({ where: { ...s.where, [key]: where }, chosen: { ...s.chosen, [key]: chosen } }));
   return where;
 }
