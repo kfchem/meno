@@ -40,6 +40,9 @@ import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard, { type Offered3D } from "./ExportCard";
+import OrdersCard from "./OrdersCard";
+import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import { partOf } from "./utils/completeness";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
@@ -311,6 +314,41 @@ function WorkspaceContent({
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // a molecule's bond orders sought from its shape as it comes in, where they
+  // are unknown; and those given from a SMILES, asked for on its ligand
+  useBondOrders();
+  const [givingOrders, setGivingOrders] = useState<{ id: number; atom: number | null } | null>(null);
+  // its ligand's hydrogens, the ones its file leaves out, added - as one undo step
+  const completeHydrogens = useCallback(
+    async (id: number, atom: number | null) => {
+      setWorking3d("Adding hydrogens…");
+      setChemError(null);
+      try {
+        await addHydrogens(store, id, atom);
+      } catch (e: unknown) {
+        setChemError(`The hydrogens could not be added: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setWorking3d(null);
+      }
+    },
+    [store],
+  );
+  // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
+  const lookUpComponents = useCallback(
+    async (id: number) => {
+      setWorking3d("Looking up chemical components…");
+      setChemError(null);
+      try {
+        const r = await ordersFromDictionary(store, id);
+        if (r && !r.given) setChemError("No residue of this entry is in the CCD as the entry draws it.");
+      } catch (e: unknown) {
+        setChemError(`The CCD could not be looked up: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setWorking3d(null);
+      }
+    },
+    [store],
+  );
   const build3d = useCallback(
     async (blocks: Block[], isomers: "one" | "all", replacing?: Molecule3D) => {
       setWorking3d("Making the 3D structure…");
@@ -715,6 +753,7 @@ function WorkspaceContent({
     }
   };
   const menuLink = menuMolecule ? linkOf(menuMolecule, model) : null;
+  const menuPart = menuMolecule ? partOf(menuMolecule, menu?.atom ?? null) : null;
   // (what is chosen of it, or the measurement right-clicked, can be set: utils/edit3d)
   const frameShown = (id: number) => store.getState().frames3d[id] ?? 0;
   const chosenPathOf = menuMolecule && chosen3d?.id === menuMolecule.id ? chosenPath(menuMolecule, chosen3d) : null;
@@ -741,6 +780,10 @@ function WorkspaceContent({
         ...(menuLink === "live" || menuLink === "changed" ? { onTurnLikeDrawing: () => turnLikeDrawing(menuMolecule.id) } : {}),
         ...(menuLink === "changed" ? { onRemake: () => remake3d(menuMolecule.id) } : {}),
         ...(menuLink == null || menuLink === "gone" ? { onDrawFormula: () => void drawFormula(menuMolecule.id) } : {}),
+        // (its bond orders given, its hydrogens added: its ligand's, for a PDB entry - utils/completeness)
+        ...(canAskDictionary(menuMolecule) ? { onOrdersFromDictionary: () => void lookUpComponents(menuMolecule.id) } : {}),
+        ...(canGiveOrders(menuMolecule, menuPart) ? { onOrdersFromSmiles: () => setGivingOrders({ id: menuMolecule.id, atom: menu?.atom ?? null }) } : {}),
+        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {
               lists: resultsOn(menuMolecule.calc?.results, "list").map((l, _, all) => ({
@@ -826,7 +869,7 @@ function WorkspaceContent({
     // A card's text field keeps the system's own menu - cut, copy, paste.
     if (e.target !== domRef.current) return;
     e.preventDefault(); // no browser menu over the drawing
-    const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d } = store.getState();
+    const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d, hoveredAtom3d } = store.getState();
     const box = e.currentTarget.getBoundingClientRect();
     const place = {
       at: clientToWorld(e.clientX, e.clientY) ?? pasteTarget(),
@@ -855,6 +898,8 @@ function WorkspaceContent({
         id: hovered3d.id,
         selection: here ? "here" : drawing || sel3d.size ? "elsewhere" : "none",
         drawing,
+        // (the atom under the pointer: which of its ligands the menu is about)
+        ...(hoveredAtom3d?.id === hovered3d.id && hoveredAtom3d.atom != null ? { atom: hoveredAtom3d.atom } : {}),
         ...place,
       });
       return;
@@ -1144,6 +1189,18 @@ function WorkspaceContent({
               void build3d(ask3d.blocks, "one", ask3d.replacing);
             }}
             onCancel={() => setAsk3d(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {givingOrders && (
+          <OrdersCard
+            key="orders"
+            onCancel={() => setGivingOrders(null)}
+            onGive={async (smiles) => {
+              await ordersFromSmiles(store, givingOrders.id, givingOrders.atom, smiles);
+              setGivingOrders(null);
+            }}
           />
         )}
       </AnimatePresence>

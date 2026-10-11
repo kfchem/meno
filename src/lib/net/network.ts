@@ -76,6 +76,7 @@ export function purposeName(purpose: string): string {
   if (purpose === "python-code") return "Python run in the console";
   if (purpose === "web-view") return "The window";
   if (purpose === "app-update") return "Keeping Meno up to date";
+  if (purpose === "ccd") return "Chemical components from the wwPDB's dictionary";
   if (purpose === "python-env:console")
     return "Setting up Python for the console";
   if (purpose === "python-env:node") return "Setting up Python for workflows";

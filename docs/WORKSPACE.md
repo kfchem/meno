@@ -824,6 +824,81 @@ reading in Meno is.
   (the bitmap); where there is no WebGL, as sticks along each ribbon.
   NMR models and trajectories: the ribbon follows each frame.
 
+## Hydrogens and bond orders
+
+Built in lane L5 on 2026-10-11, as the maintainer asked: a file of
+coordinates - XYZ, PDB, a calculation's output - gives no bond orders, and
+an X-ray entry no hydrogens. A molecule drawn as if they were known
+misleads as one with its hydrogens hidden does, so a molecule says what is
+missing, and what can be found is found, through the RDKit plugin's own
+requests (its worker's; the role that draws a molecule in 3D as a
+formula). Pure logic in `utils/completeness.ts`, the requests in
+`chem/bondOrders.ts`.
+
+- **Said over it.** *No H in file* where the molecule - for a PDB entry,
+  its chains while they are drawn as atoms, or a ligand - has no
+  hydrogens and either has carbon, its orders unknown, or has an atom
+  whose valence, its orders known, leaves room for some; *Bond orders
+  unknown* where they are - for a PDB entry, while a ligand's are, or
+  while its chains are drawn as atoms, whose orders no entry gives (the
+  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  over the molecule at any zoom, one over another, and in every picture
+  made of it (SVG, PNG, EMF).
+- **Found from its shape.** As a molecule comes in, opened or pasted,
+  with its orders unknown, they are sought once - with the request its
+  formula is drawn by (`drawing_of`, `perceive`: RDKit's
+  `DetermineBondOrders`) - where the plugin is set up already: nothing is
+  set up because a file was opened. What is found is learnt of the
+  molecule, with no undo step of its own; the 3D view draws it. A PDB
+  entry's ligands are each sought alone; its chains are not.
+- **Only with its hydrogens.** Tried with RDKit 2026.03: a ligand
+  without its hydrogens (biotin, from entry 1STP) has no orders found, and
+  with them its orders are exact; benzoic acid without them has orders
+  found that are wrong. So a molecule, or a ligand, without hydrogens is
+  not sought at all, and says its orders are unknown; nor is one of more
+  than 400 atoms.
+- **Given from a SMILES.** Right-click a ligand (for a PDB entry, the
+  one under the pointer), *Bond orders from SMILES…*: a card over the
+  canvas takes its SMILES, and RDKit's `AssignBondOrdersFromTemplate`
+  gives each bond the order the SMILES has for it, and each atom its
+  charge. The SMILES must be the ligand's heavy atoms and bonds, all of
+  them; else the card says so and nothing changes. One undo step.
+- **Hydrogens added.** Its orders known, a ligand without hydrogens has
+  *Add hydrogens* in the same menu: RDKit's `AddHs`, placed where the
+  atoms' geometry puts them, bonded to their atoms and in their residue.
+  One undo step. Not for a molecule with other frames (an NMR entry's
+  models, a trajectory), which would be left without them.
+- **Not done: protonating a protein.** A chain's hydrogens depend on each
+  residue's protonation state - histidine's tautomer, the pH, what is
+  near - which is a calculation of its own, not a completion of the file.
+  Only ligands are given hydrogens; a plugin for proteins could come
+  later.
+- **From the Chemical Component Dictionary** (the maintainer's ruling,
+  2026-10-11: asked for, from the menu, not on opening; standard residues
+  too). A PDB entry's right-click menu has *Bond orders from the CCD*:
+  each residue name it uses - amino acids, nucleotides, ligands, ions,
+  water left out - is looked up in the wwPDB's dictionary (CC0), whose
+  component files give each component's atoms by name, its bonds' orders
+  and its atoms' formal charges (`lib/chem/ccd.ts`, read by the CIF 1.1
+  syntax, `lib/chem/cif.ts`, and the PDBx/mmCIF dictionary's definitions
+  of `_chem_comp_atom` and `_chem_comp_bond`). A residue takes the
+  component's orders and charges where every atom of it is one of the
+  component's, by name and element, and every bond within it is one of
+  the component's, single, double or triple; any other residue is left as
+  it was, and says so. Bonds between residues - a peptide's, a
+  disulfide, a ligand's link - stay as they are. A ligand so given can be
+  given its hydrogens; chains whose every residue was given no longer say
+  their orders are unknown, drawn as atoms. The charges are the
+  dictionary's, as its components are drawn, not a protonation worked out
+  for the entry. One undo step. The files come from files.wwpdb.org
+  (`refdata/chem_comp/<last character>/<id>/<id>.cif`), fetched by the app
+  as a task of its own on Meno's network (`src-tauri/src/ccd.rs`,
+  `lib/net/components.ts`, purpose
+  `ccd`, asked for the first time it is used) and kept in Meno's cache, so
+  each is fetched once; only the components' names leave Meno. A PDB file
+  with no chain (a ligand on its own) keeps no residue names, and is not
+  looked up.
+
 ## Risks
 
 - **The 2D drawing changing.** The thinnest lines and the place of every

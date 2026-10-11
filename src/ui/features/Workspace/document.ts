@@ -957,6 +957,11 @@ function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule
   return next === all[i] ? doc : { ...doc, molecules3d: all.map((m, k) => (k === i ? next : m)) };
 }
 
+/** A molecule in 3D as `change` makes it: what is found or given of it (its bond orders, its hydrogens: utils/completeness). */
+export function changeMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule3D) => Molecule3D): WorkspaceDocument {
+  return withMolecule3d(doc, id, change);
+}
+
 /** Molecules in 3D drawn in the 3D style's primary look, or its secondary. */
 export function setLook3d(doc: WorkspaceDocument, ids: readonly number[], look: Look3D): WorkspaceDocument {
   return ids.reduce(

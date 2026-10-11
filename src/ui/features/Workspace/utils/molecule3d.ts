@@ -3,6 +3,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
+import { NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -257,16 +258,18 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
  * or which has one frame: its bonds are its bonds.
  */
 export type FrameBonds = { bonds: ParsedBond[]; present: Uint8Array[] };
-const frameBonds = new WeakMap<Molecule3D["atoms"], { frames: Molecule3D["frames"]; v: FrameBonds | null }>();
+const frameBonds = new WeakMap<Molecule3D["atoms"], { frames: Molecule3D["frames"]; bonds: Molecule3D["bonds"]; v: FrameBonds | null }>();
 
 export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">): FrameBonds | null {
   if (m.bondsFrom !== "distance" || !m.frames?.length) return null;
   const known = frameBonds.get(m.atoms);
-  if (known && known.frames === m.frames) return known.v;
+  if (known && known.frames === m.frames && known.bonds === m.bonds) return known.v;
   const n = m.atoms.length;
   const xyzs = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...m.frames.filter((f) => f.length === 3 * n)];
   const index = new Map<string, number>();
   const bonds: ParsedBond[] = [];
+  // (a bond its first frame has keeps the order found for it: utils/completeness)
+  const ordered = new Map(m.bonds.map((b) => [b.a1 < b.a2 ? `${b.a1} ${b.a2}` : `${b.a2} ${b.a1}`, b.order]));
   const each = xyzs.map((xyz) =>
     bondsByDistance(m.atoms.map((a, i) => ({ el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }))).map((b) => {
       const key = `${b.a1} ${b.a2}`;
@@ -274,7 +277,8 @@ export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | 
       if (k === undefined) {
         k = bonds.length;
         index.set(key, k);
-        bonds.push(b);
+        const order = ordered.get(b.a1 < b.a2 ? key : `${b.a2} ${b.a1}`);
+        bonds.push(order && order !== b.order ? { ...b, order } : b);
       }
       return k;
     }),
@@ -285,7 +289,7 @@ export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | 
     return there;
   });
   const v = { bonds, present };
-  frameBonds.set(m.atoms, { frames: m.frames, v });
+  frameBonds.set(m.atoms, { frames: m.frames, bonds: m.bonds, v });
   return v;
 }
 
@@ -810,23 +814,57 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
 }
 
 /**
- * What a picture of a molecule drawn without the hydrogens on its carbons
- * says over it, as the canvas does: "C-H hidden", `size` high, centred over
- * its highest atom, on a white ground as a measurement's value is (the
- * maintainer, 2026-10-10: a picture of it carries the mark too). Null for
- * one drawn with them all.
+ * What a molecule in 3D says over it, as it is drawn in a look, for as long
+ * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
+ * leaves out what the molecule has misleads): its hydrogens on carbon
+ * hidden; its file's hydrogens missing; its bond orders not known - its
+ * own, or a biopolymer's chains' where they are drawn as atoms.
  */
-export function hiddenPictureMark(m: Carried3D, style: Style3D, size: number, eye?: Eye): MeasureMark | null {
-  const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
-  if (!solid.hidesH[lookOf(m)]) return null;
+export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
+  const bp = m.biopolymer;
+  const hidden = solid.hidden[look];
+  // (a chain's atoms drawn: every atom, or the side chains about a ligand)
+  const chainsDrawn = !!bp && m.atoms.some((_, i) => !hidden[i] && bp.residues[bp.residueOf[i]]?.standard);
+  return [
+    ...(solid.hidesH[look] ? [HIDDEN_MARK] : []),
+    ...(noHydrogensInFile(m, chainsDrawn) ? [NO_H_MARK] : []),
+    ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
+  ];
+}
+
+/**
+ * What a picture of a molecule says over it, as the canvas does
+ * (`notesOf`): each `size` high, one over another, centred over its
+ * highest atom - or ribbon - on a white ground as a measurement's value is.
+ * None for a molecule with nothing to say.
+ */
+export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye): MeasureMark[] {
+  const molecule = { ...m, id: 0 } as Molecule3D;
+  const solid = solidOf(molecule, style);
+  const notes = notesOf(molecule, solid, lookOf(m));
+  if (!notes.length) return [];
   let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const k of pictureMarks(m, style, eye)) {
-    if (k.kind !== "ball") continue;
-    x0 = Math.min(x0, k.c.x - k.r);
-    x1 = Math.max(x1, k.c.x + k.r);
-    y1 = Math.max(y1, k.c.y + k.r);
+    if (k.kind === "ball") {
+      x0 = Math.min(x0, k.c.x - k.r);
+      x1 = Math.max(x1, k.c.x + k.r);
+      y1 = Math.max(y1, k.c.y + k.r);
+    } else {
+      x0 = Math.min(x0, k.a.x, k.b.x);
+      x1 = Math.max(x1, k.a.x, k.b.x);
+      y1 = Math.max(y1, k.a.y + k.width / 2, k.b.y + k.width / 2);
+    }
   }
-  if (!Number.isFinite(y1)) return null;
-  // (half its height above the atom, its ground half its height again)
-  return { lines: [], fan: [], width: 0, fanOpacity: 0, label: { x: (x0 + x1) / 2, y: y1 + 1.15 * size }, text: HIDDEN_MARK, size, color: HIDDEN_MARK_COLOUR };
+  if (!Number.isFinite(y1)) return [];
+  // (half its height above the molecule, its ground half its height again; the next above it)
+  return notes.map((text, i) => ({
+    lines: [],
+    fan: [],
+    width: 0,
+    fanOpacity: 0,
+    label: { x: (x0 + x1) / 2, y: y1 + 1.15 * size + (notes.length - 1 - i) * 1.6 * size },
+    text,
+    size,
+    color: HIDDEN_MARK_COLOUR,
+  }));
 }
