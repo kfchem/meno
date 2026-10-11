@@ -35,8 +35,8 @@ molecule in 3D, from its geometry:
   WFN or a WFX, the one the molecule was read from - opened (read by cclib
   or PySCF), or written by another plugin's step; and otherwise from its
   geometry alone, by the promolecular density Multiwfn builds from its own
-  atoms' densities (its manual, 3.23.2) - so that Multiwfn alone is enough
-  for NCI. Its options: the density (the wavefunction's where there is
+  atoms' densities (its manual, 3.23.2) - so that NCI needs no other
+  program. Its options: the density (the wavefunction's where there is
   one, else promolecular; or promolecular for every molecule), the grid
   (low, medium, high: about 125 000, 512 000 or 1 728 000 points over the
   whole system), the RDG the surface is drawn at - 0.5 from a
@@ -114,9 +114,9 @@ By the maintainer, 2026-10-10 and 2026-10-11:
    scale - not one for NCI alone.
 3. **Multiwfn takes a wavefunction from upstream** through a step's
    `files`, joined by the kind's id alone.
-4. **Multiwfn alone is enough** (2026-10-11): installing NCIPLOT is a high
-   hurdle - it is built from its source - so Multiwfn also works from the
-   geometry, by its promolecular NCI; NCIPLOT stays, as an option.
+4. **Either plugin alone does NCI from a geometry** (2026-10-11): Multiwfn
+   by its promolecular NCI, NCIPLOT as before; each is installed apart and
+   used as the chemist has it.
 
 ## Not yet
 
