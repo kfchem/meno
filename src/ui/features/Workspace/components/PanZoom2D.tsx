@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, viewDriven, viewGoalOf } from "./viewGoal";
+import { letViewGoalGo, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
@@ -371,10 +371,12 @@ export function PanZoom2D() {
       zoomLeft.current = 0;
       zoomGlide.current = 0;
     }
-    // The view moved last frame under a pointer resting on it: what is under
-    // the pointer now is lit, and taken hold of by a press, as a move of no
-    // distance finds it - drawn as it was moved to, so the hit areas are too.
-    if (findAgain.current) {
+    // The view moved last frame under a pointer resting on it, or something
+    // did on it (viewGoal): what is under the pointer now is lit, and taken
+    // hold of by a press, as a move of no distance finds it - drawn as it
+    // was moved to, so the hit areas are too.
+    const askedToFind = tookMovedUnderPointer(camera);
+    if (findAgain.current || askedToFind) {
       findAgain.current = false;
       const at = pointer.current.resting();
       if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, pointerType: "mouse", bubbles: true, cancelable: true }));

@@ -12,7 +12,7 @@ import type { EditorState, Molecule3D, Turn3D } from "../store/types";
 import { atomAt, bondAt, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { movingFor, placesOf, valueOf } from "../utils/edit3d";
 import { kindOf, type MeasureKind } from "../utils/measure3d";
-import { setViewGoal } from "./viewGoal";
+import { movedUnderPointer, setViewGoal } from "./viewGoal";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
@@ -434,6 +434,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         scrub.current = null;
         setScrubbing(null);
         swallowClick();
+        // (the moves went to the value set: what is under the pointer is found once it is let go)
+        movedUnderPointer(camera);
+        invalidate();
         return;
       }
       const g = gesture.current;
@@ -466,6 +469,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       }
       swallowClick();
       st.setHovered3d(hit(e));
+      // (the moves went to the gesture: which atom is under the pointer is found once it is let go)
+      movedUnderPointer(camera);
       invalidate();
     };
 
@@ -560,6 +565,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       s.speed *= Math.pow(1 - style.turnDamping, dt * 60);
       if (s.speed < STILL) spins.current.delete(id);
     }
+    // (turning on under a pointer resting on it: the atom under it changes)
+    movedUnderPointer(camera);
     invalidate();
   });
 

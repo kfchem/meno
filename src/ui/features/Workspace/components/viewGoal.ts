@@ -35,3 +35,20 @@ export function setViewDriven(camera: THREE.Camera, on: boolean): void {
 export function viewDriven(camera: THREE.Camera): boolean {
   return driven.has(camera);
 }
+
+/**
+ * Cameras under whose resting pointer something has moved other than the
+ * view - a molecule turning on after it was let go, or let go after a
+ * gesture that kept the pointer's moves to itself - for PanZoom2D to find
+ * again what is under the pointer once that is drawn, as it does after the
+ * view moves.
+ */
+const movedUnder = new WeakSet<THREE.Camera>();
+
+export function movedUnderPointer(camera: THREE.Camera): void {
+  movedUnder.add(camera);
+}
+
+export function tookMovedUnderPointer(camera: THREE.Camera): boolean {
+  return movedUnder.delete(camera);
+}
