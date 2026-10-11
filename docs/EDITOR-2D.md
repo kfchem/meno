@@ -294,6 +294,12 @@ V, as everywhere, and the same from the menus.
   sharper pictures in Office, 2026-10-08; it was 300). A picture so large
   that it would come to more than 48 million pixels is made at a lower
   resolution, its size on the page the same (`pictureDpiFor`).
+- PDFs and texts' sheets selected go with the rest (docs/PDF.md, *With the
+  rest of the page*): in Meno's record, a PDF by its file's SHA-256, as it
+  lies, and a text whole; a text's sheet alone also as its words, for
+  other programs.
+- Files copied in the Finder or Explorer are pasted as they would be
+  dropped where the paste goes: PDFs, pictures, texts and structures' files.
 - A paste reads Meno's own record first, then a picture that carries one
   (Office's clip format, as Word and PowerPoint hand it back, or a PNG),
   then a MOL file, then plain text that is a MOL file or a SMILES (drawn by
