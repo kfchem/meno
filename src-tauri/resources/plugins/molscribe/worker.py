@@ -39,8 +39,8 @@ import sys
 WEIGHTS = "swin_base_char_aux_1m680k.pth"
 # The white MolScribe keeps round what is drawn, in pixels, as it crops a picture (its CropWhite).
 PAD = 5
-# Below this, an atom or a bond is said to be unsure (its own confidence; measured on pictures made for the purpose: a right
-# reading's atoms rarely fall below it).
+# Below this, an atom or a bond is said to be unsure (its own confidence; set on pictures made for the purpose, so that a
+# right reading's atoms rarely fall below it).
 UNSURE_BELOW = 0.75
 VERSION = "1.1.1+7296a30"
 
@@ -49,7 +49,7 @@ _model = {}
 
 
 def model():
-    """MolScribe, loaded once from its trained model, on the CPU: as quick as a Mac's GPU here, and the same everywhere."""
+    """MolScribe, loaded once from its trained model, on the CPU: the same on every computer."""
     if "it" not in _model:
         if not FILES or not os.path.isfile(os.path.join(FILES, WEIGHTS)):
             raise RuntimeError("MolScribe's trained model is not here: add MolScribe again in Settings, Plugins.")
@@ -57,7 +57,7 @@ def model():
         import molscribe.interface as mi
         from molscribe.chemistry import convert_graph_to_smiles
 
-        # (its structure made a SMILES in this process: a pool of processes started for each picture costs seconds)
+        # (one picture read at a time, in this one process)
         mi.convert_graph_to_smiles = functools.partial(convert_graph_to_smiles, num_workers=1)
         with contextlib.redirect_stdout(sys.stderr):
             _model["it"] = mi.MolScribe(os.path.join(FILES, WEIGHTS), device=torch.device("cpu"))

@@ -1037,17 +1037,17 @@ page that is not a film. The first time, the plugin is set up as any is:
 Meno asks first, saying what it downloads, how large, and from where.
 
 **The plugins** - folders of their own, neither knowing of the other;
-their code is installed from their makers' repositories, pinned to a
-commit by the archive's hash, and their trained models fetched by Meno:
+each one's code installed from its makers' repository at a fixed commit,
+pinned by the archive's hash, and its trained model fetched by Meno:
+- **MolScribe**: code under MIT (github.com/thomas0809/MolScribe, 7296a30);
+  its trained model under MIT (huggingface.co/yujieq/MolScribe), 1.13 GB;
+  53 packages, about 290 MB on a Mac, 310 MB on Windows.
+- **MolNexTR**: code under Apache-2.0 (github.com/CYF2000127/MolNexTR,
+  6f6502b); its trained model under Apache-2.0
+  (huggingface.co/datasets/CYF200127/MolNexTR), 1.13 GB; 54 packages,
+  about 290 MB on a Mac, 310 MB on Windows.
 
-| | MolScribe | MolNexTR |
-| --- | --- | --- |
-| Code | MIT (github.com/thomas0809/MolScribe, 7296a30) | Apache-2.0 (github.com/CYF2000127/MolNexTR, 6f6502b) |
-| Trained model | MIT (huggingface.co/yujieq/MolScribe), 1.13 GB | Apache-2.0 (huggingface.co/datasets/CYF200127/MolNexTR), 1.13 GB |
-| Packages | 53, about 290 MB on a Mac, 310 MB on Windows | 54, about the same |
-| Unsure below | 0.75 of its confidence | 0.45 (its confidence runs lower) |
-
-About 1.5 GB to download in all, about 2.2 GB kept; for macOS and Windows
+Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
 (their locks leave out torch's GPU libraries for Linux).
 
 **How a picture is read** (the plugins' workers; `lib/figure/picture.ts`):
@@ -1075,28 +1075,21 @@ place in the picture, in its pixels (`seen` without a page), ringed there
 as it is in the drawing, and lit from there.
 
 **Marked as unsure** (the same dashed ring as part A's, going once the
-part is changed): an atom or a bond the model is less sure of than its
-plugin's mark says, and an isotope. A mark is a hint, not a check: on the
-test pictures the misreads were read with confidence (a silicon read as a
-carbon), and the marks fell on few that were right.
+part is changed): an atom or a bond its model reports less confidence in
+than the plugin sets for that model (its worker's `UNSURE_BELOW`), and an
+isotope. A model can misread a picture: what it reports low confidence in
+is marked, so that a mark is a hint, not a check.
 
-**How well**, on pictures made for it - twenty structures drawn by RDKit
-(stereocentres, wedges and hashes, double and triple bonds, charges, an
-ion, a silyl ether, an alkyne, cholesterol), each clean and made poor
-(halved, blurred, saved as a JPEG at 55): MolScribe read 20 of 20 clean
-and 19 of 20 poor right, stereo and all; MolNexTR 18 and 18. A picture
-takes about 0.3 s on a Mac's processor (an M4) - as quick as the Mac's GPU
-here, and the same on Windows - once the model is loaded, which the first
-picture waits for: a few seconds, and about a minute the first time a
-computer loads it, as macOS looks over each new library (the workers say
-they are ready at once, so that this does not count against a worker's
-start).
+**How long**: a picture takes well under a second on a Mac's processor
+once its model is loaded, which the first picture waits for - a few
+seconds, and about a minute the first time a computer loads it, as macOS
+looks over each new library (the workers say they are ready at once, so
+that this does not count against a worker's start).
 
-**Worked round in the workers**, as their makers' code is: a pool of
-sixteen processes started for each picture (one process instead);
-MolNexTR's one-process path missing an import, and its printing on the
-line Meno reads answers from; MolNexTR's pin of a tokenizer built for no
-Python after 3.11, which reading never loads (left out of its lock).
+**What the workers do besides**: each reads one picture at a time, in its
+one process; what a model prints as it reads goes to stderr, stdout being
+Meno's answers; and a package reading never loads, pyonmttok, is left out
+of MolNexTR's lock.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.

@@ -39,8 +39,8 @@ import sys
 WEIGHTS = "molnextr_best.pth"
 # The white MolNexTR keeps round what is drawn, in pixels, as it crops a picture (its CropWhite).
 PAD = 50
-# Below this, an atom or a bond is said to be unsure (its own confidence, which runs low; measured on pictures made for
-# the purpose: a right reading's atoms rarely fall below it).
+# Below this, an atom or a bond is said to be unsure (its own confidence; set on pictures made for the purpose, so that a
+# right reading's atoms rarely fall below it).
 UNSURE_BELOW = 0.45
 VERSION = "1.0.0+6f6502b"
 
@@ -49,7 +49,7 @@ _model = {}
 
 
 def model():
-    """MolNexTR, loaded once from its trained model, on the CPU: quicker than a Mac's GPU here, and the same everywhere."""
+    """MolNexTR, loaded once from its trained model, on the CPU: the same on every computer."""
     if "it" not in _model:
         if not FILES or not os.path.isfile(os.path.join(FILES, WEIGHTS)):
             raise RuntimeError("MolNexTR's trained model is not here: add MolNexTR again in Settings, Plugins.")
@@ -58,8 +58,7 @@ def model():
         import MolNexTR.chemical as mc
         import MolNexTR.model as mm
 
-        # (its structure made a SMILES in this process - a pool of processes started for each picture costs seconds -
-        # by its one-process path, which uses itertools without importing it)
+        # (one picture read at a time, in this one process - its one-process path given itertools, which it uses)
         mc.itertools = itertools
         mm.convert_graph_to_smiles = functools.partial(mc.convert_graph_to_smiles, num_workers=1)
         with contextlib.redirect_stdout(sys.stderr):
@@ -219,7 +218,7 @@ BONDS = {"single": (1, None), "double": (2, None), "triple": (3, None), "aromati
 
 def op_read_picture(m):
     rgb = picture_of(m["picture"])
-    # (it says what it is doing on stdout, which is Meno's: sent where Meno does not read answers)
+    # (what is printed as it reads goes to stderr: stdout is Meno's answers)
     with contextlib.redirect_stdout(sys.stderr):
         p = model().predict_image(rgb, return_atoms_bonds=True, return_confidence=True)
     atoms = [{"atom_symbol": a["atom_symbol"], "x": a["coords"][0], "y": a["coords"][1], "confidence": a.get("confidence")} for a in p.get("atom_sets") or []]
