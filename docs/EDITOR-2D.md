@@ -396,7 +396,10 @@ Both go together, because both touch every layer.
 - **Defaults.** ACS 1996, exactly, as a preset. The default is Meno's own
   style built on it: ACS 1996's proportions with round ends and joins and
   labels in IBM Plex Sans, which is also the app's own typeface - its
-  capital I has serifs and its l a tail, so Cl never reads as CI. (PR #47)
+  capital I has serifs and its l a tail, so Cl never reads as CI (PR #47) -
+  and drawn in the black of Meno's palette, #141414, a little softer than
+  the pure black the journals' styles keep for print (the maintainer,
+  2026-10-11).
 - **Typefaces.** Any typeface on the computer: a label is placed and
   cleared by that typeface's own letter shapes, read from its file when it
   is first used (the app hands over one face of a collection, with its
@@ -639,17 +642,36 @@ All hover-based, as above.
   the menu of an atom, a bond, the selection or a ring - a right-click
   inside one with nothing selected - opens a card where the menu was, of
   a row for each thing it can give: *Colour*, the atoms' labels (their
-  charges too) and the bonds' lines; *Highlight*, a light tint of it laid
-  behind the drawing, a band along each bond and round each atom - round
-  its label, where it has one - flat, so that the pieces of one colour run
-  together into one shape with a sharp edge; and *Fill ring*, a lighter
-  tint over the inside of each ring it holds whole, or of the ring
-  right-clicked. An electron-pushing arrow's menu has it too, of the one
-  row *Colour* - the arrow's line, head and lone pair. Each row has none, Okabe and Ito's colours but black -
-  told apart by those who see colours otherwise - and any other, from the
-  system's chooser; the one given now is ringed. A swatch is given at
-  once, one step each (as long as the chooser is open, one step in all),
-  and the card stays open for the next; Escape, a press elsewhere or the
+  charges too) and the bonds' lines; *Highlight*, laid behind the drawing,
+  a band along each bond and round each atom - round its label, where it
+  has one - flat, so that the pieces of one colour run together into one
+  shape with a sharp edge; and *Fill ring*, over the inside of each ring
+  it holds whole, or of the ring right-clicked. A highlight and a fill are
+  in the colour exactly as it is chosen, never lightened (the maintainer,
+  2026-10-11): a pale colour for them is in the set. An electron-pushing
+  arrow's menu has it too, of the one row *Colour* - the arrow's line,
+  head and lone pair. Each row has none, the colours of the set in use and
+  any other, from the system's chooser; the one given now is ringed.
+  - **Colour sets** (the maintainer, 2026-10-11), in Settings, General,
+    *Colours*, chosen as the drawing style's presets are; the one chosen is
+    the one in use (the card offers only it). Meno's - its base #317689,
+    its accent #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
+    highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
+    look right as they are, as colour makes a drawing look cheap easily -
+    and Okabe and Ito's, told apart by those who see colours otherwise,
+    are built in and kept as they are. The plus after the sets begins one
+    of the user's own; a set's menu (a right-click) duplicates it, and
+    renames or deletes one of the user's own. The user's own set in use
+    shows its colours: two clicks on one open the system's chooser beside
+    its hex and its red, green and blue (0 to 255), which keep in step; a
+    drag moves it along; its menu changes or removes it; the plus adds one.
+    The sets are saved in Settings' file, read back only as colours
+    (#rrggbb, each once, sixteen to a set), their names on one line,
+    twenty sets of the user's own at most (`lib/chem/palette`,
+    `ColourSettings`).
+
+  A swatch is given at once, one step each (as long as the chooser is
+  open, one step in all), and the card stays open for the next; Escape, a press elsewhere or the
   wheel closes it. A selection's colour goes to its atoms and the bonds
   selected among them; a bond keeps its own colour, its atoms theirs.
   R, S, E and Z are never coloured (2026-10-05), nor is anything Meno

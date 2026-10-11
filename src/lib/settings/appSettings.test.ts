@@ -25,6 +25,7 @@ describe("the settings file", () => {
       words: { smart: false },
       calculations: { atOnce: 2, cores: 4 },
       procedures: [{ id: "p-1", name: "Optimise, then energies", saved: 1, flow: { sets: [{ id: 1, x0: 0, y0: -4, x1: 4, y1: 0 }], steps: [{ id: 2, kind: "optimise", x: 6, y: 0 }], wires: [{ id: 3, from: { set: 1 }, to: 2 }] } }],
+      colours: { use: "set-1", sets: [{ id: "set-1", name: "Talk slides", colours: ["#cd4560", "#317689", "#2a9d8f"] }] },
     };
     const text = settingsFileText(settings);
     expect(JSON.parse(text).format).toBe(1);

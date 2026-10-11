@@ -1,15 +1,9 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
+import { useAppSettings } from "../../../lib/settings/appSettings";
+import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
-
-/**
- * The colours a part of a structure can be given (docs/EDITOR-2D.md,
- * *Colour*): Okabe and Ito's eight, told apart by those who see colour
- * otherwise, but black - which is what "none" draws - and any other picked
- * by the system's own chooser.
- */
-export const COLOURS = ["#d55e00", "#e69f00", "#f0e442", "#009e73", "#56b4e9", "#0072b2", "#cc79a7"] as const;
 
 /** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, and the electron-pushing arrows it colours. */
 export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[] };
@@ -40,6 +34,8 @@ export default function ColourCard({
   onClose: () => void;
 }) {
   const store = useEditorStore();
+  // (the set in use, chosen in Settings - and any other colour by the system's own chooser)
+  const palette = setInUse(useAppSettings((s) => s.colours)).colours;
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
@@ -87,7 +83,7 @@ export default function ColourCard({
     if (row === "ring") s.fillRings(target.rings, color, gesture);
     else s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
   };
-  const width = 92 + (COLOURS.length + 2) * (SWATCH + 4) + 12;
+  const width = 92 + (palette.length + 2) * (SWATCH + 4) + 12;
   const height = rows.length * (SWATCH + 10) + 12;
   return (
     <motion.div
@@ -119,7 +115,7 @@ export default function ColourCard({
               className={`shrink-0 rounded-full border border-gh-line bg-white transition-shadow duration-150 ease-meno ${ring(null)}`}
               style={{ width: SWATCH, height: SWATCH, backgroundImage: "linear-gradient(135deg, transparent 46%, #c0c0c0 46%, #c0c0c0 54%, transparent 54%)" }}
             />
-            {COLOURS.map((c) => (
+            {palette.map((c) => (
               <button
                 key={c}
                 aria-label={c}
@@ -132,8 +128,8 @@ export default function ColourCard({
             {/* any other, by the system's own chooser */}
             <label
               title="Other colour"
-              className={`relative shrink-0 rounded-full cursor-pointer overflow-hidden transition-shadow duration-150 ease-meno ${has && !COLOURS.includes(has as (typeof COLOURS)[number]) ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
-              style={{ width: SWATCH, height: SWATCH, background: has && !COLOURS.includes(has as (typeof COLOURS)[number]) ? has : "conic-gradient(#d55e00, #f0e442, #009e73, #56b4e9, #0072b2, #cc79a7, #d55e00)" }}
+              className={`relative shrink-0 rounded-full cursor-pointer overflow-hidden transition-shadow duration-150 ease-meno ${has && !palette.includes(has) ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
+              style={{ width: SWATCH, height: SWATCH, background: has && !palette.includes(has) ? has : "conic-gradient(#d55e00, #f0e442, #009e73, #56b4e9, #0072b2, #cc79a7, #d55e00)" }}
             >
               <input
                 type="color"

@@ -8,6 +8,8 @@ import { OCCLUSION_TERMS, type Occlusion } from "../utils/occlusion3d";
 import { OCCLUSION_DIRECT as DIRECT, occludedMaterial } from "../utils/occlusionMaterial";
 import { askOcclusion, occlusionKnown, packLines } from "../utils/occlusions";
 import { casterOf, castersOn } from "../utils/shadows3d";
+import { largeOn } from "../utils/largeDrawing";
+import { screenShadersOn, shadeWith } from "../utils/screenShade";
 import { FRAME_ORDER } from "../utils/page";
 
 /** How quickly the shade goes over to another - a frame's, a look's, or one just worked out - in seconds. */
@@ -43,6 +45,8 @@ export function useShading3d(o: {
   turned: RefObject<THREE.Group>;
   atoms: RefObject<THREE.InstancedMesh>;
   bonds: RefObject<THREE.InstancedMesh | null>;
+  /** Its chains' ribbons, where it has any: shaded on the screen with it (never per atom). */
+  ribbon?: RefObject<THREE.Mesh | null>;
   atomsMat: RefObject<THREE.MeshStandardMaterial>;
   bondsMat: RefObject<THREE.MeshStandardMaterial | null>;
   /** The molecule as drawn: its bonds those it draws. */
@@ -83,7 +87,16 @@ export function useShading3d(o: {
   }, [places, solid, lines, invalidate]);
 
   // the shade as drawn, on its way to what it is to be
-  const shown = useRef({ atoms: openTerms(n), bonds: new Float32Array(0), strength: 0 });
+  const shown = useRef({ atoms: openTerms(n), bonds: new Float32Array(0), strength: 0, screen: 0 });
+  // its balls, sticks and ribbon drawn into the screen's shade, as deep as it is shaded there
+  const screened = useRef(new WeakSet<THREE.Object3D>());
+  const screenWeight = useRef(() => shown.current.screen);
+  useEffect(() => {
+    const set = screenShadersOn(gl);
+    const w = screenWeight.current;
+    set.add(w);
+    return () => void set.delete(w);
+  }, [gl]);
   const attrs = useRef<{ a: THREE.InstancedBufferAttribute; b: THREE.InstancedBufferAttribute; c: THREE.InstancedBufferAttribute; ends: THREE.InstancedBufferAttribute | null } | null>(
     null,
   );
@@ -137,13 +150,33 @@ export function useShading3d(o: {
       if (caster && drawn) caster.visible = drawn.visible;
     }
 
-    // how deep the hollows' shade is: the looks', as far over as it is
-    const P = style.primary.occlusion;
-    const strengthTo = P + (style.secondary.occlusion - P) * f;
+    // how deep the hollows' shade is, per atom and on the screen: each
+    // look's, as far over as it is - on the screen only where the canvas is
+    // not drawn lighter (a very large drawing), per atom there instead
+    const lighter = largeOn(gl).lighter;
+    const by = (look: Role3D) => {
+      const l = style[look];
+      const screen = l.occlusionBy === "screen" && !lighter;
+      return { atoms: l.occlusionBy === "atoms" || (l.occlusionBy === "screen" && lighter) ? l.occlusion : 0, screen: screen ? l.occlusion : 0 };
+    };
+    const P = by("primary");
+    const S = by("secondary");
+    const strengthTo = P.atoms + (S.atoms - P.atoms) * f;
+    const screenTo = P.screen + (S.screen - P.screen) * f;
     const s = shown.current;
     if (s.strength !== strengthTo) {
       s.strength = Math.abs(strengthTo - s.strength) < 0.003 ? strengthTo : s.strength + (strengthTo - s.strength) * k;
       moving = true;
+    }
+    if (s.screen !== screenTo) {
+      s.screen = Math.abs(screenTo - s.screen) < 0.003 ? screenTo : s.screen + (screenTo - s.screen) * k;
+      moving = true;
+    }
+    for (const mesh of [atoms, bonds, o.ribbon?.current]) {
+      if (mesh && !screened.current.has(mesh)) {
+        shadeWith(mesh, screenWeight.current);
+        screened.current.add(mesh);
+      }
     }
     const au = uniformsOf(atomsMat, "atoms");
     au.strength.value = s.strength;

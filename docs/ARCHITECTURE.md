@@ -397,8 +397,19 @@ What is left before the editor counts as finished, and in what order, is in
     settings' preview has its own), cast by coarse instanced balls and
     sticks sharing the drawn ones' instance matrices and drawn as none on
     the canvas (`utils/shadows3d.ts`), the shadow map cast again only when
-    they move or the box it is fitted to changes. `render3d` draws a
-    picture's the same way, instanced, with every ball and stick casting.
+    they move or the box it is fitted to changes. A style may shade on
+    the screen instead (`utils/screenShade.ts`, `components/ScreenShade3D.tsx`):
+    three.js's `GTAOPass` given a pass camera on the molecules' own layer
+    (`SCREEN_LAYER`) and a normal material whose alpha is each mesh's
+    weight (`shadeWith`), run each frame any molecule wants it, at half
+    resolution, and a full-screen sheet drawn just after the molecules
+    (`renderOrder` `OVER_PAGE + 0.5`) multiplying the canvas by the shade
+    where a molecule is. `KeyLight3D` counts the atoms and marks a very
+    large drawing (`utils/largeDrawing.ts`), which the molecules read, and
+    says so once through `src/ui/notices.ts` (shown beside the network's
+    cards). `render3d` draws a picture's the same way, instanced, with
+    every ball and stick casting, and a screen shade at full resolution
+    per tile, each tile drawn with a margin as wide as the shade looks.
   - The pointer: hovered, its outline lights up faintly and the atom under
     the pointer swells on a spring. A drag on it - its atoms, bonds or
     within its rings - turns it, with inertia; on one selected, it moves
