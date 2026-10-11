@@ -7,7 +7,10 @@
  * so the scale it was drawn at does not matter.
  */
 import { drawnVolume, insidePolygon } from "./geometry";
-import { atomDepth, boxesDepth, namesLaid, segmentMeetsBox } from "./names";
+import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox } from "./names";
+
+// (where a label's H goes is the names' business too: there for all that ask here)
+export { hydrogenSpot } from "./names";
 import { isMetal, METAL_BOND } from "./perceive";
 import { smallestRings, type Edge } from "./rings";
 
@@ -263,21 +266,6 @@ export function ringIrregularity(
   return best;
 }
 
-/**
- * Where the drawing sets a labelled atom's H, from the atom, in bond
- * lengths, given the ways its bonds leave it (unit vectors): beside the
- * symbol on the side its bonds leave free - OH, or HO where they leave to
- * the right - or under it (over it) where they leave on both sides. (The
- * font is 0.69 of a bond: an H beside its symbol is half a bond off, one
- * under it 0.6.)
- */
-export function hydrogenSpot(ways: readonly { x: number; y: number }[]): { x: number; y: number } {
-  const band = Math.sin((10 * Math.PI) / 180);
-  const sx = ways.reduce((sum, w) => sum + w.x, 0);
-  const sy = ways.reduce((sum, w) => sum + w.y, 0);
-  if (ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
-  return { x: sx > Math.hypot(sx, sy) * band ? -0.5 : 0.5, y: 0 };
-}
 
 /**
  * How far a label's ink reaches along `d` from its atom, in bond lengths, of
@@ -587,11 +575,28 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // a bond deep, so that a little clear of it is a little better
   const nameRoom = g.nameRoom ?? 1;
   if (g.labelled && g.elements && nameRoom > 0) {
-    const named = [...namesLaid({ x, y, edges, elements: g.elements }, L)];
+    const named = [...namesLaid({ x, y, edges, elements: g.elements, hydrogens: g.hydrogens }, L)];
+    // (and a label's H, where the drawing sets it: OH's H in BzO's way as much as its O)
+    const spots: { a: number; x: number; y: number }[] = [];
+    for (let a = 0; a < n; a++) {
+      if (!g.labelled[a] || g.elements[a] === "C" || isName(g.elements[a]) || !((g.hydrogens?.[a] ?? 0) > 0) || !neighbours[a].length) continue;
+      const h = hydrogenSpot(
+        neighbours[a].map((b) => {
+          const d = Math.hypot(x[b] - x[a], y[b] - y[a]) || 1;
+          return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
+        }),
+      );
+      spots.push({ a, x: x[a] + h.x * L, y: y[a] + h.y * L });
+    }
     for (const [i, [a, { box }]] of named.entries()) {
       for (let b = 0; b < n; b++) {
         if (b === a || bonded.has(pair(a, b)) || named.some(([o]) => o === b)) continue;
         const deep = atomDepth(box, { x: x[b], y: y[b] }, g.labelled[b] && g.elements[b] !== "*", L);
+        if (deep > 0) crowdedLabels += nameRoom * Math.min(1, deep / (0.3 * L));
+      }
+      for (const h of spots) {
+        if (bonded.has(pair(a, h.a))) continue;
+        const deep = atomDepth(box, h, true, L);
         if (deep > 0) crowdedLabels += nameRoom * Math.min(1, deep / (0.3 * L));
       }
       for (const [p, q] of edges) {
