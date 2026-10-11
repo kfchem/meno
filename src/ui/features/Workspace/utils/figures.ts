@@ -75,8 +75,8 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
 
 /** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
 const READ_DPI = 200;
-/** How long a picture's reading may take: the first loads the plugin's model. */
-const READ_MS = 120_000;
+/** How long a picture's reading may take: the first loads the plugin's model - a minute or more, the first time a computer loads it. */
+const READ_MS = 300_000;
 
 /** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
 async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {

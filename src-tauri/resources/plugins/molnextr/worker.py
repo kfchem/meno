@@ -11,8 +11,9 @@ One JSON object per line on stdin, one per line back on stdout:
 
 It runs no code it is sent - only the operation below - and reaches no
 network: MolNexTR's trained model is downloaded by Meno, with the user's
-leave, into the folder given as this script's one argument. When MolNexTR
-has been imported it says so:
+leave, into the folder given as this script's one argument. It says it is
+ready at once; MolNexTR and its model are loaded for the first picture -
+a minute, the first time a computer loads them, as it looks them over:
 
     {"event": "ready", "version": "1.0.0+6f6502b"}
 
@@ -272,8 +273,6 @@ def answer(line):
 
 
 def main():
-    with contextlib.redirect_stdout(sys.stderr):
-        import MolNexTR.model  # noqa: F401 - imported first, so that ready means ready
     print(json.dumps({"event": "ready", "version": VERSION}), flush=True)
     for line in sys.stdin:
         line = line.strip()
