@@ -9,7 +9,7 @@ import { chainRuns } from "../../../lib/chem/biopolymer";
 import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
-import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial } from "./utils/surfaceMesh";
+import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
 
 /** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely. */
 const BALL_SEGMENTS = 48;
@@ -89,6 +89,8 @@ export function rendered3d(
   const ribbonMats: THREE.Material[] = [];
   const surfaces: THREE.BufferGeometry[] = [];
   const surfaceMat = surfaceMaterial(SURFACE_OPACITY);
+  // (one coloured by another grid - NCI's - not seen through, as the canvas draws it)
+  const colouredMat = surfaceMaterial(surfaceOpacity(true));
   // (one for each colour in each finish: a molecule's look's)
   const material = (color: string, look: MoleculeLook) => {
     const key = `${color} ${look.roughness} ${look.metalness}`;
@@ -159,12 +161,12 @@ export function rendered3d(
       // the surface it shows, as the canvas draws it: its phases one mesh,
       // seen through, its triangles farthest first as the picture sees them
       if (surface) {
-        const { geometry, split } = surfaceGeometry(surface.plus, surface.minus);
+        const { geometry, split, coloured } = surfaceGeometry(surface.plus, surface.minus);
         colourSurface(geometry, split, style.surfacePlus, style.surfaceMinus);
         const way = new THREE.Vector3(0, 0, -1).applyQuaternion(group.quaternion.clone().invert());
         backToFront(geometry.getAttribute("position").array as Float32Array, [way.x, way.y, way.z], geometry.getIndex()!.array as Uint32Array);
         surfaces.push(geometry);
-        const mesh = new THREE.Mesh(geometry, surfaceMat);
+        const mesh = new THREE.Mesh(geometry, coloured ? colouredMat : surfaceMat);
         mesh.renderOrder = 1;
         group.add(mesh);
       }
@@ -243,6 +245,7 @@ export function rendered3d(
     for (const g of ribbons) g.dispose();
     for (const g of surfaces) g.dispose();
     surfaceMat.dispose();
+    colouredMat.dispose();
     for (const mat of ribbonMats) mat.dispose();
     renderer.dispose();
     renderer.forceContextLoss();

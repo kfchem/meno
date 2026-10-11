@@ -50,7 +50,7 @@ describe("the readers Meno knows of", () => {
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
@@ -90,6 +90,13 @@ describe("the readers Meno knows of", () => {
     expect(pluginsFilling("render").map((p) => p.id)).toEqual(["blender"]);
     expect(blender.installed[0]).toMatchObject({ name: "blender", files: { macos: "Blender", windows: "blender.exe", linux: "blender" } });
     expect(blender.installed[0].places.macos).toContain("/Applications/Blender.app/Contents/MacOS");
+    // (and those that fill NCI: NCIPLOT from a geometry; Multiwfn from a wavefunction another plugin read - by the kinds' ids alone)
+    const nciplot = PLUGINS.find((p) => p.id === "nciplot")!;
+    expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);
+    expect(nciplot.installed[0]).toMatchObject({ name: "nciplot", env: { NCIPLOT_HOME: ["{parent}"] } });
+    const multiwfn = PLUGINS.find((p) => p.id === "multiwfn")!;
+    expect(multiwfn.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["multiwfn"], ["molden", "gaussian-fchk", "wfn", "wfx"]]]);
+    expect(multiwfn.installed[0]).toMatchObject({ name: "multiwfn", env: { Multiwfnpath: ["{folder}"] } });
   });
 
   it("each reads the kinds it brings, and Meno's: none a kind only another plugin brings, which it does not know", () => {

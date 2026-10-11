@@ -143,7 +143,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `reads` | ids | The kinds it reads: its own, or Meno's. |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
-| `steps` | list of `{kinds, programs?, options?, takes?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. |
+| `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first. Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
@@ -155,12 +155,10 @@ a choice, a number, a text or a switch, each with a label and a default it
 takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
 charge, multiplicity or name, for a writer's).
 
-**Reserved for what comes next** (lane L7; not read yet): a step's
-`files`, the kinds of file made upstream that it takes besides molecules,
-by their ids - `{"kinds": ["nci"], "programs": ["multiwfn"], "files":
-["molden", "fchk"]}`, the kind *NCI* to come - so that a step can be given
-a wavefunction another plugin's step wrote, the two joined by a kind's id
-and sharing no code.
+A step's `files` (built 2026-10-11, NCI.md): `{"kinds": ["nci"],
+"programs": ["multiwfn"], "files": ["molden", "gaussian-fchk", "wfn",
+"wfx"]}` - a wavefunction another plugin read is given to Multiwfn's step,
+the two joined by a kind's id and sharing no code.
 
 ## A plugin's guide
 
@@ -253,11 +251,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   (2026-10-11) - the role *Render*, the glTF 2.0 scene Meno writes, the
   Blender interface, and pictures and films on the page:
   [`RENDER.md`](./RENDER.md). *Render* as a workflow's step comes later.
-- **NCI** (NCIPLOT, or an interface to Multiwfn): a kind of step, *NCI*,
-  whose result is a general form - one grid's surface coloured by another
-  grid's values, with a scale - not one for NCI alone. NCIPLOT can work
-  from a molecule in 3D alone; Multiwfn takes a wavefunction another
-  step wrote, through a step's `files` (*The manifest*, reserved).
+- **NCI**: built (2026-10-11) - the kind of step *NCI*, a surface
+  coloured by another grid as a general form, a step's `files`, and the
+  NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).
 
 ## Several plugins, one role
 
@@ -400,6 +396,11 @@ The same for every plugin and for Meno's own parts:
     made (`{made: [{entry, file, media}]}`);
   - a job may say how far it is, in lines of its log of their own -
     `progress <done>/<all>` - which Meno shows as it runs;
+  - `collect` may answer, for each entry, surfaces in cube files the job
+    wrote, which Meno reads itself - `{"surfaces": [{"name", "rows":
+    [{"label", "file", "iso", "colour": {"file", "from", "to",
+    "label"}}]}]}` - an RDG surface coloured by sign(λ2)ρ (NCI.md); an
+    entry is given, in `files`, the outputs its step's `files` take;
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
     place (RDKit's *Duplicates*). `holds` says whether they came as a

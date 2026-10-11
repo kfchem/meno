@@ -10,8 +10,8 @@ import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "band" | "twins" | "bars" | "grouped" | "pointer";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "band" | "twins" | "bars" | "grouped" | "pointer";
 
 export type KindInfo = {
   kind: StepKind;
@@ -36,6 +36,8 @@ export const KINDS: readonly KindInfo[] = [
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
   { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies" },
+  // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions" },
   {
     kind: "energy-window",
     name: "Energy window",

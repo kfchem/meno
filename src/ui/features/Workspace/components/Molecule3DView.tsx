@@ -179,6 +179,8 @@ export type Molecule3DViewProps = {
   /** The surface it shows - a list's row chosen - and the value it is drawn at; none, none (or one fading out). */
   surface?: Grid | null;
   surfaceIso?: number;
+  /** What colours the surface, where another grid does, and the values its scale runs between. */
+  surfaceColour?: { grid: Grid; from: number; to: number } | null;
   /** Its measurement whose value is being typed, by id: its chip a field; none, none. */
   editingMeasure?: number | null;
   /** A value typed for a measurement, and Enter pressed: set it (utils/edit3d). */
@@ -1264,6 +1266,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
+          colour={props.surfaceColour ?? null}
           renderOrder={OVER_PAGE + 2}
         />
         {stereoMarks.map((mark) => (

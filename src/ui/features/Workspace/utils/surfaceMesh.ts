@@ -1,11 +1,14 @@
 /**
  * A surface (an orbital's, a density's) as it is drawn, on the canvas
  * (../components/Surface3D) and in a picture (../render3d): both phases one
- * mesh, each point coloured by its phase, its triangles drawn in the order
- * its index gives - from the farthest to the nearest (./backToFront).
+ * mesh, each point coloured by its phase - or, where another grid colours
+ * it (lib/calc/results `SurfaceColour`: NCI's), by that grid's value there -
+ * its triangles drawn in the order its index gives - from the farthest to
+ * the nearest (./backToFront).
  */
 import * as THREE from "three";
 import { isAsk, readGrid, resultKey, resultsOn, type Grid } from "../../../../lib/calc/results";
+import { givenValue } from "../../../../lib/calc/asks";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { Carried3D, Molecule3D } from "../store/types";
 import type { Mesh, Vec3 } from "./isosurface";
@@ -13,15 +16,19 @@ import { frameOf, heightOf, lookOf, solidOf } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
 import { surfaceNow } from "./surfaces";
 
-/** How far a surface is seen through: its opacity. */
+/** How far a surface is seen through: its opacity. One coloured by another grid is not seen through: its colours are what it says. */
 export const SURFACE_OPACITY = 0.6;
+export const COLOURED_OPACITY = 1;
+
+/** A surface's opacity: seen through, or - coloured by another grid - not. */
+export const surfaceOpacity = (coloured: boolean) => (coloured ? COLOURED_OPACITY : SURFACE_OPACITY);
 /** Its finish. */
 export const SURFACE_FINISH = { roughness: 0.55, metalness: 0 };
 /** The value a surface is drawn at where its grid says none. */
 export const SURFACE_ISO = 0.05;
 
-/** A surface's two phases as one mesh - the positive's triangles, then the negative's - and where the negative's begin, by point. */
-export function surfaceGeometry(plus: Mesh, minus: Mesh | null): { geometry: THREE.BufferGeometry; split: number } {
+/** A surface's two phases as one mesh - the positive's triangles, then the negative's - and where the negative's begin, by point; `coloured`, its points coloured already, by another grid (the positive's own colours, kept). */
+export function surfaceGeometry(plus: Mesh, minus: Mesh | null): { geometry: THREE.BufferGeometry; split: number; coloured: boolean } {
   const n = plus.positions.length + (minus?.positions.length ?? 0);
   const positions = new Float32Array(n);
   const normals = new Float32Array(n);
@@ -34,13 +41,18 @@ export function surfaceGeometry(plus: Mesh, minus: Mesh | null): { geometry: THR
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   g.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n), 3));
+  const colours = new Float32Array(n);
+  const coloured = !!plus.colours && plus.colours.length === plus.positions.length && !minus;
+  if (coloured) colours.set(plus.colours!);
+  g.setAttribute("color", new THREE.BufferAttribute(colours, 3));
   g.setIndex(new THREE.BufferAttribute(new Uint32Array(n / 3), 1));
-  return { geometry: g, split: plus.positions.length / 3 };
+  g.userData.coloured = coloured;
+  return { geometry: g, split: plus.positions.length / 3, coloured };
 }
 
-/** Each point its phase's colour: the first `split` points the positive's. */
+/** Each point its phase's colour: the first `split` points the positive's - unless another grid coloured them, whose colours stay. */
 export function colourSurface(g: THREE.BufferGeometry, split: number, plus: string, minus: string) {
+  if (g.userData.coloured) return;
   const attr = g.getAttribute("color") as THREE.BufferAttribute;
   const a = new THREE.Color(plus);
   const b = new THREE.Color(minus);
@@ -75,19 +87,26 @@ export function frameCentre(m: Pick<Carried3D, "atoms" | "frames">, f: number): 
 
 /**
  * The surface a carried molecule shows - its open list's chosen row's,
- * given (a promise not yet given shows none) - and the value it is drawn
- * at.
+ * given (a promise not yet given shows none) - the value it is drawn at,
+ * and what colours it, where another grid does (given too).
  */
-export function shownSurface(m: Pick<Carried3D, "calc" | "list">): { grid: Grid; iso: number } | null {
+export function shownSurface(m: Pick<Carried3D, "calc" | "list">): { grid: Grid; iso: number; colour?: { grid: Grid; from: number; to: number } } | null {
   const open = m.list;
   if (!open || open.row == null || !m.calc?.results) return null;
   const list = resultsOn(m.calc.results, "list").find((r) => resultKey(r) === open.id);
-  const v = list?.rows[open.row]?.surface;
+  const row = list?.rows[open.row];
+  const v = row?.surface;
   if (!v || isAsk(v)) return null;
   // (read once for the grid given: the same grid each time, so that its surface is worked out once)
-  if (!read.has(v)) read.set(v, readGrid(v) ?? null);
-  const grid = read.get(v);
-  return grid ? { grid, iso: open.iso ?? grid.iso ?? SURFACE_ISO } : null;
+  const once = (x: object) => {
+    if (!read.has(x)) read.set(x, readGrid(x) ?? null);
+    return read.get(x) ?? null;
+  };
+  const grid = once(v);
+  if (!grid) return null;
+  const by = row?.colour ? (isAsk(row.colour.by) ? givenValue(m.calc.source, list?.from, row.colour.by.ask) : row.colour.by) : undefined;
+  const colourGrid = by && typeof by === "object" ? once(by) : null;
+  return { grid, iso: open.iso ?? grid.iso ?? SURFACE_ISO, ...(colourGrid && row?.colour ? { colour: { grid: colourGrid, from: row.colour.from, to: row.colour.to } } : {}) };
 }
 const read = new WeakMap<object, Grid | null>();
 
@@ -101,7 +120,7 @@ export function pictureSurface(m: Carried3D, style: Style3D, eye?: Eye): { plus:
   const shown = shownSurface(m);
   if (!shown) return null;
   const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
-  const mesh = surfaceNow(shown.grid, frameCentre(m, frameOf(solid, m.frame)), shown.iso);
+  const mesh = surfaceNow(shown.grid, frameCentre(m, frameOf(solid, m.frame)), shown.iso, shown.colour);
   const height = heightOf(m, solid, lookOf(m));
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
   const p = new THREE.Vector3();

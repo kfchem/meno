@@ -104,10 +104,15 @@ export type RoleDecl = { role: RoleId; programs: string[]; options: Option[] };
  * in the step and in Settings, *Calculations* - those of the role of the
  * same name, where it fills one and says none; and, where it takes less
  * than the kind does, what it takes (`takes`: CREST's conformer search,
- * molecules in 3D and conformer sets, not structures drawn). A manifest may
- * say several kinds in one, with the same programs and options.
+ * molecules in 3D and conformer sets, not structures drawn); and the kinds
+ * of file it takes besides, by their ids (`files`: Multiwfn's NCI, a
+ * wavefunction - "molden", "gaussian-fchk", "wfn", "wfx"), each entry given
+ * the file its molecule was read from where it is one of them - another
+ * plugin's step's, or one opened - the two joined by the kind's id alone.
+ * A manifest may say several kinds in one, with the same programs and
+ * options.
  */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; takes?: SetKind[] };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; takes?: SetKind[]; files?: string[] };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -251,10 +256,11 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const kinds = list(s?.kinds).filter((k): k is StepKind => typeof k === "string" && isStepKind(k));
   const programs = [...new Set(list(s?.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
   const takes = Array.isArray(s?.takes) ? SET_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
+  const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roles.find((r) => r.role === kind)?.options ?? []));
-  return kinds.map((kind) => ({ kind, programs, options: optionsFor(kind), ...(takes.length ? { takes: [...takes] } : {}) }));
+  return kinds.map((kind) => ({ kind, programs, options: optionsFor(kind), ...(takes.length ? { takes: [...takes] } : {}), ...(files.length ? { files: [...files] } : {}) }));
 }
 
 /** A program's file, as a system has it: a name, not a path. */

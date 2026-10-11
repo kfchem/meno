@@ -21,7 +21,9 @@
     {"plugin": "crest", "for": "Searches for a molecule's conformers"},
     {"plugin": "orca", "for": "Runs ORCA, installed separately"},
     {"plugin": "gaussian", "for": "Runs Gaussian 16, installed separately"},
-    {"plugin": "blender", "for": "Renders pictures and films of molecules in 3D with Blender, installed separately"}
+    {"plugin": "blender", "for": "Renders pictures and films of molecules in 3D with Blender, installed separately"},
+    {"plugin": "nciplot", "for": "Shows non-covalent interactions from a geometry, with NCIPLOT installed separately"},
+    {"plugin": "multiwfn", "for": "Shows non-covalent interactions from a wavefunction, with Multiwfn installed separately"}
   ],
   "files": [
     {"id": "adf", "name": "ADF output", "extensions": [".out", ".log"], "marks": [{"text": "Amsterdam Density Functional", "anyCase": true}], "suggest": ["cclib"]},

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { Grid } from "../../../../lib/calc/results";
 import { backToFront } from "../utils/backToFront";
 import type { Vec3 } from "../utils/isosurface";
-import { colourSurface, SURFACE_FINISH, SURFACE_OPACITY, surfaceGeometry } from "../utils/surfaceMesh";
+import { colourSurface, SURFACE_FINISH, surfaceGeometry, surfaceOpacity } from "../utils/surfaceMesh";
 import { surfaceOf } from "../utils/surfaces";
 
 /** How quickly a surface comes and goes, in seconds. */
@@ -27,7 +27,10 @@ const eye = new THREE.Vector3();
  * over the other). Worked
  * out off the main thread (../utils/surfaces); a new value's surface takes
  * the old one's place when it is ready, the last value asked for winning.
- * It fades in, and out as its grid is let go.
+ * It fades in, and out as its grid is let go. Coloured by another grid
+ * (`colour`: lib/calc/results `SurfaceColour`), it is one surface, each
+ * point in the colour the other grid's value there takes on the scale, and
+ * not seen through.
  */
 export default function Surface3D({
   grid,
@@ -35,6 +38,7 @@ export default function Surface3D({
   iso,
   plus,
   minus,
+  colour,
   renderOrder,
 }: {
   /** The grid; none, its surface fading out. */
@@ -44,6 +48,8 @@ export default function Surface3D({
   iso: number;
   plus: string;
   minus: string;
+  /** The grid that colours it, and the values its scale runs between; none, its two phases' colours. */
+  colour?: { grid: Grid; from: number; to: number } | null;
   renderOrder: number;
 }) {
   const { invalidate, camera } = useThree();
@@ -59,7 +65,7 @@ export default function Surface3D({
   // a grid no longer shown
   const mounted = useRef(true);
   const busy = useRef(false);
-  const wanted = useRef<{ grid: Grid; centre: Vec3; iso: number } | null>(null);
+  const wanted = useRef<{ grid: Grid; centre: Vec3; iso: number; colour?: { grid: Grid; from: number; to: number } } | null>(null);
   const showing = useRef<Grid | null>(grid);
   showing.current = grid;
   const [cx, cy, cz] = centre;
@@ -70,7 +76,7 @@ export default function Surface3D({
       const want = wanted.current;
       wanted.current = null;
       try {
-        const m = await surfaceOf(want.grid, want.centre, want.iso);
+        const m = await surfaceOf(want.grid, want.centre, want.iso, want.colour);
         if (!mounted.current || showing.current !== want.grid) continue;
         setMeshes((was) => {
           was?.geometry.dispose();
@@ -85,11 +91,14 @@ export default function Surface3D({
     busy.current = false;
   }, [invalidate]);
 
+  const by = colour?.grid;
+  const from = colour?.from;
+  const to = colour?.to;
   useEffect(() => {
     if (!grid) return;
-    wanted.current = { grid, centre: [cx, cy, cz], iso };
+    wanted.current = { grid, centre: [cx, cy, cz], iso, ...(by && from != null && to != null ? { colour: { grid: by, from, to } } : {}) };
     void pump();
-  }, [grid, cx, cy, cz, iso, pump]);
+  }, [grid, cx, cy, cz, iso, by, from, to, pump]);
 
   // (let go when it leaves)
   useEffect(
@@ -111,16 +120,16 @@ export default function Surface3D({
   }, [meshes, plus, minus, invalidate]);
 
   useFrame((_, dt) => {
-    const to = grid && meshes ? SURFACE_OPACITY : 0;
-    const v = to + (level.current - to) * Math.exp(-Math.min(dt, 1 / 30) / FADE_TAU);
-    level.current = Math.abs(v - to) < 0.005 ? to : v;
+    const goal = grid && meshes ? surfaceOpacity(meshes.coloured) : 0;
+    const v = goal + (level.current - goal) * Math.exp(-Math.min(dt, 1 / 30) / FADE_TAU);
+    level.current = Math.abs(v - goal) < 0.005 ? goal : v;
     if (mat.current) {
       mat.current.opacity = level.current;
       mat.current.visible = level.current > 0.005;
     }
     if (meshes && mesh.current && level.current > 0.005) sort(meshes.geometry, mesh.current);
-    if (level.current !== to) invalidate();
-    else if (to === 0 && meshes && !grid) {
+    if (level.current !== goal) invalidate();
+    else if (goal === 0 && meshes && !grid) {
       setMeshes((was) => {
         was?.geometry.dispose();
         return null;
