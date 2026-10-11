@@ -13,10 +13,11 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { ringKeyOf } from "./utils/rings";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
-import { printedSize } from "../../../lib/picture/image";
+import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
 import { newTextName } from "./utils/texts";
@@ -27,6 +28,9 @@ export type WorkspaceDocument = {
   arrows: Arrow[];
   /** The "+" signs of a reaction scheme. */
   pluses: Plus[];
+  /** The electron-pushing arrows, each from and to atoms and bonds by id. */
+  pushes?: PushArrow[];
+  nextPushId?: number;
   /** Words on the page: a reaction's reagents and conditions, or anything else. */
   captions?: Caption[];
   nextCaptionId?: number;
@@ -39,6 +43,8 @@ export type WorkspaceDocument = {
   aromaticEnabled: boolean;
   /** Per-ring aromatic circle flags, keyed by ring key. */
   aromaticRings: Record<string, boolean>;
+  /** The rings filled with a colour, by ring key (`RingFills`). */
+  ringFills?: RingFills;
   /** Ids are handed out from one counter shared by atoms and bonds. */
   nextId: number;
   nextArrowId: number;
@@ -357,7 +363,7 @@ export function deleteParts(
   }
   const kept = atoms.filter((a) => !atomsGone.has(a.id));
   if (kept.length === atoms.length && left.length === bonds.length) return doc;
-  return { ...doc, model: { atoms: kept, bonds: left } };
+  return withPushesOn({ ...doc, model: { atoms: kept, bonds: left } });
 }
 
 /**
@@ -431,7 +437,13 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
     bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
   }
-  return { ...doc, nextId, model: { atoms, bonds } };
+  // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
+  const pushes = (doc.pushes ?? []).map((p) => {
+    if (!p.bend || !pushAtoms(doc, p).every((id) => to.has(id))) return p;
+    const { bend: _bend, ...rest } = p;
+    return rest;
+  });
+  return withPushesOn({ ...doc, nextId, model: { atoms, bonds }, ...(doc.pushes ? { pushes } : {}) });
 }
 
 /**
@@ -541,7 +553,7 @@ export function writtenAsLabels(doc: WorkspaceDocument, groups: readonly Written
     bonds = bonds.filter((b) => !(ids.has(b.a) && ids.has(b.b)));
   }
   if (atoms === doc.model.atoms) return doc;
-  return { ...doc, model: { atoms, bonds } };
+  return withPushesOn({ ...doc, model: { atoms, bonds } });
 }
 
 /**
@@ -585,7 +597,7 @@ export function contractToAbbreviation(
     .filter((a) => !ids.has(a.id) || a.id === attachId)
     .map((a) => (a.id === attachId ? { id: a.id, x: a.x, y: a.y, r: a.r, el: label, abbrev } : a));
   const bonds = doc.model.bonds.filter((b) => !(ids.has(b.a) && ids.has(b.b)));
-  return { ...doc, model: { atoms, bonds } };
+  return withPushesOn({ ...doc, model: { atoms, bonds } });
 }
 
 /**
@@ -705,7 +717,7 @@ export function replaceDraggedAtomWith(
 /** Replaces the content, e.g. opening a file: one undo step for the import. */
 export function replaceModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { pushes?: readonly PushArrow[]; ringFills?: RingFills },
 ): WorkspaceDocument {
   const maxId = Math.max(
     0,
@@ -719,6 +731,7 @@ export function replaceModel(
     nextArrowId: 1,
     pluses: [],
     nextPlusId: 1,
+    ...pushesOf(next.pushes, next),
     captions: [],
     nextCaptionId: 1,
     molecules3d: [],
@@ -729,6 +742,7 @@ export function replaceModel(
     nextWorkflowId: 1,
     aromaticEnabled: false,
     aromaticRings: {},
+    ringFills: { ...(next.ringFills ?? {}) },
     nextId: Math.max(1, maxId + 1),
   };
 }
@@ -736,7 +750,7 @@ export function replaceModel(
 /** Adds another structure alongside the current one, renumbering its ids. */
 export function appendModel(
   doc: WorkspaceDocument,
-  next: Model,
+  next: Model & { pushes?: readonly PushArrow[]; ringFills?: RingFills },
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
   const idMap = new Map<number, number>();
@@ -761,13 +775,35 @@ export function appendModel(
         }
       : {}),
   }));
-  const bonds = next.bonds.map((b) => ({
-    ...b,
-    id: cursor++,
-    a: idMap.get(b.a) ?? b.a,
-    b: idMap.get(b.b) ?? b.b,
-    ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
-  }));
+  const bondMap = new Map<number, number>();
+  const bonds = next.bonds.map((b) => {
+    const id = cursor++;
+    bondMap.set(b.id, id);
+    return {
+      ...b,
+      id,
+      a: idMap.get(b.a) ?? b.a,
+      b: idMap.get(b.b) ?? b.b,
+      ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
+    };
+  });
+  // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
+  const moved = (e: PushEnd): PushEnd | null => {
+    if ("atom" in e) return idMap.has(e.atom) ? { atom: idMap.get(e.atom)! } : null;
+    if ("bond" in e) return bondMap.has(e.bond) ? { bond: bondMap.get(e.bond)! } : null;
+    return idMap.has(e.gap[0]) && idMap.has(e.gap[1]) ? { gap: [idMap.get(e.gap[0])!, idMap.get(e.gap[1])!] } : null;
+  };
+  let pushId = doc.nextPushId ?? 1;
+  const pushes = (next.pushes ?? []).flatMap((p) => {
+    const from = moved(p.from);
+    const to = moved(p.to);
+    return from && to ? [{ ...p, id: pushId++, from, to }] : [];
+  });
+  // (its rings' fills with it, by its atoms' new ids)
+  const fills = Object.entries(next.ringFills ?? {}).flatMap(([key, color]) => {
+    const ids = key.split("-").map((id) => idMap.get(Number(id)));
+    return ids.every((id) => id != null) ? [[ringKeyOf(ids as number[]), color] as const] : [];
+  });
   return {
     ...doc,
     nextId: cursor,
@@ -775,6 +811,8 @@ export function appendModel(
       atoms: [...doc.model.atoms, ...atoms],
       bonds: [...doc.model.bonds, ...bonds],
     },
+    ...(pushes.length ? { pushes: [...(doc.pushes ?? []), ...pushes], nextPushId: pushId } : {}),
+    ...(fills.length ? { ringFills: { ...(doc.ringFills ?? {}), ...Object.fromEntries(fills) } } : {}),
   };
 }
 
@@ -919,6 +957,11 @@ function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule
   return next === all[i] ? doc : { ...doc, molecules3d: all.map((m, k) => (k === i ? next : m)) };
 }
 
+/** A molecule in 3D as `change` makes it: what is found or given of it (its bond orders, its hydrogens: utils/completeness). */
+export function changeMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule3D) => Molecule3D): WorkspaceDocument {
+  return withMolecule3d(doc, id, change);
+}
+
 /** Molecules in 3D drawn in the 3D style's primary look, or its secondary. */
 export function setLook3d(doc: WorkspaceDocument, ids: readonly number[], look: Look3D): WorkspaceDocument {
   return ids.reduce(
@@ -1032,6 +1075,85 @@ export function removeArrow(
   return arrows.length === doc.arrows.length ? doc : withoutArrowsOf({ ...doc, arrows }, new Set([id]));
 }
 
+// --- electron-pushing arrows -----------------------------------------------
+
+/** The atoms an end stands on, by id: an atom, a bond's two, a gap's two. */
+export function endAtoms(doc: Pick<WorkspaceDocument, "model">, e: PushEnd): number[] {
+  if ("atom" in e) return [e.atom];
+  if ("gap" in e) return [...e.gap];
+  const b = doc.model.bonds.find((x) => x.id === e.bond);
+  return b ? [b.a, b.b] : [];
+}
+
+/** The atoms an electron-pushing arrow stands on, at either end. */
+export function pushAtoms(doc: Pick<WorkspaceDocument, "model">, p: PushArrow): number[] {
+  return [...endAtoms(doc, p.from), ...endAtoms(doc, p.to)];
+}
+
+/** Whether an end is still drawn: its atom, its bond, its gap's two atoms - not bonded to each other. */
+function endIsThere(doc: Pick<WorkspaceDocument, "model">, e: PushEnd): boolean {
+  const has = (id: number) => doc.model.atoms.some((a) => a.id === id);
+  if ("atom" in e) return has(e.atom);
+  if ("bond" in e) return doc.model.bonds.some((b) => b.id === e.bond);
+  return e.gap[0] !== e.gap[1] && has(e.gap[0]) && has(e.gap[1]);
+}
+
+/** `doc` without the electron-pushing arrows whose ends are gone. */
+function withPushesOn(doc: WorkspaceDocument): WorkspaceDocument {
+  const pushes = doc.pushes ?? [];
+  const kept = pushes.filter((p) => endIsThere(doc, p.from) && endIsThere(doc, p.to));
+  return kept.length === pushes.length ? doc : { ...doc, pushes: kept };
+}
+
+/** The electron-pushing arrows a file or a record brings, those whose ends are in `model`, numbered from one. */
+function pushesOf(pushes: readonly PushArrow[] | undefined, model: Model): Pick<WorkspaceDocument, "pushes" | "nextPushId"> {
+  const kept = (pushes ?? []).filter((p) => endIsThere({ model }, p.from) && endIsThere({ model }, p.to)).map((p, i) => ({ ...p, id: i + 1 }));
+  return { pushes: kept, nextPushId: kept.length + 1 };
+}
+
+/** `doc` with an electron-pushing arrow from `from` to `to`, numbered `nextPushId`. */
+export function addPush(doc: WorkspaceDocument, from: PushEnd, to: PushEnd, half: boolean): WorkspaceDocument {
+  if (!endIsThere(doc, from) || !endIsThere(doc, to) || JSON.stringify(from) === JSON.stringify(to)) return doc;
+  const id = doc.nextPushId ?? 1;
+  return { ...doc, nextPushId: id + 1, pushes: [...(doc.pushes ?? []), { id, from, to, ...(half ? { half: true as const } : {}) }] };
+}
+
+/** `doc` with the electron-pushing arrow `id` changed: its head, its bend (null: as Meno bends it), its ends, its lone pair's dots. */
+export function updatePush(
+  doc: WorkspaceDocument,
+  id: number,
+  patch: { half?: boolean; bend?: PushArrow["bend"] | null; from?: PushEnd; to?: PushEnd; noPair?: boolean },
+): WorkspaceDocument {
+  const pushes = doc.pushes ?? [];
+  const i = pushes.findIndex((p) => p.id === id);
+  if (i < 0) return doc;
+  const was = pushes[i];
+  const { half: _h, bend: _b, noPair: _n, ...rest } = was;
+  const half = patch.half ?? !!was.half;
+  const bend = patch.bend === undefined ? was.bend : (patch.bend ?? undefined);
+  const noPair = patch.noPair ?? !!was.noPair;
+  const next: PushArrow = { ...rest, from: patch.from ?? was.from, to: patch.to ?? was.to, ...(half ? { half: true } : {}), ...(bend ? { bend } : {}), ...(noPair ? { noPair: true } : {}) };
+  if (!endIsThere(doc, next.from) || !endIsThere(doc, next.to) || JSON.stringify(next.from) === JSON.stringify(next.to)) return doc;
+  if (JSON.stringify(next) === JSON.stringify(was)) return doc;
+  const out = pushes.slice();
+  out[i] = next;
+  return { ...doc, pushes: out };
+}
+
+export function removePush(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+  const pushes = (doc.pushes ?? []).filter((p) => p.id !== id);
+  return pushes.length === (doc.pushes ?? []).length ? doc : { ...doc, pushes };
+}
+
+/** `doc` with the electron-pushing arrows on the atoms `ids` alone turned over with them: each bent to its other side. */
+export function turnPushesOver(doc: WorkspaceDocument, ids: ReadonlySet<number>): WorkspaceDocument {
+  if (!doc.pushes?.some((p) => p.bend)) return doc;
+  return {
+    ...doc,
+    pushes: doc.pushes.map((p) => (p.bend && pushAtoms(doc, p).every((id) => ids.has(id)) ? { ...p, bend: { along: p.bend.along, out: -p.bend.out } } : p)),
+  };
+}
+
 export function addPlus(doc: WorkspaceDocument, x: number, y: number): WorkspaceDocument {
   const pluses = doc.pluses ?? [];
   const nextPlusId = doc.nextPlusId ?? 1;
@@ -1052,9 +1174,10 @@ export function removePlus(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   return pluses.length === (doc.pluses ?? []).length ? doc : { ...doc, pluses };
 }
 
-/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; and texts' sheets, by their top left. */
+/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; texts' sheets, by their top left; PDFs, by where they lie. */
 export type MarkPlaces = {
   pictures?: { id: number; x: number; y: number; turn?: number }[];
+  pdfs?: { id: number; x: number; y: number }[];
   texts?: { id: number; x: number; y: number }[];
   arrows?: { id: number; x: number; y: number }[];
   pluses?: { id: number; x: number; y: number }[];
@@ -1075,6 +1198,11 @@ export type MarksAt = { atoms: { id: number; chargeAt?: MarkAt; stereoAt?: MarkA
 export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): WorkspaceDocument {
   if (places?.markAts) return placeMarks(withMarksAt(doc, places.markAts), { ...places, markAts: undefined });
   if (places?.molecules3d?.length) return placeMarks(moveMolecules3d(doc, places.molecules3d), { ...places, molecules3d: [] });
+  if (places?.pdfs?.length) {
+    const at = new Map(places.pdfs.map((p) => [p.id, p]));
+    const placed = { ...doc, pdfs: (doc.pdfs ?? []).map((p) => (at.has(p.id) ? { ...p, x: at.get(p.id)!.x, y: at.get(p.id)!.y } : p)) };
+    return placeMarks(placed, { ...places, pdfs: [] });
+  }
   if (places?.texts?.length) {
     const at = new Map(places.texts.map((t) => [t.id, t]));
     const placed = { ...doc, texts: (doc.texts ?? []).map((t) => (at.has(t.id) && t.at ? { ...t, at: { x: at.get(t.id)!.x, y: at.get(t.id)!.y } } : t)) };
@@ -1269,6 +1397,12 @@ export function placePdfPage(doc: WorkspaceDocument, id: number, page: number, x
   return { ...doc, pdfs: doc.pdfs!.map((p) => (p.id === id ? next : p)) };
 }
 
+/** `doc` without the PDFs `ids`. */
+export function removePdfs(doc: WorkspaceDocument, ids: ReadonlySet<number>): WorkspaceDocument {
+  if (!ids.size || !(doc.pdfs ?? []).some((p) => ids.has(p.id))) return doc;
+  return { ...doc, pdfs: doc.pdfs!.filter((p) => !ids.has(p.id)) };
+}
+
 /** `doc` without a PDF. */
 /** Where a PDF is read in the column, as far as it can be: its pages there, at a size between a quarter and eight times the column's width. */
 export function readingOf(r: { at: number; zoom: number }, pages: number): NonNullable<PdfItem["reading"]> {
@@ -1301,7 +1435,7 @@ export function picturesInRow(held: readonly PictureToAdd[], at: { x: number; y:
   let x = at.x;
   for (const h of held) {
     if (typeof h?.name !== "string" || typeof h.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(h.sha256)) continue;
-    if ((h.media !== "image/png" && h.media !== "image/jpeg") || !(h.width > 0) || !(h.height > 0)) continue;
+    if (!PICTURE_MEDIA.includes(h.media) || !(h.width > 0) || !(h.height > 0)) continue;
     const size = printedSize(h);
     const w = size.w * POINT;
     if (out.length) x += w / 2;
@@ -1382,6 +1516,46 @@ function withoutArrowsOf(doc: WorkspaceDocument, gone: ReadonlySet<number>): Wor
       return rest;
     }),
   };
+}
+
+// --- colour ----------------------------------------------------------------
+
+/**
+ * `doc` with the atoms and bonds `parts` names given `color` - drawn in it
+ * (`which` "color"), or highlighted in it - or (null) none; and its
+ * electron-pushing arrows drawn in it.
+ */
+export function colourParts(
+  doc: WorkspaceDocument,
+  parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> },
+  which: "color" | "highlight",
+  color: string | null,
+): WorkspaceDocument {
+  const atomIds = new Set(parts.atoms);
+  const bondIds = new Set(parts.bonds);
+  let changed = false;
+  const paint = <T extends { id: number; color?: string; highlight?: string }>(x: T, named: ReadonlySet<number>): T => {
+    if (!named.has(x.id) || (x[which] ?? null) === color) return x;
+    changed = true;
+    const { [which]: _was, ...rest } = x;
+    return (color ? { ...rest, [which]: color } : rest) as T;
+  };
+  const atoms = doc.model.atoms.map((a) => paint(a, atomIds));
+  const bonds = doc.model.bonds.map((b) => paint(b, bondIds));
+  const pushIds = new Set(which === "color" ? (parts.pushes ?? []) : []);
+  const pushes = pushIds.size ? (doc.pushes ?? []).map((p) => paint(p, pushIds)) : doc.pushes;
+  return changed ? { ...doc, model: { atoms, bonds }, ...(pushes ? { pushes } : {}) } : doc;
+}
+
+/** `doc` with the rings `keys` filled with `color`, or (null) not. */
+export function fillRings(doc: WorkspaceDocument, keys: readonly string[], color: string | null): WorkspaceDocument {
+  const was = doc.ringFills ?? {};
+  const next = { ...was };
+  for (const k of keys) {
+    if (color) next[k] = color;
+    else delete next[k];
+  }
+  return keys.every((k) => was[k] === next[k]) ? doc : { ...doc, ringFills: next };
 }
 
 // --- aromatic circles ------------------------------------------------------
@@ -1476,6 +1650,23 @@ export function setTextOf(doc: WorkspaceDocument, id: number, of: TextOf): Works
   const texts = doc.texts!.slice();
   texts[at] = { ...texts[at], of };
   return { ...doc, texts };
+}
+
+/**
+ * Texts' sheets pasted: each a text of its own, even where the workspace
+ * holds the same, its sheet where it says, not read in the column - its
+ * id, as it is added, among `ids`.
+ */
+export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<WorkspaceText, "id">[]): { doc: WorkspaceDocument; ids: number[] } {
+  const held = (doc.texts ?? []).slice();
+  let next = doc.nextTextId ?? Math.max(0, ...held.map((t) => t.id)) + 1;
+  const ids: number[] = [];
+  for (const t of sheets) {
+    if (!t.at) continue;
+    held.push({ id: next, name: t.name || newTextName(held), text: t.text, at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    ids.push(next++);
+  }
+  return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };
 }
 
 /** The texts `ids` taken out. */

@@ -14,7 +14,9 @@
  * read - it is taken hold of, lit from the pointer out as a structure is,
  * and then moved by the drag. Its pages spread, a page held so is moved
  * alone, to a place of its own, and its name moves them all. As an icon, a
- * drag moves it. The page on top
+ * drag moves it. A click selects it, Ctrl/Cmd and a click adds it to the
+ * selection or takes it out; selected, a drag moves the whole selection.
+ * Moved by an undo or a redo, it glides there. The page on top
  * is turned by the corner that folds as the stack is hovered, or by the
  * arrow keys over it (Workspace). Turned, the page lifts off toward
  * the viewer and goes under; spread or gathered, the pages lift off one
@@ -60,6 +62,8 @@ import { dragBox, inBox } from "./boxDrag";
 import { figureAt, figuresHad } from "../../../../lib/pdf/figures";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { HeldLight } from "./HeldLight";
+import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { dragSelection, selectionMoving } from "../utils/dragSelection";
 import { heldShows } from "./held";
 import type { WordPlace } from "../store/types";
 
@@ -117,6 +121,7 @@ export default function Pdfs2D() {
   const foundNow = pdfFind ? (pdfFind.found[pdfFind.now] ?? null) : null;
   const pdfFlash = useEditor((s) => s.pdfFlash);
   const pdfBox = useEditor((s) => s.pdfBox);
+  const selPdfs = useEditor((s) => s.selPdfs);
   const store = useEditorStore();
   const { camera, gl, invalidate, size } = useThree();
   const [, setTick] = useState(0);
@@ -154,7 +159,7 @@ export default function Pdfs2D() {
       const was = spreadSheets(before);
       const to = spreadSheets(p);
       const d = dragged.current;
-      const followed = (i: number) => d?.id === p.id && (d.page == null || d.page === i);
+      const followed = (i: number) => selectionMoving.active || (d?.id === p.id && (d.page == null || d.page === i));
       if (to.some((s, i) => !followed(i) && (s.x !== was[i]?.x || s.y !== was[i]?.y))) {
         const m2 = motion.current.get(p.id);
         const now = performance.now();
@@ -166,6 +171,13 @@ export default function Pdfs2D() {
       }
     }
     if (before && !!before.icon !== !!p.icon) motion.current.set(p.id, { ...motion.current.get(p.id), icon: { to: !!p.icon, start: performance.now() } });
+    // (moved as a whole - not spread, by an undo or a redo, not dragged: it glides there from where it was drawn)
+    if (before && !(before.spread && p.spread) && (before.x !== p.x || before.y !== p.y) && dragged.current?.id !== p.id && !selectionMoving.active) {
+      const m3 = motion.current.get(p.id);
+      const now = performance.now();
+      const left = shifted(m3, now);
+      motion.current.set(p.id, { ...m3, shift: { dx: left.dx + before.x - p.x, dy: left.dy + before.y - p.y, start: now } });
+    }
   }
   was.current = new Map(pdfs.map((p) => [p.id, p]));
 
@@ -231,6 +243,7 @@ export default function Pdfs2D() {
       // (drawn until a little past the end, so that the last frame drawn is the end's)
       if ((m.turned && now - m.turned.start < TURN_MS + 80) || (m.spread && now - m.spread.start < SPREAD_MS + 20 * SPREAD_STAGGER_MS + 80)) animating = true;
       if (m.glide && now - m.glide.start < GLIDE_MS + 80) animating = true;
+      if (m.shift && now - m.shift.start < GLIDE_MS + 80) animating = true;
     }
     // (a place shown marked, fading)
     const flash = store.getState().pdfFlash;
@@ -404,6 +417,12 @@ export default function Pdfs2D() {
     // (what is drawn over it is pressed, not it)
     if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null) return;
     e.stopPropagation();
+    // (Ctrl/Cmd and a click: into the selection, or out of it, as a picture is)
+    if (addsToSelection(ev as { ctrlKey?: boolean; metaKey?: boolean })) {
+      st.togglePdfSel(p.id);
+      st.suppressDoubleClick(DOUBLE_CLICK_MS);
+      return;
+    }
     const q = toWorld(ev.clientX, ev.clientY);
     // (on its words selected, at a size they can be read: the words carried out - or on a box drawn there, the box)
     const w = wordsOn(p, q);
@@ -442,7 +461,9 @@ export default function Pdfs2D() {
       panHeld = true;
       store.getState().beginPanHold(ev.pointerId ?? null);
     };
-    if (p.icon) holdPan();
+    // (selected: a drag moves the whole selection, not the view - a press held still does what it does on any PDF)
+    const selected = st.selPdfs.has(p.id);
+    if (p.icon || selected) holdPan();
     const letHoldGo = () => {
       if (hold != null) window.clearTimeout(hold);
       hold = null;
@@ -510,6 +531,18 @@ export default function Pdfs2D() {
         return;
       }
       const away = Math.hypot(m.clientX - ev.clientX, m.clientY - ev.clientY);
+      if (selected && (mode === "pressed" || (mode === "moving" && p.icon && away >= MOV_PX)) && away >= PAN_PX) {
+        // (the selection dragged from here on: its own gesture)
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp, true);
+        letHoldGo();
+        letLightGo();
+        dragSelection(store, toWorld, { x: ev.clientX, y: ev.clientY }, (u) => {
+          store.getState().endPanHold(u.pointerId);
+          store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+        });
+        return;
+      }
       if (mode === "pressed") {
         // (moved before it was held long enough: the view moves, as on empty space)
         if (away < PAN_PX) return;
@@ -543,11 +576,16 @@ export default function Pdfs2D() {
         return;
       }
       if (mode === "selecting" || mode === "panned" || away >= CLICK_PX || (mode === "moving" && !p.icon)) return;
-      // a click: the words selected let go, a link followed
+      // a click: the words selected let go, a link followed - or else the PDF selected, alone
       store.getState().setPdfSel(null);
       const now = store.getState().pdfs.find((x) => x.id === p.id);
       const link = now ? linkOn(now, toWorld(u.clientX, u.clientY)) : null;
       if (now && link) followLink(store, now, link);
+      else if (now) {
+        const s2 = store.getState();
+        s2.clearSel();
+        s2.selectPdfs([p.id]);
+      }
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
@@ -565,6 +603,7 @@ export default function Pdfs2D() {
           now={now}
           px={px}
           hovered={hoveredPdf === p.id}
+          selected={selPdfs.has(p.id)}
           motion={motion.current.get(p.id)}
           previewOf={(page) => pics.preview(p, page)}
           tilesOf={(page) => pics.tilesOf(p.sha256, page, view.current.level.get(p.id * 100000 + page) ?? 0)}
@@ -590,6 +629,7 @@ function PdfStack(props: {
   now: number;
   px: number;
   hovered: boolean;
+  selected: boolean;
   motion?: Motion;
   previewOf: (page: number) => Pic | null;
   tilesOf: (page: number) => Tile[];
@@ -604,6 +644,8 @@ function PdfStack(props: {
   type: { size: number; font: string | null; family: string };
 }) {
   const { p, now, px, motion } = props;
+  // (gliding to where it lies, moved by an undo)
+  const shift = shifted(motion, now);
   const top = topSheet(p);
   const spread = spreadSheets(p);
   const under = stackSheets(p);
@@ -695,7 +737,10 @@ function PdfStack(props: {
     };
     const heldBox = heldPage != null && sheets[heldPage] ? sheets[heldPage].s : null;
     return (
-      <group onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
+      <group position={[shift.dx, shift.dy, 0]} onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
+        {/* (selected: the selection's frame round each page) */}
+        {props.selected &&
+          sheets.map(({ s }, i) => <SelectedFrame key={`f${i}`} b={{ x0: s.x - s.w / 2 - pad, x1: s.x + s.w / 2 + pad, y0: s.y - s.h / 2 - pad, y1: s.y + s.h / 2 + pad }} w={2 * px} z={0.02 * p.pages.length + 0.22} />)}
         {/* (those in their rows lowest, then those put in places of their own, the last put there on top) */}
         {(g ? g.order : spreadOrder(p)).map((i, n) => {
           const { k, s } = sheets[i];
@@ -745,7 +790,8 @@ function PdfStack(props: {
   // (what is drawn made smaller is drawn with a screen's pixel the larger)
   const inPx = px / k;
   return (
-    <group onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
+    <group position={[shift.dx, shift.dy, 0]} onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
+      {props.selected && <SelectedFrame b={{ x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad }} w={2 * px} z={0.45} />}
       {atSize(
         <>
           {under.map((s, i) => (
@@ -795,7 +841,37 @@ type Motion = {
   held?: { x: number; y: number; start: number; done?: boolean; let?: number; page?: number };
   /** Its pages spread gliding to where they lie now, from where they were drawn: in the order they lay in, and which were in places of their own, before. */
   glide?: { from: Sheet[]; start: number; order: number[]; placed: number[] };
+  /** It all gliding to where it lies now, moved by an undo or a redo: how far from there it was drawn as it began. */
+  shift?: { dx: number; dy: number; start: number };
 };
+
+/** How far from where it lies a PDF is drawn now, gliding there - none, once it is there. */
+function shifted(m: Motion | undefined, now: number): { dx: number; dy: number } {
+  const s = m?.shift;
+  if (!s) return { dx: 0, dy: 0 };
+  const k = 1 - ease((now - s.start) / GLIDE_MS);
+  return k <= 0 ? { dx: 0, dy: 0 } : { dx: s.dx * k, dy: s.dy * k };
+}
+
+/** The selection's frame round a box of the page, `w` thick, on the screen's pixels as `px` says. */
+function SelectedFrame({ b, w, z }: { b: { x0: number; x1: number; y0: number; y1: number }; w: number; z: number }) {
+  const sides: [number, number, number, number][] = [
+    [(b.x0 + b.x1) / 2, b.y1 + w / 2, b.x1 - b.x0 + 2 * w, w],
+    [(b.x0 + b.x1) / 2, b.y0 - w / 2, b.x1 - b.x0 + 2 * w, w],
+    [b.x0 - w / 2, (b.y0 + b.y1) / 2, w, b.y1 - b.y0],
+    [b.x1 + w / 2, (b.y0 + b.y1) / 2, w, b.y1 - b.y0],
+  ];
+  return (
+    <>
+      {sides.map(([x, y, sw, sh], i) => (
+        <mesh key={i} position={[x, y, z]} scale={[sw, sh, 1]}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color={COLORS.highlight} toneMapped={false} />
+        </mesh>
+      ))}
+    </>
+  );
+}
 
 /** Where a PDF's pages spread are drawn now: where they lie, `to`, or on their way there, gliding. */
 function glided(m: Motion | undefined, to: Sheet[], now: number): Sheet[] {

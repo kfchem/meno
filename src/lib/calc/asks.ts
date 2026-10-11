@@ -229,6 +229,10 @@ export function calcShowing(calc: CalcInfo, list: string, row: number | null): C
   const shown = target?.rows[row];
   if (!target || !shown) return calc;
   const swap = (v: unknown) => (isAsk(v) && givenValue(calc.source, target.from, v.ask) !== undefined ? givenValue(calc.source, target.from, v.ask) : v);
-  const rows = target.rows.map((r, i) => (i === row ? { ...r, ...(r.move ? { move: swap(r.move) } : {}), ...(r.surface ? { surface: swap(r.surface) } : {}) } : r));
+  const rows = target.rows.map((r, i) =>
+    i === row
+      ? { ...r, ...(r.move ? { move: swap(r.move) } : {}), ...(r.surface ? { surface: swap(r.surface) } : {}), ...(r.colour ? { colour: { ...r.colour, by: swap(r.colour.by) } } : {}) }
+      : r,
+  );
   return { ...calc, results: calc.results.map((r) => (r === target ? ({ ...target, rows } as ListResult) : r)) } as CalcInfo;
 }

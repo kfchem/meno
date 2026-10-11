@@ -55,6 +55,17 @@ export function centroid(points: readonly Point[]): Point {
   return { x: x / n, y: y / n };
 }
 
+/** Whether p lies inside the polygon (even-odd). */
+export function insidePolygon(p: Point, polygon: readonly Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 /** Whether segments ab and cd cross (not merely touch at an end). */
 export function segmentsCross(a: Point, b: Point, c: Point, d: Point): boolean {
   const o = (p: Point, q: Point, r: Point) => Math.sign(cross(sub(q, p), sub(r, p)));

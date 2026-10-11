@@ -1,0 +1,210 @@
+/* Meno's website. The page is a Meno workspace: a light sheet with a faint
+   honeycomb, the app's own typeface and colours (src/App.css). One window
+   stays in view while scrolling moves the work on, chapter by chapter. */
+
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url(assets/fonts/IBMPlexSans-Regular.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url(assets/fonts/IBMPlexSans-Italic.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-style: normal; font-display: swap; src: url(assets/fonts/IBMPlexSans-Medium.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-style: normal; font-display: swap; src: url(assets/fonts/IBMPlexSans-SemiBold.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url(assets/fonts/IBMPlexMono-Regular.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-style: normal; font-display: swap; src: url(assets/fonts/IBMPlexMono-Medium.woff2) format("woff2"); }
+
+:root {
+  --paper: #f6fafc;
+  --sheet: #ffffff;
+  --ink: #1a1f2b;
+  --muted: #59636e;
+  --line: #d1d9e0;
+  --teal: #317689;
+  --teal-soft: #cfe7ee;
+  --on-teal: #ffffff;
+  --hex-filter: none;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* How things move in Meno (--ease-meno) */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e1217;
+    --sheet: #151a21;
+    --ink: #e6edf3;
+    --muted: #9aa6b2;
+    --line: #29313b;
+    --teal: #74b7ca;
+    --teal-soft: #1b343d;
+    --on-teal: #0e1217;
+    --hex-filter: invert(1);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 24px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+a { color: var(--teal); text-underline-offset: 0.18em; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 6px; }
+img { max-width: 100%; }
+.wrap { width: min(1180px, 100%); margin-inline: auto; padding-inline: 24px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; } }
+
+.eyebrow { font: 500 13px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+
+/* The honeycomb Meno draws its rings on, faint, drifting slower than the page. */
+.honeycomb {
+  position: fixed; inset: -200px 0 0 0; z-index: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='69.28' height='120' viewBox='0 0 69.28 120'%3E%3Cpath d='M34.64 0v20M0 40l34.64-20 34.64 20M0 40v40M69.28 40v40M0 80l34.64 20 34.64-20M34.64 100v20' fill='none' stroke='black' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 69.28px 120px;
+  opacity: 0.07;
+  filter: var(--hex-filter);
+  transform: translate3d(0, calc(var(--scroll, 0) * -0.25px), 0);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+}
+
+/* Top bar */
+.top { position: relative; z-index: 2; padding-block: 22px; padding-top: calc(22px + env(safe-area-inset-top, 0px)); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: block; color: var(--ink); line-height: 0; }
+.brand svg { height: 24px; width: auto; aspect-ratio: 2464 / 399; }
+.top nav { display: flex; gap: 22px; font-size: 15px; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--ink); }
+
+/* Hero */
+.hero { position: relative; z-index: 1; padding-top: 48px; }
+.hero-text { position: relative; display: grid; justify-items: center; text-align: center; gap: 22px; }
+h1 {
+  margin: 0; max-width: 16ch; text-wrap: balance;
+  font-weight: 400; font-size: clamp(40px, 7vw, 84px); line-height: 1.02; letter-spacing: -0.035em;
+}
+h1 b { font-weight: 600; }
+.lead { margin: 0; max-width: 60ch; color: var(--muted); font-size: clamp(17px, 2vw, 20px); text-wrap: pretty; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 6px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 10px;
+  font: 500 16px/1.1 var(--font-sans); text-decoration: none; border: 1px solid var(--line);
+  color: var(--ink); background: var(--sheet);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -10px rgba(26, 31, 43, 0.45); }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: var(--on-teal); }
+.btn small { font: 400 12px/1 var(--font-mono); opacity: 0.85; }
+.fine { margin: 0; font: 400 13px/1.5 var(--font-mono); color: var(--muted); }
+.fine a { color: inherit; }
+.nb { white-space: nowrap; }
+@media (max-width: 480px) {
+  .cta { flex-direction: column; align-items: stretch; width: min(100%, 340px); }
+}
+
+/* Molecules floating behind the hero, each at its own depth. */
+.float-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.mol { position: absolute; color: var(--ink); opacity: 0.16; transform: translate3d(0, calc(var(--scroll, 0) * var(--depth) * 1px), 0) rotate(var(--rot, 0deg)); }
+.mol svg { display: block; width: 100%; height: auto; font-family: var(--font-sans); }
+@media (max-width: 700px) { .mol { opacity: 0.1; } }
+
+/* The window: the app's own, as captured, its corners and title bar its own */
+.window { filter: drop-shadow(0 24px 40px rgba(26, 31, 43, 0.22)) drop-shadow(0 6px 12px rgba(26, 31, 43, 0.12)); }
+.screen { position: relative; aspect-ratio: 16 / 10; }
+.screen img, .screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* The story's films are the window recorded, on white: its corners are rounded here, as the window's are */
+.screen.film { border-radius: 1.5625% / 2.5%; overflow: hidden; }
+.screen video { opacity: 0; transition: opacity 160ms linear; }
+.screen video.on { opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  .window { filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.7)); }
+}
+
+.hero-stage { position: relative; margin-top: 56px; perspective: 1400px; }
+.hero-stage .window {
+  width: min(1040px, 100%); margin-inline: auto;
+  transform-origin: 50% 0%;
+  transform: rotateX(calc((1 - var(--flat, 1)) * 22deg)) scale(calc(0.92 + var(--flat, 1) * 0.08));
+}
+
+/* The story: a sticky stage; scrolling is time. */
+.story { position: relative; z-index: 1; margin-top: 120px; }
+.stage {
+  position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; height: 100svh;
+  display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); align-items: center; gap: 48px;
+}
+.chapters { position: relative; min-height: 320px; }
+.chapter { transition: opacity 260ms var(--ease), transform 260ms var(--ease); }
+.js .chapter { position: absolute; inset: 0 0 auto 0; opacity: 0; transform: translateY(18px); pointer-events: none; }
+.js .chapter.on { opacity: 1; transform: none; pointer-events: auto; }
+.chapter .n { font: 500 13px/1 var(--font-mono); color: var(--teal); letter-spacing: 0.08em; text-transform: uppercase; }
+.chapter h2 { margin: 14px 0 12px; font-weight: 500; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.08; letter-spacing: -0.025em; text-wrap: balance; }
+.chapter p { margin: 0; color: var(--muted); max-width: 40ch; }
+.chapter .datum { margin-top: 18px; display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font: 400 13px/1.2 var(--font-mono); color: var(--ink); background: var(--sheet); }
+.chapter .datum span { margin-left: 2px; color: var(--muted); white-space: nowrap; }
+.chapter .datum sub { font-size: 0.75em; line-height: 0; }
+
+.rail { position: absolute; left: 0; right: 0; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.rail button {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font: 500 12px/1 var(--font-mono); color: var(--muted);
+  padding: 8px 10px 11px; border-radius: 999px; position: relative;
+}
+.rail button::before, .rail button::after { content: ""; position: absolute; left: 10px; bottom: 3px; height: 2px; }
+.rail button::before { right: 10px; background: var(--line); }
+.rail button::after { width: calc((100% - 20px) * var(--p, 0)); background: var(--teal); }
+.rail button.on { color: var(--ink); }
+.track { height: calc(var(--chapters, 5) * 240vh); }
+html:not(.js) .stage { position: static; height: auto; padding-block: 40px; }
+html:not(.js) .track, html:not(.js) .rail { display: none; }
+
+@media (max-width: 860px) {
+  .stage { grid-template-columns: 1fr; align-content: center; gap: 24px; }
+  .stage .window { order: -1; }
+  .chapters { min-height: 240px; }
+  .rail { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .track { height: calc(var(--chapters, 5) * 160vh); }
+}
+
+/* Plain sections after the story */
+section.plain { position: relative; z-index: 1; padding-block: 110px; }
+.section-head { display: grid; gap: 12px; margin-bottom: 40px; }
+.section-head h2 { margin: 0; font-weight: 500; font-size: clamp(30px, 4vw, 48px); letter-spacing: -0.03em; line-height: 1.05; text-wrap: balance; }
+.section-head p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+.traits { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px; }
+.trait h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.trait p { margin: 0; color: var(--muted); font-size: 16px; }
+.trait .k { display: block; margin-bottom: 14px; font: 500 12px/1 var(--font-mono); color: var(--teal); letter-spacing: 0.06em; text-transform: uppercase; }
+
+.downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 24px; }
+.dl { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+.dl h3 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.dl .req { margin: 0; font: 400 13px/1.5 var(--font-mono); color: var(--muted); }
+.dl .file { margin: 0; font: 400 13px/1.4 var(--font-mono); overflow-wrap: anywhere; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.dl .file span + span:not(:empty)::before { content: " · "; color: var(--muted); }
+.dl ol { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; font-size: 16px; }
+.dl ol li::marker { font-family: var(--font-mono); color: var(--teal); }
+.dl .note { margin: 0; font-size: 14px; color: var(--muted); }
+.update { margin-top: 28px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; padding: 24px 28px; border-radius: 14px; background: var(--teal-soft); }
+.update .glyph { width: 40px; height: 40px; border-radius: 50%; background: var(--sheet); display: grid; place-items: center; color: var(--teal); }
+.update h3 { margin: 0 0 6px; font-size: 18px; }
+.update p { margin: 0; font-size: 16px; max-width: 70ch; }
+
+footer { position: relative; z-index: 1; border-top: 1px solid var(--line); padding-block: 40px 56px; padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; }
+footer .wrap { display: grid; gap: 14px; }
+footer p { margin: 0; max-width: 72ch; }
+footer a { color: inherit; }
+.foot-mark { height: 18px; width: auto; aspect-ratio: 2464 / 399; color: var(--ink); }
+.disclaimer { display: grid; gap: 8px; margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; }
+.disclaimer h2 { margin: 0; font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-stage .window, .honeycomb, .mol { transform: none !important; }
+  .chapter, .screen img, .btn { transition: none; }
+}

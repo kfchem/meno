@@ -6,7 +6,6 @@ import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import {
-  KEY_LIGHT_FROM,
   LOOK_3D_FIELDS,
   LOOK_3D_PRESETS,
   look3dPreset,
@@ -26,6 +25,7 @@ import {
 } from "../../../lib/chem/style3d";
 import type { Turn3D } from "../Workspace/store/types";
 import Molecule3DView from "../Workspace/components/Molecule3DView";
+import KeyLight3D from "../Workspace/components/KeyLight3D";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import HideHydrogensAsk from "./HideHydrogensAsk";
 import { SAMPLE_3D } from "./sample3d";
@@ -372,7 +372,7 @@ function Preview({ style, look, onDouble }: { style: Style3D; look: Role3D; onDo
   return (
     <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }} onDoubleClick={onDouble}>
       <ambientLight intensity={style.ambientLight} />
-      <directionalLight position={KEY_LIGHT_FROM as [number, number, number]} intensity={style.keyLight} />
+      <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       <Framing style={style} look={look} />
       <Turnable style={style} look={look} />
     </Canvas>

@@ -9,7 +9,7 @@ import { readClipboard } from "../../../../lib/clipboard";
 import { rgbaOfDib } from "../../../../lib/binary/dib";
 import { withDpi } from "../../../../lib/binary/png";
 import { holdPicture, pictureBytes } from "../../../../lib/picture/held";
-import type { PictureMedia } from "../../../../lib/picture/image";
+import { isFilm, type PictureMedia } from "../../../../lib/picture/image";
 import type { PictureItem, PictureToAdd } from "../store/types";
 
 /** An image's bytes decoded as the window shows them. */
@@ -43,10 +43,10 @@ async function pngOf(rgba: Uint8ClampedArray, width: number, height: number, dpi
   return dpi ? withDpi(png, dpi) : png;
 }
 
-/** A picture as a PNG, for other programs: as it is, a PNG; a JPEG drawn again as one. */
+/** A picture as a PNG, for other programs: as it is, a PNG; a JPEG drawn again as one; a film, none. */
 export async function picturePng(p: Pick<PictureItem, "sha256" | "media">): Promise<Uint8Array | null> {
   const bytes = pictureBytes(p.sha256);
-  if (!bytes) return null;
+  if (!bytes || isFilm(p.media)) return null;
   if (p.media === "image/png") return bytes;
   const bitmap = await decoded(bytes, p.media);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -55,10 +55,13 @@ export async function picturePng(p: Pick<PictureItem, "sha256" | "media">): Prom
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
 }
 
-/** A picture on the clipboard, as a PNG: a screenshot, say - on Windows, a bitmap (CF_DIB) made one; none, where there is none. */
+/** A picture on the clipboard: a PNG - a screenshot, say - or a JPEG as a browser copies a photograph, as they are; on Windows, a bitmap (CF_DIB) made a PNG; none, where there is none. */
 export async function pictureOnClipboard(): Promise<Uint8Array | null> {
   const png = await readClipboard(["png"]).catch(() => null);
   if (png?.bytes?.length) return png.bytes;
+  // (a photograph as a browser copies it, kept as it is)
+  const jpeg = await readClipboard(["jpeg"]).catch(() => null);
+  if (jpeg?.bytes?.length) return jpeg.bytes;
   const dib = await readClipboard(["dib"]).catch(() => null);
   const read = dib?.bytes ? rgbaOfDib(dib.bytes) : null;
   return read ? pngOf(read.rgba, read.width, read.height, read.dpi) : null;

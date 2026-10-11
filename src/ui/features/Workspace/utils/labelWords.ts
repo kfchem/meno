@@ -22,11 +22,11 @@ export class LabelWords extends WordsEditor {
     this.typed = text;
   }
 
-  edit(e: Edit, sel?: Sel): void {
+  edit(e: Edit, sel?: Sel, typed = true): void {
     const insert = e.insert.replace(/[\r\n]+/g, "").normalize("NFKC");
     this.typed = applyEdit(this.typed.length === this.text.length ? this.typed : this.text, { ...e, insert });
     // (a new line taken out, or letters made ordinary: the caret after what is put in)
-    super.edit({ ...e, insert }, insert === e.insert ? sel : undefined);
+    super.edit({ ...e, insert }, insert === e.insert ? sel : undefined, typed);
     this.read();
   }
 

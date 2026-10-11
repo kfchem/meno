@@ -129,6 +129,14 @@ export function createUiSlice(
       );
     },
 
+    colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => {
+      doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? { coalesceKey: `colour:${which}:${gesture}` } : undefined);
+    },
+
+    fillRings: (keys: readonly string[], color: string | null, gesture?: string) => {
+      doc.edit("fill ring", (d) => ops.fillRings(d, keys, color), gesture ? { coalesceKey: `fill:${gesture}` } : undefined);
+    },
+
     setRingEnabled: (key: string, v: boolean) => {
       doc.edit("aromatic circle", (d) => ops.setRingEnabled(d, key, v));
     },

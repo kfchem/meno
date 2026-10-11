@@ -16,6 +16,7 @@ import {
   ScissorsIcon,
   SparklesIcon,
   StopIcon,
+  SwatchIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, ReactNode, SVGProps } from "react";
@@ -53,6 +54,7 @@ export const MENU_ICONS = {
   edit: hero(PencilIcon),
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
+  colour: hero(SwatchIcon),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>
@@ -64,6 +66,19 @@ export const MENU_ICONS = {
     <>
       <circle cx="10" cy="10" r="6.6" />
       <path d="M6.6 10 H13.4" />
+    </>,
+  ),
+  // (a curved arrow, its head full - a pair of electrons - or half, a fishhook's)
+  pushArrow: own(
+    <>
+      <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
+      <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+    </>,
+  ),
+  fishhook: own(
+    <>
+      <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
+      <path d="M17.6 8.6 L16.1 13.4" />
     </>,
   ),
   // (everything inside a dashed frame)

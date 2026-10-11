@@ -5,7 +5,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver } from "../../utils/selection";
 import { schemeAmong } from "../../utils/copyPaste";
 import { relinked } from "../../utils/drawnLink";
@@ -145,7 +145,8 @@ export const createModelSlice = (
     const over = turnedOver(model, sel.atoms, axis);
     // (marks put by hand turned over with them)
     const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
-    doc.edit("turn over", (d) => ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts }));
+    // (and the electron-pushing arrows on it, each bent to its other side)
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
@@ -153,8 +154,8 @@ export const createModelSlice = (
   },
 
   deleteSelection: () => {
-    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, steps, model, arrows, pluses, captions } = get();
-    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size) return;
+    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, steps, model, arrows, pluses, captions } = get();
+    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size) return;
     // the arrows and pluses among it go with it, as with a cut; the
     // molecules in 3D selected, and a workflow's sets and steps, in the same
     // step - but not a step running, which is asked about on its own
@@ -164,9 +165,12 @@ export const createModelSlice = (
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
       removeParts(
-        ops.removeTexts(
-          ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), new Set([...ids(among.captions), ...selCaptions])), sel3d), selPictures),
-          selTexts,
+        ops.removePdfs(
+          ops.removeTexts(
+            ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), new Set([...ids(among.captions), ...selCaptions])), sel3d), selPictures),
+            selTexts,
+          ),
+          selPdfs,
         ),
         selFlow.sets,
         idle,
@@ -386,7 +390,12 @@ export const createModelSlice = (
     // (pictures pasted only where they are held: a copy carries them by what they are known by)
     const pictures = (next.pictures ?? []).filter((p) => pictureBytes(p.sha256));
     const words = next.captions ?? [];
-    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length) return;
+    // (PDFs by their SHA-256, as Meno's cache holds them; texts' sheets whole)
+    const pdfs = next.pdfs ?? [];
+    const sheets = (next.sheets ?? []).filter((t) => t.at);
+    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length) return;
+    const startPdf = doc.getState().nextPdfId ?? 1;
+    let sheetIds: number[] = [];
     const start = doc.getState().nextId;
     const startCaption = doc.getState().nextCaptionId ?? 1;
     const start3d = doc.getState().nextMolecule3dId ?? 1;
@@ -399,7 +408,10 @@ export const createModelSlice = (
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit("paste", (d) => {
       const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
-      const drawn = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
+      const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
+      const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
+      const { doc: drawn, ids: sheetsAdded } = ops.addSheets(withPdfs, sheets.map(({ id: _, ...t }) => t));
+      sheetIds = sheetsAdded;
       if (!flow.sets.length && !flow.steps.length) return drawn;
       const added = appendParts(drawn, flow);
       pastedFlow = added;
@@ -420,6 +432,8 @@ export const createModelSlice = (
       sel: added(start, doc.getState().model),
       sel3d: new Set(ids),
       selPictures: new Set(pictures.map((_, i) => startPicture + i)),
+      selPdfs: new Set(pdfs.map((_, i) => startPdf + i)),
+      selTexts: new Set(sheetIds),
       // (the words pasted selected too: alone, they are all that is)
       selCaptions: new Set(words.map((_, i) => startCaption + i)),
       selFlow: { sets: new Set(pastedFlow.sets), steps: new Set(pastedFlow.steps) },
@@ -457,6 +471,25 @@ export const createModelSlice = (
     const id = doc.getState().nextArrowId;
     doc.edit("add arrow", (d) => ops.addArrow(d, x, y, angle, length));
     return id;
+  },
+
+  setHoveredPush: (id: number | null) => set({ hoveredPush: id }),
+
+  setPushDraw: (draw: EditorState["pushDraw"]) => set({ pushDraw: draw }),
+
+  addPush: (from: PushEnd, to: PushEnd, half: boolean) => {
+    const id = doc.getState().nextPushId ?? 1;
+    doc.edit("add electron arrow", (d) => ops.addPush(d, from, to, half));
+    return id;
+  },
+
+  updatePush: (id: number, patch: Parameters<EditorState["updatePush"]>[1], gesture?: string) => {
+    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? { coalesceKey: `push:${id}:${gesture}` } : undefined);
+  },
+
+  removePush: (id: number) => {
+    if (doc.edit("delete electron arrow", (d) => ops.removePush(d, id)))
+      set((prev: EditorState) => (prev.hoveredPush === id ? { ...prev, hoveredPush: null } : prev));
   },
 
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {

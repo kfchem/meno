@@ -71,6 +71,23 @@ describe("a calculation's results, as a plugin gives them", () => {
   });
 });
 
+describe("a surface coloured by another grid", () => {
+  const grid = { origin: [0, 0, 0], axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], counts: [2, 2, 2], values: "A".repeat(4 * Math.ceil(32 / 3)) };
+  const list = (colour: unknown) => [{ id: "nci", on: "list", group: "NCI", label: "NCI", columns: [{ label: "Surface" }], rows: [{ cells: ["x"], surface: grid, colour }] }];
+  it("is read with the grid or promise that colours it, the values its scale runs between, and what they are", () => {
+    const [r] = readResults(list({ by: grid, from: -0.035, to: 0.02, label: "sign(λ2)ρ (a.u.)" }), 1, 1);
+    expect(r.on === "list" && r.rows[0].colour).toMatchObject({ from: -0.035, to: 0.02, label: "sign(λ2)ρ (a.u.)" });
+    const [p] = readResults(list({ by: { ask: "grid:1" }, from: -1, to: 1 }), 1, 1);
+    expect(p.on === "list" && p.rows[0].colour).toEqual({ by: { ask: "grid:1" }, from: -1, to: 1 });
+  });
+  it("is left uncoloured where what colours it reads as nothing: no grid, a scale running nowhere", () => {
+    for (const bad of [{ from: 0, to: 1 }, { by: grid, from: 1, to: 1 }, { by: grid, from: 0 }, "red"]) {
+      const [r] = readResults(list(bad), 1, 1);
+      expect(r.on === "list" && r.rows[0].colour).toBeUndefined();
+    }
+  });
+});
+
 describe("a result's values, as Meno writes them", () => {
   it("in the quantity's unit, to its decimals, with a true minus", () => {
     expect(valueText(-382.0550901, { quantity: "energy" })).toBe("−382.055090 Eh");
