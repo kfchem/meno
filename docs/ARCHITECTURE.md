@@ -933,6 +933,15 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   cut out of it (`components/figureTie.ts`), and an atom whose place is
   under the pointer there is lit in the drawing (`figureLit`, drawn by
   `LinkedHover2D`).
+- **Pictures read as structures** (docs/PDF.md, *A picture read*): a
+  figure that is a picture, drawn by PDFium (`boxPicture`), or a picture
+  on the page, sent to the plugin that fills the role *Structures read
+  from pictures* (`read_picture`, `lib/roles/client.ts`), and its answer
+  read as a figure read is (`lib/figure/picture.ts`) - the same structure,
+  marks and tie, the tie in the picture's own pixels where it came from
+  no PDF (`FigureSpot` without a page). The plugin's trained model is
+  fetched by Meno as the plugin is set up (`plugfiles.rs`, its manifest's
+  `downloads`), into its environment's folder, which its worker is given.
 
 ### Pictures
 
@@ -983,6 +992,7 @@ the frames standing where renders will put what they make
 | --- | --- | --- |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
+| `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
 | `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |

@@ -912,7 +912,7 @@ Two kinds of figure, read two ways:
 - **A figure that is a picture** - a scanned page, a screenshot, a bitmap
   a journal printed - is read by a model that has learnt structures from
   pictures, as a plugin, its weights fetched with the chemist's consent
-  (part B, planned).
+  (part B, below).
 
 ### Decided by the maintainer (2026-10-11)
 
@@ -930,6 +930,14 @@ Two kinds of figure, read two ways:
 4. **Structures first.** A reaction scheme's arrows, plus signs,
    conditions and compound numbers, and letters drawn as outlines, come
    after.
+5. **Two plugins read pictures, each standing alone** - MolScribe and
+   MolNexTR - and the chemist chooses which, as any role's plugin is
+   chosen. Meno does not read a picture with both to see whether they
+   agree.
+6. **What a plugin is unsure of is marked without a number**: unclear in
+   the picture, no more.
+7. **A figure in a PDF that is a picture is read by the chosen plugin**
+   from the same *Read as structure*, without being asked again.
 
 ### A figure read (part A, built 2026-10-11)
 
@@ -1009,7 +1017,75 @@ Not yet, and where it comes:
   shapes, matched against the shapes of letters (a part of its own).
 - **Reaction schemes**: arrows, plus signs, conditions and compound
   numbers, read as Meno's own arrows and words (a part of its own).
-- **A figure that is a picture**: part B, a plugin.
+### A picture read (part B, built 2026-10-11)
+
+*Read as structure* reads, by the plugin chosen for the role *Structures
+read from pictures* (Settings, *Chemistry*): a figure in a box of a PDF
+that is a picture - Meno finds no lines in it - and any picture on the
+page that is not a film. The first time, the plugin is set up as any is:
+Meno asks first, saying what it downloads, how large, and from where.
+
+**The plugins** - folders of their own, neither knowing of the other;
+their code is installed from their makers' repositories, pinned to a
+commit by the archive's hash, and their trained models fetched by Meno:
+
+| | MolScribe | MolNexTR |
+| --- | --- | --- |
+| Code | MIT (github.com/thomas0809/MolScribe, 7296a30) | Apache-2.0 (github.com/CYF2000127/MolNexTR, 6f6502b) |
+| Trained model | MIT (huggingface.co/yujieq/MolScribe), 1.13 GB | Apache-2.0 (huggingface.co/datasets/CYF200127/MolNexTR), 1.13 GB |
+| Packages | 53, about 290 MB on a Mac, 310 MB on Windows | 54, about the same |
+| Unsure below | 0.75 of its confidence | 0.45 (its confidence runs lower) |
+
+About 1.5 GB to download in all, about 2.2 GB kept; for macOS and Windows
+(their locks leave out torch's GPU libraries for Linux).
+
+**How a picture is read** (the plugins' workers; `lib/figure/picture.ts`):
+- the picture goes to the worker as a PNG or a JPEG - a PDF's box drawn by
+  PDFium at 200 dpi, a picture on the page as it is shown - and the model
+  reads its atoms and bonds;
+- **where its atoms lie**: the models give them across the picture as
+  they cropped it, or across the structure itself, each way - they learnt
+  from both - so the worker stretches and moves them, each way, until the
+  bonds lie on the picture's lines and the atoms on what is drawn;
+- **wedges**: the models say only which end of a wedge or a hash lies
+  nearer - a wedge narrow at one end is a hash narrow at the other - so
+  the worker looks at the picture for which end its ink draws narrow;
+  where it cannot tell, Meno draws it narrow at the end that can be a
+  stereocentre;
+- **atoms**: an element as the model reads it, with its charge (its
+  notation's hydrogens and stereo marks are not a label); a group's name
+  read as a typed label is; an isotope, seldom drawn, is unsure;
+- the rest as a figure's lines are: the structure in Meno's units, beside
+  the PDF or the picture, selected, as one step.
+
+**Tied to the picture**: an atom read from a PDF's box keeps its place on
+the page, as part A's do; one read from a picture on the page keeps its
+place in the picture, in its pixels (`seen` without a page), ringed there
+as it is in the drawing, and lit from there.
+
+**Marked as unsure** (the same dashed ring as part A's, going once the
+part is changed): an atom or a bond the model is less sure of than its
+plugin's mark says, and an isotope. A mark is a hint, not a check: on the
+test pictures the misreads were read with confidence (a silicon read as a
+carbon), and the marks fell on few that were right.
+
+**How well**, on pictures made for it - twenty structures drawn by RDKit
+(stereocentres, wedges and hashes, double and triple bonds, charges, an
+ion, a silyl ether, an alkyne, cholesterol), each clean and made poor
+(halved, blurred, saved as a JPEG at 55): MolScribe read 20 of 20 clean
+and 19 of 20 poor right, stereo and all; MolNexTR 18 and 18. A picture
+takes about 0.3 s on a Mac's processor (an M4), after a second or two to
+load the model; the processor is as quick as the Mac's GPU here, and is
+the same on Windows.
+
+**Worked round in the workers**, as their makers' code is: a pool of
+sixteen processes started for each picture (one process instead);
+MolNexTR's one-process path missing an import, and its printing on the
+line Meno reads answers from; MolNexTR's pin of a tokenizer built for no
+Python after 3.11, which reading never loads (left out of its lock).
+
+Not yet: a picture with several structures, or a scheme, read as more
+than one structure; Linux.
 
 ## In order
 
@@ -1045,7 +1121,7 @@ Each step is a pull request of its own, checked in the built app on the
 Mac (and on Windows for steps 0, 1 and 5). Then stage 5 (*Stage 5*,
 above): the paths and letters a PDF's vector figure is made of read
 straight from PDFium (part A, built), and a picture read as a structure by
-a model, as a plugin with consent for its weights (part B, planned), each
+a model, as a plugin with consent for its weights (part B, built), each
 drawn beside its figure and tied to it.
 
 ## Not yet
