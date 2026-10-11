@@ -887,6 +887,8 @@ pub fn run() {
             clipboard::clipboard_write,
             clipboard::clipboard_read,
             clipboard::clipboard_takes,
+            clipboard::clipboard_file_names,
+            clipboard::clipboard_file,
             clipboard::drag_read,
             // drags the page cannot read, taken from the webview (Windows)
             drop_catch,

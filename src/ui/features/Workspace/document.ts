@@ -17,7 +17,7 @@ import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Mo
 import { ringKeyOf } from "./utils/rings";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
-import { printedSize } from "../../../lib/picture/image";
+import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
 import { newTextName } from "./utils/texts";
@@ -1067,9 +1067,10 @@ export function removePlus(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   return pluses.length === (doc.pluses ?? []).length ? doc : { ...doc, pluses };
 }
 
-/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; and texts' sheets, by their top left. */
+/** Where arrows, pluses and words go, by id - and pictures, and how they are turned; texts' sheets, by their top left; PDFs, by where they lie. */
 export type MarkPlaces = {
   pictures?: { id: number; x: number; y: number; turn?: number }[];
+  pdfs?: { id: number; x: number; y: number }[];
   texts?: { id: number; x: number; y: number }[];
   arrows?: { id: number; x: number; y: number }[];
   pluses?: { id: number; x: number; y: number }[];
@@ -1090,6 +1091,11 @@ export type MarksAt = { atoms: { id: number; chargeAt?: MarkAt; stereoAt?: MarkA
 export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): WorkspaceDocument {
   if (places?.markAts) return placeMarks(withMarksAt(doc, places.markAts), { ...places, markAts: undefined });
   if (places?.molecules3d?.length) return placeMarks(moveMolecules3d(doc, places.molecules3d), { ...places, molecules3d: [] });
+  if (places?.pdfs?.length) {
+    const at = new Map(places.pdfs.map((p) => [p.id, p]));
+    const placed = { ...doc, pdfs: (doc.pdfs ?? []).map((p) => (at.has(p.id) ? { ...p, x: at.get(p.id)!.x, y: at.get(p.id)!.y } : p)) };
+    return placeMarks(placed, { ...places, pdfs: [] });
+  }
   if (places?.texts?.length) {
     const at = new Map(places.texts.map((t) => [t.id, t]));
     const placed = { ...doc, texts: (doc.texts ?? []).map((t) => (at.has(t.id) && t.at ? { ...t, at: { x: at.get(t.id)!.x, y: at.get(t.id)!.y } } : t)) };
@@ -1284,6 +1290,12 @@ export function placePdfPage(doc: WorkspaceDocument, id: number, page: number, x
   return { ...doc, pdfs: doc.pdfs!.map((p) => (p.id === id ? next : p)) };
 }
 
+/** `doc` without the PDFs `ids`. */
+export function removePdfs(doc: WorkspaceDocument, ids: ReadonlySet<number>): WorkspaceDocument {
+  if (!ids.size || !(doc.pdfs ?? []).some((p) => ids.has(p.id))) return doc;
+  return { ...doc, pdfs: doc.pdfs!.filter((p) => !ids.has(p.id)) };
+}
+
 /** `doc` without a PDF. */
 /** Where a PDF is read in the column, as far as it can be: its pages there, at a size between a quarter and eight times the column's width. */
 export function readingOf(r: { at: number; zoom: number }, pages: number): NonNullable<PdfItem["reading"]> {
@@ -1316,7 +1328,7 @@ export function picturesInRow(held: readonly PictureToAdd[], at: { x: number; y:
   let x = at.x;
   for (const h of held) {
     if (typeof h?.name !== "string" || typeof h.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(h.sha256)) continue;
-    if ((h.media !== "image/png" && h.media !== "image/jpeg") || !(h.width > 0) || !(h.height > 0)) continue;
+    if (!PICTURE_MEDIA.includes(h.media) || !(h.width > 0) || !(h.height > 0)) continue;
     const size = printedSize(h);
     const w = size.w * POINT;
     if (out.length) x += w / 2;
@@ -1528,6 +1540,23 @@ export function setTextOf(doc: WorkspaceDocument, id: number, of: TextOf): Works
   const texts = doc.texts!.slice();
   texts[at] = { ...texts[at], of };
   return { ...doc, texts };
+}
+
+/**
+ * Texts' sheets pasted: each a text of its own, even where the workspace
+ * holds the same, its sheet where it says, not read in the column - its
+ * id, as it is added, among `ids`.
+ */
+export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<WorkspaceText, "id">[]): { doc: WorkspaceDocument; ids: number[] } {
+  const held = (doc.texts ?? []).slice();
+  let next = doc.nextTextId ?? Math.max(0, ...held.map((t) => t.id)) + 1;
+  const ids: number[] = [];
+  for (const t of sheets) {
+    if (!t.at) continue;
+    held.push({ id: next, name: t.name || newTextName(held), text: t.text, at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    ids.push(next++);
+  }
+  return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };
 }
 
 /** The texts `ids` taken out. */

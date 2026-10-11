@@ -5,11 +5,22 @@
  * where it says so. Nothing else is read of it here: the window decodes it.
  */
 
-/** The kinds of image Meno puts on the page. */
-export type PictureMedia = "image/png" | "image/jpeg";
+/** The kinds of picture Meno puts on the page: images, and films - MP4s, a render's (docs/RENDER.md). */
+export type PictureMedia = "image/png" | "image/jpeg" | "video/mp4";
+
+/** The kinds of picture a workspace keeps. */
+export const PICTURE_MEDIA: readonly PictureMedia[] = ["image/png", "image/jpeg", "video/mp4"];
+
+/** Whether a picture is a film. */
+export const isFilm = (media: PictureMedia) => media === "video/mp4";
+
+/** Whether bytes are an MP4's: an ISO base media file, its first box its file type ("ftyp"). */
+export function isMp4(bytes: Uint8Array): boolean {
+  return bytes.length >= 12 && String.fromCharCode(...bytes.subarray(4, 8)) === "ftyp";
+}
 
 /** An image file's kind, its size in pixels, and its resolution where it gives one. */
-export type ImageInfo = { media: PictureMedia; width: number; height: number; dpi?: number };
+export type ImageInfo = { media: Exclude<PictureMedia, "video/mp4">; width: number; height: number; dpi?: number };
 
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 

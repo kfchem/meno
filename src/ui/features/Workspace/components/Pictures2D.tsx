@@ -2,7 +2,9 @@
  * Pictures on the page (docs/PDF.md, *A picture*): each drawn as it is,
  * turned and as large as it is made, under the drawing and over the PDFs,
  * in the order they were put there - a light grey sheet until it has been
- * decoded - and lit round while the pointer is on it.
+ * decoded - and lit round while the pointer is on it. A film (a render's,
+ * docs/RENDER.md) plays as it lies there, over and over, without sound,
+ * until it is paused from its menu.
  *
  * A press on one is as on empty space: a drag moves the view. Held still a
  * moment, it is taken hold of - lit from the pointer out, as a structure
@@ -19,6 +21,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureBytes } from "../../../../lib/picture/held";
+import { isFilm } from "../../../../lib/picture/image";
+import { filmTexture, textures, type Shared } from "./pictureTextures";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { setCursor } from "../../../theme/cursors";
@@ -49,21 +53,20 @@ const UNREAD = "#eef0f2";
 
 type Pt = { x: number; y: number };
 
-/** Each picture's texture, decoded once and shared, by its SHA-256: let go once none draws it. */
-const textures = new Map<string, { texture: THREE.Texture | null; users: number; waiting: Set<() => void> }>();
-
-/** A picture's texture: none until it is decoded - `came` called then - or where its bytes are held nowhere. */
-function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRenderer): THREE.Texture | null {
+/** A picture's texture: none until it is decoded - `came` called then - or where its bytes are held nowhere. A film's draws a frame of the page for each of its own (`invalidate`). */
+function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRenderer, invalidate: () => void): THREE.Texture | null {
   const [, setCame] = useState(0);
   const key = p.sha256;
   useEffect(() => {
     let entry = textures.get(key);
+    let release: (() => void) | undefined;
     if (!entry) {
-      const made: { texture: THREE.Texture | null; users: number; waiting: Set<() => void> } = { texture: null, users: 0, waiting: new Set() };
+      const made: Shared = { texture: null, users: 0, waiting: new Set() };
       textures.set(key, made);
       entry = made;
       const bytes = pictureBytes(key);
-      if (bytes) {
+      if (bytes && isFilm(p.media)) release = filmTexture(made, bytes);
+      else if (bytes) {
         createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: p.media }), { imageOrientation: "flipY" })
           .then((bitmap) => {
             const t = new THREE.Texture(bitmap);
@@ -81,22 +84,26 @@ function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRen
       }
     }
     const e = entry;
+    if (release) (e as Shared & { release?: () => void }).release = release;
     e.users++;
     const tell = () => setCame((n) => n + 1);
     e.waiting.add(tell);
+    e.drawn?.add(invalidate);
     return () => {
       e.waiting.delete(tell);
+      e.drawn?.delete(invalidate);
       if (--e.users > 0) return;
       // (gone a moment later, so that one moved to another place in the list is not decoded again)
       window.setTimeout(() => {
         if (e.users > 0 || textures.get(key) !== e) return;
         textures.delete(key);
-        const image = e.texture?.image as ImageBitmap | undefined;
+        (e as Shared & { release?: () => void }).release?.();
+        const image = e.video ? undefined : (e.texture?.image as ImageBitmap | undefined);
         e.texture?.dispose();
         image?.close?.();
       }, 1000);
     };
-  }, [key, p.media, gl]);
+  }, [key, p.media, gl, invalidate]);
   return textures.get(key)?.texture ?? null;
 }
 
@@ -168,7 +175,7 @@ function Picture({
 }) {
   const store = useEditorStore();
   const { camera, gl, invalidate } = useThree();
-  const texture = useTexture(p, gl);
+  const texture = useTexture(p, gl, invalidate);
   const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
   const px = 1 / zoom;
   // the light round it while the pointer is on it, coming and going
@@ -292,7 +299,8 @@ function Picture({
       >
         <planeGeometry args={[1, 1]} />
         {/* (a material of its own once decoded: one made without a picture is drawn without one) */}
-        {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
+        {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
+        {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
       {selected && <Frame p={p} px={px} toWorld={toWorld} />}

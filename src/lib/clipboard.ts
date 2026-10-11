@@ -33,7 +33,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
  * beside it, PowerPoint pastes text as a text box in preference to a
  * picture.
  */
-export type Flavor = "meno" | "mol" | "rxn" | "text" | "gvml" | "emf" | "png" | "dib" | "embed" | "object";
+export type Flavor = "meno" | "mol" | "rxn" | "text" | "gvml" | "emf" | "png" | "jpeg" | "dib" | "embed" | "object";
 
 export type ClipItem = { flavor: Flavor; text?: string; bytes?: Uint8Array };
 
@@ -74,6 +74,17 @@ export async function readClipboard(flavors: Flavor[]): Promise<ClipItem | null>
     return null;
   }
   return fromWire(await invoke<Wire | null>("clipboard_read", { flavors }));
+}
+
+/**
+ * The files on the clipboard, copied in the Finder or Explorer, each read
+ * as a file of its name - only those the clipboard holds: the app reads
+ * them, the page names no path. None, where it holds none.
+ */
+export async function clipboardFiles(): Promise<File[]> {
+  if (!isTauri()) return [];
+  const names = await invoke<string[]>("clipboard_file_names").catch(() => [] as string[]);
+  return Promise.all(names.map(async (name, index) => new File([new Uint8Array(await invoke<ArrayBuffer>("clipboard_file", { index }))], name)));
 }
 
 /**

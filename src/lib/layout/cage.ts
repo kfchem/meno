@@ -1052,6 +1052,65 @@ const normalise = (a: Vec3): Vec3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
+/**
+ * The cage within a ring system that is not one as a whole: its rings
+ * bridged to one another - each sharing three atoms or more with another,
+ * as a cage's do - with rings fused to them on a side (ibogaine's
+ * isoquinuclidine, fused to its indole by a seven-membered ring;
+ * tetrodotoxin's cage, its guanidine ring fused to it). The largest such
+ * set of rings, where it is a cage on its own; else none.
+ */
+export function cageCore(mol: Molecule, sys: RingSystem): RingSystem | null {
+  const rings = sys.rings;
+  const shares3 = (i: number, j: number) => mol.rings[i].filter((a) => mol.rings[j].includes(a)).length >= 3;
+  const seen = new Set<number>();
+  let best: number[] = [];
+  for (const start of rings) {
+    if (seen.has(start)) continue;
+    const group = [start];
+    seen.add(start);
+    for (let k = 0; k < group.length; k++)
+      for (const j of rings) {
+        if (seen.has(j) || !shares3(group[k], j)) continue;
+        seen.add(j);
+        group.push(j);
+      }
+    if (group.length > best.length) best = group;
+  }
+  if (best.length < 2 || best.length === rings.length) return null;
+  const core: RingSystem = { rings: best, atoms: [...new Set(best.flatMap((i) => mol.rings[i]))] };
+  return isCage(mol, core) ? core : null;
+}
+
+/**
+ * Whether a solid drawn in perspective has each of its stereocentres - those
+ * with three bonds or more within `atoms` - as given, read from where its
+ * atoms are on the page and how near the viewer each is. A cage's own shape
+ * fixes its centres; rings fused round a middle do not - a ring fusion is
+ * cis or trans with the same bonds between the same atoms - so a solid found
+ * from how far apart the bonds put its atoms may have one the wrong way.
+ */
+export function keepsConfigurations(mol: Molecule, atoms: readonly number[], pos: Map<number, Point>, depth: Map<number, number>): boolean {
+  const inside = new Set(atoms);
+  const at = (a: number): Vec3 => [pos.get(a)!.x, pos.get(a)!.y, depth.get(a) ?? 0];
+  for (const c of atoms) {
+    const t = mol.tetra.get(c);
+    if (!t) continue;
+    const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && inside.has(n));
+    if (known.length < 3) continue;
+    // (the volume of three of its four, as the volume of the first three says
+    // it: the same, or the other way, by which one is left out)
+    const three = known.slice(0, 3);
+    const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
+    const p = at(c);
+    const v = three.map(([n]) => subV(at(n), p));
+    const d = dotV(v[0], crossV(v[1], v[2]));
+    if (Math.abs(d) < 1e-6) return false;
+    if (Math.sign(d) !== t.volume * (left % 2 === 1 ? 1 : -1)) return false;
+  }
+  return true;
+}
+
 /** How badly a flat layout of a ring system reads, by the same measure. */
 export function flatCost(
   mol: Molecule,

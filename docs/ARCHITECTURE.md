@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
   utils/atomUtils         element table (radii, colours)
@@ -92,6 +93,10 @@ src-tauri/
   resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
                           Meno names none of them (docs/PLUGINS.md)
+site/                     the website, kfchem.github.io/meno: plain HTML, CSS and JS, no build. The
+                          Pages workflow (.github/workflows/pages.yml) writes the latest release
+                          into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
+                          wordmark; frames/ holds the app's pictures its story steps through
 ```
 
 ## Tabs and views
@@ -736,7 +741,18 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   the value as often as it changes, one at a time, the last value asked
   for winning. Placed about the shown frame's centre, as the atoms are; in
   the 3D style's two colours (`surfacePlus`, `surfaceMinus`; at first a
-  muted blue and orange), seen through, fading in and out. The value is
+  muted blue and orange), seen through, fading in and out. Both phases
+  are one mesh, each point coloured by its phase, its triangles drawn in
+  one go from the farthest to the nearest as seen (`utils/backToFront.ts`,
+  a counting sort by depth), put in order again only as the molecule turns:
+  drawn as two meshes, the positive one was laid over the other wherever
+  they crossed on the screen, whichever was in front. The atoms are drawn
+  before it and keep their depth, so one inside a lobe shows through it.
+  A picture (`render3d`) draws the surface a carried molecule shows - its
+  open list's chosen row's, given (`utils/surfaceMesh.ts` `shownSurface`) -
+  the same way, worked out at once and kept (`surfaces.ts` `surfaceNow`),
+  and keeps room for where it reaches (`pictureSurface`).
+  The value is
   set by a slider under the list (from 0.0001 to 0.5, by its logarithm),
   kept in `lists3d` as `iso`.
 
@@ -904,11 +920,31 @@ window decodes; nothing of it goes through Rust but the clipboard.
   (`createImageBitmap`), and makes a PNG of a JPEG or of a Windows bitmap
   read off the clipboard (`lib/binary/dib` `rgbaOfDib`).
 - **Drawn** by `components/Pictures2D.tsx`: a texture each, shared by
-  SHA-256 and let go once nothing draws it, on a plane turned and scaled
-  as the picture is; under the drawing and over the PDFs, each one put
-  there later a step over the one before in depth. Its frame and corner
-  handles, and its hold's light (`components/HeldLight.tsx`, shared with
-  the PDFs), are drawn in its own turned frame.
+  SHA-256 and let go once nothing draws it (`components/pictureTextures`),
+  on a plane turned and scaled as the picture is; under the drawing and
+  over the PDFs, each one put there later a step over the one before in
+  depth. Its frame and corner handles, and its hold's light
+  (`components/HeldLight.tsx`, shared with the PDFs), are drawn in its own
+  turned frame.
+- **A film** (docs/RENDER.md) is a picture whose media is `video/mp4`, held
+  as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
+  element playing it, over and over and muted, its texture a
+  `VideoTexture`, a frame of the canvas drawn for each of the film's
+  (`requestVideoFrameCallback`) - none while it is paused.
+
+### Renders
+
+A render (docs/RENDER.md) is the molecules in 3D asked for, written as a
+glTF 2.0 scene (`lib/scene/gltf.ts`, its shapes `lib/scene/shapes.ts`;
+built from the canvas's own geometry by
+`ui/features/Workspace/render/renderScene.ts`), given to the plugin that
+fills the role *Render* and run as a job (`render/renders.ts`: prepared by
+the plugin, the scene put into the job's folder, looked at each second,
+its `progress` lines read, and what it made read from the job's folder and
+put on the page with `putPicture`). The card asking for one is
+`render/RenderCard.tsx` (Meno's own choices in `render/renderOptions.ts`),
+the frames standing where renders will put what they make
+`render/Renders2D.tsx`, and Save picture or film `render/savePicture.ts`.
 - **Selected** with the rest (`selPictures`): a box or a lasso takes those
   whose middle it holds (`molecules3dIn`), a dragged selection carries
   them (`utils/dragSelection`, `MarkPlaces.pictures`), and the selection's

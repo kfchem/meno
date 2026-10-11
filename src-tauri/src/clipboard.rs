@@ -24,7 +24,7 @@ pub enum Payload<'a> {
 
 /// Kinds that are bytes, not text: pictures, and an object Office holds.
 fn is_binary(flavor: &str) -> bool {
-    matches!(flavor, "gvml" | "png" | "emf" | "dib" | "object")
+    matches!(flavor, "gvml" | "png" | "jpeg" | "emf" | "dib" | "object")
 }
 
 /// The kinds a copy may put on the clipboard (`object` is only ever read).
@@ -47,6 +47,8 @@ fn names(flavor: &str) -> &'static [&'static str] {
             "text" => &["public.utf8-plain-text"],
             "gvml" => &["com.microsoft.Art--GVML-ClipFormat"],
             "png" => &["public.png"],
+            // a photograph, as a browser may copy one (only ever read)
+            "jpeg" => &["public.jpeg"],
             // an object copied in Word or PowerPoint for Mac: its storage, as
             // a compound file (read by the page: src/lib/binary/cfb.ts)
             "object" => &["com.microsoft.Embedded-Object"],
@@ -63,6 +65,7 @@ fn names(flavor: &str) -> &'static [&'static str] {
             "text" => &["CF_UNICODETEXT"],
             "gvml" => &["Art::GVML ClipFormat"],
             "png" => &["PNG"],
+            "jpeg" => &["JFIF"],
             "emf" => &["CF_ENHMETAFILE"],
             "dib" => &["CF_DIB"],
             _ => &[],
@@ -194,6 +197,33 @@ pub enum Board {
     Drag,
 }
 
+/// The files on the clipboard, copied in the Finder or Explorer, in order:
+/// those that are files, not folders.
+fn clipboard_files() -> Vec<std::path::PathBuf> {
+    platform::files().into_iter().filter(|p| p.is_file()).collect()
+}
+
+/// The names of the files on the clipboard - copied in the Finder or
+/// Explorer - in order; none, where it holds none.
+#[tauri::command]
+pub fn clipboard_file_names() -> Vec<String> {
+    clipboard_files()
+        .iter()
+        .map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+        .collect()
+}
+
+/// The bytes of the `index`th file on the clipboard now, as
+/// `clipboard_file_names` named it. Only a file the clipboard holds is read:
+/// the page names no path.
+#[tauri::command]
+pub async fn clipboard_file(index: usize) -> Result<tauri::ipc::Response, String> {
+    let files = clipboard_files();
+    let path = files.get(index).ok_or("that file is no longer on the clipboard")?;
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 /// The first of `flavors` the clipboard holds: its text, or its bytes as base64.
 #[tauri::command]
 pub fn clipboard_read(flavors: Vec<String>) -> Result<Option<ClipItem>, String> {
@@ -240,7 +270,7 @@ fn read_from(board: Board, flavors: &[String]) -> Result<Option<ClipItem>, Strin
 mod platform {
     use super::{Board, Payload};
     use objc2_app_kit::{NSPasteboard, NSPasteboardNameDrag};
-    use objc2_foundation::{NSArray, NSData, NSString};
+    use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 
     pub fn write(entries: &[(&str, Payload)]) -> Result<(), String> {
         let names: Vec<_> = entries.iter().map(|(n, _)| NSString::from_str(n)).collect();
@@ -261,6 +291,26 @@ mod platform {
             }
         }
         Ok(())
+    }
+
+    /// The files on the clipboard, copied in the Finder: each item's file
+    /// URL - a file reference URL, as the Finder gives it, read as its path.
+    pub fn files() -> Vec<std::path::PathBuf> {
+        let pb = NSPasteboard::generalPasteboard();
+        let Some(items) = pb.pasteboardItems() else { return Vec::new() };
+        let kind = NSString::from_str("public.file-url");
+        items
+            .to_vec()
+            .iter()
+            .filter_map(|item| {
+                let written = item.stringForType(&kind)?;
+                let url = NSURL::URLWithString(&written)?;
+                if !url.isFileURL() {
+                    return None;
+                }
+                Some(std::path::PathBuf::from(url.path()?.to_string()))
+            })
+            .collect()
     }
 
     /// What is on the clipboard, or being dragged, under `name`, as it is there.
@@ -415,6 +465,40 @@ mod platform {
         Ok(())
     }
 
+    /// The files on the clipboard, copied in Explorer: its list of them
+    /// (CF_HDROP), each by its path.
+    pub fn files() -> Vec<std::path::PathBuf> {
+        use std::os::windows::ffi::OsStringExt;
+        use windows_sys::Win32::System::Ole::CF_HDROP;
+        use windows_sys::Win32::UI::Shell::DragQueryFileW;
+        // SAFETY: asking needs no open clipboard.
+        if unsafe { IsClipboardFormatAvailable(CF_HDROP as u32) } == 0 {
+            return Vec::new();
+        }
+        let Ok(_open) = Open::new() else { return Vec::new() };
+        // SAFETY: the clipboard is open, and the list it hands out is read
+        // only through DragQueryFileW, each name within the length it gives.
+        unsafe {
+            let list = GetClipboardData(CF_HDROP as u32);
+            if list.is_null() {
+                return Vec::new();
+            }
+            let count = DragQueryFileW(list, u32::MAX, null_mut(), 0);
+            (0..count)
+                .filter_map(|i| {
+                    let len = DragQueryFileW(list, i, null_mut(), 0);
+                    if len == 0 {
+                        return None;
+                    }
+                    let mut name = vec![0u16; len as usize + 1];
+                    let got = DragQueryFileW(list, i, name.as_mut_ptr(), len + 1);
+                    name.truncate(got as usize);
+                    Some(std::path::PathBuf::from(std::ffi::OsString::from_wide(&name)))
+                })
+                .collect()
+        }
+    }
+
     /// What is on the clipboard under `name`: text as UTF-8, pictures as they are.
     pub fn read(board: Board, name: &str) -> Result<Option<Vec<u8>>, String> {
         // (what a drag carried, as Meno's own window over the page read it:
@@ -460,6 +544,9 @@ mod platform {
     pub fn read(_: Board, _: &str) -> Result<Option<Vec<u8>>, String> {
         Ok(None)
     }
+    pub fn files() -> Vec<std::path::PathBuf> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]
@@ -482,11 +569,14 @@ mod tests {
     fn a_kind_has_its_platforms_names() {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            for flavor in ["meno", "mol", "rxn", "text", "gvml", "png"] {
+            for flavor in ["meno", "mol", "rxn", "text", "gvml", "png", "jpeg"] {
                 assert!(!names(flavor).is_empty(), "{flavor}");
             }
         }
         assert!(names("nonsense").is_empty());
+        // (a photograph is read, binary, and never written)
+        assert!(is_binary("jpeg"));
+        assert!(!WRITTEN.contains(&"jpeg"));
     }
 
     #[test]

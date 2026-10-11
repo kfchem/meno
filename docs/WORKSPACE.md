@@ -639,7 +639,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Drawn by Meno.** The surface where the grid takes a value (marching
   cubes, worked out off the main thread), going over to another as the
   value changes. An orbital's two phases in two colours, a density's in
-  one, seen through. The colours are the chemist's to choose in Settings;
+  one, seen through - a lobe behind another, of either phase, showing
+  through it as it lies (since lane L11, 2026-10-11: before, the positive
+  phase was laid over the negative wherever they crossed on the screen).
+  A picture made of the molecule - copied or exported - shows the surface
+  as the canvas does, and is as large as its lobes reach (before, pictures
+  left surfaces out).
+  The colours are the chemist's to choose in Settings;
   at first a muted blue and orange. The value is set by a slider under the
   list, the surface following it.
 - **Asked for when wanted.** Any result, of whatever kind, can come as a
