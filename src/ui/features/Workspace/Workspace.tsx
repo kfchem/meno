@@ -136,6 +136,7 @@ import { selectedWords, selects } from "./utils/pdfSelection";
 import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
+import HoverFollowsView from "./components/HoverFollowsView";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, writeClipboard } from "../../../lib/clipboard";
@@ -236,6 +237,7 @@ function WorkspaceContent({
     handleDoubleClick,
     handleWrapperMouseMove,
     handleWrapperMouseLeave,
+    hoverAgain,
     handleWrapperClick,
     dropZone,
     openFilesAt,
@@ -1935,6 +1937,8 @@ function WorkspaceContent({
         <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
+        {/* (what is under the pointer, found again as the view moves under it) */}
+        <HoverFollowsView again={hoverAgain} held={() => buttonsHeld.current !== 0} />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
