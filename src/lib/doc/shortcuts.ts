@@ -155,6 +155,19 @@ export function saveIntent(event: KeyLike): "save" | "saveAs" | null {
 }
 
 /**
+ * A talk given from the slides on the page (docs/PRESENTING.md): from the
+ * first by Ctrl/Cmd+Shift+Enter or F5, from the slide in view by
+ * Ctrl/Cmd+Enter or Shift+F5, as slides software has it - but not while a
+ * text field has the keys.
+ */
+export function presentIntent(event: KeyLike): "first" | "here" | null {
+  if (isTextTarget(event.target) || event.altKey) return null;
+  if (event.key === "F5" && !event.ctrlKey && !event.metaKey) return event.shiftKey ? "here" : "first";
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) return event.shiftKey ? "first" : "here";
+  return null;
+}
+
+/**
  * Ctrl/Cmd+Shift+K cleans a structure up - but not while a text field has
  * the keys.
  */

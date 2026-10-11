@@ -14,7 +14,7 @@ import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -111,8 +111,8 @@ export function clipItems(part: Drawn): ClipItem[] {
   // molecules in 3D alone: a molfile in 3D, as they are seen
   if (!part.atoms.length) {
     const ms = part.molecules3d ?? [];
-    // (a workflow's parts, pictures, PDFs or texts' sheets, alone: Meno's record, which no other program reads)
-    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
+    // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
+    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
@@ -154,6 +154,7 @@ export function recordText(part: Drawn): string {
     ...(part.molecules3d?.length ? { molecules3d: part.molecules3d } : {}),
     ...(hasFlow(part) ? { flow: part.flow } : {}),
     ...(part.pictures?.length ? { pictures: part.pictures } : {}),
+    ...(part.slides?.length ? { slides: part.slides } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
     ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
     ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
@@ -208,6 +209,7 @@ export function readDrawn(data: unknown): Drawn | null {
     molecules3d?: unknown;
     flow?: unknown;
     pictures?: unknown;
+    slides?: unknown;
   };
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
@@ -253,6 +255,12 @@ export function readDrawn(data: unknown): Drawn | null {
     const read = readPicture(p);
     return read ? [read] : [];
   });
+  // (slides where their place and size read, in their order)
+  const slides = (Array.isArray(r.slides) ? (r.slides as Partial<Slide>[]) : []).flatMap((s): Slide[] =>
+    isNum(s?.id) && isNum(s.x) && isNum(s.y) && isNum(s.w) && isNum(s.h) && s.w > 0 && s.h > 0
+      ? [{ id: s.id, x: s.x, y: s.y, w: s.w, h: s.h, ...(s.around === true ? { around: true as const } : {}) }]
+      : [],
+  );
   // (a mark put by hand where it reads as a place, else where the drawing puts it)
   const markAt = (p: unknown) => {
     const q = p as { x?: unknown; y?: unknown } | undefined;
@@ -316,6 +324,7 @@ export function readDrawn(data: unknown): Drawn | null {
     ...(molecules3d.length ? { molecules3d } : {}),
     ...(flow ? { flow } : {}),
     ...(pictures.length ? { pictures } : {}),
+    ...(slides.length ? { slides } : {}),
   };
 }
 
@@ -475,7 +484,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.captions ?? []),
     ...(drawn.molecules3d ?? []).map((m) => m.at),
     ...(flow ? [{ x: flow.x0, y: flow.y0 }, { x: flow.x1, y: flow.y1 }] : []),
-    ...(drawn.pictures ?? []).flatMap((p) => [
+    ...[...(drawn.pictures ?? []), ...(drawn.slides ?? [])].flatMap((p) => [
       { x: p.x - p.w / 2, y: p.y - p.h / 2 },
       { x: p.x + p.w / 2, y: p.y + p.h / 2 },
     ]),
@@ -498,6 +507,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.captions ? { captions: drawn.captions.map(moved) } : {}),
     ...(drawn.molecules3d ? { molecules3d: drawn.molecules3d.map((m) => ({ ...m, at: moved(m.at) })) } : {}),
     ...(drawn.pictures ? { pictures: drawn.pictures.map(moved) } : {}),
+    ...(drawn.slides ? { slides: drawn.slides.map(moved) } : {}),
     ...(drawn.pdfs ? { pdfs: drawn.pdfs.map(moved) } : {}),
     ...(drawn.sheets ? { sheets: drawn.sheets.map((t) => (t.at ? { ...t, at: moved(t.at) } : t)) } : {}),
     ...(drawn.flow

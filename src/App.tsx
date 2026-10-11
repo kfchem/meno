@@ -3,6 +3,7 @@ import { RISE } from "./ui/theme/motion";
 import "./App.css";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import TopBar, { type TabsController } from "./ui/layouts/TopBar";
+import { usePresentingWindow } from "./ui/presenting";
 import {
   reducer,
   createInitialState,
@@ -72,6 +73,8 @@ export default function App() {
   };
   // Shown when an action is refused, e.g. the WebGL canvas budget is full.
   const [notice, setNotice] = useState<string | null>(null);
+  // (a talk given in the window: the title bar makes way for it)
+  const presenting = usePresentingWindow((s) => s.on);
   // Something with unsaved changes, waiting on a yes or a no.
   const [pendingClose, setPendingClose] = useState<
     { kind: "tab"; id: string } | { kind: "window" } | null
@@ -573,7 +576,10 @@ export default function App() {
           </div>
         )}
       >
-      <TopBar ctl={ctl} />
+      {/* (while a talk is given, the title bar slides up out of the way: docs/PRESENTING.md) */}
+      <div className="shrink-0" style={{ marginTop: presenting ? -40 : 0, transition: "margin-top 300ms cubic-bezier(0.45, 0, 0.55, 1)" }} aria-hidden={presenting || undefined}>
+        <TopBar ctl={ctl} />
+      </div>
       <input
         ref={fileInputRef}
         type="file"

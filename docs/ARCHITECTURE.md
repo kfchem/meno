@@ -1136,7 +1136,9 @@ to be able to work with nothing going out at all.
   purpose's first use of the network waits on the user's yes
   (`askToConnect`, remembered in the settings until withdrawn); each task
   has a card in the corner while it runs; the top bar switches offline mode;
-  Settings › Network holds the allowed purposes and the record.
+  Settings › Network holds the allowed purposes and the record. While a
+  talk is given in the window (docs/PRESENTING.md), the cards and the
+  question wait until it ends; the record is kept as ever.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

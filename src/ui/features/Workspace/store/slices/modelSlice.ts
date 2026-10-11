@@ -154,8 +154,8 @@ export const createModelSlice = (
   },
 
   deleteSelection: () => {
-    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, steps, model, arrows, pluses, captions } = get();
-    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size) return;
+    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, steps, model, arrows, pluses, captions } = get();
+    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size) return;
     // the arrows and pluses among it go with it, as with a cut; the
     // molecules in 3D selected, and a workflow's sets and steps, in the same
     // step - but not a step running, which is asked about on its own
@@ -165,12 +165,15 @@ export const createModelSlice = (
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
       removeParts(
-        ops.removePdfs(
-          ops.removeTexts(
-            ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), new Set([...ids(among.captions), ...selCaptions])), sel3d), selPictures),
-            selTexts,
+        ops.removeSlides(
+          ops.removePdfs(
+            ops.removeTexts(
+              ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), new Set([...ids(among.captions), ...selCaptions])), sel3d), selPictures),
+              selTexts,
+            ),
+            selPdfs,
           ),
-          selPdfs,
+          selSlides,
         ),
         selFlow.sets,
         idle,
@@ -318,6 +321,8 @@ export const createModelSlice = (
           nextPdfId: ws.pdfs.length + 1,
           pictures: (drawn.pictures ?? []).map((p, i) => ({ ...p, id: i + 1 })),
           nextPictureId: (drawn.pictures ?? []).length + 1,
+          slides: (drawn.slides ?? []).map((s, i) => ({ ...s, id: i + 1 })),
+          nextSlideId: (drawn.slides ?? []).length + 1,
         },
         ws.style,
       );
@@ -393,7 +398,10 @@ export const createModelSlice = (
     // (PDFs by their SHA-256, as Meno's cache holds them; texts' sheets whole)
     const pdfs = next.pdfs ?? [];
     const sheets = (next.sheets ?? []).filter((t) => t.at);
-    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length) return;
+    // (slides last in the talk's order, as they were among themselves)
+    const slides = next.slides ?? [];
+    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length) return;
+    const startSlide = doc.getState().nextSlideId ?? 1;
     const startPdf = doc.getState().nextPdfId ?? 1;
     let sheetIds: number[] = [];
     const start = doc.getState().nextId;
@@ -410,7 +418,8 @@ export const createModelSlice = (
       const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
-      const { doc: drawn, ids: sheetsAdded } = ops.addSheets(withPdfs, sheets.map(({ id: _, ...t }) => t));
+      const withSlides = slides.reduce((doc2, { id: _, ...s }) => ops.addSlide(doc2, s), withPdfs);
+      const { doc: drawn, ids: sheetsAdded } = ops.addSheets(withSlides, sheets.map(({ id: _, ...t }) => t));
       sheetIds = sheetsAdded;
       if (!flow.sets.length && !flow.steps.length) return drawn;
       const added = appendParts(drawn, flow);
@@ -433,6 +442,7 @@ export const createModelSlice = (
       sel3d: new Set(ids),
       selPictures: new Set(pictures.map((_, i) => startPicture + i)),
       selPdfs: new Set(pdfs.map((_, i) => startPdf + i)),
+      selSlides: new Set(slides.map((_, i) => startSlide + i)),
       selTexts: new Set(sheetIds),
       // (the words pasted selected too: alone, they are all that is)
       selCaptions: new Set(words.map((_, i) => startCaption + i)),
@@ -537,6 +547,7 @@ export const createModelSlice = (
     const steps = get().steps.filter((s) => part.flow?.steps.some((x) => x.id === s.id) && !s.running);
     const edited = doc.edit("cut", (d) =>
       removeParts(
+        ops.removeSlides(
         ops.removePictures(
           ops.removeMolecules3d(
             ops.deleteDrawn(
@@ -550,6 +561,8 @@ export const createModelSlice = (
             molecules3d,
           ),
           (part.pictures ?? []).map((p) => p.id),
+        ),
+        (part.slides ?? []).map((x) => x.id),
         ),
         (part.flow?.sets ?? []).map((b) => b.id),
         steps.map((s) => s.id),
