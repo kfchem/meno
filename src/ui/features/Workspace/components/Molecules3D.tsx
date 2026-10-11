@@ -3,7 +3,8 @@ import { setCursor } from "../../../theme/cursors";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { bondRadiusOf, KEY_LIGHT_FROM, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
+import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
+import KeyLight3D from "./KeyLight3D";
 import { LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
@@ -577,7 +578,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   return (
     <group>
       <ambientLight intensity={style.ambientLight} />
-      <directionalLight position={KEY_LIGHT_FROM as [number, number, number]} intensity={style.keyLight} />
+      <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       {molecules.map((m) => {
         // (one of its lists open under it: the row chosen moves it, the row pointed at - or chosen - marks its atoms)
         const open = lists[m.id];

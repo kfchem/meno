@@ -727,6 +727,58 @@ space-filling side by side is better science than either alone.
 - **Not read from before.** A settings file from before keeps none of
   its 3D look (pre-alpha: no migration).
 
+## Depth in 3D
+
+Built in lane L11 on 2026-10-11, the maintainer choosing each way from
+pictures of it beside the others: a molecule's shape should read at a
+glance, in the canvas where chemists look at molecules all day, without
+slowing it - and in the pictures made of it.
+
+- **Hollows shaded.** Where atoms crowd round, less of the light from all
+  round reaches: grooves and pockets darker, a space-filling molecule's
+  shape read in depth. Worked out for each atom once for each shape the
+  molecule takes - a frame, in a look - never as it turns, which changes
+  nothing of it: from each point of its ball a ray goes straight out, and
+  how soon another atom stops it, within three ångströms, says how open
+  that way is. Some dozens of rays are summed into nine numbers an atom
+  (spherical harmonics to the second band, with the cosine every point
+  of a surface weighs the sky above it with folded in), which the atom's
+  own shading reads at each point; a bond has a number at each end.
+  Worked out off the main thread, gone over to as it comes, and as the
+  frame or the look changes; drawn at no cost a frame. How deep it is,
+  is each style's (*Shade in hollows*): space-filling the deepest. The
+  light from all round is taken by it, and a little of the light from
+  above right. Chosen over shading worked out on the screen each frame,
+  which would take the whole canvas - the page too - through another
+  pass, flicker as a molecule turns and cost more; atoms of other
+  molecules, and ribbons, do not shade it.
+- **Shadows.** The light from above right casts them, on the molecule and
+  on others beside it, never on the page (the drawings and words on it
+  stay as they are): soft-edged, a quarter of an ångström across, and
+  only part of the way dark (*Shadows*, shared by all styles, as the
+  lights are). Cast by balls and sticks coarser than those drawn, which
+  stand where they do and draw nothing themselves; cast again only when a
+  molecule moves, turns or changes - fitted round every molecule, so
+  that panning and zooming leave it, until that would make it coarser
+  than the screen's pixels, when it is fitted round what is in view. Past
+  twenty thousand atoms on the canvas the shadows fade: casting them
+  again as such a drawing turns costs more than turning it can spare.
+- **In pictures too.** A picture of molecules in 3D shades their hollows
+  and casts their shadows as the canvas does, with every ball and stick,
+  in a finer shadow map, however many atoms.
+- **No jump.** A change of either in Settings is gone over to; so is a
+  frame's shade, or a look's.
+- **Meno's own.** A render made elsewhere (Blender) finds its own hollows
+  and shadows: neither setting is written into a scene handed over.
+- **What it costs** (a MacBook Air M4, Chrome, a canvas 2796 by 1796
+  pixels, the median frame turning a molecule, before and with both):
+  taxol (113 atoms) 9.2 and 12.1 ms as ball and stick, 5.8 and 9.2
+  space-filling; 1STP (1001 atoms) 12.5 and 14.4, space-filling 13.5 and
+  16.6. Four hundred cholesterols as one molecule (29,600 atoms): 48 and
+  49 ms as ball and stick, 51 and 52 space-filling - the hollows' shade
+  costing nothing, the shadows, which would cost 22 to 44 ms more, faded
+  there. Panning casts no shadow again.
+
 ## Editing in 3D
 
 Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:

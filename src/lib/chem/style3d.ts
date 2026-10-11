@@ -23,6 +23,14 @@ export type MoleculeLook = {
   roughness: number;
   metalness: number;
   /**
+   * How much darker the hollows are - where atoms crowd round, less of the
+   * light from all round reaches: none (0) to all of it (1). Worked out
+   * once for each shape a molecule takes, never as it turns
+   * (Workspace/utils/occlusion3d). Meno's own: a picture rendered elsewhere
+   * finds its own.
+   */
+  occlusion: number;
+  /**
    * The hydrogens on carbon, shown or left out. Left out, the picture is
    * wrong - smaller and more open than the molecule - so it is never so
    * unless the chemist has said, past a warning, that they know it
@@ -41,6 +49,13 @@ export type Scene3D = {
   /** The light from all round, and the light from above right, in front. */
   ambientLight: number;
   keyLight: number;
+  /**
+   * How dark the shadows the light from above right casts are, from none
+   * (0) to as dark as the light from all round leaves them (1): a
+   * molecule's on itself and on another, never on the page. Meno's own, as
+   * the hollows' shade is.
+   */
+  shadows: number;
   /** How far a drag across half the canvas turns a molecule, in radians. */
   turnPerHalfWidth: number;
   /** How much of its speed a turn left to itself loses each sixtieth of a second. */
@@ -69,6 +84,7 @@ export const BALL_AND_STICK: MoleculeLook = {
   bondColor: "#000000",
   roughness: 1,
   metalness: 0,
+  occlusion: 0.6,
   hydrogens: "shown",
   biopolymers: "ribbons",
 };
@@ -77,6 +93,7 @@ export const BALL_AND_STICK: MoleculeLook = {
 export const SCENE_3D: Scene3D = {
   ambientLight: 0.9,
   keyLight: 1,
+  shadows: 0.4,
   turnPerHalfWidth: 3,
   turnDamping: 0.1,
   ballSegments: 32,
@@ -112,8 +129,9 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     id: "space",
     name: "Space-filling",
     description: "Each atom as large as its van der Waals radius: the molecule's surface.",
-    // (a protein space-filling, every atom: its surface, its pockets)
-    look: { ...BALL_AND_STICK, atoms: "space", biopolymers: "atoms" },
+    // (a protein space-filling, every atom: its surface, its pockets -
+    // its hollows the deepest, and the most telling of its shape)
+    look: { ...BALL_AND_STICK, atoms: "space", biopolymers: "atoms", occlusion: 0.8 },
   },
 ];
 
@@ -351,6 +369,17 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     step: 0.05,
     ends: ["Not at all", "Fully"],
   },
+  {
+    key: "occlusion",
+    group: "Surface",
+    label: "Shade in hollows",
+    description: "Where atoms crowd round, less light reaches: hollows and pockets darker, so the shape reads in depth.",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    ends: ["None", "Deep"],
+  },
 ];
 
 /** What every style shares. */
@@ -376,6 +405,17 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
     max: 3,
     step: 0.05,
     digits: 2,
+  },
+  {
+    key: "shadows",
+    group: "Light",
+    label: "Shadows",
+    description: "The shadows the light from above right casts, on the molecule and on those beside it - never on the page.",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    ends: ["None", "Dark"],
   },
   {
     key: "surfacePlus",

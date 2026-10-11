@@ -20,6 +20,7 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
+import { useShading3d } from "./shading3d";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
@@ -997,6 +998,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (moving) invalidate();
   }, FRAME_ORDER.molecules);
 
+  // its hollows shaded and its shadow cast, as it stands now (after the frame
+  // above has placed its atoms)
+  useShading3d({ turned, atoms, bonds, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
+
   /** The atoms' and bonds' finish, `f` of the way from the primary look's to the secondary's. */
   const finish = (f: number) => {
     const P = style.primary;
@@ -1056,6 +1061,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           args={[undefined, undefined, n]}
           renderOrder={OVER_PAGE}
           frustumCulled={false}
+          receiveShadow
           onPointerMove={(e) => {
             e.stopPropagation();
             if (e.instanceId != null && e.instanceId !== hoverAtom) setHoverAtom(e.instanceId);
@@ -1071,6 +1077,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             args={[undefined, undefined, lineCount]}
             renderOrder={OVER_PAGE}
             frustumCulled={false}
+            receiveShadow
             // (pointed at, a bond says what a calculation found of it - where one did)
             onPointerMove={
               pairResults.length
