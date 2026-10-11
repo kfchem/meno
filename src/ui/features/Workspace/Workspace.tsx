@@ -1252,6 +1252,10 @@ function WorkspaceContent({
       onMouseLeave={handleWrapperMouseLeave}
       onClick={handleWrapperClick}
       onContextMenu={openMenu}
+      // (no drag-and-drop of the system's own begins on the page: begun over text selected by
+      // chance, it took the pointer's moves and its release from the gesture under way - a
+      // structure dragged out of a set did not move, and then followed the pointer, the button up)
+      onDragStart={(e) => e.preventDefault()}
       onPointerDownCapture={onRightDown}
       onPointerMoveCapture={onRightMove}
       onPointerUpCapture={onRightUp}
