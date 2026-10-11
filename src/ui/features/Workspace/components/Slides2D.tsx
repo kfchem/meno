@@ -31,6 +31,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { setCursor } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pageAt } from "../utils/page";
+import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
@@ -375,15 +376,19 @@ function Handles({ s, px, toWorld }: { s: Slide; px: number; toWorld: (cx: numbe
     const least = (LEAST_PX * px * len) / Math.min(s.w, s.h);
     const gesture = `scale-${performance.now()}`;
     store.getState().beginPanHold(ev.pointerId);
+    // (as wide or as tall as something near, where it comes near: docs/PRESENTING.md, *Guides*)
+    const placeAt = (f: number) => ({ w: s.w * f, h: s.h * f, x: fixed.x + (dir.x * len * f) / 2, y: fixed.y + (dir.y * len * f) / 2 });
+    const guide = guideScale(store, toWorld, { x: ev.clientX, y: ev.clientY }, boxOf(s));
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
       const along = Math.max(least, (q.x - fixed.x) * dir.x + (q.y - fixed.y) * dir.y);
-      const f = along / len;
-      store.getState().updateSlide(s.id, { w: s.w * f, h: s.h * f, x: fixed.x + (dir.x * along) / 2, y: fixed.y + (dir.y * along) / 2 }, gesture);
+      const f = Math.max(least / len, guide.step(along / len, m, (g) => boxOf({ ...s, ...placeAt(g) })));
+      store.getState().updateSlide(s.id, placeAt(f), gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      guide.end();
       const st = store.getState();
       st.endPanHold(u.pointerId);
       st.suppressDoubleClick(DOUBLE_CLICK_MS);

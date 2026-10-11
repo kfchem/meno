@@ -165,6 +165,7 @@ import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
+import Guides2D from "./components/Guides2D";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -1829,6 +1830,8 @@ function WorkspaceContent({
           <Workflow2D />
           {/* Slides: frames round what a talk shows, over everything on the page (docs/PRESENTING.md) */}
           <Slides2D />
+          {/* Guides, as something is moved or made larger (docs/PRESENTING.md, *Guides*) */}
+          <Guides2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />

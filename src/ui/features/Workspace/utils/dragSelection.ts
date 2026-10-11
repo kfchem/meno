@@ -1,6 +1,7 @@
 import type { EditorStore } from "../store";
 import { setMembers } from "../workflow/entries";
 import { schemeAmong } from "./copyPaste";
+import { guideMove, type Held } from "./guiding";
 
 type Pt = { x: number; y: number };
 
@@ -43,14 +44,18 @@ export function dragSelection(
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   const p0 = toWorld(from.x, from.y);
+  // (lined up with what is near as it goes: docs/PRESENTING.md, *Guides*)
+  const guide = guideMove(store, toWorld, from);
+  let keys: Held = { shiftKey: false, metaKey: false, ctrlKey: false };
   const gesture = `drag-${performance.now()}`;
   selectionMoving.active = true;
   let frame: number | null = null;
   let last = p0;
   const apply = () => {
     frame = null;
-    const dx = last.x - p0.x;
-    const dy = last.y - p0.y;
+    const d = guide.step(last.x - p0.x, last.y - p0.y, keys);
+    const dx = d.x;
+    const dy = d.y;
     const by = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: p.x + dx, y: p.y + dy });
     store.getState().moveAtoms(atoms.map(by), gesture, {
       arrows: among.arrows.map(by),
@@ -67,6 +72,7 @@ export function dragSelection(
   };
   const onMove = (ev: PointerEvent) => {
     last = toWorld(ev.clientX, ev.clientY);
+    keys = ev;
     if (frame == null) frame = window.requestAnimationFrame(apply);
   };
   const onUp = (ev: PointerEvent) => {
@@ -75,8 +81,10 @@ export function dragSelection(
     if (frame != null) {
       window.cancelAnimationFrame(frame);
       last = toWorld(ev.clientX, ev.clientY);
+      keys = ev;
       apply();
     }
+    guide.end();
     selectionMoving.active = false;
     done(ev, last.x !== p0.x || last.y !== p0.y);
   };

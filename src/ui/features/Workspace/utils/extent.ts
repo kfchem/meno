@@ -89,3 +89,70 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   }
   return Number.isFinite(b.x0) && Number.isFinite(b.y0) ? b : null;
 }
+
+/**
+ * Boxes round what is on the page and not selected, each as it is drawn -
+ * each structure, each reaction arrow and "+" and words, each molecule in
+ * 3D, picture, PDF, text's sheet and slide: what something moved lines up
+ * with (presenting/guides). A structure's box is its atoms', and half a
+ * label more round those that show one.
+ */
+export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: number, leave?: { caption?: number }): Box[] {
+  const out: Box[] = [];
+  const opts = editorLayoutOptions(style);
+  const pad = opts.fontPx * 0.45;
+  // the structures not selected: each its own, its atoms joined by their bonds
+  const free = st.model.atoms.filter((a) => !st.sel.atoms.has(a.id));
+  if (free.length) {
+    const root = new Map(free.map((a) => [a.id, a.id]));
+    const find = (id: number): number => {
+      let r = id;
+      while (root.get(r) !== r) r = root.get(r)!;
+      root.set(id, r);
+      return r;
+    };
+    for (const b of st.model.bonds) if (root.has(b.a) && root.has(b.b)) root.set(find(b.a), find(b.b));
+    const boxes = new Map<number, Box>();
+    for (const a of free) {
+      const r = a.el === "C" ? 0 : pad;
+      const k = find(a.id);
+      const b = boxes.get(k);
+      boxes.set(k, b ? { x0: Math.min(b.x0, a.x - r), y0: Math.min(b.y0, a.y - r), x1: Math.max(b.x1, a.x + r), y1: Math.max(b.y1, a.y + r) } : { x0: a.x - r, y0: a.y - r, x1: a.x + r, y1: a.y + r });
+    }
+    out.push(...boxes.values());
+  }
+  // the arrows, "+" signs and words not among what is selected, nor selected themselves
+  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+  const taken = (xs: readonly { id: number }[], id: number) => xs.some((x) => x.id === id);
+  for (const a of st.arrows) {
+    if (taken(among.arrows, a.id)) continue;
+    const e = arrowEnds(a);
+    out.push({ x0: Math.min(e.from.x, e.to.x), y0: Math.min(e.from.y, e.to.y), x1: Math.max(e.from.x, e.to.x), y1: Math.max(e.from.y, e.to.y) });
+  }
+  for (const p of st.pluses) if (!taken(among.pluses, p.id)) out.push({ x0: p.x - opts.fontPx / 2, y0: p.y - opts.fontPx / 2, x1: p.x + opts.fontPx / 2, y1: p.y + opts.fontPx / 2 });
+  for (const c of st.captions) {
+    if (taken(among.captions, c.id) || st.selCaptions.has(c.id) || c.id === leave?.caption) continue;
+    const set = wordsSet(c, opts, labelSetOf(opts));
+    out.push({ x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH });
+  }
+  const style3d = currentStyle3D();
+  for (const m of st.molecules3d) {
+    if (st.sel3d.has(m.id)) continue;
+    const pose = poseOf(m, solidOf(m, style3d), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]);
+    const s = seenBounds(pose, eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
+    out.push({ x0: s.minX, y0: s.minY, x1: s.maxX, y1: s.maxY });
+  }
+  for (const p of st.pictures) {
+    if (st.selPictures.has(p.id)) continue;
+    const q = cornersOf(p);
+    out.push({ x0: Math.min(...q.map((v) => v.x)), y0: Math.min(...q.map((v) => v.y)), x1: Math.max(...q.map((v) => v.x)), y1: Math.max(...q.map((v) => v.y)) });
+  }
+  for (const p of st.pdfs) if (!st.selPdfs.has(p.id)) out.push(pdfRoom(p));
+  for (const t of st.texts) {
+    if (st.selTexts.has(t.id)) continue;
+    const r = sheetRoom(t);
+    if (r) out.push(r);
+  }
+  for (const s of st.slides) if (!st.selSlides.has(s.id)) out.push(boxOf(s));
+  return out;
+}
