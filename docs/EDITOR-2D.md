@@ -502,10 +502,20 @@ All hover-based, as above.
      ipr iPr - not the NHC IPr).
   2. No element after uranium is read from letters typed small: nh is NH,
      cn CN, no NO; ts is tosyl, fm Fm.
-  3. Typed as it is drawn on a bond's left - aco, meo, bochn, ho2c, h2n,
-     or HN before a group, hnfmoc - it is kept as it reads from the bond:
-     OAc, OMe, NHBoc, CO2H, NH2, NHFmoc (and drawn the other way round
-     again where its bond leaves to the left).
+  3. Typed as it is drawn on a bond's left - AcO, aco, meo, bochn, ho2c,
+     h2n, or HN before a group, hnfmoc - it is kept as it reads from the
+     bond: OAc, OMe, NHBoc, CO2H, NH2, NHFmoc (and drawn the other way
+     round again where its bond leaves to the left). So what is kept is
+     the same however it was typed - small, as it is written or as it is
+     drawn on the left (the maintainer, 2026-10-11): HO, ho and oh are all
+     OH; AcO, aco and OAc all OAc; NC and nc CN. What reads as something
+     as it is written is that, not turned round: hcl is HCl, as HCl typed
+     is; and only what is written in words is turned round: MES stays MES.
+     Of letters typed small, a heteroatom with its H or with a group, as
+     it is drawn on the left, comes before any other reading of them (the
+     maintainer, 2026-10-12): ho is HO, kept OH, not holmium; mes is MeS,
+     kept SMe, not mesityl - Mes typed so is mesityl. A charge typed last
+     stays last: ho- and HO- are OH-, h3n+ NH3+.
   4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
      iPr stays.
   5. What reads as nothing stays exactly as typed - no capital made.
@@ -514,9 +524,9 @@ All hover-based, as above.
   - the same letters in the same places, the caret where it was; rules 3
   and 4 as it is kept. An input method's composition is left alone until
   it is given. Where what is kept is not what was typed, the atom's menu
-  has it back, read as nothing else (*As typed: obz*, one step); Settings
-  › General, *Read labels as they are meant*, turned off keeps every label
-  exactly as typed.
+  has it back, read as nothing else (*As typed: obz*, *As typed: HO*, one
+  step); Settings › General, *Read labels as they are meant*, turned off
+  keeps every label exactly as typed.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
   clicks on an atom or two on empty space, the honeycomb's ring where a
