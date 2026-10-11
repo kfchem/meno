@@ -28,6 +28,7 @@ import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -339,7 +340,8 @@ export function useStructureEvents(
     const p = clientToWorld(e.clientX, e.clientY);
     if (!p) return;
     const tol = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
-    const id = st.findAtomNear(p.x, p.y, tol, null);
+    // (or on a label's other letters: the H of HO is the O - utils/labelHits)
+    const id = st.findAtomNear(p.x, p.y, tol, null) ?? atomOfLabelAt(labelReachOf(store), p);
     if (id != null) st.setHoveredFromId(id);
     else st.clearAtomHover();
   };
