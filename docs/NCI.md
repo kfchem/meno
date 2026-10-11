@@ -121,8 +121,10 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 
 ## Not yet
 
-- No reader of WFN or WFX files yet: those kinds are named for when one
-  comes.
+- WFX files are read by the WFX reader (2026-10-12; the format's
+  specification, AIMAll's), so one opened goes to Multiwfn's NCI as its
+  wavefunction; WFN files not yet - no specification of that format is
+  published to follow.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).
 - Renders (RENDER.md) of coloured surfaces: the glTF scene carries a
   surface's own colours, not yet another grid's.
