@@ -639,7 +639,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Drawn by Meno.** The surface where the grid takes a value (marching
   cubes, worked out off the main thread), going over to another as the
   value changes. An orbital's two phases in two colours, a density's in
-  one, seen through. The colours are the chemist's to choose in Settings;
+  one, seen through - a lobe behind another, of either phase, showing
+  through it as it lies (since lane L11, 2026-10-11: before, the positive
+  phase was laid over the negative wherever they crossed on the screen).
+  A picture made of the molecule - copied or exported - shows the surface
+  as the canvas does, and is as large as its lobes reach (before, pictures
+  left surfaces out).
+  The colours are the chemist's to choose in Settings;
   at first a muted blue and orange. The value is set by a slider under the
   list, the surface following it.
 - **Asked for when wanted.** Any result, of whatever kind, can come as a
@@ -720,6 +726,58 @@ space-filling side by side is better science than either alone.
   look that keeps the hydrogens.
 - **Not read from before.** A settings file from before keeps none of
   its 3D look (pre-alpha: no migration).
+
+## Depth in 3D
+
+Built in lane L11 on 2026-10-11, the maintainer choosing each way from
+pictures of it beside the others: a molecule's shape should read at a
+glance, in the canvas where chemists look at molecules all day, without
+slowing it - and in the pictures made of it.
+
+- **Hollows shaded.** Where atoms crowd round, less of the light from all
+  round reaches: grooves and pockets darker, a space-filling molecule's
+  shape read in depth. Worked out for each atom once for each shape the
+  molecule takes - a frame, in a look - never as it turns, which changes
+  nothing of it: from each point of its ball a ray goes straight out, and
+  how soon another atom stops it, within three ångströms, says how open
+  that way is. Some dozens of rays are summed into nine numbers an atom
+  (spherical harmonics to the second band, with the cosine every point
+  of a surface weighs the sky above it with folded in), which the atom's
+  own shading reads at each point; a bond has a number at each end.
+  Worked out off the main thread, gone over to as it comes, and as the
+  frame or the look changes; drawn at no cost a frame. How deep it is,
+  is each style's (*Shade in hollows*): space-filling the deepest. The
+  light from all round is taken by it, and a little of the light from
+  above right. Chosen over shading worked out on the screen each frame,
+  which would take the whole canvas - the page too - through another
+  pass, flicker as a molecule turns and cost more; atoms of other
+  molecules, and ribbons, do not shade it.
+- **Shadows.** The light from above right casts them, on the molecule and
+  on others beside it, never on the page (the drawings and words on it
+  stay as they are): soft-edged, a quarter of an ångström across, and
+  only part of the way dark (*Shadows*, shared by all styles, as the
+  lights are). Cast by balls and sticks coarser than those drawn, which
+  stand where they do and draw nothing themselves; cast again only when a
+  molecule moves, turns or changes - fitted round every molecule, so
+  that panning and zooming leave it, until that would make it coarser
+  than the screen's pixels, when it is fitted round what is in view. Past
+  twenty thousand atoms on the canvas the shadows fade: casting them
+  again as such a drawing turns costs more than turning it can spare.
+- **In pictures too.** A picture of molecules in 3D shades their hollows
+  and casts their shadows as the canvas does, with every ball and stick,
+  in a finer shadow map, however many atoms.
+- **No jump.** A change of either in Settings is gone over to; so is a
+  frame's shade, or a look's.
+- **Meno's own.** A render made elsewhere (Blender) finds its own hollows
+  and shadows: neither setting is written into a scene handed over.
+- **What it costs** (a MacBook Air M4, Chrome, a canvas 2796 by 1796
+  pixels, the median frame turning a molecule, before and with both):
+  taxol (113 atoms) 9.2 and 12.1 ms as ball and stick, 5.8 and 9.2
+  space-filling; 1STP (1001 atoms) 12.5 and 14.4, space-filling 13.5 and
+  16.6. Four hundred cholesterols as one molecule (29,600 atoms): 48 and
+  49 ms as ball and stick, 51 and 52 space-filling - the hollows' shade
+  costing nothing, the shadows, which would cost 22 to 44 ms more, faded
+  there. Panning casts no shadow again.
 
 ## Editing in 3D
 
@@ -817,6 +875,81 @@ reading in Meno is.
 - **Pictures.** An exported picture draws the ribbons as the canvas does
   (the bitmap); where there is no WebGL, as sticks along each ribbon.
   NMR models and trajectories: the ribbon follows each frame.
+
+## Hydrogens and bond orders
+
+Built in lane L5 on 2026-10-11, as the maintainer asked: a file of
+coordinates - XYZ, PDB, a calculation's output - gives no bond orders, and
+an X-ray entry no hydrogens. A molecule drawn as if they were known
+misleads as one with its hydrogens hidden does, so a molecule says what is
+missing, and what can be found is found, through the RDKit plugin's own
+requests (its worker's; the role that draws a molecule in 3D as a
+formula). Pure logic in `utils/completeness.ts`, the requests in
+`chem/bondOrders.ts`.
+
+- **Said over it.** *No H in file* where the molecule - for a PDB entry,
+  its chains while they are drawn as atoms, or a ligand - has no
+  hydrogens and either has carbon, its orders unknown, or has an atom
+  whose valence, its orders known, leaves room for some; *Bond orders
+  unknown* where they are - for a PDB entry, while a ligand's are, or
+  while its chains are drawn as atoms, whose orders no entry gives (the
+  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  over the molecule at any zoom, one over another, and in every picture
+  made of it (SVG, PNG, EMF).
+- **Found from its shape.** As a molecule comes in, opened or pasted,
+  with its orders unknown, they are sought once - with the request its
+  formula is drawn by (`drawing_of`, `perceive`: RDKit's
+  `DetermineBondOrders`) - where the plugin is set up already: nothing is
+  set up because a file was opened. What is found is learnt of the
+  molecule, with no undo step of its own; the 3D view draws it. A PDB
+  entry's ligands are each sought alone; its chains are not.
+- **Only with its hydrogens.** Tried with RDKit 2026.03: a ligand
+  without its hydrogens (biotin, from entry 1STP) has no orders found, and
+  with them its orders are exact; benzoic acid without them has orders
+  found that are wrong. So a molecule, or a ligand, without hydrogens is
+  not sought at all, and says its orders are unknown; nor is one of more
+  than 400 atoms.
+- **Given from a SMILES.** Right-click a ligand (for a PDB entry, the
+  one under the pointer), *Bond orders from SMILES…*: a card over the
+  canvas takes its SMILES, and RDKit's `AssignBondOrdersFromTemplate`
+  gives each bond the order the SMILES has for it, and each atom its
+  charge. The SMILES must be the ligand's heavy atoms and bonds, all of
+  them; else the card says so and nothing changes. One undo step.
+- **Hydrogens added.** Its orders known, a ligand without hydrogens has
+  *Add hydrogens* in the same menu: RDKit's `AddHs`, placed where the
+  atoms' geometry puts them, bonded to their atoms and in their residue.
+  One undo step. Not for a molecule with other frames (an NMR entry's
+  models, a trajectory), which would be left without them.
+- **Not done: protonating a protein.** A chain's hydrogens depend on each
+  residue's protonation state - histidine's tautomer, the pH, what is
+  near - which is a calculation of its own, not a completion of the file.
+  Only ligands are given hydrogens; a plugin for proteins could come
+  later.
+- **From the Chemical Component Dictionary** (the maintainer's ruling,
+  2026-10-11: asked for, from the menu, not on opening; standard residues
+  too). A PDB entry's right-click menu has *Bond orders from the CCD*:
+  each residue name it uses - amino acids, nucleotides, ligands, ions,
+  water left out - is looked up in the wwPDB's dictionary (CC0), whose
+  component files give each component's atoms by name, its bonds' orders
+  and its atoms' formal charges (`lib/chem/ccd.ts`, read by the CIF 1.1
+  syntax, `lib/chem/cif.ts`, and the PDBx/mmCIF dictionary's definitions
+  of `_chem_comp_atom` and `_chem_comp_bond`). A residue takes the
+  component's orders and charges where every atom of it is one of the
+  component's, by name and element, and every bond within it is one of
+  the component's, single, double or triple; any other residue is left as
+  it was, and says so. Bonds between residues - a peptide's, a
+  disulfide, a ligand's link - stay as they are. A ligand so given can be
+  given its hydrogens; chains whose every residue was given no longer say
+  their orders are unknown, drawn as atoms. The charges are the
+  dictionary's, as its components are drawn, not a protonation worked out
+  for the entry. One undo step. The files come from files.wwpdb.org
+  (`refdata/chem_comp/<last character>/<id>/<id>.cif`), fetched by the app
+  as a task of its own on Meno's network (`src-tauri/src/ccd.rs`,
+  `lib/net/components.ts`, purpose
+  `ccd`, asked for the first time it is used) and kept in Meno's cache, so
+  each is fetched once; only the components' names leave Meno. A PDB file
+  with no chain (a ligand on its own) keeps no residue names, and is not
+  looked up.
 
 ## Risks
 

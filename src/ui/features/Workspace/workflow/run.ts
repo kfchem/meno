@@ -179,7 +179,7 @@ export function withResults(
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
-export const LAID_OVER: readonly StepKind[] = ["optimise", "energy", "frequencies"];
+export const LAID_OVER: readonly StepKind[] = ["optimise", "energy", "frequencies", "nci"];
 
 /**
  * How each molecule a step gave is first turned, where it is what came in

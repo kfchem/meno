@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, hartrees, jobEntries, pluginEntry, readCollected, readKept, readPrepared, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, jobEntries, pluginEntry, readCollected, readKept, readPrepared, workedOf } from "./programs";
 import type { SetEntry } from "./entries";
 import { resultsOf } from "./run";
 
@@ -101,6 +101,36 @@ describe("what a plugin reads back of a job", () => {
     const energy = workedOf("energy", WATER, { ...out, frames: [WATER.xyz as number[]], energies: [-5.07] }, ["xtb 6.7.1"]);
     expect(typeof energy !== "string" && energy.path).toBeFalsy();
     expect(workedOf("energy", WATER, { ...out, atoms: ["O", "H", "C"] }, ["xtb 6.7.1"])).toBe("What came back is not the molecule that went");
+  });
+});
+
+describe("surfaces a job wrote, in cube files Meno reads itself", () => {
+  it("are taken, one list for each entry: each row its file, the value it is drawn at, and what colours it", () => {
+    const row = { label: "Promolecular density", file: "NCI-grad.cube", iso: 0.3, colour: { file: "NCI-dens.cube", from: -7, to: 7, label: "sign(λ2)ρ × 100 (a.u.)" } };
+    expect(readCollected({ surfaces: [{ name: "Non-covalent interactions", rows: [row] }] }, 1)).toEqual({ surfaces: [{ name: "Non-covalent interactions", rows: [row] }] });
+  });
+
+  it("are refused where they cannot be read: a file outside the job's folder, a scale that runs nowhere, one too few", () => {
+    const one = (r: Record<string, unknown>) => readCollected({ surfaces: [{ name: "NCI", rows: [{ label: "x", file: "a.cube", ...r }] }] }, 1);
+    expect(one({ file: "../a.cube" })).toHaveProperty("why");
+    expect(one({ colour: { file: "b.cube", from: 1, to: 1 } })).toHaveProperty("why");
+    expect(one({ colour: { file: "/b.cube", from: 0, to: 1 } })).toHaveProperty("why");
+    expect(one({})).toEqual({ surfaces: [{ name: "NCI", rows: [{ label: "x", file: "a.cube" }] }] });
+    expect(readCollected({ surfaces: [] }, 1)).toHaveProperty("why");
+  });
+});
+
+describe("the files a step takes besides", () => {
+  const held = async (sha256: string) => (sha256 === "abc" ? { name: "water.molden", text: "[Molden Format]" } : undefined);
+  it("are an entry's molecule's output, where it is of a kind the step takes - and the entry its last geometry", async () => {
+    const source = { name: "water.molden", sha256: "abc", kind: "molden" };
+    expect(await entryFiles({ last: true }, source, ["molden", "wfx"], held)).toEqual([{ kind: "molden", name: "water.molden", text: "[Molden Format]" }]);
+    // (of no kind it takes; not its last geometry; held nowhere; read from nothing)
+    expect(await entryFiles({ last: true }, { ...source, kind: "orca" }, ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: false }, source, ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, { ...source, sha256: "def" }, ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, undefined, ["molden"], held)).toEqual([]);
+    expect(await entryFiles({ last: true }, source, [], held)).toEqual([]);
   });
 });
 

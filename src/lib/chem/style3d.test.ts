@@ -38,6 +38,17 @@ describe("the 3D style", () => {
     expect(STYLE_3D.secondary.atoms).toBe("space");
     expect(STYLE_3D.ambientLight).toBe(SCENE_3D.ambientLight);
   });
+  it("shades hollows in every style - space-filling the most - and casts shadows, part of the way dark", () => {
+    for (const p of LOOK_3D_PRESETS) expect(p.look.occlusion).toBeGreaterThan(0);
+    expect(look3dPreset("space").look.occlusion).toBeGreaterThan(look3dPreset("balls").look.occlusion);
+    expect(SCENE_3D.shadows).toBeGreaterThan(0);
+    expect(SCENE_3D.shadows).toBeLessThan(1);
+    // (read within their bounds, as every setting is)
+    expect(acceptStyle3dChoice({ looks: { space: { occlusion: 2 }, balls: { occlusion: 0 } }, shared: { shadows: 0.5 } })).toMatchObject({
+      looks: { balls: { occlusion: 0 } },
+      shared: { shadows: 0.5 },
+    });
+  });
   it("leaves out only the hydrogens on carbon, and only where a look hides them", () => {
     // methanol: H3C-OH
     const m = {

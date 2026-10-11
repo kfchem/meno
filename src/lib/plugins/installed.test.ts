@@ -4,8 +4,9 @@ import { locate, lookFor, lookForAll, useInstalled, whereIs } from "./installed"
 
 vi.mock("./here", () => ({ systemHere: () => "macos" }));
 
-const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" }, path: [], env: {} };
-const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" }, path: [], env: {} };
+const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" }, path: [], env: {}, places: {} };
+const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" }, path: [], env: {}, places: {} };
+const BLENDER = { name: "blender", label: "Blender", files: { macos: "Blender" }, path: [], env: {}, places: {} };
 
 /** Meno's backend, as a test has it: a program is where it was located, if that is it; else where `onPath` says. */
 function backend(onPath: Record<string, string> = {}) {
@@ -56,5 +57,15 @@ describe("a program installed separately", () => {
     // another file: refused, saying what it should be
     await expect(locate("orca", ORCA, async () => "/Applications/orca_6/orca_scf", ask)).rejects.toThrow(/not ORCA: its program is the file called orca/);
     expect(useAppSettings.getState().plugins.programs).toEqual({ "orca:orca": "/Applications/orca_6/orca" });
+  });
+
+  it("is located on macOS by picking the app that holds it: the program inside it kept", async () => {
+    const inside = "/Applications/Blender.app/Contents/MacOS/Blender";
+    const ask = (async (_cmd: string, a?: Record<string, unknown>) => (a?.located === "/Applications/Blender.app" ? inside : null)) as never;
+    expect(await locate("blender", BLENDER, async () => "/Applications/Blender.app", ask)).toBe(inside);
+    expect(useAppSettings.getState().plugins.programs["blender:blender"]).toBe(inside);
+    // (an app that holds something else is not it)
+    const elsewhere = (async () => "/Applications/Other.app/x/Blender") as never;
+    await expect(locate("blender", BLENDER, async () => "/Applications/Blender.app", elsewhere)).rejects.toThrow(/not Blender/);
   });
 });

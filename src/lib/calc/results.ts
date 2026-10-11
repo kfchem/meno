@@ -60,10 +60,21 @@ type Vec3 = [number, number, number];
  */
 export type Grid = { origin: Vec3; axes: [Vec3, Vec3, Vec3]; counts: Vec3; values: string; signed?: boolean; iso?: number };
 /**
+ * A surface coloured by a second grid's values where it passes (docs/NCI.md):
+ * an RDG isosurface coloured by sign(λ2)ρ, say, or a density's coloured by
+ * the electrostatic potential - not one for any analysis alone. `by`, the
+ * grid whose values colour it, on the same points as the surface's or not;
+ * `from` and `to`, the values the colour scale runs between, as the grid
+ * has them; `label`, what its values are, said by the scale. Meno draws the
+ * scale, blue through green to red.
+ */
+export type SurfaceColour = { by: Grid | Ask; from: number; to: number; label?: string };
+/**
  * A list's row: its values, column by column, and what Meno can do with
  * it - the atoms it is of, marked as it is pointed at; a frame, a motion
- * (each atom's displacement, x, y, z) or a surface (a grid's), shown as it
- * is chosen. A motion or a surface may be a promise, asked for then.
+ * (each atom's displacement, x, y, z) or a surface (a grid's) - coloured by
+ * another's, where it says so - shown as it is chosen. A motion, a surface
+ * or what colours one may be a promise, asked for then.
  */
 export type Row = {
   cells: Cell[];
@@ -71,6 +82,7 @@ export type Row = {
   frame?: number;
   move?: number[] | Ask;
   surface?: Grid | Ask;
+  colour?: SurfaceColour;
 };
 /** A list of rows; `focus`, the row it opens on; `shown`, the row chosen as it comes - the list opened at once. */
 export type ListResult = Named & {
@@ -132,7 +144,19 @@ function rowOf(v: unknown, columns: number, atoms: number, frames: number): Row 
   else if (askOf(r.move)) row.move = askOf(r.move);
   const surface = askOf(r.surface) ?? readGrid(r.surface);
   if (surface) row.surface = surface;
+  const colour = surface ? colourOf(r.colour) : undefined;
+  if (colour) row.colour = colour;
   return row;
+}
+
+/** What colours a surface, as given: a grid or a promise, and the values its scale runs between, the first below the second; otherwise none. */
+export function colourOf(v: unknown): SurfaceColour | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const c = v as Record<string, unknown>;
+  const by = askOf(c.by) ?? readGrid(c.by);
+  if (!by || !isNum(c.from) || !isNum(c.to) || !(c.from < c.to)) return undefined;
+  const label = typeof c.label === "string" && c.label.trim() ? c.label.trim().slice(0, UNIT_MOST * 4) : undefined;
+  return { by, from: c.from, to: c.to, ...(label ? { label } : {}) };
 }
 
 /** A promise as given; otherwise none. */

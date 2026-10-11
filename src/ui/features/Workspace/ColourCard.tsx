@@ -11,8 +11,8 @@ import { useEditor, useEditorStore } from "./store";
  */
 export const COLOURS = ["#d55e00", "#e69f00", "#f0e442", "#009e73", "#56b4e9", "#0072b2", "#cc79a7"] as const;
 
-/** What a colour card is for: the atoms and bonds it colours or highlights, and the rings it fills, by key. */
-export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[] };
+/** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, and the electron-pushing arrows it colours. */
+export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[] };
 
 type Row = "color" | "highlight" | "ring";
 const ROW_NAME: Record<Row, string> = { color: "Colour", highlight: "Highlight", ring: "Fill ring" };
@@ -62,7 +62,10 @@ export default function ColourCard({
   }, [onClose]);
 
   const parts = target.atoms.length + target.bonds.length > 0;
-  const rows: Row[] = [...(parts ? (["color", "highlight"] as const) : []), ...(target.rings.length ? (["ring"] as const) : [])];
+  const arrows = target.pushes ?? [];
+  const pushes = useEditor((s) => s.pushes);
+  // (an arrow has a colour, not a highlight)
+  const rows: Row[] = [...(parts ? (["color", "highlight"] as const) : arrows.length ? (["color"] as const) : []), ...(target.rings.length ? (["ring"] as const) : [])];
   // (the colour each row has now, where all it is for have the same one; null, none; undefined, several)
   const now = (row: Row): string | null | undefined => {
     const atoms = new Set(target.atoms);
@@ -70,7 +73,11 @@ export default function ColourCard({
     const had =
       row === "ring"
         ? target.rings.map((k) => ringFills[k] ?? null)
-        : [...model.atoms.filter((a) => atoms.has(a.id)), ...model.bonds.filter((b) => bonds.has(b.id))].map((p) => p[row] ?? null);
+        : [
+            ...model.atoms.filter((a) => atoms.has(a.id)),
+            ...model.bonds.filter((b) => bonds.has(b.id)),
+            ...(row === "color" ? pushes.filter((p) => arrows.includes(p.id)) : []),
+          ].map((p) => (p as { color?: string; highlight?: string })[row] ?? null);
     return had.every((c) => c === had[0]) ? had[0] : undefined;
   };
   // (a colour chosen in the system's chooser is given as it changes there, all of it one step)
@@ -78,7 +85,7 @@ export default function ColourCard({
   const give = (row: Row, color: string | null, gesture?: string) => {
     const s = store.getState();
     if (row === "ring") s.fillRings(target.rings, color, gesture);
-    else s.colourParts({ atoms: target.atoms, bonds: target.bonds }, row, color, gesture);
+    else s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
   };
   const width = 92 + (COLOURS.length + 2) * (SWATCH + 4) + 12;
   const height = rows.length * (SWATCH + 10) + 12;

@@ -1,4 +1,6 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { pushMeasures, pushOutlines } from "../../../lib/chem/pushArrow";
+import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -13,11 +15,12 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
 import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
-import { bondsAt, hiddenPictureMark, pictureMarks } from "./utils/molecule3d";
+import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
 import { currentStyle3D } from "./style3d";
 import { withSolidsImage } from "./render3d";
+import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemeOutlines } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
@@ -244,6 +247,20 @@ export function drawingLayout(
     };
     drawn = true;
   };
+  // (the electron-pushing arrows, drawn as the canvas draws them, with their lone pairs' dots)
+  const pm = pushMeasures(style, NOMINAL_BOND_LENGTH);
+  const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout, opts, opts.fontPx, pm);
+  for (const { push, shape } of pushed) {
+    const polys = pushOutlines(shape, !!push.half, pm);
+    // (in the bonds' ink, unless the arrow is given its own colour)
+    layout.polys.push(...polys.map((points) => ({ points, ...(push.color ? { color: push.color } : {}) })));
+    layout.fills.push(...shape.dots.map((d) => ({ ...d, ...(push.color ? { color: push.color } : {}) })));
+    const pts = [...polys.flat(), ...shape.dots.flatMap((d) => [{ x: d.c.x - d.r, y: d.c.y - d.r }, { x: d.c.x + d.r, y: d.c.y + d.r }])];
+    take(
+      pts.map((p) => p.x),
+      pts.map((p) => p.y),
+    );
+  }
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
   const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set);
@@ -282,6 +299,14 @@ export function drawingLayout(
         ys.push(m.a.y, m.b.y);
       }
     }
+    // (and as far as the surface each shows reaches - a lobe past its atoms)
+    for (const m of model.molecules3d ?? []) {
+      const b = pictureSurface(m, currentStyle3D())?.bounds;
+      if (b) {
+        xs.push(b.min.x, b.max.x);
+        ys.push(b.min.y, b.max.y);
+      }
+    }
     take(xs, ys);
   }
   // and their measurements, over them: their values as large as the
@@ -289,11 +314,8 @@ export function drawingLayout(
   const markSize = (opts.units === "px" ? opts.fontPx / layout.zoom : opts.fontPx) * MARK_SCALE;
   const family = labelSetOf(opts).fontFamily;
   const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, currentStyle3D(), markSize, undefined, family));
-  // and over each drawn without the hydrogens on its carbons, a word saying so
-  for (const m of model.molecules3d ?? []) {
-    const said = hiddenPictureMark(m, currentStyle3D(), markSize);
-    if (said) measures.push(said);
-  }
+  // and over each, what it says of itself: its hydrogens hidden or not in its file, its bond orders not known
+  for (const m of model.molecules3d ?? []) measures.push(...notePictureMarks(m, currentStyle3D(), markSize));
   if (measures.length) {
     layout.measures = measures;
     const xs: number[] = [];
@@ -440,7 +462,14 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
-/** Everything the canvas draws: its structures - its rings' fills with them - arrows and "+" signs. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "ringFills">>): Drawn {
-  return { ...state.model, ...(state.ringFills && Object.keys(state.ringFills).length ? { ringFills: state.ringFills } : {}), arrows: state.arrows, pluses: state.pluses, captions: state.captions };
+/** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs. */
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills">>): Drawn {
+  return {
+    ...state.model,
+    ...(state.pushes?.length ? { pushes: state.pushes } : {}),
+    ...(state.ringFills && Object.keys(state.ringFills).length ? { ringFills: state.ringFills } : {}),
+    arrows: state.arrows,
+    pluses: state.pluses,
+    captions: state.captions,
+  };
 }

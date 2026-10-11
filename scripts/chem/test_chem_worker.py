@@ -14,6 +14,8 @@ import pathlib
 import time
 import unittest
 
+from rdkit import Chem
+
 WORKER = pathlib.Path(__file__).resolve().parents[2] / "src-tauri/resources/plugins/rdkit/worker.py"
 spec = importlib.util.spec_from_file_location("chem_worker", WORKER)
 worker = importlib.util.module_from_spec(spec)
@@ -362,10 +364,60 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual([a.GetSymbol() for a in mol.GetAtoms()], ["C"] * 9 + ["O", "O", "N", "Cl"])
         self.assertEqual(Chem.MolToSmiles(mol), ask("to_smiles", molblock=PCPA)["result"]["smiles"])
 
+    def test_says_whether_it_found_a_molecule_in_3d_s_bond_orders(self):
+        # benzoic acid in 3D, its bonds all single as a file of coordinates gives them
+        from rdkit.Chem import AllChem
+        mol = Chem.AddHs(Chem.MolFromSmiles("OC(=O)c1ccccc1"))
+        AllChem.EmbedMolecule(mol, randomSeed=11)
+        flat = coordinates_only(mol)
+        found = ask("drawing_of", molblock=Chem.MolToMolBlock(flat, kekulize=False), perceive=True)["result"]
+        self.assertTrue(found["perceived"])
+        self.assertEqual(Chem.MolToSmiles(Chem.MolFromMolBlock(found["molblock"])), "O=C(O)c1ccccc1")
+        # its hydrogens left out, they cannot be found: it says so, and keeps the file's
+        heavy = coordinates_only(Chem.RemoveHs(mol))
+        lost = ask("drawing_of", molblock=Chem.MolToMolBlock(heavy, kekulize=False), perceive=True)
+        self.assertFalse(lost["ok"] and lost["result"]["perceived"])
+
+    def test_gives_a_ligand_its_bond_orders_from_a_smiles_and_then_its_hydrogens(self):
+        from rdkit.Chem import AllChem
+        mol = Chem.AddHs(Chem.MolFromSmiles("OC(=O)c1ccccc1"))
+        AllChem.EmbedMolecule(mol, randomSeed=11)
+        heavy = coordinates_only(Chem.RemoveHs(mol))
+        block = Chem.MolToMolBlock(heavy, kekulize=False)
+        given = ask("orders_from_smiles", molblock=block, smiles="OC(=O)c1ccccc1")["result"]["molblock"]
+        got = Chem.MolFromMolBlock(given, removeHs=False)
+        # its atoms in their order, the bonds as the SMILES has them
+        self.assertEqual([a.GetSymbol() for a in got.GetAtoms()], [a.GetSymbol() for a in heavy.GetAtoms()])
+        self.assertEqual(Chem.MolToSmiles(got), "O=C(O)c1ccccc1")
+        # then its hydrogens, each where its atom puts it, after its atoms
+        with_h = Chem.MolFromMolBlock(ask("add_hydrogens", molblock=given)["result"]["molblock"], removeHs=False)
+        self.assertEqual(with_h.GetNumAtoms(), heavy.GetNumAtoms() + 6)
+        self.assertEqual([a.GetSymbol() for a in with_h.GetAtoms()][: heavy.GetNumAtoms()], [a.GetSymbol() for a in heavy.GetAtoms()])
+        conf = with_h.GetConformer()
+        for a in with_h.GetAtoms():
+            if a.GetSymbol() == "H":
+                n = a.GetNeighbors()[0].GetIdx()
+                self.assertLess((conf.GetAtomPosition(a.GetIdx()) - conf.GetAtomPosition(n)).Length(), 1.2)
+        # a SMILES of another molecule: said, not forced
+        self.assertFalse(ask("orders_from_smiles", molblock=block, smiles="c1ccccc1")["ok"])
+
     def test_answers_what_it_cannot_do_with_an_error_not_a_crash(self):
         self.assertEqual(ask("exec", code="1")["error"], "no such request: exec")
         self.assertFalse(ask("from_smiles", smiles="C1CC")["ok"])
         self.assertFalse(worker.answer("not json")["ok"])
+
+
+def coordinates_only(mol):
+    """A molecule as a file of coordinates gives it: its atoms where they
+    stand, every bond single, nothing else known."""
+    flat = Chem.RWMol(mol)
+    for b in flat.GetBonds():
+        b.SetBondType(Chem.BondType.SINGLE)
+        b.SetIsAromatic(False)
+    for a in flat.GetAtoms():
+        a.SetIsAromatic(False)
+        a.SetFormalCharge(0)
+    return flat.GetMol()
 
 
 if __name__ == "__main__":

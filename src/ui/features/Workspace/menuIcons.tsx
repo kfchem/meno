@@ -68,6 +68,19 @@ export const MENU_ICONS = {
       <path d="M6.6 10 H13.4" />
     </>,
   ),
+  // (a curved arrow, its head full - a pair of electrons - or half, a fishhook's)
+  pushArrow: own(
+    <>
+      <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
+      <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+    </>,
+  ),
+  fishhook: own(
+    <>
+      <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
+      <path d="M17.6 8.6 L16.1 13.4" />
+    </>,
+  ),
   // (everything inside a dashed frame)
   selectAll: own(<rect x="3.5" y="3.5" width="13" height="13" rx="1.5" strokeDasharray="2.4 2.2" />),
   // (a paragraph's lines, as they lie)

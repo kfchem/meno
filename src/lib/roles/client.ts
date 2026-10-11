@@ -36,9 +36,18 @@ export type ChemRequests = {
   /**
    * A molecule in 3D as a formula to draw: its heavy atoms in their order,
    * laid out in 2D and wedged as it is in 3D; its bonds' orders found where
-   * they are not known (`perceive`).
+   * they are not known (`perceive`) - and whether they were (`perceived`):
+   * never without hydrogens, which they are found by.
    */
-  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string } };
+  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
+  /**
+   * A molecule in 3D whose file gives no bond orders given them from a
+   * SMILES of the same molecule (RDKit's AssignBondOrdersFromTemplate): its
+   * atoms in their order, its bonds' orders and charges the SMILES's.
+   */
+  orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
+  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
+  add_hydrogens: { args: { molblock: string }; result: { molblock: string } };
 };
 
 export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };

@@ -30,6 +30,8 @@ export type FileMolecule3D = {
   bondsFrom?: "distance";
   /** Its atoms' names and residues, and its secondary structure: a PDB entry's chains (lib/chem/biopolymer). */
   biopolymer?: Biopolymer;
+  /** Its bonds' orders "unknown": its file gives coordinates alone (an XYZ or PDB file). */
+  bondOrders?: "unknown";
 };
 
 /**
@@ -135,6 +137,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           atoms: first.atoms,
           bonds: first.bonds,
           bondsFrom: "distance",
+          bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((f) => f.atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
           ...(energies?.length === molecules.length ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
@@ -233,10 +236,12 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
         ...named,
         ...biopolymer(first),
+        // (a PDB file gives no bond orders: CONECT records say which atoms are bonded, not how)
+        bondOrders: "unknown" as const,
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms) }));
+  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);

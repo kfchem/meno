@@ -3,7 +3,8 @@ import { setCursor } from "../../../theme/cursors";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { bondRadiusOf, KEY_LIGHT_FROM, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
+import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
+import KeyLight3D from "./KeyLight3D";
 import { LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
@@ -20,6 +21,7 @@ import { schemeAmong } from "../utils/copyPaste";
 import { setMembers } from "../workflow/entries";
 import CalcList3D from "./CalcList3D";
 import { isAsk, readGrid, resultKey, resultsOn, type Ask, type ListResult } from "../../../../lib/calc/results";
+import { SURFACE_ISO } from "../utils/surfaceMesh";
 import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "../../../../lib/calc/asks";
 import { titled } from "../../../../lib/calc/sources";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -576,7 +578,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   return (
     <group>
       <ambientLight intensity={style.ambientLight} />
-      <directionalLight position={KEY_LIGHT_FROM as [number, number, number]} intensity={style.keyLight} />
+      <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       {molecules.map((m) => {
         // (one of its lists open under it: the row chosen moves it, the row pointed at - or chosen - marks its atoms)
         const open = lists[m.id];
@@ -591,7 +593,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
               )
             : undefined;
         const surface = list && row?.surface ? held(m.calc, list, row.surface, asks, wantAsked.current, readGrid) : undefined;
-        const asking = [motion, surface].find((h) => h?.state && h.state !== "given")?.state;
+        // (and what colours it, where another grid does)
+        const colourBy = list && row?.colour ? held(m.calc, list, row.colour.by, asks, wantAsked.current, readGrid) : undefined;
+        const asking = [motion, surface, colourBy].find((h) => h?.state && h.state !== "given")?.state;
         return (
           <Molecule3DView
             key={m.id}
@@ -620,6 +624,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
+            surfaceColour={colourBy?.value && row?.colour ? { grid: colourBy.value, from: row.colour.from, to: row.colour.to } : null}
             marked={settingMoves?.id === m.id ? settingMoves.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
             editingMeasure={measureEdit?.id === m.id ? measureEdit.measure : null}
             onSetMeasure={(measure, value) => {
@@ -649,6 +654,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                   }
                   iso={surface?.value ? (open.iso ?? surface.value.iso ?? DEFAULT_ISO) : undefined}
                   onIso={(iso) => store.getState().setIso3d(m.id, iso)}
+                  scale={colourBy?.value && row?.colour ? { from: row.colour.from, to: row.colour.to, ...(row.colour.label ? { label: row.colour.label } : {}) } : undefined}
                   onClose={() => store.getState().closeList3d(m.id)}
                   onRoom={(bottom) => makeRoom(m, bottom)}
                   area={dom}
@@ -689,7 +695,7 @@ const NONE: number[] = [];
 const SCRUB_ANGSTROM = 0.01;
 const SCRUB_DEGREES = 0.5;
 /** The value a surface is drawn at where its grid says none. */
-const DEFAULT_ISO = 0.05;
+const DEFAULT_ISO = SURFACE_ISO;
 
 /**
  * A row's motion or surface (`v`), as it can be shown: given in the row,

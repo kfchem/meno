@@ -123,6 +123,9 @@ stops being part of the work.
   read in the column and deleted as the stack is.
 - **Its figures and words are taken out from here** as from the column
   (*Taking things out*, below).
+- **Selected with the rest of the page** by a click, a box or a lasso,
+  and moved, copied and deleted with it (*With the rest of the page*,
+  below).
 
 ### In the column
 
@@ -209,7 +212,8 @@ stops being part of the work.
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
   JPEG) opened or dropped, or a picture pasted from the clipboard, such
-  as a screenshot.
+  as a screenshot - or a render of molecules in 3D, a picture or a film
+  that plays where it lies ([`RENDER.md`](./RENDER.md)).
 - **Drawn as a structure is**: in the drawing, in the order things were
   put there. A picture is never drawn over a molecule in 3D.
 - **Moved, scaled and turned.** It is selected as a structure is, and
@@ -598,8 +602,8 @@ Decided while building it, for the maintainer to confirm:
 - **The cache is never cleared yet.** A PDF stays in Meno's cache once held, so that a workspace opened later finds it, and the cache grows with the PDFs opened.
 
 Not yet, and where it comes:
-- **Selecting PDFs with others**: by a click, a box or a lasso, and copying, cutting and pasting them. This comes with pictures (step 4); for now a PDF is moved alone.
-- **Pasting a PDF copied in the Finder or Explorer.** For now it is opened or dropped.
+- **Selecting PDFs with others**: by a click, a box or a lasso, and copying, cutting and pasting them. Built 2026-10-11 (*With the rest of the page*, below).
+- **Pasting a PDF copied in the Finder or Explorer.** Built 2026-10-11 (*With the rest of the page*, below).
 - **A double-click opening it in the column**: came in step 2.
 
 ### Step 2: a PDF read in the column (2026-10-09)
@@ -662,7 +666,7 @@ Built:
   - where a search finds something.
 - **Selecting words**, in the column and on a stack or its pages spread.
   - In the column, a drag on words selects them at once; two clicks select a word, three a line. A selection can run across pages, and the column moves on as the pointer nears its top or foot.
-  - On a stack at full size, a drag moves the view, as a drag on empty space does. Held still a moment on its words - as a box begins on empty space, the same ring spreading - the word under the press is selected, and the selection is drawn on from it as the pointer goes. A click selects nothing; two read the PDF in the column.
+  - On a stack at full size, a drag moves the view, as a drag on empty space does. Held still a moment on its words - as a box begins on empty space, the same ring spreading - the word under the press is selected, and the selection is drawn on from it as the pointer goes. A click selected nothing then (it selects the PDF since: *With the rest of the page*, below); two read the PDF in the column.
   - A press between two lines, or just past a line's end, counts as on the line beside it.
   - The words selected are marked in Meno's light, the same on the stack and in the column.
   - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too.
@@ -721,7 +725,7 @@ Decided while building it, for the maintainer to confirm:
 
 Not yet, and where it comes:
 - **A figure cut out of a PDF by a box**, with *Show in the PDF*: built in step 4b, below.
-- **A JPEG on the clipboard**, as some browsers copy a photograph: only a PNG or a bitmap is read for now.
+- **A JPEG on the clipboard**, as some browsers copy a photograph: built 2026-10-11 (*With the rest of the page*, below).
 - **Reading a picture as a structure**: stage 5.
 
 ### Step 4b: figures cut out of a PDF (2026-10-09)
@@ -827,7 +831,7 @@ Decided while building it, for the maintainer to confirm:
 - **Lenient grammars.** A text written as its program reads it should never be marked: an ORCA block's `end` closes the block on the line it opens, and a sub-block's on its own line; a value block (`%maxcore`) is told by its name; Gaussian's route may go on over lines. What a grammar cannot tell without a program's list of keywords is not marked: a missing blank line after Gaussian's route section reads as more of the route.
 
 Not yet, and where it comes:
-- **Copying and pasting sheets**, and turning them with the selection's handle (it carries them not).
+- **Copying and pasting sheets**, and turning them with the selection's handle: built 2026-10-11 (*With the rest of the page*, below).
 - **A step's card lies over the canvas**, in HTML, as all a workflow's cards do: a log's lines come out from under its step's card, and pass under the other cards on their way, as a PDF's page does.
 - **More grammars**: a language Lezer has a grammar for is a line here and its few tens of kilobytes; Python, JSON and XML for now, as the specification lists.
 
@@ -855,6 +859,25 @@ Not yet, and where it comes:
 - **Math** (`$...$`), footnotes and other extensions GitHub draws but GFM 0.29 does not specify are shown as written.
 - **Searching a text** (Cmd/Ctrl+F looks in PDFs).
 
+### With the rest of the page (2026-10-11)
+
+Built (lane L9, the maintainer's choice of the *Not yet* items):
+- **A PDF is selected as a picture is.** A click on it selects it alone - on a link, the link is followed instead; Ctrl/Cmd and a click adds it to the selection or takes it out; a box or a lasso takes it by the middle of what it covers; *Select all* takes it. A PDF spread is selected whole, its pages with it; a page is still moved alone by a long press on its rim. Selected, it is framed in the selection's colour, round each of its pages where they are spread.
+- **Selected, it goes with the rest.** A drag on it moves the whole selection - the view no longer - and a press held still on it does what it does on any PDF (words selected, a box drawn, a page or the stack taken hold of). Delete, Cut, Copy and Paste take it with the rest, each as one step. The selection's handle carries it round, upright, by its place. Selecting words in a PDF, or drawing a box on one, lets the PDFs selected go, and selecting a PDF lets them go: one selection.
+- **Copied**, a PDF goes in Meno's record by its file's SHA-256, as it lies - full size or an icon, spread, its pages' own places - but not where it was read; it is pasted from Meno's cache, where every PDF opened is kept, in any tab. Export is not offered for PDFs and texts' sheets alone, which it does not write.
+- **Texts' sheets too**: copied and pasted with the selection - each text whole, a sheet of its own where it is pasted, not read in the column; a sheet alone also goes to other programs as its words - and carried round by the selection's handle, upright.
+- **Files copied in the Finder or Explorer are pasted** as they would be dropped where the paste goes: PDFs, pictures, texts, workspaces and structures' files (`clipboard_file_names`, `clipboard_file`: the app reads the files the clipboard holds - the Finder's file URLs, Explorer's list of files - and the page names no path).
+- **A JPEG on the clipboard**, as a browser copies a photograph, is pasted as a picture, kept as it is (`public.jpeg` on a Mac, `JFIF` on Windows).
+- **A stack moved by an undo or a redo glides there** (320 ms), as pages spread do; one dragged, or moved with the selection, follows the pointer.
+
+Decided while building it, for the maintainer to confirm:
+- **A click on a full-size PDF selects it** (the maintainer), and a click on a link follows the link, not selecting it.
+- **A PDF spread is selected whole** (the maintainer).
+- **Selected, a drag moves the selection** at once, as for a picture; a press held still keeps its meaning.
+
+Not yet, and where it comes:
+- **A PDF copied to another program** goes as nothing yet; its file could go, as the Finder copies one.
+
 ### Pages placed one by one (2026-10-10)
 
 Built (lane L9):
@@ -870,8 +893,8 @@ Decided while building it, for the maintainer to confirm:
 - **The number under a page is *3 / 12***, as the column's page number reads.
 
 Not yet, and where it comes:
-- **A stack moved by an undo still jumps** there, as before; only pages spread glide.
-- **Selecting PDFs, or pages, with others**, to be moved, copied or deleted together (*Not yet* in step 1).
+- **A stack moved by an undo still jumped** there, as before; only pages spread glided. Done since (*With the rest of the page*, above).
+- **Selecting PDFs, or pages, with others**, to be moved, copied or deleted together: done since for PDFs, whole (*With the rest of the page*, above).
 
 ## In order
 
