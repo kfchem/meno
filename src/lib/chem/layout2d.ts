@@ -12,7 +12,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 import { namesLaid } from "../layout/names";
 
 export { implicitHydrogens };
@@ -2059,7 +2059,7 @@ export function showsLabel(
   );
 }
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /**
  * How an atom that is not an element is labelled, or nothing for one that

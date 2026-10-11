@@ -24,7 +24,7 @@ import { complexStructure, LIGAND_UNITS, ligandStructure, namedLigand, type Grou
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS as TABLE } from "./elements";
 
 export type Abbreviation = {
   /** How it is written when its bond comes in from the left: OTBS, CO2Me. */
@@ -589,7 +589,7 @@ function smilesGroup(smiles: string): GroupStructure {
 
 // --- writing a label ---------------------------------------------------------
 
-const ELEMENTS = new Set(elements.map((e) => e.symbol));
+const ELEMENTS = new Set(TABLE.map((e) => e.symbol));
 /**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.

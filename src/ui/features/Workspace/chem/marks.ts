@@ -6,7 +6,7 @@
  */
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
-import { elements } from "../../../../utils/atomUtils";
+import { ELEMENTS } from "../../../../lib/chem/elements";
 import type { Model } from "../store/types";
 
 /** A stereodescriptor's letters, against the labels': on the drawing and on a molecule in 3D alike. */
@@ -54,7 +54,7 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
   return marks;
 }
 
-const NAMES = new Map(elements.map((e) => [e.symbol, e.name]));
+const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
 /** What is wrong with an atom's valence, in words. */
 export function valenceMessage(el: string, p: ValenceProblem): string {

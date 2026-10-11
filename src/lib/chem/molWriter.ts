@@ -3,7 +3,7 @@ import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
-import { elements } from "../../utils/atomUtils";
+import { ELEMENTS } from "./elements";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number };
@@ -117,7 +117,7 @@ const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 /** MOL's radical codes. */
 const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 
-const ELEMENT_SYMBOLS = new Set(elements.map((e) => e.symbol));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
 

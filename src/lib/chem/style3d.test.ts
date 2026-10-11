@@ -23,9 +23,10 @@ import {
 
 describe("the 3D style", () => {
   it("draws balls a fifth of the van der Waals radius, as the 3D viewer did - and space-filling, each atom as large as it is", () => {
-    expect(atomRadius("C", BALL_AND_STICK)).toBeCloseTo(0.34, 9);
-    expect(atomRadius("H", BALL_AND_STICK)).toBeCloseTo(0.22, 9);
-    expect(atomRadius("C", look3dPreset("space").look)).toBeCloseTo(1.7, 9);
+    // (Alvarez's radii: carbon 1.77 A, hydrogen 1.20)
+    expect(atomRadius("C", BALL_AND_STICK)).toBeCloseTo(0.354, 9);
+    expect(atomRadius("H", BALL_AND_STICK)).toBeCloseTo(0.24, 9);
+    expect(atomRadius("C", look3dPreset("space").look)).toBeCloseTo(1.77, 9);
     expect(bondRadiusOf(BALL_AND_STICK)).toBe(0.1);
     expect(bondRadiusOf(look3dPreset("space").look)).toBe(0);
   });

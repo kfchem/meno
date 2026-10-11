@@ -1,4 +1,4 @@
-import { elements } from "./atomUtils";
+import { singleBondRadius } from "../lib/chem/elements";
 import type { Molecule, ParsedAtom, ParsedBond, StereoGroup } from "../lib/chem/molecule";
 import { readSDfile, type CtMolecule } from "../lib/chem/ctfile";
 
@@ -76,7 +76,7 @@ const covalent = new Map<string, number>();
 function covalentRadius(el: string): number {
   let r = covalent.get(el);
   if (r === undefined) {
-    r = elements.find((e) => e.symbol === el)?.single ?? 1.5;
+    r = singleBondRadius(el) ?? 1.5;
     covalent.set(el, r);
   }
   return r;
