@@ -182,42 +182,119 @@ function Invoke-MenoQuickAdd {
 
       .DESCRIPTION
       A double-click at the point opens Quick Add, and the icon is clicked
-      where src/ui/features/Workspace/quickAddPlace.ts puts it: up and to
-      the right of the point, or below it or to its left where the canvas
-      has no room for it at its largest - its calculations or its SMILES
-      field open - held there by its top left corner (OFF 14, SIZE 36, a
-      border of 1 and padding of 4, icons 2 apart - CSS px, twice as many in
-      a shot; the canvas begins under the 40 px title bar). Its
-      calculations' size depends on the plugins added: -CalcRows rows of
-      steps (and procedures), at most -CalcMost icons in one - Meno's three,
-      alone, by default. Change this with that. SMILES opens the field below
-      the row, which then takes the keys.
+      where Quick Add is seen to stand: its box found in a shot taken as it
+      opens (Find-MenoQuickAdd), its icons from its top left (a border of 1
+      and padding of 4, icons 36 wide and 2 apart, the Calculations button
+      after a rule of 9 - CSS px, twice as many in a shot). Where it stands
+      depends on how large it grows (src/ui/features/Workspace/
+      quickAddPlace.ts), and so on the plugins added and the procedures
+      saved on the computer the run is on - which a scenario cannot know.
+      Should the box not be found, the icon is clicked where it would stand
+      with -CalcRows rows of steps (and procedures) at most -CalcMost icons
+      long - Meno's own, alone, by default - and a warning says so. SMILES
+      opens the field below the row, which then takes the keys; Shapes, the
+      shapes; Calculations, the calculations.
     #>
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
-        [int] $CalcMost = 3
+        [int] $CalcMost = 4
     )
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide")
-    $size = Get-ClientSize
-    $cw = $size.Width / 2; $ch = $size.Height / 2 - 40
-    $px = $X / 2; $py = $Y / 2 - 40
-    # (the row and the Calculations button after a rule, its height with its padding; and its largest, a panel open)
-    $w = ($row.Count + 1) * 36 + 8 + 9; $h = 36 + 8
-    $mostW = [Math]::Max($w, 84 + $CalcMost * 36 + 8)
-    $mostH = [Math]::Max($h + $CalcRows * 36 + 9, $h + 32 + 9)
-    $right = ($px + 14 + $mostW -le $cw - 4) -or ($px - 14 - $mostW -lt 4)
-    $left = if ($right) { [Math]::Max(4, [Math]::Min($px + 14, $cw - 4 - $mostW)) } else { $px - 14 - $mostW }
-    $top = if ($py - 14 - $h -ge 4) { $py - 14 - $h } else { $py + 14 }
-    $top = [Math]::Max(4, [Math]::Min($top, $ch - 4 - $mostH))
-    $ix = $left + 1 + 4 + $row.IndexOf($Item) * 38 + 18
-    $iy = $top + 1 + 4 + 18
+    # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
+    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
+    $box = Find-MenoQuickAdd -X $X -Y $Y
+    if ($box) {
+        $left = $box.Left / 2; $top = $box.Top / 2 - 40
+    } else {
+        Write-Warning "Quick Add was not found as it opened at ($X, $Y): its icon is clicked where it would stand with $CalcRows row(s) of calculations"
+        $size = Get-ClientSize
+        $cw = $size.Width / 2; $ch = $size.Height / 2 - 40
+        $px = $X / 2; $py = $Y / 2 - 40
+        # (the row and the Calculations button after a rule, its height with its padding; and its largest, a panel open)
+        $w = ($row.Count + 1) * 36 + 8 + 9; $h = 36 + 8
+        $mostW = [Math]::Max($w, 84 + $CalcMost * 36 + 8)
+        $mostH = [Math]::Max($h + $CalcRows * 36 + 9, $h + 32 + 9)
+        $right = ($px + 14 + $mostW -le $cw - 4) -or ($px - 14 - $mostW -lt 4)
+        $left = if ($right) { [Math]::Max(4, [Math]::Min($px + 14, $cw - 4 - $mostW)) } else { $px - 14 - $mostW }
+        $top = if ($py - 14 - $h -ge 4) { $py - 14 - $h } else { $py + 14 }
+        $top = [Math]::Max(4, [Math]::Min($top, $ch - 4 - $mostH))
+    }
+    $ix = if ($Item -eq "Calculations") { $left + 1 + 4 + $row.Count * 38 + 9 + 18 } else { $left + 1 + 4 + $row.IndexOf($Item) * 38 + 18 }
+    $iy = $top + 1 + 4 + 18
     Invoke-MenoClick -X ([int](2 * $ix)) -Y ([int](2 * ($iy + 40)))
     Start-Sleep -Milliseconds 300
+}
+
+function Find-MenoQuickAdd {
+    <#
+      .SYNOPSIS
+      Where Quick Add stands, just opened at (X, Y): the top left of its box
+      in shot pixels, or nothing where it is not to be seen.
+
+      .DESCRIPTION
+      The window is shot, and a column of the shot walked a little to the
+      right of the point - then to its left, where Quick Add opens to the
+      left of it: its box is the pair of hairline edges (App.css
+      --color-gh-line) 44 CSS px apart that cross it, the row of icons alone
+      as it opens; its left edge is walked to along the row's middle, and
+      its right edge looked for as wide as the row away.
+    #>
+    param([Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y)
+    $png = Join-Path ([System.IO.Path]::GetTempPath()) "meno-quick-add-$PID.png"
+    Save-MenoShot -Path $png | Out-Null
+    try { $px = Read-ShotPixels -Png $png } finally { Remove-Item $png -ErrorAction SilentlyContinue }
+    foreach ($cx in @(($X + 68), ($X - 68))) {
+        if ($cx -lt 0 -or $cx -ge $px.Width) { continue }
+        $edges = @()
+        for ($y = 80; $y -lt $px.Height; $y++) {
+            if ((Test-ShotHairline $px $cx $y) -and -not (Test-ShotHairline $px $cx ($y - 1))) { $edges += $y }
+        }
+        foreach ($top in $edges) {
+            if ($null -eq ($edges | Where-Object { [Math]::Abs($_ - $top - 86) -le 6 } | Select-Object -First 1)) { continue }
+            $mid = $top + 44
+            for ($x = $cx; $x -gt 0; $x--) {
+                if (-not (Test-ShotHairline $px $x $mid)) { continue }
+                # (as wide as its row as it opens - nine icons and Calculations, with their gaps, some 397 CSS px - or not Quick Add)
+                for ($r = $x + 720; $r -le [Math]::Min($x + 860, $px.Width - 1); $r++) {
+                    if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top } }
+                }
+                break
+            }
+        }
+    }
+    return $null
+}
+
+function Read-ShotPixels {
+    # A shot's pixels, read through a BMP of it - sips's on a Mac, System.Drawing's on Windows: what Test-ShotHairline looks at.
+    param([Parameter(Mandatory)] [string] $Png)
+    $bmp = [System.IO.Path]::ChangeExtension($Png, ".bmp")
+    if ($IsWindows) {
+        Add-Type -AssemblyName System.Drawing
+        $image = [System.Drawing.Bitmap]::new($Png)
+        try { $image.Save($bmp, [System.Drawing.Imaging.ImageFormat]::Bmp) } finally { $image.Dispose() }
+    } else {
+        & sips -s format bmp $Png --out $bmp *> $null
+    }
+    try { $b = [System.IO.File]::ReadAllBytes($bmp) } finally { Remove-Item $bmp -ErrorAction SilentlyContinue }
+    $w = [BitConverter]::ToInt32($b, 18)
+    $h = [BitConverter]::ToInt32($b, 22)
+    $bpp = [BitConverter]::ToInt16($b, 28)
+    [pscustomobject]@{
+        Width = $w; Height = [Math]::Abs($h); Bytes = $b; Offset = [BitConverter]::ToInt32($b, 10)
+        Stride = [int]([Math]::Floor(($bpp * $w + 31) / 32) * 4); Step = $bpp / 8; BottomUp = $h -gt 0
+    }
+}
+
+function Test-ShotHairline($px, [int] $x, [int] $y) {
+    # (Meno's hairline grey, App.css --color-gh-line 209, 217, 224 - give or take; the BMP's bytes blue first)
+    $row = if ($px.BottomUp) { $px.Height - 1 - $y } else { $y }
+    $i = $px.Offset + $row * $px.Stride + $x * $px.Step
+    return [Math]::Abs($px.Bytes[$i + 2] - 209) -le 14 -and [Math]::Abs($px.Bytes[$i + 1] - 217) -le 14 -and [Math]::Abs($px.Bytes[$i] - 224) -le 14
 }
 
 function Add-MenoSmiles {

@@ -90,7 +90,7 @@ available:
 |---|---|
 | `Start-Meno` | start the app under test, sized and in front |
 | `Open-MenoFile -Path` | open a structure with Ctrl/Cmd+O: in place of the first tab's blank canvas, or in a tab of its own |
-| `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons: `Chain` begins a chain at the point, `SMILES` opens its field |
+| `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons, clicked where Quick Add is seen to stand in a shot (where it stands depends on the plugins added and procedures saved): `Chain` begins a chain at the point, `SMILES` opens its field, `Shapes` and `Calculations` theirs |
 | `Add-MenoSmiles -Smiles [-X -Y] [-WaitSec]` | a structure from a SMILES, by Quick Add, centred at the point (the middle of the canvas unless told), and let go of |
 | `Save-MenoFile -Path` | Save As (Ctrl/Cmd+Shift+S), under a path not already taken - a workspace (`.meno`), say |
 | `Save-Step -Name` | a numbered screenshot |
