@@ -1074,9 +1074,12 @@ carbon), and the marks fell on few that were right.
 ion, a silyl ether, an alkyne, cholesterol), each clean and made poor
 (halved, blurred, saved as a JPEG at 55): MolScribe read 20 of 20 clean
 and 19 of 20 poor right, stereo and all; MolNexTR 18 and 18. A picture
-takes about 0.3 s on a Mac's processor (an M4), after a second or two to
-load the model; the processor is as quick as the Mac's GPU here, and is
-the same on Windows.
+takes about 0.3 s on a Mac's processor (an M4) - as quick as the Mac's GPU
+here, and the same on Windows - once the model is loaded, which the first
+picture waits for: a few seconds, and about a minute the first time a
+computer loads it, as macOS looks over each new library (the workers say
+they are ready at once, so that this does not count against a worker's
+start).
 
 **Worked round in the workers**, as their makers' code is: a pool of
 sixteen processes started for each picture (one process instead);
