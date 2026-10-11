@@ -9,6 +9,9 @@
 # - "click-then-type": a click on one atom, then at once a letter typed over
 #   another (the ring's top atom). The letter is the second atom's label: a
 #   pyridine, and nothing begun on the first.
+# - "push-right-press": an electron-pushing arrow begun from C1's menu, led to
+#   the O and let go by a right press there. The arrow goes, and no menu
+#   opens (the O's did).
 #
 # (A right press in the middle of a drag, the fourth, opens no menu either:
 # its press needs a chorded button the shared verbs do not post, and was
@@ -50,3 +53,11 @@ Send-MenoKey Enter
 Move-MenoPointer -X 300 -Y 300
 Start-Sleep -Milliseconds 400
 Save-Step "click-then-type"
+
+# an electron-pushing arrow from C1's menu (its fifth icon), led to the O, let go by a right press
+Invoke-MenoClick -X 1216 -Y 988 -Right
+Invoke-MenoClick -X 1566 -Y 1033
+Move-MenoPointerAlong -Path @(@(1460, 1040), @(1360, 1040), @(1260, 1040), @(1180, 1040), @(1140, 1038), @(1128, 1038)) -StepMs 40
+Invoke-MenoClick -X 1128 -Y 1038 -Right
+Start-Sleep -Milliseconds 400
+Save-Step "push-right-press"
