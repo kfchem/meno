@@ -27,6 +27,7 @@ import { keepClipboard, keepPageUnselected, openIntent, undoIntent } from "./lib
 import { saverOf } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
+import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -283,7 +284,7 @@ export default function App() {
         // (a workspace file: its workspace, and the outputs it keeps held)
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
-          openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
+          openWorkspaceTab(name, workspace, path);
           continue;
         }
         const text = new TextDecoder().decode(bytes);
@@ -334,15 +335,32 @@ export default function App() {
     const into = stateRef.current.activeId;
     const texts: OpenedText[] = [];
     for (const f of files) {
-      const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
-      const text = workspace == null ? await f.text() : "";
-      // (told as Open through the dialog tells it: a catalogue's kind too)
-      const opened = workspace != null ? openedAs(f.name, workspace, undefined, MENO_KINDS.workspace) : openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
-      const asText = textsOf(opened);
-      if (asText) texts.push(...asText);
-      else openTab(opened);
+      try {
+        const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
+        if (workspace != null) {
+          openWorkspaceTab(f.name, workspace);
+          continue;
+        }
+        const text = await f.text();
+        // (told as Open through the dialog tells it: a catalogue's kind too)
+        const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
+        const asText = textsOf(opened);
+        if (asText) texts.push(...asText);
+        else openTab(opened);
+      } catch (e) {
+        // (as Open through the dialog says it: a file that does not read - a workspace cut short - said so, not dropped unseen)
+        setNotice(`${f.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
     if (texts.length) openTexts(texts, into);
+  };
+  // A workspace file's workspace in a tab of its own - where it opens: one
+  // that does not - saved by a newer Meno, say - is said so, and leaves no
+  // empty tab named after it.
+  const openWorkspaceTab = (name: string, workspace: string, path?: string) => {
+    const problem = workspaceProblem(workspace);
+    if (problem) setNotice(`${name} could not be read: ${problem}.`);
+    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
   };
   // (the key listened for once; what it does is this render's)
   const pickRef = useRef(pickFiles);

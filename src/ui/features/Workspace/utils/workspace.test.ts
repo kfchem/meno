@@ -4,7 +4,7 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
-import { readTexts, readWorkspace, workspaceFile, workspaceText } from "./workspace";
+import { readTexts, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
@@ -226,5 +226,23 @@ describe("a workspace file", () => {
     expect(readWorkspace("not json")).toBeNull();
     expect(readWorkspace(JSON.stringify({ format: "meno-structure", version: 1, atoms: [], bonds: [] }))).toBeNull();
     expect(readWorkspace(JSON.stringify({ format: "meno-workspace", version: 2, atoms: [], bonds: [] }))).toBeNull();
+  });
+});
+
+describe("a workspace that does not open", () => {
+  it("says why before a tab is made for it - saved by a newer Meno, or none Meno reads - and nothing where it opens", () => {
+    const { state } = (() => {
+      const doc = createWorkspaceDocument();
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      return { state: () => store.getState() };
+    })();
+    state().addCaption("K2CO3, DMF", 0, 0);
+    const saved = workspaceText(state());
+    expect(workspaceProblem(saved)).toBeNull();
+    const newer = JSON.stringify({ ...JSON.parse(saved), version: 2 });
+    expect(workspaceProblem(newer)).toBe("it was saved by a newer Meno - update Meno to open it");
+    expect(workspaceProblem("{")).toBe("it is not a workspace Meno reads");
+    expect(workspaceProblem(JSON.stringify({ format: "something else", version: 1 }))).toBe("it is not a workspace Meno reads");
   });
 });
