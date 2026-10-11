@@ -358,6 +358,10 @@ export const WILEY: DrawingStyle = {
  */
 export const MENO: DrawingStyle = {
   ...ACS_1996,
+  // (its ink the black of Meno's palette, a little softer than a journal's
+  // pure black, which print wants - the maintainer, 2026-10-11)
+  bondColor: "#141414",
+  labelColor: "#141414",
   ends: "round",
   fontFamily: "IBM Plex Sans",
   stereoDescriptors: "plain",

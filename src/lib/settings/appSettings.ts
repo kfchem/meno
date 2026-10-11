@@ -11,6 +11,7 @@ import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../chem/style";
 import { acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
+import { acceptColours, DEFAULT_COLOURS, type ColourSettings } from "../chem/palette";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
 import type { OptionValues } from "../options";
 import { isRole } from "../plugins/roles";
@@ -48,6 +49,8 @@ export type AppSettings = {
   calculations: CalculationSettings;
   /** The procedures saved (docs/WORKFLOWS.md, *Procedures*): put down again from Quick Add. */
   procedures: SavedProcedure[];
+  /** The user's own colour sets, and the one in use: what a part of a structure can be given from its colour card (lib/chem/palette). */
+  colours: ColourSettings;
 };
 
 /**
@@ -161,6 +164,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   words: { smart: true },
   calculations: {},
   procedures: [],
+  colours: DEFAULT_COLOURS,
 };
 
 /** The file's layout; bumped when it changes in a way old files need reading round. */
@@ -186,6 +190,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
     procedures: acceptProcedures(r.procedures),
+    colours: acceptColours(r.colours),
   };
 }
 
@@ -389,6 +394,7 @@ type SettingsState = AppSettings & {
   setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
   setProcedures: (procedures: SavedProcedure[]) => void;
+  setColours: (colours: ColourSettings) => void;
 };
 
 /** How long after the last change the file is written. */
@@ -399,9 +405,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures } = get();
+      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures }),
+        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -458,6 +464,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setProcedures: (procedures) => {
       set({ procedures });
+      scheduleSave();
+    },
+    setColours: (colours) => {
+      set({ colours: acceptColours(colours) });
       scheduleSave();
     },
     setUpdates: (updates) => {

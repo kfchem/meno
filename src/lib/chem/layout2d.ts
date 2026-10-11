@@ -42,7 +42,7 @@ export type Atom = AtomChem & {
   chargeAt?: Vec2;
   /** The colour its label is drawn in - its charge with it - where it is given one (as CSS: "#d55e00"). */
   color?: string;
-  /** The colour it is highlighted in, behind the drawing, where it is: drawn as a light tint of it (`highlightTint`). */
+  /** The colour it is highlighted in, behind the drawing, where it is: drawn in it exactly. */
   highlight?: string;
 };
 export type Bond = BondChem & {
@@ -179,8 +179,8 @@ export type LayoutOptions = {
   aromaticCircle?: boolean | { enabled: Set<string> };
   /**
    * The rings filled with a colour, behind the drawing: the colour (as CSS)
-   * by the ring's key - its atoms' ids, ascending, joined by "-" - drawn as
-   * a light tint of it (`ringTint`).
+   * by the ring's key - its atoms' ids, ascending, joined by "-" - drawn in
+   * it exactly.
    */
   ringFills?: Readonly<Record<string, string>>;
 };
@@ -4159,28 +4159,6 @@ export function layoutMolecule(
 
 /** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
 const HIGHLIGHT_REACH = 0.4;
-/** How much of white a highlight, and a ring's fill, is mixed with: light enough to read the drawing over. */
-const HIGHLIGHT_WHITE = 0.7;
-const RING_WHITE = 0.78;
-
-/** `css` (#rrggbb) mixed with white by `share`; as it is, if it is not one this reads. */
-function towardWhite(css: string, share: number): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(css.trim());
-  if (!m) return css;
-  const n = parseInt(m[1], 16);
-  const mix = (c: number) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0");
-  return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
-}
-
-/** The light tint a part highlighted in `css` is drawn in, flat, its edge sharp. */
-export function highlightTint(css: string): string {
-  return towardWhite(css, HIGHLIGHT_WHITE);
-}
-
-/** The light tint a ring filled with `css` is drawn in. */
-export function ringTint(css: string): string {
-  return towardWhite(css, RING_WHITE);
-}
 
 /** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
 export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
@@ -4244,14 +4222,16 @@ function roundedBox(left: number, bottom: number, right: number, top: number, r:
 /**
  * What is drawn behind the drawing: each ring filled (`LayoutOptions.ringFills`),
  * then each part highlighted - a band along each bond, round each atom, or
- * round its label where it has one - in a flat light tint of its colour, so
- * that one colour's pieces run together into one shape with a sharp edge.
+ * round its label where it has one - flat in its colour exactly (a pale one
+ * from the palette reads the drawing over), so that one colour's pieces run
+ * together into one shape with a sharp edge.
  */
 function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
   const out: Under[] = [];
   for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
     const ring = ringOfKey(atoms, bonds, key);
-    if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color: ringTint(color) });
+    // (in the colour given, exactly - the maintainer, 2026-10-11)
+    if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color });
   }
   if (!atoms.some((a) => a.highlight) && !bonds.some((b) => b.highlight)) return out;
   const font = toWorld(opts.fontPx, zoom, opts.units);
@@ -4259,13 +4239,13 @@ function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts
   const set = labelSetOf(opts);
   for (const b of bonds) {
     if (!b.highlight || b.endpoints?.length || b.a1 === b.a2) continue;
-    out.push({ points: bandOf(atoms[b.a1], atoms[b.a2], h), color: highlightTint(b.highlight) });
+    out.push({ points: bandOf(atoms[b.a1], atoms[b.a2], h), color: b.highlight });
   }
   const labelOf = new Map(labels.filter((t) => t.atom != null).map((t) => [t.atom!, t]));
   atoms.forEach((a, i) => {
     if (!a.highlight) return;
     const t = labelOf.get(i);
-    const color = highlightTint(a.highlight);
+    const color = a.highlight;
     if (!t) {
       out.push({ points: roundOf(a, h), color });
       return;
