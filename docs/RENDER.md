@@ -136,6 +136,16 @@ uv, no package), and the script Blender runs, `render.py`.
   `Program Files\Blender Foundation\Blender *`, the newest first
   (`installed[].places`). On macOS an app picked in *Locate…* stands for
   the program inside it.
+- **Blender 5.0 or later.** Meno asks each copy it finds its version
+  (`blender --version`, `installed[].version`) - as it looks, as one is
+  located and before each render - and takes the one located where it is
+  new enough, else the newest copy that is. Settings, *Plugins*, shows
+  the version beside where it is; of an older copy it says why it will not
+  do: "Meno needs Blender 5.0 or later; this one is 4.1", and *Locate…*
+  refuses one. It looks again whenever Meno is come back to while
+  *Plugins* is shown, so a Blender installed or updated meanwhile is taken
+  without starting Meno again; a copy is asked once, and again only once
+  its file has changed.
 - **Its job** runs Blender as its manual says (docs.blender.org, Blender
   5.2, "Command Line Arguments"): `blender -b --factory-startup -noaudio
   --offline-mode -t <cores> --python-exit-code 1 -P render.py --
@@ -182,6 +192,8 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 5. **Materials** - glossy, metal, glass, matte, clay - for molecules and for
    surfaces apart, written as Khronos's glTF extensions.
 6. **The command first**; Render as a workflow's step in a later change.
+7. **Blender 5.0 or later**, a round line; the newest copy new enough
+   taken, its version shown in Settings.
 
 ## Not yet
 
