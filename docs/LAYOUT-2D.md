@@ -151,7 +151,17 @@ they hang from.
   only with every stereocentre in it as given: a ring fusion is cis or
   trans with the same bonds between the same atoms, so a solid found from
   how far apart the bonds put its atoms may have one the wrong way - and
-  morphine, flat with its bridge across, stays as it was.
+  morphine, flat with its bridge across, stays as it was. That goes for a
+  cage with rings fused flat onto it too, read as it is drawn, those rings
+  with it: laid beside the bond it shares with the cage, a ring stands on
+  one face of the cage there or the other, and only one is the molecule.
+  Scopolamine's epoxide, laid towards its three-carbon bridge and not its
+  N, drew another isomer - the wedges right for a reader that reads them
+  flat, the perspective showing the epoxide on the other face; and
+  tetrodotoxin's guanidine ring turned one of the atoms it joins the cage
+  at. Both are drawn flat now.
+  The cage seen from its other side, for a mirrored frame, is kept only so
+  too.
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds
