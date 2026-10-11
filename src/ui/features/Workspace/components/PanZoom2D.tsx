@@ -383,7 +383,7 @@ export function PanZoom2D() {
 
   // (a talk given: the view is its own, taken up again from where it left it)
   const drivenBefore = useRef(false);
-  useFrame((_, dt) => {
+  useFrame(({ size }, dt) => {
     const cam = camera as any;
     if (viewDriven(camera)) {
       drivenBefore.current = true;
@@ -472,7 +472,7 @@ export function PanZoom2D() {
       if (Math.abs(zoomGlide.current) < 0.02 || next !== old * Math.exp(take)) zoomGlide.current = 0;
     }
 
-    const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
+    const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1, width: size.width, height: size.height };
     if (viewMoved(seenView.current, view)) {
       pointer.current.moved();
       invalidate();

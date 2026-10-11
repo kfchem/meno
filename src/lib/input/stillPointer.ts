@@ -4,9 +4,10 @@
  * something else without moving. What is lit as under it, and what a press
  * there will take hold of, is found again then, as a move of no distance
  * would find it: the way a browser moves the pointer by nothing after a
- * page scrolls. With a button held, what the press drags - an atom, a box's
- * corner - goes on following the pointer the same way, rather than staying
- * where the view took it and jumping back at the next move.
+ * page scrolls - and likewise when the window is resized round it. With a
+ * button held, what the press drags - an atom, a box's corner - goes on
+ * following the pointer the same way, rather than staying where the view
+ * took it and jumping back at the next move.
  *
  * Only a mouse stays over the view: a finger or a pen lifted is over nothing.
  */
@@ -23,7 +24,8 @@ export type PointerLike = {
 /** Where a pointer is, and the buttons held: to be moved there again. */
 export type PointerAt = { clientX: number; clientY: number; pointerId: number; buttons: number };
 
-export type View = { x: number; y: number; zoom: number };
+/** Where a view looks, how near, and how large it is (a window resized moves what is under the pointer too). */
+export type View = { x: number; y: number; zoom: number; width: number; height: number };
 
 /**
  * A watch on one view's pointer: what it has heard, and whether something
@@ -68,5 +70,5 @@ export function stillPointer() {
 /** Whether the view has moved from where it was. */
 export function viewMoved(was: View | null, now: View): boolean {
   if (!was) return false;
-  return was.x !== now.x || was.y !== now.y || was.zoom !== now.zoom;
+  return was.x !== now.x || was.y !== now.y || was.zoom !== now.zoom || was.width !== now.width || was.height !== now.height;
 }

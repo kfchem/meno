@@ -70,11 +70,12 @@ describe("what is under a pointer held still, found again", () => {
 });
 
 describe("a view moved", () => {
-  it("is moved when two fingers move it, the wheel zooms it, or it is fitted - not when it is first drawn", () => {
-    const was = { x: 0, y: 0, zoom: 40 };
+  it("is moved when two fingers move it, the wheel zooms it, it is fitted or the window resized - not when it is first drawn", () => {
+    const was = { x: 0, y: 0, zoom: 40, width: 1280, height: 800 };
     expect(viewMoved(null, was)).toBe(false);
     expect(viewMoved(was, { ...was })).toBe(false);
     expect(viewMoved(was, { ...was, x: -6 })).toBe(true);
     expect(viewMoved(was, { ...was, zoom: 46 })).toBe(true);
+    expect(viewMoved(was, { ...was, width: 1000 })).toBe(true);
   });
 });
