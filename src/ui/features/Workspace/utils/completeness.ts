@@ -179,6 +179,36 @@ export function withOrders(m: Molecule3D, atoms: readonly number[], molblock: st
 }
 
 /**
+ * A molecule given bond orders and formal charges for some of its atoms
+ * (`atoms`), as an estimate made of them alone gives them: `orders`, each
+ * bond's among them by its place in `bonds`, the molecule's bonds between
+ * two of them in turn; `charges`, each atom's in turn. Its other bonds and
+ * atoms as they were.
+ */
+export function withPartOrders(m: Molecule3D, atoms: readonly number[], orders: readonly number[], charges: readonly number[]): Molecule3D {
+  const at = new Map(atoms.map((a, k) => [a, k]));
+  let k = 0;
+  const bonds = m.bonds.map((b) => {
+    if (!at.has(b.a1) || !at.has(b.a2)) return b;
+    const order = orders[k++];
+    return order === b.order ? b : { ...b, order };
+  });
+  const atomsNow = m.atoms.map((a, i) => {
+    const k = at.get(i);
+    if (k == null || charges[k] === (a.charge ?? 0)) return a;
+    const { charge: _was, ...rest } = a;
+    return charges[k] ? { ...rest, charge: charges[k] } : rest;
+  });
+  return { ...m, atoms: atomsNow, bonds };
+}
+
+/** The bonds among some of a molecule's atoms (`atoms`), each by those atoms' places: as an estimate is asked of them, in the molecule's order. */
+export function bondsAmong(m: Pick<Molecule3D, "bonds">, atoms: readonly number[]): { a1: number; a2: number }[] {
+  const at = new Map(atoms.map((a, k) => [a, k]));
+  return m.bonds.flatMap((b) => (at.has(b.a1) && at.has(b.a2) ? [{ a1: at.get(b.a1)!, a2: at.get(b.a2)! }] : []));
+}
+
+/**
  * A molecule given the hydrogens the worker added to some of its atoms
  * (`atoms`, the block's first ones in their order; its new hydrogens after
  * them): each put after the molecule's atoms, bonded to its atom - in the

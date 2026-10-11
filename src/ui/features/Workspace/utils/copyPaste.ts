@@ -415,7 +415,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
     ...(biopolymer ? { biopolymer } : {}),
-    ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" ? { bondOrders: m.bondOrders } : {}),
+    ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? { bondOrders: m.bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
     ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
