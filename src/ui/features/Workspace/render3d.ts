@@ -13,6 +13,7 @@ import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfac
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { fitShadow, lightBoxOf } from "./utils/shadows3d";
+import { ScreenShade, shadeMarginPx, shadeWith } from "./utils/screenShade";
 
 /** How smooth a ball and a stick are in a picture: finer than on the canvas, a picture being looked at closely - a ball finer still where it is large in it (`ballSegmentsFor`). */
 const BALL_SEGMENTS = 48;
@@ -189,7 +190,7 @@ export function rendered3d(
       });
       if (occlusion) {
         setAtomOcclusion(ball, occlusion.atoms);
-        ao.strength.value = drawn.occlusion;
+        ao.strength.value = drawn.occlusionBy === "atoms" ? drawn.occlusion : 0;
         ao.direct.value = OCCLUSION_DIRECT;
       }
       atomsMesh.castShadow = atomsMesh.receiveShadow = true;
@@ -209,7 +210,7 @@ export function rendered3d(
         });
         if (occlusion) {
           setBondOcclusion(stick, occlusion.bonds);
-          bo.strength.value = drawn.occlusion;
+          bo.strength.value = drawn.occlusionBy === "atoms" ? drawn.occlusion : 0;
           bo.direct.value = OCCLUSION_DIRECT;
         }
         bondsMesh.castShadow = bondsMesh.receiveShadow = true;
@@ -264,6 +265,20 @@ export function rendered3d(
         }
       }
       scene.add(group);
+      // hollows shaded on the screen, where its look shades them so: as the
+      // canvas does, at the picture's own resolution, each tile seeing a
+      // margin round it (what shades its edge lies beyond it)
+      const shade = drawn.occlusionBy === "screen" ? new ScreenShade(scene, 0.5) : null;
+      if (shade) {
+        // (its balls, sticks and ribbons: not its measurements)
+        for (const o of group.children) {
+          const mesh = o as THREE.Mesh;
+          if ((mesh as THREE.InstancedMesh).isInstancedMesh || ribbonMats.includes(mesh.material as THREE.Material)) shadeWith(mesh, () => drawn.occlusion);
+        }
+        scene.add(shade.sheet);
+        made.push(shade);
+      }
+      const margin = shade ? Math.min(shadeMarginPx(pxPerWorld), Math.floor(most / 4)) : 0;
       // the key light's shadow, fitted round it, as dark as the style has it
       if (style.shadows > 0) {
         group.updateMatrixWorld(true);
@@ -293,11 +308,12 @@ export function rendered3d(
       const view = { left: (b.min.x - m.at.x) * k, right: (b.max.x - m.at.x) * k, top: (b.max.y - m.at.y) * k, bottom: (b.min.y - m.at.y) * k };
       const x0 = Math.round((b.min.x - bounds.min.x) * pxPerWorld);
       const y0 = Math.round((bounds.max.y - b.max.y) * pxPerWorld);
-      for (const t of tilesOf(w, h, most)) {
-        const left = view.left + ((view.right - view.left) * t.x) / w;
-        const right = view.left + ((view.right - view.left) * (t.x + t.w)) / w;
-        const top = view.top - ((view.top - view.bottom) * t.y) / h;
-        const bottom = view.top - ((view.top - view.bottom) * (t.y + t.h)) / h;
+      for (const t of tilesOf(w, h, most - 2 * margin)) {
+        // (with its margin, which is drawn but not kept)
+        const left = view.left + ((view.right - view.left) * (t.x - margin)) / w;
+        const right = view.left + ((view.right - view.left) * (t.x + t.w + margin)) / w;
+        const top = view.top - ((view.top - view.bottom) * (t.y - margin)) / h;
+        const bottom = view.top - ((view.top - view.bottom) * (t.y + t.h + margin)) / h;
         if (ortho) {
           Object.assign(ortho, { left, right, top, bottom, near, far: 2 * EYE_HEIGHT });
           ortho.updateProjectionMatrix();
@@ -305,9 +321,12 @@ export function rendered3d(
           camera.projectionMatrix.makePerspective(left, right, top, bottom, near, D * 2);
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
         }
-        renderer.setSize(t.w, t.h, false);
+        const tw = t.w + 2 * margin;
+        const th = t.h + 2 * margin;
+        renderer.setSize(tw, th, false);
+        shade?.update(renderer, camera, tw, th, true);
         renderer.render(scene, camera);
-        ctx.drawImage(renderer.domElement, 0, 0, t.w, t.h, x0 + t.x, y0 + t.y, t.w, t.h);
+        ctx.drawImage(renderer.domElement, margin, margin, t.w, t.h, x0 + t.x, y0 + t.y, t.w, t.h);
       }
     }
   } finally {
