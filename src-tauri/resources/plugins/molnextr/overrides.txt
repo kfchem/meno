@@ -1,0 +1,3 @@
+# MolNexTR pins pyonmttok 1.37.1, built for no Python after 3.11; reading a
+# picture never loads it, and the lock leaves it out (requirements.in).
+pyonmttok>=1.38

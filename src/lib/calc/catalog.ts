@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type InstalledDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
@@ -57,6 +57,8 @@ export type PythonPlugin = ReaderBase &
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
     installed: readonly InstalledDecl[];
+    /** The files it needs downloaded besides its environment - a model's weights - fetched as it is set up (src-tauri/src/plugfiles.rs). */
+    downloads: readonly DownloadDecl[];
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -92,6 +94,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     writes: m.writes.filter((w) => !MENO_IDS.has(w.id)),
     steps: m.steps,
     installed: m.installed,
+    downloads: m.downloads,
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     profile: `plugin-${m.id}`,
