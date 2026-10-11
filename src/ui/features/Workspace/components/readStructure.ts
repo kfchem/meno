@@ -1,19 +1,21 @@
 /**
  * *Read as structure* (docs/PDF.md, *Stage 5*): the figure in a box drawn on
- * a PDF's page, or a picture cut out of one, read as a structure and put on
- * the page beside the PDF or the picture - clear of what lies there - as one
- * step, selected; the view taking it in where it lies out of view.
+ * a PDF's page, or a picture cut out of one - its lines read by Meno, or,
+ * where it is a picture, the picture by the plugin that reads them - or any
+ * picture on the page, read as a structure and put on the page beside the
+ * PDF or the picture - clear of what lies there - as one step, selected;
+ * the view taking it in where it lies out of view.
  */
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { takenOnPage } from "../chem/make3d";
-import { placedBeside, readBox } from "../utils/figures";
+import { placedBeside, readBox, readPicture } from "../utils/figures";
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 
-/** Where a figure is: its PDF, its page and its box there, in points from the page's top left. */
-export type FigureSource = { sha256: string; page: number; box: [number, number, number, number] };
+/** Where a figure is: its PDF, its page and its box there, in points from the page's top left; or a picture on the page, all of it. */
+export type FigureSource = { sha256: string; page: number; box: [number, number, number, number] } | { picture: Pick<PictureItem, "sha256" | "media"> };
 
 /** What the page around a picture takes, turned as it is. */
 export function pictureRegion(p: Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">): Region {
@@ -35,10 +37,10 @@ export async function readStructure(
   region: Region,
   ui: { working: (what: string | null) => void; say: (why: string | null) => void; view: () => Region | null; fit: () => void },
 ): Promise<void> {
-  ui.working("Reading the figure…");
+  ui.working("picture" in source ? "Reading the picture…" : "Reading the figure…");
   ui.say(null);
   try {
-    const read = await readBox(source.sha256, source.page, source.box);
+    const read = "picture" in source ? await readPicture(source.picture) : await readBox(source.sha256, source.page, source.box, ui.working);
     if ("none" in read) {
       ui.say(read.none);
       return;

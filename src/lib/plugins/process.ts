@@ -9,12 +9,14 @@
  * to do. A worker has no business on the network; the app keeps it off it.
  *
  * It says it is ready, and its version - that of what it brings, as it
- * runs - in its first line: `{"event": "ready", "version": ...}`.
+ * runs - in its first line: `{"event": "ready", "version": ...}`. A plugin
+ * that downloads files besides its environment is given the folder they
+ * are kept in as its one argument.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { resolveResource } from "@tauri-apps/api/path";
-import { ensurePyEnv, pyEnvReady } from "../pyEnv";
+import { ensurePyEnv, pluginFilesFolder, pyEnvReady } from "../pyEnv";
 import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
 import { ChemClient } from "../roles/client";
@@ -69,6 +71,7 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
   if (!(await pyEnvReady(p.profile))) throw new Error(`${p.name} is not added: add it in Settings, Plugins.`);
   const python = await ensurePyEnv(p.profile);
   const script = await resolveResource(p.worker);
+  const files = await pluginFilesFolder(p);
   // (heard from before the worker's id is known, so that nothing it says
   // first is missed; kept to its own lines once it is)
   let id: string | null = null;
@@ -103,7 +106,7 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
       whenStopped.forEach((f) => f(p.id));
     }
   });
-  id = await invoke<string>("ext_spawn_sidecar", { payload: { entry: python, args: ["-u", script] } });
+  id = await invoke<string>("ext_spawn_sidecar", { payload: { entry: python, args: ["-u", script, ...(files ? [files] : [])] } });
   const worker = id;
   for (const m of early.splice(0)) if (m.id === worker) onLine.forEach((f) => f(m.line));
   try {

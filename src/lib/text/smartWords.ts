@@ -17,6 +17,10 @@
  *   (2026-10-10) - and stays as it is; so does a hyphen next to a letter
  *   (4-Å MS, Pd-118, 1,2-dichloroethane).
  *
+ * - **Bullets:** a hyphen or a star typed at a line's start - after any tabs
+ *   - and then a space begins a list's item: "- " → "• " (docs/
+ *   EDITOR-2D.md, *Text*).
+ *
  * A range waits for its word's end: until then 7647-0 may still be the start
  * of a CAS number.
  */
@@ -27,6 +31,7 @@ export type Change = { from: number; to: number; insert: string };
 export const MINUS = "\u2212";
 export const EN_DASH = "\u2013";
 export const DEGREES_C = "\u00b0C";
+export const BULLET = "\u2022";
 
 /** A number: maybe a minus, typed or written, digits, and maybe a decimal part. */
 const NUM = String.raw`[\-\u2212]?\d+(?:[.,]\d+)?`;
@@ -87,6 +92,9 @@ export function typedChanges(text: string, from: number, to: number): Change[] {
   const out: Change[] = [];
   for (let i = Math.max(from - 1, 0); i < to; i++) {
     if (text[i] === "-" && isDigit(text[i + 1]) && (i === 0 || STARTS.test(text[i - 1]))) out.push({ from: i, to: i + 1, insert: MINUS });
+    // (a hyphen or a star alone at a line's start, a space typed after it: a bullet)
+    if (text[i] === " " && i >= from && i > 0 && (text[i - 1] === "-" || text[i - 1] === "*") && /^\t*$/.test(text.slice(text.lastIndexOf("\n", i - 2) + 1, i - 1)))
+      out.push({ from: i - 1, to: i, insert: BULLET });
   }
   for (let k = from; k < to; k++) {
     if (!WORDLY.test(text[k])) out.push(...wordEnded(text, k));

@@ -17,6 +17,7 @@ const good = {
   steps: [],
   systems: [],
   installed: [],
+  downloads: [],
   guide: [],
   suggests: [],
   files: [],
@@ -26,10 +27,10 @@ describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -185,6 +186,32 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest(byRole)?.installed.map((d) => d.name)).toEqual(["blender"]);
     // (Gaussian's, as Meno carries it)
     expect(MANIFESTS.find((m) => m.id === "gaussian")?.installed[0]).toMatchObject({ name: "g16", path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] } });
+  });
+
+  it("may need files downloaded besides its environment: each as it must be - HTTPS, its hash and size, a name not a path - or the plugin is none", () => {
+    const weights = { file: "model.pth", name: "Its trained model", licence: "MIT", url: "https://huggingface.co/a/b/resolve/0123abc/model.pth", sha256: "ab".repeat(32), bytes: 1_134_173_494 };
+    expect(acceptManifest({ ...good, downloads: [weights] })?.downloads).toEqual([weights]);
+    for (const wrong of [
+      { file: "../model.pth" },
+      { file: "Model.pth" },
+      { file: "model.pth.part" },
+      { url: "http://huggingface.co/model.pth" },
+      { url: "https://user@host/model.pth" },
+      { url: "https://host/a model.pth" },
+      { sha256: "AB".repeat(32) },
+      { sha256: "ab" },
+      { bytes: 0 },
+      { bytes: 1.5 },
+      { bytes: 3e10 },
+      { name: "" },
+      { licence: undefined },
+    ])
+      expect(acceptManifest({ ...good, downloads: [{ ...weights, ...wrong }] }), JSON.stringify(wrong)).toBeNull();
+    expect(acceptManifest({ ...good, downloads: [weights, weights] })).toBeNull();
+    expect(acceptManifest({ ...good, downloads: weights })).toBeNull();
+    // (a plugin that runs nothing uses none)
+    const { environment: _e, reads: _r, kinds: _k, ...data } = good;
+    expect(acceptManifest({ ...data, guide: [{ title: "Hello", text: "Hello." }], downloads: [weights] })?.downloads).toEqual([]);
   });
 
   it("may say how a program installed separately says its version, and the least Meno takes - as the backend reads it", () => {

@@ -60,6 +60,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
+| Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | the Blender interface (a job: Blender, installed separately) |
@@ -85,8 +86,14 @@ Everything a plugin is lives in one folder, named by its id:
   (or pixi.toml and  needs conda-forge, by pixi
    pixi.lock)
   <name>.grammar     how a text of a kind it knows is coloured, where it says
+  overrides.txt      what its lock overrides, where its makers pin what cannot
+                     be installed (MolNexTR's)
   LICENSE            its licence's text, where it is not Meno's (*Licences*)
 ```
+
+What it needs besides - a model's trained weights, too large to carry and
+no package - is not in its folder: its manifest says where Meno fetches it
+(`downloads`), into its environment's folder.
 
 A plugin that runs nothing - Getting started, which brings a guide and a
 catalogue - has a manifest alone.
@@ -145,6 +152,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one "Meno needs Blender 5.0 or later; this one is 4.1". Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
+| `downloads` | list of `{file, name, licence, url, sha256, bytes}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -259,7 +267,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 ## Several plugins, one role
 
 - **One plugin fills a role at a time**: the one assigned. The others that
-  could are offered in the same place.
+  could are offered in the same place. Where none is assigned, the first
+  that is added fills it - the one the chemist added, of MolScribe and
+  MolNexTR - else the first in Meno's order, set up when it is first
+  needed, asking first.
 - **For reading a file, others may add to it.** The assigned reader reads
   the file. Others the chemist adds for that kind read it as well, and
   their results join under their names, as an NBO plugin's would join
@@ -377,7 +388,13 @@ The same for every plugin and for Meno's own parts:
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
-    {molblock}` (its bond orders from a SMILES, its hydrogens added).
+    {molblock}` (its bond orders from a SMILES, its hydrogens added);
+    `read_picture {picture}` (structures read from pictures: a PNG or a
+    JPEG in base64, answered with the structure's atoms where the picture
+    has them, in its pixels - each an element with its charge, or a label
+    as drawn - its bonds by index, a wedge's or a hash's nearer end and,
+    where the plugin can tell, which end is drawn narrow, and what it is
+    unsure of, by no number: PDF.md, *A picture read*).
     (A general `run {role, input, options}`, planned at first, was never
     needed: a new role comes with Meno, and with it its requests);
   - `prepare {step, entries, options, cores}` and `collect {step,

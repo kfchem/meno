@@ -5,7 +5,7 @@ import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
-import { arrowsWithWords, captionSet } from "../../../lib/chem/captions";
+import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionFileText } from "./chem/reactionFile";
@@ -267,7 +267,7 @@ export function drawingLayout(
   }
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
-  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set);
+  const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
   const outlines = schemeOutlines({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
   if (outlines.length) {
     const points = outlines.flat();
@@ -278,11 +278,11 @@ export function drawingLayout(
     );
   }
   // and the words on the page, set as the canvas sets them
-  const words = (model.captions ?? []).flatMap((c) => captionSet(c.text, c.x, c.y, opts.fontPx, set, c.width, c.align).items);
+  const words = (model.captions ?? []).flatMap((c) => wordsSet(c, opts, set).items);
   if (words.length) {
     layout.texts.push(...words);
     // (each line's ink, about where it is set)
-    const boxes = words.map((t) => ({ t, b: labelBox(t, opts.fontPx, set) }));
+    const boxes = words.map((t) => ({ t, b: labelBox(t, t.ownSize ? t.fontPx : opts.fontPx, set) }));
     take(
       boxes.flatMap(({ t, b }) => [t.x - b.left, t.x + b.right]),
       boxes.flatMap(({ t, b }) => [t.y - b.bottom, t.y + b.top]),

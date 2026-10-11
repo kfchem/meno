@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { captionPlace, captionSet, type CaptionSet } from "../../../../lib/chem/captions";
+import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
@@ -34,7 +34,7 @@ const NARROWEST_EMS = 2;
 const SHADE_COLOR = new THREE.Color(SELECTION_SHADE);
 
 /** A caption as it is set about its middle, and the room it takes. */
-type Laid = { c: Caption } & CaptionSet;
+type Laid = { c: Caption; fs: number } & CaptionSet;
 
 /**
  * The words on the page (lib/chem/captions), set as the drawing sets its
@@ -76,8 +76,9 @@ export default function Captions2D() {
 function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selected: boolean }) {
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
-  const fs = opts.fontPx;
-  const laid = useMemo<Laid>(() => ({ c, ...captionSet(c.text, 0, 0, fs, set, c.width, c.align) }), [c, fs, set]);
+  // (at its own size, or the labels'; its letters as they were marked)
+  const fs = wordsFontPx(c, opts);
+  const laid = useMemo<Laid>(() => ({ c, fs, ...wordsSet(c, opts, set, { x: 0, y: 0 }) }), [c, fs, opts, set]);
   // (given back by what was written in their place: seen at once, as that was - else faded in, as they come)
   const [fadeIn] = useState(() => store.getState().captionLeft?.id !== c.id);
   return (
@@ -90,12 +91,12 @@ function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selecte
 
 /** Where a caption is taken hold of: the room round its words, lit while the pointer is on it, shaded while it is selected. */
 function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
-  const { c, halfW, halfH } = laid;
+  const { c, halfW, halfH, fs } = laid;
   const store = useEditorStore();
   const hovered = useEditor((s) => s.hoveredCaption === c.id);
   const { opts } = useDrawnLayout();
   const { camera, gl, invalidate } = useThree();
-  const margin = MARGIN * opts.fontPx;
+  const margin = MARGIN * fs;
   const light = useRef<THREE.MeshBasicMaterial>(null);
   const shade = useRef<THREE.MeshBasicMaterial>(null);
   // (shaded as a structure is, under the drawing: the page's white going over to the shade - opaque, so behind the bonds)
@@ -175,10 +176,10 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       const others = s.captions
         .filter((o) => o.id !== c.id)
         .map((o) => {
-          const r = captionSet(o.text, o.x, o.y, opts.fontPx, labelSetOf(opts), o.width, o.align);
+          const r = wordsSet(o, opts, labelSetOf(opts));
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
-      const placed = captionPlace({ x: q.x + off.x, y: q.y + off.y }, { w: halfW, h: halfH }, arrowsBeside(s, opts.fontPx, labelSetOf(opts), c.id), opts.fontPx, others);
+      const placed = captionPlace({ x: q.x + off.x, y: q.y + off.y }, { w: halfW, h: halfH }, arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
       s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
     };
     window.addEventListener("pointermove", onMove);
@@ -222,7 +223,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selSlides.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);
@@ -325,7 +326,10 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
         e.stopPropagation();
         // (the other edge stays where it is; this one follows the pointer)
         const fixed = c.x - side * halfW;
-        const narrowest = NARROWEST_EMS * opts.fontPx;
+        const narrowest = NARROWEST_EMS * laid.fs;
+        // (a box keeps its top as its lines are broken again; words over an arrow, their middle)
+        const top = c.arrow == null ? c.y + halfH : null;
+        const set = labelSetOf(opts);
         const gesture = `resize-${performance.now()}`;
         const st = store.getState();
         st.beginPanHold(e.nativeEvent.pointerId);
@@ -333,7 +337,9 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
         const onMove = (ev: PointerEvent) => {
           const q = toWorld(ev.clientX, ev.clientY);
           const edge = side > 0 ? Math.max(fixed + narrowest, q.x) : Math.min(fixed - narrowest, q.x);
-          store.getState().updateCaption(c.id, { width: Math.abs(edge - fixed), x: (edge + fixed) / 2 }, gesture);
+          const width = Math.abs(edge - fixed);
+          const y = top != null ? top - wordsSet({ ...c, width }, opts, set).halfH : c.y;
+          store.getState().updateCaption(c.id, { width, x: (edge + fixed) / 2, y }, gesture);
         };
         const onUp = (ev: PointerEvent) => {
           window.removeEventListener("pointermove", onMove);

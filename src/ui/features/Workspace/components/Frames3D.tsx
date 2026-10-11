@@ -173,7 +173,7 @@ export default function Frames3D({
   return (
     <PageHtml zIndexRange={[30, 20]}>
       <div
-        className="meno-page-chip flex flex-col items-center select-none"
+        className="meno-page-chip meno-control-chip flex flex-col items-center select-none"
         style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => {

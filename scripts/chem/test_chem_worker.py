@@ -76,6 +76,21 @@ def v3000(atoms, bonds):
     return "\n".join(lines) + "\n"
 
 
+def v3000_3d(atoms, bonds):
+    """A V3000 block in 3D, as Meno writes one past 999 atoms (molWriter
+    writeMolfile3d): atoms as (element, x, y, z), bonds as (first, second,
+    order), 0-based."""
+    lines = ["", "  Meno              3D", "", "  0  0  0     0  0  0  0  0  0999 V3000",
+             "M  V30 BEGIN CTAB", f"M  V30 COUNTS {len(atoms)} {len(bonds)} 0 0 0", "M  V30 BEGIN ATOM"]
+    for i, (el, x, y, z) in enumerate(atoms):
+        lines.append(f"M  V30 {i + 1} {el} {x:.4f} {y:.4f} {z:.4f} 0")
+    lines += ["M  V30 END ATOM", "M  V30 BEGIN BOND"]
+    for i, (a, b, order) in enumerate(bonds):
+        lines.append(f"M  V30 {i + 1} {order} {a + 1} {b + 1}")
+    lines += ["M  V30 END BOND", "M  V30 END CTAB", "M  END"]
+    return "\n".join(lines) + "\n"
+
+
 def v2000(atoms, bonds):
     """A V2000 block: atoms as (element, x, y), bonds as (first, second,
     order, "up" / "down" / None), 0-based, a wedge narrow at `first`."""
@@ -363,6 +378,28 @@ class ChemWorkerTest(unittest.TestCase):
         # its heavy atoms, in their order, and the same molecule, configuration and all
         self.assertEqual([a.GetSymbol() for a in mol.GetAtoms()], ["C"] * 9 + ["O", "O", "N", "Cl"])
         self.assertEqual(Chem.MolToSmiles(mol), ask("to_smiles", molblock=PCPA)["result"]["smiles"])
+
+    def test_draws_a_molecule_in_3d_of_more_atoms_than_v2000_counts_as_a_formula(self):
+        # an all-trans alkane, C333H668 - 1001 atoms - its bonds all single,
+        # as a file of coordinates gives them, in a V3000 block
+        n = 333
+        atoms = [("C", 1.258 * i, 0.444 if i % 2 else -0.444, 0.0) for i in range(n)]
+        bonds = [(i, i + 1, 1) for i in range(n - 1)]
+        for i in range(n):
+            side = 1 if i % 2 else -1
+            for z in (0.89, -0.89):
+                atoms.append(("H", atoms[i][1], atoms[i][2] + side * 0.63, z))
+                bonds.append((i, len(atoms) - 1, 1))
+        for i, d in ((0, -1), (n - 1, 1)):
+            atoms.append(("H", atoms[i][1] + d * 1.03, atoms[i][2] + (1 if i % 2 else -1) * 0.36, 0.0))
+            bonds.append((i, len(atoms) - 1, 1))
+        self.assertEqual(len(atoms), 1001)
+        found = ask("drawing_of", molblock=v3000_3d(atoms, bonds), perceive=True)["result"]
+        self.assertTrue(found["perceived"])
+        drawn = Chem.MolFromMolBlock(found["molblock"])
+        # its heavy atoms, in their order: a chain of 333 carbons
+        self.assertEqual(drawn.GetNumAtoms(), n)
+        self.assertEqual(Chem.MolToSmiles(drawn), "C" * n)
 
     def test_says_whether_it_found_a_molecule_in_3d_s_bond_orders(self):
         # benzoic acid in 3D, its bonds all single as a file of coordinates gives them

@@ -166,7 +166,8 @@ export default function ChemMarks2D({
       w: (r.left + r.right) * z,
       h: (r.top + r.bottom) * z,
       round: !box,
-      message: valenceMessage(a.el, problem),
+      // (read from a figure and unsure there too: said after - the one mark says both)
+      message: [valenceMessage(a.el, problem), read?.atoms.get(id)].filter(Boolean).join(" "),
     });
   }
   // and, dashed, what the drawing says of its stereochemistry only by luck:
