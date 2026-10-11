@@ -3,9 +3,11 @@ import { RISE } from "../theme/motion";
 import {
   ArrowDownTrayIcon,
   CheckCircleIcon,
+  InformationCircleIcon,
   NoSymbolIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
+import { useNotices } from "../notices";
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -26,6 +28,8 @@ const LINGER_MS = 6000;
  * opens the full record.
  */
 export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
+  const notices = useNotices((s) => s.notices);
+  const dismissNotice = useNotices((s) => s.dismiss);
   const tasks = useNetwork((s) => s.tasks);
   const connections = useNetwork((s) => s.connections);
   const [now, setNow] = useState(() => Date.now());
@@ -76,6 +80,39 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
     <div className="absolute right-3 bottom-3 z-[90] flex flex-col gap-2 w-80 pointer-events-none">
       {/* each card comes in, and goes, softly; the others make room as it does */}
       <AnimatePresence initial={false}>
+      {/* what Meno did of itself, with the way to have it otherwise (../notices) */}
+      {notices.map((n) => (
+        <motion.div
+          key={`notice-${n.id}`}
+          layout
+          {...RISE}
+          role="status"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            dismissNotice(n.id);
+          }}
+          className="pointer-events-auto rounded-lg border border-gh-line bg-white/95 shadow-md px-3 py-2 text-xs text-gh-black"
+        >
+          <div className="flex items-center gap-2">
+            <InformationCircleIcon className="h-4 w-4 shrink-0 text-accel-base" />
+            <span className="font-medium truncate flex-1">{n.title}</span>
+          </div>
+          <div className="mt-1 pl-6 text-gh-gray leading-snug">{n.text}</div>
+          {n.action && (
+            <div className="mt-1.5 pl-6">
+              <button
+                onClick={() => {
+                  n.action!.run();
+                  dismissNotice(n.id);
+                }}
+                className="h-6 px-2 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base"
+              >
+                {n.action.label}
+              </button>
+            </div>
+          )}
+        </motion.div>
+      ))}
       {cards.map(({ key, task, conns }) => {
         const blocked = !task;
         const hosts = [

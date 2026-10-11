@@ -2,16 +2,13 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { castersNow, castersOn, fitShadow, lightBoxOf, SHADOW_SOFT, type LightBox } from "../utils/shadows3d";
+import { LARGE_ATOMS, largeOn, lighterText } from "../utils/largeDrawing";
+import { useNotices } from "../../../notices";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { withSharedSetting } from "../../../../lib/chem/style3d";
 
 /** The shadow map's size, in texels a side. */
 const SHADOW_MAP = 2048;
-/**
- * The most atoms casting shadows on the canvas: past it - tens of
- * thousands, a protein space-filling - the shadows fade, casting them again
- * as such a drawing turns costing more than the turning can spare (a
- * picture made of it has them all the same).
- */
-const SHADOW_ATOMS_MOST = 20_000;
 /** How quickly the shadows' darkness goes over to another, in seconds. */
 const SHADOW_TAU = 0.08;
 /**
@@ -29,8 +26,26 @@ const TEXELS_TO_PIXEL = 3;
  * casts it moves, turns or changes, or the view it is fitted to changes:
  * fitted round every molecule, panning and zooming leave it as it is,
  * until that would leave its texels coarser than the screen's pixels.
+ *
+ * It counts the atoms on the canvas too: past `LARGE_ATOMS` - tens of
+ * thousands, a protein space-filling - where `large` says "lighter", the
+ * canvas is drawn lighter (utils/largeDrawing): the shadows fade, casting
+ * them again as such a drawing turns costing more than the turning can
+ * spare, and hollows shaded on the screen (`screen`, where a style does)
+ * are shaded per atom; and it says so, once, with the way to keep them (a
+ * picture made of it has them all the same).
  */
-export default function KeyLight3D({ intensity, shadows: strength }: { intensity: number; shadows: number }) {
+export default function KeyLight3D({
+  intensity,
+  shadows: strength,
+  large = "lighter",
+  screen = false,
+}: {
+  intensity: number;
+  shadows: number;
+  large?: "lighter" | "asSet";
+  screen?: boolean;
+}) {
   const { gl, camera, invalidate } = useThree();
   const light = useMemo(() => {
     const l = new THREE.DirectionalLight(0xffffff, intensity);
@@ -55,7 +70,31 @@ export default function KeyLight3D({ intensity, shadows: strength }: { intensity
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     const { spheres, sign, atoms } = castersNow(castersOn(gl));
-    const to = atoms > SHADOW_ATOMS_MOST ? 0 : strength;
+    const state = largeOn(gl);
+    state.atoms = atoms;
+    const lighter = large === "lighter" && atoms > LARGE_ATOMS;
+    if (lighter !== state.lighter) {
+      state.lighter = lighter;
+      invalidate();
+    }
+    // (said once on this canvas, where it changes anything)
+    const said = lighter && !state.told ? lighterText(strength > 0, screen) : null;
+    if (said) {
+      state.told = true;
+      useNotices.getState().show({
+        id: "large-drawing",
+        title: "Many atoms on the canvas",
+        text: said,
+        action: {
+          label: "Keep them",
+          run: () => {
+            const s = useAppSettings.getState();
+            s.setStyle3d(withSharedSetting(s.style3d, "largeDrawings", "asSet"));
+          },
+        },
+      });
+    }
+    const to = lighter ? 0 : strength;
     const v = to + (level.current - to) * Math.exp(-step / SHADOW_TAU);
     level.current = Math.abs(v - to) < 0.003 ? to : v;
     if (level.current !== to) invalidate();
