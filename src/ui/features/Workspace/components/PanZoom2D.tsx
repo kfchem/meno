@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
-import { isPinch, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
+import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
 import { letViewGoalGo, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
@@ -53,6 +54,8 @@ export function PanZoom2D() {
   const { extend } = useEditor();
   const fitNonce = useEditor((s) => s.fitNonce);
   const store = useEditorStore();
+  // (the layer what is on the page in HTML is laid in: coverLayer)
+  const layer = useContext(PageHtmlLayer);
   const extendRef = useRef(extend.active);
   // Keep pan-hold state in a ref to avoid stale closures during event sequence
   const panHoldRef = useRef(false);
@@ -303,14 +306,31 @@ export function PanZoom2D() {
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
-    // (the wheel and a pinch over what is laid on the canvas - a molecule's
-    // frames chip, its note - zoom as over the canvas: they are heard on
-    // the box the canvas's events are, where drei's Html lays those)
+    // (the wheel and a pinch over what is laid on the canvas zoom as over
+    // the canvas: they are heard on the box the canvas's events are, where
+    // drei's Html lays what has no layer of its own)
     const box = events.connected instanceof HTMLElement ? events.connected : dom;
     box.addEventListener("wheel", onWheel, { passive: false });
     box.addEventListener("gesturestart", onGestureStart);
     box.addEventListener("gesturechange", onGestureChange);
     box.addEventListener("gestureend", onGestureEnd);
+    // ...and over what is laid on the page in its own layer (coverLayer): a
+    // molecule's frames chip, its list, a step's card - save where a list
+    // scrolls on that way, which takes the wheel for itself
+    const onLayerWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && layer) {
+        for (let el = e.target instanceof Element ? e.target : null; el && el !== layer; el = el.parentElement) {
+          const css = getComputedStyle(el);
+          const b = { overflowX: css.overflowX, overflowY: css.overflowY, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop, scrollWidth: el.scrollWidth, scrollHeight: el.scrollHeight, clientWidth: el.clientWidth, clientHeight: el.clientHeight };
+          if (scrollsAlong(b, e.deltaX, e.deltaY)) return;
+        }
+      }
+      onWheel(e);
+    };
+    layer?.addEventListener("wheel", onLayerWheel, { passive: false });
+    layer?.addEventListener("gesturestart", onGestureStart);
+    layer?.addEventListener("gesturechange", onGestureChange);
+    layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
       for (const name of HEARD) dom.removeEventListener(name, heard);
@@ -321,8 +341,12 @@ export function PanZoom2D() {
       box.removeEventListener("gesturestart", onGestureStart);
       box.removeEventListener("gesturechange", onGestureChange);
       box.removeEventListener("gestureend", onGestureEnd);
+      layer?.removeEventListener("wheel", onLayerWheel);
+      layer?.removeEventListener("gesturestart", onGestureStart);
+      layer?.removeEventListener("gesturechange", onGestureChange);
+      layer?.removeEventListener("gestureend", onGestureEnd);
     };
-  }, [camera, gl, invalidate, dom, extend.active, store, events.connected]);
+  }, [camera, gl, invalidate, dom, extend.active, store, events.connected, layer]);
 
   // When camera is updated externally (e.g., FitToContent2D), mirror it internally to avoid overrides
   useEffect(() => {
