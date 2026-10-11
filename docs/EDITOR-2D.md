@@ -858,7 +858,8 @@ All hover-based, as above.
       Shift+Enter in an item starts the next one, as deep, its number one
       on, and on an item with nothing after its bullet ends the list, the
       bullet taken away; Tab and Shift+Tab take the items the selection
-      touches a level in or out (anywhere else, Tab does as it did). Their
+      touches a level in or out (anywhere else, Tab does nothing: the words
+      keep the keys, where it once took them away and kept the words). Their
       menu's *Bullets* makes every line an item, or, all of them items,
       plain lines again.
     - *A box keeps its top*: words given a width, and over no arrow, keep
