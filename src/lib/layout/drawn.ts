@@ -7,12 +7,16 @@
  *   on a wedge stands out of the page, one on hashes behind it (as
  *   `drawnVolume` reads it).
  * - A centre in a structure drawn in perspective - a cage, as the engine
- *   draws one - shows it by the drawing itself. Its atoms have a depth, so
- *   the bonds between them are known in three dimensions; a bond out of
- *   the cage points one of the ways the centre's other bonds leave free, and
- *   which one is read from the way it is drawn. Turn a substituent the other
- *   way - from one side of a chair to the other - and the configuration
- *   turns with it.
+ *   draws one - shows it by the drawing itself (`centre`). Its atoms have a
+ *   depth, so the bonds between them are known in three dimensions; a bond
+ *   out of the cage points one of the ways the centre's other bonds leave
+ *   free, and which one is read from the way it is drawn. Turn a
+ *   substituent the other way - from one side of a chair to the other - and
+ *   the configuration turns with it.
+ * - Any other centre shows it by its wedges, depth or none: a ring laid
+ *   across the face of another (morphine's piperidine, gibberellic acid's
+ *   lactone) is drawn in front of it or behind, its depth a layer and not a
+ *   place in space, and a ring fused flat onto a cage is flat.
  * - A double bond's groups are on the side they are drawn on - but in a
  *   ring of seven atoms or fewer, which has them as its ring does (cis),
  *   however it is drawn: a benzene ring's bonds say nothing.
@@ -77,6 +81,13 @@ const det3 = (p: V3, q: V3, r: V3) => dot3(p, cross3(q, r));
 const HALF_TETRAHEDRAL = Math.acos(-1 / 3) / 2;
 /** How far out of the page a wedge is taken to stand, as a share of its length. */
 const WEDGE_LIFT = 0.8;
+/**
+ * The least volume three bonds of unit length into a cage span, drawn, for
+ * the drawing to say which way round they go: less, and they lie all but in
+ * one plane on the page, which way a matter of a hair (a tetrahedral
+ * centre's three span 0.77).
+ */
+const HAIR = 0.2;
 
 export function readStereo(
   atoms: readonly DrawnAtom[],
@@ -106,7 +117,7 @@ export function readStereo(
     const wedged = around.some((n) => lift(c, n) !== 0);
     if (!wedged && !atom.centre) return;
     const order = atom.hs ? [...around, -1] : around;
-    const volume = atom.z != null ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
+    const volume = atom.centre && atom.z != null ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
     const v =
       volume ||
       drawnVolume(
@@ -194,7 +205,7 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
   const centres: number[] = [];
   atoms.forEach((atom, c) => {
     const around = neighbours[c];
-    if (atom.z != null || atom.hs > 1 || around.length + atom.hs !== 4) return;
+    if (atom.centre || atom.hs > 1 || around.length + atom.hs !== 4) return;
     if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
     if (!around.some((n) => lift(c, n) !== 0)) return;
     const order = atom.hs ? [...around, -1] : around;
@@ -300,7 +311,11 @@ function fitLinear(from: readonly V3[], to: readonly V3[]): ((v: V3) => V3) | nu
  * to atoms with a depth are known; a wedge stands out of the page, hashes
  * behind it; the rest take the ways the known ones leave free, whichever
  * each is drawn nearer to - the ways the cage's solid leaves free, where
- * the centre is in one, as the drawing shows them.
+ * the centre is in one, as the drawing shows them. A centre with three
+ * bonds into the cage is read from those three alone, the fourth being
+ * where they leave it - and where they are drawn all but in one plane, as
+ * a textbook's chair can draw a bridgehead, from the cage as a whole, its
+ * solid as fitted to the drawing.
  */
 function volumeInSpace(
   atoms: readonly DrawnAtom[],
@@ -320,6 +335,20 @@ function volumeInSpace(
     if (inCage && !l) dirs.set(n, sub3([p.x, p.y, p.z!], at));
     else if (l) dirs.set(n, [flat[0], flat[1], l * WEDGE_LIFT * Math.hypot(flat[0], flat[1])]);
     else unknown.push(n);
+  }
+  const caged = around.filter((n) => (fit ? fit.solid.has(n) : atoms[n].z != null) && !lift(c, n));
+  if (caged.length >= 3) {
+    // (the volume of three, as the volume of the first three says it: the
+    // same, or the other way, by which one is left out)
+    const out = around.findIndex((n) => !caged.includes(n));
+    const left = around.length === 4 && out >= 0 ? out : 3;
+    const three = around.filter((_, k) => k !== left).slice(0, 3);
+    const sign = left % 2 === 1 ? 1 : -1;
+    const d = det3(...(three.map((n) => unit3(dirs.get(n)!)) as [V3, V3, V3]));
+    if (Math.abs(d) >= HAIR || !fit) return Math.abs(d) < 1e-6 ? 0 : Math.sign(d) * sign;
+    const s = fit.solid.get(c)!;
+    const f = det3(...(three.map((n) => unit3(fit.map(sub3(fit.solid.get(n)!, s)))) as [V3, V3, V3]));
+    return Math.abs(f) < 1e-6 ? 0 : Math.sign(f) * sign;
   }
   if (dirs.size < 2) return 0;
   if (unknown.length) {
