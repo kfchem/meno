@@ -24,7 +24,7 @@ import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, layoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
-import { extendRingSystem, misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
+import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, type CageView } from "./cage";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
@@ -555,12 +555,15 @@ function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
   const bridged = rings.some((r, j) =>
     rings.some((q, k) => k > j && q.filter((a) => r.includes(a)).length >= 3 && q.length < 9 && r.length < 9),
   );
-  // how it reads, flat - its rings' shapes counted as well as its faults -
-  // and, with a fault in it (a crowded atom, a stretched bond), tried eased
-  // toward rings of their own shape, atoms kept clear, where that is better
-  const cost = (pos: Map<number, Point>) => flatCost(mol, sys, pos) + 20 * misshapen(mol, sys, pos);
+  // how it reads, flat - its rings' shapes counted as well as its faults,
+  // and each gap too narrow for the groups either side of it (narrowGap) -
+  // and, with a fault in it (a crowded atom, a stretched bond, such a gap),
+  // tried eased toward rings of their own shape, atoms kept clear, where
+  // that is better
+  const cost = (pos: Map<number, Point>) =>
+    flatCost(mol, sys, pos) + 20 * misshapen(mol, sys, pos) + 3 * narrowGap(mol, sys, pos);
   const eased = (pos: Map<number, Point>) => {
-    if (flatCost(mol, sys, pos) < 1) return pos;
+    if (flatCost(mol, sys, pos) < 1 && !narrowGap(mol, sys, pos)) return pos;
     const trial = new Map(pos);
     regularize(mol, sys, trial);
     return cost(trial) < cost(pos) - 1e-9 ? trial : pos;

@@ -300,6 +300,52 @@ function setFrameAngle(frame: Frame, t: number): number {
   return angleOf(q) + frame.turn;
 }
 
+/**
+ * The ways out of ring atom `a` (`slots`), turned together, within the room
+ * outside its rings, away from an atom of its own ring system it is not
+ * bonded to that one of them would end by - as at a narrow gap between
+ * rings, three five-membered rings round one atom leaving 36 degrees
+ * (bilobalide's C4 and C9, either side of theirs): each centre's groups
+ * leaning out of the gap, as chemists draw them, not into each other.
+ */
+function leanAway(mol: Molecule, pos: Grown, a: number, taken: readonly number[], slots: number[]): number[] {
+  const at = pos.get(a)!;
+  // (not in a bridged system laid flat, its gaps where a bridge was pressed
+  // into the page - tetrodotoxin's)
+  const rings = mol.systems[mol.systemOf[a]].rings.map((r) => mol.rings[r]);
+  if (rings.some((r, i) => rings.slice(i + 1).some((q) => q.filter((v) => r.includes(v)).length >= 3))) return slots;
+  // (an atom across a narrow gap: bonded with `a` to one atom, the two
+  // bonds under 45 degrees apart)
+  const near: Point[] = [];
+  for (const c of mol.neighbours[a]) {
+    const pc = pos.get(c);
+    if (!pc || mol.systemOf[c] !== mol.systemOf[a]) continue;
+    for (const b of mol.neighbours[c]) {
+      const pb = pos.get(b);
+      if (b === a || !pb || mol.systemOf[b] !== mol.systemOf[a] || mol.neighbours[a].includes(b)) continue;
+      const apart = Math.abs(wrap(angleOf(sub(pb, pc)) - angleOf(sub(at, pc))));
+      if (apart < (45 * Math.PI) / 180) near.push(pb);
+    }
+  }
+  if (!near.length) return slots;
+  const room = (ts: readonly number[]) => Math.min(...ts.flatMap((t) => near.map((p) => dist(p, add(at, dir(t))))));
+  if (room(slots) >= 0.9) return slots;
+  // (each way kept 35 degrees clear of the atom's own bonds)
+  const clear = (t: number) => taken.every((u) => Math.abs(wrap(t - u)) >= (35 * Math.PI) / 180);
+  let best = slots;
+  let bestRoom = room(slots);
+  for (const deg of [10, -10, 20, -20, 30, -30, 40, -40]) {
+    const turned = slots.map((t) => t + (deg * Math.PI) / 180);
+    if (!turned.every(clear)) continue;
+    const r = room(turned) - 0.005 * Math.abs(deg);
+    if (r > bestRoom + 1e-9) {
+      best = turned;
+      bestRoom = r;
+    }
+  }
+  return best;
+}
+
 /** Which child goes which way from atom `a`. */
 function assign(
   mol: Molecule,
@@ -327,7 +373,8 @@ function assign(
     const centres = mol.ringsOf[a]
       .filter((r) => mol.rings[r].length < MACROCYCLE)
       .map((r) => angleOf(sub(centroid(mol.rings[r].map((v) => pos.get(v)!)), at)));
-    const slots = mol.systemOf[a] >= 0 ? splitOutside(taken, centres, k) : splitWidestGap(taken, k);
+    const even = mol.systemOf[a] >= 0 ? splitOutside(taken, centres, k) : splitWidestGap(taken, k);
+    const slots = mol.systemOf[a] >= 0 ? leanAway(mol, pos, a, taken, even) : even;
     const mid = slots.reduce((s, t) => s + t, 0) / slots.length;
     const byCentre = [...slots].sort((p, q) => Math.abs(wrap(p - mid)) - Math.abs(wrap(q - mid)));
     return byWeight.map((c, i) => [c, byCentre[i]]);
