@@ -412,9 +412,11 @@ export function useStructureEvents(
   // Mac, the drag pasteboard is emptied as the drag ends).
   const dropReading = useRef<Promise<Drawn | null> | null>(null);
   // The drawing as a drop zone (lib/drop): it takes files and whatever
-  // else is dragged to it, and reads the latter as it comes
+  // else is dragged to it, and reads the latter as it comes - but nothing
+  // while a talk is given, which edits nothing on the page (the talk's
+  // layer lies within the drawing's place, and a drop there would)
   const dropZone: DropZone = {
-    takes: () => true,
+    takes: () => store.getState().presenting == null,
     enter: (drag) => {
       // (a file from the Finder or Explorer is read when dropped, as ever)
       if (dropReading.current || drag.files) return;
