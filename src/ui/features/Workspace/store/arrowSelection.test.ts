@@ -90,5 +90,8 @@ describe("arrows and \"+\" signs selected for themselves", () => {
     st().selectArrows([id]);
     doc.undo();
     expect(st().selArrows.size).toBe(0);
+    // (nor selected again by its id, gone)
+    st().selectArrows([id]);
+    expect(st().selArrows.size).toBe(0);
   });
 });

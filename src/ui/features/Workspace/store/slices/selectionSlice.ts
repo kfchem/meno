@@ -125,8 +125,11 @@ export function createSelectionSlice(set: SetState) {
       ),
 
     /** Arrows and "+" signs selected for themselves - added to those selected, or in their place. */
-    selectArrows: (ids: Iterable<number>, add = false) => set((prev: EditorState) => ({ ...prev, selArrows: new Set([...(add ? prev.selArrows : []), ...ids]) })),
-    selectPluses: (ids: Iterable<number>, add = false) => set((prev: EditorState) => ({ ...prev, selPluses: new Set([...(add ? prev.selPluses : []), ...ids]) })),
+    // (only those there: an id an undo has taken away is no selection - as for shapes)
+    selectArrows: (ids: Iterable<number>, add = false) =>
+      set((prev: EditorState) => ({ ...prev, selArrows: new Set([...(add ? prev.selArrows : []), ...[...ids].filter((id) => prev.arrows.some((a) => a.id === id))]) })),
+    selectPluses: (ids: Iterable<number>, add = false) =>
+      set((prev: EditorState) => ({ ...prev, selPluses: new Set([...(add ? prev.selPluses : []), ...[...ids].filter((id) => prev.pluses.some((p) => p.id === id))]) })),
     toggleArrowSel: (id: number) =>
       set((prev: EditorState) => {
         const selArrows = new Set(prev.selArrows);
