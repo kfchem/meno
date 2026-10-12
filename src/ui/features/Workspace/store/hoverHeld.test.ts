@@ -137,3 +137,30 @@ describe("Quick Add opened by a wire", () => {
     expect(state().quickAdd).not.toBeNull();
   });
 });
+
+describe("words, a text's sheet, a slide or a shape an undo took away", () => {
+  it("is not selected when a press held on it comes to take hold of it", () => {
+    const { doc, state } = editor();
+    const words = state().addCaption("K2CO3", 0, 0);
+    doc.undo();
+    state().selectCaptions([words]);
+    expect(state().selCaptions.size).toBe(0);
+    state().addTexts([{ name: "notes.md", text: "# Hi" }], { x: 0, y: 0 });
+    const sheet = state().texts[0].id;
+    doc.undo();
+    state().selectTexts([sheet]);
+    expect(state().selTexts.size).toBe(0);
+    const slide = state().addSlide({ x: 0, y: 0, w: 16, h: 9 })!;
+    doc.undo();
+    state().selectSlides([slide]);
+    expect(state().selSlides.size).toBe(0);
+    const shape = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 5 })!;
+    doc.undo();
+    state().selectShapes([shape]);
+    expect(state().selShapes.size).toBe(0);
+    // (one still there is selected)
+    const kept = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 5 })!;
+    state().selectShapes([kept]);
+    expect([...state().selShapes]).toEqual([kept]);
+  });
+});

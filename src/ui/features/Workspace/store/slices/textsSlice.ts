@@ -62,8 +62,9 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
     setTextIcon: (id: number, icon: boolean) => doc.edit(icon ? "minimize text" : "expand text", (d) => ops.setTextIcon(d, id, icon)),
     setTextOf: (id: number, of: TextOf) => doc.amend((d) => ops.setTextOf(d, id, of)),
     setHoveredText: (id: number | null) => set((prev: EditorState) => (prev.hoveredText === id ? prev : { ...prev, hoveredText: id })),
+    // (only sheets on the page, as pictures)
     selectTexts: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selTexts: new Set([...(add ? prev.selTexts : []), ...ids]), pdfSel: null, pdfBox: null })),
+      set((prev: EditorState) => ({ ...prev, selTexts: new Set([...(add ? prev.selTexts : []), ...[...ids].filter((id) => prev.texts.some((t) => t.id === id && t.at))]), pdfSel: null, pdfBox: null })),
     toggleTextSel: (id: number) =>
       set((prev: EditorState) => {
         const next = new Set(prev.selTexts);

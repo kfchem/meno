@@ -19,8 +19,9 @@ let writings = 0;
 export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState) {
   return {
     setHoveredCaption: (id: number | null) => set({ hoveredCaption: id }),
+    // (only those on the page, as pictures)
     selectCaptions: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selCaptions: new Set([...(add ? prev.selCaptions : []), ...ids]), pdfSel: null, pdfBox: null })),
+      set((prev: EditorState) => ({ ...prev, selCaptions: new Set([...(add ? prev.selCaptions : []), ...[...ids].filter((id) => prev.captions.some((c) => c.id === id))]), pdfSel: null, pdfBox: null })),
     setCaptionEdit: (edit: EditorState["captionEdit"]) => set({ captionEdit: edit && { ...edit, n: edit.n ?? ++writings } }),
     markCaptionDrawn: (n: number) =>
       set((prev: EditorState) => (prev.captionEdit?.n === n && !prev.captionEdit.drawn ? { ...prev, captionEdit: { ...prev.captionEdit, drawn: true } } : prev)),

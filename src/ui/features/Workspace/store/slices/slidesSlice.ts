@@ -21,8 +21,9 @@ type GetState = StoreApi<EditorState>["getState"];
 export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
   return {
     setHoveredSlide: (id: number | null) => set((prev: EditorState) => (prev.hoveredSlide === id ? prev : { ...prev, hoveredSlide: id })),
+    // (only those on the page, as pictures)
     selectSlides: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selSlides: new Set([...(add ? prev.selSlides : []), ...ids]) })),
+      set((prev: EditorState) => ({ ...prev, selSlides: new Set([...(add ? prev.selSlides : []), ...[...ids].filter((id) => prev.slides.some((x) => x.id === id))]) })),
     toggleSlideSel: (id: number) =>
       set((prev: EditorState) => {
         const selSlides = new Set(prev.selSlides);
