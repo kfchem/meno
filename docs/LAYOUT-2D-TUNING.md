@@ -315,13 +315,15 @@ and the held-out list takes new ones. What it showed, by kind:
 
 - **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
   the perspective drawing read better than the flat one, and both faced
-  the wrong way). It is now a perspective drawing of the whole system that
-  reads as given. Still open: it stands with its guanidine ring below, a
-  quarter turn from the usual drawing, which builds the view on the
-  cyclohexane as the chair, its guanidine ring to the right; building it
-  so broke other drawings (paeoniflorin, ibogaine) and one of its own
-  centres in a first try. And the OH on C9 sits close against a bond of
-  the cage.
+  the wrong way). Its whole solid now reads as given. The maintainer,
+  2026-10-12: six-membered rings that are not chairs carry groups with no
+  wedges, so the stereochemistry cannot be read. Both answers are built,
+  one switch apart (`SOLID_STEREO`, *What a solid shows by its shape* in
+  `LAYOUT-2D.md`), the pictures of both in its PR; the choice is the
+  maintainer's. Still open either way: it stands a quarter turn from the
+  usual drawing (guanidine ring below rather than to the right), and the
+  OH in the middle of the cage reads O|H, a bond of the cage between its O
+  and its H.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

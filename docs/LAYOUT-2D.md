@@ -160,23 +160,33 @@ they hang from.
   centre is turned - put through the plane of three of its neighbours, its
   bonds keeping their lengths - and the solid eased again with every
   centre held the way it is given (tetrodotoxin's C4a, where its guanidine
-  ring joins its cage). A flat drawing whose only faults are bonds a
-  little uneven and a bond or two passing behind another where a bridge
-  crosses a ring is no drawing with a fault: morphine and strychnine stay
-  flat with their bridges across, as they are drawn everywhere. And a
-  solid is seen from where a bond out of it, ending at a label, keeps a
-  label's breadth from another label of the solid (tetrodotoxin's OH on C9
-  by its bridging O). That goes for a
-  cage with rings fused flat onto it too, read as it is drawn, those rings
-  with it: laid beside the bond it shares with the cage, a ring stands on
-  one face of the cage there or the other, and only one is the molecule.
-  Scopolamine's epoxide, laid towards its three-carbon bridge and not its
-  N, drew another isomer - the wedges right for a reader that reads them
-  flat, the perspective showing the epoxide on the other face; and
-  tetrodotoxin's guanidine ring turned one of the atoms it joins the cage
-  at. Both are drawn flat now.
-  The cage seen from its other side, for a mirrored frame, is kept only so
-  too.
+  ring joins its cage). That goes for a cage with rings fused flat onto
+  it too, read as it is drawn, those rings with it: laid beside the bond
+  it shares with the cage, a ring stands on one face of the cage there or
+  the other, and only one is the molecule. Scopolamine's epoxide, laid
+  towards its three-carbon bridge and not its N, drew another isomer - the
+  wedges right for a reader that reads them flat, the perspective showing
+  the epoxide on the other face. The cage seen from its other side, for a
+  mirrored frame, is kept only so too.
+- **What a solid shows by its shape.** A stereocentre in a six-membered
+  ring drawn as a chair or a boat (the template, any way round) shows its
+  configuration by the drawing: each bond out of it upright or along a
+  ring bond, up or down for a reader to see. A centre in no such ring -
+  tetrodotoxin's in its rings that are neither, gelsemine's, ibogaine's -
+  shows it only by a depth the page does not show. The maintainer chooses
+  between two ways (`SOLID_STEREO` in `engine.ts`): "chairs", a solid only
+  where every stereocentre in it is so shown, flat with wedges otherwise;
+  or "wedges", the solid kept and each centre its shape does not show
+  given a wedge or hashes on a bond out of it, or an H drawn upright, as
+  a flat ring's centre is. Meno reads a drawing so too (`drawn.ts`): depth
+  only at a centre the solid shows by its shape, wedges at the rest.
+- **When a flat drawing gives way.** A flat drawing whose only faults are
+  bonds a little uneven and a bond or two passing behind another where a
+  bridge crosses a ring is no drawing with a fault: morphine and
+  strychnine stay flat with their bridges across, as they are drawn
+  everywhere. And a solid is seen from where a bond out of it, ending at a
+  label, keeps a label's breadth from another label of the solid
+  (tetrodotoxin's OH on C9 by its bridging O).
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds
