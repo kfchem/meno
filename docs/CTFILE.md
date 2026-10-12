@@ -360,9 +360,9 @@ journals:
 | Reagents | Above the arrow, side by side, their lowest point two fifths of a bond above it - clear of its head. |
 | The arrow | Two and two-thirds of a bond long, or half a bond longer than the reagents above it are wide on either side. Its line and head as the drawing style has them, or as the arrow sets for itself. |
 
-An arrow and a "+" can also be added - from the menu a right-click on
-empty space opens - moved and deleted, and an arrow drawn out by either
-end (docs/EDITOR-2D.md). The arrows and pluses drawn
+An arrow and a "+" can also be added - from Quick Add - moved and
+deleted, and an arrow drawn out by either end, given a kind, heads,
+dashes, a weight, corners and a colour (docs/EDITOR-2D.md, *Arrows*). The arrows and pluses drawn
 among a selection go with it: they are copied, cut, deleted and moved with
 it (but not turned). Pictures - SVG, and the EMF and PNG a copy puts on the
 clipboard - show them, and Meno's own record of a copied drawing keeps
@@ -391,8 +391,10 @@ Rgroup, an atom list, a valence and a query hydrogen count go in their
 fields. V3000 lines longer than 80 characters are continued, as the format
 has it.
 
-A drawing with one arrow is saved as an RXN file (*Save* to a name ending
-`.rxn`, offered first for a drawing with an arrow), and a copy of a
+A drawing with one arrow showing a reaction - a structure drawn near its
+tail or its point - is saved as an RXN file (*Save* to a name ending
+`.rxn`, offered first for a drawing with such an arrow), whatever the
+arrow's kind: the file holds none, and is a plain reaction; and a copy of a
 reaction puts one on the clipboard beside the MOL file - as
 `chemical/x-mdl-rxnfile` - for chemistry programs that take one; a paste
 reads one back as a scheme. Which molecule is which is read from the
@@ -410,8 +412,10 @@ drawing:
 The file is V2000 - $MOL blocks, each a MOL file - where every molecule can
 be written V2000, and V3000 - a CTAB for each in REACTANT, PRODUCT and
 REAGENT blocks - where one cannot. The reagents' count is left out where
-there are none, which the format reads as none. A drawing with no arrow, or
-more than one, is not saved as an RXN file: the save says why.
+there are none, which the format reads as none. A drawing with no arrow
+showing a reaction, or more than one, is not saved as an RXN file: the save
+says why. An arrow alone - on a slide, with nothing near its ends - shows
+none, and is left out.
 
 MOL files are written V2000 where that can say everything, and V3000
 where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past

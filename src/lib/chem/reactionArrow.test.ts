@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrowMeasures, arrowOutline, type ArrowMeasures } from "./reactionArrow";
+import { arrowMeasures, arrowOutline, arrowPath, arrowPieces, cornerAt, pathLength, strokeOutline, type ArrowMeasures } from "./reactionArrow";
 import { ACS_1996, MENO, ofBond, pt, resolveStyle } from "./style";
 
 type P = { x: number; y: number };
@@ -132,5 +132,98 @@ describe("a reaction arrow's outline", () => {
 
   it("is nothing for an arrow of no length", () => {
     expect(arrowOutline(from, from, plain)).toEqual([]);
+  });
+});
+
+describe("an arrow's kinds, heads, dashes, weight and corners", () => {
+  const xs = (o: P[]) => o.map((p) => p.x);
+  const ys = (o: P[]) => o.map((p) => p.y);
+
+  it("draws a reaction arrow, straight, single and solid, as the one outline it was", () => {
+    expect(arrowPieces(from, to, {}, plain)).toEqual([arrowOutline(from, to, plain)]);
+  });
+
+  it("puts a head at either end where it has two, its line between them", () => {
+    const pieces = arrowPieces(from, to, { heads: 2 }, plain);
+    const heads = pieces.filter((o) => o.length === 3);
+    expect(heads).toHaveLength(2);
+    expect(heads.map((o) => Math.min(...xs(o)))).toContain(0);
+    expect(heads.map((o) => Math.max(...xs(o)))).toContain(10);
+    // (the line stops inside both heads)
+    const line = pieces.find((o) => o.length !== 3)!;
+    expect(Math.min(...xs(line))).toBeGreaterThan(0);
+    expect(Math.max(...xs(line))).toBeLessThan(10);
+  });
+
+  it("draws an equilibrium as two lines either side, each with a half head on its outer side, pointing either way", () => {
+    const pieces = arrowPieces(from, to, { kind: "equilibrium" }, plain);
+    const lines = pieces.filter((o) => o.length === 4);
+    const halves = pieces.filter((o) => o.length === 3);
+    expect(lines).toHaveLength(2);
+    expect(halves).toHaveLength(2);
+    // the upper (to the left of the way it points) reaches its point; the lower its tail
+    const upper = halves.find((o) => Math.min(...ys(o)) > 0)!;
+    const lower = halves.find((o) => Math.max(...ys(o)) < 0)!;
+    expect(Math.max(...xs(upper))).toBeCloseTo(10, 9);
+    expect(Math.min(...xs(lower))).toBeCloseTo(0, 9);
+    // (a half head: outward of its line only)
+    expect(Math.max(...ys(upper))).toBeGreaterThan(Math.max(...lines.flatMap(ys)));
+    // full heads, as a choice
+    expect(arrowPieces(from, to, { kind: "equilibrium", full: true }, plain).filter((o) => o.length === 3)).toHaveLength(2);
+  });
+
+  it("draws a retrosynthetic arrow as two lines and an open head spanning them", () => {
+    const pieces = arrowPieces(from, to, { kind: "retrosynthetic" }, plain);
+    expect(pieces).toHaveLength(3);
+    const head = pieces[2];
+    expect(Math.max(...xs(head))).toBeGreaterThan(9.9);
+    const span = Math.max(...ys(head)) - Math.min(...ys(head));
+    const lines = Math.max(...pieces.slice(0, 2).flatMap(ys)) - Math.min(...pieces.slice(0, 2).flatMap(ys));
+    expect(span).toBeGreaterThan(lines);
+  });
+
+  it("crosses out a reaction that does not go at its middle", () => {
+    const pieces = arrowPieces(from, to, { kind: "noReaction" }, plain);
+    const cross = pieces.slice(-2);
+    for (const o of cross) {
+      const mx = (Math.min(...xs(o)) + Math.max(...xs(o))) / 2;
+      expect(mx).toBeCloseTo(5, 6);
+    }
+  });
+
+  it("breaks a dashed line into dashes, its head whole", () => {
+    const pieces = arrowPieces(from, to, { dash: true }, plain);
+    expect(pieces.length).toBeGreaterThan(4);
+    expect(pieces.filter((o) => o.length === 3)).toHaveLength(1);
+  });
+
+  it("weighs its line: thin and thick as shares of the regular", () => {
+    const wide = (o: P[]) => Math.max(...ys(o)) - Math.min(...ys(o));
+    const line = (w: "thin" | "thick") => arrowPieces(from, to, { weight: w }, plain)[0];
+    expect(wide(line("thick"))).toBeCloseTo(2 * plain.thickness, 6);
+    expect(wide(line("thin"))).toBeCloseTo(0.6 * plain.thickness, 6);
+  });
+
+  it("turns at its corners, each a share along it and a distance across it, kept as it moves and grows", () => {
+    const corners = [{ along: 0.5, across: 2 }];
+    const path = arrowPath(from, to, corners);
+    expect(path).toEqual([from, { x: 5, y: 2 }, to]);
+    expect(cornerAt(from, to, { x: 5, y: 2 })).toEqual({ along: 0.5, across: 2 });
+    // (twice as long, turned a quarter: the corner with it)
+    const turned = arrowPath({ x: 0, y: 0 }, { x: 0, y: 20 }, corners);
+    expect(turned[1].x).toBeCloseTo(-2, 9);
+    expect(turned[1].y).toBeCloseTo(10, 9);
+    expect(pathLength(path)).toBeCloseTo(2 * Math.hypot(5, 2), 9);
+    // its head along its last stretch
+    const pieces = arrowPieces(from, to, { corners }, plain);
+    const head = pieces.find((o) => o.length === 3)!;
+    expect(head).toContainEqual(to);
+    expect(Math.max(...ys(head))).toBeGreaterThan(0);
+  });
+
+  it("strokes a line through points as one outline round it, mitred at its corners", () => {
+    const o = strokeOutline([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }], 0.2);
+    expect(o).toHaveLength(6);
+    expect(Math.abs(area2(o)) / 2).toBeCloseTo(0.2 * 8, 6);
   });
 });

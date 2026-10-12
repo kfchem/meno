@@ -1101,6 +1101,7 @@ function namesInTheWay(mol: Molecule, piece: number[], p: Grown): Map<number, nu
       y: piece.map((a) => p.get(a)!.y),
       edges: edges.map(([a, b]) => [index.get(a)!, index.get(b)!] as const),
       elements: piece.map((a) => mol.el[a]),
+      hydrogens: piece.map((a) => mol.hs[a]),
     },
     1,
   );
