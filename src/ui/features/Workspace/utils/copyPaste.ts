@@ -500,6 +500,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.look === "secondary" ? { look: m.look } : {}),
     ...(measures.length ? { measures } : {}),
     ...(typeof m.name === "string" ? { name: m.name } : {}),
+    ...(typeof m.title === "string" && m.title ? { title: m.title } : {}),
     ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
     ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),

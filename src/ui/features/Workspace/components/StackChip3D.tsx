@@ -13,7 +13,8 @@ const CHIP_TAU = 0.12;
 
 /**
  * A stack's chip, just below the molecule it shows (utils/stacks): which of
- * how many - and, its molecule hovered or selected, a slider through them,
+ * how many, and its record's title (*3 / 60  aspirin*) - and, its molecule
+ * hovered or selected, a slider through them,
  * as a molecule's frames have. The stack's own, not its molecules': it
  * stays as they go over one to the next, a drag along its slider going on
  * through them.
@@ -51,7 +52,7 @@ export default function StackChip3D({
   });
   return (
     <group ref={group}>
-      <Frames3D count={count} frame={index} open={open} onFrame={onShow} area={gl.domElement} />
+      <Frames3D count={count} frame={index} open={open} onFrame={onShow} area={gl.domElement} title={shown.title} />
     </group>
   );
 }

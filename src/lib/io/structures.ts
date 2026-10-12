@@ -25,6 +25,8 @@ export type FileMolecule3D = {
   energies?: number[];
   /** The file it came from. */
   name?: string;
+  /** Its record's title, where its file gives one: an SD file's record's first line. */
+  title?: string;
   frame?: number;
   /** Its bonds are where its atoms stand close enough, frame by frame: its file gives none (an XYZ file). */
   bondsFrom?: "distance";
@@ -150,7 +152,11 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && (said[i] || depthOf(m) > 0.1);
   const molecules3d = molecules
     .filter(inDepth)
-    .map((m) => ({ atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}) }));
+    .map((m) => {
+      // (and its record's title, its first line, where it gives one)
+      const title = m.ct?.name.trim();
+      return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}) };
+    });
   const flat = molecules.filter((m, i) => !inDepth(m, i));
   if (molecules3d.length && !flat.some((m) => m.atoms.length)) {
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };

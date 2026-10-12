@@ -921,7 +921,9 @@ file are shown the way a molecule's frames are, one at a time.
   workflow's results are no stack. One pasted out of its stack, or left
   alone in it as the rest are deleted, is a molecule of its own.
 - **One shown.** The stack shows one molecule. Its chip, just below it,
-  says which of how many (*3 / 60*) and, hovered or selected, is a slider
+  says which of how many and the record's title where its file gives one
+  (*3 / 60  aspirin*: an SD record's first line, kept on the molecule as
+  `title`) and, hovered or selected, is a slider
   through them, as a molecule's frames' chip is (`StackChip3D`). It is the
   stack's chip, not its molecules', so a drag along it goes on through the
   stack. Which one is shown is the view's (`stacksShown`), as a frame is,

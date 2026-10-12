@@ -363,6 +363,8 @@ export type Molecule3D = {
   measures?: Measure3D[];
   /** The file it came from. */
   name?: string;
+  /** Its record's title, where its file gives one: an SD file's record's first line (a stack's chip says it). */
+  title?: string;
   /**
    * One of a stack: the molecules one file brought - an SD file's records -
    * standing in one place, one shown at a time (utils/stacks), by the

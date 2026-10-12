@@ -110,13 +110,16 @@ describe("a stack of molecules in 3D", () => {
   });
 
   it("is saved as it is - its molecules, whether laid out, and the one it shows - and opened so", () => {
-    const { state } = editor();
+    const { doc, state } = editor();
+    // (each record's title too, which its chip says)
+    doc.edit("titled", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m, i) => (i === 1 ? { ...m, title: "aspirin" } : m)) }));
     state().showInStack(1, 2);
     const text = workspaceText(state());
     const other = editor();
     other.state().openWorkspace(readWorkspace(text)!, true);
     expect(other.state().molecules3d.map((m) => m.stack?.id ?? null)).toEqual([1, 1, 1, null]);
     expect(other.state().stacksShown).toEqual({ 1: 2 });
+    expect(other.state().molecules3d[1].title).toBe("aspirin");
     state().spreadStack(1);
     other.state().openWorkspace(readWorkspace(workspaceText(state()))!, true);
     expect(other.state().molecules3d.slice(0, 3).every((m) => m.stack?.spread)).toBe(true);

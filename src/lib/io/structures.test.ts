@@ -49,6 +49,23 @@ function het(serial: number, el: string, x: number, y: number, z: number, more: 
 }
 const conect = (from: number, ...to: number[]) => "CONECT" + [from, ...to].map((n) => String(n).padStart(5)).join("");
 
+describe("an SD file of records in 3D, as Meno's own reader gives it", () => {
+  // (two records, each three atoms spread in depth, titled on their first lines - one not)
+  const record = (title: string, z: number) =>
+    [title, "  Meno            3D", "", "  3  2  0  0  0  0  0  0  0  0999 V2000",
+      `    0.0000    0.0000    ${z.toFixed(4)} O   0  0  0  0  0  0  0  0  0  0  0  0`,
+      "    0.7600    0.5900    0.5000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+      "   -0.7600    0.5900   -0.5000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+      "  1  2  1  0", "  1  3  1  0", "M  END", "$$$$"].join("\n");
+  it("is a molecule in 3D for each record, each with its record's title where it gives one", () => {
+    const read = readStructures("sdf", "w.sdf", [record("aspirin", 0), record("", 0.2)].join("\n") + "\n");
+    expect(read.molecules3d?.map((m) => [m.name, m.title ?? null])).toEqual([
+      ["w.sdf", "aspirin"],
+      ["w.sdf", null],
+    ]);
+  });
+});
+
 describe("a PDB file, as Meno's own reader gives it", () => {
   it("is a molecule in 3D: its atoms, and its bonds from CONECT records and from its atoms' distances", () => {
     const read = readStructures("pdb", "cholesterol.pdb", samplePdb);
