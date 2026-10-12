@@ -11,6 +11,7 @@
  * drawing's labels' size is, `pointPx` page units to the point.
  */
 import type { Vec2 } from "./layout2d";
+import { MENO_SET, type ColourSet } from "./palette";
 
 /** What writes: a pen, or a marker - see-through, under the words. */
 export type InkPen = "pen" | "marker";
@@ -20,9 +21,13 @@ export type InkStroke = { points: number[]; pressure?: true };
 
 /** The widths each pen writes in, in points: thin, regular and thick. */
 export const INK_WIDTHS_PT: Record<InkPen, readonly [number, number, number]> = { pen: [0.75, 1.5, 3], marker: [6, 10, 16] };
-/** How see-through a marker is, and the colour it writes in when it is given none. */
+/** How see-through a marker is. */
 export const MARKER_OPACITY = 0.38;
-export const MARKER_COLOUR = "#f0e442";
+
+/** The colour a marker writes in when it is given none of its own: the first of the colour set in use (`set`). */
+export function markerColour(set: ColourSet): string {
+  return set.colours[0] ?? MENO_SET.colours[0];
+}
 
 /** A stroke's points as places. */
 export function placesOf(s: InkStroke): Vec2[] {
@@ -239,7 +244,7 @@ export function inkWidth(k: { pen: InkPen; width: 0 | 1 | 2 }, pointPx: number):
   return INK_WIDTHS_PT[k.pen][k.width] * pointPx;
 }
 
-/** The colour a piece is written in: its own, or its pen's - a marker's, or the drawing's `ink`. */
-export function inkColour(k: { pen: InkPen; color?: string }, ink: string): string {
-  return k.color ?? (k.pen === "marker" ? MARKER_COLOUR : ink);
+/** The colour a piece is written in: its own, or its pen's - a pen's the drawing's `ink`, a marker's `marker` (`markerColour`). */
+export function inkColour(k: { pen: InkPen; color?: string }, ink: string, marker: string): string {
+  return k.color ?? (k.pen === "marker" ? marker : ink);
 }

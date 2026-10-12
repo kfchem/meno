@@ -19,7 +19,9 @@ import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inkColour, inkWidth, MARKER_OPACITY, strokeHit, strokesBounds, type InkStroke } from "../../../../lib/chem/ink";
+import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeHit, strokesBounds, type InkStroke } from "../../../../lib/chem/ink";
+import { setInUse } from "../../../../lib/chem/palette";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { strokesGeometry } from "./inkGeometry";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
@@ -49,12 +51,14 @@ type Pt = { x: number; y: number };
 function StrokesLook({ look, strokes, pointPx, ink, extra = 0, color, opacity }: { look: InkLook; strokes: readonly InkStroke[]; pointPx: number; ink: string; extra?: number; color?: string; opacity?: number }) {
   const width = inkWidth(look, pointPx) + extra;
   const marker = look.pen === "marker";
+  // (a marker's own colour: the first of the set in use)
+  const own = markerColour(setInUse(useAppSettings((s) => s.colours)));
   const geometry = useMemo(() => strokesGeometry(strokes, width, !marker), [strokes, width, marker]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const o = opacity ?? (marker ? MARKER_OPACITY : 1);
   return (
     <mesh geometry={geometry} frustumCulled={false} raycast={() => {}}>
-      <meshBasicMaterial color={color ?? inkColour(look, ink)} transparent={o < 1} opacity={o} depthWrite={o >= 1} toneMapped={false} side={THREE.DoubleSide} />
+      <meshBasicMaterial color={color ?? inkColour(look, ink, own)} transparent={o < 1} opacity={o} depthWrite={o >= 1} toneMapped={false} side={THREE.DoubleSide} />
     </mesh>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OneEuro, placesOf, strokeHit, strokeMoved, strokeOutline, strokeTriangles, strokesBounds, thinned, type InkStroke } from "./ink";
+import { inkColour, markerColour, OneEuro, placesOf, strokeHit, strokeMoved, strokeOutline, strokeTriangles, strokesBounds, thinned, type InkStroke } from "./ink";
+import { MENO_SET, OKABE_ITO_SET } from "./palette";
 
 const line: InkStroke = { points: [0, 0, 0.5, 5, 0, 0.5, 10, 0, 0.5] };
 
@@ -50,5 +51,18 @@ describe("the 1€ filter", () => {
     let last = 0;
     for (let i = 0; i < 20; i++) last = quick.next(i * 50, i / 100);
     expect(19 * 50 - last).toBeLessThan(150);
+  });
+});
+
+describe("the colour a piece is written in", () => {
+  it("is its own; else a pen's is the drawing's ink and a marker's the first colour of the set in use", () => {
+    expect(markerColour(MENO_SET)).toBe(MENO_SET.colours[0]);
+    expect(markerColour(OKABE_ITO_SET)).toBe(OKABE_ITO_SET.colours[0]);
+    // (a set with no colours: Meno's first)
+    expect(markerColour({ id: "none", name: "None", colours: [] })).toBe(MENO_SET.colours[0]);
+    const marker = markerColour(OKABE_ITO_SET);
+    expect(inkColour({ pen: "marker" }, "#000000", marker)).toBe(marker);
+    expect(inkColour({ pen: "pen" }, "#000000", marker)).toBe("#000000");
+    expect(inkColour({ pen: "marker", color: "#cd4560" }, "#000000", marker)).toBe("#cd4560");
   });
 });

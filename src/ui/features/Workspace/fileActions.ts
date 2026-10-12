@@ -5,7 +5,8 @@ import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { fillOutline, headsOf, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
-import { inkColour, inkWidth, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
+import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
+import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -307,10 +308,11 @@ export function drawingLayout(
   if (inks.length) {
     const pointPx = opts.pointPx ?? 0;
     const ink = opts.bondColor ?? "#000000";
+    const marker = markerColour(setInUse(useAppSettings.getState().colours));
     layout.inks = inks.flatMap((k) =>
       k.strokes.map((s) => ({
         points: strokeOutline(s, inkWidth(k, pointPx), k.pen !== "marker"),
-        color: inkColour(k, ink),
+        color: inkColour(k, ink, marker),
         ...(k.pen === "marker" ? { opacity: MARKER_OPACITY } : {}),
         over: k.pen !== "marker",
       })),

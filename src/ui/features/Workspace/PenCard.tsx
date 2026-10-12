@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { RISE } from "../../theme/motion";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
-import { INK_WIDTHS_PT, MARKER_COLOUR } from "../../../lib/chem/ink";
+import { INK_WIDTHS_PT, markerColour } from "../../../lib/chem/ink";
 import type { InkMode } from "./store/types";
 
 /** Each button's square, in px; each swatch's. */
@@ -30,10 +30,12 @@ const TOOLS: { tool: InkMode["tool"]; name: string; icon: React.ReactNode }[] = 
  * The pen's card (docs/PRESENTING.md, *Handwriting*), at the top of the
  * canvas while writing with a mouse or a trackpad: the pen, the marker or
  * the eraser; the colours of the set in use - the first, none of the pen's
- * own; the three widths; and Done. Escape is Done too.
+ * own: a pen's, the drawing's ink; a marker's, the set's first colour, so
+ * not shown twice; the three widths; and Done. Escape is Done too.
  */
 export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMode: (mode: InkMode) => void; onDone: () => void }) {
-  const palette = setInUse(useAppSettings((s) => s.colours)).colours;
+  const set = setInUse(useAppSettings((s) => s.colours));
+  const palette = set.colours;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -44,7 +46,9 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
     return () => window.removeEventListener("keydown", onKey);
   }, [onDone]);
   const writing = mode.tool !== "eraser";
-  const own = (mode.tool === "marker" ? MARKER_COLOUR : "#141414") as string;
+  const marker = mode.tool === "marker";
+  const own = marker ? markerColour(set) : "#141414";
+  const swatches = [null, ...(marker ? palette.filter((c) => c !== own) : palette)];
   const widths = INK_WIDTHS_PT[mode.tool === "marker" ? "marker" : "pen"];
   return (
     <motion.div
@@ -73,13 +77,13 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
       ))}
       <div className="mx-1 h-6 border-l border-gh-line" role="separator" />
       <div role="group" aria-label="Colour" className={`flex items-center gap-1 transition-opacity duration-150 ease-meno ${writing ? "" : "opacity-35 pointer-events-none"}`}>
-        {[null, ...palette].map((c) => (
+        {swatches.map((c) => (
           <button
             key={c ?? "own"}
-            aria-label={c ?? "The pen's own"}
-            title={c ?? "The pen's own"}
+            aria-label={c ?? (marker ? "The marker's own" : "The pen's own")}
+            title={c ?? (marker ? "The marker's own" : "The pen's own")}
             onClick={() => onMode({ ...mode, color: c })}
-            className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${mode.color === c ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
+            className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${mode.color === c || (c === null && mode.color === own) ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
             style={{ width: SWATCH, height: SWATCH, background: c ?? own }}
           />
         ))}

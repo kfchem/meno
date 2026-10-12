@@ -185,7 +185,8 @@ words, a width they break into lines at, and how their lines lie.
 - **Strokes written one after another**, within a second and a half and
   near each other, are one piece of writing: selected, moved, coloured and
   deleted together. The eraser takes a stroke at a time. A marker is see-
-  through and lies under the words.
+  through, in the first colour of the set in use unless given another, and
+  lies under the words.
 - **While a talk is given**, a pen writes over the slide, and what it wrote
   goes as the slide does.
 - **Saved and undone, a stroke at a time; in pictures as vectors.**
@@ -319,7 +320,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   Vogel, 2012) that smooths what the pointer gives as it comes; and points
   nearer than 0.6 pixels to the one before dropped as it is kept. The pen
   writes 0.75, 1.5 or 3 points wide, the marker 6, 10 or 16, see-through
-  (0.38) and yellow (#f0e442) unless given a colour.
+  (0.38). Given no colour of its own, a pen writes in the drawing's ink and
+  a marker in the first colour of the set in use (`markerColour`).
 - `store/types.ts` `Ink` (a piece: its pen, width, colour and strokes,
   each its points - x, y and the pressure - and whether the pressure was
   the pen's own) and `InkMode` (the card); `document.ts` `addInkStroke`
@@ -338,9 +340,10 @@ Shift+Enter, since Enter keeps the words, as it did before.
   stroke being written, the light round a piece, and a press, a hold and a
   click on one, as on a picture.
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
-  eraser, the colours of the set in use and the pen's own, three widths,
-  Done (or Escape). Quick Add's *Pen* opens it; the pointer is a cross
-  while it is open. Writing's menu: *Colour…* and *Delete writing*.
+  eraser, the colours of the set in use and the pen's own (a marker's own
+  being the set's first, shown once), three widths, Done (or Escape).
+  Quick Add's *Pen* opens it; the pointer is a cross while it is open.
+  Writing's menu: *Colour…* and *Delete writing*.
 - Pictures (`Layout.inks`): a marker's under the drawing, see-through in
   SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
   everything.

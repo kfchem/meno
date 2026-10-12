@@ -286,7 +286,8 @@ export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: 
  * *Handwriting*): strokes written one after another in one pen, near each
  * other - selected, moved, coloured and deleted together. `width`, which of
  * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`); `color`, its own -
- * none, a pen's is the drawing's ink and a marker's `MARKER_COLOUR`.
+ * none, a pen's is the drawing's ink and a marker's the first of the colour
+ * set in use (lib/chem/ink `markerColour`).
  */
 export type Ink = { id: number; pen: InkPen; width: 0 | 1 | 2; color?: string; strokes: InkStroke[] };
 /** A piece of writing by hand on a PDF's page: as one on the page (`Ink`, but numbered by its place among its PDF's), on page `page`, its strokes' points in that page's points from its top left. */
