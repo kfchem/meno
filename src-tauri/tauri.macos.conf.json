@@ -35,7 +35,10 @@
       "frameworks": [
         "pdfium/macos/libpdfium.dylib"
       ],
-      "entitlements": "Entitlements.plist"
+      "entitlements": "Entitlements.plist",
+      "files": {
+        "Resources/meno-document.icns": "icons/document/meno-document.icns"
+      }
     }
   }
 }

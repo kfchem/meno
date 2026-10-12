@@ -53,6 +53,7 @@ import UpdateNotice from "./ui/network/UpdateNotice";
 import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
+import { watchOpenedFiles } from "./lib/openedFiles";
 
 /** How long a Meno started for Office waits for Office to ask it for something. */
 const OFFICE_GRACE_MS = 1500;
@@ -248,15 +249,21 @@ export default function App() {
       fileInputRef.current?.click();
       return;
     }
-    const into = stateRef.current.activeId;
     const picked = await openDialog({
       multiple: true,
       filters: [{ name: "Files Meno opens", extensions: openable().map((ext) => ext.slice(1)) }],
     }).catch(() => null);
+    await openPaths(picked ?? []);
+  };
+  // Files opened by their paths - picked in Open's dialog, or opened from
+  // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
+  // - each in a tab, by what it is.
+  const openPaths = async (paths: readonly string[]) => {
+    const into = stateRef.current.activeId;
     const texts: OpenedText[] = [];
     const pdfs: OpenedPdf[] = [];
     const pictures: PictureToAdd[] = [];
-    for (const path of picked ?? []) {
+    for (const path of paths) {
       const name = path.split(/[\\/]/).pop() || path;
       // (a picture: held, and put on the page - docs/PDF.md, *A picture*)
       if (isPictureName(name)) {
@@ -451,6 +458,15 @@ export default function App() {
     });
   };
   office.current = { openTab, closeTab, leaveIfOnlyForOffice };
+
+  // Workspace files opened from outside Meno - a .meno double-clicked
+  // (lib/openedFiles): each in a tab, as Open opens it.
+  const openPathsNow = useRef(openPaths);
+  openPathsNow.current = openPaths;
+  useEffect(() => {
+    if (!isTauri()) return;
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths));
+  }, []);
 
   const ctl: TabsController = {
     tabOrder: state.tabOrder,
