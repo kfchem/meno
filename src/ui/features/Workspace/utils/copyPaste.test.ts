@@ -196,3 +196,19 @@ describe("molecules in 3D on the clipboard", () => {
     ]);
   });
 });
+
+describe("an arrow in a record", () => {
+  it("keeps its kind, heads, dashes, weight, corners and colour - only what Meno knows of each", () => {
+    const record = recordText({
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }],
+      bonds: [],
+      arrows: [
+        { id: 1, x: 3, y: 0, angle: 0, length: 4, kind: "retrosynthetic", heads: 2, dash: true, weight: "thin", corners: [{ along: 0.3, across: 1 }], color: "#c44848" },
+        { id: 2, x: 3, y: 5, angle: 0, length: 4, kind: "sideways" as never, heads: 3 as never, weight: "heavy" as never, corners: [{ along: "x" } as never], color: "red" },
+      ],
+    });
+    const read = readRecord(record)!;
+    expect(read.arrows![0]).toMatchObject({ kind: "retrosynthetic", heads: 2, dash: true, weight: "thin", corners: [{ along: 0.3, across: 1 }], color: "#c44848" });
+    expect(read.arrows![1]).toEqual({ id: 2, x: 3, y: 5, angle: 0, length: 4 });
+  });
+});

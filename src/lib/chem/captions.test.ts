@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, LIST_INDENT, listItem, marksOf, stylesOf, wordsNeed } from "./captions";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
 import { labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
@@ -332,5 +332,18 @@ describe("a list in words on the page", () => {
       const b = p.at[k];
       expect(b.line > a.line || (b.line === a.line && b.x >= a.x - 1e-9)).toBe(true);
     }
+  });
+});
+
+describe("words over an arrow that turns", () => {
+  it("go over its longest stretch, the arrow growing as a whole until that stretch holds them", () => {
+    const bent = { id: 1, x: 5, y: 0, angle: 0, length: 10, corners: [{ along: 0.2, across: 3 }] };
+    // (its longest stretch: from the corner at (2, 3) to its point at (10, 0))
+    const placed = captionPlace({ x: 6, y: 2 }, { w: 1, h: 0.5 }, [bent], 1);
+    expect(placed.arrow).toBe(1);
+    const stretch = Math.hypot(8, 3);
+    const grown = withWordsNeed([bent], new Map([[1, 2 * stretch]]))[0];
+    expect(grown.length).toBeCloseTo(20, 9);
+    expect(withWordsNeed([bent], new Map([[1, stretch / 2]]))[0]).toBe(bent);
   });
 });

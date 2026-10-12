@@ -343,10 +343,12 @@ degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
 as there is space - the usual way where both have as much; the drawing
 reads it as the layout reckoned it. Its letters running into an atom, a
-bond or another name count as labels crowding: lightly while the parts
-are set, so that the way a molecule is turned comes first, and in full
-last, when room is made for them as for an H, by the same small moves
-(wider turns of a name's own bond).
+bond, another name or a label's H (OH's H is in BzO's way as much as its
+O) count as labels crowding: lightly while the parts are set, so that the
+way a molecule is turned comes first, and in full last, when room is made
+for them as for an H, by the same small moves (wider turns of a name's own
+bond). Two names one over the other keep a line's space between them, a
+quarter of a bond: with less, taxol's AcO sat on its OBz.
 
 ## 6. Stereochemistry that reads
 
@@ -360,7 +362,9 @@ last, when room is made for them as for an H, by the same small moves
   a steroid's are - so the page shows the sense as well as the wedge.
   Where that spot is taken - the middle of morphine or strychnine, hemmed
   in by rings - the H goes wherever round its atom there is most room,
-  clear of atoms and bonds and crossing none; its wedge says the same
+  clear of atoms, bonds and names' letters and crossing none (taxol's C3
+  H once stood on the A of its C4 AcO, which reaches a bond's length from
+  its atom); its wedge says the same
   whichever way it points. It goes into one of its own rings only as a
   steroid's does: straight up or down, into a ring with no double bond of
   its own (one no other ring shares, whose second line is drawn inside
