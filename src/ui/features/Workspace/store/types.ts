@@ -750,7 +750,7 @@ export type EditorState = {
   setHoveredAtom3d: (id: number, atom: number | null) => void;
   setFigureLit: (atom: number | null) => void;
   /** A structure read from a figure put on the page - selected - as one step. */
-  putRead: (model: Model) => void;
+  putRead: (model: Model, scheme?: ImportedScheme) => void;
   setTurn3d: (id: number, turn: Turn3D) => void;
   /**
    * Molecules in 3D made from a drawing, as one undo step: each where it is

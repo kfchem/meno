@@ -20,8 +20,8 @@ export type SchemeArrow = { tail: Point; point: Point; corners: Point[]; form: A
 /** Words read: what they say, how some of their letters are set, where they stand, and the arrow they are over or under, by its place among the arrows. */
 export type SchemeWords = { text: string; marks: WordsMark[]; box: Box; arrow?: number; align?: "left" };
 
-/** A scheme read: its structures (./read), its arrows, its "+" signs, and its words. */
-export type SchemeRead = { figure: FigureRead; arrows: SchemeArrow[]; pluses: Point[]; words: SchemeWords[] };
+/** A scheme read: its structures (./read), its arrows, its "+" signs, its words, and how long its bonds are drawn - or would be, by its letters, where it has none. */
+export type SchemeRead = { figure: FigureRead; arrows: SchemeArrow[]; pluses: Point[]; words: SchemeWords[]; bond: number };
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 const len = (s: { a: Point; b: Point }) => dist(s.a, s.b);
@@ -691,7 +691,7 @@ export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);
   const { words, pluses } = wordsOf(figure.left.letters, arrows);
-  return { figure: { ...figure, left: { letters: [] } }, arrows, pluses: [...signs.pluses, ...pluses], words };
+  return { figure: { ...figure, left: { letters: [] } }, arrows, pluses: [...signs.pluses, ...pluses], words, bond: figure.bond || bond };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */
