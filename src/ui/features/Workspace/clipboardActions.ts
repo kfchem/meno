@@ -66,7 +66,13 @@ export function useClipboardActions(
     const shapes = only != null ? [] : state.shapes.filter((s) => state.selShapes.has(s.id));
     const inShapes = state.captions.filter((c) => c.shape != null && shapes.some((s) => s.id === c.shape) && !words.some((w) => w.id === c.id));
     words.push(...inShapes);
-    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length > 0;
+    // (and the arrows and "+" signs selected for themselves - one pointing at something - with the words over those arrows)
+    const lone = only != null ? [] : state.arrows.filter((a) => state.selArrows.has(a.id));
+    const lonePluses = only != null ? [] : state.pluses.filter((p) => state.selPluses.has(p.id));
+    words.push(...state.captions.filter((c) => c.arrow != null && lone.some((a) => a.id === c.arrow) && !words.some((w) => w.id === c.id)));
+    // (and the writing by hand selected, each piece whole)
+    const inks = only != null ? [] : state.inks.filter((k) => state.selInks.has(k.id));
+    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length + inks.length > 0;
     const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
     const sel = heldAtoms.size
       ? { atoms: new Set([...state.sel.atoms, ...heldAtoms]), bonds: new Set([...state.sel.bonds, ...bondsAmong(model, heldAtoms)]) }
@@ -83,9 +89,14 @@ export function useClipboardActions(
     if (!drawn && !carried.length && !flow && !others) return null;
     const amongWords = drawn?.captions ?? [];
     const allWords = [...amongWords, ...words.filter((c) => !amongWords.some((a) => a.id === c.id))];
+    // (each arrow and "+" once: among the atoms, or selected for itself)
+    const allArrows = [...(drawn?.arrows ?? []), ...lone.filter((a) => !drawn?.arrows?.some((x) => x.id === a.id))];
+    const allPluses = [...(drawn?.pluses ?? []), ...lonePluses.filter((p) => !drawn?.pluses?.some((x) => x.id === p.id))];
     return {
       part: {
         ...(drawn ?? { atoms: [], bonds: [] }),
+        ...(allArrows.length ? { arrows: allArrows } : {}),
+        ...(allPluses.length ? { pluses: allPluses } : {}),
         ...(allWords.length ? { captions: allWords } : {}),
         ...(carried.length ? { molecules3d: carried } : {}),
         ...(flow ? { flow } : {}),
@@ -94,6 +105,7 @@ export function useClipboardActions(
         ...(sheets.length ? { sheets } : {}),
         ...(slides.length ? { slides } : {}),
         ...(shapes.length ? { shapes } : {}),
+        ...(inks.length ? { inks } : {}),
       },
       ids3d: molecules3d.filter((m) => ids3d.includes(m.id)).map((m) => m.id),
     };
@@ -162,7 +174,7 @@ export function useClipboardActions(
           return;
         }
         const found = await structureOnClipboard();
-        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length)) {
+        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;

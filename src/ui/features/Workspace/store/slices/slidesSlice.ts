@@ -4,11 +4,12 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Slide } from "../types";
-import { inBox, molecules3dIn } from "../../utils/selection";
+import { arrowsIn, inBox, molecules3dIn } from "../../utils/selection";
 import { sheetMiddle } from "../../utils/textSheets";
 import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
+import { strokesBounds } from "../../../../../lib/chem/ink";
 import { middleOf } from "../../../../../lib/chem/shapes";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -56,6 +57,11 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.selectMolecules3d(molecules3dIn(st.molecules3d, "box", box));
       st.selectPictures(molecules3dIn(st.pictures.map((p) => ({ id: p.id, at: p })), "box", box));
       st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), "box", box));
+      // (and writing by hand on it, each piece by its middle, as a box takes it)
+      st.selectInks(st.inks.filter((k) => {
+        const m = strokesBounds(k.strokes, 0);
+        return m != null && within({ x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2 });
+      }).map((k) => k.id));
       st.selectPdfs(
         molecules3dIn(
           st.pdfs.map((p) => {
@@ -73,6 +79,9 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       // (the drawing's last: a molecule in 3D selected alone lets it go)
       st.setSel(inBox(st.model, box[0], box[1]));
       st.selectSlides([id, ...st.slides.filter((x) => x.id !== id && within(x) && within({ x: x.x - x.w / 2, y: x.y - x.h / 2 }) && within({ x: x.x + x.w / 2, y: x.y + x.h / 2 })).map((x) => x.id)]);
+      // (and the arrows standing wholly on it - each end and corner - and the "+" signs: those among its atoms carried with them, once)
+      st.selectArrows(arrowsIn(st.arrows, "box", box));
+      st.selectPluses(st.pluses.filter(within).map((p) => p.id));
     },
     orderSlide: (id: number, to: number) => doc.edit("reorder slides", (d) => ops.orderSlide(d, id, to)),
     removeSlide: (id: number) => {
@@ -88,13 +97,15 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.letGo();
       st.clearSel();
       st.setWorkflowView({ openStep: null, chosenSet: null, workflowMenu: null });
-      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) } }));
+      // (and no pen's card over the talk: a pen writes over the slide as it is)
+      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) }, talkInk: [], inkMode: null }));
     },
     presentAt: (at: number) =>
       set((prev: EditorState) => {
         if (!prev.presenting || at < 0 || at >= prev.slides.length || at === prev.presenting.at) return prev;
-        return { ...prev, presenting: { at } };
+        // (a pen's writing over the slide goes as the slide does)
+        return { ...prev, presenting: { at }, talkInk: [] };
       }),
-    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null } : prev)),
+    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null, talkInk: [] } : prev)),
   };
 }

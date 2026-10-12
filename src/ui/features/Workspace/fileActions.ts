@@ -5,7 +5,9 @@ import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { fillOutline, headsOf, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { fillOutline, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
+import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -299,7 +301,6 @@ export function drawingLayout(
       return {
         ...(area ? { fill: { points: area, color: s.fill! } } : {}),
         lines: lined ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
-        heads: lined ? headsOf(s, pointPx).map((points) => ({ points, color })) : [],
       };
     });
     const boxes = shapes.map((s) => shapeBounds(s, pointPx));
@@ -307,6 +308,27 @@ export function drawingLayout(
       boxes.flatMap((b) => [b.x0, b.x1]),
       boxes.flatMap((b) => [b.y0, b.y1]),
     );
+  }
+  // and writing by hand, as the canvas draws it: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*)
+  const inks = model.inks ?? [];
+  if (inks.length) {
+    const pointPx = opts.pointPx ?? 0;
+    const ink = opts.bondColor ?? "#000000";
+    const marker = markerColour(setInUse(useAppSettings.getState().colours));
+    layout.inks = inks.flatMap((k) =>
+      k.strokes.map((s) => ({
+        points: strokeOutline(s, inkWidth(k, pointPx), k.pen !== "marker"),
+        color: inkColour(k, ink, marker),
+        ...(k.pen === "marker" ? { opacity: MARKER_OPACITY } : {}),
+        over: k.pen !== "marker",
+      })),
+    );
+    const boxes = inks.flatMap((k) => strokesBounds(k.strokes, inkWidth(k, pointPx) / 2) ?? []);
+    if (boxes.length)
+      take(
+        boxes.flatMap((b) => [b.x0, b.x1]),
+        boxes.flatMap((b) => [b.y0, b.y1]),
+      );
   }
   // and the words on the page, set as the canvas sets them
   const words = (model.captions ?? []).flatMap((c) => wordsSet(c, opts, set).items);
@@ -504,7 +526,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
 const NO_RECORDS: Record<number, number> = {};
 
 /** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "fullModel" | "recordsShown">>): Drawn {
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks" | "fullModel" | "recordsShown">>): Drawn {
   return {
     // (every record of each stack of drawings, the one it shows marked: utils/stacks)
     ...carriedDrawing(state.fullModel ?? state.model, state.recordsShown ?? NO_RECORDS),
@@ -514,5 +536,6 @@ export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" |
     pluses: state.pluses,
     captions: state.captions,
     ...(state.shapes?.length ? { shapes: state.shapes } : {}),
+    ...(state.inks?.length ? { inks: state.inks } : {}),
   };
 }

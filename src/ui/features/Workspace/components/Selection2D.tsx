@@ -10,10 +10,11 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
+import { strokesBounds, strokeTurned } from "../../../../lib/chem/ink";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D, useStyle3D } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, turnedTogether, type Turning3D } from "../utils/molecule3d";
@@ -21,7 +22,7 @@ import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { selectionMoving } from "../utils/dragSelection";
-import { schemeAmong } from "../utils/copyPaste";
+import { selectionScheme } from "../utils/selectionScheme";
 import { TAU, follow } from "../../../theme/motion";
 import { hiddenInStacks } from "../utils/stacks";
 import SelectionShade2D from "./SelectionShade2D";
@@ -188,6 +189,14 @@ export default function Selection2D() {
         // (and slides and shapes, by their middles)
         s.selectSlides(molecules3dIn(s.slides.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectShapes(molecules3dIn(s.shapes.map((x) => ({ id: x.id, at: shapeMiddle(x) })), kind, points), add);
+        // (and writing by hand, each piece by its middle)
+        s.selectInks(molecules3dIn(s.inks.flatMap((k) => {
+          const b = strokesBounds(k.strokes, 0);
+          return b ? [{ id: k.id, at: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } }] : [];
+        }), kind, points), add);
+        // (and arrows standing wholly in it - each end and corner - and "+" signs, by their middles: those among the atoms it takes are carried with them, once)
+        s.selectArrows(arrowsIn(s.arrows, kind, points), add);
+        s.selectPluses(molecules3dIn(s.pluses.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -212,7 +221,8 @@ export default function Selection2D() {
         st.hoveredMark != null ||
         st.hoveredMeasure3d != null ||
         st.hoveredSlide != null ||
-        st.hoveredShape != null;
+        st.hoveredShape != null ||
+        st.hoveredInk != null;
       if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || onMark || st.labelEdit.active || st.extend.active || st.captionEdit) return;
       const add = addsToSelection(e);
       const count = pressOnEmpty(lastEmpty, { t: e.timeStamp, x: e.clientX, y: e.clientY }, DOUBLE_CLICK_MS);
@@ -330,9 +340,11 @@ export default function Selection2D() {
     // (shapes likewise - a line's or an arrow's ends carried round with it)
     const shapes = st.shapes.filter((s) => st.selShapes.has(s.id));
     const shapesAt = (angle: number) => shapes.map((s) => shapePlace(turnedShape(s, about, angle), { x: 0, y: 0 }));
-    // (the arrows, "+" signs and words among it carried round too - the words' places, their letters upright - as a drag takes them)
-    const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
-    const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
+    const inks = st.inks.filter((k) => st.selInks.has(k.id));
+    const inksAt = (angle: number) => inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeTurned(s, about, angle)) }));
+    // (the arrows, "+" signs and words among it, and those selected for themselves, carried round too - the words' places, their letters upright - as a drag takes them)
+    const among = selectionScheme(st);
+    const words = among.captions;
     const scheme = among.arrows.length || among.pluses.length || words.length;
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
@@ -353,7 +365,7 @@ export default function Selection2D() {
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
-        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || scheme
+        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length || scheme
           ? {
               ...(scheme ? { arrows: turnedArrows(among.arrows, about, angle), pluses: turned(among.pluses, about, angle), captions: turned(words, about, angle) } : {}),
               ...(pics.length ? { pictures: picturesAt(angle) } : {}),
@@ -362,6 +374,7 @@ export default function Selection2D() {
               ...(pdfs.length ? { pdfs: turned(pdfs, about, angle) } : {}),
               ...(slides.length ? { slides: turned(slides, about, angle) } : {}),
               ...(shapes.length ? { shapes: shapesAt(angle) } : {}),
+              ...(inks.length ? { inks: inksAt(angle) } : {}),
             }
           : undefined;
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);

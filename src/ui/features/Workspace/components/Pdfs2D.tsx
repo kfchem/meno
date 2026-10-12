@@ -68,6 +68,7 @@ import { heldShows } from "./held";
 import type { WordPlace } from "../store/types";
 import { spotMoving } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
+import { inkOnPage } from "../utils/pdfInk";
 
 /** Eased in and out, cubic: what is lifted rises and settles. */
 export const ease = (u: number) => {
@@ -752,7 +753,7 @@ function PdfStack(props: {
         {(g ? g.order : spreadOrder(p)).map((i, n) => {
           const { k, s } = sheets[i];
           const lift = Math.sin(Math.PI * k);
-          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} />;
+          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} ink={inkOnPage(p, i)} />;
         })}
         {/* (lit round each page, not round all of them: they may lie far apart) */}
         {lit > 0.001 &&
@@ -804,7 +805,7 @@ function PdfStack(props: {
           {under.map((s, i) => (
             <BlankSheet key={i} s={s} z={0.01 * i} />
           ))}
-          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} />
+          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} ink={inkOnPage(p, p.page)} />
       {going != null && (
         <Page
           pt={p.pages[going]}

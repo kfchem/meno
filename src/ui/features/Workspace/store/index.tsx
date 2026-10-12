@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -22,6 +22,7 @@ import { createPicturesSlice } from "./slices/picturesSlice";
 import { createWorkflowSlice } from "./slices/workflowSlice";
 import { createSlidesSlice } from "./slices/slidesSlice";
 import { createShapesSlice } from "./slices/shapesSlice";
+import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
 import { turnsAcross } from "./turnJournal";
@@ -64,6 +65,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     pictures: doc.pictures ?? NO_PICTURES,
     slides: doc.slides ?? NO_SLIDES,
     shapes: doc.shapes ?? NO_SHAPES,
+    inks: doc.inks ?? NO_INKS,
   };
 }
 
@@ -95,6 +97,7 @@ const NO_PDFS: PdfItem[] = [];
 const NO_PICTURES: PictureItem[] = [];
 const NO_SLIDES: Slide[] = [];
 const NO_SHAPES: Shape[] = [];
+const NO_INKS: Ink[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {
@@ -181,6 +184,10 @@ export function connectStoreToDocument(
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         selSlides: picturesHeld(prev.selSlides, mirrored.slides),
         selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
+        selArrows: picturesHeld(prev.selArrows, mirrored.arrows),
+        selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
+        selInks: picturesHeld(prev.selInks, mirrored.inks),
+        hoveredInk: prev.hoveredInk != null && !mirrored.inks.some((k) => k.id === prev.hoveredInk) ? null : prev.hoveredInk,
         hoveredShape: prev.hoveredShape != null && !mirrored.shapes.some((s) => s.id === prev.hoveredShape) ? null : prev.hoveredShape,
         hoveredSlide: prev.hoveredSlide != null && !mirrored.slides.some((s) => s.id === prev.hoveredSlide) ? null : prev.hoveredSlide,
         // (a talk given from slides an undo took away: ended; from fewer, at the last there is)
@@ -270,8 +277,15 @@ export function createEditorStore(
     selSlides: new Set<number>(),
     hoveredSlide: null,
     selShapes: new Set<number>(),
+    selArrows: new Set<number>(),
+    selPluses: new Set<number>(),
     hoveredShape: null,
     shapeDraft: null,
+    selInks: new Set<number>(),
+    hoveredInk: null,
+    inkMode: null,
+    inkDraft: null,
+    talkInk: [],
     arrowDraft: null,
     presenting: null,
     guides: null,
@@ -323,6 +337,7 @@ export function createEditorStore(
     ...createWorkflowSlice(doc, set, get),
     ...createSlidesSlice(doc, set, get),
     ...createShapesSlice(doc, set),
+    ...createInksSlice(doc, set),
     ...createRecordsSlice(doc, set, get),
   }));
 

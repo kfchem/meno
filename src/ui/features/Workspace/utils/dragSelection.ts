@@ -1,8 +1,9 @@
 import type { EditorStore } from "../store";
 import { setMembers } from "../workflow/entries";
-import { schemeAmong } from "./copyPaste";
+import { selectionScheme } from "./selectionScheme";
 import { guideMove, type Held } from "./guiding";
 import { shapePlace } from "../document";
+import { strokeMoved } from "../../../../lib/chem/ink";
 
 type Pt = { x: number; y: number };
 
@@ -37,9 +38,9 @@ export function dragSelection(
   const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat())]);
   const takenSolids = new Set([...st.sel3d, ...held.flatMap((h) => h.molecules)]);
   const atoms = st.model.atoms.filter((a) => takenAtoms.has(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, takenAtoms);
-  // (and the words selected, each as one thing)
-  const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((a) => a.id === c.id))];
+  // (the arrows, "+" signs and words among them, and those selected for themselves - each once)
+  const among = selectionScheme(st, takenAtoms);
+  const words = among.captions;
   const solids = st.molecules3d.filter((m) => takenSolids.has(m.id)).map((m) => ({ id: m.id, at: m.at }));
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   // (a set's pictures - a Render step's - with it)
@@ -49,6 +50,7 @@ export function dragSelection(
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   const shapes = st.shapes.filter((s) => st.selShapes.has(s.id));
+  const inks = st.inks.filter((k) => st.selInks.has(k.id));
   const p0 = toWorld(from.x, from.y);
   // (lined up with what is near as it goes: docs/PRESENTING.md, *Guides*)
   const guide = guideMove(store, toWorld, from);
@@ -75,6 +77,7 @@ export function dragSelection(
       pdfs: pdfs.map(by),
       slides: slides.map(by),
       shapes: shapes.map((s) => shapePlace(s, { x: dx, y: dy })),
+      inks: inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })),
     });
   };
   const onMove = (ev: PointerEvent) => {

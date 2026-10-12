@@ -1,27 +1,27 @@
 /**
  * Shapes on the page (docs/PRESENTING.md, *Shapes*): rectangles, rounded
- * rectangles, ellipses, lines, arrows - one head or two - and callouts, a
- * rounded box with a tail pointing at something. What each draws - the line
- * it follows, broken into dashes where it is dashed, its arrowheads and the
- * area it fills - is worked out here, once, for the canvas, for SVG and for
- * EMF alike; and where a press takes it, how far it reaches, where its words
- * go, and how it is drawn out, made larger or smaller, moved and turned.
+ * rectangles, ellipses, lines and callouts, a rounded box with a tail
+ * pointing at something. (An arrow is the page's one Arrow, not a shape.)
+ * What each draws - the line it follows, broken into dashes where it is
+ * dashed, and the area it fills - is worked out here, once, for the canvas,
+ * for SVG and for EMF alike; and where a press takes it, how far it reaches,
+ * where its words go, and how it is drawn out, made larger or smaller, moved
+ * and turned.
  *
  * Everything is in the page's units; a line's width is in points, as the
  * drawing's labels' size is, `pointPx` page units to the point.
  */
 import type { Vec2 } from "./layout2d";
 
-export type ShapeKind = "rect" | "rounded" | "ellipse" | "line" | "arrow" | "callout";
+export type ShapeKind = "rect" | "rounded" | "ellipse" | "line" | "callout";
 
 /** The kinds, in the order Quick Add offers them, and their names. */
-export const SHAPE_KINDS: readonly ShapeKind[] = ["rect", "rounded", "ellipse", "line", "arrow", "callout"];
+export const SHAPE_KINDS: readonly ShapeKind[] = ["rect", "rounded", "ellipse", "line", "callout"];
 export const SHAPE_NAMES: Record<ShapeKind, string> = {
   rect: "Rectangle",
   rounded: "Rounded rectangle",
   ellipse: "Ellipse",
   line: "Line",
-  arrow: "Arrow",
   callout: "Callout",
 };
 
@@ -33,9 +33,8 @@ export const WEIGHT_PT: Record<ShapeWeight, number> = { thin: 0.6, regular: 1, t
 /**
  * What a shape's drawing depends on. A box - a rectangle, a rounded one, an
  * ellipse, a callout - lies between two corners, `x0` < `x1` and `y0` < `y1`;
- * a line or an arrow runs from (`x0`, `y0`) to (`x1`, `y1`), an arrow's head
- * at the end - and, `heads` 2, at the start too. A callout's tail reaches to
- * `tail`.
+ * a line runs from (`x0`, `y0`) to (`x1`, `y1`). A callout's tail reaches
+ * to `tail`.
  */
 export type ShapeGeometry = {
   kind: ShapeKind;
@@ -46,12 +45,11 @@ export type ShapeGeometry = {
   tail?: Vec2;
   weight?: "thin" | "thick";
   dash?: true;
-  heads?: 2;
 };
 
-/** Whether it is a box, which holds words and can be filled - not a line or an arrow. */
+/** Whether it is a box, which holds words and can be filled - not a line. */
 export function isBox(kind: ShapeKind): boolean {
-  return kind !== "line" && kind !== "arrow";
+  return kind !== "line";
 }
 
 /** Its line's width, in page units. */
@@ -157,46 +155,10 @@ function boxOutline(s: ShapeGeometry, pointPx: number): Vec2[] {
   });
 }
 
-/** An arrowhead's length, and how far its line stops short of its tip - in page units, for a line `width` wide. */
-function headLength(width: number, pointPx: number): number {
-  return Math.max(6 * pointPx, 4.5 * width);
-}
-const HEAD_HALF = 0.4;
-const HEAD_BACK = 0.8;
-
-/** The line a shape follows - closed round a box; a line's or an arrow's, short of its heads - in page units. */
+/** The line a shape follows - closed round a box; a line's, from end to end - in page units. */
 export function outlineOf(s: ShapeGeometry, pointPx: number): { points: Vec2[]; closed: boolean } {
   if (isBox(s.kind)) return { points: boxOutline(s, pointPx), closed: true };
-  let a = { x: s.x0, y: s.y0 };
-  let b = { x: s.x1, y: s.y1 };
-  if (s.kind === "arrow") {
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const back = Math.min(headLength(lineWidthOf(s, pointPx), pointPx) * HEAD_BACK, len / (s.heads === 2 ? 2 : 1));
-    if (len > 1e-9) {
-      const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-      b = { x: b.x - u.x * back, y: b.y - u.y * back };
-      if (s.heads === 2) a = { x: a.x + u.x * back, y: a.y + u.y * back };
-    }
-  }
-  return { points: [a, b], closed: false };
-}
-
-/** An arrow's heads, each a triangle, filled: at its end, and at its start too where it has two. */
-export function headsOf(s: ShapeGeometry, pointPx: number): Vec2[][] {
-  if (s.kind !== "arrow") return [];
-  const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0);
-  if (len < 1e-9) return [];
-  const width = lineWidthOf(s, pointPx);
-  const l = Math.min(headLength(width, pointPx), len / (s.heads === 2 ? 2 : 1));
-  const head = (tip: Vec2, u: Vec2): Vec2[] => {
-    const back = { x: tip.x - u.x * l, y: tip.y - u.y * l };
-    const n = { x: -u.y * l * HEAD_HALF, y: u.x * l * HEAD_HALF };
-    return [tip, { x: back.x + n.x, y: back.y + n.y }, { x: back.x - n.x, y: back.y - n.y }];
-  };
-  const u = { x: (s.x1 - s.x0) / len, y: (s.y1 - s.y0) / len };
-  const heads = [head({ x: s.x1, y: s.y1 }, u)];
-  if (s.heads === 2) heads.push(head({ x: s.x0, y: s.y0 }, { x: -u.x, y: -u.y }));
-  return heads;
+  return { points: [{ x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 }], closed: false };
 }
 
 /** A dashed line's dashes and the gaps between them, in page units, for a line `width` wide. */
@@ -244,7 +206,7 @@ export function strokePieces(s: ShapeGeometry, pointPx: number): { points: Vec2[
   return dashed(o.points, o.closed, dash, gap).map((points) => ({ points, closed: false }));
 }
 
-/** The area a box fills - its edge, round it; none for a line or an arrow. */
+/** The area a box fills - its edge, round it; none for a line. */
 export function fillOutline(s: ShapeGeometry, pointPx: number): Vec2[] | null {
   return isBox(s.kind) ? boxOutline(s, pointPx) : null;
 }
@@ -314,8 +276,8 @@ function distanceToSegment(p: Vec2, a: Vec2, b: Vec2): number {
 
 /**
  * Where a press at `p` takes a shape: on its line - within `slack` of it,
- * besides its own width, and on an arrow's heads - or inside it, where it is
- * filled (`filled`); else null. Its line is pressed as a whole, dashed or not.
+ * besides its own width - or inside it, where it is filled (`filled`); else
+ * null. Its line is pressed as a whole, dashed or not.
  */
 export function shapeHit(s: ShapeGeometry, p: Vec2, slack: number, pointPx: number, filled: boolean, lined = true): "line" | "inside" | null {
   const o = outlineOf(s, pointPx);
@@ -323,14 +285,13 @@ export function shapeHit(s: ShapeGeometry, p: Vec2, slack: number, pointPx: numb
   const pts = o.points;
   const segments = o.closed ? pts.length : pts.length - 1;
   for (let i = 0; i < segments; i++) if (distanceToSegment(p, pts[i], pts[(i + 1) % pts.length]) <= reach) return "line";
-  for (const head of headsOf(s, pointPx)) if (insidePolygon(p, head)) return "line";
   if (filled && o.closed && insidePolygon(p, pts)) return "inside";
   return null;
 }
 
-/** The box round all a shape draws: its line, half its width either side of it, its heads and its tail. */
+/** The box round all a shape draws: its line, half its width either side of it, and its tail. */
 export function shapeBounds(s: ShapeGeometry, pointPx: number): { x0: number; y0: number; x1: number; y1: number } {
-  const pts = [...outlineOf(s, pointPx).points, ...headsOf(s, pointPx).flat()];
+  const pts = outlineOf(s, pointPx).points;
   const h = lineWidthOf(s, pointPx) / 2;
   return {
     x0: Math.min(...pts.map((q) => q.x)) - h,
@@ -343,7 +304,7 @@ export function shapeBounds(s: ShapeGeometry, pointPx: number): { x0: number; y0
 /**
  * Where a box's words go: about its middle, as wide as it is inside - the
  * rectangle within an ellipse - less `pad` either side; never narrower than
- * `pad`. None for a line or an arrow.
+ * `pad`. None for a line.
  */
 export function wordsRoom(s: ShapeGeometry, pad: number): { x: number; y: number; width: number } | null {
   if (!isBox(s.kind)) return null;
@@ -453,8 +414,8 @@ export function moved<T extends ShapeGeometry>(s: T, d: Vec2): T {
 }
 
 /**
- * `s` carried round `about` by `angle`: a line's and an arrow's ends turned
- * with it; a box upright - the page never tilts - its middle carried round,
+ * `s` carried round `about` by `angle`: a line's ends turned with it; a
+ * box upright - the page never tilts - its middle carried round,
  * and its tail turned with it.
  */
 export function turned<T extends ShapeGeometry>(s: T, about: Vec2, angle: number): T {

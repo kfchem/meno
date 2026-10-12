@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The same icon drawn for 16 and 32 pixels: a bolder sheet and a larger mark, so that both still read. -->
+  <path d="M200 56h448l200 200v680a32 32 0 0 1-32 32H200a32 32 0 0 1-32-32V88a32 32 0 0 1 32-32z" fill="#ffffff" stroke="#6e7781" stroke-width="64" stroke-linejoin="round"/>
+  <path d="M648 56v168a32 32 0 0 0 32 32h168" fill="#d0d7de" stroke="#6e7781" stroke-width="64" stroke-linejoin="round"/>
+  <g transform="translate(246 380) scale(1.099)" fill="#1a1f2b">
+    <path d="M172 328.5c0-38.9 31.3-70.5 70-70.5s70 31.6 70 70.5-31.3 70.5-70 70.5-70-31.6-70-70.5zM0 258.4C.4 115.5 108.8 0 242.3 0 375.7.2 483.8 116 484 258.9l-58.8.1C425 148.6 327.2 80.8 239 82.3 150.8 83.8 59.2 148.2 58.8 258.6z"/>
+  </g>
+</svg>

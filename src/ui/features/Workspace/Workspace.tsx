@@ -174,6 +174,9 @@ import Guides2D from "./components/Guides2D";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
+import Inks2D from "./components/Inks2D";
+import InkWriting from "./components/InkWriting";
+import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
@@ -735,6 +738,10 @@ function WorkspaceContent({
         // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
         e.preventDefault();
         st.removeSlide(st.hoveredSlide);
+      } else if (isDeleteKey(e) && !busy && st.hoveredInk != null && st.inks.some((k) => k.id === st.hoveredInk)) {
+        // writing by hand under the pointer, likewise (docs/PRESENTING.md, *Handwriting*)
+        e.preventDefault();
+        st.removeInk(st.hoveredInk);
       } else if (isDeleteKey(e) && !busy && st.hoveredShape != null && st.shapes.some((x) => x.id === st.hoveredShape)) {
         // a shape under the pointer, likewise (docs/PRESENTING.md, *Shapes*)
         e.preventDefault();
@@ -800,6 +807,9 @@ function WorkspaceContent({
   }, [labelBegun]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
+  // the pen's card, while writing with a mouse or a trackpad (docs/PRESENTING.md, *Handwriting*)
+  const inkMode = useEditor((s) => s.inkMode);
+  const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
   // An undo or a redo that would take away a running step is held, and asks
   // first what deleting it asks (heard before the app's own undo, App.tsx)
@@ -1056,8 +1066,10 @@ function WorkspaceContent({
       open({ kind: "push", id: hoveredPush, selection: "none", ...place });
       return;
     }
-    // on a reaction arrow, and nothing else: the arrow's menu
-    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow)) {
+    // on an arrow, and nothing else - or selected alone - the arrow's menu
+    const { selArrows, selPluses } = store.getState();
+    const arrowWithMore = selectedOf({ ...store.getState(), selArrows: new Set() }).any || selArrows.size > 1;
+    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow) && !(selArrows.has(hoveredArrow) && arrowWithMore)) {
       const target: MenuTarget = { kind: "arrow", id: hoveredArrow, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -1072,7 +1084,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
+      return selectedOf({ ...s, selCaptions: new Set() }).any || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -1084,10 +1096,22 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
+      return selectedOf({ ...s, selTexts: new Set() }).any || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise writing by hand, unless it is selected with more (docs/PRESENTING.md, *Handwriting*)
+    const { hoveredInk, inks, selInks } = store.getState();
+    const inkWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selInks: new Set() }).any || selInks.size > 1;
+    })();
+    if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk) && !(selInks.has(hoveredInk) && inkWithMore)) {
+      const target: MenuTarget = { kind: "ink", id: hoveredInk, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1108,7 +1132,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
+      return selectedOf({ ...s, selPictures: new Set() }).any || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -1120,7 +1144,7 @@ function WorkspaceContent({
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
     const pdfWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+      return selectedOf({ ...s, selPdfs: new Set() }).any || selPdfs.size > 1;
     })();
     if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
@@ -1140,8 +1164,9 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
-    // likewise a "+"
-    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus)) {
+    // likewise a "+", unless it is selected with more
+    const plusWithMore = selectedOf({ ...store.getState(), selPluses: new Set() }).any || selPluses.size > 1;
+    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus) && !(selPluses.has(hoveredPlus) && plusWithMore)) {
       const target: MenuTarget = { kind: "plus", id: hoveredPlus, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -1496,6 +1521,8 @@ function WorkspaceContent({
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
+              // (the pen's card: writing with the mouse or the trackpad, until Done)
+              else if (what === "pen") st.setInkMode({ tool: "pen", color: null, width: 1 });
               else if (what === "slide") {
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
@@ -1542,6 +1569,7 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
         {sizeCard && (
           <SizeCard
@@ -1574,6 +1602,7 @@ function WorkspaceContent({
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
             else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
+            else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
@@ -1735,7 +1764,6 @@ function WorkspaceContent({
               onWeight: (weight) => st.styleShapes([sh.id], { weight }),
               dash: !!sh.dash,
               onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
-              ...(sh.kind === "arrow" ? { heads: { both: sh.heads === 2, onBoth: () => st.styleShapes([sh.id], { heads: sh.heads === 2 ? 1 : 2 }) } } : {}),
               onFront: () => st.orderShapes([sh.id], true),
               onBack: () => st.orderShapes([sh.id], false),
             };
@@ -1780,6 +1808,7 @@ function WorkspaceContent({
               spread: !!p.spread,
               icon: !!p.icon,
               onSpread: () => st.spreadPdf(p.id, !p.spread),
+              onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 1 }),
               ...(p.spread && p.placed?.length ? { onRows: () => st.pdfPagesInRows(p.id) } : {}),
               onIcon: () => st.iconPdf(p.id, !p.icon),
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),
@@ -1878,13 +1907,15 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
                 : menu.kind === "shape" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], shapes: [menu.id] }
+                : menu.kind === "ink" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], inks: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
@@ -1955,6 +1986,9 @@ function WorkspaceContent({
           <Pictures2D />
           {/* Shapes, over the pictures and under the drawing (docs/PRESENTING.md, *Shapes*) */}
           <Shapes2D />
+          {/* Writing by hand: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*) */}
+          <Inks2D />
+          <InkWriting />
           {/* Rings filled and parts highlighted with a colour, behind the drawing */}
           <Fills2D />
           {/* where renders under way will put what they make (docs/RENDER.md) */}

@@ -174,7 +174,8 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture; Delete | show in the PDF |
-| A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, head at both ends (an arrow), bring to front, send to back |
+| A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, bring to front, send to back |
+| Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run (or stop), run from here, options; Delete | show log, show files, save as procedure |
 | A set, an arrow, a "+", a wire, a measurement | Delete | save as procedure (a set), arrow style (an arrow) |
@@ -227,13 +228,15 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow, a "+", an electron-pushing arrow (from
-the first atom or bond pressed, *Electron-pushing arrows* below), a
-slide of what is seen (docs/PRESENTING.md) and *Shapes*, which opens a
-row below it of a rectangle, a rounded one, an ellipse, a line, an arrow
-and a callout - each drawn from where the double-click was by a drag from
-its icon, or traced with the button up until a click (docs/PRESENTING.md,
-*Shapes*). A choice puts it down where the
+SMILES, text, an arrow (*Arrows* below), a "+", an electron-pushing
+arrow (from the first atom or bond pressed, *Electron-pushing arrows*
+below), a slide of what is seen (docs/PRESENTING.md), *Pen* - its card
+opened, to write by hand with the mouse or the trackpad
+(docs/PRESENTING.md, *Handwriting*; a pen writes anywhere, always) - and
+*Shapes*, which opens a row below it of a rectangle, a rounded one, an
+ellipse, a line and a callout - each drawn from where the double-click
+was by a drag from its icon, or traced with the button up until a click
+(docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
@@ -284,6 +287,18 @@ highlight's colour, under the drawing, and a small handle stands above it.
   arrow is carried round and points as far round, or is mirrored and
   points the mirrored way. Words move to their new places, their letters
   upright, and words over an arrow stay with it.
+- **Arrows and "+" signs are selected for themselves too** (2026-10-12):
+  one standing alone - an arrow pointing at something on a slide - as a
+  shape is. A click selects one alone, Ctrl/⌘ and a click adds it or takes
+  it out, and a box or a lasso takes an arrow wholly in it (each end and
+  each corner) and a "+" by its middle; Select All and a slide's *Select
+  what is on it* take them as well. Selected, one is lit round, and goes
+  with the selection when it is moved, turned, copied, cut, deleted,
+  coloured (an arrow) or pasted, the words over an arrow with it. An
+  arrow or a "+" among the selection's atoms is carried as before, and
+  once only, selected for itself or not (`utils/selectionScheme.ts`). A
+  press on one carried by a selection with more takes all of it; else a
+  drag moves it alone, as before.
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,

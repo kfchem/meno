@@ -4,6 +4,7 @@ import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
+import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -227,6 +228,8 @@ export type PdfItem = {
   placed?: PagePlace[];
   /** Made small, an icon about a benzene ring's size, its top page on it (lib/pdf/layout `ICON_HEIGHT`). */
   icon?: boolean;
+  /** Writing by hand on its pages, each piece on the page it was begun on and going wherever that goes (docs/PRESENTING.md, *Handwriting*). */
+  inks?: PdfInk[];
   /**
    * Read in the column, its name among the texts' (docs/PDF.md, *In the
    * column*): where the column's top was, in pages from the first's top -
@@ -281,18 +284,32 @@ export type Slide = { id: number; x: number; y: number; w: number; h: number; ar
 export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
 /**
  * A change to a shape: where it lies, its tail, its line's weight, dashed
- * or not, an arrow's heads (1 or 2), its line's colour and its fill (null,
- * none of its own).
+ * or not, its line's colour and its fill (null, none of its own).
  */
 export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
   weight?: ShapeWeight;
   dash?: boolean;
-  heads?: 1 | 2;
   stroke?: string | null;
   fill?: string | null;
 };
 /** A shape being drawn from Quick Add: its kind, where it was begun, where the pointer is, and whether Shift keeps it even. */
 export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: { x: number; y: number }; even: boolean };
+
+/**
+ * A piece of writing by hand on the page (docs/PRESENTING.md,
+ * *Handwriting*): strokes written one after another in one pen, near each
+ * other - selected, moved, coloured and deleted together. `width`, which of
+ * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`); `color`, its own -
+ * none, a pen's is the drawing's ink and a marker's the first of the colour
+ * set in use (lib/chem/ink `markerColour`).
+ */
+export type Ink = { id: number; pen: InkPen; width: 0 | 1 | 2; color?: string; strokes: InkStroke[] };
+/** A piece of writing by hand on a PDF's page: as one on the page (`Ink`, but numbered by its place among its PDF's), on page `page`, its strokes' points in that page's points from its top left. */
+export type PdfInk = Omit<Ink, "id"> & { page: number };
+/** What a stroke is written in: the pen, its width, its colour. */
+export type InkLook = Pick<Ink, "pen" | "width" | "color">;
+/** Writing with a mouse or a trackpad, its card open: what writes - a pen, a marker or the eraser - in what colour and width. */
+export type InkMode = { tool: InkPen | "eraser"; color: string | null; width: 0 | 1 | 2 };
 
 /** A talk being given from the slides: the slide shown, by its place in their order. */
 export type Presenting = { at: number };
@@ -585,6 +602,8 @@ export type Drawn = Model & {
   slides?: Slide[];
   /** Shapes carried, from the back (docs/PRESENTING.md, *Shapes*). */
   shapes?: Shape[];
+  /** Writing by hand carried, each piece whole (docs/PRESENTING.md, *Handwriting*). */
+  inks?: Ink[];
 };
 
 export type EditorState = {
@@ -965,6 +984,18 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /**
+   * The arrows and "+" signs selected for themselves - one standing alone,
+   * pointing at something on a slide - beside those a selection carries as
+   * it lies among its atoms (utils/selectionScheme); the view's.
+   */
+  selArrows: Set<number>;
+  selPluses: Set<number>;
+  selectArrows: (ids: Iterable<number>, add?: boolean) => void;
+  selectPluses: (ids: Iterable<number>, add?: boolean) => void;
+  /** An arrow or a "+" added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  toggleArrowSel: (id: number) => void;
+  togglePlusSel: (id: number) => void;
   /** An arrow being drawn from Quick Add, from a point to its point - the view's (components/arrowFrom). */
   arrowDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
   setArrowDraft: (draft: EditorState["arrowDraft"]) => void;
@@ -976,13 +1007,39 @@ export type EditorState = {
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
-  /** The shapes `ids` given the same look - their lines' weight, dashed or not, an arrow's heads - as one step. */
-  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => void;
+  /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
   /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
   colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
   /** The shapes `ids` brought over all the others, or put under them. */
   orderShapes: (ids: readonly number[], front: boolean) => void;
   removeShape: (id: number) => void;
+  /** Writing by hand on the page (docs/PRESENTING.md, *Handwriting*): its pieces, which are selected and which is under the pointer; the pen's card, open or not; and a stroke being written - the view's. */
+  inks: Ink[];
+  selInks: Set<number>;
+  hoveredInk: number | null;
+  inkMode: InkMode | null;
+  inkDraft: { look: InkLook; stroke: InkStroke } | null;
+  setInkMode: (mode: InkMode | null) => void;
+  setInkDraft: (draft: { look: InkLook; stroke: InkStroke } | null) => void;
+  setHoveredInk: (id: number | null) => void;
+  selectInks: (ids: Iterable<number>, add?: boolean) => void;
+  toggleInkSel: (id: number) => void;
+  /** A stroke written, one step: added to the piece `join` - where it is still in the same pen - or a piece of its own; the piece's id. */
+  writeStroke: (look: InkLook, stroke: InkStroke, join?: number | null) => number | null;
+  /** Strokes rubbed out - each by its piece and its place in it - one step for a rub (`gesture`). */
+  eraseStrokes: (cuts: readonly { id: number; index: number }[], gesture?: string) => void;
+  /** The pieces `ids` given a colour of their own, or none; one step for all a chooser gives (`gesture`). */
+  colourInks: (ids: readonly number[], color: string | null, gesture?: string) => void;
+  removeInk: (id: number) => void;
+  /** A stroke written on a PDF's page, one step: on the piece there `join` (by its place) where it is in the same pen, else a piece of its own; the piece's place. */
+  writePdfStroke: (pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null) => number | null;
+  /** Strokes rubbed out of PDFs' pages - each by its PDF, its piece's place and its own - one step for a rub (`gesture`). */
+  erasePdfStrokes: (cuts: readonly { pdf: number; piece: number; index: number }[], gesture?: string) => void;
+  /** A pen's writing over the slide while a talk is given: gone as the slide goes (docs/PRESENTING.md, *Handwriting*) - the view's, never the document's. */
+  talkInk: { look: InkLook; stroke: InkStroke }[];
+  writeTalkStroke: (look: InkLook, stroke: InkStroke) => void;
+  eraseTalkStrokes: (indices: readonly number[]) => void;
   /** A talk being given from the slides, or none; begun at a slide, gone on to another, ended. */
   presenting: Presenting | null;
   /** What a move or a resize under way lines up with, shown as guides (presenting/guides) - the view's. */

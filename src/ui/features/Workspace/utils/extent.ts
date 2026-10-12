@@ -10,6 +10,7 @@ import { labelSetOf, layoutMolecule, type Atom as LAtom, type Bond as LBond } fr
 import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
+import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 
 /** The box round an arrow's line: its ends and the corners it turns at. */
@@ -27,14 +28,14 @@ import type { EditorState } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { cornersOf } from "./selection";
 import { sheetRoom } from "./textSheets";
-import { schemeAmong } from "./copyPaste";
+import { selectionScheme } from "./selectionScheme";
 import { boxOf } from "../presenting/slides";
 
 export type Box = { x0: number; y0: number; x1: number; y1: number };
 
 type Selected = Pick<
   EditorState,
-  "model" | "sel" | "sel3d" | "selCaptions" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes"
+  "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "selInks" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes" | "inks"
 >;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
@@ -62,15 +63,14 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     const r = layoutMolecule(la, lb, opts, zoom).bounds;
     take(r.min.x, r.min.y, r.max.x, r.max.y);
   }
-  // the arrows, "+" signs and words among them, and the words selected
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+  // the arrows, "+" signs and words among them, and those selected for themselves
+  const among = selectionScheme(st);
   for (const a of among.arrows) {
     const b = arrowBox(a);
     take(b.x0, b.y0, b.x1, b.y1);
   }
   for (const p of among.pluses) take(p.x - opts.fontPx / 2, p.y - opts.fontPx / 2, p.x + opts.fontPx / 2, p.y + opts.fontPx / 2);
-  const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
-  for (const c of words) {
+  for (const c of among.captions) {
     // (at their own size, their letters as they are marked)
     const set = wordsSet(c, opts, labelSetOf(opts));
     take(c.x - set.halfW, c.y - set.halfH, c.x + set.halfW, c.y + set.halfH);
@@ -100,6 +100,10 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     // (for guides, its frame: what lines up and is sized)
     const r = frames ? shapeFrame(s) : shapeBounds(s, opts.pointPx ?? 0);
     take(r.x0, r.y0, r.x1, r.y1);
+  }
+  for (const k of st.inks) if (st.selInks.has(k.id)) {
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    if (r) take(r.x0, r.y0, r.x1, r.y1);
   }
   return Number.isFinite(b.x0) && Number.isFinite(b.y0) ? b : null;
 }
@@ -136,7 +140,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
     out.push(...boxes.values());
   }
   // the arrows, "+" signs and words not among what is selected, nor selected themselves
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+  const among = selectionScheme(st);
   const taken = (xs: readonly { id: number }[], id: number) => xs.some((x) => x.id === id);
   for (const a of st.arrows) {
     if (taken(among.arrows, a.id)) continue;
@@ -144,7 +148,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   }
   for (const p of st.pluses) if (!taken(among.pluses, p.id)) out.push({ x0: p.x - opts.fontPx / 2, y0: p.y - opts.fontPx / 2, x1: p.x + opts.fontPx / 2, y1: p.y + opts.fontPx / 2 });
   for (const c of st.captions) {
-    if (taken(among.captions, c.id) || st.selCaptions.has(c.id) || c.id === leave?.caption) continue;
+    if (taken(among.captions, c.id) || c.id === leave?.caption) continue;
     const set = wordsSet(c, opts, labelSetOf(opts));
     out.push({ x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH });
   }
@@ -169,6 +173,12 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   for (const s of st.slides) if (!st.selSlides.has(s.id)) out.push(boxOf(s));
   // and the shapes, all each draws (docs/PRESENTING.md, *Shapes*)
   for (const s of st.shapes) if (!st.selShapes.has(s.id)) out.push(shapeFrame(s));
+  // and writing by hand, each piece
+  for (const k of st.inks) {
+    if (st.selInks.has(k.id)) continue;
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    if (r) out.push(r);
+  }
   return out;
 }
 

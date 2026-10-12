@@ -10,7 +10,17 @@
       "resources/plugins/*/pixi.toml",
       "resources/plugins/*/LICENSE",
       "resources/licenses/*",
-      "pdfium/windows/pdfium.dll"
+      "pdfium/windows/pdfium.dll",
+      "icons/document/meno-document.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["meno"],
+        "name": "Meno.Workspace",
+        "description": "Meno workspace",
+        "role": "Editor",
+        "mimeType": "application/vnd.kfchem.meno+zip"
+      }
     ],
     "windows": {
       "nsis": {
