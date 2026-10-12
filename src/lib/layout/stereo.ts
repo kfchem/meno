@@ -15,6 +15,7 @@
 import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
 import { hydrogenSpot } from "./metrics";
 import { key, type Molecule } from "./perceive";
+import { atomDepth, isName, namesLaid } from "./names";
 
 export { drawnVolume };
 
@@ -119,6 +120,23 @@ export function placeStereo(
   const narrowEnds = new Set<number>();
   const centres = [...tetra.keys()].filter((c) => pos.has(c));
   const ringBond = (a: number, b: number) => mol.ringBonds.has(key(a, b));
+  // where the letters of each name lie - OAc read leftward under a ring as
+  // AcO, its Ac reaching a bond's length from its atom - for an H drawn to
+  // keep clear of them as of an atom
+  const nameBoxes = mol.el.some(isName)
+    ? [
+        ...namesLaid(
+          {
+            x: mol.el.map((_, a) => pos.get(a)?.x ?? NaN),
+            y: mol.el.map((_, a) => pos.get(a)?.y ?? NaN),
+            edges: mol.bonds.map(({ a, b }) => [a, b] as [number, number]),
+            elements: mol.el,
+            hydrogens: mol.hs,
+          },
+          1,
+        ).values(),
+      ].map((n) => n.box)
+    : [];
 
   // centres with fewest ways to show them first, so they get theirs
   const options = (c: number) => mol.neighbours[c].filter((n) => !ringBond(c, n)).length;
@@ -206,6 +224,14 @@ export function placeStereo(
         const p = { x: at.x + Math.cos(angle), y: at.y + Math.sin(angle) };
         let r = Infinity;
         for (const o of others) r = Math.min(r, Math.hypot(o.p.x - p.x, o.p.y - p.y) - (o.label ? 0.2 : 0));
+        // (as far clear of a name's letters as the drawing reckons a
+        // labelled atom must be, or the drawing turns the name round to
+        // keep clear of the H - and into whatever is on its other side:
+        // within that, by a hair or more, a step the worse)
+        for (const b of nameBoxes) {
+          const d = atomDepth(b, p, true, 1);
+          r = Math.min(r, d > 0 ? 0.3 - d : 0.4 - d);
+        }
         for (const [u, v] of bonds) {
           // (a label's room from a bond, a little less than from an atom)
           r = Math.min(r, toSegment(p, u, v) + 0.15);

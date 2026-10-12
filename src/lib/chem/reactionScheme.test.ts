@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "./acs";
-import { arrowEnds, plusMeasures, plusOutline, reactionRoles, reshapedArrow, schemeOutlines } from "./reactionScheme";
+import { arrowEnds, arrowPoints, plusMeasures, plusOutline, reactionRoles, reshapedArrow, schemeOutlines, schemePieces, wordsLine } from "./reactionScheme";
 import { ACS_1996, bondFraction } from "./style";
 
 const L = NOMINAL_BOND_LENGTH;
@@ -135,5 +135,37 @@ describe("an arrow drawn out by one end", () => {
     const a = reshapedArrow("head", { x: 0, y: 0 }, { x: 0.1, y: 0 }, { step, minLength: 0.5 });
     expect(a.length).toBe(0.5);
     expect(arrowEnds(a).to.x).toBeCloseTo(0.5, 9);
+  });
+});
+
+describe("an arrow that turns", () => {
+  const bent = { x: 5, y: 0, angle: 0, length: 10, corners: [{ along: 0.2, across: 3 }] };
+
+  it("runs through its corners, from its tail to its point", () => {
+    const pts = arrowPoints(bent);
+    expect(pts).toHaveLength(3);
+    expect(pts[0]).toEqual({ x: 0, y: 0 });
+    expect(pts[1].x).toBeCloseTo(2, 9);
+    expect(pts[1].y).toBeCloseTo(3, 9);
+    expect(pts[2]).toEqual({ x: 10, y: 0 });
+  });
+
+  it("has its words over its longest stretch", () => {
+    const line = wordsLine(bent);
+    expect(line.length).toBeCloseTo(Math.hypot(8, 3), 9);
+    expect(line.x).toBeCloseTo(6, 9);
+    expect(line.y).toBeCloseTo(1.5, 9);
+    expect(line.angle).toBeCloseTo(Math.atan2(-3, 8), 9);
+    // (one straight: itself)
+    const straight = { x: 1, y: 2, angle: 0.3, length: 4 };
+    expect(wordsLine(straight)).toBe(straight);
+  });
+});
+
+describe("a scheme's arrows in a picture", () => {
+  it("go each in their pieces, in their own colour where they have one", () => {
+    const pieces = schemePieces({ arrows: [{ x: 0, y: 0, angle: 0, length: 3, color: "#c44848", kind: "equilibrium" }, { x: 0, y: 5, angle: 0, length: 3 }] }, ACS_1996, L);
+    expect(pieces.filter((p) => p.color === "#c44848")).toHaveLength(4);
+    expect(pieces.filter((p) => !p.color)).toHaveLength(1);
   });
 });

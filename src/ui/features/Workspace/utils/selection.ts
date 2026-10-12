@@ -154,6 +154,35 @@ export function turned(
   });
 }
 
+/** Arrows carried round `about` by `angle` with what they are among: each one's middle turned, and each pointing as far round - its corners, kept along it, going with it. */
+export function turnedArrows(
+  arrows: readonly { id: number; x: number; y: number; angle: number }[],
+  about: Pt,
+  angle: number,
+): { id: number; x: number; y: number; angle: number }[] {
+  return turned(arrows, about, angle).map((q, i) => ({ ...q, angle: arrows[i].angle + angle }));
+}
+
+/**
+ * Arrows turned over with what they are among, about the line through
+ * `mid` - upright (`vertical`: left for right) or level (`horizontal`: up
+ * for down): each one's middle mirrored, pointing the mirrored way, and its
+ * corners on its other side.
+ */
+export function turnedOverArrows(
+  arrows: readonly { id: number; x: number; y: number; angle: number; corners?: readonly { along: number; across: number }[] }[],
+  mid: Pt,
+  axis: "vertical" | "horizontal",
+): { id: number; x: number; y: number; angle: number; corners?: { along: number; across: number }[] }[] {
+  return arrows.map((a) => ({
+    id: a.id,
+    x: axis === "vertical" ? 2 * mid.x - a.x : a.x,
+    y: axis === "horizontal" ? 2 * mid.y - a.y : a.y,
+    angle: axis === "vertical" ? Math.PI - a.angle : -a.angle,
+    ...(a.corners ? { corners: a.corners.map((c) => ({ along: c.along, across: -c.across })) } : {}),
+  }));
+}
+
 /**
  * The selection turned over, left to right (about the upright line through
  * its middle) or top to bottom: what was in front of the page is now

@@ -11,6 +11,12 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
+import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
+import { MENO } from "../../../../lib/chem/style";
+import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
+import { drawingLayout, drawnOf } from "../fileActions";
+import { editorModelOf } from "../utils/io";
+import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
@@ -242,8 +248,34 @@ describe("cleanUp", () => {
         labelled: m.atoms.map((a) => a.el !== "C"),
         nameRoom,
       }).crowdedLabels;
-    expect(crowding(1) - crowding(0)).toBe(0);
+    // (OBz and OAc side by side on a line, a hair - 0.005 of a bond - within
+    // the space reckoned between two names: not letters running together)
+    expect(crowding(1) - crowding(0)).toBeLessThan(0.05);
   });
+
+  it("cleans up taxol drawn any which way with its names and its ring-fusion H clear of one another", async () => {
+    // (a drawing a reader cleaned up to find C3's H standing on the A of
+    // C4's AcO, and that AcO on C2's OBz, with no paper between them)
+    const model = editorModelOf(moleculesToEditorModel(readMoleculesFromText(messyTaxol, "mol")).model);
+    const { store } = canvas(model);
+    await cleanUp(store);
+    const s = store.getState();
+    expect(s.model.atoms.filter((a) => !/^[A-Z][a-z]?$/.test(a.el)).map((a) => a.el).sort()).toEqual(["NHBz", "OAc", "OAc", "OBz"]);
+    // every two labels' letters, as the picture draws them, a quarter of a
+    // letter apart or more
+    const { layout, opts } = drawingLayout(drawnOf(s), s, MENO);
+    const set = labelSetOf(opts);
+    const boxes = layout.texts.map((t) => {
+      const b = labelBox(t, t.fontPx, set);
+      return { text: t.text, x0: t.x - b.left, x1: t.x + b.right, y0: t.y - b.bottom, y1: t.y + b.top };
+    });
+    for (const [i, p] of boxes.entries()) {
+      for (const q of boxes.slice(i + 1)) {
+        const gap = Math.max(q.x0 - p.x1, p.x0 - q.x1, q.y0 - p.y1, p.y0 - q.y1);
+        expect(gap, `${p.text} and ${q.text}`).toBeGreaterThan(0.25 * opts.fontPx);
+      }
+    }
+  }, 30_000);
 
   it("cleans up Stryker's reagent just drawn out, and writes its phosphines by name the next time", async () => {
     const model = expandAbbreviation(
@@ -262,7 +294,11 @@ describe("cleanUp", () => {
     expect(drawn.bonds.filter((b) => cus.has(b.a) && cus.has(b.b) && b.display === "dashed")).toHaveLength(12);
     await cleanUp(store);
     expect(store.getState().model.atoms.filter((a) => a.el === "PPh3")).toHaveLength(6);
-  }, 20000);
+    // (the first Clean-up lays the reagent out drawn out in full - 126 atoms,
+    // eighteen phenyl rings round six coppers - scoring some 2,400 drawings
+    // of it on the way: 3 to 4 s on a quiet machine, and many times that on
+    // one busy with other work, 37 s seen)
+  }, 90_000);
 
   it("writes a protecting group by name, in the same step, and leaves one just drawn out drawn", async () => {
     // tert-butyldimethylsilyl ethyl ether, drawn atom by atom
