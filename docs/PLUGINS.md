@@ -465,7 +465,12 @@ The same for every plugin and for Meno's own parts:
     among them - and the plugins it suggests;
   - its version, licence and home; "Comes with Meno: nothing to download"
     for one that runs nothing;
-  - Add, and Remove; and Show, for one that brings a guide.
+  - Add, and Remove; and Show, for one that brings a guide. Removing a
+    plugin while any of its jobs waits or runs asks first, saying how
+    many; once the chemist says *Stop and remove*, those jobs are stopped
+    and waited for until they have ended, and then the plugin is removed
+    (the maintainer, 2026-10-12). Cancel leaves the plugin and its jobs
+    as they are.
 
   Meno is not in it.
 - **Files.** The tab named for files (FILE-IO.md) holds, for each kind

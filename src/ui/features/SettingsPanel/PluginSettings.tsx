@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { FADE } from "../../theme/motion";
+import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, REFUSED, runs, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { showGuide } from "../../../lib/plugins/guides";
 import { addedReaders, addPlugin, removePlugin, useReaders } from "../../../lib/calc/workers";
@@ -43,11 +47,24 @@ export default function PluginSettings() {
 /** A plugin: what it is and does, whether it is added, and the button that adds it or takes it away. */
 function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: string; problem?: string }) {
   const [busy, setBusy] = useState(false);
+  // (its jobs that wait or run, as taking it away was asked: stopped only once the chemist says so)
+  const [live, setLive] = useState<readonly Job[] | null>(null);
   const run = (job: (p: AnyPlugin) => Promise<void>) => {
     setBusy(true);
     job(p)
       .catch(() => {}) // (said by the plugin's problem)
       .finally(() => setBusy(false));
+  };
+  const remove = () => {
+    setBusy(true);
+    liveJobsOf(p.id)
+      .catch((): Job[] => [])
+      .then((jobs) => {
+        if (jobs.length) {
+          setBusy(false);
+          setLive(jobs);
+        } else run(removePlugin);
+      });
   };
   // (its files besides its packages, as they come)
   const share = useDownloads((s) => s[p.id]);
@@ -116,7 +133,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             )}
             <button
               disabled={busy}
-              onClick={() => run(state === "added" ? removePlugin : addPlugin)}
+              onClick={() => (state === "added" ? remove() : run(addPlugin))}
               className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
             >
               {state === "added" ? "Remove" : "Add"}
@@ -124,6 +141,24 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           </div>
         )}
       </div>
+      <AnimatePresence>
+        {live && (
+          // (over the whole window, as a question about the app is)
+          <motion.div key="remove" {...FADE} className="fixed inset-0 z-[100]">
+            <ConfirmDiscard
+              title={`Remove ${p.name}?`}
+              message={`${live.length === 1 ? "One of its jobs is" : `${live.length} of its jobs are`} running or waiting. Removing it stops ${live.length === 1 ? "that job" : "them"}, and what ${live.length === 1 ? "it" : "they"} would have made is lost.`}
+              discardLabel="Stop and remove"
+              onCancel={() => setLive(null)}
+              onDiscard={() => {
+                const ids = live.map((j) => j.id);
+                setLive(null);
+                run((q) => removePlugin(q, ids));
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
