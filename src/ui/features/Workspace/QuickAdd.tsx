@@ -6,7 +6,7 @@ import { placeQuickAdd } from "./quickAddPlace";
 import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
-import { SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
+import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
@@ -23,24 +23,12 @@ const LABEL_W = 84;
 const SMILES_H = 32 + 9;
 const SHAPES_H = 36 + 9;
 
-/**
- * The row of shapes, in order (lib/chem/shapes) - and among them an arrow,
- * where one looks for it beside a line: the page's one Arrow, drawn as the
- * main row's is, not a shape.
- */
-const SHAPES_ROW: readonly (ShapeKind | "arrow")[] = ["rect", "rounded", "ellipse", "line", "arrow", "callout"];
-/** Each one's icon, drawn as Quick Add's are, on a 20-unit square. */
-const SHAPE_ICONS: Record<ShapeKind | "arrow", ReactNode> = {
+/** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
+const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
   rect: <rect x="3" y="5" width="14" height="10" />,
   rounded: <rect x="3" y="5" width="14" height="10" rx="3" />,
   ellipse: <ellipse cx="10" cy="10" rx="7.5" ry="5.2" />,
   line: <path d="M3.5 15.5 L16.5 4.5" />,
-  arrow: (
-    <>
-      <path d="M3.5 15.5 L13.6 6.9" />
-      <path d="M17 4 L14.5 8.8 L11.9 5.7 Z" fill="currentColor" />
-    </>
-  ),
   callout: <path d="M5 4 H15 Q17 4 17 6 V10.5 Q17 12.5 15 12.5 H9 L5.5 16.5 L6.3 12.5 H5 Q3 12.5 3 10.5 V6 Q3 4 5 4 Z" />,
 };
 
@@ -80,7 +68,7 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
   },
   {
     id: "arrow",
-    name: "Reaction arrow",
+    name: "Arrow",
     icon: (
       <>
         <path d="M2.5 10 H14" />
@@ -285,17 +273,17 @@ export default function QuickAdd({
           </div>
         </div>
       )}
-      {/* (the shapes, likewise: each drawn from where Quick Add was opened, by a drag from its icon or traced with the button up - the arrow as the row's is) */}
+      {/* (the shapes, likewise: each drawn from where Quick Add was opened, by a drag from its icon or traced with the button up) */}
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "shapes" ? "1fr" : "0fr", opacity: open === "shapes" ? 1 : 0 }}>
           <div className="overflow-hidden" inert={open !== "shapes"}>
             <div role="group" aria-label="Shapes" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
-              {SHAPES_ROW.map((k) => (
+              {SHAPE_KINDS.map((k) => (
                 <button
                   key={k}
-                  aria-label={k === "arrow" ? "Arrow" : SHAPE_NAMES[k]}
-                  title={k === "arrow" ? "Arrow" : SHAPE_NAMES[k]}
-                  onPointerDown={(e) => e.button === 0 && (k !== "arrow" ? onShape?.(k, e) : onArrow ? onArrow(e) : onChoose("arrow"))}
+                  aria-label={SHAPE_NAMES[k]}
+                  title={SHAPE_NAMES[k]}
+                  onPointerDown={(e) => e.button === 0 && onShape?.(k, e)}
                   className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
                   style={{ width: SIZE, height: SIZE }}
                 >

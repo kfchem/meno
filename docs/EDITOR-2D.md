@@ -227,14 +227,13 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow, a "+", an electron-pushing arrow (from
-the first atom or bond pressed, *Electron-pushing arrows* below), a
-slide of what is seen (docs/PRESENTING.md) and *Shapes*, which opens a
-row below it of a rectangle, a rounded one, an ellipse, a line, an arrow
-and a callout - each drawn from where the double-click was by a drag from
-its icon, or traced with the button up until a click (docs/PRESENTING.md,
-*Shapes*); its arrow is the reaction arrow's, drawn as that is (*Arrows*
-below). A choice puts it down where the
+SMILES, text, an arrow (*Arrows* below), a "+", an electron-pushing
+arrow (from the first atom or bond pressed, *Electron-pushing arrows*
+below), a slide of what is seen (docs/PRESENTING.md) and *Shapes*, which
+opens a row below it of a rectangle, a rounded one, an ellipse, a line
+and a callout - each drawn from where the double-click was by a drag
+from its icon, or traced with the button up until a click
+(docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,

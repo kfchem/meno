@@ -146,10 +146,9 @@ words, a width they break into lines at, and how their lines lie.
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
   *Box around these*, a rounded rectangle round it.
 - **An arrow is the page's one Arrow** (the maintainer, 2026-10-12), not a
-  shape: *Arrow* in the shapes' row draws it, as Quick Add's own arrow
-  does, with its kinds, heads, dashes, weight, colour and corners in its
-  menu (docs/EDITOR-2D.md, *Arrows*). A plain line with no head stays a
-  shape.
+  shape: Quick Add's *Arrow* draws it, with its kinds, heads, dashes,
+  weight, colour and corners in its menu (docs/EDITOR-2D.md, *Arrows*). A
+  plain line with no head stays a shape.
 - **Under the drawing, over pictures and PDFs**: a shape never hides a
   bond. A shape with no fill lets a press inside it through to what is
   under it; its line is its own.
@@ -265,23 +264,25 @@ Shift+Enter, since Enter keeps the words, as it did before.
   filled, inside it - none through what is drawn over it; a hold, a click,
   a second click to write in it; the handles. `components/shapeFrom.ts`:
   drawn from Quick Add, led by a drag or traced with the button up.
-- Quick Add's *Shapes* opens a row of the five and the Arrow; the shape's
-  menu (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*;
-  thin, regular or thick line, dashed, *Bring to front*, *Send to back*. The selection's menu has *Box around these*: a rounded
-  rectangle a third of a bond clear of it. The colour card's rows for
+- Quick Add's *Shapes* opens a row of the five; the shape's menu
+  (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
+  regular or thick line, dashed, *Bring to front*, *Send to back*. The
+  selection's menu has *Box around these*: a rounded rectangle a third of
+  a bond clear of it. The colour card's rows for
   shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
   quarter of the way from white).
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
   pens, under everything else, from the back.
 - **An arrow is not a shape** (2026-10-12, once arrows were one): `Shape`
-  lost its `arrow` kind and its heads. *Arrow* in the shapes' row begins
-  the page's `Arrow` as Quick Add's own arrow does
-  (`components/arrowFrom.ts`: drawn by a drag to its point, or put down as
-  one is made by a click), so an arrow pointing at something for the
-  audience can be dashed, coloured, given corners or two heads in its menu,
-  as any arrow. The arrow's menu is called *Arrow* again, and its delete
-  *Delete arrow*. A shape of kind `arrow` in a workspace saved before is
-  not read: it opens without it.
+  lost its `arrow` kind and its heads, and the shapes' row its arrow.
+  Quick Add has one arrow, *Arrow* (the maintainer: one entry, in the
+  first row, no longer called *Reaction arrow*), drawn by a drag to its
+  point or put down as one is made by a click (`components/arrowFrom.ts`),
+  so an arrow pointing at something for the audience can be dashed,
+  coloured, given corners or two heads in its menu, as any arrow. The
+  arrow's menu is called *Arrow* again, and its delete *Delete arrow*. A
+  shape of kind `arrow` in a workspace saved before is not read: it opens
+  without it.
 
 ### Guides (lane L8, fourth part, 2026-10-11)
 
