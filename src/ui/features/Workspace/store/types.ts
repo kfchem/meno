@@ -1,5 +1,5 @@
 import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
-import type { SetKind, StepKind } from "../workflow/kinds";
+import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
@@ -484,9 +484,9 @@ export type TextOf = { step: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
- * Made by a step: the step, the kind of set it holds, and the entries the
- * step set aside, listed struck through. Made by the chemist, a set is a
- * compound set.
+ * Made by a step: the step, the kind of set it holds - a Render step's,
+ * pictures - and the entries the step set aside, listed struck through.
+ * Made by the chemist, a set is a compound set.
  */
 export type WorkflowSet = {
   id: number;
@@ -494,7 +494,7 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  made?: { step: number; holds: SetKind };
+  made?: { step: number; holds: SetHolds };
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
@@ -518,7 +518,8 @@ export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; re
  * their place among those that came in; and the files of its folder its
  * plugin reads back once it is done.
  */
-export type StepJob = { id: string; entries: number[]; reads: string[] };
+/** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
+export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they
@@ -847,6 +848,8 @@ export type EditorState = {
     drawing?: { id: number; x: number; y: number }[],
     marks?: MarkPlaces,
   ) => void;
+  /** A turn made with turnMolecules3d (`gesture`) let go of by Escape: taken back, nothing left to redo, and the molecules turned as they were (`turnsBefore`). */
+  dropTurnMolecules3d: (gesture: string, turnsBefore: Record<number, Turn3D | undefined>) => void;
   /**
    * Molecules in 3D turned where they stand, by the selection's handle, from
    * `turnsBefore` to `turnsAfter` (each set as it turned): one undo step,
@@ -938,6 +941,8 @@ export type EditorState = {
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
+  /** A drag of a picture's (`gesture`, as updatePicture took it) let go of by Escape: taken back, nothing left to redo. */
+  dropPictureChange: (id: number, gesture: string) => void;
   removePicture: (id: number) => void;
   /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
   slides: Slide[];
@@ -1107,6 +1112,17 @@ export type EditorState = {
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */
   askDeleteStep: number | null;
+  /**
+   * An undo (or a redo) that would take away a running step: held, and the
+   * question deleting it asks asked first (`askUndo`, Workspace) - true
+   * where it is held so; false where it takes nothing running away, left to
+   * be done as any undo.
+   */
+  holdUndo: (direction: "undo" | "redo") => boolean;
+  /** The undo held (`holdUndo`) let go: done - the running steps it takes away stopped first, their jobs as deleting them stops them - or, `go` false, not. */
+  letUndo: (go: boolean) => void;
+  /** An undo or a redo held, that would take away running steps (`holdUndo`). */
+  askUndo: { direction: "undo" | "redo"; steps: number } | null;
   /** A wire from what gives into a step, where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number) => boolean;
   removeWire: (id: number) => void;
@@ -1274,6 +1290,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
+  dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
   /** The selection deleted, as one undo step. */

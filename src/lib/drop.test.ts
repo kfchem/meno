@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRouter, type Drag, type DropZone, type Dropped } from "./drop";
+import { createRouter, pageDrags, type Drag, type DropZone, type Dropped } from "./drop";
 
 type Place = { name: string; parentElement: Place | null };
 const place = (name: string, parentElement: Place | null = null): Place => ({ name, parentElement });
@@ -79,5 +79,20 @@ describe("the drop router", () => {
     r.over(atom, data);
     r.over(tabs, data);
     expect(log).toEqual(["canvas enter", "canvas leave", "page enter"]);
+  });
+});
+
+describe("the page's own drags", () => {
+  it("are not routed while they last; one the page prevented begins none, and files dropped after it are routed", () => {
+    const own = pageDrags();
+    own.started();
+    own.settled({ defaultPrevented: false });
+    expect(own.inside()).toBe(true);
+    own.ended();
+    expect(own.inside()).toBe(false);
+    // (the workspace prevents the system's drag-and-drop: no dragend follows)
+    own.started();
+    own.settled({ defaultPrevented: true });
+    expect(own.inside()).toBe(false);
   });
 });

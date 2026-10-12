@@ -25,7 +25,25 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   readJobFile: async (id: string, name: string) => jobs.get(id)!.files[name],
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
+  jobFolder: async (id: string) => `/jobs/${id}`,
 }));
+
+/** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
+const madeFiles = new Map<string, Uint8Array>();
+vi.mock("@tauri-apps/plugin-fs", async (actual) => ({
+  ...(await actual<typeof import("@tauri-apps/plugin-fs")>()),
+  readFile: async (path: string) => madeFiles.get(path) ?? new Uint8Array(),
+}));
+vi.mock("@tauri-apps/api/path", async (actual) => ({
+  ...(await actual<typeof import("@tauri-apps/api/path")>()),
+  join: async (...parts: string[]) => parts.join("/"),
+}));
+
+/** A PNG's signature, its header for `w` by `h`, and its end: what Meno takes to be a picture, `seed` making each its own. */
+function png(w: number, h: number, seed = 0): Uint8Array {
+  const be = (n: number) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be(w), ...be(h), 8, 6, 0, 0, 0, seed, 0, 0, 0, 0, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0, 0, 0, 0]);
+}
 
 /** The xTB plugin's worker, as the test has it: what it prepared and read back, and what it was asked. */
 const worker = {
@@ -94,6 +112,10 @@ import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
+import { canWire } from "../workflow/flow";
+import { optionsFor } from "../workflow/doers";
+import { CARD_W } from "../workflow/look";
+import { setMembers } from "../workflow/entries";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -311,6 +333,21 @@ describe("a step that runs a plugin's program", () => {
     useInstalled.setState({ chosen: {} });
   });
 
+  it("starts its jobs once, however often Run is pressed before they have started", async () => {
+    const { st, step } = editor();
+    const a = st().runStep(step);
+    const b = st().runStep(step);
+    const c = st().runAll();
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.running!.jobs.map((j) => j.id)).toEqual([idOf(1)]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await Promise.all([a, b, c]);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+  });
+
   it("says it was stopped, and brings nothing in", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);
@@ -385,6 +422,43 @@ describe("a step that runs a plugin's program", () => {
     expect(st().askDeleteStep).toBeNull();
     await settle();
     expect(asked.stopped).toEqual([idOf(1)]);
+  });
+
+  it("run again straight after it was stopped, runs anew once the stop has come through", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    st().stopStep(step);
+    Object.assign(jobs.get(idOf(1))!, { state: "stopped", started: 1000, ended: 2000 });
+    const again = st().runStep(step);
+    await st().lookAtJobs();
+    await first;
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 3000, ended: 4000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await again;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+  });
+
+  it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().removeStep(step, true);
+    await settle();
+    // (stopped by the deletion: the runner says so)
+    Object.assign(jobs.get(idOf(1))!, { state: "stopped", started: 1000, ended: 2000 });
+    doc.undo();
+    expect(st().steps.find((s) => s.id === step)).toBeTruthy();
+    await st().lookAtJobs();
+    await ran;
+    const back = st().steps.find((s) => s.id === step)!;
+    expect(back.running).toBeUndefined();
+    expect(back.ran).toMatchObject({ ok: false, stopped: true });
   });
 });
 
@@ -520,5 +594,94 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { rmsd: 0.125 }, "molecules");
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
     expect(st().sets.find((b) => b.made?.step === step)!.aside).toHaveLength(1);
+  });
+});
+
+describe("Render as a step", () => {
+  beforeEach(() => {
+    jobs.clear();
+    next = 1;
+    asked.started = [];
+    worker.prepare.mockClear();
+    worker.collect.mockClear();
+    madeFiles.clear();
+    useReaders.setState({ state: { blender: "added" }, problem: {} });
+    installedAt.blender = "/Applications/Blender.app/Contents/MacOS/Blender";
+  });
+
+  /** The Blender plugin's worker, as the test has it: a job for the scene, and the picture it made. */
+  const rendering = () => {
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "blender", args: ["-b", "-P", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }] }) as never);
+  };
+
+  it("renders each entry as a picture of its own, in a set of pictures wired from the step - and run again, makes it anew in that set, one step to undo", async () => {
+    const { doc, st } = editor();
+    const step = st().addStep("render", "blender", 10, 0);
+    st().connect({ set: st().sets[0].id }, step);
+    // (Meno's own choices first, then Blender's - the role's, asked as a step)
+    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 4)).toEqual(["width", "shape", "molecules", "surfaces"]);
+    expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
+    // (it gives pictures, which no step takes: nothing is wired from it)
+    expect(canWire(st(), { step }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
+
+    rendering();
+    let ran = st().runStep(step);
+    await settle();
+    await settle();
+    // the scene Meno wrote put in the job's folder; the plugin given its own options alone
+    expect(asked.started[0]).toMatchObject({ plugin: "blender", program: "blender" });
+    expect(asked.started[0].files!.map((f) => f.name)).toEqual(["render.json", "scene.gltf"]);
+    expect(JSON.parse(asked.started[0].files![1].text).asset.version).toBe("2.0");
+    const given = (worker.prepare.mock.calls[0] as unknown[])[2];
+    expect(given).not.toHaveProperty("width");
+    expect(given).toHaveProperty("engine");
+    madeFiles.set(`/jobs/${idOf(1)}/picture.png`, png(240, 120, 1));
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 13_000 });
+    await st().lookAtJobs();
+    await ran;
+    const first = st().pictures;
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ media: "image/png", px: [240, 120] });
+    // (in the step's result set - a set of pictures, to its right - as a calculation's molecules are in theirs)
+    const set = st().sets.find((b) => b.made?.step === step)!;
+    expect(set.made).toEqual({ step, holds: "pictures" });
+    expect(setMembers(st(), set).pictures).toEqual([first[0].id]);
+    expect(set.x0).toBeGreaterThan(st().steps.find((s) => s.id === step)!.x + CARD_W);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:12 \u00b7 1 picture" });
+    expect(doc.history().undoLabel).toBe("render");
+
+    // run again: its picture made anew, the earlier one gone - one step to undo
+    rendering();
+    ran = st().runStep(step);
+    await settle();
+    await settle();
+    madeFiles.set(`/jobs/${idOf(2)}/picture.png`, png(240, 120, 2));
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 1000, ended: 2000 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().pictures).toHaveLength(1);
+    expect(st().pictures[0].sha256).not.toBe(first[0].sha256);
+    expect(st().sets.filter((b) => b.made?.step === step).map((b) => b.id)).toEqual([set.id]);
+    expect(setMembers(st(), set).pictures).toEqual([st().pictures[0].id]);
+    doc.undo();
+    expect(st().pictures.map((p) => p.sha256)).toEqual([first[0].sha256]);
+  });
+
+  it("says why, and keeps the pictures it made before, where it made none", async () => {
+    const { st } = editor();
+    const step = st().addStep("render", "blender", 10, 0);
+    st().connect({ set: st().sets[0].id }, step);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "blender", args: [], files: [], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ why: "Blender quit" }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().pictures).toEqual([]);
+    expect(st().sets.some((b) => b.made?.step === step)).toBe(false);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
   });
 });

@@ -236,6 +236,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
+| Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound |
@@ -472,7 +473,13 @@ gave), and one can be shown again.
 - A run is not undone. Its results coming in is one step: an undo takes
   them away (the step shows its earlier run, or none), a redo brings them
   back. The job's files stay until the step is deleted.
-- Deleting a step that is running asks first; it stops it.
+- Deleting a step that is running asks first; it stops it. So does an
+  undo, or a redo, that would take a running step away (the step made, a
+  delete undone and the step run again): it asks the same; answered yes,
+  the step's jobs are stopped as deleting it stops them, and the undo is
+  done; cancelled, the history stays where it was. An undo that takes
+  away only the wire into a running step is done at once: the step runs
+  on, on what came in.
 
 ## Saving and sharing
 
@@ -761,7 +768,8 @@ Decided while building it, for the maintainer to confirm:
   that closing it without saving stops its jobs, saved first they go on;
   one saved says, once its tab is closed, how many go on. Meno quitting
   with nothing unsaved says nothing: there is nowhere left to say it.
-- **Deleting a running step asks first**; deleted, a step's jobs are
+- **Deleting a running step asks first** - and so does an undo or a redo
+  that would take one away (*Undo*); deleted, a step's jobs are
   stopped and their folders taken away. Undone, the step comes back
   without them; its results keep its logs.
 - **Show log** opens each job's log as a text of the workspace, *Optimise

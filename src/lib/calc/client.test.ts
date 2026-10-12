@@ -54,8 +54,8 @@ describe("a reader's worker, asked", () => {
     const w = fakeWorker();
     const client = new ReaderClient("cclib", w.transport);
     const bad = client.read("orca", "x.out", "nothing");
-    w.say({ id: 1, ok: false, error: "cclib found no molecule in x.out" });
-    await expect(bad).rejects.toThrow("cclib found no molecule in x.out");
+    w.say({ id: 1, ok: false, error: "No molecule was found in x.out." });
+    await expect(bad).rejects.toThrow("No molecule was found in x.out.");
     const waiting = client.read("orca", "y.out", "text");
     client.close();
     await expect(waiting).rejects.toThrow("the cclib reader stopped");

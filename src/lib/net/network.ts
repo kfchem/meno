@@ -201,12 +201,34 @@ async function grant(purpose: string): Promise<void> {
   );
 }
 
+/** The questions waiting their turn: the last's answer, the next asked after it - and each purpose's, while it is asked or waits. */
+let questions: Promise<unknown> = Promise.resolve();
+const waiting = new Map<string, Promise<boolean>>();
+
 /**
  * Whether `request.purpose` may use the network: yes when it has been
  * allowed before; otherwise the user is asked, and a yes is remembered. No
- * in offline mode, without asking.
+ * in offline mode, without asking. One question at a time: one asked while
+ * another is up waits its turn - never taken as a no - and one for a
+ * purpose already being asked shares that answer.
  */
 export function askToConnect(request: ConsentRequest): Promise<boolean> {
+  const s = useNetwork.getState();
+  if (s.offline) return Promise.resolve(false);
+  if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
+  // (one asked again - what it fetches having grown - does not share the answer of one that is not)
+  const key = request.again ? `${request.purpose} again` : request.purpose;
+  const same = waiting.get(key);
+  if (same) return same;
+  const asked = questions.then(() => askNow(request));
+  waiting.set(key, asked);
+  void asked.finally(() => waiting.delete(key));
+  questions = asked.catch(() => undefined);
+  return asked;
+}
+
+/** A question, its turn come: asked - unless meanwhile Meno went offline, or the purpose was allowed (and it is not to be asked again). */
+function askNow(request: ConsentRequest): Promise<boolean> {
   const s = useNetwork.getState();
   if (s.offline) return Promise.resolve(false);
   if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
@@ -216,8 +238,6 @@ export function askToConnect(request: ConsentRequest): Promise<boolean> {
       if (yes) void grant(request.purpose);
       resolve(yes);
     };
-    // one question at a time: an earlier one still open is taken as a no
-    s.asking?.answer(false);
     useNetwork.setState({ asking: { ...request, answer } });
   });
 }

@@ -43,6 +43,14 @@ export const whereIs = (plugin: string, name: string): string | null | undefined
 export const tooOld = (plugin: string, name: string): string | undefined => useInstalled.getState().chosen[programKey(plugin, name)]?.why;
 
 /**
+ * Each program's latest look, by key: a look answers only where none was
+ * begun after it - a look begun as a file dialog closes (the window come
+ * back) never undoing what was located in it.
+ */
+const latest = new Map<string, number>();
+let looks = 0;
+
+/**
  * Looks for a program installed separately - where the chemist located it,
  * else where the system finds programs, else where it is usually installed;
  * where its plugin says how to ask, the newest copy of a version Meno takes -
@@ -51,6 +59,8 @@ export const tooOld = (plugin: string, name: string): string | undefined => useI
  */
 export async function lookFor(plugin: string, name: string, ask: typeof invoke = invoke): Promise<string | null> {
   const key = programKey(plugin, name);
+  const mine = ++looks;
+  latest.set(key, mine);
   const located = useAppSettings.getState().plugins.programs[key];
   let chosen: Chosen | null = null;
   try {
@@ -59,6 +69,8 @@ export async function lookFor(plugin: string, name: string, ask: typeof invoke =
     chosen = null;
   }
   const where = chosen && !chosen.why ? chosen.path : null;
+  // (a look begun after this one says where it is, for all to see: this one answers its caller alone)
+  if (latest.get(key) !== mine) return where;
   useInstalled.setState((s) => ({ where: { ...s.where, [key]: where }, chosen: { ...s.chosen, [key]: chosen } }));
   return where;
 }
@@ -98,6 +110,8 @@ export async function locate(
   if (!chosen || !where || (where !== picked && !inApp)) throw new Error(`That is not ${decl.label}: its program is ${file ? `the file called ${file}` : "not made for this system"}, one that can be run.`);
   if (chosen.why) throw new Error(`${chosen.why}.`);
   const key = programKey(plugin, decl.name);
+  // (what is located is what is: any look begun before answers to nothing)
+  latest.set(key, ++looks);
   const settings = useAppSettings.getState();
   settings.setPlugins({ ...settings.plugins, programs: { ...settings.plugins.programs, [key]: where } });
   useInstalled.setState((s) => ({ where: { ...s.where, [key]: where }, chosen: { ...s.chosen, [key]: chosen } }));

@@ -8,7 +8,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { takeOpening, useEditorStore } from "../store";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { clickClock, doubleClickedSince, noteClick } from "../utils/clickCount";
+import { clickClock, clickEditHeldOff, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { schemeOf, type ImportedScheme } from "../document";
@@ -28,6 +28,7 @@ import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -346,7 +347,8 @@ export function useStructureEvents(
     const p = clientToWorld(e.clientX, e.clientY);
     if (!p) return;
     const tol = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
-    const id = st.findAtomNear(p.x, p.y, tol, null);
+    // (or on a label's other letters: the H of HO is the O - utils/labelHits)
+    const id = st.findAtomNear(p.x, p.y, tol, null) ?? atomOfLabelAt(labelReachOf(store), p);
     if (id != null) st.setHoveredFromId(id);
     else st.clearAtomHover();
   };
@@ -405,7 +407,7 @@ export function useStructureEvents(
       const st = store.getState();
       const now =
         typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (st.extend.active || st.moveDrag.active) return;
+      if (clickEditHeldOff(st)) return;
       if (st.suppressDblClickUntil && now < st.suppressDblClickUntil) return;
       const p = clientToWorld(e.clientX, e.clientY);
       if (!p) return;
@@ -550,6 +552,8 @@ export function useStructureEvents(
 
   const handleMouseDownCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     pressRef.current = startPress(e.clientX, e.clientY);
+    // (and an atom's click before it, waiting to edit its label, edits nothing: Atoms2D)
+    notePress();
     // A press takes back the edit a click before it was about to begin: it
     // is the second click of a double-click - a chain dragged out of the
     // atom, perhaps - or the start of something else.

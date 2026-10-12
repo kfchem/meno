@@ -728,6 +728,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                       : undefined
                   }
                   iso={surface?.value ? (open.iso ?? surface.value.iso ?? DEFAULT_ISO) : undefined}
+                  isoStart={surface?.value?.iso}
                   onIso={(iso) => store.getState().setIso3d(m.id, iso)}
                   scale={colourBy?.value && row?.colour ? { from: row.colour.from, to: row.colour.to, ...(row.colour.label ? { label: row.colour.label } : {}) } : undefined}
                   onClose={() => store.getState().closeList3d(m.id)}

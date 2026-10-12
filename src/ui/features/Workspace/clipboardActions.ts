@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from "react";
-import { clipboardFiles, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { useCallback, useMemo, useRef } from "react";
+import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { styleOf } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { chemMolblock } from "../../../lib/roles/molblock";
@@ -10,7 +10,7 @@ import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
 import type { Carried3D, Drawn } from "./store/types";
-import { centredAt, clipItems, hasFlow, partToCopy, recordText } from "./utils/copyPaste";
+import { centredAt, clipItems, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
 import { pictureOnClipboard, picturePng, pictureToAdd } from "./utils/pictures";
 import { bondsAmong } from "./utils/selection";
 import { carriedOf } from "./utils/workspace";
@@ -52,8 +52,11 @@ export function useClipboardActions(
   const part = useCallback((only?: number): { part: Drawn; ids3d: number[] } | null => {
     const state = store.getState();
     const { model, hovered, hovered3d, molecules3d, selFlow } = state;
-    // (the pictures selected go with it, and the words)
-    const pictures = only != null ? [] : state.pictures.filter((p) => state.selPictures.has(p.id));
+    // (a set selected takes what it holds along, selected or not - as it does when dragged)
+    const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
+    // (the pictures selected go with it - and a set's, a Render step's - and the words)
+    const heldPictures = new Set(held.flatMap((h) => h.pictures));
+    const pictures = only != null ? [] : state.pictures.filter((p) => state.selPictures.has(p.id) || heldPictures.has(p.id));
     const words = only != null ? [] : state.captions.filter((c) => state.selCaptions.has(c.id));
     // (and the PDFs and texts' sheets selected: carried whole, by what they are)
     const pdfs = only != null ? [] : state.pdfs.filter((p) => state.selPdfs.has(p.id));
@@ -64,8 +67,6 @@ export function useClipboardActions(
     const inShapes = state.captions.filter((c) => c.shape != null && shapes.some((s) => s.id === c.shape) && !words.some((w) => w.id === c.id));
     words.push(...inShapes);
     const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length > 0;
-    // (a set selected takes what it holds along, selected or not - as it does when dragged)
-    const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
     const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
     const sel = heldAtoms.size
       ? { atoms: new Set([...state.sel.atoms, ...heldAtoms]), bonds: new Set([...state.sel.bonds, ...bondsAmong(model, heldAtoms)]) }
@@ -98,7 +99,7 @@ export function useClipboardActions(
     };
   }, [store]);
 
-  const copy = useCallback(async (only?: number) => {
+  const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
     if (!taken || busy()) return false;
     const p = taken.part;
@@ -135,6 +136,8 @@ export function useClipboardActions(
       return false;
     }
   }, [part, busy, onError, store]);
+  // (what is selected now, put on the clipboard once its pictures are drawn: a paste meanwhile waits for it)
+  const copy = useCallback((only?: number) => copying(() => copyNow(only)), [copyNow]);
 
   const cut = useCallback(async (only?: number) => {
     const taken = part(only);
@@ -144,13 +147,17 @@ export function useClipboardActions(
     store.getState().deleteDrawn(taken.part, taken.ids3d);
   }, [part, copy, store]);
 
+  // (the pastes asked for at one place: a paste there again lands a step on - utils/copyPaste#pastePlace)
+  const pastes = useRef<PastesAt | null>(null);
   const paste = useCallback(
-    async (at: Pt) => {
+    async (asked: Pt) => {
       if (busy()) return;
+      const { place: at, pastes: now } = pastePlace(pastes.current, asked);
       try {
         // (files copied in the Finder or Explorer: as they would come dropped there)
         const files = openFiles ? await clipboardFiles() : [];
         if (files.length && openFiles) {
+          pastes.current = now;
           await openFiles(files, at);
           return;
         }
@@ -160,12 +167,14 @@ export function useClipboardActions(
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;
           if (picture) {
+            pastes.current = now;
             store.getState().addPictures([picture], at);
             return;
           }
           onError("There is nothing on the clipboard that reads as a structure or a picture.");
           return;
         }
+        pastes.current = now;
         store.getState().pasteModel(centredAt(found, at));
       } catch (e) {
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -174,30 +183,35 @@ export function useClipboardActions(
     [busy, store, onError, openFiles],
   );
 
-  const copySmiles = useCallback(async () => {
-    const p = part()?.part;
-    if (!p?.atoms.length) return;
-    try {
-      const c = await chemWorker("smiles");
-      const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
-      await writeClipboard([{ flavor: "text", text: smiles }]);
-    } catch (e) {
-      onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [part, onError]);
+  const copySmiles = useCallback(
+    () =>
+      copying(async () => {
+        const p = part()?.part;
+        if (!p?.atoms.length) return;
+        try {
+          const c = await chemWorker("smiles");
+          const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          await writeClipboard([{ flavor: "text", text: smiles }]);
+        } catch (e) {
+          onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }),
+    [part, onError],
+  );
 
   // a picture on the page, alone: for Meno, and as itself for other programs
   const copyPicture = useCallback(
-    async (id: number) => {
-      const p = store.getState().pictures.find((x) => x.id === id);
-      if (!p) return;
-      try {
-        const png = await picturePng(p);
-        await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
-      } catch (e) {
-        onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    },
+    (id: number) =>
+      copying(async () => {
+        const p = store.getState().pictures.find((x) => x.id === id);
+        if (!p) return;
+        try {
+          const png = await picturePng(p);
+          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
+        } catch (e) {
+          onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }),
     [store, onError],
   );
 

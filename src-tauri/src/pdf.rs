@@ -372,7 +372,7 @@ fn run_reader(cache: &Path) -> i32 {
     let bindings = match Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) {
         Ok(b) => b,
         Err(e) => {
-            let _ = write_frame(&mut out, &json!({"id": 0, "ok": false, "why": format!("PDFium could not be loaded: {e}")}), &[]);
+            let _ = write_frame(&mut out, &json!({"id": 0, "ok": false, "why": format!("The PDF reader could not be loaded: {e}")}), &[]);
             return 1;
         }
     };

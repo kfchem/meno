@@ -6,10 +6,10 @@
 import type { WorkspaceDocument } from "../document";
 import type { Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { holdsOf, setMembers } from "./entries";
-import { kindInfo, optionsOf, type SetKind } from "./kinds";
+import { kindInfo, optionsOf, type SetHolds, type SetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
-type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires">;
+type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
 export const stepOf = (doc: Flow, id: number): WorkflowStep | undefined => doc.steps?.find((s) => s.id === id);
 export const findSet = (doc: Flow, id: number): WorkflowSet | undefined => doc.sets?.find((b) => b.id === id);
@@ -21,7 +21,7 @@ export const wireInto = (doc: Flow, step: number): Wire | undefined => doc.wires
 export const resultOf = (doc: Flow, step: number): WorkflowSet | undefined => doc.sets?.find((b) => b.made?.step === step);
 
 /** What a port gives: a set, the kind of set it holds; a step, what it made - or, not run, what it will make of what comes into it. Null where that is not known yet. */
-export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new Set()): SetKind | null {
+export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new Set()): SetHolds | null {
   if ("set" in end) {
     const set = findSet(doc, end.set);
     return set ? holdsOf(doc, set) : null;
@@ -68,18 +68,21 @@ export function canWire(doc: Flow, from: WireEnd, to: number): boolean {
   const madeBy = "step" in from ? from.step : findSet(doc, from.set)?.made?.step;
   if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return false;
   const holds = givesOf(doc, from);
-  return holds == null || takesBy(step.kind, byOf(step), holds);
+  // (pictures - a Render step's - no step takes)
+  return holds == null || (holds !== "pictures" && takesBy(step.kind, byOf(step), holds));
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet. */
+/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
 export function inputOf(doc: Flow, step: number): { holds: SetKind; molecules: Molecule3D[]; structures: number[][] } | null {
   const from = wireInto(doc, step)?.from;
   if (!from) return null;
   const set = "set" in from ? findSet(doc, from.set) : resultOf(doc, from.step);
   if (!set) return null;
+  const holds = holdsOf(doc, set);
+  if (holds === "pictures") return null;
   const { structures, molecules } = setMembers(doc, set);
   const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
-  return { holds: holdsOf(doc, set), molecules: molecules.map((id) => byId.get(id)!), structures };
+  return { holds, molecules: molecules.map((id) => byId.get(id)!), structures };
 }
 
 /** FNV-1a over a string: a short key for what came into a step. */

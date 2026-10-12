@@ -128,13 +128,31 @@ export function useDropZone(ref: RefObject<Element | null>, zone: DropZone): voi
   }, [ref]);
 }
 
+/**
+ * Whether a drag under way began in the page - from its dragstart to its
+ * dragend - and so is the page's own, not routed. A dragstart the page
+ * prevents begins no drag, and no dragend follows to say it is over: it is
+ * not one (the workspace begins no drag-and-drop of the system's own,
+ * Workspace.tsx). `settled` is told of each dragstart after the page's own
+ * listeners have had it - whether one of them prevented it.
+ */
+export function pageDrags() {
+  let inside = false;
+  return {
+    started: () => void (inside = true),
+    settled: (e: { defaultPrevented: boolean }) => void (e.defaultPrevented && (inside = false)),
+    ended: () => void (inside = false),
+    inside: () => inside,
+  };
+}
+
 /** The page's drag events, and the app's for drags it took from the webview: routed, once. */
 function startRouting() {
   if (listening || typeof document === "undefined") return;
   listening = true;
   const router = createRouter<Element>((el) => zones.get(el));
   // A drag begun in the page: not routed
-  let inside = false;
+  const own = pageDrags();
   // Whether the app takes drags the page cannot read (Windows): unknown
   // until first asked; and whether it has been asked for this drag
   let native: boolean | null = null;
@@ -157,7 +175,7 @@ function startRouting() {
     );
   };
   const over = (e: DragEvent) => {
-    if (inside) return;
+    if (own.inside()) return;
     const drag = dragOf(e);
     if (!router.over(e.target as Element, drag)) return;
     e.preventDefault();
@@ -168,17 +186,18 @@ function startRouting() {
     const zone = router.current();
     if (!drag.files && zone) catchIt(zone);
   };
-  document.addEventListener("dragstart", () => (inside = true), true);
-  document.addEventListener("dragend", () => (inside = false), true);
+  document.addEventListener("dragstart", own.started, true);
+  document.addEventListener("dragstart", own.settled);
+  document.addEventListener("dragend", own.ended, true);
   document.addEventListener("dragenter", over, true);
   document.addEventListener("dragover", over, true);
   // (off the page - or handed to the app's own window, on Windows, which
   // says where it goes from then on)
-  document.addEventListener("dragleave", (e) => !inside && !e.relatedTarget && router.leave(), true);
+  document.addEventListener("dragleave", (e) => !own.inside() && !e.relatedTarget && router.leave(), true);
   document.addEventListener(
     "drop",
     (e) => {
-      if (inside) return;
+      if (own.inside()) return;
       if (caught) {
         caught = false;
         void invoke("drop_release");

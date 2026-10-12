@@ -42,7 +42,8 @@ export function Port({
       aria-label={label}
       onPointerDown={onPointerDown}
       className={clsx(
-        "absolute rounded-full transition-colors duration-150 ease-meno",
+        // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
+        "absolute rounded-full select-none transition-colors duration-150 ease-meno",
         look === "lit" ? "bg-accel-base border-accel-base" : "bg-white border-gh-gray hover:bg-accel-lightbase hover:border-accel-base",
       )}
       style={{

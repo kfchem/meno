@@ -137,9 +137,11 @@ export const createModelSlice = (
   },
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
-    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), {
-      coalesceKey: `move-atoms:${gesture}`,
-    });
+    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+  },
+
+  dropMoveAtoms: (gesture: string) => {
+    doc.drop(`move-atoms:${gesture}`);
   },
 
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
@@ -161,7 +163,7 @@ export const createModelSlice = (
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
-    doc.edit(at ? "move mark" : "put mark back", (d) => ops.putMark(d, of, at), gesture ? { coalesceKey: `mark:${gesture}` } : undefined);
+    doc.edit(at ? "move mark" : "put mark back", (d) => ops.putMark(d, of, at), gesture ? gestureStep(`mark:${gesture}`) : undefined);
   },
 
   deleteSelection: () => {
@@ -553,7 +555,7 @@ export const createModelSlice = (
   },
 
   updatePush: (id: number, patch: Parameters<EditorState["updatePush"]>[1], gesture?: string) => {
-    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? { coalesceKey: `push:${id}:${gesture}` } : undefined);
+    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? gestureStep(`push:${id}:${gesture}`) : undefined);
   },
 
   removePush: (id: number) => {

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { isoBounds, isoOf, ISO_STEPS, sliderOf } from "../utils/isoSlider";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isMarked, valueText, type ListResult } from "../../../../lib/calc/results";
 import { SCALE_STOPS } from "../utils/isosurface";
@@ -11,12 +12,6 @@ const HEAD = 20;
 const MARGIN = 8;
 /** How many frames after it opens it has been placed under its molecule, to ask for room. */
 const PLACED_FRAMES = 3;
-/** The values a surface's slider goes between, by their logarithms: the slider's steps. */
-const ISO_LEAST = 1e-4;
-const ISO_MOST = 0.5;
-const ISO_STEPS = 1000;
-const sliderOf = (iso: number) => Math.round((ISO_STEPS * Math.log(iso / ISO_LEAST)) / Math.log(ISO_MOST / ISO_LEAST));
-const isoOf = (step: number) => ISO_LEAST * Math.pow(ISO_MOST / ISO_LEAST, step / ISO_STEPS);
 /** A surface's value as it is written: "0.050", "0.0020". */
 const isoText = (iso: number) => (iso >= 0.01 ? iso.toFixed(3) : iso.toPrecision(2));
 /** A colour scale's ends, as written: a minus sign, not a hyphen. */
@@ -54,6 +49,7 @@ export default function CalcList3D({
   asking,
   onFind,
   iso,
+  isoStart,
   onIso,
   scale,
   area,
@@ -71,6 +67,8 @@ export default function CalcList3D({
   onFind?: { name: string; find: () => void };
   /** The value the row chosen's surface is drawn at - a slider under it sets it; none, no slider. */
   iso?: number;
+  /** The value it is drawn at at first, as its grid says: what the slider reaches round. */
+  isoStart?: number;
   onIso?: (iso: number) => void;
   /** The scale the surface shown is coloured on, where another grid colours it: what its values run between, and what they are. */
   scale?: { from: number; to: number; label?: string };
@@ -79,6 +77,8 @@ export default function CalcList3D({
   /** What it keeps within: the canvas. */
   area: Element;
 }) {
+  // (the slider's reach, round the value the surface was first drawn at)
+  const bounds = isoBounds(isoStart);
   const card = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   // (its heading scrolls with it, held at its top, so that it is laid out
@@ -240,8 +240,8 @@ export default function CalcList3D({
             min={0}
             max={ISO_STEPS}
             step={1}
-            value={sliderOf(Math.min(ISO_MOST, Math.max(ISO_LEAST, iso)))}
-            onChange={(e) => onIso(isoOf(Number(e.target.value)))}
+            value={sliderOf(Math.min(bounds.most, Math.max(bounds.least, iso)), bounds)}
+            onChange={(e) => onIso(isoOf(Number(e.target.value), bounds))}
             data-cursor="sideways"
             className="flex-1 min-w-24 h-2 rounded-full appearance-none bg-white/60 border border-gh-line"
           />

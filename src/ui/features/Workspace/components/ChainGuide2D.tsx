@@ -27,7 +27,7 @@ const easeOut = (u: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
  *
  * It also leads a chain traced with the button up (`extend.tracing`): the
  * pointer's moves go to it, a click ends it, and Escape - or the other
- * button - lets it go.
+ * button - lets it go. Escape lets a bond being drawn go too.
  */
 export default function ChainGuide2D() {
   const extend = useEditor((s) => s.extend);
@@ -106,10 +106,10 @@ export default function ChainGuide2D() {
     };
   }, [tracing, gl, camera, store, invalidate]);
 
-  // Escape lets any chain go, dragged or traced
-  const chainUnderWay = !!chain;
+  // Escape lets any stroke go - a chain, dragged or traced, or a bond being drawn
+  const strokeUnderWay = extend.active;
   useEffect(() => {
-    if (!chainUnderWay) return;
+    if (!strokeUnderWay) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -119,7 +119,7 @@ export default function ChainGuide2D() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [chainUnderWay, store, invalidate]);
+  }, [strokeUnderWay, store, invalidate]);
 
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);

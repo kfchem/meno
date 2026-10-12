@@ -37,17 +37,19 @@ export function resizeSet(doc: WorkspaceDocument, id: number, frame: Frame): Wor
   return withSet(doc, id, (b) => (b.x0 === f.x0 && b.y0 === f.y0 && b.x1 === f.x1 && b.y1 === f.y1 ? b : { ...b, ...f }));
 }
 
-/** A set moved by (dx, dy), with all it holds: the structures drawn and the molecules in 3D inside it. */
+/** A set moved by (dx, dy), with all it holds: the structures drawn, the molecules in 3D and the pictures inside it. */
 export function moveSet(doc: WorkspaceDocument, id: number, dx: number, dy: number): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
   if (!set || (dx === 0 && dy === 0)) return doc;
-  const { structures, molecules } = setMembers(doc, set);
+  const { structures, molecules, pictures } = setMembers(doc, set);
   const atoms = new Set(structures.flat());
   const moved = new Set(molecules);
+  const shown = new Set(pictures);
   return {
     ...withSet(doc, id, (b) => ({ ...b, x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy })),
     model: atoms.size ? { ...doc.model, atoms: doc.model.atoms.map((a) => (atoms.has(a.id) ? { ...a, x: a.x + dx, y: a.y + dy } : a)) } : doc.model,
     molecules3d: moved.size ? (doc.molecules3d ?? []).map((m) => (moved.has(m.id) ? { ...m, at: { ...m.at, x: m.at.x + dx, y: m.at.y + dy } } : m)) : doc.molecules3d,
+    pictures: shown.size ? (doc.pictures ?? []).map((p) => (shown.has(p.id) ? { ...p, x: p.x + dx, y: p.y + dy } : p)) : doc.pictures,
   };
 }
 
@@ -111,6 +113,12 @@ export function setRunning(doc: WorkspaceDocument, id: number, running: Workflow
     const { running: _r, ...rest } = s;
     return rest;
   });
+}
+
+/** The steps running in `now` that `then` - what an undo or a redo would come to - has not: an undo that takes them away asks first, as deleting them does. */
+export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | undefined): WorkflowStep[] {
+  if (!then) return [];
+  return (now.steps ?? []).filter((s) => s.running && !(then.steps ?? []).some((x) => x.id === s.id));
 }
 
 /** `doc` without a step and the wires into it and out of it. The set it made stays, with what it holds - a set like any the chemist drew (of conformers, where its molecules' frames are a conformer search's: entries `holdsOf`). */
