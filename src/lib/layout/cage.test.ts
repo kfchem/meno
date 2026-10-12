@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage } from "./cage";
+import { cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -40,8 +40,10 @@ describe("a cage within a ring system", () => {
       [0, 10], [10, 11, 2], [11, 12], [12, 13, 2], [13, 14], [14, 1],
     ];
     const input = carbons(15, fused);
-    const { x, y, solid } = layout2D(input);
-    expect(solid.slice(0, 10).every(Boolean)).toBe(true);
+    // (the cage in perspective; the ring fused on its side, with its double
+    // bonds, flat onto it)
+    const { x, y, depth } = layout2D(input);
+    expect(depth.slice(0, 10).every((d) => d != null)).toBe(true);
     for (const { a, b } of input.bonds) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(0.6);
   });
 });
@@ -70,6 +72,59 @@ describe("a six-membered ring drawn as a chair or a boat", () => {
     const hexagon = Array.from({ length: 6 }, (_, k) => ({ x: Math.cos((k * Math.PI) / 3), y: Math.sin((k * Math.PI) / 3) }));
     expect(drawnAsChairOrBoat(hexagon)).toBe(false);
     expect(drawnAsChairOrBoat(chair.map((p, k) => (k === 3 ? { x: p.x + 0.25, y: p.y + 0.2 } : p)))).toBe(false);
+  });
+});
+
+describe("a solid found from its bonds", () => {
+  const fromSmiles = (smiles: string) => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return perceive({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+  };
+  const sub = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const cross = (p: Vec3, q: Vec3): Vec3 => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  /** The torsion a-b-c-d, in degrees. */
+  const torsion = (X: Map<number, Vec3>, a: number, b: number, c: number, d: number) => {
+    const [pa, pb, pc, pd] = [a, b, c, d].map((v) => X.get(v)!);
+    const n1 = cross(sub(pb, pa), sub(pc, pb));
+    const n2 = cross(sub(pc, pb), sub(pd, pc));
+    const b2 = sub(pc, pb);
+    const m = cross(n1, b2.map((v) => v / Math.hypot(...b2)) as Vec3);
+    return (Math.atan2(dot(m, n2), dot(n1, n2)) * 180) / Math.PI;
+  };
+  const angle = (X: Map<number, Vec3>, a: number, b: number, c: number) => {
+    const u = sub(X.get(a)!, X.get(b)!);
+    const v = sub(X.get(c)!, X.get(b)!);
+    return (Math.acos(dot(u, v) / Math.hypot(...u) / Math.hypot(...v)) * 180) / Math.PI;
+  };
+
+  it("has cocaine's six-membered ring the chair it is, its torsions turning each way in turn", () => {
+    // (eased from several placements: from the rough one alone, its angles
+    // its own, it came out a boat)
+    const mol = fromSmiles("CN1[C@H]2CC[C@@H]1[C@H]([C@H](C2)OC(=O)c1ccccc1)C(=O)OC");
+    const sys = mol.systems.find((x) => x.atoms.includes(1))!;
+    const X = solidOf(mol, sys);
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(1))!;
+    const t = ring.map((_, i) => torsion(X, ...([0, 1, 2, 3].map((k) => ring[(i + k) % 6]) as [number, number, number, number])));
+    t.forEach((v, i) => {
+      expect(Math.abs(v)).toBeGreaterThan(35);
+      expect(Math.sign(v)).not.toBe(Math.sign(t[(i + 1) % 6]));
+    });
+  });
+
+  it("keeps a double bond and its neighbours in one plane, at 120 degrees", () => {
+    // cyclohexene: C1=C2 (atoms 0 and 1), their neighbours in the ring 5 and 2
+    const mol = fromSmiles("C1=CCCCC1");
+    const X = solidOf(mol, mol.systems[0]);
+    expect(Math.abs(torsion(X, 5, 0, 1, 2))).toBeLessThan(5);
+    expect(angle(X, 5, 0, 1)).toBeCloseTo(120, -1);
+    expect(angle(X, 0, 1, 2)).toBeCloseTo(120, -1);
   });
 });
 

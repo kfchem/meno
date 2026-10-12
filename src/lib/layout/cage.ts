@@ -3,10 +3,15 @@
  * norbornane, quinuclidine, adamantane, cubane - drawn the way it is always
  * drawn: in perspective, as the solid it is.
  *
- * The solid is found from the bonds alone: atoms a bond apart at 1, two
- * bonds apart at a tetrahedral 1.63, further apart further, placed in three
- * dimensions to fit those distances as well as they can (classical scaling,
- * then stress majorisation). Then it is drawn the way a chemist draws it:
+ * The solid is found from the bonds: each atom's bonds at the angles its
+ * bonding gives - tetrahedral, flat at 120 degrees beside a double bond,
+ * straight through a triple one, a small ring's own - so that atoms a bond
+ * apart are 1 apart and two bonds apart as far as that angle puts them; a
+ * double bond's atoms and all their neighbours in one plane; atoms further
+ * apart further, placed in three dimensions to fit those distances as well
+ * as they can (classical scaling, then stress majorisation), and eased
+ * with every stereocentre held the way round it is given (`embed`). Then
+ * it is drawn the way a chemist draws it:
  * one of its six-membered rings as the chair or boat it is, by the
  * textbook's template, and the rest of the cage built on that (`textbook`).
  * A cage with no six-membered ring is looked at from many directions
@@ -15,7 +20,8 @@
  * nearly one length.
  */
 import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
-import { isMetal, type Molecule, type RingSystem } from "./perceive";
+import { ringShape } from "./conformation";
+import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 
 export type Vec3 = [number, number, number];
 
@@ -102,11 +108,25 @@ function majorise(X: Vec3[], D: number[][]): Vec3[] {
 }
 
 /**
- * The solid as it really is: bonds 1, atoms two bonds apart at a
- * tetrahedral 1.63, and nothing else nearer than 1.9 - eased in from the
- * rough placement until those hold.
+ * The distances a solid keeps between its atoms (`embed`): each pair's own
+ * where its bonds fix one - a bond's, the angle's across two bonds, across
+ * a double bond to a neighbour on each side - with how hard it is held;
+ * otherwise the least it may come to.
  */
-function settle(X: Vec3[], hop: number[][], hold: readonly Held[] = []): Vec3[] {
+type Targets = {
+  d: (number | null)[][];
+  w: number[][];
+  least: number[][];
+  /** The atoms that lie in one plane: each double bond's two and those bonded to them. */
+  planes: number[][];
+};
+
+/**
+ * The solid as it really is: the distances its bonds fix, and nothing else
+ * nearer than it may come - eased in from the rough placement until those
+ * hold.
+ */
+function settle(X: Vec3[], T: Targets, hold: readonly Held[] = []): Vec3[] {
   const n = X.length;
   const P = X.map((p) => [...p] as Vec3);
   const pull = (i: number, j: number, target: number, k: number, onlyApart: boolean) => {
@@ -122,10 +142,18 @@ function settle(X: Vec3[], hop: number[][], hold: readonly Held[] = []): Vec3[] 
   for (let it = 0; it < 400; it++) {
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
-        const h = hop[i][j];
-        if (h === 1) pull(i, j, 1, 1, false);
-        else if (h === 2) pull(i, j, 1.633, 0.6, false);
-        else pull(i, j, 1.9, 0.3, true);
+        const d = T.d[i][j];
+        if (d != null) pull(i, j, d, T.w[i][j], false);
+        else pull(i, j, T.least[i][j], 0.3, true);
+      }
+    }
+    // (a double bond's atoms and their neighbours drawn into their plane)
+    for (const group of T.planes) {
+      const c: Vec3 = [0, 1, 2].map((k) => group.reduce((sum, g) => sum + P[g][k], 0) / group.length) as Vec3;
+      const nrm = leastAxis(group.map((g) => subV(P[g], c)));
+      for (const g of group) {
+        const k = 0.5 * dotV(subV(P[g], c), nrm);
+        P[g] = [P[g][0] - k * nrm[0], P[g][1] - k * nrm[1], P[g][2] - k * nrm[2]];
       }
     }
     // (a centre held the way round it is given, put back through the plane
@@ -140,6 +168,19 @@ function settle(X: Vec3[], hop: number[][], hold: readonly Held[] = []): Vec3[] 
     }
   }
   return P;
+}
+
+/** The direction points about their middle spread least along: the normal of the plane that fits them best. */
+function leastAxis(us: readonly Vec3[]): Vec3 {
+  const C = [0, 1, 2].map((i) => [0, 1, 2].map((j) => us.reduce((sum, u) => sum + u[i] * u[j], 0)));
+  const s = C[0][0] + C[1][1] + C[2][2] + 1e-9;
+  // (power iteration on s - C, whose largest is C's least)
+  let v: Vec3 = [0.577, 0.578, 0.576];
+  for (let it = 0; it < 40; it++) {
+    const w: Vec3 = [0, 1, 2].map((i) => s * v[i] - (C[i][0] * v[0] + C[i][1] * v[1] + C[i][2] * v[2])) as Vec3;
+    v = normalise(w);
+  }
+  return v;
 }
 
 /** A stereocentre held the way round it is given while a solid is eased: its index, three neighbours' and the sign of the volume they span from it. */
@@ -270,18 +311,203 @@ function look(
   };
 }
 
+/**
+ * The angle an atom's bonds keep, by how it bonds: straight through a
+ * triple bond or two double ones; 120 degrees with a double bond, or
+ * beside one with a lone pair to share - an amide's or a guanidine's N,
+ * an ester's O; tetrahedral otherwise.
+ */
+function bondAngle(mol: Molecule, a: number): number {
+  const orders = mol.neighbours[a].map((b) => orderOf(mol, a, b));
+  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2) return Math.PI;
+  if (orders.includes(2)) return (2 * Math.PI) / 3;
+  const lonePair = (mol.el[a] === "N" || mol.el[a] === "O") && mol.neighbours[a].length <= 3;
+  if (lonePair && mol.neighbours[a].some((b) => mol.neighbours[b].some((c) => orderOf(mol, b, c) === 2))) return (2 * Math.PI) / 3;
+  return Math.acos(-1 / 3);
+}
+
+/**
+ * The angle between bonds `a`-`j` and `a`-`k`: a three-, four- or
+ * five-membered ring's own where the two run round one (60, 90, and 108
+ * flat or 104 puckered); otherwise the atom's, and where a flat atom has
+ * a small ring's angle among its three, the rest of the turn shared by
+ * its other two.
+ */
+function angleAt(mol: Molecule, a: number, j: number, k: number, inside: (v: number) => boolean): number {
+  const small = (p: number, q: number) => {
+    let n = Infinity;
+    for (const r of mol.ringsOf[a]) {
+      const ring = mol.rings[r];
+      const i = ring.indexOf(a);
+      const m = ring.length;
+      const nb = [ring[(i + 1) % m], ring[(i - 1 + m) % m]];
+      if (nb.includes(p) && nb.includes(q)) n = Math.min(n, m);
+    }
+    return n;
+  };
+  const own = bondAngle(mol, a);
+  const flat = Math.abs(own - (2 * Math.PI) / 3) < 1e-6;
+  const ringAngle = (n: number) => (n === 3 ? Math.PI / 3 : n === 4 ? Math.PI / 2 : n === 5 ? ((flat ? 108 : 104) * Math.PI) / 180 : null);
+  const here = ringAngle(small(j, k));
+  if (here != null) return here;
+  const near = mol.neighbours[a].filter(inside);
+  if (!flat || near.length !== 3) return own;
+  const third = near.find((v) => v !== j && v !== k)!;
+  const fixed = [ringAngle(small(j, third)), ringAngle(small(k, third))].filter((t): t is number => t != null);
+  if (fixed.length !== 1) return own;
+  return (2 * Math.PI - fixed[0]) / 2;
+}
+
+/** How near two atoms either side of a bond between tetrahedral atoms may come: 50 degrees round from eclipsed (1.67 apart; gauche, at 60, 1.92). */
+const STAGGERED = 1.85;
+
+/** The distances a ring system's bonds fix between its atoms, and the least the rest may come to (`Targets`). */
+function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, number>, hop: number[][]): Targets {
+  const n = atoms.length;
+  const d: (number | null)[][] = Array.from({ length: n }, () => new Array<number | null>(n).fill(null));
+  const w: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  const least: number[][] = hop.map((row) => row.map((h) => (h <= 2 ? 0 : h === 3 ? 1.6 : 1.7)));
+  const inside = (v: number) => index.has(v);
+  const set = (i: number, j: number, v: number, k: number) => {
+    d[i][j] = d[j][i] = v;
+    w[i][j] = w[j][i] = k;
+  };
+  atoms.forEach((a, i) => {
+    const near = mol.neighbours[a].filter(inside);
+    for (const b of near) set(i, index.get(b)!, 1, 1);
+    for (let p = 0; p < near.length; p++)
+      for (let q = p + 1; q < near.length; q++) {
+        const [j, k] = [index.get(near[p])!, index.get(near[q])!];
+        if (hop[j][k] !== 2) continue;
+        set(j, k, 2 * Math.sin(angleAt(mol, a, near[p], near[q], inside) / 2), 0.6);
+      }
+  });
+  // across a bond between two tetrahedral atoms, the atoms either side
+  // staggered, not eclipsed - a ring a chair rather than a boat where it
+  // can be: at least as far apart as 50 degrees round puts them
+  const tetrahedral = (v: number) => Math.abs(bondAngle(mol, v) - Math.acos(-1 / 3)) < 1e-6;
+  for (const bond of mol.bonds) {
+    const [a, b] = [bond.a, bond.b];
+    if (bond.order !== 1 || !inside(a) || !inside(b) || !tetrahedral(a) || !tetrahedral(b)) continue;
+    for (const x of mol.neighbours[a])
+      for (const y of mol.neighbours[b]) {
+        if (x === b || y === a || x === y || !inside(x) || !inside(y)) continue;
+        const [i, j] = [index.get(x)!, index.get(y)!];
+        if (hop[i][j] === 3) least[i][j] = least[j][i] = Math.max(least[i][j], STAGGERED);
+      }
+  }
+  // a double bond flat: its atoms and those bonded to them in one plane,
+  // each neighbour of one end a cis or trans distance from each of the
+  // other's - cis where a ring runs through all four
+  const planes: number[][] = [];
+  for (const bond of mol.bonds) {
+    if (bond.order !== 2 || !inside(bond.a) || !inside(bond.b)) continue;
+    const [a, b] = [bond.a, bond.b];
+    const group = [...new Set([a, b, ...mol.neighbours[a], ...mol.neighbours[b]])].filter(inside).map((v) => index.get(v)!);
+    if (group.length >= 4) planes.push(group);
+    for (const x of mol.neighbours[a]) {
+      if (x === b || !inside(x)) continue;
+      for (const y of mol.neighbours[b]) {
+        if (y === a || y === x || !inside(y)) continue;
+        const cis = mol.rings.some((r) => {
+          if (r.length > 8 || ![x, a, b, y].every((v) => r.includes(v))) return false;
+          const m = r.length;
+          const at = (v: number) => r.indexOf(v);
+          const next = (u: number, v: number) => Math.abs(at(u) - at(v)) === 1 || Math.abs(at(u) - at(v)) === m - 1;
+          return next(x, a) && next(b, y);
+        });
+        const ta = angleAt(mol, a, x, b, inside);
+        const tb = angleAt(mol, b, y, a, inside);
+        const px = { x: Math.cos(ta), y: Math.sin(ta) };
+        const py = { x: 1 - Math.cos(tb), y: (cis ? 1 : -1) * Math.sin(tb) };
+        const [i, j] = [index.get(x)!, index.get(y)!];
+        if (hop[i][j] === 3) set(i, j, Math.hypot(px.x - py.x, px.y - py.y), 0.4);
+      }
+    }
+  }
+  return { d, w, least, planes };
+}
+
+/**
+ * A ring system's solid: placed roughly by its distances (classical
+ * scaling, stress majorisation), taken the way round its stereocentres
+ * say rather than as its mirror image, each centre the wrong way put
+ * through the plane of its three neighbours (`rightCentres`), and eased.
+ */
+function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
+  // (found once for a molecule's ring system: it is asked for again and again)
+  const key = atoms.join(",");
+  const cached = solids.get(mol)?.get(key);
+  if (cached) return cached;
+  const found = embedAnew(mol, atoms, index);
+  if (!solids.has(mol)) solids.set(mol, new Map());
+  solids.get(mol)!.set(key, found);
+  return found;
+}
+
+/** Each molecule's solids found so far, by their atoms. */
+const solids = new WeakMap<Molecule, Map<string, Vec3[]>>();
+
+function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
+  const hop = hops(mol, atoms);
+  const T = targetsOf(mol, atoms, index, hop);
+  const D = hop.map((row, i) => row.map((h, j) => T.d[i][j] ?? span(h)));
+  const rough = majorise(classical(D), D);
+  // (eased from the rough placement and from a few others, the atoms
+  // scattered through a ball the solid's size - the rough placement lays
+  // atoms far apart in the graph far apart in space, and a ring left a boat
+  // from it may come out the chair it is from another - the one that keeps
+  // its distances best taken)
+  let best: Vec3[] = rough;
+  let bestMiss = Infinity;
+  const size = Math.cbrt(atoms.length);
+  for (let k = 0; k < STARTS; k++) {
+    const scatter = (i: number, c: number) => size * Math.sin(12.9898 * (i + 1) + 78.233 * (c + 1) + 37.719 * k) * Math.cos(4.1414 * (i + 1) * (k + 1) + c);
+    let X = k ? rough.map((_, i) => [0, 1, 2].map((c) => scatter(i, c)) as Vec3) : rough;
+    // the solid is found from distances, which cannot tell a shape from
+    // its mirror image: the one whose stereocentres are as given is taken
+    if (handedness(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
+    X = rightCentres(mol, atoms, index, settle(X, T, holds(mol, atoms, index)), T);
+    const m = miss(X, T);
+    if (m < bestMiss - 1e-9) {
+      bestMiss = m;
+      best = X;
+    }
+  }
+  return best;
+}
+
+/** How many placements a solid is eased from (`embed`). */
+const STARTS = 7;
+
+/** How far a solid misses its distances: each fixed one's miss squared, as hard as it is held, and each pair nearer than it may come. */
+function miss(X: Vec3[], T: Targets): number {
+  let sum = 0;
+  for (let i = 0; i < X.length; i++)
+    for (let j = i + 1; j < X.length; j++) {
+      const l = Math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1], X[i][2] - X[j][2]);
+      const d = T.d[i][j];
+      sum += d != null ? T.w[i][j] * (l - d) ** 2 : 0.3 * Math.max(0, T.least[i][j] - l) ** 2;
+    }
+  return sum;
+}
+
 /** The solid a cage system is taken to be: its atoms' places in three dimensions. */
 export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
   const index = new Map(sys.atoms.map((a, i) => [a, i]));
-  const hop = hops(mol, sys.atoms);
-  const D = hop.map((row) => row.map(span));
-  let X = settle(majorise(classical(D), D), hop);
-  if (handedness(mol, sys.atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
-  X = rightCentres(mol, sys.atoms, index, X, hop);
+  const X = embed(mol, sys.atoms, index);
   return new Map(sys.atoms.map((a, i) => [a, X[i]]));
 }
 
-export function projectCage(mol: Molecule, sys: RingSystem): CageView {
+/**
+ * The cage seen from its best side (`rank` 0) - or, a textbook view, the
+ * next best (1, 2, ...), for a ring system to try with what is fused to the
+ * cage: a cage the same from several sides reads best from the one that
+ * leaves room for the rest. Null where there is no such view.
+ */
+export function projectCage(mol: Molecule, sys: RingSystem): CageView;
+export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
+export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView | null {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
   const bonds: [number, number][] = [];
@@ -289,22 +515,17 @@ export function projectCage(mol: Molecule, sys: RingSystem): CageView {
     const [a, b] = k.split(",").map(Number);
     if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
   }
-  const hop = hops(mol, atoms);
-  const D = hop.map((row) => row.map(span));
-  let X = settle(majorise(classical(D), D), hop);
-  // the solid is found from distances, which cannot tell a shape from its
-  // mirror image: the one whose stereocentres are as given is taken
-  if (handedness(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
-  X = rightCentres(mol, atoms, index, X, hop);
+  const X = embed(mol, atoms, index);
 
   // a bicyclo[3.3.1] cage as 9-BBN is drawn: its two chairs stood on end
   const twin = twinChairs(mol, sys, X, index, bonds);
-  if (twin) return twin;
+  if (twin) return rank ? null : twin;
 
   // the way it is drawn in textbooks, where it has a six-membered ring to
   // draw that on
-  const drawn = textbook(mol, sys, X, index, bonds);
+  const drawn = textbook(mol, sys, X, index, bonds, rank);
   if (drawn && drawn.cost < 8) return drawn;
+  if (rank) return null;
 
   let best: Point[] = [];
   let bestDepth: number[] = [];
@@ -538,6 +759,22 @@ export function shownByShape(mol: Molecule, atoms: readonly number[], pos: (a: n
   return out;
 }
 
+/**
+ * The stereocentres among `atoms` - those of `sys` drawn as a solid, at
+ * `pos` - that the drawing shows by its shape: each in a six-membered ring
+ * drawn as a chair or a boat (`shownByShape`), or in a ring of the system
+ * bridged across another (sharing three atoms or more with it), whose
+ * atoms the cage drawn in perspective fixes - the way each bond goes from
+ * them says which way round they are.
+ */
+export function shownBySolid(mol: Molecule, sys: RingSystem, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
+  const out = shownByShape(mol, atoms, pos);
+  const rings = sys.rings.map((r) => mol.rings[r]);
+  const bridged = rings.filter((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
+  for (const a of atoms) if (mol.tetra.has(a) && bridged.some((r) => r.includes(a))) out.add(a);
+  return out;
+}
+
 /** Every six-membered cycle through the given atoms, each in order round it. */
 function sixCycles(mol: Molecule, atoms: readonly number[]): number[][] {
   const inside = new Set(atoms);
@@ -604,6 +841,7 @@ function textbook(
   X: Vec3[],
   index: Map<number, number>,
   bonds: [number, number][],
+  rank = 0,
 ): CageView | null {
   const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
@@ -618,7 +856,7 @@ function textbook(
   type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
   // the best seen with its front zigzag set off each way: one the other
   // seen from its other side
-  const best = new Map<number, Found>();
+  const best = new Map<number, Found[]>();
   for (const cycle of cycles) {
     const R = cycle.map(at);
     const c: Vec3 = [0, 1, 2].map((k) => R.reduce((sum, p) => sum + p[k], 0) / 6) as Vec3;
@@ -629,11 +867,13 @@ function textbook(
     }
     nrm = normalise(nrm);
     const rest = atoms.filter((a) => !cycle.includes(a)).map(at);
-    // a chair's atoms alternately above and below its mean plane; a boat's
-    // bow and stern, opposite each other, the furthest out on one side
+    // only a ring the solid has as a chair or a boat is drawn as one - not
+    // one flat with a double bond in it, nor one twisted (conformation.ts)
+    const shape = ringShape(mol, cycle, at);
+    if (shape.kind !== "chair" && shape.kind !== "boat") continue;
     const h = R.map((p) => dotV(subV(p, c), nrm));
-    const chair = h.every((v, i) => Math.sign(v) !== Math.sign(h[(i + 1) % 6]));
-    const bow = [0, 1, 2].sort((p, q) => Math.abs(h[q] + h[q + 3]) - Math.abs(h[p] + h[p + 3]))[0];
+    const chair = shape.kind === "chair";
+    const bow = shape.kind === "boat" ? shape.bow : 0;
     for (const turn of [1, -1]) {
       for (let start = 0; start < 6; start++) {
         if (!chair && start % 3 !== bow) continue;
@@ -680,15 +920,24 @@ function textbook(
               (restUp ? 0 : 0.5) +
               exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
               0.25 * behind;
-            const held = best.get(hand);
-            if (!held || cost < held.cost - 1e-9) best.set(hand, { pts, depth, hints, cost });
+            best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
           }
         }
       }
     }
   }
-  const found = [...best.values()].sort((p, q) => p.cost - q.cost);
-  if (!found.length) return null;
+  // (the views of each hand, best first, one of each look: a view and the
+  // same ring seen again from another start comes out the same drawing)
+  const looks = (fs: Found[]) => {
+    const seen = new Set<string>();
+    return [...fs].sort((p, q) => p.cost - q.cost).filter((f) => {
+      const k = f.pts.map((p) => `${Math.round(p.x * 20)},${Math.round(p.y * 20)}`).join(";");
+      return !seen.has(k) && (seen.add(k), true);
+    });
+  };
+  const hands = [...best.values()].map(looks).sort((p, q) => p[0].cost - q[0].cost);
+  if (!hands.length || rank >= hands[0].length) return null;
+  const found = [hands[0][rank], ...(hands[1] ? [hands[1][0]] : [])];
   const view = (f: Found): Omit<CageView, "other"> => {
     const pos = new Map<number, Point>();
     const depth = new Map<number, number>();
@@ -746,6 +995,9 @@ function twinChairs(
   const ends = shared.filter((a) => mol.neighbours[a].filter((b) => shared.includes(b)).length === 1);
   const top = shared.find((a) => !ends.includes(a));
   if (shared.length !== 3 || ends.length !== 2 || top == null) return null;
+  // (only two chairs the solid has as chairs: not a ring flat with a double
+  // bond in it - huperzine A's - whose atom would carry an axial bond)
+  if (![r1, r2].every((r) => ringShape(mol, r, (a) => X[index.get(a)!]).kind === "chair")) return null;
   // each three-atom bridge, from the first bridgehead round to the second
   const bridge = (r: number[]) => {
     const i = r.indexOf(ends[0]);
@@ -1025,7 +1277,7 @@ function drawOn(
  * centre so fixed held the way round it is given; taken where that leaves
  * fewer wrong.
  */
-function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number, number>, X: Vec3[], hop: number[][]): Vec3[] {
+function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number, number>, X: Vec3[], T: Targets): Vec3[] {
   const fixed = (c: number) => {
     const t = mol.tetra.get(c);
     if (!t) return null;
@@ -1044,14 +1296,6 @@ function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number
     });
   const bad = wrong(X);
   if (!bad.length) return X;
-  // (every centre so fixed held the way it is given while the solid eases)
-  const hold: Held[] = atoms.flatMap((c) => {
-    const f = fixed(c);
-    if (!f) return [];
-    const three = f.known.slice(0, 3);
-    const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
-    return [{ c: index.get(c)!, three: three.map(([n]) => index.get(n)!) as [number, number, number], sign: f.t.volume * (left % 2 === 1 ? 1 : -1) }];
-  });
   const next = X.map((p) => [...p] as Vec3);
   for (const c of bad) {
     const [a, b, d] = fixed(c)!.known.slice(0, 3).map(([n]) => X[index.get(n)!]);
@@ -1060,8 +1304,21 @@ function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number
     const k = 2 * dotV(subV(p, a), nrm);
     next[index.get(c)!] = [p[0] - k * nrm[0], p[1] - k * nrm[1], p[2] - k * nrm[2]];
   }
-  const settled = settle(next, hop, hold);
+  const settled = settle(next, T, holds(mol, atoms, index));
   return wrong(settled).length < bad.length ? settled : X;
+}
+
+/** Every stereocentre with three bonds or more in the system, to be held the way round it is given while the solid eases. */
+function holds(mol: Molecule, atoms: readonly number[], index: Map<number, number>): Held[] {
+  return atoms.flatMap((c) => {
+    const t = mol.tetra.get(c);
+    if (!t) return [];
+    const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
+    if (known.length < 3) return [];
+    const three = known.slice(0, 3);
+    const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
+    return [{ c: index.get(c)!, three: three.map(([n]) => index.get(n)!) as [number, number, number], sign: t.volume * (left % 2 === 1 ? 1 : -1) }];
+  });
 }
 
 /**
