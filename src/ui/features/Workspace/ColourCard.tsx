@@ -6,6 +6,7 @@ import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
 import { stylesOf } from "../../../lib/chem/captions";
 import { isBox, tintOf } from "../../../lib/chem/shapes";
+import { markerColour } from "../../../lib/chem/ink";
 
 /** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, the electron-pushing arrows, arrows, words on the page and writing by hand it colours, and the shapes whose line it colours and which it fills. */
 export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; arrows?: number[]; captions?: number[]; shapes?: number[]; inks?: number[] };
@@ -39,7 +40,8 @@ export default function ColourCard({
 }) {
   const store = useEditorStore();
   // (the set in use, chosen in Settings - and any other colour by the system's own chooser)
-  const palette = setInUse(useAppSettings((s) => s.colours)).colours;
+  const set = setInUse(useAppSettings((s) => s.colours));
+  const palette = set.colours;
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
@@ -78,6 +80,8 @@ export default function ColourCard({
   // (writing by hand: its colour)
   const inkIds = target.inks ?? [];
   const inks = useEditor((s) => s.inks).filter((k) => inkIds.includes(k.id));
+  // (writing in a marker alone: given none, it is in its own colour - the set's first - so none is shown as that, and it is not listed twice, as in the pen's card)
+  const markerOwn = inks.length > 0 && inks.every((k) => k.pen === "marker") && !parts && !arrows.length && !lines.length && !words.length ? markerColour(set) : null;
   const rows: Row[] = [
     ...(parts ? (["color", "highlight"] as const) : arrows.length || lines.length || words.length || inks.length ? (["color"] as const) : []),
     ...(target.rings.length ? (["ring"] as const) : []),
@@ -141,21 +145,22 @@ export default function ColourCard({
     >
       {rows.map((row) => {
         const has = now(row);
-        const ring = (c: string | null) => (has === c ? "ring-2 ring-offset-1 ring-gh-gray" : "");
+        const own = row === "color" ? markerOwn : null;
+        const ring = (c: string | null) => (has === c || (c === null && own != null && has === own) ? "ring-2 ring-offset-1 ring-gh-gray" : "");
         // (a light fill's row: the colours toward white; neither fill's own an other colour)
         const tints = palette.map((c) => tintOf(c, TINT));
-        const swatches = row === "tint" ? tints : palette;
+        const swatches = row === "tint" ? tints : own ? palette.filter((c) => c !== own) : palette;
         const known = row === "fill" || row === "tint" ? [...palette, ...tints] : palette;
         const other = !!has && !known.includes(has) && row !== "tint";
         return (
           <div key={row} role="group" aria-label={ROW_NAME[row]} className="flex items-center gap-1 py-1">
             <span className="w-[88px] shrink-0 text-gh-gray">{ROW_NAME[row]}</span>
             <button
-              aria-label="None"
-              title="None"
+              aria-label={own ? "The marker's own" : "None"}
+              title={own ? "The marker's own" : "None"}
               onClick={() => give(row, null)}
               className={`shrink-0 rounded-full border border-gh-line bg-white transition-shadow duration-150 ease-meno ${ring(null)}`}
-              style={{ width: SWATCH, height: SWATCH, backgroundImage: "linear-gradient(135deg, transparent 46%, #c0c0c0 46%, #c0c0c0 54%, transparent 54%)" }}
+              style={own ? { width: SWATCH, height: SWATCH, background: own } : { width: SWATCH, height: SWATCH, backgroundImage: "linear-gradient(135deg, transparent 46%, #c0c0c0 46%, #c0c0c0 54%, transparent 54%)" }}
             />
             {swatches.map((c) => (
               <button

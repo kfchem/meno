@@ -343,7 +343,9 @@ Shift+Enter, since Enter keeps the words, as it did before.
   eraser, the colours of the set in use and the pen's own (a marker's own
   being the set's first, shown once), three widths, Done (or Escape).
   Quick Add's *Pen* opens it; the pointer is a cross while it is open.
-  Writing's menu: *Colour…* and *Delete writing*.
+  Writing's menu: *Colour…* - whose card, for a marker's writing alone,
+  shows the marker's own colour (the set's first) in place of *None*, as
+  the pen's card does - and *Delete writing*.
 - Pictures (`Layout.inks`): a marker's under the drawing, see-through in
   SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
   everything.
