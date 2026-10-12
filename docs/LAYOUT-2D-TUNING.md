@@ -131,6 +131,11 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   then fix such things locally, last.
 - **A local fix must never buy itself with a crossing.** Every late step
   checks crossings.
+- **An H is a letter, not a point.** The measure keeps bonds 0.3 of a bond
+  from an H's middle; a bond at a slant 0.4 off can still touch a corner
+  of it (ginkgolide B's tert-butyl, by its OH). Widening that for every
+  bond moved bilobalide's OH onto a wedge; the tert-butyl's own settling
+  measures the H by its letter instead.
 - **A ring turned over across a bond lies askew.** Offer the turn that sets
   it square on the lattice again.
 - **Rules made for one case can be wrong in another.** A sugar's anomeric
@@ -228,6 +233,10 @@ now kept by a rule in `LAYOUT-2D.md`:
     (lovastatin's, yohimbine's), but a steroid's straight up or down
     stays as it is;
   - both of a ring atom's two groups marked.
+- **A tert-butyl** fanned, its methyls 60 degrees apart, not a cross; and
+  so a trimethylsilyl, a trimethylammonium, a CF3 and a CCl3. A molecule
+  grown from one (tert-butanol) has its other bond level, the fan to one
+  side (the maintainer, 2026-10-12).
 - **Chains**: gem-dimethyls drawn close together; symmetry kept. Lipids
   are straight, a cis double bond a step; prostaglandins drawn as their
   fatty acid folded, the acid's chain on top.
