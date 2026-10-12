@@ -374,7 +374,8 @@ function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
  * A selected picture's frame, drawn in its own turned frame: its edge in
  * Meno's light and a handle at each corner, the same size on the screen at
  * any zoom. A handle dragged makes the picture larger or smaller - its
- * proportions kept, the opposite corner where it was - as one step.
+ * proportions kept, the opposite corner where it was - as one step; Escape
+ * on the way lets it go, as large as it was.
  */
 function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
@@ -421,9 +422,20 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
       const f = Math.max(least / len, guide.step(along / len, m, boxAt));
       store.getState().updatePicture(p.id, placeAt(f), gesture);
     };
+    // Escape lets it go, as large as it was (as a drag of the selection: the maintainer, 2026-10-12)
+    const onKey = (k: KeyboardEvent) => {
+      if (k.key !== "Escape") return;
+      k.preventDefault();
+      k.stopPropagation();
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKey, true);
+      guide.end();
+      store.getState().dropPictureChange(p.id, gesture);
+    };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
       guide.end();
       const s = store.getState();
       s.endPanHold(u.pointerId);
@@ -432,6 +444,7 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
   // (the pointer a corner shows: down to the right or up to the right, as it points on the screen)
   const cornerCursor = (k: number) => {

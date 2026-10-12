@@ -75,7 +75,7 @@ def read(molblock, sanitize=True):
     """A molecule from a MOL block, kept as drawn: no hydrogens removed."""
     mol = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
     if mol is None:
-        raise ValueError("not a MOL block RDKit can read")
+        raise ValueError("This structure could not be read.")
     if sanitize:
         problem = Chem.SanitizeMol(mol, catchErrors=True)
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
@@ -94,7 +94,7 @@ def op_to_smiles(m):
 def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
-        raise ValueError("not a SMILES RDKit can read")
+        raise ValueError("This SMILES could not be read.")
     lay_out_2d(mol)
     return {"molblock": Chem.MolToV3KMolBlock(mol)}
 
@@ -469,7 +469,7 @@ def op_drawing_of(m):
     atoms are, if they can be."""
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
-        raise ValueError("not a MOL block RDKit can read")
+        raise ValueError("This structure could not be read.")
     # (whether its bonds' orders were found: DetermineBondOrders works from
     # each atom's electrons as what is bonded to it gives them, hydrogens
     # and all, so they are sought only where the molecule has its hydrogens)
@@ -504,10 +504,10 @@ def op_orders_from_smiles(m):
 
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
-        raise ValueError("not a MOL block RDKit can read")
+        raise ValueError("This structure could not be read.")
     template = Chem.MolFromSmiles(m["smiles"])
     if template is None:
-        raise ValueError("not a SMILES RDKit can read")
+        raise ValueError("This SMILES could not be read.")
     # (the whole of it, not a part: as many heavy atoms either way)
     heavy = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() != 1)
     if template.GetNumHeavyAtoms() != heavy:
@@ -540,7 +540,7 @@ def op_add_hydrogens(m):
     hydrogens after them."""
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
-        raise ValueError("not a MOL block RDKit can read")
+        raise ValueError("This structure could not be read.")
     implicit(mol)
     with_h = Chem.AddHs(mol, addCoords=True)
     return {"molblock": Chem.MolToV3KMolBlock(with_h, kekulize=True)}
@@ -592,7 +592,7 @@ def op_prepare(m):
     """A conformer search's jobs: one for each molecule, its molecule and the
     options written into its folder, run by this environment's Python."""
     if m.get("step") != "conformers":
-        raise ValueError(f"RDKit does no {m.get('step')!r} as a job")
+        raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     options = m.get("options") or {}
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
@@ -614,7 +614,7 @@ def op_collect(m):
     """What a conformer search's job wrote, as Meno's output form: each
     conformer a geometry, lowest energy first, with its energy."""
     if m.get("step") != "conformers":
-        raise ValueError(f"RDKit does no {m.get('step')!r} as a job")
+        raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     if m.get("ended") != "done":
         lines = [line.strip() for line in (m.get("log") or "").splitlines() if line.strip()]
         return {"why": lines[-1] if lines else "it said nothing"}
@@ -643,7 +643,7 @@ def op_run(m):
     energy first, each entry set aside that is within the RMSD of one kept,
     over their heavy atoms, at its best over the molecule's symmetries."""
     if m.get("step") != "duplicates":
-        raise ValueError(f"RDKit does no {m.get('step')!r} at once")
+        raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     alike = float((m.get("options") or {}).get("rmsd", ALIKE))
     entries = m.get("entries") or []
     heavy = []

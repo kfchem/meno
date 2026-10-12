@@ -17,12 +17,21 @@ const now = () =>
   typeof performance !== "undefined" ? performance.now() : Date.now();
 
 /** No stroke under way. */
-const ended: EditorState["extend"] = {
+export const ended: EditorState["extend"] = {
   active: false,
   atomId: null,
   pointer: null,
   mode: "snap",
   stroke: null,
+  preview: null,
+};
+
+/** No atom being dragged. */
+export const noMoveDrag: EditorState["moveDrag"] = {
+  active: false,
+  atomId: null,
+  pointer: null,
+  mode: "snap",
   preview: null,
 };
 
@@ -199,13 +208,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
     endMoveDrag: () =>
       set((prev: EditorState) => ({
         ...prev,
-        moveDrag: {
-          active: false,
-          atomId: null,
-          pointer: null,
-          mode: "snap",
-          preview: null,
-        },
+        moveDrag: noMoveDrag,
       })),
 
     beginPanHold: (pointerId: number | null) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDocument, DEFAULT_COALESCE_MS } from "./document";
+import { createDocument, DEFAULT_COALESCE_MS, gestureStep } from "./document";
 
 type Doc = { atoms: string[]; title: string };
 
@@ -114,6 +114,46 @@ describe("createDocument", () => {
     doc.edit("plain", (d) => ({ ...d, title: "d" }));
     doc.edit("plain", (d) => ({ ...d, title: "e" }));
     expect(doc.history().undoDepth).toBe(5);
+  });
+
+  it("merges a gesture's edits into one step however long it is held still", () => {
+    const { doc, tick } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    tick(10 * DEFAULT_COALESCE_MS);
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    expect(doc.history().undoDepth).toBe(1);
+    // (another gesture is a step of its own, however soon)
+    doc.edit("drag", (d) => ({ ...d, title: "c" }), gestureStep("drag:2"));
+    expect(doc.history().undoDepth).toBe(2);
+    doc.undo();
+    doc.undo();
+    expect(doc.getState().title).toBe("untitled");
+  });
+
+  it("takes back a gesture's step when it is let go of, leaving nothing to redo", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    expect(doc.drop("drag:1")).toBe(true);
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "untitled" });
+    expect(doc.history().redoDepth).toBe(0);
+    expect(doc.history().undoLabel).toBe("add C");
+    // (a gesture that made no step - another's on top - takes nothing back)
+    expect(doc.drop("drag:2")).toBe(false);
+    expect(doc.getState().atoms).toEqual(["C"]);
+  });
+
+  it("says what an undo or a redo would come to, without coming to it", () => {
+    const { doc } = withClock();
+    expect(doc.peek("undo")).toBeUndefined();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("add O", addAtom("O"));
+    expect(doc.peek("undo")?.atoms).toEqual(["C"]);
+    expect(doc.getState().atoms).toEqual(["C", "O"]);
+    doc.undo();
+    expect(doc.peek("redo")?.atoms).toEqual(["C", "O"]);
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 1 });
   });
 
   it("keeps the history bounded, dropping the oldest steps", () => {

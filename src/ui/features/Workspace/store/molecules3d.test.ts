@@ -32,6 +32,26 @@ function editor() {
 describe("molecules in 3D turned together, as one body", () => {
   const half: [number, number, number, number] = [0, 1, 0, 0]; // (a half turn about the upright)
 
+  // (the maintainer, 2026-10-12: Escape during a turn puts everything back as it was)
+  it("go back where they stood, turned as they were, when the turn is let go of by Escape", () => {
+    const { doc, state } = editor();
+    state().setTurn3d(1, [0, 0, 0, 1]);
+    state().turnMolecules3d(
+      [
+        { id: 1, at: { x: 6, y: 0, z: 2 }, turn: half },
+        { id: 2, at: { x: 0, y: 0, z: 2 }, turn: half },
+      ],
+      "turn-1",
+    );
+    state().dropTurnMolecules3d("turn-1", { 1: [0, 0, 0, 1], 2: undefined });
+    expect(state().molecules3d.map((m) => m.at)).toEqual([
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+    ]);
+    expect(state().turns3d).toEqual({ 1: [0, 0, 0, 1] });
+    expect(doc.history()).toMatchObject({ undoLabel: "add", redoDepth: 0 });
+  });
+
   it("move as the turn takes them, as one undo step, and the undo puts their turns back too", () => {
     const { doc, state } = editor();
     state().setTurn3d(1, [0, 0, 0, 1]);

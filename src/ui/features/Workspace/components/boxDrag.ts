@@ -13,7 +13,7 @@ import { boxPicture } from "../../../../lib/pdf/reader";
 import { POINT } from "../../../../lib/pdf/layout";
 import { holdPicture } from "../../../../lib/picture/held";
 import { withDpi } from "../../../../lib/binary/png";
-import { writeClipboard } from "../../../../lib/clipboard";
+import { copying, writeClipboard } from "../../../../lib/clipboard";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { overCanvasAt, putDownAt, type OnScreen } from "./wordsDrag";
 
@@ -43,9 +43,11 @@ export async function putBox(store: EditorStore, pdf: Pick<PdfItem, "name" | "sh
 }
 
 /** A box of a PDF copied as a picture, for other programs (its menu's *Copy picture*). */
-export async function copyBox(pdf: Pick<PdfItem, "sha256">, box: PdfBox): Promise<void> {
-  const drawn = await boxPicture(pdf.sha256, box.page, box.box, useAppSettings.getState().pictures.dpi);
-  await writeClipboard([{ flavor: "png", bytes: withDpi(drawn.png, drawn.dpi) }]);
+export function copyBox(pdf: Pick<PdfItem, "sha256">, box: PdfBox): Promise<void> {
+  return copying(async () => {
+    const drawn = await boxPicture(pdf.sha256, box.page, box.box, useAppSettings.getState().pictures.dpi);
+    await writeClipboard([{ flavor: "png", bytes: withDpi(drawn.png, drawn.dpi) }]);
+  });
 }
 
 /**

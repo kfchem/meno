@@ -52,6 +52,18 @@ export default function PushDraw2D() {
       const to = d.from && over(e) ? targetAt(e.clientX, e.clientY) : null;
       s.setPushDraw({ ...d, pointer: toWorld(e.clientX, e.clientY), to: to && JSON.stringify(to) !== JSON.stringify(d.from) ? to : null });
     };
+    // (the click, and the menu, that end a press are the arrow's too - a
+    // right press lets it go, and opens no menu: as a chain's do, ChainGuide2D)
+    const swallow = (ev: Event) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+    };
+    const swallowEnd = () => {
+      for (const type of ["click", "contextmenu"]) window.addEventListener(type, swallow, { capture: true, once: true });
+      window.setTimeout(() => {
+        for (const type of ["click", "contextmenu"]) window.removeEventListener(type, swallow, { capture: true });
+      }, 400);
+    };
     // (where it is begun or put down: the press is its, nothing else's)
     const onDown = (e: PointerEvent) => {
       const s = store.getState();
@@ -59,6 +71,7 @@ export default function PushDraw2D() {
       if (!d || !over(e)) return;
       e.preventDefault();
       e.stopPropagation();
+      swallowEnd();
       if (e.button !== 0) return s.setPushDraw(null);
       s.suppressDoubleClick(DOUBLE_CLICK_MS);
       if (!d.from) {
