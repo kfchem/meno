@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyEdit } from "./editing";
-import { typedChanges, wordEnded, type Change } from "./smartWords";
+import { typedChanges, wordEnded, writtenAsMeant, type Change } from "./smartWords";
 
 const written = (text: string, changes: Change[]) => changes.reduceRight((t, c) => applyEdit(t, c), text);
 
@@ -75,5 +75,22 @@ describe("words on the page typed as they are meant", () => {
     expect(typedChanges("-55", 2, 3)).toEqual([]);
     // (several typed at once - an input method's - written as one)
     expect(written("-78-0dc, 2 h", typedChanges("-78-0dc, 2 h", 0, 12))).toBe("−78–0 °C, 2 h");
+  });
+});
+
+describe("words written as meant, all at once", () => {
+  const plain = (t: string) => writtenAsMeant(t, Array.from(t, () => 0)).text;
+  it("writes a minus, ranges, and a temperature with one space before °C - the last word too - and begins no list", () => {
+    expect(plain("-78°C to rt, 1-2 h")).toBe("\u221278 \u00b0C to rt, 1\u20132 h");
+    expect(plain("\u201378 \u00b0 C")).toBe("\u221278 \u00b0C");
+    expect(plain("60-80")).toBe("60\u201380");
+    expect(plain("2-propanol, t-BuOK, 7647-01-0")).toBe("2-propanol, t-BuOK, 7647-01-0");
+    expect(plain("- not a list")).toBe("- not a list");
+  });
+
+  it("keeps each letter's style with it, what is put in taking the style of what it replaced", () => {
+    const r = writtenAsMeant("60\u00b0C", ["a", "b", "c", "d"]);
+    expect(r.text).toBe("60 \u00b0C");
+    expect(r.styles).toEqual(["a", "b", "c", "c", "c"]);
   });
 });

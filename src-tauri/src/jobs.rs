@@ -502,7 +502,9 @@ pub struct Found {
 /// The program `name` of plugin `id` (its folder `plugin_dir`), from the
 /// plugin's environment in Meno's data folder `data`: one its manifest
 /// names, never a shell, found in its environment's own folders - and, where
-/// it is Python, running a script of the plugin's.
+/// it is Python, running a script of the plugin's. Or, where its manifest
+/// says Meno fetches it as the plugin is set up (`downloads[].provides`:
+/// Blender), Meno's own copy of it, in the plugin's files.
 pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args: &[String]) -> Result<Found, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
@@ -515,6 +517,10 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     let manifest: serde_json::Value = serde_json::from_str(&manifest).map_err(|e| format!("{id}'s manifest: {e}"))?;
     if !programs_named(&manifest).iter().any(|p| p == name) {
         return Err(format!("{id} names no program {name}"));
+    }
+    // (Meno's own copy, fetched as the plugin was set up)
+    if let Some(program) = crate::plugfiles::provided(data, &manifest, id, name)? {
+        return Ok(Found { program, activation: None, env: Vec::new(), beside: Vec::new() });
     }
 
     // its environment: pixi's, activated, or uv's
@@ -1752,6 +1758,28 @@ mod tests {
         assert!(plugin_program(&empty, &dir2, "demo", "xtb", &[]).unwrap_err().contains("not in"));
         let _ = fs::remove_dir_all(data.parent().unwrap());
         let _ = fs::remove_dir_all(empty.parent().unwrap());
+    }
+
+    #[test]
+    fn runs_meno_s_own_copy_of_a_program_the_plugin_fetched_as_it_was_set_up() {
+        let base = temp();
+        let dir = base.join("plugins").join("demo");
+        fs::create_dir_all(&dir).unwrap();
+        let sha = "a".repeat(64);
+        let manifest = serde_json::json!({"id": "demo", "name": "Demo", "roles": [{"role": "render", "programs": ["blender"]}],
+            "downloads": [{"file": "blender-x.tar.xz", "url": "https://h/b", "sha256": sha, "bytes": 1, "system": system(),
+                "unpack": "tar.xz", "program": "*/blender", "provides": "blender"}]});
+        fs::write(dir.join("manifest.json"), manifest.to_string()).unwrap();
+        let data = base.join("data");
+        // (not unpacked whole: said, not looked for in its environment)
+        assert_eq!(plugin_program(&data, &dir, "demo", "blender", &[]).unwrap_err(), "Demo is not set up");
+        let folder = data.join("uv/plugin-demo/files/blender-x");
+        let program = program_file(&folder.join("blender-5"), "blender");
+        fs::write(folder.join(".meno-unpacked"), &sha).unwrap();
+        let found = plugin_program(&data, &dir, "demo", "blender", &[]).unwrap();
+        assert_eq!(found.program, program);
+        assert!(found.activation.is_none() && found.env.is_empty());
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]

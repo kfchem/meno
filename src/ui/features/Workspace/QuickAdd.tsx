@@ -7,9 +7,10 @@ import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
+import { swallowPress } from "./utils/press";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
@@ -23,18 +24,12 @@ const LABEL_W = 84;
 const SMILES_H = 32 + 9;
 const SHAPES_H = 36 + 9;
 
-/** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). */
+/** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
 const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
   rect: <rect x="3" y="5" width="14" height="10" />,
   rounded: <rect x="3" y="5" width="14" height="10" rx="3" />,
   ellipse: <ellipse cx="10" cy="10" rx="7.5" ry="5.2" />,
   line: <path d="M3.5 15.5 L16.5 4.5" />,
-  arrow: (
-    <>
-      <path d="M3.5 15.5 L13.6 6.9" />
-      <path d="M17 4 L14.5 8.8 L11.9 5.7 Z" fill="currentColor" />
-    </>
-  ),
   callout: <path d="M5 4 H15 Q17 4 17 6 V10.5 Q17 12.5 15 12.5 H9 L5.5 16.5 L6.3 12.5 H5 Q3 12.5 3 10.5 V6 Q3 4 5 4 Z" />,
 };
 
@@ -42,8 +37,9 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
  * The row's icons, in order: what draws a structure - a bond, a chain, a
  * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
  * - and an electron-pushing arrow, begun at the first atom or bond pressed;
- * then a slide of what is seen (docs/PRESENTING.md), and the shapes, which
- * open a row of their own below it.
+ * then a slide of what is seen (docs/PRESENTING.md), the pen - its card
+ * opened, to write by hand - and the shapes, which open a row of their own
+ * below it.
  */
 const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; icon: ReactNode }[] = [
   {
@@ -74,7 +70,7 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
   },
   {
     id: "arrow",
-    name: "Reaction arrow",
+    name: "Arrow",
     icon: (
       <>
         <path d="M2.5 10 H14" />
@@ -108,6 +104,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
         <circle cx="3.5" cy="5.5" r="2.4" fill="currentColor" />
       </>
     ),
+  },
+  {
+    id: "pen",
+    name: "Pen",
+    // (a pen, writing)
+    icon: <path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M11.5 5.5 L14.5 8.5" />,
   },
   {
     id: "shapes",
@@ -182,8 +184,11 @@ export default function QuickAdd({
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
+    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
     const outside = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (ref.current?.contains(e.target as Node)) return;
+      if (e.type === "pointerdown") swallowPress(e);
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;

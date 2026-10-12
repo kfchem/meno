@@ -1,8 +1,9 @@
 import type { EditorStore } from "../store";
 import { setMembers } from "../workflow/entries";
-import { schemeAmong } from "./copyPaste";
+import { selectionScheme } from "./selectionScheme";
 import { guideMove, type Held } from "./guiding";
 import { shapePlace } from "../document";
+import { strokeMoved } from "../../../../lib/chem/ink";
 
 type Pt = { x: number; y: number };
 
@@ -18,9 +19,11 @@ export const selectionMoving = { active: false };
  * as much as the pointer goes, off the grid, with the arrows, "+" signs and
  * words among it, the molecules in 3D, pictures, texts' sheets, PDFs, slides and shapes selected with it, and a
  * workflow's sets - with what they hold - and steps selected, as one undo step - one
- * move a frame, as every move lays the drawing out again. `toWorld` takes a
- * point of the screen to the page; `done` is told when the button comes up,
- * and whether it moved.
+ * move a frame, as every move lays the drawing out again. Escape lets it go:
+ * all of it back where it was, as if it had not been dragged (the
+ * maintainer, 2026-10-12). `toWorld` takes a point of the screen to the
+ * page; `done` is told when the button comes up, and whether it moved (one
+ * let go of by Escape did: it was no click).
  */
 export function dragSelection(
   store: EditorStore,
@@ -35,16 +38,19 @@ export function dragSelection(
   const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat())]);
   const takenSolids = new Set([...st.sel3d, ...held.flatMap((h) => h.molecules)]);
   const atoms = st.model.atoms.filter((a) => takenAtoms.has(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, takenAtoms);
-  // (and the words selected, each as one thing)
-  const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((a) => a.id === c.id))];
+  // (the arrows, "+" signs and words among them, and those selected for themselves - each once)
+  const among = selectionScheme(st, takenAtoms);
+  const words = among.captions;
   const solids = st.molecules3d.filter((m) => takenSolids.has(m.id)).map((m) => ({ id: m.id, at: m.at }));
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
-  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
+  // (a set's pictures - a Render step's - with it)
+  const heldPictures = new Set(held.flatMap((h) => h.pictures));
+  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id) || heldPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const texts = st.texts.flatMap((t) => (t.at && st.selTexts.has(t.id) ? [{ id: t.id, x: t.at.x, y: t.at.y }] : []));
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   const shapes = st.shapes.filter((s) => st.selShapes.has(s.id));
+  const inks = st.inks.filter((k) => st.selInks.has(k.id));
   const p0 = toWorld(from.x, from.y);
   // (lined up with what is near as it goes: docs/PRESENTING.md, *Guides*)
   const guide = guideMove(store, toWorld, from);
@@ -71,6 +77,7 @@ export function dragSelection(
       pdfs: pdfs.map(by),
       slides: slides.map(by),
       shapes: shapes.map((s) => shapePlace(s, { x: dx, y: dy })),
+      inks: inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })),
     });
   };
   const onMove = (ev: PointerEvent) => {
@@ -78,9 +85,26 @@ export function dragSelection(
     keys = ev;
     if (frame == null) frame = window.requestAnimationFrame(apply);
   };
+  let letGo = false;
+  const onKey = (ev: KeyboardEvent) => {
+    if (ev.key !== "Escape") return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    // (back where it was; the button's release still ends the press)
+    letGo = true;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("keydown", onKey, true);
+    if (frame != null) window.cancelAnimationFrame(frame);
+    frame = null;
+    guide.end();
+    selectionMoving.active = false;
+    store.getState().dropMoveAtoms(gesture);
+  };
   const onUp = (ev: PointerEvent) => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp, true);
+    window.removeEventListener("keydown", onKey, true);
+    if (letGo) return done(ev, true);
     if (frame != null) {
       window.cancelAnimationFrame(frame);
       last = toWorld(ev.clientX, ev.clientY);
@@ -93,4 +117,5 @@ export function dragSelection(
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp, true);
+  window.addEventListener("keydown", onKey, true);
 }

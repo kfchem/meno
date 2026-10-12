@@ -131,6 +131,11 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   then fix such things locally, last.
 - **A local fix must never buy itself with a crossing.** Every late step
   checks crossings.
+- **An H is a letter, not a point.** The measure keeps bonds 0.3 of a bond
+  from an H's middle; a bond at a slant 0.4 off can still touch a corner
+  of it (ginkgolide B's tert-butyl, by its OH). Widening that for every
+  bond moved bilobalide's OH onto a wedge; the tert-butyl's own settling
+  measures the H by its letter instead.
 - **A ring turned over across a bond lies askew.** Offer the turn that sets
   it square on the lattice again.
 - **Rules made for one case can be wrong in another.** A sugar's anomeric
@@ -201,10 +206,14 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   bilobalide's carbon between its lactones). A wedge is now first taken
   only where it reads the same with any bond in the page turned 12 degrees
   either way, and with the bonds spread round the centre; an H drawn and
-  wedged, or another bond, before that. Bilobalide is still read the other
-  way: no choice is sure there, its four bonds all in half the page - a
-  cage's drawing, not a wedge, is its answer. Until it has one, the canvas
-  marks such a centre (EDITOR-2D.md, *Stereochemistry drawn by luck*);
+  wedged, or another bond, before that. Bilobalide was still read the
+  other way, its four bonds all in half the page, until its groups at the
+  36-degree gap beside its C4 leant out of the gap (2026-10-12,
+  `LAYOUT-2D.md` *At a ring atom*); now every reader reads it as given.
+  Its tert-butyl then ran through C9's OH, the two atoms 0.62 of a bond
+  apart: the gap is now eased open as well (`LAYOUT-2D.md` *Rings of three
+  to eight*), and the molecule stands with C4 above C9, its tert-butyl up.
+  For a centre with no such answer, the canvas marks it (EDITOR-2D.md, *Stereochemistry drawn by luck*);
   checking every centre of the bench's 700 takes about 5 ms.
 - **Speed.** One measure takes 0.1 to 0.3 ms; the calls multiply by frames,
   shapes and passes. The sheet takes about 8 s; ciclosporin, at about 1 s,
@@ -239,6 +248,10 @@ now kept by a rule in `LAYOUT-2D.md`:
     (lovastatin's, yohimbine's), but a steroid's straight up or down
     stays as it is;
   - both of a ring atom's two groups marked.
+- **A tert-butyl** fanned, its methyls 60 degrees apart, not a cross; and
+  so a trimethylsilyl, a trimethylammonium, a CF3 and a CCl3. A molecule
+  grown from one (tert-butanol) has its other bond level, the fan to one
+  side (the maintainer, 2026-10-12).
 - **Chains**: gem-dimethyls drawn close together; symmetry kept. Lipids
   are straight, a cis double bond a step; prostaglandins drawn as their
   fatty acid folded, the acid's chain on top.

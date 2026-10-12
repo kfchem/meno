@@ -8,7 +8,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { takeOpening, useEditorStore } from "../store";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { clickClock, doubleClickedSince, noteClick } from "../utils/clickCount";
+import { clickClock, clickEditHeldOff, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { schemeOf, type ImportedScheme } from "../document";
@@ -16,7 +16,7 @@ import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
 import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
-import { workspaceOfFile } from "../../../views/openFile";
+import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
 import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
@@ -28,6 +28,7 @@ import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -339,7 +340,8 @@ export function useStructureEvents(
     const p = clientToWorld(e.clientX, e.clientY);
     if (!p) return;
     const tol = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
-    const id = st.findAtomNear(p.x, p.y, tol, null);
+    // (or on a label's other letters: the H of HO is the O - utils/labelHits)
+    const id = st.findAtomNear(p.x, p.y, tol, null) ?? atomOfLabelAt(labelReachOf(store), p);
     if (id != null) st.setHoveredFromId(id);
     else st.clearAtomHover();
   };
@@ -398,7 +400,7 @@ export function useStructureEvents(
       const st = store.getState();
       const now =
         typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (st.extend.active || st.moveDrag.active) return;
+      if (clickEditHeldOff(st)) return;
       if (st.suppressDblClickUntil && now < st.suppressDblClickUntil) return;
       const p = clientToWorld(e.clientX, e.clientY);
       if (!p) return;
@@ -412,9 +414,11 @@ export function useStructureEvents(
   // Mac, the drag pasteboard is emptied as the drag ends).
   const dropReading = useRef<Promise<Drawn | null> | null>(null);
   // The drawing as a drop zone (lib/drop): it takes files and whatever
-  // else is dragged to it, and reads the latter as it comes
+  // else is dragged to it, and reads the latter as it comes - but nothing
+  // while a talk is given, which edits nothing on the page (the talk's
+  // layer lies within the drawing's place, and a drop there would)
   const dropZone: DropZone = {
-    takes: () => true,
+    takes: () => store.getState().presenting == null,
     enter: (drag) => {
       // (a file from the Finder or Explorer is read when dropped, as ever)
       if (dropReading.current || drag.files) return;
@@ -457,9 +461,9 @@ export function useStructureEvents(
 
   /**
    * Files put on the page at `at`, dropped or pasted - copied in the Finder
-   * or Explorer: PDFs and pictures held and laid there; a workspace's or a
-   * record's drawing, a text's sheet, or a structure read from its file,
-   * there, selected.
+   * or Explorer: PDFs and pictures held and laid there; a record's drawing,
+   * a text's sheet, or a structure read from its file, there, selected; a
+   * workspace file opened as Open opens it, in a tab of its own.
    */
   const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void) => {
     const f = files[0];
@@ -492,16 +496,10 @@ export function useStructureEvents(
       }
       return;
     }
-    // a workspace file: its workspace - its outputs held - beside what is drawn, selected
-    if (isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer()))) {
-      try {
-        const drawn = readWorkspace(workspaceOfFile(new Uint8Array(await f.arrayBuffer())) ?? "")?.drawn;
-        if (!drawn) throw new Error(`${f.name} could not be read.`);
-        store.getState().pasteModel(centredAt(drawn, at));
-        setImportError(null);
-      } catch (e) {
-        reportImportError("append", e);
-      }
+    // a workspace file: opened as Open opens it - in a tab of its own - not pasted in part (the maintainer, 2026-10-12)
+    if (opensAsWorkspace(isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer())), kind?.id, MENO_KINDS.workspace.id)) {
+      askToOpenFiles(files.filter((g) => g === f || isWorkspaceFile(g.name)));
+      setImportError(null);
       return;
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
@@ -511,9 +509,9 @@ export function useStructureEvents(
       return;
     }
     const text = await f.text();
-    // a workspace dropped, or a record: what it holds, beside what is drawn, selected
-    if (kind?.id === MENO_KINDS.workspace.id || kind?.id === MENO_KINDS.record.id) {
-      const drawn = kind.id === MENO_KINDS.workspace.id ? readWorkspace(text)?.drawn : readRecord(text);
+    // a record dropped: what it holds, beside what is drawn, selected
+    if (kind?.id === MENO_KINDS.record.id) {
+      const drawn = readRecord(text);
       if (drawn) {
         store.getState().pasteModel(centredAt(drawn, at));
         setImportError(null);
@@ -547,6 +545,8 @@ export function useStructureEvents(
 
   const handleMouseDownCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     pressRef.current = startPress(e.clientX, e.clientY);
+    // (and an atom's click before it, waiting to edit its label, edits nothing: Atoms2D)
+    notePress();
     // A press takes back the edit a click before it was about to begin: it
     // is the second click of a double-click - a chain dragged out of the
     // atom, perhaps - or the start of something else.

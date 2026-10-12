@@ -174,7 +174,8 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture; Delete | show in the PDF |
-| A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, head at both ends (an arrow), bring to front, send to back |
+| A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, bring to front, send to back |
+| Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run (or stop), run from here, options; Delete | show log, show files, save as procedure |
 | A set, an arrow, a "+", a wire, a measurement | Delete | save as procedure (a set), arrow style (an arrow) |
@@ -203,8 +204,8 @@ workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide or a picture made larger
-takes another's width or height, and words made wider another's width.
+thin line in Meno's accent showing each. A slide, a picture or a shape made
+larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
@@ -227,13 +228,15 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, a reaction arrow, a "+", an electron-pushing arrow (from
-the first atom or bond pressed, *Electron-pushing arrows* below), a
-slide of what is seen (docs/PRESENTING.md) and *Shapes*, which opens a
-row below it of a rectangle, a rounded one, an ellipse, a line, an arrow
-and a callout - each drawn from where the double-click was by a drag from
-its icon, or traced with the button up until a click (docs/PRESENTING.md,
-*Shapes*). A choice puts it down where the
+SMILES, text, an arrow (*Arrows* below), a "+", an electron-pushing
+arrow (from the first atom or bond pressed, *Electron-pushing arrows*
+below), a slide of what is seen (docs/PRESENTING.md), *Pen* - its card
+opened, to write by hand with the mouse or the trackpad
+(docs/PRESENTING.md, *Handwriting*; a pen writes anywhere, always) - and
+*Shapes*, which opens a row below it of a rectangle, a rounded one, an
+ellipse, a line and a callout - each drawn from where the double-click
+was by a drag from its icon, or traced with the button up until a click
+(docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
@@ -274,11 +277,28 @@ highlight's colour, under the drawing, and a small handle stands above it.
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
   each stereocentre keeps its configuration.
+- Turned over, a selection is mirrored about the middle of all it moves,
+  which so stays where it was. Pictures, texts, PDFs, slides, shapes
+  and molecules in 3D selected with it go to their mirrored places, each
+  drawn as it was: a picture's image, a PDF's pages and a molecule in 3D
+  are not mirrored, though a tilted picture tilts the other way.
 - Turned by the handle or turned over, a selection takes along the
   reaction arrows, "+" signs and words among it, as a drag does. An
   arrow is carried round and points as far round, or is mirrored and
   points the mirrored way. Words move to their new places, their letters
   upright, and words over an arrow stay with it.
+- **Arrows and "+" signs are selected for themselves too** (2026-10-12):
+  one standing alone - an arrow pointing at something on a slide - as a
+  shape is. A click selects one alone, Ctrl/⌘ and a click adds it or takes
+  it out, and a box or a lasso takes an arrow wholly in it (each end and
+  each corner) and a "+" by its middle; Select All and a slide's *Select
+  what is on it* take them as well. Selected, one is lit round, and goes
+  with the selection when it is moved, turned, copied, cut, deleted,
+  coloured (an arrow) or pasted, the words over an arrow with it. An
+  arrow or a "+" among the selection's atoms is carried as before, and
+  once only, selected for itself or not (`utils/selectionScheme.ts`). A
+  press on one carried by a selection with more takes all of it; else a
+  drag moves it alone, as before.
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,
@@ -899,7 +919,8 @@ All hover-based, as above.
       Shift+Enter in an item starts the next one, as deep, its number one
       on, and on an item with nothing after its bullet ends the list, the
       bullet taken away; Tab and Shift+Tab take the items the selection
-      touches a level in or out (anywhere else, Tab does as it did). Their
+      touches a level in or out (anywhere else, Tab does nothing: the words
+      keep the keys, where it once took them away and kept the words). Their
       menu's *Bullets* makes every line an item, or, all of them items,
       plain lines again.
     - *A box keeps its top*: words given a width, and over no arrow, keep

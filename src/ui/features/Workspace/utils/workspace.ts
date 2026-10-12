@@ -55,7 +55,7 @@ type Saved = Pick<
 > &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -126,6 +126,8 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.slides?.length ? { slides: state.slides } : {}),
       // (the shapes, from the back: docs/PRESENTING.md, *Shapes*)
       ...(state.shapes?.length ? { shapes: state.shapes } : {}),
+      // (writing by hand, each piece in the order written: docs/PRESENTING.md, *Handwriting*)
+      ...(state.inks?.length ? { inks: state.inks } : {}),
     }) + "\n"
   );
 }
@@ -241,6 +243,24 @@ export function readWorkspace(text: string): Workspace | null {
 }
 
 const SHA = /^[0-9a-f]{64}$/;
+
+/**
+ * Why a workspace's JSON does not open, in words to follow "could not be
+ * read:" - saved by a newer Meno, or none Meno reads - or null, where it
+ * opens: asked before a tab is made for it, so that none is left empty.
+ */
+export function workspaceProblem(text: string): string | null {
+  if (readWorkspace(text)) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return "it is not a workspace Meno reads";
+  }
+  const r = data as { format?: unknown; version?: unknown } | null;
+  if (r?.format === WORKSPACE && typeof r.version === "number" && r.version > WORKSPACE_VERSION) return "it was saved by a newer Meno - update Meno to open it";
+  return "it is not a workspace Meno reads";
+}
 
 /** Whether a file's name says it is a workspace. */
 export const isWorkspaceFile = (name: string) => /\.meno$/i.test(name);

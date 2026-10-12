@@ -4,17 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
-import { SELECTION_SHADE } from "./selectionShade";
 import { sheetMiddle, sheetOf } from "../utils/textSheets";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
+import { strokesBounds, strokeTurned } from "../../../../lib/chem/ink";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D, useStyle3D } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, turnedTogether, type Turning3D } from "../utils/molecule3d";
@@ -22,8 +22,10 @@ import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { selectionMoving } from "../utils/dragSelection";
-import { schemeAmong } from "../utils/copyPaste";
+import { selectionScheme } from "../utils/selectionScheme";
 import { TAU, follow } from "../../../theme/motion";
+import SelectionShade2D from "./SelectionShade2D";
+import { pressMovedUnder } from "./viewGoal";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
 const HANDLE_ABOVE = 0.75;
@@ -184,6 +186,14 @@ export default function Selection2D() {
         // (and slides and shapes, by their middles)
         s.selectSlides(molecules3dIn(s.slides.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectShapes(molecules3dIn(s.shapes.map((x) => ({ id: x.id, at: shapeMiddle(x) })), kind, points), add);
+        // (and writing by hand, each piece by its middle)
+        s.selectInks(molecules3dIn(s.inks.flatMap((k) => {
+          const b = strokesBounds(k.strokes, 0);
+          return b ? [{ id: k.id, at: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } }] : [];
+        }), kind, points), add);
+        // (and arrows standing wholly in it - each end and corner - and "+" signs, by their middles: those among the atoms it takes are carried with them, once)
+        s.selectArrows(arrowsIn(s.arrows, kind, points), add);
+        s.selectPluses(molecules3dIn(s.pluses.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -208,7 +218,8 @@ export default function Selection2D() {
         st.hoveredMark != null ||
         st.hoveredMeasure3d != null ||
         st.hoveredSlide != null ||
-        st.hoveredShape != null;
+        st.hoveredShape != null ||
+        st.hoveredInk != null;
       if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || onMark || st.labelEdit.active || st.extend.active || st.captionEdit) return;
       const add = addsToSelection(e);
       const count = pressOnEmpty(lastEmpty, { t: e.timeStamp, x: e.clientX, y: e.clientY }, DOUBLE_CLICK_MS);
@@ -234,7 +245,8 @@ export default function Selection2D() {
         };
         const onSecondUp = () => {
           done();
-          if (lastEmpty.count !== 2) return;
+          // (nor where the view has moved under the press: viewGoal)
+          if (lastEmpty.count !== 2 || pressMovedUnder(camera)) return;
           const r = host.getBoundingClientRect();
           store.getState().doubleClickOnEmpty({ at: toWorld(sx, sy), x: sx - r.left, y: sy - r.top, within: { width: r.width, height: r.height } });
         };
@@ -255,7 +267,8 @@ export default function Selection2D() {
         cleanUp();
         store.getState().setPressHold(null);
         lastEmpty = none;
-        box(e, sx, sy, kind, false);
+        // (no box where the view has moved under the press: viewGoal)
+        if (!pressMovedUnder(camera)) box(e, sx, sy, kind, false);
       }, LONG_PRESS_MS);
       const onFirstMove = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;
@@ -324,9 +337,11 @@ export default function Selection2D() {
     // (shapes likewise - a line's or an arrow's ends carried round with it)
     const shapes = st.shapes.filter((s) => st.selShapes.has(s.id));
     const shapesAt = (angle: number) => shapes.map((s) => shapePlace(turnedShape(s, about, angle), { x: 0, y: 0 }));
-    // (the arrows, "+" signs and words among it carried round too - the words' places, their letters upright - as a drag takes them)
-    const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
-    const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
+    const inks = st.inks.filter((k) => st.selInks.has(k.id));
+    const inksAt = (angle: number) => inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeTurned(s, about, angle)) }));
+    // (the arrows, "+" signs and words among it, and those selected for themselves, carried round too - the words' places, their letters upright - as a drag takes them)
+    const among = selectionScheme(st);
+    const words = among.captions;
     const scheme = among.arrows.length || among.pluses.length || words.length;
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
@@ -347,7 +362,7 @@ export default function Selection2D() {
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
-        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || scheme
+        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length || scheme
           ? {
               ...(scheme ? { arrows: turnedArrows(among.arrows, about, angle), pluses: turned(among.pluses, about, angle), captions: turned(words, about, angle) } : {}),
               ...(pics.length ? { pictures: picturesAt(angle) } : {}),
@@ -356,6 +371,7 @@ export default function Selection2D() {
               ...(pdfs.length ? { pdfs: turned(pdfs, about, angle) } : {}),
               ...(slides.length ? { slides: turned(slides, about, angle) } : {}),
               ...(shapes.length ? { shapes: shapesAt(angle) } : {}),
+              ...(inks.length ? { inks: inksAt(angle) } : {}),
             }
           : undefined;
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);
@@ -371,6 +387,21 @@ export default function Selection2D() {
         apply();
       }, FREE_MS);
     };
+    // Escape lets it go: all of it back as it was, the molecules turned as they were (the maintainer, 2026-10-12)
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (pause != null) window.clearTimeout(pause);
+      if (frame != null) window.cancelAnimationFrame(frame);
+      pause = frame = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKey, true);
+      selectionMoving.active = false;
+      const s = store.getState();
+      if (carried.length) s.dropTurnMolecules3d(gesture, Object.fromEntries(carried.map((m) => [m.id, m.turn])));
+      else s.dropMoveAtoms(gesture);
+    };
     const onUp = (ev: PointerEvent) => {
       if (pause != null) window.clearTimeout(pause);
       if (frame != null) {
@@ -379,6 +410,7 @@ export default function Selection2D() {
       }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
       selectionMoving.active = false;
       const s = store.getState();
       s.endPanHold(ev.pointerId);
@@ -387,6 +419,7 @@ export default function Selection2D() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
 
   /**
@@ -449,51 +482,17 @@ export default function Selection2D() {
   };
 
   // --- coming and going ------------------------------------------------------
-  // What is shaded, the box or lasso, and the handle each come into view and
-  // go out of it rather than appear and vanish (TAU.quick): each shaded part
-  // and its last place, the last box drawn, and the handle's last place, with
-  // how far in view each is.
-  const parts = useRef(new Map<string, { level: number; atom?: { x: number; y: number }; bond?: { p: { x: number; y: number }; q: { x: number; y: number } } }>());
-  const chosen = useRef(new Set<string>());
+  // The box or lasso, and the handle, each come into view and go out of it
+  // rather than appear and vanish (TAU.quick): the last box drawn, and the
+  // handle's last place, with how far in view each is. (What is selected
+  // of the drawing does so in its shading: SelectionShade2D.)
   const box = useRef<{ level: number; outline: { line: THREE.LineLoop; fill: THREE.Mesh } | null }>({ level: 0, outline: null });
   const handleSeen = useRef<{ level: number; at: { x: number; y: number } | null }>({ level: 0, at: null });
   const [, setFrame] = useState(0);
-  {
-    const at = new Map(shownModel.atoms.map((a) => [a.id, a]));
-    const now = new Set<string>();
-    for (const id of sel.atoms) {
-      const a = at.get(id);
-      if (!a) continue;
-      const e = parts.current.get(`a${id}`) ?? { level: 0 };
-      e.atom = { x: a.x, y: a.y };
-      parts.current.set(`a${id}`, e);
-      now.add(`a${id}`);
-    }
-    for (const b of model.bonds) {
-      if (!sel.bonds.has(b.id)) continue;
-      const p = at.get(b.a);
-      const q = at.get(b.b);
-      if (!p || !q) continue;
-      const e = parts.current.get(`b${b.id}`) ?? { level: 0 };
-      e.bond = { p: { x: p.x, y: p.y }, q: { x: q.x, y: q.y } };
-      parts.current.set(`b${b.id}`, e);
-      now.add(`b${b.id}`);
-    }
-    chosen.current = now;
-    if (handleAt) handleSeen.current.at = handleAt;
-  }
+  if (handleAt) handleSeen.current.at = handleAt;
   useFrame((_, dt) => {
     const d = Math.min(dt, 1 / 20);
     let moving = false;
-    for (const [k, e] of parts.current) {
-      const to = chosen.current.has(k) ? 1 : 0;
-      if (e.level !== to) {
-        const n = follow(e.level, to, d, TAU.quick);
-        e.level = Math.abs(n - to) < 0.01 ? to : n;
-        moving = true;
-      }
-      if (e.level === 0 && to === 0) parts.current.delete(k);
-    }
     const b = box.current;
     const boxTo = b.outline && boxSelect.active ? 1 : 0;
     if (b.level !== boxTo) {
@@ -534,13 +533,8 @@ export default function Selection2D() {
     }
   });
 
-  // --- shading -------------------------------------------------------------
-  const r = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
-  const shade = useMemo(() => new THREE.Color(SELECTION_SHADE), []);
-  // (shading coming or going: the page's white going over to the shade, so
-  // that where parts overlap it stays even)
-  const shadeAt = (level: number) => new THREE.Color("#ffffff").lerp(shade, level);
-  // the box or the lasso being drawn: a pale fill inside a line
+  // --- the box or the lasso ---------------------------------------------------
+  // being drawn: a pale fill inside a line
   const outline = useMemo(() => {
     if (!boxSelect.active || boxSelect.points.length < 2) return null;
     const pts =
@@ -585,29 +579,11 @@ export default function Selection2D() {
     invalidate();
   }, [outline, invalidate]);
 
-  const shown = [...parts.current.entries()];
   const lastBox = box.current.outline;
   const handlePlace = handleSeen.current.at;
   return (
     <group>
-      {shown.map(([k, e]) =>
-        e.atom ? (
-          <mesh key={k} position={[e.atom.x, e.atom.y, -0.04]} renderOrder={-2}>
-            <circleGeometry args={[r, 32]} />
-            <meshBasicMaterial color={shadeAt(e.level)} depthWrite={false} toneMapped={false} />
-          </mesh>
-        ) : e.bond ? (
-          <mesh
-            key={k}
-            position={[(e.bond.p.x + e.bond.q.x) / 2, (e.bond.p.y + e.bond.q.y) / 2, -0.045]}
-            rotation={[0, 0, Math.atan2(e.bond.q.y - e.bond.p.y, e.bond.q.x - e.bond.p.x)]}
-            renderOrder={-2}
-          >
-            <planeGeometry args={[Math.hypot(e.bond.q.x - e.bond.p.x, e.bond.q.y - e.bond.p.y), r * 1.1]} />
-            <meshBasicMaterial color={shadeAt(e.level)} depthWrite={false} toneMapped={false} />
-          </mesh>
-        ) : null,
-      )}
+      <SelectionShade2D shown={shownModel} atoms={sel.atoms} bonds={sel.bonds} />
       {lastBox && <primitive object={lastBox.fill} />}
       {lastBox && <primitive object={lastBox.line} />}
       {handlePlace && (handleAt || handleSeen.current.level > 0) && (

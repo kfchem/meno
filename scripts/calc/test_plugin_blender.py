@@ -1,4 +1,4 @@
-"""Tests for the Blender interface's worker (src-tauri/resources/plugins/blender/worker.py).
+"""Tests for the Blender plugin's worker (src-tauri/resources/plugins/blender/worker.py).
 
 The worker needs Python alone - Blender is run by Meno, not by it - so
 these run anywhere; CI runs them:
@@ -182,6 +182,69 @@ class Renders(unittest.TestCase):
             self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
             # (its size: the PNG's header, width and height)
             self.assertEqual((int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")), (320, 240))
+
+
+    def test_colours_a_surface_by_its_points_colours(self):
+        # (a ball each of whose points is red, over a white material: COLOR_0 multiplies the base colour - glTF 3.9.2)
+        import base64
+        import struct
+        mesh = ball_mesh()
+        n = mesh["accessors"][0]["count"]
+        red = struct.pack(f"<{4 * n}f", *([1.0, 0.0, 0.0, 1.0] * n))
+        data = base64.b64decode(mesh["buffers"][0]["uri"].split(",", 1)[1]) + red
+        mesh["buffers"][0] = {"byteLength": len(data), "uri": "data:application/octet-stream;base64," + base64.b64encode(data).decode()}
+        mesh["bufferViews"].append({"buffer": 0, "byteOffset": len(data) - len(red), "byteLength": len(red)})
+        mesh["accessors"].append({"bufferView": 2, "componentType": 5126, "count": n, "type": "VEC4"})
+        mesh["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = 2
+        scene = {**BALL, **mesh, "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0, "roughnessFactor": 1}}]}
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "gpu": False, "engine": "eevee"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            r, g, b = png_pixel((pathlib.Path(d) / "picture.png").read_bytes(), 160, 120)
+            self.assertGreater(r, 2 * max(g, b), (r, g, b))
+
+
+def png_pixel(png, x, y):
+    """A pixel of an 8-bit RGB or RGBA PNG, as its specification lays one out (W3C PNG, 2nd ed.: IHDR, IDAT, filters 0-4)."""
+    import zlib
+    at, idat, width, height, kind = 8, b"", 0, 0, 0
+    while at < len(png):
+        length = int.from_bytes(png[at : at + 4], "big")
+        tag, body = png[at + 4 : at + 8], png[at + 8 : at + 8 + length]
+        if tag == b"IHDR":
+            width, height, depth, kind = int.from_bytes(body[0:4], "big"), int.from_bytes(body[4:8], "big"), body[8], body[9]
+            assert depth == 8 and kind in (2, 6), (depth, kind)
+        elif tag == b"IDAT":
+            idat += body
+        at += 12 + length
+    raw = zlib.decompress(idat)
+    step = 3 if kind == 2 else 4
+    stride = width * step
+    rows, prev, i = [], bytearray(stride), 0
+    for _ in range(height):
+        f, line = raw[i], bytearray(raw[i + 1 : i + 1 + stride])
+        i += 1 + stride
+        for k in range(stride):
+            a = line[k - step] if k >= step else 0
+            b, c = prev[k], (prev[k - step] if k >= step else 0)
+            if f == 1:
+                line[k] = (line[k] + a) & 255
+            elif f == 2:
+                line[k] = (line[k] + b) & 255
+            elif f == 3:
+                line[k] = (line[k] + (a + b) // 2) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[k] = (line[k] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(line)
+        prev = line
+    p = rows[y][x * step : x * step + 3]
+    return p[0], p[1], p[2]
 
 
 if __name__ == "__main__":

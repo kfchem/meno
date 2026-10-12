@@ -4,7 +4,6 @@ import {
   drawnShape,
   fillOutline,
   handlesOf,
-  headsOf,
   insidePolygon,
   lineWidthOf,
   moved,
@@ -49,19 +48,8 @@ describe("what a shape draws", () => {
     expect(outlineOf(box("callout", { tail: { x: 5, y: 5 } }), PT).points).not.toContainEqual({ x: 5, y: 5 });
   });
 
-  it("stops an arrow's line short of its heads, a triangle at its end - and at its start, with two", () => {
-    const arrow: ShapeGeometry = { kind: "arrow", x0: 0, y0: 0, x1: 20, y1: 0 };
-    const o = outlineOf(arrow, PT);
-    expect(o.closed).toBe(false);
-    expect(o.points[0]).toEqual({ x: 0, y: 0 });
-    expect(o.points[1].x).toBeLessThan(20);
-    const [head] = headsOf(arrow, PT);
-    expect(head[0]).toEqual({ x: 20, y: 0 });
-    // (its back behind where the line stops: the line ends within it)
-    expect(head[1].x).toBeLessThan(o.points[1].x);
-    expect(headsOf({ ...arrow, heads: 2 }, PT)).toHaveLength(2);
-    expect(outlineOf({ ...arrow, heads: 2 }, PT).points[0].x).toBeGreaterThan(0);
-    expect(headsOf({ ...arrow, kind: "line" }, PT)).toEqual([]);
+  it("runs a line from end to end, open", () => {
+    expect(outlineOf({ kind: "line", x0: 0, y0: 0, x1: 20, y1: 0 }, PT)).toEqual({ points: [{ x: 0, y: 0 }, { x: 20, y: 0 }], closed: false });
   });
 
   it("breaks a dashed line into dashes along it, round its corners", () => {
@@ -116,12 +104,12 @@ describe("where a shape is", () => {
     expect(shapeHit(s, { x: 10, y: 5 }, 0.1, PT, false)).toBeNull();
     expect(shapeHit(s, { x: 10, y: 5 }, 0.1, PT, true)).toBe("inside");
     expect(shapeHit(s, { x: 30, y: 5 }, 0.1, PT, true)).toBeNull();
-    // (an arrow's head is its line's)
-    expect(shapeHit({ kind: "arrow", x0: 0, y0: 0, x1: 20, y1: 0 }, { x: 19.5, y: 0.05 }, 0, PT, false)).toBe("line");
+    // (a line's end is its line's)
+    expect(shapeHit({ kind: "line", x0: 0, y0: 0, x1: 20, y1: 0 }, { x: 19.95, y: 0.04 }, 0, PT, false)).toBe("line");
     expect(insidePolygon({ x: 0.5, y: 0.5 }, [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 }])).toBe(true);
   });
 
-  it("reaches as far as its line, its heads and its tail", () => {
+  it("reaches as far as its line and its tail", () => {
     const b = shapeBounds(box("callout", { tail: { x: 4, y: -6 } }), PT);
     expect(b.y0).toBeCloseTo(-6 - 0.05);
     expect(b.x1).toBeCloseTo(20.05);
@@ -130,7 +118,7 @@ describe("where a shape is", () => {
   it("holds its words about its middle, as wide as it is inside - an ellipse's within it - and a line none", () => {
     expect(wordsRoom(box("rect"), 1)).toEqual({ x: 10, y: 5, width: 18 });
     expect(wordsRoom(box("ellipse"), 1)!.width).toBeCloseTo(20 * Math.SQRT1_2 - 2);
-    expect(wordsRoom({ kind: "arrow", x0: 0, y0: 0, x1: 1, y1: 0 }, 1)).toBeNull();
+    expect(wordsRoom({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 0 }, 1)).toBeNull();
   });
 });
 
@@ -155,7 +143,7 @@ describe("a shape drawn and changed", () => {
     expect(reshaped({ kind: "line", x0: 0, y0: 0, x1: 5, y1: 0 }, "start", { x: -3, y: 4 }, 1)).toMatchObject({ x0: -3, y0: 4, x1: 5, y1: 0 });
     expect(reshaped(box("callout", { tail: { x: 0, y: -5 } }), "tail", { x: 30, y: 5 }, 1).tail).toEqual({ x: 30, y: 5 });
     expect(handlesOf(box("callout", { tail: { x: 0, y: -5 } })).map((h) => h.handle)).toContain("tail");
-    expect(handlesOf({ kind: "arrow", x0: 0, y0: 0, x1: 1, y1: 1 })).toHaveLength(2);
+    expect(handlesOf({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 1 })).toHaveLength(2);
   });
 
   it("moves whole, its tail with it; turned, a line's ends go round and a box stays upright", () => {

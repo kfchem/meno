@@ -199,11 +199,14 @@ impl Drawn {
             let fill = path.fill_mode().map(|f| f != PdfPathFillMode::None).unwrap_or(false);
             let stroke = path.is_stroked().unwrap_or(false);
             let colour = |c: Result<PdfColor, PdfiumError>| c.ok().map(|c| format!("#{:02x}{:02x}{:02x}{:02x}", c.red(), c.green(), c.blue(), c.alpha()));
+            // (a stroke drawn dashed: its dash pattern has a dash or a gap of some length - an arrow's dashed line)
+            let dash = stroke && path.dash_array().map(|a| a.len() > 1 && a.iter().any(|v| v.value > 0.0)).unwrap_or(false);
             self.paths.push(json!({
                 "fill": if fill { colour(path.fill_color()) } else { None },
                 "stroke": if stroke { colour(path.stroke_color()) } else { None },
                 "width": path.stroke_width().map(|w| w.value * k).unwrap_or(0.0),
                 "d": d,
+                "dash": dash,
             }));
         } else if obj.as_image_object().is_some() {
             self.pictures.push(q);
@@ -369,7 +372,7 @@ fn run_reader(cache: &Path) -> i32 {
     let bindings = match Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) {
         Ok(b) => b,
         Err(e) => {
-            let _ = write_frame(&mut out, &json!({"id": 0, "ok": false, "why": format!("PDFium could not be loaded: {e}")}), &[]);
+            let _ = write_frame(&mut out, &json!({"id": 0, "ok": false, "why": format!("The PDF reader could not be loaded: {e}")}), &[]);
             return 1;
         }
     };
@@ -732,10 +735,11 @@ mod tests {
 
     /// A page as a journal prints a figure: a figure's form - its own
     /// matrix moving it 10 points along - placed at half its size, holding
-    /// a line 100 points long and an O; and a wedge drawn on the page.
+    /// a line 100 points long and an O; and a wedge and a dashed line drawn
+    /// on the page.
     fn figure_pdf() -> Vec<u8> {
         let form = "0.6 w 0 0 m 100 0 l S BT /F1 10 Tf 0 20 Td (O) Tj ET";
-        let page = "q 0.5 0 0 0.5 100 400 cm /Fm1 Do Q 0 0 0 rg 300 300 m 320 298 l 320 302 l h f";
+        let page = "q 0.5 0 0 0.5 100 400 cm /Fm1 Do Q 0 0 0 rg 300 300 m 320 298 l 320 302 l h f [3 2] 0 d 400 300 m 450 300 l S";
         pdf_of(vec![
             (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
             (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
@@ -760,7 +764,7 @@ mod tests {
         let mut docs = HashMap::new();
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0})).unwrap();
         let paths = head["paths"].as_array().unwrap();
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 3);
         let near = |v: &Value, want: f64| (v.as_f64().unwrap() - want).abs() < 0.05;
         // the form's line: moved 10 by its own matrix, then halved and placed at (100, 400) - 442 from the top
         let line = &paths[0];
@@ -771,12 +775,15 @@ mod tests {
         assert_eq!(d[1][0], json!("L"));
         assert!(near(&d[1][1], 155.0) && near(&d[1][2], 442.0), "{d:?}");
         assert!(near(&line["width"], 0.3), "{line:?}");
+        assert_eq!(line["dash"], json!(false));
         // the wedge: filled, closed, where it was drawn
         let wedge = &paths[1];
         assert!(wedge["fill"].is_string() && wedge["stroke"].is_null());
         let d = wedge["d"].as_array().unwrap();
         assert!(near(&d[0][1], 300.0) && near(&d[0][2], 542.0), "{d:?}");
         assert!(d.iter().any(|s| s[0] == json!("Z")));
+        // the dashed line: said to be dashed
+        assert_eq!(paths[2]["dash"], json!(true), "{:?}", paths[2]);
         // the O, half its size, its baseline where the form's matrices put it
         let letters = head["letters"].as_array().unwrap();
         assert_eq!(letters.len(), 1);

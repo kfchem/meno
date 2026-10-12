@@ -52,9 +52,9 @@ describe("the chemistry client", () => {
     const w = fakeWorker();
     const c = new ChemClient(w.transport);
     const r = c.request("from_smiles", { smiles: "C1CC" });
-    w.say({ id: 1, ok: false, error: "not a SMILES RDKit can read" });
+    w.say({ id: 1, ok: false, error: "This SMILES could not be read." });
     await expect(r).rejects.toThrow(ChemError);
-    await expect(r).rejects.toThrow("not a SMILES RDKit can read");
+    await expect(r).rejects.toThrow("This SMILES could not be read.");
   });
 
   it("gives up on an answer that does not come", async () => {

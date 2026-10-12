@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -16,8 +17,9 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
     setHoveredShape: (id: number | null) => set((prev: EditorState) => (prev.hoveredShape === id ? prev : { ...prev, hoveredShape: id })),
     setShapeDraft: (draft: EditorState["shapeDraft"]) => set({ shapeDraft: draft }),
     setArrowDraft: (draft: EditorState["arrowDraft"]) => set({ arrowDraft: draft }),
+    // (only those on the page, as pictures)
     selectShapes: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selShapes: new Set([...(add ? prev.selShapes : []), ...ids]) })),
+      set((prev: EditorState) => ({ ...prev, selShapes: new Set([...(add ? prev.selShapes : []), ...[...ids].filter((id) => prev.shapes.some((x) => x.id === id))]) })),
     toggleShapeSel: (id: number) =>
       set((prev: EditorState) => {
         const selShapes = new Set(prev.selShapes);
@@ -32,9 +34,9 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       doc.edit(
         patch.tail ? "move callout's tail" : patch.x0 !== undefined || patch.x1 !== undefined || patch.y0 !== undefined || patch.y1 !== undefined ? "resize shape" : "change shape",
         (d) => ops.updateShape(d, id, patch),
-        { ...(gesture ? { coalesceKey: `shape:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`shape:${id}:${gesture}`) : {},
       ),
-    styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
+    styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
     colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) =>
       doc.edit(which === "fill" ? "fill shapes" : "colour shapes' lines", (d) => ops.restyleShapes(d, ids, { [which]: color }), gesture ? { coalesceKey: `colour-shapes:${gesture}` } : undefined),
     orderShapes: (ids: readonly number[], front: boolean) => doc.edit(front ? "bring shapes to front" : "send shapes to back", (d) => ops.orderShapes(d, ids, front)),

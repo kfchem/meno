@@ -32,6 +32,7 @@ import {
 } from "./components";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { chordedPress } from "./utils/press";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -61,6 +62,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
@@ -96,6 +98,7 @@ import {
   presentIntent,
   saveIntent,
   shortcutLabel,
+  undoIntent,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { useDownloads } from "../../../lib/pyEnv";
@@ -138,7 +141,7 @@ import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
-import { writeClipboard } from "../../../lib/clipboard";
+import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -168,6 +171,9 @@ import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import Shapes2D from "./components/Shapes2D";
+import Inks2D from "./components/Inks2D";
+import InkWriting from "./components/InkWriting";
+import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
@@ -599,14 +605,18 @@ function WorkspaceContent({
     [store],
   );
   // words selected in a PDF copied, as they read (utils/pdfSelection)
-  const copyWords = useCallback(async () => {
-    const st = store.getState();
-    const sel = st.pdfSel;
-    const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
-    if (!sel || !pdf) return;
-    const words = await selectedWords(sel, pdf);
-    if (words) await writeClipboard([{ flavor: "text", text: words }]);
-  }, [store]);
+  const copyWords = useCallback(
+    () =>
+      copying(async () => {
+        const st = store.getState();
+        const sel = st.pdfSel;
+        const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
+        if (!sel || !pdf) return;
+        const words = await selectedWords(sel, pdf);
+        if (words) await writeClipboard([{ flavor: "text", text: words }]);
+      }),
+    [store],
+  );
   // where words taken out of a PDF are let go (components/wordsDrag)
   useEffect(() => {
     setCanvasPlace(store, { canvas: () => domRef.current, worldAt: (x, y) => clientToWorld(x, y) });
@@ -725,6 +735,10 @@ function WorkspaceContent({
         // a slide's edge or number under the pointer, likewise (docs/PRESENTING.md)
         e.preventDefault();
         st.removeSlide(st.hoveredSlide);
+      } else if (isDeleteKey(e) && !busy && st.hoveredInk != null && st.inks.some((k) => k.id === st.hoveredInk)) {
+        // writing by hand under the pointer, likewise (docs/PRESENTING.md, *Handwriting*)
+        e.preventDefault();
+        st.removeInk(st.hoveredInk);
       } else if (isDeleteKey(e) && !busy && st.hoveredShape != null && st.shapes.some((x) => x.id === st.hoveredShape)) {
         // a shape under the pointer, likewise (docs/PRESENTING.md, *Shapes*)
         e.preventDefault();
@@ -775,12 +789,39 @@ function WorkspaceContent({
   }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
+  // (nor a card a menu opened - a colour's, a size's - left over it)
   useEffect(() => {
-    if (talking) setMenu(null);
+    if (!talking) return;
+    setMenu(null);
+    setColourCard(null);
+    setSizeCard(null);
   }, [talking]);
+  // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
+  // being written, and the menu would stay open over it, its keys and the label's at odds)
+  const labelBegun = useEditor((s) => s.labelEdit.active);
+  useEffect(() => {
+    if (labelBegun) setMenu(null);
+  }, [labelBegun]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
+  // the pen's card, while writing with a mouse or a trackpad (docs/PRESENTING.md, *Handwriting*)
+  const inkMode = useEditor((s) => s.inkMode);
+  const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  // An undo or a redo that would take away a running step is held, and asks
+  // first what deleting it asks (heard before the app's own undo, App.tsx)
+  const askUndo = useEditor((s) => s.askUndo);
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const intent = undoIntent(e);
+      if (!intent || !store.getState().holdUndo(intent)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
@@ -874,6 +915,13 @@ function WorkspaceContent({
       }
     : undefined;
   useEffect(() => setMenu(null), [model]); // what it was about may be gone
+  // (what it was about gone otherwise - words, a picture, a PDF undone away while it is open: no menu left over nothing)
+  useEffect(() => {
+    if (!menu?.kind) return;
+    return store.subscribe((s) => {
+      if (menuTargetGone(menu, s)) setMenu(null);
+    });
+  }, [menu, store]);
   // the selection as a box would take it, where it holds whole structures or molecules in 3D
   const selectionAsSet = () => {
     const st = store.getState();
@@ -907,6 +955,19 @@ function WorkspaceContent({
     moved: boolean;
     pending: MenuTarget | null;
   } | null>(null);
+  // The buttons held, as the last pointer event had them: a right press
+  // while the primary button is held - an atom, the selection or the view
+  // being dragged - comes as a move with both held (a chorded press), and
+  // opens no menu: it would be the menu of what lies under what is dragged,
+  // and letting go over it would choose one of its items.
+  const buttonsHeld = useRef(0);
+  useEffect(() => {
+    const note = (e: PointerEvent) => (buttonsHeld.current = e.buttons);
+    for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.addEventListener(type, note, true);
+    return () => {
+      for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.removeEventListener(type, note, true);
+    };
+  }, []);
   const onRightDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 2) {
       rightPress.current = null; // a Ctrl-click on a Mac starts afresh
@@ -936,6 +997,8 @@ function WorkspaceContent({
     // A card's text field keeps the system's own menu - cut, copy, paste.
     if (e.target !== domRef.current) return;
     e.preventDefault(); // no browser menu over the drawing
+    // (none in the middle of a drag: pressed with the primary button held)
+    if (chordedPress(e.buttons, buttonsHeld.current)) return;
     const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d, hoveredAtom3d } = store.getState();
     const box = e.currentTarget.getBoundingClientRect();
     const place = {
@@ -977,8 +1040,10 @@ function WorkspaceContent({
       open({ kind: "push", id: hoveredPush, selection: "none", ...place });
       return;
     }
-    // on a reaction arrow, and nothing else: the arrow's menu
-    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow)) {
+    // on an arrow, and nothing else - or selected alone - the arrow's menu
+    const { selArrows, selPluses } = store.getState();
+    const arrowWithMore = selectedOf({ ...store.getState(), selArrows: new Set() }).any || selArrows.size > 1;
+    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow) && !(selArrows.has(hoveredArrow) && arrowWithMore)) {
       const target: MenuTarget = { kind: "arrow", id: hoveredArrow, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -993,7 +1058,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
+      return selectedOf({ ...s, selCaptions: new Set() }).any || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -1005,10 +1070,22 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
+      return selectedOf({ ...s, selTexts: new Set() }).any || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise writing by hand, unless it is selected with more (docs/PRESENTING.md, *Handwriting*)
+    const { hoveredInk, inks, selInks } = store.getState();
+    const inkWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selInks: new Set() }).any || selInks.size > 1;
+    })();
+    if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk) && !(selInks.has(hoveredInk) && inkWithMore)) {
+      const target: MenuTarget = { kind: "ink", id: hoveredInk, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1029,7 +1106,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
+      return selectedOf({ ...s, selPictures: new Set() }).any || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -1041,7 +1118,7 @@ function WorkspaceContent({
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
     const pdfWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+      return selectedOf({ ...s, selPdfs: new Set() }).any || selPdfs.size > 1;
     })();
     if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
@@ -1061,8 +1138,9 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
-    // likewise a "+"
-    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus)) {
+    // likewise a "+", unless it is selected with more
+    const plusWithMore = selectedOf({ ...store.getState(), selPluses: new Set() }).any || selPluses.size > 1;
+    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus) && !(selPluses.has(hoveredPlus) && plusWithMore)) {
       const target: MenuTarget = { kind: "plus", id: hoveredPlus, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -1187,7 +1265,7 @@ function WorkspaceContent({
           { name: "Open…", keys: shortcutLabel("O"), run: askToOpen },
           { name: "Save As…", keys: shortcutLabel("S", true), run: () => void saveAs() },
           // (a text of its own, in the column of texts)
-          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().addTexts([{ name: "", text: "" }], at) }] : []),
+          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().newText(at) }] : []),
         ]
       : []),
     // (a talk given from the slides on the page: docs/PRESENTING.md)
@@ -1232,6 +1310,10 @@ function WorkspaceContent({
       onMouseLeave={handleWrapperMouseLeave}
       onClick={handleWrapperClick}
       onContextMenu={openMenu}
+      // (no drag-and-drop of the system's own begins on the page: begun over text selected by
+      // chance, it took the pointer's moves and its release from the gesture under way - a
+      // structure dragged out of a set did not move, and then followed the pointer, the button up)
+      onDragStart={(e) => e.preventDefault()}
       onPointerDownCapture={onRightDown}
       onPointerMoveCapture={onRightMove}
       onPointerUpCapture={onRightUp}
@@ -1413,6 +1495,8 @@ function WorkspaceContent({
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
+              // (the pen's card: writing with the mouse or the trackpad, until Done)
+              else if (what === "pen") st.setInkMode({ tool: "pen", color: null, width: 1 });
               else if (what === "slide") {
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
@@ -1434,6 +1518,17 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {askUndo != null && (
+          <ConfirmDiscard
+            title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
+            message={askUndo.steps > 1 ? "Their jobs are stopped, and their files go with them." : "Its jobs are stopped, and their files go with it."}
+            discardLabel={askUndo.steps > 1 ? "Delete steps" : "Delete step"}
+            onCancel={() => store.getState().letUndo(false)}
+            onDiscard={() => store.getState().letUndo(true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {naming && (
           <NameDialog
             title="Save as procedure"
@@ -1448,6 +1543,7 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
         {sizeCard && (
           <SizeCard
@@ -1480,6 +1576,7 @@ function WorkspaceContent({
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
             else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
+            else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
@@ -1640,7 +1737,6 @@ function WorkspaceContent({
               onWeight: (weight) => st.styleShapes([sh.id], { weight }),
               dash: !!sh.dash,
               onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
-              ...(sh.kind === "arrow" ? { heads: { both: sh.heads === 2, onBoth: () => st.styleShapes([sh.id], { heads: sh.heads === 2 ? 1 : 2 }) } } : {}),
               onFront: () => st.orderShapes([sh.id], true),
               onBack: () => st.orderShapes([sh.id], false),
             };
@@ -1685,6 +1781,7 @@ function WorkspaceContent({
               spread: !!p.spread,
               icon: !!p.icon,
               onSpread: () => st.spreadPdf(p.id, !p.spread),
+              onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 1 }),
               ...(p.spread && p.placed?.length ? { onRows: () => st.pdfPagesInRows(p.id) } : {}),
               onIcon: () => st.iconPdf(p.id, !p.icon),
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),
@@ -1783,13 +1880,15 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
                 : menu.kind === "shape" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], shapes: [menu.id] }
+                : menu.kind === "ink" && menu.id != null
+                  ? { atoms: [], bonds: [], rings: [], inks: [menu.id] }
                 : menu.kind === "atom" && menu.id != null
                   ? { atoms: [menu.id], bonds: [], rings: [] }
                   : menu.kind === "bond" && menu.id != null
@@ -1860,6 +1959,9 @@ function WorkspaceContent({
           <Pictures2D />
           {/* Shapes, over the pictures and under the drawing (docs/PRESENTING.md, *Shapes*) */}
           <Shapes2D />
+          {/* Writing by hand: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*) */}
+          <Inks2D />
+          <InkWriting />
           {/* Rings filled and parts highlighted with a colour, behind the drawing */}
           <Fills2D />
           {/* where renders under way will put what they make (docs/RENDER.md) */}

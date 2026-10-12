@@ -1,7 +1,6 @@
 /**
  * Shapes on the page (docs/PRESENTING.md, *Shapes*): each drawn as
- * lib/chem/shapes says - filled, its line over its fill, an arrow's heads
- * over that - under the drawing and over the pictures and PDFs, each over
+ * lib/chem/shapes says - filled, its line over its fill - under the drawing and over the pictures and PDFs, each over
  * those before it; and one being drawn from Quick Add, as it will be.
  *
  * A press on one is as on a picture: on its line, or anywhere inside it
@@ -31,7 +30,6 @@ import {
   drawnShape,
   fillOutline,
   handlesOf,
-  headsOf,
   isBox,
   lineWidthOf,
   middleOf,
@@ -46,6 +44,7 @@ import {
   type ShapeHandle,
 } from "../../../../lib/chem/shapes";
 import { pageAt } from "../utils/page";
+import { guideScale, guideSides } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
@@ -75,7 +74,7 @@ const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 
 type Pt = { x: number; y: number };
 
-/** Triangles of what a shape draws, in page units: its fill, its line, and its heads. */
+/** Triangles of what a shape draws, in page units: its fill, and its line. */
 function shapeGeometry(points: { positions: number[]; indices: number[] }): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   const pos = new Float32Array((points.positions.length / 2) * 3);
@@ -113,16 +112,15 @@ function lines(pieces: readonly { points: Pt[]; closed: boolean }[], width: numb
   return { positions, indices };
 }
 
-/** A shape as it is drawn: its fill, its line and its heads, at `z` among the shapes. */
+/** A shape as it is drawn: its fill and its line, at `z` among the shapes. */
 function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stroke?: string; fill?: string }; pointPx: number; ink: string; opacity?: number }) {
   const key = JSON.stringify(s);
-  const { fill, line, heads } = useMemo(() => {
+  const { fill, line } = useMemo(() => {
     const area = s.fill ? fillOutline(s, pointPx) : null;
     const lined = s.stroke !== "none";
     return {
       fill: area ? shapeGeometry(polygons([area])) : null,
       line: lined ? shapeGeometry(lines(strokePieces(s, pointPx), lineWidthOf(s, pointPx))) : null,
-      heads: lined ? shapeGeometry(polygons(headsOf(s, pointPx))) : null,
     };
     // (made again when the shape changes, not when it is drawn again)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,9 +129,8 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
     () => () => {
       fill?.dispose();
       line?.dispose();
-      heads?.dispose();
     },
-    [fill, line, heads],
+    [fill, line],
   );
   const lineColor = s.stroke && s.stroke !== "none" ? s.stroke : ink;
   const see = opacity < 1;
@@ -146,11 +143,6 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
       )}
       {line && (
         <mesh geometry={line} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={() => {}}>
-          <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
-        </mesh>
-      )}
-      {heads && (
-        <mesh geometry={heads} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={() => {}}>
           <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
         </mesh>
       )}
@@ -224,10 +216,7 @@ function ShapeItem({
   const width = lineWidthOf(s, pointPx);
   // (the light's band, as wide on the screen at any zoom: made again as the view zooms)
   const band = useMemo(() => {
-    const o = outlineOf(s, pointPx);
-    const heads = headsOf(s, pointPx);
-    const tips = heads.map((h) => ({ points: [h[1], h[0], h[2]], closed: false }));
-    return shapeGeometry(lines([o, ...tips], width + 2 * LIT_PX * px));
+    return shapeGeometry(lines([outlineOf(s, pointPx)], width + 2 * LIT_PX * px));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, pointPx, px]);
   useEffect(() => () => band.dispose(), [band]);
@@ -422,14 +411,32 @@ function Handles({
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
     const was = s;
+    // (a box's corner or side: as wide or as tall as something near, where it comes near - its proportions, with Shift; docs/PRESENTING.md, *Guides*)
+    const sides = isBox(was.kind) && h !== "tail" ? { x: h.includes("x0") ? ("x0" as const) : h.includes("x1") ? ("x1" as const) : undefined, y: h.includes("y0") ? ("y0" as const) : h.includes("y1") ? ("y1" as const) : undefined } : null;
+    const guide = sides ? guideSides(store, toWorld, from) : null;
+    const scale = sides?.x && sides.y ? guideScale(store, toWorld, from, was) : null;
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
-      const next = reshaped(was, h, q, LEAST_PX * px, m.shiftKey);
+      let next = reshaped(was, h, q, LEAST_PX * px, m.shiftKey);
+      if (sides && scale && m.shiftKey) {
+        // (its proportions kept: from the corner across, as large as a width or a height near it)
+        const fx = sides.x === "x0" ? was.x1 : was.x0;
+        const fy = sides.y === "y0" ? was.y1 : was.y0;
+        const keep = (f: number) => {
+          const w = (was.x1 - was.x0) * f;
+          const ht = (was.y1 - was.y0) * f;
+          return { x0: sides.x === "x0" ? fx - w : fx, x1: sides.x === "x0" ? fx : fx + w, y0: sides.y === "y0" ? fy - ht : fy, y1: sides.y === "y0" ? fy : fy + ht };
+        };
+        const f = scale.step((next.x1 - next.x0) / (was.x1 - was.x0), m, keep);
+        next = { ...next, ...keep(Math.max(f, (LEAST_PX * px) / Math.min(was.x1 - was.x0, was.y1 - was.y0))) };
+      } else if (sides && guide) next = { ...next, ...guide.step(next, sides, m) };
       store.getState().updateShape(s.id, { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1, ...(next.tail ? { tail: next.tail } : {}) }, gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      guide?.end();
+      scale?.end();
       if (Math.hypot(u.clientX - from.x, u.clientY - from.y) < CLICK_PX) clicked.current = u.timeStamp;
       const st2 = store.getState();
       st2.endPanHold(u.pointerId);

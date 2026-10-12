@@ -8,6 +8,7 @@ import { menoReader } from "./builtin";
 import { stopWorker, workerOf } from "../plugins/process";
 import { useAppSettings } from "../settings/appSettings";
 import { forThisSystem } from "../plugins/here";
+import { stopJobsAndWait } from "../jobs";
 
 /**
  * The plugins on this computer, and the readers' workers: a plugin is added
@@ -90,8 +91,13 @@ export async function addPlugin(p: Plugin): Promise<void> {
   }
 }
 
-/** Takes a plugin away: its worker stopped, its environment removed - and, where it fills a role, not set up again of itself; one that runs nothing, at once. */
-export async function removePlugin(p: Plugin): Promise<void> {
+/**
+ * Takes a plugin away: the jobs of its named (`stopping`) stopped and
+ * ended first - the chemist having said they may be - its worker stopped,
+ * its environment removed - and, where it fills a role, not set up again of
+ * itself; one that runs nothing, at once.
+ */
+export async function removePlugin(p: Plugin, stopping: readonly string[] = []): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, true);
     setState(p.id, "absent");
@@ -99,6 +105,7 @@ export async function removePlugin(p: Plugin): Promise<void> {
   }
   setState(p.id, "removing");
   try {
+    if (stopping.length) await stopJobsAndWait(stopping);
     await stopWorker(p.id);
     await removePyEnv(p.profile);
     markTakenAway(p, true);

@@ -135,9 +135,9 @@ words, a width they break into lines at, and how their lines lie.
 
 ## Shapes
 
-- **Rectangles, rounded rectangles, ellipses, lines, arrows (one head or
-  two) and callouts** (a rounded box with a tail that can be moved), each
-  able to hold words, broken at its width and moving with it.
+- **Rectangles, rounded rectangles, ellipses, lines and callouts** (a
+  rounded box with a tail that can be moved), each box able to hold words,
+  broken at its width and moving with it.
 - **Their line** - its colour, thin, regular or thick, dashed - **and their
   fill**, from the palette and its light tints.
 - **From Quick Add**: *Shapes* opens a second row, as *Calculations* does;
@@ -145,8 +145,10 @@ words, a width they break into lines at, and how their lines lie.
   the pointer and clicking, as a chain is traced; Shift makes a square or a
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
   *Box around these*, a rounded rectangle round it.
-- **A shape's arrow points at something; a reaction arrow is chemistry**
-  (it goes into an RXN file). They are called *Arrow* and *Reaction arrow*.
+- **An arrow is the page's one Arrow** (the maintainer, 2026-10-12), not a
+  shape: Quick Add's *Arrow* draws it, with its kinds, heads, dashes,
+  weight, colour and corners in its menu (docs/EDITOR-2D.md, *Arrows*). A
+  plain line with no head stays a shape.
 - **Under the drawing, over pictures and PDFs**: a shape never hides a
   bond. A shape with no fill lets a press inside it through to what is
   under it; its line is its own.
@@ -185,7 +187,8 @@ words, a width they break into lines at, and how their lines lie.
 - **Strokes written one after another**, within a second and a half and
   near each other, are one piece of writing: selected, moved, coloured and
   deleted together. The eraser takes a stroke at a time. A marker is see-
-  through and lies under the words.
+  through, in the first colour of the set in use unless given another, and
+  lies under the words.
 - **While a talk is given**, a pen writes over the slide, and what it wrote
   goes as the slide does.
 - **Saved and undone, a stroke at a time; in pictures as vectors.**
@@ -241,14 +244,13 @@ Shift+Enter, since Enter keeps the words, as it did before.
 
 - `lib/chem/shapes.ts`, the same for the canvas, SVG and EMF: the line a
   shape follows (a rounded box's corners at most 9 points round, a callout's
-  tail from the side its tip lies beyond, an arrow's line stopping short of
-  its heads), its dashes, its heads, the area it fills, where a press takes
-  it, how far it reaches, where its words go, and how it is drawn, made
+  tail from the side its tip lies beyond), its dashes, the area it fills,
+  where a press takes it, how far it reaches, where its words go, and how it is drawn, made
   larger or smaller, moved and turned. Lines are 0.6, 1 or 2 points
   (thin as a bond's, regular, thick); a dash is 3.5 widths and 2 points
   long, a gap 2 widths and 1.5 points.
 - `store/types.ts` `Shape` (its kind, two corners or two ends, a callout's
-  tail, its weight, dashed, an arrow's second head, its line's colour - or
+  tail, its weight, dashed, its line's colour - or
   `"none"` - and its fill) and `Caption.shape`, the shape words are in;
   `document.ts` `addShape`, `updateShape`, `restyleShapes`, `orderShapes`,
   `removeShapes` (their words with them), `withShapeWords` (words about the
@@ -263,22 +265,25 @@ Shift+Enter, since Enter keeps the words, as it did before.
   filled, inside it - none through what is drawn over it; a hold, a click,
   a second click to write in it; the handles. `components/shapeFrom.ts`:
   drawn from Quick Add, led by a drag or traced with the button up.
-- Quick Add's *Shapes* opens a row of the six; the shape's menu (`PartMenu`
-  kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin, regular or
-  thick line, dashed, an arrow's *Head at both ends*, *Bring to front*,
-  *Send to back*. The selection's menu has *Box around these*: a rounded
-  rectangle a third of a bond clear of it. The colour card's rows for
+- Quick Add's *Shapes* opens a row of the five; the shape's menu
+  (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
+  regular or thick line, dashed, *Bring to front*, *Send to back*. The
+  selection's menu has *Box around these*: a rounded rectangle a third of
+  a bond clear of it. The colour card's rows for
   shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
-  quarter of the way from white). The reaction arrow is now *Reaction
-  arrow* in its menu.
+  quarter of the way from white).
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
   pens, under everything else, from the back.
-- **A shape's arrow is not a reaction arrow.** It points at something for
-  the audience, holds no words, and is never part of a reaction: an RXN
-  file does not hold it, and Clean-up and reaction schemes pass it by. A
-  reaction arrow (Quick Add's *Reaction arrow*) is chemistry - words over
-  and under it, its own styles, written into an RXN file - and the two are
-  kept apart in the code too (`Shape` here, `Arrow` there).
+- **An arrow is not a shape** (2026-10-12, once arrows were one): `Shape`
+  lost its `arrow` kind and its heads, and the shapes' row its arrow.
+  Quick Add has one arrow, *Arrow* (the maintainer: one entry, in the
+  first row, no longer called *Reaction arrow*), drawn by a drag to its
+  point or put down as one is made by a click (`components/arrowFrom.ts`),
+  so an arrow pointing at something for the audience can be dashed,
+  coloured, given corners or two heads in its menu, as any arrow. The
+  arrow's menu is called *Arrow* again, and its delete *Delete arrow*. A
+  shape of kind `arrow` in a workspace saved before is not read: it opens
+  without it.
 
 ### Guides (lane L8, fourth part, 2026-10-11)
 
@@ -302,14 +307,76 @@ Shift+Enter, since Enter keeps the words, as it did before.
 - Where: a drag of the selection (`dragSelection`: a structure, words, a
   picture, a PDF, a text's sheet, a slide, a workflow's steps), molecules
   in 3D moved (`Molecules3D`), words moved alone (`Captions2D`), a slide's
-  and a picture's corners, words' edges. An atom dragged alone keeps its
-  own snapping to the drawing's lengths and angles.
+  and a picture's corners, words' edges, and a shape's corners and sides
+  (`Shapes2D`: each side moved takes the width or height of something
+  near, its proportions free - or kept, with Shift, from the corner
+  across). Shapes line up and are sized by the box their line runs round
+  (`shapeFrame`), a callout's tail and an arrow's heads not counted. An
+  atom dragged alone keeps its own snapping to the drawing's lengths and
+  angles.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
   move across or up and down, the way it has gone most.
 - `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
   pixel on the screen at any zoom, coming and going in a short ease.
 
-Not yet, and where it comes: everything under *Handwriting* (its own pull
-request); shapes' handles taking another's size; a slide's notes, with the
-presenter's view. Words in a shape do not make it taller: words longer
+### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
+
+- `lib/chem/ink.ts`, the same for the canvas, SVG and EMF: a stroke's
+  outline - as thick as the pen was pressed (from 0.35 to 1.65 of its
+  width) where the system said, else even with its ends tapered over two
+  and a half widths; a marker's flat - its triangles for the canvas, where
+  a press takes it, how far it reaches; the 1€ filter (Casiez, Roussel and
+  Vogel, 2012) that smooths what the pointer gives as it comes; and points
+  nearer than 0.6 pixels to the one before dropped as it is kept. The pen
+  writes 0.75, 1.5 or 3 points wide, the marker 6, 10 or 16, see-through
+  (0.38). Given no colour of its own, a pen writes in the drawing's ink and
+  a marker in the first colour of the set in use (`markerColour`).
+- `store/types.ts` `Ink` (a piece: its pen, width, colour and strokes,
+  each its points - x, y and the pressure - and whether the pressure was
+  the pen's own) and `InkMode` (the card); `document.ts` `addInkStroke`
+  (a stroke on the piece before it, where it is in the same pen),
+  `addInk`, `removeInkStrokes`, `colourInks`, `removeInks` and
+  `MarkPlaces.inks`; `store/slices/inksSlice.ts`; `selInks`, `hoveredInk`,
+  `inkMode` and `inkDraft` beside the other kinds'; the clipboard's
+  record, a cut, a paste and the workspace's file (`inks`).
+- `components/InkWriting.tsx`: a press on the canvas by a pen - or by the
+  mouse's button while the card is open - is the writing's alone; a pen's
+  eraser end or its button, or the card's eraser, rubs out the strokes it
+  passes over, one step for a rub. A stroke joins the piece before it when
+  it comes within 1.5 seconds, in the same pen, and its box within six
+  widths and an em of that piece's. `components/Inks2D.tsx`: the pieces -
+  a pen's at 0.3, over the drawing, a marker's at -0.12, under it - the
+  stroke being written, the light round a piece, and a press, a hold and a
+  click on one, as on a picture.
+- `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
+  eraser, the colours of the set in use and the pen's own (a marker's own
+  being the set's first, shown once), three widths, Done (or Escape).
+  Quick Add's *Pen* opens it; the pointer is a cross while it is open.
+  Writing's menu: *Colour…* - whose card, for a marker's writing alone,
+  shows the marker's own colour (the set's first) in place of *None*, as
+  the pen's card does - and *Delete writing*.
+- Pictures (`Layout.inks`): a marker's under the drawing, see-through in
+  SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
+  everything.
+
+### Handwriting on PDFs and in a talk (lane L8, fifth part, second half, 2026-10-12)
+
+- A stroke begun on a PDF's page - the top one of a stack, or one spread,
+  not an icon - is that page's (`utils/pdfInk.ts` `pageUnder`): kept with
+  the PDF (`PdfItem.inks`, each piece on its page, its points the page's,
+  from its top left), and drawn with the page (`pdfPictures` `Page`, at
+  0.00245 - over its pictures, under the marks a search or a box puts on it
+  and a ring round an atom read from a figure, as agreed with lane L12) -
+  so it goes wherever the page goes: stacked, spread, put in a place of its
+  own, made an icon and back, and read in the column. A stroke joins a
+  piece on the same page only. The eraser rubs out what is written on the
+  pages under it too. A PDF's menu has *Write on it*, which opens the pen's
+  card. Saved and copied with the PDF.
+- While a talk is given, a pen - not the mouse - writes over the slide
+  (`talkInk`, the view's, never the document's: no step to undo), its
+  eraser end rubbing out; what it wrote goes as the slide does, and when
+  the talk ends.
+
+Not yet, and where it comes: writing in the column itself (what is written
+on the page shows there); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.

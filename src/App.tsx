@@ -25,8 +25,9 @@ import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, openIntent, undoIntent } from "./lib/doc/shortcuts";
 import { saverOf } from "./lib/doc/savers";
-import { useOpenAsked } from "./ui/layouts/commands";
+import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
+import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -53,6 +54,7 @@ import UpdateNotice from "./ui/network/UpdateNotice";
 import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
+import { watchOpenedFiles } from "./lib/openedFiles";
 
 /** How long a Meno started for Office waits for Office to ask it for something. */
 const OFFICE_GRACE_MS = 1500;
@@ -248,15 +250,21 @@ export default function App() {
       fileInputRef.current?.click();
       return;
     }
-    const into = stateRef.current.activeId;
     const picked = await openDialog({
       multiple: true,
       filters: [{ name: "Files Meno opens", extensions: openable().map((ext) => ext.slice(1)) }],
     }).catch(() => null);
+    await openPaths(picked ?? []);
+  };
+  // Files opened by their paths - picked in Open's dialog, or opened from
+  // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
+  // - each in a tab, by what it is.
+  const openPaths = async (paths: readonly string[]) => {
+    const into = stateRef.current.activeId;
     const texts: OpenedText[] = [];
     const pdfs: OpenedPdf[] = [];
     const pictures: PictureToAdd[] = [];
-    for (const path of picked ?? []) {
+    for (const path of paths) {
       const name = path.split(/[\\/]/).pop() || path;
       // (a picture: held, and put on the page - docs/PDF.md, *A picture*)
       if (isPictureName(name)) {
@@ -283,7 +291,7 @@ export default function App() {
         // (a workspace file: its workspace, and the outputs it keeps held)
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
-          openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
+          openWorkspaceTab(name, workspace, path);
           continue;
         }
         const text = new TextDecoder().decode(bytes);
@@ -334,15 +342,32 @@ export default function App() {
     const into = stateRef.current.activeId;
     const texts: OpenedText[] = [];
     for (const f of files) {
-      const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
-      const text = workspace == null ? await f.text() : "";
-      // (told as Open through the dialog tells it: a catalogue's kind too)
-      const opened = workspace != null ? openedAs(f.name, workspace, undefined, MENO_KINDS.workspace) : openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
-      const asText = textsOf(opened);
-      if (asText) texts.push(...asText);
-      else openTab(opened);
+      try {
+        const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
+        if (workspace != null) {
+          openWorkspaceTab(f.name, workspace);
+          continue;
+        }
+        const text = await f.text();
+        // (told as Open through the dialog tells it: a catalogue's kind too)
+        const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
+        const asText = textsOf(opened);
+        if (asText) texts.push(...asText);
+        else openTab(opened);
+      } catch (e) {
+        // (as Open through the dialog says it: a file that does not read - a workspace cut short - said so, not dropped unseen)
+        setNotice(`${f.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
     if (texts.length) openTexts(texts, into);
+  };
+  // A workspace file's workspace in a tab of its own - where it opens: one
+  // that does not - saved by a newer Meno, say - is said so, and leaves no
+  // empty tab named after it.
+  const openWorkspaceTab = (name: string, workspace: string, path?: string) => {
+    const problem = workspaceProblem(workspace);
+    if (problem) setNotice(`${name} could not be read: ${problem}.`);
+    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
   };
   // (the key listened for once; what it does is this render's)
   const pickRef = useRef(pickFiles);
@@ -452,6 +477,15 @@ export default function App() {
   };
   office.current = { openTab, closeTab, leaveIfOnlyForOffice };
 
+  // Workspace files opened from outside Meno - a .meno double-clicked
+  // (lib/openedFiles): each in a tab, as Open opens it.
+  const openPathsNow = useRef(openPaths);
+  openPathsNow.current = openPaths;
+  useEffect(() => {
+    if (!isTauri()) return;
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths));
+  }, []);
+
   const ctl: TabsController = {
     tabOrder: state.tabOrder,
     tabsById: Object.fromEntries(
@@ -517,6 +551,10 @@ export default function App() {
   useEffect(() => useSettingsAsked.subscribe(() => void ctlNow.current.openByKind?.("settings", { label: "Settings" })), []);
   // (Open… asked for from inside a view - the menu on empty space - as Ctrl/Cmd+O)
   useEffect(() => useOpenAsked.subscribe(() => void pickRef.current()), []);
+  // (files asked to be opened from inside a view - a workspace file dropped onto a canvas - as Open opens them)
+  const openFilesRef = useRef(openFiles);
+  openFilesRef.current = openFiles;
+  useEffect(() => useFilesAsked.subscribe((s, prev) => s.asked !== prev.asked && void openFilesRef.current([...s.files])), []);
   // (a guide shown with no workspace in front - from Settings, Plugins - brought to one: what it points at is a workspace's)
   const stateNow = useRef(state);
   stateNow.current = state;

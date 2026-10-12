@@ -459,6 +459,11 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertFalse(ask("from_smiles", smiles="C1CC")["ok"])
         self.assertFalse(worker.answer("not json")["ok"])
 
+    def test_says_what_it_could_not_read_without_naming_a_program(self):
+        # (the words are shown as they are, in Quick Add and elsewhere: the maintainer, 2026-10-12)
+        self.assertEqual(ask("from_smiles", smiles="C1CC")["error"], "This SMILES could not be read.")
+        self.assertEqual(ask("to_smiles", molblock="no structure")["error"], "This structure could not be read.")
+
 
 def coordinates_only(mol):
     """A molecule as a file of coordinates gives it: its atoms where they

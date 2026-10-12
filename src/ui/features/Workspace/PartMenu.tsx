@@ -4,6 +4,7 @@ import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { MENU_ICONS } from "./menuIcons";
+import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
 
 /**
@@ -15,7 +16,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -234,6 +235,8 @@ export default function PartMenu({
     /** A box drawn on it put on the page as a picture, or copied as one. */
     onPutBox?: () => void;
     onCopyBox?: () => void;
+    /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
+    onWrite?: () => void;
   };
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
@@ -296,8 +299,7 @@ export default function PartMenu({
   /**
    * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*):
    * words written in it (a box); its line thin, regular or thick, dashed or
-   * not; an arrow's heads at one end or both; and brought over the other
-   * shapes or put under them.
+   * not; and brought over the other shapes or put under them.
    */
   shape?: {
     onWrite?: () => void;
@@ -305,7 +307,6 @@ export default function PartMenu({
     onWeight: (weight: "thin" | "regular" | "thick") => void;
     dash: boolean;
     onDash: () => void;
-    heads?: { both: boolean; onBoth: () => void };
     onFront: () => void;
     onBack: () => void;
   };
@@ -342,8 +343,11 @@ export default function PartMenu({
       const next = at < 0 ? (step > 0 ? 0 : buttons.length - 1) : (at + step + buttons.length) % buttons.length;
       buttons[next]?.focus();
     };
+    // (a press elsewhere only closes it: utils/press#swallowPress)
     const onPress = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (ref.current?.contains(e.target as Node)) return;
+      swallowPress(e);
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
@@ -431,7 +435,7 @@ export default function PartMenu({
       : target.kind === "arrow"
       ? [
           ...colour,
-          del("Delete reaction arrow"),
+          del("Delete arrow"),
           // (what it is, ticked as it is: its kind; its heads; dashed or not; straight again; its line's weight)
           ...(arrow
             ? [
@@ -524,6 +528,7 @@ export default function PartMenu({
           ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
+          ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
         ]
       : target.kind === "text"
       ? [
@@ -560,7 +565,7 @@ export default function PartMenu({
           ...(shape.onWrite ? [{ name: "Edit text", keys: "", run: shape.onWrite, icon: MENU_ICONS.edit }] : []),
           ...colour,
           del("Delete shape"),
-          // (its line's weight, ticked as it is; dashed or not; an arrow's heads)
+          // (its line's weight, ticked as it is; dashed or not)
           ...(
             [
               ["thin", "Thin line"],
@@ -569,10 +574,11 @@ export default function PartMenu({
             ] as const
           ).map(([w, name]) => ({ name, keys: "", run: () => shape.onWeight(w), checked: shape.weight === w })),
           { name: "Dashed line", keys: "", run: shape.onDash, checked: shape.dash },
-          ...(shape.heads ? [{ name: "Head at both ends", keys: "", run: shape.heads.onBoth, checked: shape.heads.both }] : []),
           { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
           { name: "Send to back", keys: "", run: shape.onBack },
         ]
+      : target.kind === "ink"
+      ? [...colour, del("Delete writing")]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -686,7 +692,7 @@ export default function PartMenu({
             : target.kind === "bond"
               ? "Bond"
               : target.kind === "arrow"
-                ? "Reaction arrow"
+                ? "Arrow"
                 : target.kind === "plus"
                   ? "Plus"
                   : target.kind === "caption"
@@ -715,6 +721,8 @@ export default function PartMenu({
                       ? "Slide"
                     : target.kind === "shape"
                       ? "Shape"
+                    : target.kind === "ink"
+                      ? "Writing"
                       : "Canvas"
       }
       tabIndex={-1}

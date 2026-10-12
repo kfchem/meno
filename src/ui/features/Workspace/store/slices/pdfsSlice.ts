@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -17,8 +18,9 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
   return {
     setHoveredPdf: (id: number | null) => set({ hoveredPdf: id }),
     // (selected with the rest, as a whole: its words or a box drawn on one let go - one selection)
+    // (only those on the page, as pictures)
     selectPdfs: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selPdfs: new Set([...(add ? prev.selPdfs : []), ...ids]), pdfSel: null, pdfBox: null })),
+      set((prev: EditorState) => ({ ...prev, selPdfs: new Set([...(add ? prev.selPdfs : []), ...[...ids].filter((id) => prev.pdfs.some((p) => p.id === id))]), pdfSel: null, pdfBox: null })),
     togglePdfSel: (id: number) =>
       set((prev: EditorState) => {
         const selPdfs = new Set(prev.selPdfs);
@@ -68,7 +70,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     setPdfBox: (box: EditorState["pdfBox"]) =>
       set((prev: EditorState) =>
         box
-          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>() }
+          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>(), selInks: new Set<number>() }
           : prev.pdfBox
             ? { ...prev, pdfBox: null }
             : prev,
@@ -79,11 +81,11 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       if (row.length) doc.edit(row.length > 1 ? "add PDFs" : "add PDF", (d) => row.reduce(ops.addPdf, d));
     },
     movePdf: (id: number, x: number, y: number, gesture?: string) =>
-      doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), { ...(gesture ? { coalesceKey: `pdf:${id}:${gesture}` } : {}) }),
+      doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), gesture ? gestureStep(`pdf:${id}:${gesture}`) : {}),
     turnPdf: (id: number, page: number) => doc.edit("turn page", (d) => ops.updatePdf(d, id, { page })),
     spreadPdf: (id: number, spread: boolean) => doc.edit(spread ? "spread pages" : "gather pages", (d) => ops.updatePdf(d, id, { spread, ...(spread ? { icon: false } : {}) })),
     placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) =>
-      doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), { ...(gesture ? { coalesceKey: `pdf-page:${id}:${page}:${gesture}` } : {}) }),
+      doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), gesture ? gestureStep(`pdf-page:${id}:${page}:${gesture}`) : {}),
     pdfPagesInRows: (id: number) => doc.edit("put pages in rows", (d) => ops.updatePdf(d, id, { placed: null })),
     // (made an icon, its pages gathered first)
     iconPdf: (id: number, icon: boolean) =>

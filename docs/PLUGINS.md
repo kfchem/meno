@@ -63,7 +63,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
-| Molecules in 3D | pictures and films of them, rendered (RENDER.md) | the Blender interface (a job: Blender, installed separately) |
+| Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |
@@ -105,11 +105,16 @@ catalogue - has a manifest alone.
 - **A plugin may be for some systems only** (`systems`): CREST, whose
   program conda-forge builds for macOS and Linux; elsewhere Settings,
   *Plugins*, says so in place of *Add*.
-- **A plugin may run a program installed separately** - ORCA, Gaussian -
-  which Meno never fetches or ships (`installed`). Meno finds it where the
-  system finds programs, or where the chemist locates it in Settings,
-  *Plugins*. Such a plugin is named as an interface (the *ORCA
-  interface*), and its steps by the program's name (*ORCA*).
+- **A plugin may run a program installed separately** - ORCA, Gaussian,
+  Multiwfn, NCIPLOT - which Meno never provides (`installed`). Meno finds
+  it where the system finds programs, or where the chemist locates it in
+  Settings, *Plugins*. Such a plugin, and only such a plugin, is named as
+  an interface (the *ORCA interface*), and its steps by the program's name
+  (*ORCA*) (the maintainer, 2026-10-12).
+- **A plugin may run a program Meno fetches for it** as it is set up -
+  Blender - and never a copy installed on the computer (`downloads`,
+  `provides`; *A program Meno fetches*). It is not an interface: it is
+  named by the program alone (*Blender*).
 - **Meno carries some for now**, in `src-tauri/resources/plugins/`, and
   finds them there: no code of Meno's names one. Those fetched over the
   internet later will be folders of the same kind; how Meno trusts a list
@@ -151,8 +156,8 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
-| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one "Meno needs Blender 5.0 or later; this one is 4.1". And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
-| `downloads` | list of `{file, name, licence, url, sha256, bytes}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). |
+| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
+| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -244,13 +249,62 @@ Meno in companies make that worthwhile):
 - it is listed with its licence wherever Meno lists the licences of what
   it carries: README, and Settings, *Plugins*.
 
-The Blender interface (`resources/plugins/blender`, RENDER.md) is the
-first such plugin.
+The Blender plugin (`resources/plugins/blender`, RENDER.md) is the first
+such plugin.
 
 A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
 `NSIS_HOOK_PREINSTALL`), as was done for the Gaussian input plugin once it
 became the Gaussian interface.
+
+## A program Meno fetches
+
+Meno may download a program a plugin runs itself only where all of these
+hold (the maintainer, 2026-10-11):
+
+1. Its licence lets anyone obtain and use it, with no registration and no
+   terms each user is asked to accept.
+2. It is an official prebuilt build, from its makers' own host; Meno never
+   hosts it again.
+3. It needs nothing installed on the system - no administrator's rights,
+   no installer, no change to the system: it is unpacked into the plugin's
+   data folder (never inside Meno.app) and taken away with the plugin.
+4. Its version is pinned, and checked by its SHA-256.
+5. The user is asked first, told the program, its licence, its size and
+   where it comes from.
+
+How (`downloads`, `src-tauri/src/plugfiles.rs`): a download that
+`provides` one of the plugin's programs, by the name its steps and roles
+run it by, is an archive for one system - and processor, where it says one
+(`system`, `arch`: `aarch64`, `x86_64`) - with how it is opened (`unpack`:
+`dmg`, `zip` or `tar.xz`) and where the program is in it (`program`, `*`
+for the one folder there is). It is fetched as the plugin is set up, as
+its other files are, under the same leave: the one question that sets the
+plugin up says it - its name, its licence, its size and where it comes
+from. It is checked against its SHA-256; unpacked by what the system has -
+a disk image mounted read-only and the app copied out of it as it is, its
+signature kept (macOS: `hdiutil`, `ditto`); a zip or a tar.xz opened by
+the system's own `tar` - into `files/<archive's name>` in the plugin's
+data folder, a stamp beside it saying it is whole; and the archive thrown
+away. A job runs the program from there (`src-tauri/src/jobs.rs`,
+`plugin_program`), and from nowhere else: no copy installed on the
+computer is looked for - not where the system finds programs, not where
+programs are usually installed - and there is no *Locate…*. Such a plugin
+is not an interface (*A plugin's folder*). Taking the plugin away takes
+the program with it.
+
+As the programs stand (the maintainer, 2026-10-12):
+
+- **Blender** is fetched, and always used: GPL-3.0-or-later, official
+  builds from download.blender.org - 5.2.2 LTS for macOS on Apple silicon
+  and for Windows on x64 and arm64 (RENDER.md). A Blender located in
+  Settings before is not carried over.
+- **ORCA** and **Gaussian** are not fetched: each is obtained under its
+  makers' own terms, which each user accepts.
+- **Multiwfn** is not fetched: its licence asks each user to agree to its
+  terms, and there is no official macOS build.
+- **NCIPLOT** is not fetched: it is published as its source, with no
+  official build.
 
 ## Room for what comes next
 
@@ -258,8 +312,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 
 - **Blender** (real pictures and films of molecules in 3D): built
   (2026-10-11) - the role *Render*, the glTF 2.0 scene Meno writes, the
-  Blender interface, and pictures and films on the page:
-  [`RENDER.md`](./RENDER.md). *Render* as a workflow's step comes later.
+  Blender plugin, and pictures and films on the page:
+  [`RENDER.md`](./RENDER.md); and *Render* as a workflow's step
+  (2026-10-12), its pictures in a result set (RENDER.md, *Render as a
+  step*).
 - **NCI**: built (2026-10-11) - the kind of step *NCI*, a surface
   coloured by another grid as a general form, a step's `files`, and the
   NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).
@@ -465,7 +521,12 @@ The same for every plugin and for Meno's own parts:
     among them - and the plugins it suggests;
   - its version, licence and home; "Comes with Meno: nothing to download"
     for one that runs nothing;
-  - Add, and Remove; and Show, for one that brings a guide.
+  - Add, and Remove; and Show, for one that brings a guide. Removing a
+    plugin while any of its jobs waits or runs asks first, saying how
+    many; once the chemist says *Stop and remove*, those jobs are stopped
+    and waited for until they have ended, and then the plugin is removed
+    (the maintainer, 2026-10-12). Cancel leaves the plugin and its jobs
+    as they are.
 
   Meno is not in it.
 - **Files.** The tab named for files (FILE-IO.md) holds, for each kind
@@ -476,6 +537,10 @@ The same for every plugin and for Meno's own parts:
   - in *Molecules in 3D*, who makes a structure in 3D and its conformers,
     and by what method;
   - in a workflow step, who runs it, defaulting to the choice in Settings.
+- **A choice taken away gives way** (the maintainer, 2026-10-12): when the
+  plugin chosen for a role is taken away and another plugin that fills it
+  is added, that one fills the role. With none other added, the role stays
+  with the one chosen, and says to add it again.
 - **What, never how** (the maintainer's rule): a choice names the program
   and the method a chemist would name, never how Meno talks to it.
 

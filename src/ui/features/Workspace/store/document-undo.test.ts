@@ -319,6 +319,29 @@ describe("editor store over a document", () => {
     expect(state().model.atoms.map((a) => a.id)).toEqual([c]);
   });
 
+  it("forgets what was under the pointer when an undo takes it away, and begins no label on it", () => {
+    const { doc, state } = editor();
+    const base = state().addAtom(0, 0, "C");
+    const end = state().addAtomBonded(base, 1.5, 0, "C");
+    // the pointer resting on the atom just drawn, as an undo takes it away
+    state().setHoveredFromId(end);
+    doc.undo();
+    expect(state().hovered).toEqual({ atomId: null, bondId: null });
+    // (a letter typed over where it was begins nothing)
+    state().beginLabelEdit(end, "N");
+    expect(state().labelEdit.active).toBe(false);
+    // the bond too, and what is still there stays under the pointer
+    doc.redo();
+    const bond = state().model.bonds[0].id;
+    state().setHoveredFromId(bond);
+    doc.undo();
+    expect(state().hovered.bondId).toBeNull();
+    state().setHoveredFromId(base);
+    state().addAtom(9, 9, "N");
+    doc.undo();
+    expect(state().hovered.atomId).toBe(base);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");

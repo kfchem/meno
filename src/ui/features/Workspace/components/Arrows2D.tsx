@@ -1,13 +1,17 @@
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { arrowEnds, arrowPoints, reshapedArrow } from "../../../../lib/chem/reactionScheme";
 import { arrowPath, cornerAt, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
 import { COLORS } from "../../../theme/colors";
-import { FREE_MS } from "../constants";
+import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
+import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { strokeTriangles } from "../../../../lib/chem/shapes";
+import { dragSelection } from "../utils/dragSelection";
+import { carriedWithMore } from "../utils/selectionScheme";
 import ReactionArrow2D from "./ReactionArrow2D";
 import { useDrawnArrows } from "./drawnArrows";
 import { TAU, follow } from "../../../theme/motion";
@@ -23,8 +27,11 @@ const MIN_LENGTH = 0.5;
 const STRAIGHT = 0.08;
 /** A handle in the middle of a stretch, to turn the line there: as large as an end's, by this share. */
 const MID_SHARE = 0.7;
+/** The light round an arrow selected: how far it reaches either side of its line on the screen, in pixels, and how strong it is - as a shape's (Shapes2D). */
+const LIT_PX = 4;
+const CHOSEN = 0.38;
 
-type Pointerish = { button?: number; clientX: number; clientY: number; pointerId?: number };
+type Pointerish = { button?: number; clientX: number; clientY: number; pointerId?: number; ctrlKey?: boolean; metaKey?: boolean };
 const native = (e: unknown): Pointerish => ((e as { nativeEvent?: Pointerish }).nativeEvent ?? (e as Pointerish));
 
 /**
@@ -44,6 +51,7 @@ export default function Arrows2D() {
   const arrows = useDrawnArrows();
   const madeArrows = useEditor((s) => s.arrows);
   const hoveredArrow = useEditor((s) => s.hoveredArrow);
+  const selArrows = useEditor((s) => s.selArrows);
   // (one being drawn from Quick Add, as it will be made)
   const draft = useEditor((s) => s.arrowDraft);
   const store = useEditorStore();
@@ -110,7 +118,11 @@ export default function Arrows2D() {
     }
   });
 
-  /** A press on the arrow: it follows the pointer, as one step. */
+  /**
+   * A press on the arrow: dragged, it follows the pointer, as one step - or,
+   * carried by a selection with more, all of that goes; a click selects it
+   * alone; Ctrl, or ⌘, and a click adds it to the selection or takes it out.
+   */
   const startMove = (id: number, e: { stopPropagation: () => void }) => {
     const ev = native(e);
     // a right press is the menu's, or the view's to move
@@ -119,20 +131,44 @@ export default function Arrows2D() {
     // the pointer, and each would hand the press to this group again - two
     // moves at once, each its own undo step)
     e.stopPropagation();
-    const a = store.getState().arrows.find((x) => x.id === id);
+    const st = store.getState();
+    if (addsToSelection({ ctrlKey: !!ev.ctrlKey, metaKey: !!ev.metaKey })) {
+      st.toggleArrowSel(id);
+      st.suppressDoubleClick(DOUBLE_CLICK_MS);
+      return;
+    }
+    const a = st.arrows.find((x) => x.id === id);
     if (!a) return;
+    st.beginPanHold(ev.pointerId ?? null);
+    if (carriedWithMore(store, "arrow", id)) {
+      dragSelection(store, toWorld, { x: ev.clientX, y: ev.clientY }, (u) => {
+        const s = store.getState();
+        s.endPanHold(u.pointerId);
+        s.suppressDoubleClick(DOUBLE_CLICK_MS);
+      });
+      return;
+    }
     const p = toWorld(ev.clientX, ev.clientY);
     const off = { x: a.x - p.x, y: a.y - p.y };
     const gesture = `move-${performance.now()}`;
-    store.getState().beginPanHold(ev.pointerId ?? null);
+    let moved = false;
     const onMove = (m: PointerEvent) => {
+      if (!moved && Math.hypot(m.clientX - ev.clientX, m.clientY - ev.clientY) < MOV_PX) return;
+      moved = true;
       const q = toWorld(m.clientX, m.clientY);
       store.getState().updateArrow(id, { x: q.x + off.x, y: q.y + off.y }, gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
-      store.getState().endPanHold(u.pointerId);
+      const s = store.getState();
+      s.endPanHold(u.pointerId);
+      // (a click: it alone selected)
+      if (!moved) {
+        s.clearSel();
+        s.selectArrows([id]);
+        s.suppressDoubleClick(DOUBLE_CLICK_MS);
+      }
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
@@ -284,6 +320,7 @@ export default function Arrows2D() {
             onPointerDown={(e) => startMove(a.id, e)}
           >
             <ReactionArrow2D x1={from.x} y1={from.y} x2={to.x} y2={to.y} look={a.look} form={a} color={a.color} />
+            {selArrows.has(a.id) && <ArrowLight points={pts} />}
             {/* invisible thicker hit area to ease dragging: a stretch at a time, where it turns */}
             {pts.slice(1).map((q, i) => {
               const p = pts[i];
@@ -305,5 +342,27 @@ export default function Arrows2D() {
         );
       })}
     </group>
+  );
+}
+
+/** The light round an arrow selected, along its line and its corners, as wide on the screen at any zoom. */
+function ArrowLight({ points }: { points: readonly { x: number; y: number }[] }) {
+  const { camera } = useThree();
+  const zoom = (camera as THREE.OrthographicCamera).zoom;
+  const key = JSON.stringify(points);
+  const geometry = useMemo(() => {
+    const t = strokeTriangles(points, false, (2 * LIT_PX) / Math.max(zoom, 1e-6));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(t.positions.flatMap((v, i) => (i % 2 ? [v, 0] : [v])), 3));
+    g.setIndex(t.indices);
+    return g;
+    // (made again as it moves or the view zooms)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, zoom]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} position={[0, 0, -0.005]} frustumCulled={false} raycast={() => {}}>
+      <meshBasicMaterial color={COLORS.highlight} transparent opacity={CHOSEN} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
