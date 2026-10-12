@@ -4,10 +4,10 @@
  * seven-membered ring - drawn flat, the way a chemist draws it: the fused
  * rings flat and regular, as though the bridge were not there, and the
  * bridge a short path of bonds across the face of a ring, in front of it or
- * behind it as the solid has it (docs/LAYOUT-2D.md, section 2). Where the
+ * behind it as the molecule has it (docs/LAYOUT-2D.md, section 2). Where the
  * bridge passes over a bond, the bond behind is drawn broken.
  */
-import { affineFit, solidOf } from "./cage";
+import { affineFit, solidOf, turnedConfigurations } from "./cage";
 import { add, dir, dist, segmentsCross, sub, type Point } from "./geometry";
 import type { Molecule, RingSystem } from "./perceive";
 import { placeRingSystem } from "./ringSystem";
@@ -294,13 +294,25 @@ export function bridgeAcross(mol: Molecule, sys: RingSystem): Bridged | null {
   const ly = [fit.y[0], fit.y[1], fit.y[2]];
   const view = [lx[1] * ly[2] - lx[2] * ly[1], lx[2] * ly[0] - lx[0] * ly[2], lx[0] * ly[1] - lx[1] * ly[0]];
   const mid = [0, 1, 2].map((c) => flat.reduce((s, a) => s + solid.get(a)![c], 0) / flat.length);
-  const depth = new Map<number, number>(sys.atoms.map((a) => [a, 0]));
-  for (const path of best.paths) {
-    const side = path.atoms.reduce(
-      (s, a) => s + [0, 1, 2].reduce((t, c) => t + (solid.get(a)![c] - mid[c]) * view[c], 0),
-      0,
-    );
-    for (const a of path.atoms) depth.set(a, side >= 0 ? 1 : -1);
+  const sides = best.paths.map((path) =>
+    path.atoms.reduce((s, a) => s + [0, 1, 2].reduce((t, c) => t + (solid.get(a)![c] - mid[c]) * view[c], 0), 0) >= 0 ? 1 : -1,
+  );
+  const depthOf = (turn: number) => {
+    const depth = new Map<number, number>(sys.atoms.map((a) => [a, 0]));
+    best!.paths.forEach((path, k) => path.atoms.forEach((a) => depth.set(a, ((turn >> k) & 1 ? -1 : 1) * sides[k])));
+    return depth;
+  };
+  // - but where that has a stereocentre the other way, the side that shows
+  // them all as given: a solid found from how far apart the bonds put its
+  // atoms can have a ring fusion trans that is cis (a diastereomer of
+  // morphine, epimeric at C5, had its bridge on the wrong face and C9 read
+  // the other way)
+  let depth = depthOf(0);
+  let turned = turnedConfigurations(mol, sys.atoms, best.pos, depth);
+  for (let turn = 1; turned && turn < 1 << Math.min(best.paths.length, 4); turn++) {
+    const other = depthOf(turn);
+    const t = turnedConfigurations(mol, sys.atoms, best.pos, other);
+    if (t < turned) [depth, turned] = [other, t];
   }
   return { pos: best.pos, depth, cost: best.cost };
 }

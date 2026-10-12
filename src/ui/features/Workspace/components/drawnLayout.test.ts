@@ -42,11 +42,20 @@ function sameDrawing(a: Layout, b: Layout) {
 describe("a drawing laid out for the canvas", () => {
   it("lays out a thousand overlapping records in well under the seconds it once took, each as it is alone", () => {
     const one = layoutMolecule(cholesterol.atoms, cholesterol.bonds, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
-    const page = drawn(record.repeat(1000));
+    const timed = (n: number) => {
+      const page = drawn(record.repeat(n));
+      const started = performance.now();
+      const laid = layoutMolecule(page.atoms, page.bonds, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
+      return { page, laid, ms: performance.now() - started };
+    };
+    const tenth = timed(100);
+    const { page, laid: all, ms } = timed(1000);
     expect(page.atoms).toHaveLength(28_000);
-    const started = performance.now();
-    const all = layoutMolecule(page.atoms, page.bonds, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
-    expect(performance.now() - started).toBeLessThan(3000);
+    // (ten times the records in about ten times the time, where each record
+    // reaching into the others' drawing took a hundred times - 19 s once:
+    // timed against a tenth of the page, so that a machine busy with other
+    // work slows both alike, as it would a time set in seconds)
+    expect(ms).toBeLessThan(25 * tenth.ms + 100);
     // (records do not reach into each other's drawing: the page is the
     // first record's drawing a thousand times over, bond by bond and label
     // by label, and as much as the record makes alone)
@@ -57,7 +66,7 @@ describe("a drawing laid out for the canvas", () => {
     expect(all.texts.map((t) => [t.text, t.x, t.y])).toEqual(Array.from({ length: 1000 }, () => labels).flat());
     expect(all.polys).toHaveLength(one.polys.length * 1000);
     expect(all.fills).toHaveLength(one.fills.length * 1000);
-  });
+  }, 60_000);
 
   it("is the same drawing at any zoom where its lines are drawn wider than the least", () => {
     for (const style of [ACS_1996, MENO]) {

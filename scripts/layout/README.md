@@ -10,6 +10,7 @@ npm run layout-labels                                  # a label's H running int
 npm run layout-compare -- before.json                  # Meno's scores against an earlier .layout/scores.json
 npm run layout-stereo                                  # each drawing as a MOL file -> .layout/stereo.json
 <chem python> scripts/layout/stereo.py                 # RDKit reads each back: the stereochemistry as given?
+<chem python> scripts/layout/diastereomers.py          # the bridged molecules' one-centre diastereomers that can exist -> src/lib/layout/testdata
 
 npm run layout-fetch -- --list=heldout                 # the held-out natural products (heldout.json), likewise
 <chem python> scripts/layout/baselines.py --list=heldout
