@@ -40,7 +40,9 @@ export function dragSelection(
   const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((a) => a.id === c.id))];
   const solids = st.molecules3d.filter((m) => takenSolids.has(m.id)).map((m) => ({ id: m.id, at: m.at }));
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
-  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
+  // (a set's pictures - a Render step's - with it)
+  const heldPictures = new Set(held.flatMap((h) => h.pictures));
+  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id) || heldPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const texts = st.texts.flatMap((t) => (t.at && st.selTexts.has(t.id) ? [{ id: t.id, x: t.at.x, y: t.at.y }] : []));
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));

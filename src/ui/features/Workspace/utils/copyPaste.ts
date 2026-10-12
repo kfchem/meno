@@ -154,8 +154,7 @@ export function recordText(part: Drawn): string {
     ...(part.captions?.length ? { captions: part.captions } : {}),
     ...(part.molecules3d?.length ? { molecules3d: part.molecules3d } : {}),
     ...(hasFlow(part) ? { flow: part.flow } : {}),
-    // (a copy is its own: never the step that made the picture, to be made anew by it)
-    ...(part.pictures?.length ? { pictures: part.pictures.map(({ step: _step, ...p }) => p) } : {}),
+    ...(part.pictures?.length ? { pictures: part.pictures } : {}),
     ...(part.slides?.length ? { slides: part.slides } : {}),
     ...(part.shapes?.length ? { shapes: part.shapes } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
@@ -425,7 +424,6 @@ function readPicture(v: unknown): PictureItem | null {
     h: p.h,
     ...(isNum(p.turn) && p.turn ? { turn: p.turn } : {}),
     ...(from ? { from } : {}),
-    ...(Number.isInteger(p.step) && (p.step as number) > 0 ? { step: p.step } : {}),
   };
 }
 

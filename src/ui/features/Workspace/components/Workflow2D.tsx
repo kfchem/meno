@@ -16,7 +16,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
-import { canWire, stateOf } from "../workflow/flow";
+import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { finished } from "../../../../lib/jobs";
@@ -230,6 +230,7 @@ export default function Workflow2D() {
   const wires = useEditor((s) => s.wires);
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
+  const pictures = useEditor((s) => s.pictures);
   const hoveredSet = useEditor((s) => s.hoveredSet);
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
@@ -341,6 +342,8 @@ export default function Workflow2D() {
   /** A wire drawn out of what gives: into a step's port, or - let go on empty space - Quick Add there, at the steps that take it. */
   const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
+    // (pictures - a Render step's - no step takes: no wire is drawn out of them)
+    if (givesOf(store.getState(), from) === "pictures") return;
     store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) } });
     follow(
       e,
@@ -514,7 +517,7 @@ export default function Workflow2D() {
   }, [chosenSet, store]);
 
   // --- what is drawn ---------------------------------------------------------
-  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires }), [model, molecules3d, sets, steps, wires]);
+  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   const gives = (end: WireEnd): Pt | null => {
@@ -558,11 +561,13 @@ export default function Workflow2D() {
           const aside = b.aside?.length ?? 0;
           const counted = !count.entries
             ? "Empty"
-            : count.holds === "structures"
-              ? plural(count.entries, "structure")
-              : count.holds === "molecules"
-                ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
-                : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
+            : count.holds === "pictures"
+              ? plural(count.entries, "picture")
+              : count.holds === "structures"
+                ? plural(count.entries, "structure")
+                : count.holds === "molecules"
+                  ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
+                  : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
           return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : "Input", count: counted }];
         }),
       ),

@@ -1,16 +1,17 @@
 /**
  * What a set holds (docs/WORKFLOWS.md, *An input: a set from the selection*): what
- * lies inside its frame - each structure drawn, and each molecule in 3D,
- * whose middle is inside it - in the order they lie; what kind of set that
- * is; and its entries, each a structure with what has been found of it.
+ * lies inside its frame - each structure drawn, each molecule in 3D and each
+ * picture, whose middle is inside it - in the order they lie; what kind of
+ * set that is; and its entries, each a structure with what has been found of
+ * it.
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
-import type { Model, Molecule3D, WorkflowSet } from "../store/types";
-import type { SetKind } from "./kinds";
+import type { Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { SetHolds } from "./kinds";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
-export type Page = { model: Model; molecules3d?: readonly Molecule3D[] };
+export type Page = { model: Model; molecules3d?: readonly Molecule3D[]; pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[] };
 
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
@@ -60,8 +61,8 @@ export function middleOfAtoms(model: Model, ids: readonly number[]): Pt {
 /** Whether `p` lies before `q`: higher on the page, or - about level, within half a bond's height - to its left. */
 const before = (p: Pt, q: Pt) => (Math.abs(p.y - q.y) > 0.9 ? q.y - p.y : p.x - q.x);
 
-/** What lies inside a frame: the structures drawn (each its atoms' ids) and the molecules in 3D (by id) whose middles are inside it, each in the order they lie. */
-export function setMembers(page: Page, set: Frame): { structures: number[][]; molecules: number[] } {
+/** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
+export function setMembers(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
   const structures = structuresOf(page.model)
     .map((ids) => ({ ids, at: middleOfAtoms(page.model, ids) }))
     .filter((s) => inside(set, s.at))
@@ -71,7 +72,11 @@ export function setMembers(page: Page, set: Frame): { structures: number[][]; mo
     .filter((m) => inside(set, m.at))
     .sort((p, q) => before(p.at, q.at))
     .map((m) => m.id);
-  return { structures, molecules };
+  const pictures = (page.pictures ?? [])
+    .filter((p) => inside(set, p))
+    .sort((p, q) => before(p, q))
+    .map((p) => p.id);
+  return { structures, molecules, pictures };
 }
 
 /**
@@ -83,12 +88,13 @@ export function setMembers(page: Page, set: Frame): { structures: number[][]; mo
 export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) => m.conformerSet === true && framesOf(m) > 1;
 
 /**
- * What a set holds: what made it says; made by the chemist, structures,
- * where any is drawn - else a conformer set, where a molecule in it is a
- * conformer search's (`conformersOfOne`): each molecule in it a compound,
- * its frames its conformers - else molecules in 3D.
+ * What a set holds: what made it says - a Render step's, pictures; made by
+ * the chemist, structures, where any is drawn - else a conformer set, where
+ * a molecule in it is a conformer search's (`conformersOfOne`): each
+ * molecule in it a compound, its frames its conformers - else molecules in
+ * 3D.
  */
-export function holdsOf(page: Page, set: WorkflowSet): SetKind {
+export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   if (set.made) return set.made.holds;
   const { structures, molecules } = setMembers(page, set);
   if (structures.length) return "structures";
@@ -96,10 +102,11 @@ export function holdsOf(page: Page, set: WorkflowSet): SetKind {
   return molecules.some((id) => conformersOfOne(byId.get(id)!)) ? "conformers" : "molecules";
 }
 
-/** How many entries a set holds, of what kind of set: a structure each, a frame each of a molecule in 3D - one for a path to its last. */
-export function countOf(page: Page, set: WorkflowSet): { holds: SetKind; entries: number; compounds: number } {
+/** How many entries a set holds, of what kind of set: a structure each, a frame each of a molecule in 3D - one for a path to its last - or a picture each. */
+export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entries: number; compounds: number } {
   const holds = holdsOf(page, set);
-  const { structures, molecules } = setMembers(page, set);
+  const { structures, molecules, pictures } = setMembers(page, set);
+  if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
   const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
   const frames = molecules.reduce((n, id) => n + entriesIn(byId.get(id)!), 0);
   const entries = structures.length + frames;

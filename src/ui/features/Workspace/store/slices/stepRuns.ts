@@ -25,13 +25,13 @@ import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pl
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import type { EditorState, JobSeen, PictureItem, StepJob, StepRan, StepRunning, Turn3D } from "../types";
+import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
 import { askOf } from "../../render/renderOptions";
 import { SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
 import { currentStyle3D } from "../../style3d";
 import { holdPicture } from "../../../../../lib/picture/held";
-import { entryCarried, picturesBeside, picturesSaid } from "../../workflow/renderStep";
+import { entryCarried, picturesSaid, placePictures, type Rendered } from "../../workflow/renderStep";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -120,10 +120,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return runAtOnce(id, plugin, at);
   }
 
-  /** The kind of set a step's results make, for what came in. */
+  /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */
   const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): SetKind => {
     const g = kindInfo(kind).gives;
-    return g === "same" || g === null ? holds : g;
+    return g === "same" || g === "pictures" ? holds : g;
   };
 
   /** The results of a step put in, as one edit - with the entries it set aside - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
@@ -431,13 +431,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /**
    * A Render step's jobs ended: the picture each made read, and - where
-   * any was made - the step's earlier pictures taken away and its new ones
-   * laid beside it, with what it did, as one edit; why not, where none was.
+   * any was made - put in the step's result set, a set of pictures, in
+   * place of those it held, with what it did, as one edit; why not, where
+   * none was.
    */
   async function finishRender(id: number, run: StepRunning, records: readonly (Job | null)[], plugin: PythonPlugin | undefined, ran: Omit<StepRan, "ok" | "said">) {
     const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
     const { theirs } = renderChoices("render", run.options);
-    const made: { picture: Omit<PictureItem, "id" | "x" | "y" | "w" | "h">; size: [number, number] }[] = [];
+    const made: Rendered[] = [];
     const whys: string[] = [];
     for (const [k, j] of run.jobs.entries()) {
       if (!client) {
@@ -465,7 +466,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (as large as its molecules are drawn; where that was not kept, its pixels' shape, ten bonds wide)
         const size = j.size ?? [10 * NOMINAL_BOND_LENGTH, (10 * NOMINAL_BOND_LENGTH * held.height) / held.width];
-        made.push({ picture: { name, sha256: held.sha256, media: held.media, px: [held.width, held.height], step: id }, size });
+        made.push({ picture: { name, sha256: held.sha256, media: held.media, px: [held.width, held.height] }, size });
       } catch (e) {
         whys.push(message(e));
       }
@@ -474,19 +475,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const ok = !whys.length && made.length > 0;
     const said = ok ? `${clock(ran.took ?? 0)} \u00b7 ${picturesSaid(made.length, total)}` : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
     const first = doc.getState().nextPictureId ?? 1;
-    // (one edit: the step's earlier pictures taken away - where it made any anew - its new ones beside it, and what it did kept)
+    // (one edit: what it did before kept, its pictures - where it made any - in its set in place of those it held, and what it did)
     doc.edit("render", (x) => {
-      const step = stepOf(x, id);
-      if (!step) return x;
-      let next = x;
-      if (made.length) {
-        next = ops.removePictures(next, (next.pictures ?? []).filter((p) => p.step === id).map((p) => p.id));
-        const places = picturesBeside(step, made.map((m) => m.size));
-        made.forEach((m, i) => (next = ops.addPicture(next, { ...m.picture, x: places[i].x, y: places[i].y, w: m.size[0], h: m.size[1] })));
-      }
-      return setRan(keepRun(next, stepOf(next, id)!), id, { ...ran, ok, said });
+      if (!stepOf(x, id)) return x;
+      const kept = keepRun(x, stepOf(x, id)!);
+      const next = made.length ? placePictures(kept, stepOf(kept, id)!, made) : kept;
+      return setRan(next, id, { ...ran, ok, said });
     });
-    // (laid as the view is: a step's pictures come where it is, not where the chemist looks)
+    // (laid as the view is: a step's pictures come in its set, not where the chemist looks)
     if (made.length) set((prev) => ({ ...prev, picturesLaid: new Set([...prev.picturesLaid, ...made.map((_, i) => first + i)]) }));
   }
 

@@ -7,7 +7,7 @@
 import type { AsideEntry, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
-import { KINDS, type SetKind, type StepKind } from "./kinds";
+import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
 
@@ -35,7 +35,7 @@ function readSet(v: unknown): WorkflowSet | null {
     y0: Math.min(b.y0, b.y1),
     x1: Math.max(b.x0, b.x1),
     y1: Math.max(b.y0, b.y1),
-    ...(made && isId(made.step) && SETS.includes(made.holds as SetKind) ? { made: { step: made.step, holds: made.holds as SetKind } } : {}),
+    ...(made && isId(made.step) && (SETS.includes(made.holds as SetKind) || made.holds === "pictures") ? { made: { step: made.step, holds: made.holds as SetHolds } } : {}),
     ...(aside.length ? { aside } : {}),
   };
 }

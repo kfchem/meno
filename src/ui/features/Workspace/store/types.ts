@@ -1,5 +1,5 @@
 import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } from "../document";
-import type { SetKind, StepKind } from "../workflow/kinds";
+import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
@@ -240,8 +240,6 @@ export type PictureItem = {
   turn?: number;
   /** Where it was cut out of a PDF, if it was (docs/PDF.md, *Taking things out*). */
   from?: PictureFrom;
-  /** The step that made it, by id, where one did (Render): run again, it makes it anew. */
-  step?: number;
 };
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
@@ -462,9 +460,9 @@ export type TextOf = { step: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
- * Made by a step: the step, the kind of set it holds, and the entries the
- * step set aside, listed struck through. Made by the chemist, a set is a
- * compound set.
+ * Made by a step: the step, the kind of set it holds - a Render step's,
+ * pictures - and the entries the step set aside, listed struck through.
+ * Made by the chemist, a set is a compound set.
  */
 export type WorkflowSet = {
   id: number;
@@ -472,7 +470,7 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  made?: { step: number; holds: SetKind };
+  made?: { step: number; holds: SetHolds };
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */

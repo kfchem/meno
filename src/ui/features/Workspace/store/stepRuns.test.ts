@@ -115,6 +115,7 @@ import { MANIFESTS } from "../../../../lib/plugins/known";
 import { canWire } from "../workflow/flow";
 import { optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
+import { setMembers } from "../workflow/entries";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -556,20 +557,20 @@ describe("Render as a step", () => {
     installedAt.blender = "/Applications/Blender.app/Contents/MacOS/Blender";
   });
 
-  /** The Blender interface's worker, as the test has it: a job for the scene, and the picture it made. */
+  /** The Blender plugin's worker, as the test has it: a job for the scene, and the picture it made. */
   const rendering = () => {
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "blender", args: ["-b", "-P", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] }) as never);
     worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }] }) as never);
   };
 
-  it("renders each entry as a picture of its own, beside the step - and run again, makes it anew, one step to undo", async () => {
+  it("renders each entry as a picture of its own, in a set of pictures wired from the step - and run again, makes it anew in that set, one step to undo", async () => {
     const { doc, st } = editor();
     const step = st().addStep("render", "blender", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
     // (Meno's own choices first, then Blender's - the role's, asked as a step)
     expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 4)).toEqual(["width", "shape", "molecules", "surfaces"]);
     expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
-    // (it gives no set: nothing is wired from it)
+    // (it gives pictures, which no step takes: nothing is wired from it)
     expect(canWire(st(), { step }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
 
     rendering();
@@ -577,7 +578,7 @@ describe("Render as a step", () => {
     await settle();
     await settle();
     // the scene Meno wrote put in the job's folder; the plugin given its own options alone
-    expect(asked.started[0]).toMatchObject({ plugin: "blender", program: "blender", path: "/Applications/Blender.app/Contents/MacOS/Blender" });
+    expect(asked.started[0]).toMatchObject({ plugin: "blender", program: "blender" });
     expect(asked.started[0].files!.map((f) => f.name)).toEqual(["render.json", "scene.gltf"]);
     expect(JSON.parse(asked.started[0].files![1].text).asset.version).toBe("2.0");
     const given = (worker.prepare.mock.calls[0] as unknown[])[2];
@@ -589,13 +590,14 @@ describe("Render as a step", () => {
     await ran;
     const first = st().pictures;
     expect(first).toHaveLength(1);
-    expect(first[0]).toMatchObject({ step, media: "image/png", px: [240, 120] });
-    // (beside the step, to its right, where a result set would stand)
-    const at = st().steps.find((s) => s.id === step)!;
-    expect(first[0].x - first[0].w / 2).toBeGreaterThan(at.x + CARD_W);
+    expect(first[0]).toMatchObject({ media: "image/png", px: [240, 120] });
+    // (in the step's result set - a set of pictures, to its right - as a calculation's molecules are in theirs)
+    const set = st().sets.find((b) => b.made?.step === step)!;
+    expect(set.made).toEqual({ step, holds: "pictures" });
+    expect(setMembers(st(), set).pictures).toEqual([first[0].id]);
+    expect(set.x0).toBeGreaterThan(st().steps.find((s) => s.id === step)!.x + CARD_W);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:12 \u00b7 1 picture" });
     expect(doc.history().undoLabel).toBe("render");
-    expect(st().sets.some((b) => b.made?.step === step)).toBe(false);
 
     // run again: its picture made anew, the earlier one gone - one step to undo
     rendering();
@@ -608,6 +610,8 @@ describe("Render as a step", () => {
     await ran;
     expect(st().pictures).toHaveLength(1);
     expect(st().pictures[0].sha256).not.toBe(first[0].sha256);
+    expect(st().sets.filter((b) => b.made?.step === step).map((b) => b.id)).toEqual([set.id]);
+    expect(setMembers(st(), set).pictures).toEqual([st().pictures[0].id]);
     doc.undo();
     expect(st().pictures.map((p) => p.sha256)).toEqual([first[0].sha256]);
   });
@@ -625,6 +629,7 @@ describe("Render as a step", () => {
     await st().lookAtJobs();
     await ran;
     expect(st().pictures).toEqual([]);
+    expect(st().sets.some((b) => b.made?.step === step)).toBe(false);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
   });
 });

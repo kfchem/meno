@@ -85,10 +85,10 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
 /** What a run gave, as its result set holds it: its molecules in 3D, those it set aside, and what kind of set they make. */
 export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind };
 
-/** What a step's result set holds now, as a run kept keeps it; none, where it has made none. */
+/** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
-  if (!set?.made) return undefined;
+  if (!set?.made || set.made.holds === "pictures") return undefined;
   const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
   const molecules = setMembers(doc, set).molecules.map((id) => {
     const { id: _id, at: _at, ...m } = byId.get(id)!;
@@ -138,12 +138,12 @@ export function showRun(
 }
 
 /** A frame `w` wide and `h` tall, its top left at (x, y). */
-const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
+export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
 
 /** The most a row of molecules in a result set spans before the next row begins. */
-const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
+export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
 /** The least a result set's inside is wide: its name and count read whole. */
-const LEAST_W = 120 * PX;
+export const LEAST_W = 120 * PX;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
@@ -275,7 +275,7 @@ export function placeResults(
  * it - or, where something is there already, lower, as far as it must to
  * keep clear of the page's sets, steps, structures and molecules.
  */
-function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: number, height: number): Frame {
+export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: number, height: number): Frame {
   const taken: Frame[] = [
     ...(doc.sets ?? []),
     ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),

@@ -236,7 +236,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
-| Render | a picture | molecules in 3D | no set: each entry a picture of its own, beside the step (RENDER.md, *Render as a step*); nothing is wired from it |
+| Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound |
