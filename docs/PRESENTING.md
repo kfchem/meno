@@ -135,9 +135,9 @@ words, a width they break into lines at, and how their lines lie.
 
 ## Shapes
 
-- **Rectangles, rounded rectangles, ellipses, lines, arrows (one head or
-  two) and callouts** (a rounded box with a tail that can be moved), each
-  able to hold words, broken at its width and moving with it.
+- **Rectangles, rounded rectangles, ellipses, lines and callouts** (a
+  rounded box with a tail that can be moved), each box able to hold words,
+  broken at its width and moving with it.
 - **Their line** - its colour, thin, regular or thick, dashed - **and their
   fill**, from the palette and its light tints.
 - **From Quick Add**: *Shapes* opens a second row, as *Calculations* does;
@@ -145,8 +145,11 @@ words, a width they break into lines at, and how their lines lie.
   the pointer and clicking, as a chain is traced; Shift makes a square or a
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
   *Box around these*, a rounded rectangle round it.
-- **A shape's arrow points at something; a reaction arrow is chemistry**
-  (it goes into an RXN file). They are called *Arrow* and *Reaction arrow*.
+- **An arrow is the page's one Arrow** (the maintainer, 2026-10-12), not a
+  shape: *Arrow* in the shapes' row draws it, as Quick Add's own arrow
+  does, with its kinds, heads, dashes, weight, colour and corners in its
+  menu (docs/EDITOR-2D.md, *Arrows*). A plain line with no head stays a
+  shape.
 - **Under the drawing, over pictures and PDFs**: a shape never hides a
   bond. A shape with no fill lets a press inside it through to what is
   under it; its line is its own.
@@ -241,14 +244,13 @@ Shift+Enter, since Enter keeps the words, as it did before.
 
 - `lib/chem/shapes.ts`, the same for the canvas, SVG and EMF: the line a
   shape follows (a rounded box's corners at most 9 points round, a callout's
-  tail from the side its tip lies beyond, an arrow's line stopping short of
-  its heads), its dashes, its heads, the area it fills, where a press takes
-  it, how far it reaches, where its words go, and how it is drawn, made
+  tail from the side its tip lies beyond), its dashes, the area it fills,
+  where a press takes it, how far it reaches, where its words go, and how it is drawn, made
   larger or smaller, moved and turned. Lines are 0.6, 1 or 2 points
   (thin as a bond's, regular, thick); a dash is 3.5 widths and 2 points
   long, a gap 2 widths and 1.5 points.
 - `store/types.ts` `Shape` (its kind, two corners or two ends, a callout's
-  tail, its weight, dashed, an arrow's second head, its line's colour - or
+  tail, its weight, dashed, its line's colour - or
   `"none"` - and its fill) and `Caption.shape`, the shape words are in;
   `document.ts` `addShape`, `updateShape`, `restyleShapes`, `orderShapes`,
   `removeShapes` (their words with them), `withShapeWords` (words about the
@@ -263,22 +265,23 @@ Shift+Enter, since Enter keeps the words, as it did before.
   filled, inside it - none through what is drawn over it; a hold, a click,
   a second click to write in it; the handles. `components/shapeFrom.ts`:
   drawn from Quick Add, led by a drag or traced with the button up.
-- Quick Add's *Shapes* opens a row of the six; the shape's menu (`PartMenu`
-  kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin, regular or
-  thick line, dashed, an arrow's *Head at both ends*, *Bring to front*,
-  *Send to back*. The selection's menu has *Box around these*: a rounded
+- Quick Add's *Shapes* opens a row of the five and the Arrow; the shape's
+  menu (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*;
+  thin, regular or thick line, dashed, *Bring to front*, *Send to back*. The selection's menu has *Box around these*: a rounded
   rectangle a third of a bond clear of it. The colour card's rows for
   shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
-  quarter of the way from white). The reaction arrow is now *Reaction
-  arrow* in its menu.
+  quarter of the way from white).
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
   pens, under everything else, from the back.
-- **A shape's arrow is not a reaction arrow.** It points at something for
-  the audience, holds no words, and is never part of a reaction: an RXN
-  file does not hold it, and Clean-up and reaction schemes pass it by. A
-  reaction arrow (Quick Add's *Reaction arrow*) is chemistry - words over
-  and under it, its own styles, written into an RXN file - and the two are
-  kept apart in the code too (`Shape` here, `Arrow` there).
+- **An arrow is not a shape** (2026-10-12, once arrows were one): `Shape`
+  lost its `arrow` kind and its heads. *Arrow* in the shapes' row begins
+  the page's `Arrow` as Quick Add's own arrow does
+  (`components/arrowFrom.ts`: drawn by a drag to its point, or put down as
+  one is made by a click), so an arrow pointing at something for the
+  audience can be dashed, coloured, given corners or two heads in its menu,
+  as any arrow. The arrow's menu is called *Arrow* again, and its delete
+  *Delete arrow*. A shape of kind `arrow` in a workspace saved before is
+  not read: it opens without it.
 
 ### Guides (lane L8, fourth part, 2026-10-11)
 

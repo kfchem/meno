@@ -102,16 +102,19 @@ describe("the right-click menu", () => {
     expect(html).not.toMatch(/Align left<\/span><svg[^>]*aria-label="Chosen"/);
   });
 
-  it("offers a shape its words, colour and Delete as icons, and its line, an arrow's heads and its place among the shapes listed", () => {
+  it("offers a shape its words, colour and Delete as icons, and its line and its place among the shapes listed", () => {
     const shape = { onWrite: none, weight: "thick" as const, onWeight: none, dash: false, onDash: none, onFront: none, onBack: none };
     const { icons, listed, html } = menu(target({ kind: "shape", id: 1 }), { shape, onColour: none });
     expect(icons).toEqual(["Edit text", "Colour…", "Delete shape"]);
     expect(listed).toEqual(["Thin line", "Regular line", "Thick line", "Dashed line", "Bring to front", "Send to back"]);
     expect(html).toMatch(/Thick line<\/span><svg[^>]*aria-label="Chosen"/);
-    // (an arrow: its heads too; a line holds no words)
-    const arrow = menu(target({ kind: "shape", id: 1 }), { shape: { ...shape, onWrite: undefined, heads: { both: true, onBoth: none } } });
-    expect(arrow.icons).toEqual(["Delete shape"]);
-    expect(arrow.listed).toContain("Head at both ends");
+    // (a line holds no words)
+    const line = menu(target({ kind: "shape", id: 1 }), { shape: { ...shape, onWrite: undefined } });
+    expect(line.icons).toEqual(["Delete shape"]);
+    // (an arrow is the page's one Arrow, not a shape: its own menu, called so)
+    const arrow = menu(target({ kind: "arrow", id: 1 }));
+    expect(arrow.html).toContain('aria-label="Arrow"');
+    expect(arrow.icons).toContain("Delete arrow");
     // (and the selection a box round it)
     expect(menu(target({ selection: "here", drawing: true }), { onBoxAround: none }).listed).toContain("Box around these");
   });

@@ -1640,7 +1640,6 @@ function WorkspaceContent({
               onWeight: (weight) => st.styleShapes([sh.id], { weight }),
               dash: !!sh.dash,
               onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
-              ...(sh.kind === "arrow" ? { heads: { both: sh.heads === 2, onBoth: () => st.styleShapes([sh.id], { heads: sh.heads === 2 ? 1 : 2 }) } } : {}),
               onFront: () => st.orderShapes([sh.id], true),
               onBack: () => st.orderShapes([sh.id], false),
             };

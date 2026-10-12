@@ -1,7 +1,6 @@
 /**
  * Shapes on the page (docs/PRESENTING.md, *Shapes*): each drawn as
- * lib/chem/shapes says - filled, its line over its fill, an arrow's heads
- * over that - under the drawing and over the pictures and PDFs, each over
+ * lib/chem/shapes says - filled, its line over its fill - under the drawing and over the pictures and PDFs, each over
  * those before it; and one being drawn from Quick Add, as it will be.
  *
  * A press on one is as on a picture: on its line, or anywhere inside it
@@ -31,7 +30,6 @@ import {
   drawnShape,
   fillOutline,
   handlesOf,
-  headsOf,
   isBox,
   lineWidthOf,
   middleOf,
@@ -75,7 +73,7 @@ const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 
 type Pt = { x: number; y: number };
 
-/** Triangles of what a shape draws, in page units: its fill, its line, and its heads. */
+/** Triangles of what a shape draws, in page units: its fill, and its line. */
 function shapeGeometry(points: { positions: number[]; indices: number[] }): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   const pos = new Float32Array((points.positions.length / 2) * 3);
@@ -113,16 +111,15 @@ function lines(pieces: readonly { points: Pt[]; closed: boolean }[], width: numb
   return { positions, indices };
 }
 
-/** A shape as it is drawn: its fill, its line and its heads, at `z` among the shapes. */
+/** A shape as it is drawn: its fill and its line, at `z` among the shapes. */
 function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stroke?: string; fill?: string }; pointPx: number; ink: string; opacity?: number }) {
   const key = JSON.stringify(s);
-  const { fill, line, heads } = useMemo(() => {
+  const { fill, line } = useMemo(() => {
     const area = s.fill ? fillOutline(s, pointPx) : null;
     const lined = s.stroke !== "none";
     return {
       fill: area ? shapeGeometry(polygons([area])) : null,
       line: lined ? shapeGeometry(lines(strokePieces(s, pointPx), lineWidthOf(s, pointPx))) : null,
-      heads: lined ? shapeGeometry(polygons(headsOf(s, pointPx))) : null,
     };
     // (made again when the shape changes, not when it is drawn again)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,9 +128,8 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
     () => () => {
       fill?.dispose();
       line?.dispose();
-      heads?.dispose();
     },
-    [fill, line, heads],
+    [fill, line],
   );
   const lineColor = s.stroke && s.stroke !== "none" ? s.stroke : ink;
   const see = opacity < 1;
@@ -146,11 +142,6 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
       )}
       {line && (
         <mesh geometry={line} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={() => {}}>
-          <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
-        </mesh>
-      )}
-      {heads && (
-        <mesh geometry={heads} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={() => {}}>
           <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
         </mesh>
       )}
@@ -224,10 +215,7 @@ function ShapeItem({
   const width = lineWidthOf(s, pointPx);
   // (the light's band, as wide on the screen at any zoom: made again as the view zooms)
   const band = useMemo(() => {
-    const o = outlineOf(s, pointPx);
-    const heads = headsOf(s, pointPx);
-    const tips = heads.map((h) => ({ points: [h[1], h[0], h[2]], closed: false }));
-    return shapeGeometry(lines([o, ...tips], width + 2 * LIT_PX * px));
+    return shapeGeometry(lines([outlineOf(s, pointPx)], width + 2 * LIT_PX * px));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, pointPx, px]);
   useEffect(() => () => band.dispose(), [band]);

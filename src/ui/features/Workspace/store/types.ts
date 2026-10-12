@@ -265,13 +265,11 @@ export type Slide = { id: number; x: number; y: number; w: number; h: number; ar
 export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
 /**
  * A change to a shape: where it lies, its tail, its line's weight, dashed
- * or not, an arrow's heads (1 or 2), its line's colour and its fill (null,
- * none of its own).
+ * or not, its line's colour and its fill (null, none of its own).
  */
 export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
   weight?: ShapeWeight;
   dash?: boolean;
-  heads?: 1 | 2;
   stroke?: string | null;
   fill?: string | null;
 };
@@ -916,8 +914,8 @@ export type EditorState = {
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
-  /** The shapes `ids` given the same look - their lines' weight, dashed or not, an arrow's heads - as one step. */
-  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => void;
+  /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
   /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
   colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
   /** The shapes `ids` brought over all the others, or put under them. */

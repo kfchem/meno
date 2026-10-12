@@ -21,7 +21,7 @@ describe("shapes on the page", () => {
   it("are put down over those before, each one step - a box with no room, or a line with no length, not", () => {
     const { doc, state } = editor();
     const a = state().addShape(BOX);
-    const b = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 5 });
+    const b = state().addShape({ kind: "line", x0: 0, y0: 0, x1: 5, y1: 5 });
     expect(state().shapes.map((s) => s.id)).toEqual([a, b]);
     expect(isBlankDocument(doc.getState())).toBe(false);
     expect(doc.history().undoDepth).toBe(2);
@@ -132,28 +132,34 @@ describe("shapes on the page", () => {
   it("are saved in the workspace's file from the back, with their words, and come back so", () => {
     const { state } = editor();
     const a = state().addShape({ ...BOX, fill: "#b2d9e4" })!;
-    const b = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 9, y1: 0, heads: 2 })!;
+    const b = state().addShape({ kind: "line", x0: 0, y0: 0, x1: 9, y1: 0, dash: true })!;
     state().orderShapes([b], false);
     state().addCaption("ΔG‡", 10, 5, undefined, undefined, 10, undefined, { shape: a });
     const text = workspaceText(state());
     expect(JSON.parse(text).shapes.map((s: { id: number }) => s.id)).toEqual([b, a]);
     const other = editor();
     other.state().openWorkspace(readWorkspace(text)!, true);
-    expect(other.state().shapes.map((s) => s.kind)).toEqual(["arrow", "rect"]);
-    expect(other.state().shapes[0]).toMatchObject({ heads: 2 });
+    expect(other.state().shapes.map((s) => s.kind)).toEqual(["line", "rect"]);
+    expect(other.state().shapes[0]).toMatchObject({ dash: true });
     expect(other.state().captions[0].shape).toBe(other.state().shapes[1].id);
     expect(other.state().addShape(BOX)).toBe(3);
+    // (a shape's arrow, saved before arrows were the page's one Arrow: not read - the rest is)
+    const old = JSON.parse(text);
+    old.shapes.push({ id: 9, kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 0, heads: 2 });
+    const third = editor();
+    third.state().openWorkspace(readWorkspace(JSON.stringify(old))!, true);
+    expect(third.state().shapes.map((s) => s.kind)).toEqual(["line", "rect"]);
   });
 
-  it("are drawn in pictures under everything else: filled, their lines - dashed in pieces - over that, an arrow's heads over those", () => {
+  it("are drawn in pictures under everything else: filled, their lines - dashed in pieces - over that", () => {
     const shapes = [
       { id: 1, ...BOX, fill: "#b2d9e4", stroke: "#cd4560" },
-      { id: 2, kind: "arrow" as const, x0: 0, y0: 20, x1: 10, y1: 20, dash: true as const },
+      { id: 2, kind: "line" as const, x0: 0, y0: 20, x1: 10, y1: 20, dash: true as const },
     ];
     const part = { atoms: [], bonds: [], shapes, captions: [{ id: 1, x: 10, y: 5, text: "words", shape: 1 }] };
     const svg = drawingSvg(part, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
     expect(svg).toMatch(/<path d="[^"]+" fill="#b2d9e4" stroke="none" \/><path d="[^"]+ Z" fill="none" stroke="#cd4560"/);
-    // (the dashed arrow: several pieces, then its head, all before the words)
+    // (the dashed line: several pieces, all before the words)
     const dashes = svg.match(/fill="none" stroke="#000000"/g) ?? [];
     expect(dashes.length).toBeGreaterThan(2);
     expect(svg.indexOf("stroke=\"#cd4560\"")).toBeLessThan(svg.indexOf("<text"));
