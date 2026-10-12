@@ -5,7 +5,7 @@ import { writeRxnfile, type WriterModel } from "../../../../lib/chem/molWriter";
 import { buildEditorModelFromRXN } from "../../../../utils/importers";
 import sample from "../../../../samples/esterification.rxn?raw";
 import { drawnOf } from "../utils/io";
-import { notOneReaction, reactionFileText } from "./reactionFile";
+import { notOneReaction, reactionArrows, reactionFileText } from "./reactionFile";
 
 const L = NOMINAL_BOND_LENGTH;
 const chain = (els: string[]): WriterModel => ({
@@ -79,6 +79,17 @@ describe("a drawn reaction, saved as an RXN file", () => {
       atoms: drawn.atoms.map((a, i) => (i < 4 ? { ...a, x: a.x + 0.5 * L } : a)),
     };
     expect(readRxnfile(reactionFileText(near)).reactants.length).toBe(1);
+  });
+
+  it("is written by the arrow that shows a reaction, whatever its kind: an arrow alone, on a slide, shows none", () => {
+    const { drawn } = opened(sample);
+    const lone = { ...drawn.arrows![0], id: 9, x: drawn.arrows![0].x, y: drawn.arrows![0].y + 40 * L };
+    const two = { ...drawn, arrows: [...drawn.arrows!, lone] };
+    expect(reactionArrows(two).map((a) => a.id)).toEqual([drawn.arrows![0].id]);
+    expect(notOneReaction(two)).toBeNull();
+    const kinded = { ...drawn, arrows: [{ ...drawn.arrows![0], kind: "retrosynthetic" as const }] };
+    expect(readRxnfile(reactionFileText(kinded)).reactants.length).toBe(readRxnfile(reactionFileText(drawn)).reactants.length);
+    expect(notOneReaction({ ...drawn, atoms: [], bonds: [], arrows: [lone] })).toMatch(/arrow/);
   });
 
   it("says why where the drawing is not one reaction", () => {
