@@ -72,6 +72,8 @@ export interface DocumentStore<T> {
    * where the step on top is not that gesture's - it made none.
    */
   drop(coalesceKey: string): boolean;
+  /** The state an undo (or a redo) would come to, without coming to it: none where there is nothing to undo (to redo). */
+  peek(direction: "undo" | "redo"): T | undefined;
   /** Replaces the content and forgets the history, e.g. after opening a file. */
   reset(state: T, label?: string): void;
   /**
@@ -176,6 +178,10 @@ export function createDocument<T>(
       present = past.pop()!;
       notify();
       return true;
+    },
+
+    peek(direction) {
+      return direction === "undo" ? past[past.length - 1]?.state : future[0]?.state;
     },
 
     redo() {

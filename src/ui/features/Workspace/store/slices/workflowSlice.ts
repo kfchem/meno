@@ -86,6 +86,21 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         }));
       }
     },
+    holdUndo: (direction: "undo" | "redo") => {
+      const gone = wf.runningGone(doc.getState(), doc.peek(direction));
+      if (!gone.length) return false;
+      set({ askUndo: { direction, steps: gone.length } });
+      return true;
+    },
+    letUndo: (go: boolean) => {
+      const asked = get().askUndo;
+      set({ askUndo: null });
+      if (!asked || !go) return;
+      // (stopped as deleting them stops them: their jobs, and their files once ended)
+      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.direction))) forgetJobs(step);
+      if (asked.direction === "undo") doc.undo();
+      else doc.redo();
+    },
     putDownProcedure: (id: string, x: number, y: number) => {
       const procedure = proceduresSaved().find((p) => p.id === id);
       if (!procedure) return;

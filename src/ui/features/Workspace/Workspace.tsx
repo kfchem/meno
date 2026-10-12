@@ -97,6 +97,7 @@ import {
   presentIntent,
   saveIntent,
   shortcutLabel,
+  undoIntent,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { useDownloads } from "../../../lib/pyEnv";
@@ -792,6 +793,20 @@ function WorkspaceContent({
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  // An undo or a redo that would take away a running step is held, and asks
+  // first what deleting it asks (heard before the app's own undo, App.tsx)
+  const askUndo = useEditor((s) => s.askUndo);
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const intent = undoIntent(e);
+      if (!intent || !store.getState().holdUndo(intent)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
@@ -1460,6 +1475,17 @@ function WorkspaceContent({
             discardLabel="Delete step"
             onCancel={() => store.getState().setWorkflowView({ askDeleteStep: null })}
             onDiscard={() => store.getState().removeStep(askDeleteStep, true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {askUndo != null && (
+          <ConfirmDiscard
+            title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
+            message={askUndo.steps > 1 ? "Their jobs are stopped, and their files go with them." : "Its jobs are stopped, and their files go with it."}
+            discardLabel={askUndo.steps > 1 ? "Delete steps" : "Delete step"}
+            onCancel={() => store.getState().letUndo(false)}
+            onDiscard={() => store.getState().letUndo(true)}
           />
         )}
       </AnimatePresence>

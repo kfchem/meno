@@ -144,6 +144,18 @@ describe("createDocument", () => {
     expect(doc.getState().atoms).toEqual(["C"]);
   });
 
+  it("says what an undo or a redo would come to, without coming to it", () => {
+    const { doc } = withClock();
+    expect(doc.peek("undo")).toBeUndefined();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("add O", addAtom("O"));
+    expect(doc.peek("undo")?.atoms).toEqual(["C"]);
+    expect(doc.getState().atoms).toEqual(["C", "O"]);
+    doc.undo();
+    expect(doc.peek("redo")?.atoms).toEqual(["C", "O"]);
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 1 });
+  });
+
   it("keeps the history bounded, dropping the oldest steps", () => {
     const doc = createDocument<Doc>(initial, { limit: 3 });
     for (const el of ["C", "O", "N", "S", "P"]) doc.edit(`add ${el}`, addAtom(el));

@@ -1056,6 +1056,17 @@ export type EditorState = {
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */
   askDeleteStep: number | null;
+  /**
+   * An undo (or a redo) that would take away a running step: held, and the
+   * question deleting it asks asked first (`askUndo`, Workspace) - true
+   * where it is held so; false where it takes nothing running away, left to
+   * be done as any undo.
+   */
+  holdUndo: (direction: "undo" | "redo") => boolean;
+  /** The undo held (`holdUndo`) let go: done - the running steps it takes away stopped first, their jobs as deleting them stops them - or, `go` false, not. */
+  letUndo: (go: boolean) => void;
+  /** An undo or a redo held, that would take away running steps (`holdUndo`). */
+  askUndo: { direction: "undo" | "redo"; steps: number } | null;
   /** A wire from what gives into a step, where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number) => boolean;
   removeWire: (id: number) => void;

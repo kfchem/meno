@@ -279,6 +279,7 @@ export function createEditorStore(
     wireDrag: null,
     workflowMenu: null,
     askDeleteStep: null,
+    askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
     doubleClickBond: null,
