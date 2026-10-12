@@ -20,7 +20,7 @@
  * object in place of the clip format and the PNG: Word and PowerPoint take
  * either of those before an object, and an object is what opens in Meno.
  */
-import { seenOnly } from "./utils/stacks";
+import { seenDrawing, seenOnly } from "./utils/stacks";
 import { clipboardTakes, type ClipItem, type Flavor } from "../../../lib/clipboard";
 import { cfbStreams } from "../../../lib/binary/cfb";
 import { dibOf } from "../../../lib/binary/dib";
@@ -67,8 +67,9 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
  */
 export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
   const record = recordText(part);
-  // (the picture, of a stack, the one it shows; the record, all of it: utils/stacks)
-  const seen = part.molecules3d ? { ...part, molecules3d: seenOnly(part.molecules3d) } : part;
+  // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
+  const drawing = seenDrawing(part);
+  const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
   const { layout, opts } = drawingLayout(seen, aromatic, style);
   // (the layout then draws them so too, for the PNG)
   let solids: SolidsPicture | null = null;

@@ -17,6 +17,7 @@ import { StoreApi } from "zustand";
 import { DOUBLE_CLICK_MS } from "../../constants";
 import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
+import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -302,8 +303,10 @@ export const createModelSlice = (
     );
     get().forgetInteraction();
     // (each molecule in 3D showing the frame its file says - numbered from
-    // the first, in order, as replaceModel left them to be)
-    set((prev: EditorState) => ({ ...prev, frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}) }));
+    // the first, in order, as replaceModel left them to be - and each stack
+    // of drawings the record marked, where it carries one: utils/stacks)
+    const recordsShown = recordsShownOf(next.atoms);
+    set((prev: EditorState) => ({ ...prev, frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   joinReadings: () => {
@@ -346,7 +349,9 @@ export const createModelSlice = (
     const turns3d: EditorState["turns3d"] = {};
     const frames3d: EditorState["frames3d"] = {};
     const lists3d: EditorState["lists3d"] = {};
-    // (and each stack showing the one it showed, as its stack is numbered now)
+    // (and each stack showing the one it showed, as its stack is numbered now -
+    // a stack of drawings, the record marked: utils/stacks)
+    const recordsShown = recordsShownOf(drawn.atoms);
     const stacksShown: EditorState["stacksShown"] = {};
     const opened3d = doc.getState().molecules3d ?? [];
     (drawn.molecules3d ?? []).forEach((m, i) => {
@@ -359,7 +364,7 @@ export const createModelSlice = (
     });
     // (and its column showing the text or the PDF it showed, or closed)
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */
@@ -368,6 +373,8 @@ export const createModelSlice = (
       ops.withImportedScheme(ops.replaceModel(d, next), scheme),
     );
     get().forgetInteraction();
+    const recordsShown = recordsShownOf(next.atoms);
+    set((prev: EditorState) => ({ ...prev, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   forgetInteraction: () => {
@@ -445,6 +452,9 @@ export const createModelSlice = (
       return added.doc;
     });
     if (!pasted) return;
+    // (a stack of drawings pasted showing the record it showed: utils/stacks)
+    const recordsShown = { ...get().recordsShown, ...recordsShownAdded(next.atoms, doc.getState().model, (id) => idOf.get(id)) };
+    const model = shownModel(get().fullModel, recordsShown);
     // the molecules in 3D pasted, numbered from there on in order: selected
     // with the rest, turned and showing the frame they were copied in
     const ids = carried.map((_, i) => start3d + i);
@@ -456,7 +466,9 @@ export const createModelSlice = (
     });
     set((prev: EditorState) => ({
       ...prev,
-      sel: added(start, doc.getState().model),
+      recordsShown,
+      model,
+      sel: added(start, model),
       sel3d: new Set(ids),
       selPictures: new Set(pictures.map((_, i) => startPicture + i)),
       selPdfs: new Set(pdfs.map((_, i) => startPdf + i)),
@@ -480,7 +492,7 @@ export const createModelSlice = (
     // (selected, as what is pasted is, to be moved or put right straight on)
     set((prev: EditorState) => ({
       ...prev,
-      sel: added(start, doc.getState().model),
+      sel: added(start, prev.model),
       sel3d: new Set(),
       selPictures: new Set(),
       selAnchor: null,
@@ -496,12 +508,19 @@ export const createModelSlice = (
     const edited = doc.edit("add structure", (d) =>
       ops.withImportedScheme(ops.appendModel(d, next), scheme),
     );
+    // (a stack of drawings it brings showing its first record: utils/stacks)
+    const ids = new Map(next.atoms.map((a, k) => [a.id, start + k]));
+    const recordsShown = edited ? { ...get().recordsShown, ...recordsShownAdded(next.atoms, doc.getState().model, (id) => ids.get(id)) } : get().recordsShown;
+    const model = shownModel(get().fullModel, recordsShown);
     set((prev: EditorState) => ({
       ...prev,
+      recordsShown,
+      model,
       // (each molecule in 3D added showing the frame its file says)
       ...(edited ? { frames3d: shownFrames(scheme, start3d, prev.frames3d), lists3d: shownLists(scheme, start3d, prev.lists3d) } : {}),
       // (selected, as a paste is)
-      ...(edited && next.atoms.length ? { sel: added(start, doc.getState().model), selAnchor: null } : {}),
+      // (as it is shown: of a stack of drawings it brings, the record shown - utils/stacks)
+      ...(edited && next.atoms.length ? { sel: added(start, model), selAnchor: null } : {}),
       hovered: { atomId: null, bondId: null },
       fitNonce: prev.fitNonce + 1,
     }));

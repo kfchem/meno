@@ -47,7 +47,17 @@ export type Atom = EditorAtom & {
   seen?: FigureSpot;
   /** What was unsure of it as it was read from a figure: marked until it is changed. */
   unsure?: Unsure;
+  /** The stack of drawings it is in, with the record it is of (utils/stacks). */
+  stack?: AtomStack;
 };
+/**
+ * Of a stack of drawings - a file's records drawn flat, standing in one
+ * place, one shown at a time (utils/stacks) - which stack an atom is in, by
+ * its id, which record it is of, by its place in the file, the record's
+ * title, and whether the stack is laid out as a grid. As a copy or a file
+ * carries it, and only so, whether its record is the one its stack shows.
+ */
+export type AtomStack = { id: number; record: number; title?: string; spread?: true; shown?: true };
 /**
  * A place on a PDF's page - the PDF, by its SHA-256, the page, and the
  * point, in points from its top left - or in a picture: the picture, by its
@@ -571,7 +581,10 @@ export type Drawn = Model & {
 };
 
 export type EditorState = {
+  /** The drawing as it is shown: of each stack of drawings, the record it shows, and the rest (utils/stacks `shownModel`). What the canvas draws and works on. */
   model: Model;
+  /** The document's whole drawing, every record of each stack of drawings in it: what is saved and exported. */
+  fullModel: Model;
   sel: Sel;
   /** The last atom chosen into the selection: where a Shift+click's path starts. */
   selAnchor: number | null;
@@ -705,6 +718,14 @@ export type EditorState = {
   spreadStack: (stack: number) => void;
   /** A stack's molecules, laid out as a grid, stacked again in its middle, `shown` the one it shows: one undo step. */
   gatherStack: (stack: number, shown: number) => void;
+  /** Which record each stack of drawings shows, by the stack's id: by the record's place in its file; its first if absent (utils/stacks). */
+  recordsShown: Record<number, number>;
+  /** A stack of drawings shows another of its records - selected in its place, where the one it showed was. */
+  showRecord: (stack: number, record: number) => void;
+  /** A stack of drawings laid out as a grid where it stands, every record shown: one undo step. */
+  spreadRecords: (stack: number) => void;
+  /** A stack of drawings, laid out as a grid, stacked again in its middle, `shown` the record it shows: one undo step. */
+  gatherRecords: (stack: number, shown: number) => void;
   /** The molecules in 3D selected, whole, by id: besides `sel`, which is the drawing's. */
   sel3d: Set<number>;
   /** The sets and steps selected, with the rest - by a box, a lasso, Ctrl or ⌘ and a click, or Select all. */
