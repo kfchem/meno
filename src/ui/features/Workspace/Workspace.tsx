@@ -32,6 +32,7 @@ import {
 } from "./components";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { chordedPress } from "./utils/press";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -97,6 +98,7 @@ import {
   presentIntent,
   saveIntent,
   shortcutLabel,
+  undoIntent,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { useDownloads } from "../../../lib/pyEnv";
@@ -139,7 +141,7 @@ import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
-import { writeClipboard } from "../../../lib/clipboard";
+import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -600,14 +602,18 @@ function WorkspaceContent({
     [store],
   );
   // words selected in a PDF copied, as they read (utils/pdfSelection)
-  const copyWords = useCallback(async () => {
-    const st = store.getState();
-    const sel = st.pdfSel;
-    const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
-    if (!sel || !pdf) return;
-    const words = await selectedWords(sel, pdf);
-    if (words) await writeClipboard([{ flavor: "text", text: words }]);
-  }, [store]);
+  const copyWords = useCallback(
+    () =>
+      copying(async () => {
+        const st = store.getState();
+        const sel = st.pdfSel;
+        const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
+        if (!sel || !pdf) return;
+        const words = await selectedWords(sel, pdf);
+        if (words) await writeClipboard([{ flavor: "text", text: words }]);
+      }),
+    [store],
+  );
   // where words taken out of a PDF are let go (components/wordsDrag)
   useEffect(() => {
     setCanvasPlace(store, { canvas: () => domRef.current, worldAt: (x, y) => clientToWorld(x, y) });
@@ -783,9 +789,29 @@ function WorkspaceContent({
     setColourCard(null);
     setSizeCard(null);
   }, [talking]);
+  // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
+  // being written, and the menu would stay open over it, its keys and the label's at odds)
+  const labelBegun = useEditor((s) => s.labelEdit.active);
+  useEffect(() => {
+    if (labelBegun) setMenu(null);
+  }, [labelBegun]);
   // and what a double-click on empty space can put down there (QuickAdd)
   const quickAdd = useEditor((s) => s.quickAdd);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  // An undo or a redo that would take away a running step is held, and asks
+  // first what deleting it asks (heard before the app's own undo, App.tsx)
+  const askUndo = useEditor((s) => s.askUndo);
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const intent = undoIntent(e);
+      if (!intent || !store.getState().holdUndo(intent)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
@@ -919,6 +945,19 @@ function WorkspaceContent({
     moved: boolean;
     pending: MenuTarget | null;
   } | null>(null);
+  // The buttons held, as the last pointer event had them: a right press
+  // while the primary button is held - an atom, the selection or the view
+  // being dragged - comes as a move with both held (a chorded press), and
+  // opens no menu: it would be the menu of what lies under what is dragged,
+  // and letting go over it would choose one of its items.
+  const buttonsHeld = useRef(0);
+  useEffect(() => {
+    const note = (e: PointerEvent) => (buttonsHeld.current = e.buttons);
+    for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.addEventListener(type, note, true);
+    return () => {
+      for (const type of ["pointerdown", "pointermove", "pointerup"] as const) window.removeEventListener(type, note, true);
+    };
+  }, []);
   const onRightDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 2) {
       rightPress.current = null; // a Ctrl-click on a Mac starts afresh
@@ -948,6 +987,8 @@ function WorkspaceContent({
     // A card's text field keeps the system's own menu - cut, copy, paste.
     if (e.target !== domRef.current) return;
     e.preventDefault(); // no browser menu over the drawing
+    // (none in the middle of a drag: pressed with the primary button held)
+    if (chordedPress(e.buttons, buttonsHeld.current)) return;
     const { hovered, hoveredArrow, arrows, hoveredPlus, pluses, hoveredCaption, captions, hovered3d, sel3d, hoveredMeasure3d, hoveredAtom3d } = store.getState();
     const box = e.currentTarget.getBoundingClientRect();
     const place = {
@@ -1247,6 +1288,10 @@ function WorkspaceContent({
       onMouseLeave={handleWrapperMouseLeave}
       onClick={handleWrapperClick}
       onContextMenu={openMenu}
+      // (no drag-and-drop of the system's own begins on the page: begun over text selected by
+      // chance, it took the pointer's moves and its release from the gesture under way - a
+      // structure dragged out of a set did not move, and then followed the pointer, the button up)
+      onDragStart={(e) => e.preventDefault()}
       onPointerDownCapture={onRightDown}
       onPointerMoveCapture={onRightMove}
       onPointerUpCapture={onRightUp}
@@ -1445,6 +1490,17 @@ function WorkspaceContent({
             discardLabel="Delete step"
             onCancel={() => store.getState().setWorkflowView({ askDeleteStep: null })}
             onDiscard={() => store.getState().removeStep(askDeleteStep, true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {askUndo != null && (
+          <ConfirmDiscard
+            title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
+            message={askUndo.steps > 1 ? "Their jobs are stopped, and their files go with them." : "Its jobs are stopped, and their files go with it."}
+            discardLabel={askUndo.steps > 1 ? "Delete steps" : "Delete step"}
+            onCancel={() => store.getState().letUndo(false)}
+            onDiscard={() => store.getState().letUndo(true)}
           />
         )}
       </AnimatePresence>

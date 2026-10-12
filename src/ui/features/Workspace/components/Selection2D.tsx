@@ -377,6 +377,21 @@ export default function Selection2D() {
         apply();
       }, FREE_MS);
     };
+    // Escape lets it go: all of it back as it was, the molecules turned as they were (the maintainer, 2026-10-12)
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (pause != null) window.clearTimeout(pause);
+      if (frame != null) window.cancelAnimationFrame(frame);
+      pause = frame = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKey, true);
+      selectionMoving.active = false;
+      const s = store.getState();
+      if (carried.length) s.dropTurnMolecules3d(gesture, Object.fromEntries(carried.map((m) => [m.id, m.turn])));
+      else s.dropMoveAtoms(gesture);
+    };
     const onUp = (ev: PointerEvent) => {
       if (pause != null) window.clearTimeout(pause);
       if (frame != null) {
@@ -385,6 +400,7 @@ export default function Selection2D() {
       }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
       selectionMoving.active = false;
       const s = store.getState();
       s.endPanHold(ev.pointerId);
@@ -393,6 +409,7 @@ export default function Selection2D() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
 
   /**

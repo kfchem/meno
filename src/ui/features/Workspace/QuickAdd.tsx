@@ -7,6 +7,7 @@ import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
+import { swallowPress } from "./utils/press";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide";
@@ -176,8 +177,11 @@ export default function QuickAdd({
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
+    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
     const outside = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (ref.current?.contains(e.target as Node)) return;
+      if (e.type === "pointerdown") swallowPress(e);
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;

@@ -34,6 +34,8 @@ export function createUiSlice(
     beginLabelEdit: (atomId: number, initial = "") =>
       set((prev: EditorState) => {
         const base = prev.model.atoms.find((a) => a.id === atomId);
+        // (an atom no longer drawn has no label to write)
+        if (!base) return prev;
         // (with its charge and mass number, as they are typed: N+, 13C - or the letter it is begun with, as typed)
         const val = initial.length ? initial : base ? labelTextOf(base) : "";
         return {

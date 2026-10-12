@@ -113,6 +113,12 @@ export function setRunning(doc: WorkspaceDocument, id: number, running: Workflow
   });
 }
 
+/** The steps running in `now` that `then` - what an undo or a redo would come to - has not: an undo that takes them away asks first, as deleting them does. */
+export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | undefined): WorkflowStep[] {
+  if (!then) return [];
+  return (now.steps ?? []).filter((s) => s.running && !(then.steps ?? []).some((x) => x.id === s.id));
+}
+
 /** `doc` without a step and the wires into it and out of it. The set it made stays, with what it holds - a set like any the chemist drew (of conformers, where its molecules' frames are a conformer search's: entries `holdsOf`). */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);

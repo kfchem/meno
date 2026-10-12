@@ -8,11 +8,11 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
-import { createInteractionSlice } from "./slices/interactionSlice";
+import { createInteractionSlice, ended as noStroke, noMoveDrag } from "./slices/interactionSlice";
 import { createUiSlice } from "./slices/uiSlice";
 import { createMolecules3dSlice, heldOf } from "./slices/molecules3dSlice";
 import { createTextsSlice } from "./slices/textsSlice";
@@ -110,6 +110,42 @@ const NO_WIRES: Wire[] = [];
  * back (React StrictMode remounts it in dev) subscribes again and catches up
  * on whatever changed meanwhile.
  */
+/**
+ * What is under the pointer, kept while it is still on the page. An undo or
+ * a redo can take away what the pointer rests on, and as the pointer has not
+ * moved nothing else says so: its light would stay where it was, and a key
+ * - a letter, Delete - act on what is gone.
+ */
+/** Whether what a wire comes out of - a set, a step - is still in the workflow. */
+function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: readonly { id: number }[]): boolean {
+  return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
+}
+
+function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>) {
+  const kept = (id: number | null, there: readonly { id: number }[]) => (id != null && !there.some((x) => x.id === id) ? null : id);
+  const { atoms, bonds } = now.model;
+  const atom = prev.hovered.atomId != null && !atoms.some((a) => a.id === prev.hovered.atomId);
+  const bond = prev.hovered.bondId != null && !bonds.some((b) => b.id === prev.hovered.bondId);
+  const molecule = (id: number) => now.molecules3d.find((m) => m.id === id);
+  const { hovered3d: m3d, hoveredAtom3d: a3d, hoveredMeasure3d: q3d, hoveredMark: mark } = prev;
+  return {
+    hovered: atom || bond ? { atomId: atom ? null : prev.hovered.atomId, bondId: bond ? null : prev.hovered.bondId } : prev.hovered,
+    hoveredPush: kept(prev.hoveredPush, now.pushes),
+    hoveredArrow: kept(prev.hoveredArrow, now.arrows),
+    hoveredPlus: kept(prev.hoveredPlus, now.pluses),
+    hoveredCaption: kept(prev.hoveredCaption, now.captions),
+    hoveredPdf: kept(prev.hoveredPdf, now.pdfs),
+    hoveredPicture: kept(prev.hoveredPicture, now.pictures),
+    hoveredSet: kept(prev.hoveredSet, now.sets),
+    hoveredStep: kept(prev.hoveredStep, now.steps),
+    hoveredWire: kept(prev.hoveredWire, now.wires),
+    hovered3d: m3d && !molecule(m3d.id) ? null : m3d,
+    hoveredAtom3d: a3d && !((molecule(a3d.id)?.atoms.length ?? 0) > a3d.atom) ? null : a3d,
+    hoveredMeasure3d: q3d && !molecule(q3d.id)?.measures?.some((x) => x.id === q3d.measure) ? null : q3d,
+    hoveredMark: mark && ("bond" in mark ? !bonds.some((b) => b.id === mark.bond) : !atoms.some((a) => a.id === mark.atom)) ? null : mark,
+  };
+}
+
 export function connectStoreToDocument(
   store: EditorStore,
   doc: DocumentStore<WorkspaceDocument>,
@@ -126,7 +162,14 @@ export function connectStoreToDocument(
         ...heldOf(prev, mirrored.molecules3d),
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
+        ...hoversHeld(prev, mirrored),
+        // (a bond or a chain being drawn out of an atom, or an atom being dragged, that an undo
+        // took away: let go - drawn on, it was a bond from nowhere, its new atom a lone CH4)
+        extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,
+        moveDrag: prev.moveDrag.active && !mirrored.model.atoms.some((a) => a.id === prev.moveDrag.atomId) ? noMoveDrag : prev.moveDrag,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
+        // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
+        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
@@ -241,6 +284,7 @@ export function createEditorStore(
     wireDrag: null,
     workflowMenu: null,
     askDeleteStep: null,
+    askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
     doubleClickBond: null,

@@ -795,6 +795,8 @@ export type EditorState = {
     drawing?: { id: number; x: number; y: number }[],
     marks?: MarkPlaces,
   ) => void;
+  /** A turn made with turnMolecules3d (`gesture`) let go of by Escape: taken back, nothing left to redo, and the molecules turned as they were (`turnsBefore`). */
+  dropTurnMolecules3d: (gesture: string, turnsBefore: Record<number, Turn3D | undefined>) => void;
   /**
    * Molecules in 3D turned where they stand, by the selection's handle, from
    * `turnsBefore` to `turnsAfter` (each set as it turned): one undo step,
@@ -886,6 +888,8 @@ export type EditorState = {
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
+  /** A drag of a picture's (`gesture`, as updatePicture took it) let go of by Escape: taken back, nothing left to redo. */
+  dropPictureChange: (id: number, gesture: string) => void;
   removePicture: (id: number) => void;
   /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
   slides: Slide[];
@@ -1067,6 +1071,17 @@ export type EditorState = {
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */
   askDeleteStep: number | null;
+  /**
+   * An undo (or a redo) that would take away a running step: held, and the
+   * question deleting it asks asked first (`askUndo`, Workspace) - true
+   * where it is held so; false where it takes nothing running away, left to
+   * be done as any undo.
+   */
+  holdUndo: (direction: "undo" | "redo") => boolean;
+  /** The undo held (`holdUndo`) let go: done - the running steps it takes away stopped first, their jobs as deleting them stops them - or, `go` false, not. */
+  letUndo: (go: boolean) => void;
+  /** An undo or a redo held, that would take away running steps (`holdUndo`). */
+  askUndo: { direction: "undo" | "redo"; steps: number } | null;
   /** A wire from what gives into a step, where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number) => boolean;
   removeWire: (id: number) => void;
@@ -1234,6 +1249,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
+  dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
   /** The selection deleted, as one undo step. */

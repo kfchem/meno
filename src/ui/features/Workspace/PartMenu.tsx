@@ -4,6 +4,7 @@ import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { MENU_ICONS } from "./menuIcons";
+import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
 
 /**
@@ -340,8 +341,11 @@ export default function PartMenu({
       const next = at < 0 ? (step > 0 ? 0 : buttons.length - 1) : (at + step + buttons.length) % buttons.length;
       buttons[next]?.focus();
     };
+    // (a press elsewhere only closes it: utils/press#swallowPress)
     const onPress = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (ref.current?.contains(e.target as Node)) return;
+      swallowPress(e);
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
