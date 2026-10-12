@@ -421,7 +421,9 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
   const lengths = bonds.map(({ a, b }) => Math.hypot(atoms[a].x - atoms[b].x, atoms[a].y - atoms[b].y)).sort((p, q) => p - q);
   const k = lengths[lengths.length >> 1] || 1;
   const pos = new Map(atoms.map((a, i) => [i, { x: a.x / k, y: a.y / k }]));
-  const { wedges, hydrogens } = placeStereo(mol, pos, shown);
+  // (on a bond no other centre's wedge is on: two on one bond, one is lost)
+  const taken = new Set(bonds.flatMap((b) => (b.wedge ? [key(b.a, b.b)] : [])));
+  const { wedges, hydrogens } = placeStereo(mol, pos, shown, taken);
   return { wedges, hydrogens: hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) };
 }
 

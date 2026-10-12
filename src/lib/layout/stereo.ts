@@ -112,10 +112,12 @@ export function placeStereo(
   mol: Molecule,
   pos: Map<number, Point>,
   tetra: ReadonlyMap<number, Tetrahedral>,
+  /** Bonds that carry a wedge already, by `key`: another centre's, not to be taken. */
+  taken: ReadonlySet<string> = new Set(),
 ): Stereo {
   const wedges: Wedge[] = [];
   const hydrogens: { on: number; at: Point }[] = [];
-  const used = new Set<string>();
+  const used = new Set<string>(taken);
   const wideEnds = new Set<number>();
   const narrowEnds = new Set<number>();
   const centres = [...tetra.keys()].filter((c) => pos.has(c));

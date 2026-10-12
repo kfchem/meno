@@ -131,6 +131,16 @@ function apexes(p: Point, q: Point): Point[] {
  * bonds (each drawn broken behind it), and turns its bonds most nearly as
  * a chain's are.
  */
+/** Whether a point lies inside a polygon, its corners in order. */
+function inside(p: Point, poly: readonly Point[]): boolean {
+  let odd = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [a, b] = [poly[i], poly[j]];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) odd = !odd;
+  }
+  return odd;
+}
+
 function layPath(
   mol: Molecule,
   path: Path,
@@ -141,6 +151,7 @@ function layPath(
   const Q = pos.get(path.to)!;
   const k = path.atoms.length;
   if (k > 4) return null;
+  const inSystem = new Set([...pos.keys(), ...path.atoms]);
   const steps = k <= 3 ? 36 : 18;
   const others = [...pos.entries()];
   const middles = mol.rings
@@ -164,6 +175,12 @@ function layPath(
       // (an atom at a ring's middle reads as a spoke of it)
       for (const c of middles) if (dist(p, c) < 0.45) cost += 3;
     });
+    // (nor closed round an atom with a group of its own - huperzine A's
+    // ethylidene carbon, its group then with no room but on the bridge)
+    for (const [a, o] of others) {
+      if (a === path.from || a === path.to || !mol.neighbours[a].some((b) => !inSystem.has(b))) continue;
+      if (inside(o, chain)) cost += 15;
+    }
     // bonds it passes over, and atoms it passes through
     for (let i = 0; i + 1 < chain.length; i++) {
       for (const [a, b] of bonds) {

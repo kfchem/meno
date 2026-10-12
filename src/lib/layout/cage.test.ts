@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cageCore, keepsConfigurations } from "./cage";
+import { axialOut, cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
+import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
 import { layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
 
@@ -37,9 +40,138 @@ describe("a cage within a ring system", () => {
       [0, 10], [10, 11, 2], [11, 12], [12, 13, 2], [13, 14], [14, 1],
     ];
     const input = carbons(15, fused);
-    const { x, y, solid } = layout2D(input);
-    expect(solid.slice(0, 10).every(Boolean)).toBe(true);
+    // (the cage in perspective; the ring fused on its side, with its double
+    // bonds, flat onto it)
+    const { x, y, depth } = layout2D(input);
+    expect(depth.slice(0, 10).every((d) => d != null)).toBe(true);
     for (const { a, b } of input.bonds) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(0.6);
+  });
+});
+
+describe("a six-membered ring drawn as a chair or a boat", () => {
+  // the template's chair: two zigzags 15 degrees off level, joined by two bonds 60 degrees steep
+  const c = Math.cos((15 * Math.PI) / 180);
+  const s = Math.sin((15 * Math.PI) / 180);
+  const o = { x: -Math.cos(Math.PI / 3), y: -Math.sin(Math.PI / 3) };
+  const chair = [
+    { x: 0, y: 0 },
+    { x: c, y: s },
+    { x: c + o.x, y: s + o.y },
+    { x: o.x, y: o.y + 2 * s },
+    { x: -c + o.x, y: s + o.y },
+    { x: -c, y: s },
+  ];
+  it("is told by its shape, any way round, mirrored or at any size", () => {
+    const turned = chair.map((p) => ({ x: 3 * (p.x * Math.cos(1) - p.y * Math.sin(1)) + 5, y: 3 * (p.x * Math.sin(1) + p.y * Math.cos(1)) - 2 }));
+    expect(drawnAsChairOrBoat(turned)).toBe(true);
+    expect(drawnAsChairOrBoat(chair.map((p) => ({ x: -p.x, y: p.y })))).toBe(true);
+    expect(drawnAsChairOrBoat([...chair.slice(2), ...chair.slice(0, 2)].reverse())).toBe(true);
+  });
+
+  it("is not a regular hexagon, nor a chair pulled out of its shape", () => {
+    const hexagon = Array.from({ length: 6 }, (_, k) => ({ x: Math.cos((k * Math.PI) / 3), y: Math.sin((k * Math.PI) / 3) }));
+    expect(drawnAsChairOrBoat(hexagon)).toBe(false);
+    expect(drawnAsChairOrBoat(chair.map((p, k) => (k === 3 ? { x: p.x + 0.25, y: p.y + 0.2 } : p)))).toBe(false);
+  });
+});
+
+describe("a solid found from its bonds", () => {
+  const fromSmiles = (smiles: string) => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return perceive({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+  };
+  const sub = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const cross = (p: Vec3, q: Vec3): Vec3 => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  /** The torsion a-b-c-d, in degrees. */
+  const torsion = (X: Map<number, Vec3>, a: number, b: number, c: number, d: number) => {
+    const [pa, pb, pc, pd] = [a, b, c, d].map((v) => X.get(v)!);
+    const n1 = cross(sub(pb, pa), sub(pc, pb));
+    const n2 = cross(sub(pc, pb), sub(pd, pc));
+    const b2 = sub(pc, pb);
+    const m = cross(n1, b2.map((v) => v / Math.hypot(...b2)) as Vec3);
+    return (Math.atan2(dot(m, n2), dot(n1, n2)) * 180) / Math.PI;
+  };
+  const angle = (X: Map<number, Vec3>, a: number, b: number, c: number) => {
+    const u = sub(X.get(a)!, X.get(b)!);
+    const v = sub(X.get(c)!, X.get(b)!);
+    return (Math.acos(dot(u, v) / Math.hypot(...u) / Math.hypot(...v)) * 180) / Math.PI;
+  };
+
+  it("has cocaine's six-membered ring the chair it is, its torsions turning each way in turn", () => {
+    // (eased from several placements: from the rough one alone, its angles
+    // its own, it came out a boat)
+    const mol = fromSmiles("CN1[C@H]2CC[C@@H]1[C@H]([C@H](C2)OC(=O)c1ccccc1)C(=O)OC");
+    const sys = mol.systems.find((x) => x.atoms.includes(1))!;
+    const X = solidOf(mol, sys);
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(1))!;
+    const t = ring.map((_, i) => torsion(X, ...([0, 1, 2, 3].map((k) => ring[(i + k) % 6]) as [number, number, number, number])));
+    t.forEach((v, i) => {
+      expect(Math.abs(v)).toBeGreaterThan(35);
+      expect(Math.sign(v)).not.toBe(Math.sign(t[(i + 1) % 6]));
+    });
+  });
+
+  it("keeps a double bond and its neighbours in one plane, at 120 degrees", () => {
+    // cyclohexene: C1=C2 (atoms 0 and 1), their neighbours in the ring 5 and 2
+    const mol = fromSmiles("C1=CCCCC1");
+    const X = solidOf(mol, mol.systems[0]);
+    expect(Math.abs(torsion(X, 5, 0, 1, 2))).toBeLessThan(5);
+    expect(angle(X, 5, 0, 1)).toBeCloseTo(120, -1);
+    expect(angle(X, 0, 1, 2)).toBeCloseTo(120, -1);
+  });
+});
+
+describe("a six-membered ring fused on a bond to a cage", () => {
+  const input = (smiles: string): LayoutInput => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+  };
+
+  it("is drawn as the chair the solid has it as, beside the cage, not flat", () => {
+    // a cyclohexane fused to adamantane: its atoms 0-3 and the two it shares
+    const g = input("C1CCC2C3CC4CC(C3)CC2(C4)C1");
+    const { x, y, depth } = layout2D(g);
+    const mol = perceive(g);
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(0))!;
+    expect(ring.every((a) => depth[a] != null)).toBe(true);
+    expect(drawnAsChairOrBoat(ring.map((a) => ({ x: x[a], y: y[a] })))).toBe(true);
+  });
+
+  it("has a group axial to that chair drawn along the chair's upright", () => {
+    // (one methyl of a gem pair on the fused ring is axial; drawn as the
+    // template has it - its upright 75 or 105 degrees from each level
+    // bond, 30 or 150 from each steep one - the ring turned as its bond to
+    // the cage lies)
+    const g = input("CC1(C)CCC2C3CC4CC(C3)CC2(C4)C1");
+    const { x, y } = layout2D(g);
+    const mol = perceive(g);
+    const sys = mol.systems[0];
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(1))!;
+    const axial = axialOut(mol, sys, ring, solidOf(mol, sys));
+    expect(axial.length).toBeGreaterThan(0);
+    const angle = (ax: number, ay: number, bx: number, by: number) =>
+      (Math.acos(Math.abs(ax * bx + ay * by) / Math.hypot(ax, ay) / Math.hypot(bx, by)) * 180) / Math.PI;
+    for (const { from, to } of axial) {
+      const [ux, uy] = [x[to] - x[from], y[to] - y[from]];
+      ring.forEach((a, k) => {
+        const b = ring[(k + 1) % 6];
+        const t = angle(ux, uy, x[b] - x[a], y[b] - y[a]);
+        expect(Math.min(Math.abs(t - 30), Math.abs(t - 75)), `${a}-${b}`).toBeLessThan(4);
+      });
+    }
   });
 });
 
@@ -60,6 +192,22 @@ describe("a solid's configurations", () => {
     [2, { x: 0, y: 1 }],
     [3, { x: -0.5, y: -0.5 }],
   ]);
+
+  it("are as given in a solid found from bond distances, a ring fusion those make trans turned cis", () => {
+    // tetrodotoxin: its guanidine ring joins its cage at C4a, whose
+    // configuration the distances alone leave the wrong way round
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const ttx = perceive({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+    const sys = ttx.systems.find((x) => x.atoms.length === 14)!;
+    const view = projectCage(ttx, sys);
+    expect(keepsConfigurations(ttx, sys.atoms, view.pos, view.depth)).toBe(true);
+  });
 
   it("are kept where the solid has the centre as given, and not where it has its mirror image", () => {
     const near = new Map([[0, 0], [1, 0], [2, 0], [3, 1]]);

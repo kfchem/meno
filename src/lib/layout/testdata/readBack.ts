@@ -31,11 +31,10 @@ function fromSmiles(smiles: string): LayoutInput {
  * given, read as Meno reads a drawing (drawn.ts): a centre in a solid shown
  * by the drawing itself, each atom where it is and as near the viewer as it
  * is; the rest by the H's and wedges the engine places. And read as a
- * reader sees its depth: a centre with three bonds or more into its ring
- * system, each to an atom drawn with depth - a cage's, one where a ring
- * fused flat onto a cage joins it, a bridgehead of a ring laid across
- * another's face - by where those atoms are and how near: the face of a
- * cage a fused ring stands on, the side of a ring a bridge passes. None
+ * reader sees its depth where the page shows it: a centre the solid shows
+ * by its shape (in a six-membered ring drawn as a chair or a boat), with
+ * three bonds or more into its ring system, each to an atom drawn with
+ * depth, by where those atoms are and how near. None
  * where the molecule has no centre, or the drawing is flat throughout: that
  * is read by its wedges alone, as any reader reads it
  * (scripts/layout/stereo.py has RDKit read every one).
@@ -77,7 +76,10 @@ function misread(input: LayoutInput): string[] {
     // (each three of them that span a volume - not three in one plane, a
     // flat ring's, which say nothing of depth - as the volume of the first
     // three says it: the same, or the other way, by which one is left out)
-    if (out.depth[c] == null) return [];
+    // (by depth only where the page shows it: a centre the solid shows by
+    // its shape, in a ring drawn as a chair or a boat - the engine draws
+    // every other centre with a wedge, read above as wedges are)
+    if (out.depth[c] == null || !out.solid[c]) return [];
     const known = a.tetra.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && out.depth[n] != null && systemOf[n] === systemOf[c]);
     const turned = [0, 1, 2, 3].some((left) => {
       const three = known.filter(([, k]) => k !== left);

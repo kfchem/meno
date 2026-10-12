@@ -183,7 +183,22 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     fourth would be in the solid fitted to a drawing that is not quite its
     projection (paeoniflorin with another sugar), and a bridgehead drawn
     all but flat by a hair (camphor's skeleton with one centre given).
-  The diastereomers are a test now.
+  The diastereomers are a test now. And the engine reads back every solid
+  it draws as Meno reads a drawing, last: one whose centres do not read as
+  given (a bond out of it drawn nearer the other of the two ways the
+  solid leaves free) is drawn again, without its view from the other
+  side, then flat - three tetrodotoxin and ibogaine isomers were so.
+- **Measure a drawing as it is drawn.** Choosing between a solid and a
+  flat drawing on a measure that left out the H's its wedges stand on
+  took aconitine's crowded solid over its flat drawing; the sheet, which
+  draws them, scored it 48 against 24.
+- **A better solid moves the view.** The solid found with real angles and
+  flat double bonds (2026-10-12) is nearer the molecule, and changed which
+  textbook view of a cage scored best, and which of flat, cage alone and
+  whole won: ginkgolide B went to a whole solid with its OHs on each
+  other, ibogaine's isoquinuclidine to a view that crowded its indole.
+  The choice among them is now made on the whole drawing, and a cage's
+  next best views are tried with what hangs from it.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -245,7 +260,16 @@ now kept by a rule in `LAYOUT-2D.md`:
     back edge at the top), axial bonds exactly upright;
   - artemisinin drawn flat;
   - taxol's parts each drawn well, then joined;
-  - a ring hemmed in by others keeps its shape before its bond lengths.
+  - a ring hemmed in by others keeps its shape before its bond lengths;
+  - solids (2026-10-12): a solid keeps its centres the shape does not show
+    wedged, not drawn flat; no wedge where the drawn conformation shows the
+    configuration (a chair's or boat's bonds, a bicyclic skeleton), and a
+    mark that is needed on the substituent rather than the ring-fusion
+    atom; a group axial on a chair upright; a ring with a double bond in it
+    flat, a double bond's atoms and all their neighbours in one plane;
+    fusions drawn as they are, trans or cis; chair or boat as the molecule
+    is - all read from Meno's own solid, not set molecule by molecule.
+    Cocaine and camphor are drawn right.
 - **Orientation**:
   - Clean-up gives the right drawing in one go (turning a drawing over is
     a feature of its own, not the answer);
@@ -306,7 +330,8 @@ and the held-out list takes new ones. What it showed, by kind:
   it: paclitaxel worsened). Scopolamine and tetrodotoxin are flat: their
   cages with a ring fused flat onto them showed another isomer (*What has
   gone wrong before*), scopolamine's on its epoxide's face (the
-  maintainer, 2026-10-11). Tetrodotoxin is carried over (*Open*);
+  maintainer, 2026-10-11). Tetrodotoxin, carried over, is now a solid as a
+  whole, its C4a turned the way it is given (*Open*);
 - two rings fused on neighbouring sides of a third, squeezed flat
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
@@ -321,14 +346,23 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
-- **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11):
-  it is drawn flat, its cage in perspective with the guanidine ring laid
-  flat onto it having shown C4a the other way. The maintainer noted two
-  things: the perspective drawing read better than the flat one, and
-  both face the wrong way - their orientation. Wanted: a perspective
-  drawing that shows the molecule as given, in the right orientation: its
-  cage seen from above, as cages are drawn (`LAYOUT-2D.md` section 2), and
-  from its front face (section 4).
+- **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
+  the perspective drawing read better than the flat one, and both faced
+  the wrong way). Its whole solid now reads as given, its centres the
+  shape does not show wedged (the maintainer chose wedges over a solid
+  only where chairs show every centre, 2026-10-12). Still open: its
+  guanidine ring, with its C=N, is to be drawn flat, but laid flat onto
+  the cage on either side of the bond it shares it shows one of the two
+  ring-junction carbons the other way round, from every view tried; it
+  stands a quarter turn from the usual drawing; and the OH in the middle
+  of the cage reads O|H.
+- **The solids' rules still open** (the maintainer, 2026-10-12): quinine's
+  OH on C9, which is no ring atom, drawn straight down (asked in #269);
+  which of paeoniflorin's six-membered rings is to be the boat (asked in
+  #269). Fused chairs are drawn decalin style inside a solid, but no
+  molecule on either list has a solid with such a pair: strychnine and
+  artemisinin are drawn flat as decided, sparteine and aconitine read
+  better flat.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

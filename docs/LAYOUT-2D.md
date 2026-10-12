@@ -113,14 +113,27 @@ they hang from.
   front or behind is a layer, not a place in space. A bridge as long
   as the path it spans is that path set off by a bond, the ring the two
   make the chair or boat it is (a morphinan's piperidine under its B
-  ring).
+  ring). A bridge is never closed round an atom of the flat rings with a
+  group of its own: huperzine A's three-atom bridge laid round its
+  ethylidene carbon left the ethylidene on the bridge; laid across the
+  face of the ring, it leaves it room.
 - **Cages**: a system whose rings are all bridged, each sharing three atoms
   or more with another (norbornane, camphor, tropane, quinuclidine,
   adamantane), or a polyhedron (cubane), is drawn in perspective, as the
   solid it is, upright and seen from above - the higher on the page, the
   further back; a drawing that needs it the other way round has the cage
-  seen from its other side, never turned over or mirrored. It is built on
-  one of its six-membered rings,
+  seen from its other side, never turned over or mirrored. The solid is
+  found from the bonds (`cage.ts`): each atom's bonds at the angle its
+  bonding gives - tetrahedral, 120 degrees with a double bond or beside
+  one with a lone pair to share, straight through a triple bond, a small
+  ring's own - a double bond's atoms and those bonded to them in one
+  plane, the atoms either side of a bond between tetrahedral atoms
+  staggered, every stereocentre held the way round it is given, eased
+  from several placements and the one that keeps its distances best
+  taken. Its conformation is read from it (`conformation.ts`): each ring
+  flat (a double bond in it), a chair, a boat or puckered. It is built on
+  one of its six-membered rings the solid has as a chair or a boat - never
+  one with a double bond in it -
   drawn as a chair or a boat always is: two zigzags of three atoms, their
   bonds 15 degrees off level, the back one above the front one and joined
   to it by two bonds 60 degrees steep - a chair's zigzags pointing opposite
@@ -141,7 +154,25 @@ they hang from.
   from it (9-BBN's B-H, a ketone's O); the bridgeheads under it, the front
   one the lower; each three-atom bridge a chair's lower half to one side,
   its middle atom the foot. Seen from above it would have that bridge
-  between the rings, hemmed in.
+  between the rings, hemmed in. Only where the solid has both rings as
+  chairs: a ring with a double bond in it is flat, and its atom would
+  otherwise carry an axial bond (huperzine A). A cage the same from
+  several sides (quinine's quinuclidine) is tried from its best few
+  textbook views with what hangs from it, the best kept - another view
+  only where it reads clearly better (by 3), so that camphor stays as it
+  is always drawn. A six-membered ring the solid has as a chair or a
+  boat, with no double bond in it, fused on a bond to a ring drawn by the
+  template - or to the rest of the cage, its other four atoms in no other
+  ring - is drawn by the template too, as decalin's second chair beside
+  its first: the template laid on the bond they share, turned, mirrored
+  and started where its other atoms fall nearest where the solid puts
+  them, so that the fusion comes out trans or cis as it is. The same goes
+  for such a ring fused onto a cage drawn alone in perspective, the rest
+  of the system flat onto it - taken unless it reads clearly worse than
+  the ring laid flat, and only from a view the flat ring reads as given
+  from too. A bond axial to any chair or boat of the solid is drawn along
+  that ring's upright as laid - straight up or down where the ring stands
+  as the template does - up or down as the solid has it.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
   atom on another or on a bond, a bond crossing one not behind it, or an
@@ -156,23 +187,57 @@ they hang from.
   seven-membered ring; gelsemine's, its oxindole spiro to it; tetrodotoxin's,
   its guanidine ring fused to it - the cage is drawn so and the rings
   fused to it flat onto it, the cage's atoms bonded to them showing their
-  configuration by a wedge. Of these and the flat drawing, the one with the
-  fewest faults, where that is clearly fewer than flat; the cage alone
-  before the whole, unless the whole reads far better. A solid is taken
+  configuration by a wedge; the cage seen from each of its best few sides,
+  the one that leaves the rest room taken (ibogaine). Of these and the flat
+  drawing, the one with the fewest faults, where that is clearly fewer
+  than flat; the cage alone before the whole, unless the whole reads far
+  better. Then the whole drawing decides, measured as it will be drawn -
+  its substituents and labels, its wedges and the H's they stand on
+  counted: a solid is kept only where the drawing reads at least as well
+  as with the system flat (ginkgolide B's OHs crowded in its solid), and a
+  flat drawing with a fault a reader cannot miss - an atom on another,
+  bonds crossing - is drawn as the solid too, and that kept where it reads
+  better (aconitine). A clean flat drawing is not given up for a solid the
+  measure merely prefers (scopolamine). A ring with a double bond in it
+  is drawn flat: where the cage alone can be drawn in perspective with
+  such rings flat onto it, the whole is not drawn as a solid (gelsemine's
+  oxindole, its benzene ring otherwise foreshortened). A solid is taken
   only with every stereocentre in it as given: a ring fusion is cis or
   trans with the same bonds between the same atoms, so a solid found from
-  how far apart the bonds put its atoms may have one the wrong way - and
-  morphine, flat with its bridge across, stays as it was. That goes for a
-  cage with rings fused flat onto it too, read as it is drawn, those rings
-  with it: laid beside the bond it shares with the cage, a ring stands on
-  one face of the cage there or the other, and only one is the molecule.
-  Scopolamine's epoxide, laid towards its three-carbon bridge and not its
-  N, drew another isomer - the wedges right for a reader that reads them
-  flat, the perspective showing the epoxide on the other face; and
-  tetrodotoxin's guanidine ring turned one of the atoms it joins the cage
-  at. Both are drawn flat now.
-  The cage seen from its other side, for a mirrored frame, is kept only so
-  too.
+  how far apart the bonds put its atoms may have one the wrong way. Such a
+  centre is turned - put through the plane of three of its neighbours, its
+  bonds keeping their lengths - and the solid eased again with every
+  centre held the way it is given (tetrodotoxin's C4a, where its guanidine
+  ring joins its cage). That goes for a cage with rings fused flat onto
+  it too, read as it is drawn, those rings with it: laid beside the bond
+  it shares with the cage, a ring stands on one face of the cage there or
+  the other, and only one is the molecule. Scopolamine's epoxide, laid
+  towards its three-carbon bridge and not its N, drew another isomer - the
+  wedges right for a reader that reads them flat, the perspective showing
+  the epoxide on the other face. The cage seen from its other side, for a
+  mirrored frame, is kept only so too.
+- **What a solid shows by its shape.** A stereocentre in a six-membered
+  ring drawn as a chair or a boat (the template, any way round) shows its
+  configuration by the drawing: each bond out of it upright or along a
+  ring bond, up or down for a reader to see. So does one in a ring bridged
+  across another, which the cage drawn in perspective fixes: ibogaine's
+  isoquinuclidine, gelsemine's cage. Either only where it reads so for
+  sure - each of its bonds out of the solid turned 15 degrees either way,
+  it still reads as given; one drawn between the two corners the solid
+  leaves free says nothing. Any other centre of a solid - in a ring fused
+  round a middle and neither chair nor boat, tetrodotoxin's in its
+  guanidine ring - shows it only by a depth the page does not show, and
+  carries a wedge or hashes on a bond out of it, or an H drawn upright, as
+  a flat ring's centre does (the maintainer, 2026-10-12, of two ways
+  offered). Meno reads a drawing so too (`drawn.ts`): depth at a centre
+  the solid shows, wedges at the rest.
+- **When a flat drawing gives way.** A flat drawing whose only faults are
+  bonds a little uneven and a bond or two passing behind another where a
+  bridge crosses a ring is no drawing with a fault: morphine and
+  strychnine stay flat with their bridges across, as they are drawn
+  everywhere. And a solid is seen from where a bond out of it, ending at a
+  label, keeps a label's breadth from another label of the solid
+  (tetrodotoxin's OH on C9 by its bridging O).
 - **Chains**: zigzag, each turn the other way from the last. A trans double
   bond carries the zigzag on; a cis one is a step in it - the chain read as
   the straight chain it would be without it, taking up again, two bonds
