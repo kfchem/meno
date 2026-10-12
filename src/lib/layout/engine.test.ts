@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
-import { layout2D, roomForHydrogens, scorer, SOLID_STEREO } from "./engine";
+import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, layoutMetrics } from "./metrics";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
-import { shownByShape, solidOf } from "./cage";
+import { shownBySolid, solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -147,25 +147,20 @@ describe("layout2D", () => {
       };
     };
     // (tetrodotoxin's flat drawing crosses bonds; its solid, once its C4a is
-    // turned the way it is given, has none - but only two of its rings are
-    // drawn as chairs or boats, and its other centres show nothing by their
-    // shape: with SOLID_STEREO "wedges" it is the solid, every such centre
-    // wedged; with "chairs", flat)
+    // turned the way it is given, has none. Its centres in a chair or a boat,
+    // or in a ring bridged across another, show themselves by its shape; the
+    // rest are wedged)
     const smiles = "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O";
     const given = input(smiles);
     const ttx = layout2D(given);
     const centres = given.atoms.flatMap((a, i) => (a.tetra && ttx.depth[i] != null ? [i] : []));
-    if (SOLID_STEREO === "wedges") {
-      expect(given.atoms.filter((_, i) => ttx.depth[i] != null)).toHaveLength(14);
-      const mol = perceive(given);
-      const shown = shownByShape(mol, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
-      for (const c of centres) {
-        if (ttx.solid[c]) expect(shown.has(c), `C${c} in a chair or boat`).toBe(true);
-        else expect(ttx.wedges.some((w) => w.from === c), `C${c} wedged`).toBe(true);
-      }
-      expect(centres.filter((c) => !ttx.solid[c]).length).toBeGreaterThan(0);
-    } else {
-      expect(ttx.solid.some(Boolean)).toBe(false);
+    expect(given.atoms.filter((_, i) => ttx.depth[i] != null)).toHaveLength(14);
+    const mol = perceive(given);
+    const sys = mol.systems.find((x) => x.atoms.length === 14)!;
+    const shown = shownBySolid(mol, sys, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
+    for (const c of centres) {
+      if (ttx.solid[c]) expect(shown.has(c), `C${c} shown by the solid's shape`).toBe(true);
+      else expect(ttx.wedges.some((w) => w.from === c), `C${c} wedged`).toBe(true);
     }
     // (morphine's solid reads as given now too, but its flat drawing has no
     // fault - its bonds a little uneven, its bridge passing behind a ring -
@@ -709,6 +704,34 @@ describe("layout2D", () => {
     const { x, y } = layout2D(input);
     expect(Math.hypot(x[0] - x[1], y[0] - y[1])).toBeGreaterThan(1.5);
   });
+});
+
+describe("a ring system drawn as a solid", () => {
+  const input = (smiles: string): LayoutInput => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+  };
+
+  it("shows the centres of a ring bridged across another by its shape, with no wedge: gelsemine's, ibogaine's", () => {
+    // (all but one at most, each read for sure by its bonds as drawn; with
+    // wedges wherever no chair or boat showed them, gelsemine had seven)
+    for (const smiles of ["CN1C[C@]2([C@@H]3C[C@@H]4[C@]5([C@H]2[C@H]1[C@H]3CO4)C6=CC=CC=C6NC5=O)C=C", "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC"]) {
+      const g = input(smiles);
+      const out = layout2D(g);
+      const mol = perceive(g);
+      const rings = mol.systems.flatMap((sys) => sys.rings.map((r) => mol.rings[r]));
+      const bridged = rings.filter((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
+      const centres = g.atoms.flatMap((a, i) => (a.tetra && bridged.some((r) => r.includes(i)) ? [i] : []));
+      expect(centres.length, smiles).toBeGreaterThanOrEqual(4);
+      expect(centres.filter((c) => out.wedges.some((w) => w.from === c)).length, smiles).toBeLessThanOrEqual(1);
+    }
+  }, 30000);
 });
 
 describe("a biaryl with something beside its bond on each ring", () => {

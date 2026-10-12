@@ -3,7 +3,7 @@ import { readStereo, sameConfiguration, unsureStereo, wedgesForFlat, type DrawnA
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
-import { layout2D, SOLID_STEREO } from "./engine";
+import { layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
 import cages from "./testdata/cages.json";
 
@@ -96,8 +96,7 @@ describe("readStereo", () => {
     for (const [name, g] of Object.entries(cages)) {
       const input = g as LayoutInput;
       const { atoms, bonds, out, hydrogen } = drawing(input);
-      // (a solid only with every centre shown by a chair or a boat, where SOLID_STEREO says so)
-      expect(out.solid.some(Boolean) || SOLID_STEREO === "chairs", name).toBe(true);
+      expect(out.solid.some(Boolean), name).toBe(true);
       const read = readStereo(atoms, bonds);
       input.atoms.forEach((a, i) => {
         if (!a.tetra) return;
@@ -132,8 +131,7 @@ describe("readStereo", () => {
           }
         }
       }
-      // (a solid only with every centre shown by a chair or a boat, where SOLID_STEREO says so)
-      expect(out.solid.some(Boolean) || SOLID_STEREO === "chairs", name).toBe(true);
+      expect(out.solid.some(Boolean), name).toBe(true);
     }
   });
 

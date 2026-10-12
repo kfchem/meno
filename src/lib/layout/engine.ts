@@ -21,12 +21,12 @@ import {
   type Grown,
 } from "./assemble";
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
-import { hydrogenRunsInto, hydrogenSpot, layoutMetrics } from "./metrics";
+import { hydrogenRunsInto, hydrogenSpot, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownByShape, type CageView } from "./cage";
+import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, type CageView } from "./cage";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
@@ -68,19 +68,65 @@ export function layout2D(input: LayoutInput): Layout2D {
   // of it drawn nearer the other of the two ways the solid leaves free than
   // the one it is - is drawn again, first without its view from the other
   // side, then flat. Clean-up never hands back a solid of another molecule.
-  const redo: Redo = { alone: new Set(), flat: new Set() };
+  //
+  // And a ring system drawn as a solid because it lies flat only with a
+  // fault - not a cage, which is always drawn so - is kept a solid only
+  // where the whole drawing, its substituents and their labels counted,
+  // reads at least as well as with it flat: a solid seen from its best side
+  // can still crowd what hangs from it (ginkgolide B's OHs).
+  // And the other way: one drawn flat with a fault, where a solid would do,
+  // is drawn as the solid too, and that kept where it reads better.
+  const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set() };
   for (;;) {
-    const { out, mol } = laidOut(input, redo);
+    const { out, mol, solidToo } = laidOut(input, redo);
     const wrong = [...misread(input, mol, out)].filter((i) => !redo.flat.has(i));
-    if (!wrong.length) return out;
-    for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
+    if (wrong.length) {
+      for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
+      continue;
+    }
+    let best = out;
+    let bestScore = drawingScore(mol, out);
+    const chosen = mol.systems.flatMap((sys, i) => (!redo.flat.has(i) && !isCage(mol, sys) && out.solid.some((s, a) => s && mol.systemOf[a] === i) ? [i] : []));
+    if (chosen.length) {
+      const flat = laidOut(input, { ...redo, flat: new Set([...redo.flat, ...chosen]) });
+      const score = drawingScore(mol, flat.out);
+      if (score < bestScore - 1e-9) [best, bestScore] = [flat.out, score];
+    }
+    // (only where the flat drawing has a fault a reader cannot miss - an
+    // atom on another, bonds crossing: a solid reads better than that, but
+    // not than a clean flat drawing, however the measure has them)
+    const solids = solidToo.filter((i) => !redo.flat.has(i));
+    if (solids.length && drawingFaults(mol, best) > 0) {
+      const solid = laidOut(input, { ...redo, solid: new Set(solids) });
+      const score = drawingScore(mol, solid.out);
+      if (!misread(input, solid.mol, solid.out).size && score < bestScore - 1e-9) [best, bestScore] = [solid.out, score];
+    }
+    return best;
   }
 }
 
-/** The ring systems drawn again: without their view from the other side, or flat. */
-type Redo = { alone: Set<number>; flat: Set<number> };
+/** How well a whole drawing reads (`layoutMetrics`), piece by piece, its H's and labels counted. */
+function drawingScore(mol: Molecule, out: Layout2D): number {
+  const pos = new Map(out.x.map((x, i) => [i, { x, y: out.y[i] }]));
+  return mol.pieces.reduce((sum, piece) => sum + scorer(mol, piece, out.depth, out.solid, 1)(pos), 0);
+}
 
-function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule } {
+/** How many faults a reader cannot miss a whole drawing has: atoms on atoms, bonds crossing. */
+function drawingFaults(mol: Molecule, out: Layout2D): number {
+  const pos = new Map(out.x.map((x, i) => [i, { x, y: out.y[i] }]));
+  return mol.pieces.reduce((sum, piece) => {
+    const m = measurer(mol, piece, out.depth, out.solid, 1)(pos);
+    return sum + m.overlaps + m.crossings;
+  }, 0);
+}
+
+/** How much better another view of a cage must read than its best textbook view to be taken instead. */
+const CAGE_VIEW_MARGIN = 3;
+
+/** The ring systems drawn again: without their view from the other side, flat, or as a solid where they would be flat. */
+type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number> };
+
+function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[] } {
   const mol = perceive(input);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
@@ -98,12 +144,30 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   const etaOf = new Map(mol.eta.filter((e) => !unitOf.has(e.system)).map((e) => [e.system, e]));
   const lifts = new Map<number, number>();
   const hintsM = new Map<number, Map<number, Point>>();
+  // a cage seen from each of its best few sides, chosen among as a
+  // macrocycle's shapes are, by what hangs from it (quinine's quinuclidine)
+  const cageViews = new Map<number, CageView[]>();
+  // (the systems drawn flat that a solid would do for too)
+  const solidToo: number[] = [];
   const variantsOf = (i: number) => {
     const e = etaOf.get(i);
     const u = unitOf.get(i);
-    return e ? etaSpins(mol, e) : u ? unitVariants(mol, u) : ringSystemVariants(mol, mol.systems[i]);
+    const views = cageViews.get(i);
+    return views ? views.length : e ? etaSpins(mol, e) : u ? unitVariants(mol, u) : ringSystemVariants(mol, mol.systems[i]);
   };
   const setVariant = (i: number, v: number) => {
+    const views = cageViews.get(i);
+    if (views) {
+      const view = views[v];
+      local.set(i, view.pos);
+      view.depth.forEach((d, a) => (depth[a] = d));
+      view.hints.forEach((m, a) => (hints.set(a, m), hintsM.set(a, m)));
+      if (view.other && !redo.alone.has(i)) {
+        others.set(i, view.other);
+        view.other.hints.forEach((m, a) => hintsM.set(a, m));
+      } else others.delete(i);
+      return;
+    }
     const e = etaOf.get(i);
     const u = unitOf.get(i);
     if (!e && !u) return void local.set(i, placeRingSystem(mol, mol.systems[i], v));
@@ -114,7 +178,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   };
   mol.systems.forEach((sys, i) => {
     if (etaOf.has(i) || unitOf.has(i)) return setVariant(i, 0);
-    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i);
+    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i));
+    if (laid.solidToo) solidToo.push(i);
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
     laid.hints?.forEach((m, a) => hints.set(a, m));
@@ -122,6 +187,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       upright.add(i);
       for (const a of laid.solidAtoms ?? sys.atoms) solid[a] = true;
       if (laid.other && !redo.alone.has(i)) others.set(i, laid.other);
+      if (laid.views && laid.views.length > 1) cageViews.set(i, laid.views);
     }
   });
   // what is measured as drawn in perspective: a cage, and a ring bound
@@ -169,7 +235,6 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const count = variantsOf(i);
     if (count < 2) return;
     const piece = mol.pieces.find((p) => p.includes(sys.atoms[0]))!;
-    const score = scorer(mol, piece, depth, measured, 0, false);
     let best = 0;
     let bestScore = Infinity;
     const here = new Set(piece);
@@ -177,6 +242,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const swapsHere = swaps.filter(([a]) => here.has(a));
     for (let v = 0; v < count; v++) {
       setVariant(i, v);
+      // (measured as this one is drawn: a cage's depth is its view's)
+      const score = scorer(mol, piece, depth, measured, 0, false);
       // the frame it grows best in - the best few, for a piece of up to
       // sixty atoms - each tried the other way and untangled where it helps:
       // substituents inside a macrocycle are crowded until then, and the
@@ -190,7 +257,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         .sort((p, q) => p.score - q.score);
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
         const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
-        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score;
+        // (a cage's textbook view kept unless another reads clearly better:
+        // camphor as it is always drawn, not the other way round)
+        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (cageViews.has(i) && v ? CAGE_VIEW_MARGIN : 0);
         if (s < bestScore) {
           bestScore = s;
           best = v;
@@ -392,18 +461,22 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     }
   }
   for (const d of mol.dienes) d.ring.forEach((a, i) => perspective(a, d.ring[(i + 1) % d.ring.length]));
-  // a stereocentre in a cage drawn in perspective shows itself there
+  // a stereocentre in a cage drawn in perspective shows itself there - one
+  // in a six-membered ring drawn as a chair or a boat, or in a ring bridged
+  // across another (ibogaine's isoquinuclidine): the way its bonds go, as
+  // drawn, says which way round it is. Any other centre of a solid shows
+  // nothing by its shape, and carries a wedge.
+  // (and only where it reads so for sure: its bonds out of the solid each
+  // turned 15 degrees either way, it still reads as given - a bond drawn
+  // between the two corners the solid leaves free says nothing)
   const tetra = new Map<number, Tetrahedral>();
-  // (and, a solid showing them with wedges, each centre in it its shape
-  // does not show: in no six-membered ring drawn as a chair or a boat)
-  if (SOLID_STEREO === "wedges") {
-    mol.systems.forEach((sys) => {
-      const own = sys.atoms.filter((a) => solid[a]);
-      if (!own.some((a) => input.atoms[a].tetra)) return;
-      const shown = shownByShape(mol, own, (a) => ({ x: x[a], y: y[a] }));
-      for (const a of own) if (input.atoms[a].tetra && !shown.has(a)) solid[a] = false;
-    });
-  }
+  mol.systems.forEach((sys) => {
+    const own = sys.atoms.filter((a) => solid[a]);
+    if (!own.some((a) => input.atoms[a].tetra)) return;
+    const shown = shownBySolid(mol, sys, own, (a) => ({ x: x[a], y: y[a] }));
+    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => shown.has(a) && input.atoms[a].tetra));
+    for (const a of own) if (input.atoms[a].tetra && (!shown.has(a) || unsure.has(a))) solid[a] = false;
+  });
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));
   // and an axis of chirality, by a wedge at an end of it
@@ -419,7 +492,57 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const ms = u.cluster.metals;
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
-  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol };
+  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo };
+}
+
+/**
+ * Of the `centres` of a solid, drawn at `x`, `y` and `depth` with no wedge,
+ * those that read as given only by a hair, as Meno reads a drawing
+ * (drawn.ts): one of their bonds out of the solid turned 15 degrees either
+ * way, they read otherwise, or not at all.
+ */
+function byAHair(
+  input: LayoutInput,
+  mol: Molecule,
+  x: readonly number[],
+  y: readonly number[],
+  depth: readonly (number | null)[],
+  centres: readonly number[],
+): Set<number> {
+  const out = new Set<number>();
+  if (!centres.length) return out;
+  const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({
+    x: x[i],
+    y: y[i],
+    el: a.el,
+    hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(depth[i] != null ? { z: depth[i]! } : {}),
+    ...(a.tetra && centres.includes(i) ? { centre: true } : {}),
+  }));
+  const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
+  for (const c of centres) {
+    const t = input.atoms[c].tetra!;
+    const reads = (as: DrawnAtom[]) => {
+      const u = readStereo(as, bonds).tetra.get(c);
+      return !!u && sameConfiguration(t, u);
+    };
+    if (!reads(atoms)) {
+      out.add(c);
+      continue;
+    }
+    for (const n of mol.neighbours[c]) {
+      if (depth[n] != null || out.has(c)) continue;
+      for (const deg of [-15, 15]) {
+        const r = (deg * Math.PI) / 180;
+        const v = { x: x[n] - x[c], y: y[n] - y[c] };
+        const turned = atoms.map((a, i) =>
+          i === n ? { ...a, x: x[c] + v.x * Math.cos(r) - v.y * Math.sin(r), y: y[c] + v.x * Math.sin(r) + v.y * Math.cos(r) } : a,
+        );
+        if (!reads(turned)) out.add(c);
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -549,36 +672,21 @@ type SystemLayout = {
   /** Drawn in perspective, these alone: a cage's core, the rings fused to it flat. */
   solidAtoms?: number[];
   other?: Omit<CageView, "other">;
+  /** A cage's views to choose among by what hangs from it, the best first. */
+  views?: CageView[];
+  /** Drawn flat with a fault, where a solid would do as well: to be tried as that. */
+  solidToo?: boolean;
 };
 
-/**
- * How a solid shows a stereocentre its shape does not: one in no
- * six-membered ring drawn as a chair or a boat (cage.ts `shownByShape`),
- * whose bonds' depth the page does not show a reader.
- * - "chairs": it is not drawn as a solid at all, but flat, with wedges,
- *   unless every stereocentre in it is so shown.
- * - "wedges": it is drawn as the solid, and each such centre carries a
- *   wedge or hashes on its bond out of the solid, or an H drawn upright.
- * (The maintainer chooses, from the pictures of both.)
- */
-export const SOLID_STEREO: "chairs" | "wedges" = "wedges";
-
-/** Whether every stereocentre among `atoms`, drawn at `pos`, is shown by the solid's shape - or a solid need not show them so. */
-function shapeShowsAll(mol: Molecule, atoms: readonly number[], pos: Map<number, Point>): boolean {
-  if (SOLID_STEREO !== "chairs") return true;
-  const centres = atoms.filter((a) => mol.tetra.has(a));
-  if (!centres.length) return true;
-  const shown = shownByShape(mol, atoms, (a) => pos.get(a)!);
-  return centres.every((c) => shown.has(c));
-}
-
-function layoutSystem(mol: Molecule, i: number): SystemLayout {
+function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   const sys = mol.systems[i];
   // a cage - norbornane, tropane, quinuclidine, adamantane - is drawn in
   // perspective, the way it always is; anything else flat
   if (isCage(mol, sys)) {
     const cage = projectCage(mol, sys);
-    if (shapeShowsAll(mol, sys.atoms, cage.pos)) return { ...cage, other: cage.other && shapeShowsAll(mol, sys.atoms, cage.other.pos) ? cage.other : undefined, solid: true };
+    // (and the next best of its textbook views, to try with what hangs from it)
+    const views = [cage, ...[1, 2].flatMap((rank) => projectCage(mol, sys, rank) ?? [])];
+    return { ...cage, solid: true, views };
   }
   const flat = layoutFlat(mol, sys);
   // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
@@ -602,10 +710,10 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const wholeFits = sys.atoms.length <= 20 && rings.every((r) => r.length <= 8) && !sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]));
   // (and only a solid with every stereocentre in it as given)
   const projected = wholeFits ? projectCage(mol, sys) : null;
-  const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) && shapeShowsAll(mol, sys.atoms, projected.pos) ? projected : null;
+  const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) ? projected : null;
   const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth, true) : Infinity;
   const core = cageCore(mol, sys);
-  if (!core) return whole && wholeFaults < flatFaults - 1 ? { ...whole, solid: true } : flat;
+  if (!core) return whole && (asSolid || wholeFaults < flatFaults - 1) ? { ...whole, solid: true } : { ...flat, solidToo: !!whole };
   const view = projectCage(mol, core);
   const onto = (v: Omit<CageView, "other">) => {
     const pos = new Map(v.pos);
@@ -630,18 +738,32 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const coreAtoms = new Set(core.atoms);
   const solidAtoms = core.atoms.filter((a) => mol.neighbours[a].every((b) => !inSys.has(b) || coreAtoms.has(b)));
   const shows = (v: Omit<CageView, "other">) =>
-    sys.atoms.every((a) => v.pos.has(a)) && keepsConfigurations(mol, sys.atoms, v.pos, v.depth) && shapeShowsAll(mol, solidAtoms, v.pos);
-  const persp = onto(view);
-  const perspFaults = shows(persp) ? flatCost(mol, sys, persp.pos, persp.depth, true) : Infinity;
+    sys.atoms.every((a) => v.pos.has(a)) && keepsConfigurations(mol, sys.atoms, v.pos, v.depth);
+  // (the cage seen from each of its best few sides, the rings fused flat
+  // onto it: the one that reads best - a cage alike from several sides,
+  // ibogaine's isoquinuclidine, leaves the rest room from one of them)
+  let persp = onto(view);
+  let perspFaults = shows(persp) ? flatCost(mol, sys, persp.pos, persp.depth, true) : Infinity;
+  let seen: CageView = view;
+  for (let rank = 1; rank < 4; rank++) {
+    const v = projectCage(mol, core, rank);
+    if (!v) break;
+    const p = onto(v);
+    const f = shows(p) ? flatCost(mol, sys, p.pos, p.depth, true) : Infinity;
+    if (f < perspFaults - 1e-9) [seen, persp, perspFaults] = [v, p, f];
+  }
   // (the cage alone in perspective before the whole, its fused rings flat
   // and wedged as a chemist draws them, unless the whole reads far better)
-  if (whole && wholeFaults < flatFaults - 1 && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
-  if (perspFaults >= flatFaults - 1) return flat;
+  if (whole && (asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
+  if (perspFaults >= flatFaults - 1 && !(asSolid && perspFaults < Infinity)) {
+    if (asSolid && whole) return { ...whole, solid: true };
+    return { ...flat, solidToo: !!whole || perspFaults < Infinity };
+  }
   // (an atom of the cage bonded to a ring fused flat onto it shows its
   // configuration by a wedge, as a flat ring's atoms do: its bond into that
   // ring lies where the flat ring puts it, not where the solid would - and
   // seen from its other side, for a mirrored frame, only so too)
-  const other = view.other && onto(view.other);
+  const other = seen.other && onto(seen.other);
   return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}) };
 }
 
@@ -1456,6 +1578,19 @@ export function scorer(
   hydrogenRoom?: number,
   sugarFaces?: boolean,
 ): (pos: Grown) => number {
+  const measure = measurer(mol, piece, depth, solid, hydrogenRoom, sugarFaces);
+  return (pos) => measure(pos).score;
+}
+
+/** The same, every measure of it (`layoutMetrics`). */
+function measurer(
+  mol: Molecule,
+  piece: number[],
+  depth: readonly (number | null)[] = [],
+  solid: readonly boolean[] = [],
+  hydrogenRoom?: number,
+  sugarFaces?: boolean,
+): (pos: Grown) => LayoutMetrics {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
   const orders: number[] = [];
@@ -1504,5 +1639,5 @@ export function scorer(
       // the H's)
       ...(hydrogenRoom === 0 ? { nameRoom: NAME_ROOM_FIRST } : {}),
       sugarFaces,
-    }).score;
+    });
 }
