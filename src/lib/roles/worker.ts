@@ -26,12 +26,20 @@ export type ChemState =
 
 export const useChem = create<ChemState>(() => ({ state: "idle" }));
 
-/** The plugin that fills a role: the one chosen, where it fills it; else the first added that does - the one the chemist added, of two that read pictures; else the first that does. */
+/**
+ * The plugin that fills a role: the one chosen, where it fills it - unless
+ * the chemist took it away and another that fills it is added (the
+ * maintainer, 2026-10-12); else the first added that does - the one the
+ * chemist added, of two that read pictures; else the first that does.
+ */
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   const can = pluginsFilling(role);
-  const chosen = useAppSettings.getState().plugins.roles[role];
+  const { roles, removed } = useAppSettings.getState().plugins;
   const state = useReaders.getState().state;
-  return can.find((p) => p.id === chosen) ?? can.find((p) => state[p.id] === "added") ?? can[0];
+  const picked = can.find((p) => p.id === roles[role]);
+  const added = can.find((p) => state[p.id] === "added" && !removed.includes(p.id));
+  if (picked && removed.includes(picked.id) && added) return added;
+  return picked ?? added ?? can[0];
 }
 
 /** A role asked of a plugin the chemist took away: not a failure of it - it says to add it. */

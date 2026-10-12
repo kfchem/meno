@@ -749,15 +749,21 @@ function Invoke-MenoSwipe {
       .SYNOPSIS
       Two fingers on a trackpad over a point: scroll by DX, DY pixels in small
       steps. A positive DY scrolls down, as it would a page.
+
+      -Held swipes where the pointer already is, without moving it there
+      first: with a button held down, in a drag's -AtStep, a move would be
+      the drag's.
     #>
     param(
         [Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y,
-        [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10
+        [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10, [switch] $Held
     )
     $p = ConvertTo-Screen $X $Y
     Assert-MenoFront
-    [MacGui]::MoveTo($p.X, $p.Y)
-    Start-Sleep -Milliseconds 60
+    if (-not $Held) {
+        [MacGui]::MoveTo($p.X, $p.Y)
+        Start-Sleep -Milliseconds 60
+    }
     [MacGui]::Swipe($p.X, $p.Y, $DX, $DY, $Steps)
     Start-Sleep -Milliseconds 200
 }

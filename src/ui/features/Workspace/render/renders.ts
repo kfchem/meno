@@ -1,7 +1,7 @@
 /**
  * Rendering (docs/RENDER.md): molecules in 3D written as a scene
  * (./renderScene), given to the plugin that fills the role Render - the
- * Blender interface - which prepares a job; the job run apart from Meno,
+ * Blender plugin - which prepares a job; the job run apart from Meno,
  * as a workflow's are (lib/jobs), looked at until it ends - how far it is,
  * as its log says ("progress 12/240") - and what it made, a picture or a
  * film, put on the page beside the molecules: where a placeholder of its
@@ -117,6 +117,9 @@ export async function shownOf(store: EditorStore, ids: readonly number[]): Promi
     };
     const move = row?.move ? given(row.move, (v) => (Array.isArray(v) && v.length === 3 * m.atoms.length && v.every(Number.isFinite) ? (v as number[]) : undefined)) : undefined;
     const grid = row?.surface ? given(row.surface, readGrid) : undefined;
+    // (coloured by another grid where it says so - NCI's sign(λ2)ρ - as the canvas colours it)
+    const by = row?.colour ? given(row.colour.by, readGrid) : undefined;
+    const colour = by && row?.colour ? { grid: by, from: row.colour.from, to: row.colour.to } : undefined;
     let surfaces: Shown3D["surfaces"];
     if (grid) {
       // (about the centre of the frame shown, as the canvas places it)
@@ -125,7 +128,7 @@ export async function shownOf(store: EditorStore, ids: readonly number[]): Promi
       const n = Math.floor(xyz.length / 3) || 1;
       const centre: [number, number, number] = [0, 0, 0];
       for (let k = 0; k + 2 < xyz.length; k += 3) for (let c = 0; c < 3; c++) centre[c] += xyz[k + c] / n;
-      surfaces = await surfaceOf(grid, centre, open?.iso ?? grid.iso ?? 0.05).catch(() => undefined);
+      surfaces = await surfaceOf(grid, centre, open?.iso ?? grid.iso ?? 0.05, colour).catch(() => undefined);
     }
     out.push({ m, ...(surfaces ? { surfaces } : {}), ...(move ? { move } : {}) });
   }

@@ -3,6 +3,7 @@ import { usePresentingWindow } from "../presenting";
 import { FADE, RISE } from "../theme/motion";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef } from "react";
+import { useAskedKeys } from "../layouts/asking";
 import { purposeName, useNetwork } from "../../lib/net/network";
 
 /**
@@ -15,24 +16,20 @@ export default function ConsentDialog() {
   const talking = usePresentingWindow((s) => s.on);
   const asking = useNetwork((s) => (talking ? null : s.asking));
   const noRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // (the keys its own while it asks: Escape fetches nothing, and nothing behind it acts on one)
+  useAskedKeys(boxRef, () => asking?.answer(false), !!asking);
   useEffect(() => {
     if (!asking) return;
     // Not fetching is the safe answer, so it is the one a stray Enter gives.
     noRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        asking.answer(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, [asking]);
   return (
     <AnimatePresence>
     {asking && (
     <motion.div key="consent" {...FADE} className="absolute inset-0 z-[110] flex items-center justify-center bg-black/20">
       <motion.div
+        ref={boxRef}
         {...RISE}
         role="alertdialog"
         aria-modal="true"

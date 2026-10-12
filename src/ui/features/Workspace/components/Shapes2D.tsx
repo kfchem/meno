@@ -46,6 +46,7 @@ import {
   type ShapeHandle,
 } from "../../../../lib/chem/shapes";
 import { pageAt } from "../utils/page";
+import { guideScale, guideSides } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
@@ -422,14 +423,32 @@ function Handles({
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
     const was = s;
+    // (a box's corner or side: as wide or as tall as something near, where it comes near - its proportions, with Shift; docs/PRESENTING.md, *Guides*)
+    const sides = isBox(was.kind) && h !== "tail" ? { x: h.includes("x0") ? ("x0" as const) : h.includes("x1") ? ("x1" as const) : undefined, y: h.includes("y0") ? ("y0" as const) : h.includes("y1") ? ("y1" as const) : undefined } : null;
+    const guide = sides ? guideSides(store, toWorld, from) : null;
+    const scale = sides?.x && sides.y ? guideScale(store, toWorld, from, was) : null;
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
-      const next = reshaped(was, h, q, LEAST_PX * px, m.shiftKey);
+      let next = reshaped(was, h, q, LEAST_PX * px, m.shiftKey);
+      if (sides && scale && m.shiftKey) {
+        // (its proportions kept: from the corner across, as large as a width or a height near it)
+        const fx = sides.x === "x0" ? was.x1 : was.x0;
+        const fy = sides.y === "y0" ? was.y1 : was.y0;
+        const keep = (f: number) => {
+          const w = (was.x1 - was.x0) * f;
+          const ht = (was.y1 - was.y0) * f;
+          return { x0: sides.x === "x0" ? fx - w : fx, x1: sides.x === "x0" ? fx : fx + w, y0: sides.y === "y0" ? fy - ht : fy, y1: sides.y === "y0" ? fy : fy + ht };
+        };
+        const f = scale.step((next.x1 - next.x0) / (was.x1 - was.x0), m, keep);
+        next = { ...next, ...keep(Math.max(f, (LEAST_PX * px) / Math.min(was.x1 - was.x0, was.y1 - was.y0))) };
+      } else if (sides && guide) next = { ...next, ...guide.step(next, sides, m) };
       store.getState().updateShape(s.id, { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1, ...(next.tail ? { tail: next.tail } : {}) }, gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      guide?.end();
+      scale?.end();
       if (Math.hypot(u.clientX - from.x, u.clientY - from.y) < CLICK_PX) clicked.current = u.timeStamp;
       const st2 = store.getState();
       st2.endPanHold(u.pointerId);

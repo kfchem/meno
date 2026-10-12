@@ -24,7 +24,7 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "pyscf"]);
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "pyscf", "wfx"]);
     // (the structure files Meno reads on the page, and the cube, under the readers' contract)
     expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
     const [cclib, pyscf] = READER_PLUGINS;
@@ -50,11 +50,11 @@ describe("the readers Meno knows of", () => {
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf", "wfx"]);
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
     // (two that read structures from pictures, each standing alone: the chemist chooses, in Settings, Chemistry)
@@ -103,15 +103,15 @@ describe("the readers Meno knows of", () => {
       ["conformers", ["python"]],
       ["duplicates", []],
     ]);
-    // (and those that fill a role by running a program installed separately: Blender, rendering - found where it is usually installed too)
+    // (and those that fill a role by running a program Meno fetches as the plugin is set up: Blender, rendering - never one installed separately)
     const blender = PLUGINS.find((p) => p.id === "blender")!;
-    expect(blender).toMatchObject({ roles: ["render"], rolePrograms: { render: ["blender"] }, licence: "GPL-3.0-or-later", profile: "plugin-blender" });
+    expect(blender).toMatchObject({ name: "Blender", roles: ["render"], rolePrograms: { render: ["blender"] }, licence: "GPL-3.0-or-later", profile: "plugin-blender" });
     // (and Render as a workflow's step, its options the role's - the same work, asked as a step)
     expect(blender.steps.map((d) => [d.kind, d.programs])).toEqual([["render", ["blender"]]]);
     expect(blender.steps[0].options.map((o) => o.id)).toEqual(blender.roleOptions.render!.map((o) => o.id));
     expect(pluginsFilling("render").map((p) => p.id)).toEqual(["blender"]);
-    expect(blender.installed[0]).toMatchObject({ name: "blender", files: { macos: "Blender", windows: "blender.exe", linux: "blender" } });
-    expect(blender.installed[0].places.macos).toContain("/Applications/Blender.app/Contents/MacOS");
+    expect(blender.installed).toEqual([]);
+    expect(blender.downloads.every((d) => d.provides === "blender")).toBe(true);
     // (and those that fill NCI: NCIPLOT from a geometry; Multiwfn from a wavefunction another plugin read - by the kinds' ids alone - or a geometry)
     const nciplot = PLUGINS.find((p) => p.id === "nciplot")!;
     expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);

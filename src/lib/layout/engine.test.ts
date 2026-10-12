@@ -3,10 +3,13 @@ import { FRAMES, grow, sidesOf } from "./assemble";
 import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, layoutMetrics } from "./metrics";
+import { segmentMeetsBox } from "./names";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
 import { solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -131,6 +134,37 @@ describe("layout2D", () => {
       .filter((i) => s.atoms[i].el === "O" && bondedTo(i).some((c) => bondedTo(c).filter((o) => s.atoms[o].el === "O").length === 2));
     expect(dioxy).toHaveLength(2);
     for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
+  });
+
+  it("draws bilobalide's C4 with its bonds spread round it, its wedges read one way only", () => {
+    // three five-membered rings round one carbon leave 36 degrees between
+    // C4 and C9: their groups, pointed into that gap at each other, sent
+    // C4's OH into its ring and left all four of C4's bonds in half the page
+    const input = bilobalide();
+    const { x, y } = layout2D(input);
+    const c4 = 4;
+    const around = input.bonds.flatMap((b) => (b.a === c4 ? [b.b] : b.b === c4 ? [b.a] : []));
+    expect(around).toHaveLength(4);
+    const t = around.map((n) => Math.atan2(y[n] - y[c4], x[n] - x[c4])).sort((p, q) => p - q);
+    const widest = Math.max(...t.map((v, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - v));
+    expect(widest).toBeLessThan(Math.PI - (12 * Math.PI) / 180);
+  });
+
+  it("opens bilobalide's gap between C4 and C9, its tert-butyl clear of C9's OH", () => {
+    // left at 36 degrees, the two were 0.62 of a bond apart, and C4's
+    // tert-butyl ran through the OH on C9
+    const input = bilobalide();
+    const { x, y } = layout2D(input);
+    const at = (a: number) => ({ x: x[a], y: y[a] });
+    const L = input.bonds.reduce((t, b) => t + dist(at(b.a), at(b.b)), 0) / input.bonds.length;
+    expect(dist(at(4), at(9))).toBeGreaterThan(0.75 * L);
+    const toBond = (p: { x: number; y: number }, a: number, b: number) => {
+      const v = { x: x[b] - x[a], y: y[b] - y[a] };
+      const k = Math.max(0, Math.min(1, ((p.x - x[a]) * v.x + (p.y - y[a]) * v.y) / (v.x * v.x + v.y * v.y)));
+      return Math.hypot(p.x - x[a] - k * v.x, p.y - y[a] - k * v.y);
+    };
+    // (the OH's O, atom 17; the tert-butyl, atoms 0 to 3 on C4)
+    for (const [a, b] of [[4, 1], [1, 0], [1, 2], [1, 3]]) expect(toBond(at(17), a, b)).toBeGreaterThan(0.5 * L);
   });
 
   it("draws huperzine A with room for its ethylidene, no atom on another", () => {
@@ -670,6 +704,89 @@ describe("layout2D", () => {
   });
 });
 
+describe("a tert-butyl, and the other tridents", () => {
+  const input = (smiles: string): LayoutInput => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+  };
+  const around = (g: LayoutInput, a: number) => g.bonds.flatMap((b) => (b.a === a ? [b.b] : b.b === a ? [b.a] : []));
+  // (an end: a methyl or a halogen atom, bonded to nothing else)
+  const end = (g: LayoutInput, v: number) => ["C", "F", "Cl"].includes(g.atoms[v].el) && around(g, v).length === 1;
+  // (the angles round its middle atom, in degrees, from the bond into it on)
+  const fan = (smiles: string) => {
+    const g = input(smiles);
+    const { x, y } = layout2D(g);
+    const middles = g.atoms.flatMap((_, a) => (around(g, a).length === 4 && around(g, a).filter((v) => end(g, v)).length === 3 ? [a] : []));
+    return middles.map((a) => {
+      const into = around(g, a).find((v) => !end(g, v))!;
+      const t0 = Math.atan2(y[into] - y[a], x[into] - x[a]);
+      const ts = around(g, a)
+        .filter((v) => v !== into)
+        .map((v) => ((((Math.atan2(y[v] - y[a], x[v] - x[a]) - t0) * 180) / Math.PI) % 360 + 360) % 360)
+        .sort((p, q) => p - q);
+      return ts;
+    });
+  };
+
+  it("has its methyls fanned 60 degrees apart about the line of the bond into it", () => {
+    // (an ester's, a carbamate's, an alcohol's, on a ring, and a
+    // trimethylsilyl's - grown from its middle atom, too - and the other
+    // tridents: choline's trimethylammonium, a CF3, a CCl3)
+    for (const smiles of [
+      "CC(=O)OC(C)(C)C",
+      "CC(C)(C)OC(=O)NCC(=O)O",
+      "CC(C)(C)O",
+      "CC1=CC(=C(C(=C1)C(C)(C)C)O)C(C)(C)C",
+      "C[Si](C)(C)C#C",
+      "C[N+](C)(C)CCO",
+      "OC(=O)C(F)(F)F",
+      "OC(O)C(Cl)(Cl)Cl",
+    ]) {
+      const fans = fan(smiles);
+      expect(fans.length).toBeGreaterThan(0);
+      for (const ts of fans) {
+        expect(ts[0]).toBeCloseTo(120, 0);
+        expect(ts[1]).toBeCloseTo(180, 0);
+        expect(ts[2]).toBeCloseTo(240, 0);
+      }
+    }
+  });
+
+  it("is not neopentane, nor CF4: four like ends make a cross", () => {
+    for (const smiles of ["CC(C)(C)C", "FC(F)(F)F"]) {
+      const g = input(smiles);
+      const { x, y } = layout2D(g);
+      const ts = around(g, 1)
+        .map((v) => (Math.atan2(y[v] - y[1], x[v] - x[1]) * 180) / Math.PI)
+        .sort((p, q) => p - q);
+      for (let i = 1; i < 4; i++) expect(ts[i] - ts[i - 1]).toBeCloseTo(90, 0);
+    }
+  });
+
+  it("is settled clear of the H of ginkgolide B's OH beside it", () => {
+    // turned off its ring as far as clears it, a methyl ran past a corner of the H's letter
+    const g = input("C[C@@H]1C(=O)O[C@@H]2[C@]1([C@@]34C(=O)O[C@H]5[C@]3([C@@H]2O)[C@@]6([C@@H](C5)C(C)(C)C)[C@H](C(=O)O[C@H]6O4)O)O");
+    const { x, y } = layout2D(g);
+    const L = g.bonds.reduce((t, b) => t + Math.hypot(x[b.a] - x[b.b], y[b.a] - y[b.b]), 0) / g.bonds.length;
+    const tb = 18;
+    for (let o = 0; o < g.atoms.length; o++) {
+      if (g.atoms[o].el !== "O" || !g.atoms[o].hs) continue;
+      const h = hydrogenSpot(around(g, o).map((c) => {
+        const d = Math.hypot(x[c] - x[o], y[c] - y[o]);
+        return { x: (x[c] - x[o]) / d, y: (y[c] - y[o]) / d };
+      }));
+      const box = { x0: x[o] + (h.x - 0.35) * L, x1: x[o] + (h.x + 0.35) * L, y0: y[o] + (h.y - 0.35) * L, y1: y[o] + (h.y + 0.35) * L };
+      for (const m of around(g, tb)) expect(segmentMeetsBox({ x: x[tb], y: y[tb] }, { x: x[m], y: y[m] }, box)).toBe(false);
+    }
+  });
+});
+
 describe("a biaryl with something beside its bond on each ring", () => {
   it("hangs its second ring the way that puts them on opposite sides: BINAP's two PPh2 anti, no ring over another", async () => {
     // BINAP from SMILES, as a structure pasted in is drawn (../chem)
@@ -714,3 +831,15 @@ describe("an atom its bonds run straight through", () => {
     expect(angleAt(chain, 3)).toBeCloseTo(180, 6);
   });
 });
+
+/** Bilobalide, its H's counted, as a SMILES string gives it. */
+function bilobalide(): LayoutInput {
+  const s = readSmiles("CC(C)(C)[C@@]1(C[C@H]2[C@@]3([C@]14[C@H](C(=O)O[C@H]4OC3=O)O)CC(=O)O2)O");
+  const orders = kekuleOrders(s.atoms, s.bonds);
+  const sum = s.atoms.map(() => 0);
+  s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+  return {
+    atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+    bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+  };
+}

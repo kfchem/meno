@@ -188,14 +188,16 @@ export function turnedOverArrows(
  * its middle) or top to bottom: what was in front of the page is now
  * behind it, so each wedge on it becomes hashes and each hashes a wedge, and
  * a depth changes sign - the same molecule, seen from its other side, not
- * its mirror image.
+ * its mirror image. About `about`, where given: the middle of all that is
+ * turned over with it.
  */
 export function turnedOver(
   model: Model,
   atoms: ReadonlySet<number>,
   axis: "vertical" | "horizontal",
+  about?: Pt,
 ): { atoms: { id: number; x: number; y: number; z?: number }[]; bonds: Pick<Bond, "id" | "stereo">[] } {
-  const mid = middleOf(model, atoms);
+  const mid = about ?? middleOf(model, atoms);
   if (!mid) return { atoms: [], bonds: [] };
   const moved = model.atoms
     .filter((a) => atoms.has(a.id))

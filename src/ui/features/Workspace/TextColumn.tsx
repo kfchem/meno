@@ -141,6 +141,8 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
   const find = useEditor((s) => s.pdfFind);
   const editText = useEditor((s) => s.editText);
+  // (a text just made to be written in: given the keys as it shows)
+  const toWrite = useEditor((s) => s.textToWrite);
   const closeTexts = useEditor((s) => s.closeTexts);
   const [error, setError] = useState<string | null>(null);
   // (a Markdown text read formatted, or its source written)
@@ -218,7 +220,7 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
               {markdown && !source ? (
                 <MarkdownBody entry={columnText(store, shown.id, shown.text)} reader={markdownReaderOf(columnText(store, shown.id, shown.text), shown.text)} value={shown.text} />
               ) : (
-                <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} onChange={(v) => editText(shown.id, v)} />
+                <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} onChange={(v) => editText(shown.id, v)} write={toWrite === shown.id} onWrite={() => store.getState().wroteText()} />
               )}
             </div>
           )}

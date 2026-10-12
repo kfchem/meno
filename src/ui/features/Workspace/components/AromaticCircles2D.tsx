@@ -2,7 +2,8 @@ import * as THREE from "three";
 import * as React from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef, useState, useEffect } from "react";
-import { useEditor } from "../store";
+import { useEditor, useEditorStore } from "../store";
+import { ringUnder } from "./ringUnder";
 import {
   circlePoints,
   ringCircles,
@@ -103,6 +104,7 @@ export default function AromaticCircles2D() {
   };
 
   const { gl } = useThree();
+  const store = useEditorStore();
 
   // keep latest hover state in refs to avoid stale closures in DOM handlers
   const hoverCenterRef = useRef<typeof hoverCenter>(null);
@@ -119,24 +121,18 @@ export default function AromaticCircles2D() {
   React.useEffect(() => {
     const el = gl.domElement as HTMLElement;
     if (!el) return;
-    // a ring's circle within 40 px of the pointer, the nearest
+    // a ring's circle within 40 px of the pointer, the nearest - none with an atom or a bond under it, whose the press is
     const circleAt = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
       const cw = el.clientWidth || 1;
       const ch = el.clientHeight || 1;
-      let found: { x: number; y: number; r: number; key?: string } | null = null;
-      let minD = Infinity;
-      for (const c of previewCenters()) {
+      const onScreen = (c: { x: number; y: number }) => {
         const v = new THREE.Vector3(c.x, c.y, 0).project(camera as THREE.Camera);
-        const d = Math.hypot(cx - ((v.x + 1) / 2) * cw, cy - ((-v.y + 1) / 2) * ch);
-        if (d < 40 && d < minD) {
-          found = { x: c.x, y: c.y, r: c.r, key: c.key };
-          minD = d;
-        }
-      }
-      return found;
+        return { x: ((v.x + 1) / 2) * cw, y: ((-v.y + 1) / 2) * ch };
+      };
+      const { hovered } = store.getState();
+      const found = ringUnder(previewCenters(), { x: e.clientX - rect.left, y: e.clientY - rect.top }, onScreen, hovered.atomId != null || hovered.bondId != null);
+      return found ? { x: found.x, y: found.y, r: found.r, key: found.key } : null;
     };
     const dwelt = () => {
       const hs = hoverStartRef.current;
@@ -187,7 +183,7 @@ export default function AromaticCircles2D() {
         capture: true,
       } as any);
     };
-  }, [gl, camera, toggleRing, toggleAromatic]);
+  }, [gl, camera, store, toggleRing, toggleAromatic]);
 
   // Each circle comes into view as it is turned on - opening out a little
   // as it fades in - and goes out of it as it is turned off; the preview of

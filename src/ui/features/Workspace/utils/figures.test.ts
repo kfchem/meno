@@ -3,7 +3,13 @@ import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../.
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
 import { readDrawn } from "./copyPaste";
-import { atomAs, atomAtSpot, bondAs, placedBeside, readMarks, structureFrom } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, placedBeside, readMarks, type FigureResult, type Unread } from "./figures";
+
+/** What a figure as drawn reads as: its structure, or why there is none. */
+const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
+  const r = figureFrom(drawn, sha, page);
+  return "none" in r ? r : r.model;
+};
 
 const SHA = "a".repeat(64);
 const L = 14.4;
@@ -89,13 +95,50 @@ describe("where a structure read goes", () => {
     bonds: [],
   };
   it("lies beside what it was read from, its top level with it", () => {
-    const placed = placedBeside(m, { x0: 0, y0: 0, x1: 10, y1: 8 }, []);
+    const placed = placedBeside({ model: m }, { x0: 0, y0: 0, x1: 10, y1: 8 }, []).model;
     expect(Math.min(...placed.atoms.map((a) => a.x))).toBeCloseTo(10 + 2 * NOMINAL_BOND_LENGTH);
     expect(Math.max(...placed.atoms.map((a) => a.y))).toBeCloseTo(8);
   });
   it("goes on past what lies there", () => {
-    const placed = placedBeside(m, { x0: 0, y0: 0, x1: 10, y1: 8 }, [{ x0: 12, y0: 0, x1: 30, y1: 10 }]);
+    const placed = placedBeside({ model: m }, { x0: 0, y0: 0, x1: 10, y1: 8 }, [{ x0: 12, y0: 0, x1: 30, y1: 10 }]).model;
     expect(Math.min(...placed.atoms.map((a) => a.x))).toBeGreaterThan(30);
+  });
+  it("carries a scheme's arrows, signs and words with it, as they stood to it", () => {
+    const read: FigureResult = { model: m, scheme: { arrows: [{ x: 3, y: 0, angle: 0, length: 2 }], pluses: [{ x: -2, y: 0 }], captions: [{ x: 3, y: 0.8, text: "NaH", arrowAt: 0 }] } };
+    const placed = placedBeside(read, { x0: 0, y0: 0, x1: 10, y1: 8 }, []);
+    const dx = placed.model.atoms[0].x - m.atoms[0].x;
+    const dy = placed.model.atoms[0].y - m.atoms[0].y;
+    expect(placed.scheme!.arrows![0]).toMatchObject({ x: 3 + dx, y: dy, angle: 0, length: 2 });
+    expect(placed.scheme!.pluses![0]).toEqual({ x: -2 + dx, y: dy });
+    expect(placed.scheme!.captions![0]).toMatchObject({ x: 3 + dx, y: 0.8 + dy, arrowAt: 0 });
+    // (its left edge two bonds past the region's right: the "+" sign's, leftmost of all)
+    expect(-2 + dx).toBeCloseTo(10 + 2 * NOMINAL_BOND_LENGTH);
+  });
+});
+
+describe("a scheme read for the page", () => {
+  it("keeps the figure's layout: two structures, the arrow between them as an equilibrium, its words over it, a compound's number in bold - one middle and one scale for all", () => {
+    const chain = (x: number): FigurePath => stroke([x, 100], [x + L * 0.866, 100 - L / 2], [x + 2 * L * 0.866, 100], [x + 3 * L * 0.866, 100 - L / 2]);
+    const half = (tip: P, ux: number, side: number): FigurePath => ({ fill: "#000000ff", stroke: null, width: 0, d: [["M", ...tip], ["L", tip[0] - ux * 6, tip[1] + side * 2.5], ["L", tip[0] - ux * 6, tip[1]], ["Z"]] });
+    const drawn: FigureDrawn = {
+      paths: [chain(0), chain(200), stroke([60, 93], [134, 93]), half([140, 93], 1, -1), stroke([146, 97], [72, 97]), half([66, 97], -1, 1)],
+      letters: [...letters("THF", [90, 84]), ...letters("1", [20, 125]).map((l) => ({ ...l, font: "Helvetica-Bold" }))],
+      pictures: [],
+    };
+    const r = figureFrom(drawn, SHA, 1) as FigureResult;
+    expect(r.model.atoms).toHaveLength(8);
+    const [arrow] = r.scheme!.arrows!;
+    expect(arrow).toMatchObject({ kind: "equilibrium" });
+    expect(arrow.angle).toBeCloseTo(0, 2);
+    // (as long, in bonds, as drawn: 86 points over 14.4)
+    expect(arrow.length / NOMINAL_BOND_LENGTH).toBeCloseTo(86 / L, 1);
+    const words = r.scheme!.captions!;
+    expect(words.find((c) => c.text === "THF")).toMatchObject({ arrowAt: 0 });
+    expect(words.find((c) => c.text === "1")).toMatchObject({ marks: [{ from: 0, to: 1, bold: true }] });
+    // (the arrow between the two structures, as drawn: right of the first's atoms, left of the second's)
+    const xs = r.model.atoms.map((a) => a.x).sort((p, q) => p - q);
+    expect(arrow.x).toBeGreaterThan(xs[3]);
+    expect(arrow.x).toBeLessThan(xs[4]);
   });
 });
 

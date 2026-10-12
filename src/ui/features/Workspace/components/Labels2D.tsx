@@ -8,6 +8,7 @@ import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
+import { fadeLetters } from "./labelFade";
 
 /**
  * How far an italic run leans: about the slant of a sans-serif's italic.
@@ -120,9 +121,7 @@ export function Texts2D({
     const n = follow(s.level, 1, Math.min(dt, 1 / 20), TAU.quick);
     s.level = n > 0.99 ? 1 : n;
     if (moved) return;
-    group.current?.traverse((o) => {
-      if ("fillOpacity" in o) (o as unknown as { fillOpacity: number }).fillOpacity = s.level;
-    });
+    group.current?.traverse((o) => fadeLetters(o, s.level));
     invalidate();
   });
   // (labels sized in the drawing's own units are the same at any zoom: the

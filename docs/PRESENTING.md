@@ -302,14 +302,18 @@ Shift+Enter, since Enter keeps the words, as it did before.
 - Where: a drag of the selection (`dragSelection`: a structure, words, a
   picture, a PDF, a text's sheet, a slide, a workflow's steps), molecules
   in 3D moved (`Molecules3D`), words moved alone (`Captions2D`), a slide's
-  and a picture's corners, words' edges. An atom dragged alone keeps its
-  own snapping to the drawing's lengths and angles.
+  and a picture's corners, words' edges, and a shape's corners and sides
+  (`Shapes2D`: each side moved takes the width or height of something
+  near, its proportions free - or kept, with Shift, from the corner
+  across). Shapes line up and are sized by the box their line runs round
+  (`shapeFrame`), a callout's tail and an arrow's heads not counted. An
+  atom dragged alone keeps its own snapping to the drawing's lengths and
+  angles.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
   move across or up and down, the way it has gone most.
 - `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
   pixel on the screen at any zoom, coming and going in a short ease.
 
 Not yet, and where it comes: everything under *Handwriting* (its own pull
-request); shapes' handles taking another's size; a slide's notes, with the
-presenter's view. Words in a shape do not make it taller: words longer
+request); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.
