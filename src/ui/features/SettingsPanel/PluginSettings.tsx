@@ -4,11 +4,11 @@ import { showGuide } from "../../../lib/plugins/guides";
 import { addedReaders, addPlugin, removePlugin, useReaders } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
-import { copyFor, fetchCopy, locate, lookForAll, programKey, useFetching, useInstalled } from "../../../lib/plugins/installed";
-import { SYSTEMS, type DownloadDecl, type InstalledDecl } from "../../../lib/plugins/manifest";
+import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
+import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { kindById } from "../../../lib/io/kinds";
-import { sizeOf, useDownloads } from "../../../lib/pyEnv";
+import { useDownloads } from "../../../lib/pyEnv";
 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
@@ -49,13 +49,13 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
       .catch(() => {}) // (said by the plugin's problem)
       .finally(() => setBusy(false));
   };
-  // (its files besides its packages, as they come)
+  // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
   const share = useDownloads((s) => s[p.id]);
   const status =
     state === "added"
       ? "Added"
       : state === "adding"
-        ? share != null
+        ? share != null && share < 1
           ? `Adding… ${Math.floor(share * 100)}%`
           : "Adding…"
         : state === "removing"
@@ -80,7 +80,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
             {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1">In a workflow: {stepNames(p).join(", ")}.</p>}
             {p.installed.map((d) => (
-              <Installed key={d.name} owner={p} added={state === "added"} decl={d} />
+              <Installed key={d.name} plugin={p.id} decl={d} />
             ))}
           </>
         )}
@@ -140,8 +140,7 @@ const runsOn = (decl: InstalledDecl) =>
  * finds programs or located here, and its version where it says; or that it
  * is found nowhere, or only too old, and why.
  */
-function Installed({ owner, added, decl }: { owner: { id: string; name: string; downloads: readonly DownloadDecl[] }; added: boolean; decl: InstalledDecl }) {
-  const plugin = owner.id;
+function Installed({ plugin, decl }: { plugin: string; decl: InstalledDecl }) {
   const where = useInstalled((s) => s.where[programKey(plugin, decl.name)]);
   const chosen = useInstalled((s) => s.chosen[programKey(plugin, decl.name)]);
   // (only too old: the copy found, said, and why it will not do)
@@ -154,13 +153,6 @@ function Installed({ owner, added, decl }: { owner: { id: string; name: string; 
     setProblem(undefined);
     locate(plugin, decl).catch((e: unknown) => setProblem(e instanceof Error ? e.message : String(e)));
   };
-  // (none fit to run found: a copy Meno fetches for its own use, where the plugin offers one - added, so that it goes with it)
-  const copy = made && added ? copyFor(owner, decl) : undefined;
-  const share = useFetching((s) => s[programKey(plugin, decl.name)]);
-  const fetch = () => {
-    setProblem(undefined);
-    fetchCopy(owner, decl).catch((e: unknown) => setProblem(e instanceof Error ? e.message : String(e)));
-  };
   return (
     <div className="mt-2 text-xs">
       <div className="flex items-center gap-2 min-w-0">
@@ -172,15 +164,6 @@ function Installed({ owner, added, decl }: { owner: { id: string; name: string; 
         {made && (
           <button onClick={pick} className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base">
             Locate…
-          </button>
-        )}
-        {copy && (where === null || share != null) && (
-          <button
-            onClick={fetch}
-            disabled={share != null}
-            className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base disabled:text-gh-gray disabled:hover:bg-white tabular-nums"
-          >
-            {share == null ? `Fetch for Meno (${sizeOf(copy.bytes)})…` : share >= 1 ? "Unpacking…" : `Fetching… ${Math.floor(share * 100)}%`}
           </button>
         )}
       </div>

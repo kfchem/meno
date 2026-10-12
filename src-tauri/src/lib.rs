@@ -920,7 +920,6 @@ pub fn run() {
             // the wwPDB's chemical components, fetched once and kept
             ccd::ccd_components,
             plugfiles::plugin_files,
-            plugfiles::program_fetch,
             // the window given over to a talk
             present::present_window,
             // keeping Meno up to date

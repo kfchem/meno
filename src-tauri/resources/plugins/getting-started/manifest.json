@@ -21,7 +21,7 @@
     {"plugin": "crest", "for": "Searches for a molecule's conformers"},
     {"plugin": "orca", "for": "Runs ORCA, installed separately"},
     {"plugin": "gaussian", "for": "Runs Gaussian 16, installed separately"},
-    {"plugin": "blender", "for": "Renders pictures and films of molecules in 3D with Blender, installed separately"},
+    {"plugin": "blender", "for": "Renders pictures and films of molecules in 3D with Blender, fetched by Meno as it is set up"},
     {"plugin": "nciplot", "for": "Shows non-covalent interactions from a geometry, with NCIPLOT installed separately"},
     {"plugin": "multiwfn", "for": "Shows non-covalent interactions from a wavefunction or a geometry, with Multiwfn installed separately"},
     {"plugin": "molscribe", "for": "Reads structures from pictures with a trained model: about 1.5 GB to download"},

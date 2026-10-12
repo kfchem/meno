@@ -103,12 +103,12 @@ describe("the readers Meno knows of", () => {
       ["conformers", ["python"]],
       ["duplicates", []],
     ]);
-    // (and those that fill a role by running a program installed separately: Blender, rendering - found where it is usually installed too)
+    // (and those that fill a role by running a program Meno fetches as the plugin is set up: Blender, rendering - never one installed separately)
     const blender = PLUGINS.find((p) => p.id === "blender")!;
-    expect(blender).toMatchObject({ roles: ["render"], rolePrograms: { render: ["blender"] }, steps: [], licence: "GPL-3.0-or-later", profile: "plugin-blender" });
+    expect(blender).toMatchObject({ name: "Blender", roles: ["render"], rolePrograms: { render: ["blender"] }, steps: [], licence: "GPL-3.0-or-later", profile: "plugin-blender" });
     expect(pluginsFilling("render").map((p) => p.id)).toEqual(["blender"]);
-    expect(blender.installed[0]).toMatchObject({ name: "blender", files: { macos: "Blender", windows: "blender.exe", linux: "blender" } });
-    expect(blender.installed[0].places.macos).toContain("/Applications/Blender.app/Contents/MacOS");
+    expect(blender.installed).toEqual([]);
+    expect(blender.downloads.every((d) => d.provides === "blender")).toBe(true);
     // (and those that fill NCI: NCIPLOT from a geometry; Multiwfn from a wavefunction another plugin read - by the kinds' ids alone - or a geometry)
     const nciplot = PLUGINS.find((p) => p.id === "nciplot")!;
     expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);

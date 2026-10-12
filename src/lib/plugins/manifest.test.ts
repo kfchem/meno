@@ -198,7 +198,7 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
   });
 
-  it("may offer a copy of a program it runs, for Meno's own use: an archive for one system, where the program is in it - as the backend takes it", () => {
+  it("may fetch a program it runs, Meno's own copy: an archive for one system, where the program is in it - as the backend takes it", () => {
     const copy = {
       file: "blender-5.2.2-windows-x64.zip",
       name: "Blender 5.2.2 LTS",
@@ -210,7 +210,7 @@ describe("a plugin's manifest", () => {
       arch: "x86_64",
       unpack: "zip",
       program: "*/blender.exe",
-      installs: "blender",
+      provides: "blender",
     };
     expect(acceptManifest({ ...good, downloads: [copy] })?.downloads).toEqual([copy]);
     for (const wrong of [
@@ -220,20 +220,21 @@ describe("a plugin's manifest", () => {
       { program: "C:\\blender.exe" },
       { system: "amiga" },
       { arch: "ppc" },
-      { installs: "../blender" },
+      { provides: "../blender" },
       { program: undefined },
       { system: undefined },
       { file: "blender.dmg", unpack: "dmg", program: "*/Blender" },
     ])
       expect(acceptManifest({ ...good, downloads: [{ ...copy, ...wrong }] }), JSON.stringify(wrong)).toBeNull();
     // (Blender's, as Meno carries it: the official builds for macOS on Apple silicon and Windows)
-    const blender = MANIFESTS.find((m) => m.id === "blender")!.downloads;
-    expect(blender.map((d) => [d.system, d.arch, d.unpack, d.installs])).toEqual([
+    const blender = MANIFESTS.find((m) => m.id === "blender")!;
+    expect(blender.installed).toEqual([]);
+    expect(blender.downloads.map((d) => [d.system, d.arch, d.unpack, d.provides])).toEqual([
       ["macos", "aarch64", "dmg", "blender"],
       ["windows", "x86_64", "zip", "blender"],
       ["windows", "aarch64", "zip", "blender"],
     ]);
-    expect(blender.every((d) => d.url.startsWith("https://download.blender.org/release/Blender5.2/") && d.url.endsWith(d.file))).toBe(true);
+    expect(blender.downloads.every((d) => d.url.startsWith("https://download.blender.org/release/Blender5.2/") && d.url.endsWith(d.file))).toBe(true);
   });
 
   it("may need files downloaded besides its environment: each as it must be - HTTPS, its hash and size, a name not a path - or the plugin is none", () => {
@@ -271,8 +272,6 @@ describe("a plugin's manifest", () => {
     // (options alone - never a file or a path - text to find, a version: else none of it)
     for (const bad of [{ ...rule, args: [] }, { ...rule, args: ["/tmp/x"] }, { ...rule, args: ["--version", "file"] }, { ...rule, after: "" }, { ...rule, after: "a\nb" }, { ...rule, least: "5.x" }, { ...rule, least: "" }, "5.0"])
       expect(blender(bad)).toEqual([]);
-    // (Blender's, as Meno carries it: 5.0 or later)
-    expect(MANIFESTS.find((m) => m.id === "blender")?.installed[0].version).toEqual(rule);
   });
 
   it("runs nothing where it says no environment: then it brings data alone - and a plugin that does nothing is none", () => {

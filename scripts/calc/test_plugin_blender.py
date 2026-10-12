@@ -1,4 +1,4 @@
-"""Tests for the Blender interface's worker (src-tauri/resources/plugins/blender/worker.py).
+"""Tests for the Blender plugin's worker (src-tauri/resources/plugins/blender/worker.py).
 
 The worker needs Python alone - Blender is run by Meno, not by it - so
 these run anywhere; CI runs them:

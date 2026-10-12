@@ -968,8 +968,9 @@ Not yet, and where it comes:
   *Calculations*), ORCA needs none.
 - **The version** of a program installed separately is what its output
   says, as the readers read it; Settings asks the program itself only
-  where its plugin says how (`installed[].version`, since 2026-10-11:
-  Blender, docs/RENDER.md), and then takes only a copy new enough.
+  where its plugin says how (`installed[].version`, since 2026-10-11 -
+  no plugin Meno carries says so since Blender became Meno's own copy,
+  2026-10-12, docs/RENDER.md), and then takes only a copy new enough.
 
 ### Real runs of ORCA and Gaussian (2026-10-09)
 

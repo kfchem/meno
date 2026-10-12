@@ -1,8 +1,8 @@
 # Rendering
 
-Pictures and films of molecules in 3D, rendered by a plugin: the Blender
-interface, the first to fill the role *Render*. Written on 2026-10-11 with
-the maintainer (lane L7); what is decided is under *Decided*.
+Pictures and films of molecules in 3D, rendered by a plugin: Blender, the
+first to fill the role *Render*. Written on 2026-10-11 with the
+maintainer (lane L7); what is decided is under *Decided*.
 
 ## What it is for
 
@@ -18,7 +18,7 @@ onto the page beside the molecules it shows.
 
 Right-click a molecule in 3D - or a selection holding some - and choose
 **Render…**. It is offered only while a plugin that renders is added (the
-Blender interface, in Settings, *Plugins*). A card over the canvas asks:
+Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
 
 - **Picture** or **Film**.
 - Meno's own choices, whoever renders:
@@ -36,7 +36,7 @@ Blender interface, in Settings, *Plugins*). A card over the canvas asks:
     shown, what it is made of: as the canvas draws it, glass, glossy or
     matte.
 - The plugin's options, as its manifest declares them (the Blender
-  interface's below).
+  plugin's below).
 
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
 the role's options, which Settings, *Molecules in 3D*, shows as well.
@@ -126,39 +126,26 @@ workspace as any picture is. Its menu offers **Pause** or **Play** and
 **Save film…**; a picture's, **Save picture…**. A film is not copied as a
 picture for other programs.
 
-## The Blender interface
+## The Blender plugin
 
 `src-tauri/resources/plugins/blender/`: a worker in Python alone (made by
 uv, no package), and the script Blender runs, `render.py`.
 
-- **Blender is installed separately**, under its own licence, and never
-  fetched or shipped by Meno (`installed`). Meno looks for it where it was
-  located, where the system finds programs, and where it is usually
-  installed: on macOS `/Applications/Blender.app` and
-  `~/Applications/Blender.app`; on Windows
-  `Program Files\Blender Foundation\Blender *`, the newest first
-  (`installed[].places`). On macOS an app picked in *Locate…* stands for
-  the program inside it.
-- **Blender 5.0 or later.** Meno asks each copy it finds its version
-  (`blender --version`, `installed[].version`) - as it looks, as one is
-  located and before each render - and takes the one located where it is
-  new enough, else the newest copy that is. Settings, *Plugins*, shows
-  the version beside where it is; of an older copy it says why it will not
-  do: "Meno needs Blender 5.0 or later; this one is 4.1", and *Locate…*
-  refuses one. It looks again whenever Meno is come back to while
-  *Plugins* is shown, so a Blender installed or updated meanwhile is taken
-  without starting Meno again; a copy is asked once, and again only once
-  its file has changed.
-- **Fetched by Meno, where none is found** (2026-10-11): where no Blender
-  fit to run is found, Settings, *Plugins*, offers *Fetch for Meno* -
-  Blender's official build for this computer, 5.2.2 LTS, from
-  download.blender.org (macOS on Apple silicon, 346 MB; Windows x64,
-  404 MB; Windows arm64, 274 MB), asked for first under a leave of its
-  own, checked against the SHA-256 Blender publishes for it, and unpacked
-  into the Blender interface's data folder for Meno's own use - nothing
-  installed on the system; on macOS the app copied out of the disk image
-  as it is, its signature whole - and taken away with the plugin.
-  PLUGINS.md, *A program Meno fetches*, says when Meno does this at all.
+- **Meno's own Blender** (the maintainer, 2026-10-12): the plugin always
+  runs Blender 5.2.2 LTS, its official build for this computer from
+  download.blender.org - macOS on Apple silicon (346 MB), Windows on x64
+  (404 MB) and on arm64 (274 MB) - fetched as the plugin is set up, in the
+  one question that sets it up, which says its licence, its size and where
+  it comes from (`downloads`, `provides`); checked against the SHA-256
+  Blender publishes for it; and unpacked into the plugin's data folder for
+  Meno's own use - nothing installed on the system; on macOS the app
+  copied out of the disk image as it is, its signature whole - and taken
+  away with the plugin. A Blender installed on the computer is never
+  looked for or run: not where the system finds programs, not where
+  programs are usually installed, and there is no *Locate…*; one located
+  before is not carried over. PLUGINS.md, *A program Meno fetches*, says
+  when Meno fetches a program at all. The plugin is added on macOS and
+  Windows (`systems`).
 - **Its job** runs Blender as its manual says (docs.blender.org, Blender
   5.2, "Command Line Arguments"): `blender -b --factory-startup -noaudio
   --offline-mode -t <cores> --python-exit-code 1 -P render.py --
@@ -190,7 +177,7 @@ uv, no package), and the script Blender runs, `render.py`.
 ## Licences
 
 Meno is Apache-2.0. A script using Blender's Python API is under the GPL,
-so the Blender interface is GPL-3.0-or-later: its folder carries the
+so the Blender plugin is GPL-3.0-or-later: its folder carries the
 licence's text (`LICENSE`) and its files say so; it stands strictly apart
 - nothing of Meno's or of another plugin's takes anything from it, and it
 speaks to Meno only through files and arguments (docs/PLUGINS.md,
@@ -198,7 +185,7 @@ speaks to Meno only through files and arguments (docs/PLUGINS.md,
 
 ## Decided
 
-By the maintainer, 2026-10-10 and 2026-10-11:
+By the maintainer, 2026-10-10 to 2026-10-12:
 
 1. **Blender as a plugin, bundled for now** with a strict boundary, its
    licence GPL-3.0-or-later; distributed apart later if those using Meno in
@@ -211,12 +198,13 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 5. **Materials** - glossy, metal, glass, matte, clay - for molecules and for
    surfaces apart, written as Khronos's glTF extensions.
 6. **The command first**; Render as a workflow's step in a later change.
-7. **Blender 5.0 or later**, a round line; the newest copy new enough
-   taken, its version shown in Settings.
+7. **Meno's own Blender** (2026-10-12): the plugin always runs Blender
+   5.2.2 LTS, fetched as it is set up; never a Blender installed on the
+   computer. This replaces two decisions of 2026-10-11 - Blender 5.0 or
+   later installed separately, the newest copy taken; and a copy fetched
+   by Meno only where none was found, on asking.
 8. **The view moves once**, as a render is begun; not again as what it
    makes lands.
-9. **Blender fetched by Meno** where none fit to run is found, on asking -
-   under the rule PLUGINS.md, *A program Meno fetches*, sets out.
 
 ## Not yet
 

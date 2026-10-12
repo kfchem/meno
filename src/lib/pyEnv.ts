@@ -40,13 +40,13 @@ const filesOf = (plugin: PythonPlugin, fetch: boolean) => invoke<FilesState>("pl
 export const useDownloads = create<Record<string, number>>(() => ({}));
 
 /**
- * What a plugin downloads as it is set up, for this computer: never a copy
- * of a program it runs (`installs`: Blender), which is fetched only when
- * asked (lib/plugins/installed `fetchCopy`); the backend takes the same
- * (src-tauri/src/plugfiles.rs `needed`).
+ * What a plugin downloads as it is set up: what is for this computer - its
+ * system, and processor, where a file says one (a program's build:
+ * Blender's); the backend takes the same (src-tauri/src/plugfiles.rs
+ * `needed`).
  */
 export function setUpFiles(plugin: Pick<PythonPlugin, "downloads"> | undefined, system = systemHere(), processor: string = arch()): PythonPlugin["downloads"] {
-  return (plugin?.downloads ?? []).filter((d) => !d.installs && (!d.system || d.system === system) && (!d.arch || d.arch === processor));
+  return (plugin?.downloads ?? []).filter((d) => (!d.system || d.system === system) && (!d.arch || d.arch === processor));
 }
 
 /** The folder a plugin's files are kept in, given to its worker; none, where it downloads none. */
@@ -77,7 +77,8 @@ async function fetchFiles(plugin: PythonPlugin): Promise<void> {
     await filesOf(plugin, true);
   } finally {
     stop();
-    useDownloads.setState((s) => Object.fromEntries(Object.entries(s).filter(([id]) => id !== plugin.id)));
+    // (replaced, not merged: a merge would keep the plugin's share it leaves out)
+    useDownloads.setState((s) => Object.fromEntries(Object.entries(s).filter(([id]) => id !== plugin.id)), true);
   }
 }
 
@@ -183,7 +184,8 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     baseDir: BaseDirectory.AppData,
   });
 
-  let stamp: { lockSha?: string; py?: string } = {};
+  // (and the files besides that the user was told of, as it was set up: by their SHA-256)
+  let stamp: { lockSha?: string; py?: string; files?: string[] } = {};
   if (stampExists) {
     try {
       stamp = JSON.parse(
@@ -207,9 +209,12 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     stamp.lockSha !== lockSha ||
     stamp.py !== info.pythonVersion;
   // (a plugin's files besides, each there whole)
-  const needFiles = !!plugin && setUpFiles(plugin).length > 0 && (await filesOf(plugin, false)).missing.length > 0;
+  const files = setUpFiles(plugin);
+  const needFiles = !!plugin && files.length > 0 && (await filesOf(plugin, false)).missing.length > 0;
+  // (one the user was not told of as it was set up - a plugin that has come to need more since: asked again, even where it was allowed)
+  const untold = files.some((f) => !stamp.files?.includes(f.sha256));
 
-  return { info, lockText, lockSha, venvPy, needSetup, needFiles };
+  return { info, lockText, lockSha, venvPy, needSetup, needFiles, untold, told: files.map((f) => f.sha256) };
 }
 
 /**
@@ -233,10 +238,12 @@ export async function ensurePyEnv(
   profile: PyProfile,
   opts?: EnvOptions
 ): Promise<string> {
-  const { info, lockText, lockSha, venvPy, needSetup, needFiles } = await envState(
+  const { info, lockText, lockSha, venvPy, needSetup, needFiles, untold, told } = await envState(
     profile,
     opts
   );
+  // (set up, with the files besides the user was told of)
+  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) }, BaseDirectory.AppData);
   const extra = besides(pluginOf(profile));
   // (who downloads what: the packages' maker, and Meno the plugin's files besides)
   const downloads = (maker: string) => `${maker}, fetched the first time it is needed, downloads ${extra.need ? "the packages, and Meno the rest" : "them"} - once`;
@@ -250,6 +257,7 @@ export async function ensurePyEnv(
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: consentTitle(plugin),
+      again: untold,
       detail:
         `${plugin.description} It runs in a Python of its own, ` +
         `with the ${download.packages} packages it needs` +
@@ -267,7 +275,7 @@ export async function ensurePyEnv(
       throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
     }
     await invoke("py_env_setup_pixi", { payload: info });
-    await writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion }, BaseDirectory.AppData);
+    await stampNow();
   } else if (needSetup) {
     // The first time, the user says whether it may download at all.
     const packages = lockText
@@ -278,6 +286,7 @@ export async function ensurePyEnv(
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: plugin ? consentTitle(plugin) : `Download Python for ${PROFILE_USE[profile as keyof typeof PROFILE_USE]}?`,
+      again: untold,
       detail:
         (plugin
           ? `${plugin.description} It runs in a Python ${info.pythonVersion} of its own, `
@@ -287,8 +296,12 @@ export async function ensurePyEnv(
           ? `with the ${packages} packages it needs, in its data folder${extra.need}. ` +
             `${downloads("Astral's uv")}` +
             (hashed ? ", every file checked against the fingerprint Meno carries for it:" : ":")
-          : "in its data folder, and needs nothing else. Astral's uv, fetched the first time it is needed, " +
-            "downloads Python - once, and only where Meno has not fetched it before:"),
+          : extra.need
+            ? `in its data folder${extra.need.replace(/ beside them$/, " beside it")}. Astral's uv, fetched the first time it is needed, ` +
+              "downloads Python - once, and only where Meno has not fetched it before - and Meno the rest, once, " +
+              "checked against the fingerprint Meno carries for it:"
+            : "in its data folder, and needs nothing else. Astral's uv, fetched the first time it is needed, " +
+              "downloads Python - once, and only where Meno has not fetched it before:"),
       sources: [
         "uv the first time, and Python itself, from Astral, who make uv (releases.astral.sh)",
         ...(packages ? ["the packages, from the Python Package Index (pypi.org, files.pythonhosted.org)"] : []),
@@ -302,22 +315,21 @@ export async function ensurePyEnv(
       );
     }
     await invoke("py_env_setup_uv", { payload: info });
-    await writeJsonSafe(
-      info.stampPath,
-      { lockSha, py: info.pythonVersion },
-      BaseDirectory.AppData
-    );
+    await stampNow();
   }
   if (needFiles) {
-    // (allowed as the plugin was set up - asked again only where that leave was withdrawn)
+    // (allowed as the plugin was set up - asked again where that leave was
+    // withdrawn, or where the user was not told of these then)
     const plugin = pluginOf(profile)!;
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: consentTitle(plugin),
-      detail: `${plugin.name} needs${extra.need.replace(/^; and it needs/, "").replace(/ beside them$/, "")}, downloaded once into its data folder, checked against the fingerprint Meno carries for it:`,
+      again: untold && !needSetup,
+      detail: `The ${plugin.name} plugin needs${extra.need.replace(/^; and it needs/, "").replace(/ beside them$/, "")}, downloaded once into its data folder, checked against the fingerprint Meno carries for it:`,
       sources: extra.sources,
     });
     if (!allowed) throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
+    if (untold && !needSetup) await stampNow();
     await fetchFiles(plugin);
   }
 
