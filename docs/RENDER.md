@@ -68,7 +68,13 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   the canvas draws it is seen through (alpha blended, 3.9.4) and from both
   sides (3.9.5); as glass, a thin wall.
 - **Surfaces** - an orbital, a density - shown from a calculation's list,
-  made at the value they are drawn at, each sign a mesh in its colour.
+  made at the value they are drawn at, each sign a mesh in its colour. One
+  another grid colours (NCI's RDG surface, by sign(λ2)ρ: NCI.md) is one
+  mesh whose points carry their colours on the scale (`COLOR_0`, linear,
+  3.7.2.1), over a white material they multiply (3.9.2) - not seen
+  through, as the canvas draws it; glass, glossy or matte as asked.
+  Blender's importer takes those colours into the material as it is
+  (checked with Blender 5.2: a ball whose points are red renders red).
 - **The camera** straight above, orthographic, as the canvas's is
   (3.10.3.4): its frame what is drawn with a little room round it, in the
   shape asked for - and, for a film, all it reaches in any of its frames.
