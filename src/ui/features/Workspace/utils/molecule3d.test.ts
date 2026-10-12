@@ -19,6 +19,7 @@ import {
   rowAbout,
   seenBounds,
   seenOnPage,
+  seenShare,
   solidOf,
   standingHeight,
   turnedInPlane,
@@ -355,6 +356,16 @@ describe("a molecule in 3D drawn without the hydrogens on its carbons", () => {
     expect([...s.hidden.secondary]).toEqual([0, 0, 0, 0, 0, 0]);
     expect([0, 1, 2, 3, 4, 5].map((i) => s.radii.primary[i] > 0)).toEqual([true, true, false, false, false, true]);
     expect(s.reach.primary).toBeLessThan(solidOf(methanol(), STYLE_3D).reach.primary + 1e-9);
+  });
+
+  it("takes with them what is drawn of them - a chosen atom's ring, a measurement - as the look goes over, and gives it back", () => {
+    const s = solidOf(methanol(), hiding);
+    // (C-O: drawn in either look; C-H: none in the primary, all in the secondary, half way over half)
+    expect(seenShare(s.hidden, [0, 1], 0)).toBe(1);
+    expect(seenShare(s.hidden, [0, 2], 0)).toBe(0);
+    expect(seenShare(s.hidden, [0, 2], 0.5)).toBe(0.5);
+    expect(seenShare(s.hidden, [0, 2], 1)).toBe(1);
+    expect(seenShare(s.hidden, [2], 0)).toBe(0);
   });
 
   it("leaves them and their bonds out of a picture, and out of where it reaches on the page", () => {

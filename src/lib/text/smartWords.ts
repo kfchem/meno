@@ -104,3 +104,39 @@ export function typedChanges(text: string, from: number, to: number): Change[] {
   for (const c of out) if (!apart.length || c.from >= apart[apart.length - 1].to) apart.push(c);
   return apart;
 }
+
+/** `text` with `changes` made - none overlapping - and each letter's style going with it: what is put in takes the style of what it took the place of. */
+function withChanges<S>(text: string, styles: readonly S[], changes: readonly Change[]): { text: string; styles: S[] } {
+  let t = text;
+  let st = [...styles];
+  for (const c of [...changes].sort((a, b) => b.from - a.from)) {
+    const s = st[c.from] ?? st[c.from - 1];
+    t = t.slice(0, c.from) + c.insert + t.slice(c.to);
+    st = [...st.slice(0, c.from), ...Array.from({ length: c.insert.length }, () => s), ...st.slice(c.to)];
+  }
+  return { text: t, styles: st };
+}
+
+/** A degree written in a temperature - after a number, with or without a space, a space in it - or a temperature's minus written as a dash. */
+const DEGREES = /(\d)[ \u00a0]*\u00b0[ \u00a0]*C(?![\p{L}\p{N}])/gu;
+const DASH_MINUS = /(^|[\s([{])([\u2013\u2012])(?=\d)/gu;
+
+/**
+ * Words written as Meno writes words typed, all of them at once - words
+ * taken out of a figure (docs/PDF.md, *Reaction schemes*): a minus where a
+ * hyphen or a dash at a word's start stands for one, a range's hyphen an
+ * en dash, a temperature with one space before °C - each letter's style
+ * going with it (`styles`, one a letter). No bullet is begun: these are no
+ * lists typed.
+ */
+export function writtenAsMeant<S>(text: string, styles: readonly S[]): { text: string; styles: S[] } {
+  const own: Change[] = [];
+  for (const m of text.matchAll(DEGREES)) own.push({ from: m.index! + m[1].length, to: m.index! + m[0].length, insert: ` ${DEGREES_C}` });
+  for (const m of text.matchAll(DASH_MINUS)) own.push({ from: m.index! + m[1].length, to: m.index! + m[1].length + 1, insert: MINUS });
+  const first = withChanges(text, styles, own);
+  // (and the last word, ended by the text's end)
+  const typed = [...typedChanges(first.text, 0, first.text.length).filter((c) => c.insert !== BULLET), ...wordEnded(first.text, first.text.length)];
+  const apart: Change[] = [];
+  for (const c of typed.sort((p, q) => p.from - q.from)) if (!apart.length || c.from >= apart[apart.length - 1].to) apart.push(c);
+  return withChanges(first.text, first.styles, apart);
+}

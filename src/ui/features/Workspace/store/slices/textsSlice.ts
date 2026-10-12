@@ -23,6 +23,11 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
       if (next !== doc.getState()) doc.edit(texts.length > 1 ? "open texts" : "open text", () => next);
       set({ textShown: last, textsOpen: last != null, ...(lastSheet ? { textFlight: { id: last!, to: "column" as const, start: performance.now() } } : {}) });
     },
+    newText: (onPage?: { x: number; y: number }) => {
+      getState().addTexts([{ name: "", text: "" }], onPage);
+      set({ textToWrite: getState().textShown });
+    },
+    wroteText: () => set({ textToWrite: null }),
     editText: (id: number, text: string) =>
       doc.edit("type text", (d) => ops.editText(d, id, text), { coalesceKey: `text:${id}` }),
     removeText: (id: number) => doc.edit("close text", (d) => ops.removeText(d, id)),

@@ -10,7 +10,11 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
-import { readFigure, type FigureRead } from "../../../../lib/figure/read";
+import type { FigureRead } from "../../../../lib/figure/read";
+import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
+import { cornerAt } from "../../../../lib/chem/reactionArrow";
+import { arrowPoints } from "../../../../lib/chem/reactionScheme";
+import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { chemWorker } from "../../../../lib/roles/worker";
@@ -58,15 +62,18 @@ export function readMarks(model: Model): { atoms: Map<number, string>; bonds: Ma
 /** Why a figure gave no structure: what to say. */
 export type Unread = { none: string };
 
+/** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
+export type FigureResult = { model: Model; scheme?: ImportedScheme };
+
 /**
  * A figure within a box of a PDF's page, read as a structure: its atoms
  * where the figure has them - its middle at naught, a bond as long as Meno
  * draws one - each tied to where it was drawn; or why it gave none.
  */
-export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void): Promise<Model | Unread> {
+export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void): Promise<FigureResult | Unread> {
   if (!isTauri()) return { none: "Figures are read in the app." };
   const drawn = await invoke<FigureDrawn>("pdf_figure", { sha: sha256, page, box });
-  const read = structureFrom(drawn, sha256, page);
+  const read = figureFrom(drawn, sha256, page);
   // (a figure that is a picture: the picture read, by the plugin that reads them)
   if ("none" in read && drawn.pictures.length) {
     working?.("Reading the picture…");
@@ -88,40 +95,87 @@ async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
 }
 
 /** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
-async function readBoxPicture(sha256: string, page: number, box: Box): Promise<Model | Unread> {
+async function readBoxPicture(sha256: string, page: number, box: Box): Promise<FigureResult | Unread> {
   const shot = await boxPicture(sha256, page, box, READ_DPI);
   const read = await readByPlugin(shot.png);
   if ("none" in read) return read;
   // (its pixels made the page's points: a pixel is 72/dpi of a point, from the box's top left)
   const k = 72 / shot.dpi;
   const onPage = scaledFigure(read, k, box[0], box[1]);
-  return modelOf(onPage, (x, y) => ({ sha256, page, x, y, bond: onPage.bond }));
+  return { model: modelOf(onPage, (x, y) => ({ sha256, page, x, y, bond: onPage.bond })) };
 }
 
 /** A picture on the page read by the plugin that reads pictures, each atom tied to its place in the picture, in its pixels. */
-export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">): Promise<Model | Unread> {
+export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">): Promise<FigureResult | Unread> {
   if (!isTauri()) return { none: "Pictures are read in the app." };
   const png = await picturePng(picture);
   if (!png) return { none: "A film is not read as a structure." };
   const read = await readByPlugin(png);
   if ("none" in read) return read;
-  return modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond }));
+  return { model: modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond })) };
 }
 
-/** What a figure as drawn reads as, tied to its PDF's page (`readBox`). */
-export function structureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): Model | Unread {
+/**
+ * What a figure as drawn reads as, tied to its PDF's page (`readBox`): its
+ * structures, and - a scheme - its arrows, "+" signs and words (lib/figure/
+ * scheme), all in Meno's units, a bond as long as Meno draws one, the
+ * middle of all of it at naught: each where it stands to the rest as the
+ * figure has it (the maintainer, 2026-10-11: the scheme keeps the figure's
+ * layout).
+ */
+export function figureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
   // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
   const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
-  const read = readFigure(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
-  if (!read.atoms.length || !read.bonds.length) {
+  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
+  const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
+  if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
-  return modelOf(read, (x, y) => ({ sha256, page, x, y, bond: read.bond }));
+  // (one middle and one scale for all of it)
+  const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
+  const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
+  const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, x, y, bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  const scheme = schemeOf(read, about);
+  return { model, ...(scheme ? { scheme } : {}) };
 }
 
-/** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`). */
-function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot): Model {
-  const s = structureOf(read, figureLabels);
+/**
+ * A scheme's arrows, "+" signs and words in Meno's units - the page's
+ * points made a bond as long as Meno draws one, `about` at naught, the
+ * page's y turned up - each arrow as the kind it was read as, its words
+ * over it; none, where it has none.
+ */
+export function schemeOf(read: SchemeRead, about: { x: number; y: number }): ImportedScheme | null {
+  if (!read.arrows.length && !read.pluses.length && !read.words.length) return null;
+  const k = read.bond ? NOMINAL_BOND_LENGTH / read.bond : 1;
+  const to = (p: { x: number; y: number }) => ({ x: (p.x - about.x) * k, y: -(p.y - about.y) * k });
+  const arrows = read.arrows.map((a) => {
+    const from = to(a.tail);
+    const end = to(a.point);
+    const corners = a.corners.map((c) => cornerAt(from, end, to(c)));
+    return {
+      x: (from.x + end.x) / 2,
+      y: (from.y + end.y) / 2,
+      angle: Math.atan2(end.y - from.y, end.x - from.x),
+      length: Math.hypot(end.x - from.x, end.y - from.y),
+      ...a.form,
+      ...(corners.length ? { corners } : {}),
+      ...(a.color ? { color: a.color } : {}),
+    };
+  });
+  const captions = read.words.map((w) => ({
+    ...to({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 }),
+    text: w.text,
+    ...(w.marks.length ? { marks: w.marks } : {}),
+    ...(w.align ? { align: w.align } : {}),
+    ...(w.arrow != null ? { arrowAt: w.arrow } : {}),
+  }));
+  return { arrows, pluses: read.pluses.map(to), captions };
+}
+
+/** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`) - its middle at naught, or `about`. */
+function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): Model {
+  const s = structureOf(read, figureLabels, about);
   const degree = new Map<number, number>();
   for (const b of s.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
   const atoms: Atom[] = s.atoms.map((a, i) => ({
@@ -155,15 +209,31 @@ function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot): 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 const overlaps = (a: Region, b: Region) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 
+/** The points a figure read stands on: its atoms, its arrows' ends and corners, its "+" signs, and its words' middles - each word taken half a bond wider all round. */
+function pointsOf(read: FigureResult): { x: number; y: number }[] {
+  const pad = NOMINAL_BOND_LENGTH / 2;
+  return [
+    ...read.model.atoms,
+    ...(read.scheme?.arrows ?? []).flatMap((a) => arrowPoints(a)),
+    ...(read.scheme?.pluses ?? []),
+    ...(read.scheme?.captions ?? []).flatMap((c) => [
+      { x: c.x - pad, y: c.y - pad },
+      { x: c.x + pad, y: c.y + pad },
+    ]),
+  ];
+}
+
 /**
- * A structure moved to lie beside what it was read from - its left edge
+ * A figure read moved to lie beside what it was read from - its left edge
  * two bonds past the region's right, its top level with the region's -
- * and on to the right until it is clear of what is `taken`.
+ * and on to the right until it is clear of what is `taken`: its structure
+ * and its scheme together, as they stand to each other.
  */
-export function placedBeside(model: Model, region: Region, taken: readonly Region[]): Model {
-  if (!model.atoms.length) return model;
-  const xs = model.atoms.map((a) => a.x);
-  const ys = model.atoms.map((a) => a.y);
+export function placedBeside(read: FigureResult, region: Region, taken: readonly Region[]): FigureResult {
+  const pts = pointsOf(read);
+  if (!pts.length) return read;
+  const xs = pts.map((a) => a.x);
+  const ys = pts.map((a) => a.y);
   const pad = 0.5 * NOMINAL_BOND_LENGTH;
   const w = Math.max(...xs) - Math.min(...xs);
   const h = Math.max(...ys) - Math.min(...ys);
@@ -178,7 +248,23 @@ export function placedBeside(model: Model, region: Region, taken: readonly Regio
   }
   const dx = x0 - Math.min(...xs);
   const dy = top - Math.max(...ys);
-  return { ...model, atoms: model.atoms.map((a) => ({ ...a, x: a.x + dx, y: a.y + dy })) };
+  const by = <T extends { x: number; y: number }>(p: T): T => ({ ...p, x: p.x + dx, y: p.y + dy });
+  const scheme = read.scheme && {
+    ...read.scheme,
+    arrows: (read.scheme.arrows ?? []).map(by),
+    pluses: (read.scheme.pluses ?? []).map(by),
+    captions: (read.scheme.captions ?? []).map(by),
+  };
+  return { model: { ...read.model, atoms: read.model.atoms.map(by) }, ...(scheme ? { scheme } : {}) };
+}
+
+/** Where on the page a figure read stands: the box round all of it, half a bond wider all round. */
+export function regionOf(read: FigureResult): Region | null {
+  const pts = pointsOf(read);
+  if (!pts.length) return null;
+  const xs = pts.map((a) => a.x);
+  const ys = pts.map((a) => a.y);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 }
 
 /** Where an atom was drawn in a figure, if it was read from one. */

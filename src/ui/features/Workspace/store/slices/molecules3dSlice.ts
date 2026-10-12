@@ -329,10 +329,20 @@ function chosenWith(
 }
 
 /**
+ * How each molecule in 3D the document let go of was turned, and the frame
+ * it showed - by the molecule itself, as the document held it: an undo or a
+ * redo that brings that very molecule back brings it back as it was seen,
+ * not as its file has it. (Changed in any way, a molecule is another; one
+ * new is seen as its file has it.)
+ */
+const seenAsLetGo = new WeakMap<Molecule3D, { turn?: Turn3D; frame?: number }>();
+
+/**
  * The view's hold on molecules in 3D, kept to those the document still has:
  * an undo, a deletion or a file opened afresh takes the others away - their
  * turn, their frame, their place in the selection, their chosen atoms and
- * the hover.
+ * the hover. One brought back as it was let go is turned, and shows the
+ * frame, as it did.
  */
 export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<EditorState> {
   const by = new Map(molecules.map((m) => [m.id, m]));
@@ -345,6 +355,15 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     }
     return same ? r : out;
   };
+  let turns3d = keep(prev.turns3d);
+  let frames3d = keep(prev.frames3d);
+  const had = new Set(prev.molecules3d.map((m) => m.id));
+  for (const m of prev.molecules3d) if (!by.has(m.id)) seenAsLetGo.set(m, { turn: prev.turns3d[m.id], frame: prev.frames3d[m.id] });
+  for (const m of molecules) {
+    const seen = had.has(m.id) ? undefined : seenAsLetGo.get(m);
+    if (seen?.turn) turns3d = { ...turns3d, [m.id]: seen.turn };
+    if (seen?.frame != null) frames3d = { ...frames3d, [m.id]: seen.frame };
+  }
   const sel3d = [...prev.sel3d].every((id) => by.has(id)) ? prev.sel3d : new Set([...prev.sel3d].filter((id) => by.has(id)));
   const c = prev.chosen3d;
   const chosenStays =
@@ -370,8 +389,8 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     hoveredMeasure3d: measureStays ? hm : null,
     measureEdit3d: editStays ? em : null,
     lists3d,
-    turns3d: keep(prev.turns3d),
-    frames3d: keep(prev.frames3d),
+    turns3d,
+    frames3d,
     sel3d,
     chosen3d: chosenStays ? c : null,
     hovered3d: prev.hovered3d && !by.has(prev.hovered3d.id) ? null : prev.hovered3d,
