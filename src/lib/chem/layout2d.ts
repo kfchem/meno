@@ -209,16 +209,14 @@ export type Curve = { points: Vec2[]; width: number; round?: boolean; color?: st
 export type Under = { points: Vec2[]; color: string };
 /**
  * A shape on the page as a picture draws it, under everything of the
- * drawing (lib/chem/shapes): its fill, its line - whole or in dashes, each
- * `width` wide in the layout's units, its corners mitred - and an arrow's
- * heads.
+ * drawing (lib/chem/shapes): its fill, and its line - whole or in dashes,
+ * each `width` wide in the layout's units, its corners mitred.
  */
 /** Writing by hand as a picture draws it: each stroke's outline, filled in its colour - a marker's see-through (`opacity`) and under the drawing, a pen's over everything (`over`). */
 export type InkMark = { points: Vec2[]; color: string; opacity?: number; over: boolean };
 export type ShapeMark = {
   fill?: { points: Vec2[]; color: string };
   lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
-  heads: { points: Vec2[]; color: string }[];
 };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
@@ -4413,14 +4411,13 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   let s = "";
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
-  // under it all: the shapes on the page, each filled, its line over its fill, an arrow's heads over its line
+  // under it all: the shapes on the page, each filled, its line over its fill
   for (const m of layout.shapes ?? []) {
     if (m.fill) s += `<path d="${toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
     for (const l of m.lines) {
       const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
       s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     }
-    for (const h of m.heads) s += `<path d="${toSvgPath(h)}" fill="${svgColor(h.color)}" stroke="none" />`;
   }
   // a marker's writing, over the shapes and under the drawing
   for (const k of layout.inks ?? []) if (!k.over) s += svgInk(k);

@@ -1,6 +1,6 @@
 import type { EditorStore } from "../store";
 import { setMembers } from "../workflow/entries";
-import { schemeAmong } from "./copyPaste";
+import { selectionScheme } from "./selectionScheme";
 import { guideMove, type Held } from "./guiding";
 import { shapePlace } from "../document";
 import { strokeMoved } from "../../../../lib/chem/ink";
@@ -38,12 +38,14 @@ export function dragSelection(
   const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat())]);
   const takenSolids = new Set([...st.sel3d, ...held.flatMap((h) => h.molecules)]);
   const atoms = st.model.atoms.filter((a) => takenAtoms.has(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, takenAtoms);
-  // (and the words selected, each as one thing)
-  const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((a) => a.id === c.id))];
+  // (the arrows, "+" signs and words among them, and those selected for themselves - each once)
+  const among = selectionScheme(st, takenAtoms);
+  const words = among.captions;
   const solids = st.molecules3d.filter((m) => takenSolids.has(m.id)).map((m) => ({ id: m.id, at: m.at }));
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
-  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
+  // (a set's pictures - a Render step's - with it)
+  const heldPictures = new Set(held.flatMap((h) => h.pictures));
+  const pictures = st.pictures.filter((p) => st.selPictures.has(p.id) || heldPictures.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const texts = st.texts.flatMap((t) => (t.at && st.selTexts.has(t.id) ? [{ id: t.id, x: t.at.x, y: t.at.y }] : []));
   const pdfs = st.pdfs.filter((p) => st.selPdfs.has(p.id)).map((p) => ({ id: p.id, x: p.x, y: p.y }));
   const slides = st.slides.filter((s) => st.selSlides.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));

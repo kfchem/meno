@@ -49,6 +49,13 @@ describe("a workspace file", () => {
     expect(readMenoFile(written).data(sha(output))).toEqual(output);
   });
 
+  it("cut short or damaged, is said to be so - not in the zip reader's words", () => {
+    for (const broken of [bytes.slice(0, Math.floor(bytes.length / 2)), bytes.slice(0, bytes.length - 10)]) {
+      expect(() => readMenoFile(broken)).toThrow(NotMenoFile);
+      expect(() => readMenoFile(broken)).toThrow(/cut short or damaged/);
+    }
+  });
+
   it("is not just any zip, nor JSON: those are said not to be one", () => {
     const other = zipSync({ "workspace.json": strToU8(WORKSPACE) });
     expect(isMenoFile(other)).toBe(false);

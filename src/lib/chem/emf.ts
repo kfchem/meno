@@ -374,7 +374,7 @@ export function layoutEmf(
     poly(EMR.POLYGON, pts);
   };
   // under it all, the shapes on the page, one after another: each filled,
-  // its line over its fill - a corner where it closes - and an arrow's heads over that
+  // its line over its fill - a corner where it closes
   for (const m of layout.shapes ?? []) {
     if (m.fill && m.fill.points.length >= 3) {
       select(NULL_PEN);
@@ -387,10 +387,6 @@ export function layoutEmf(
         const id = penFor(l.width * zoom, colorRef(l.color));
         drawLines(id, points(l.closed ? [...l.points, l.points[0], l.points[1]] : l.points));
       }
-    }
-    if (m.heads.length) {
-      select(NULL_PEN);
-      for (const h of m.heads) fillPolygon(points(h.points), colorRef(h.color));
     }
   }
   // writing by hand, filled: a marker's see-through for EMF+ - GDI, which

@@ -7,7 +7,7 @@
 import type { AsideEntry, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
-import { KINDS, type SetKind, type StepKind } from "./kinds";
+import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
 
@@ -35,7 +35,7 @@ function readSet(v: unknown): WorkflowSet | null {
     y0: Math.min(b.y0, b.y1),
     x1: Math.max(b.x0, b.x1),
     y1: Math.max(b.y0, b.y1),
-    ...(made && isId(made.step) && SETS.includes(made.holds as SetKind) ? { made: { step: made.step, holds: made.holds as SetKind } } : {}),
+    ...(made && isId(made.step) && (SETS.includes(made.holds as SetKind) || made.holds === "pictures") ? { made: { step: made.step, holds: made.holds as SetHolds } } : {}),
     ...(aside.length ? { aside } : {}),
   };
 }
@@ -99,9 +99,17 @@ function readKept(v: unknown): StepRunKept | null {
 function readRunning(v: unknown): StepRunning | undefined {
   const r = v as { at?: unknown; input?: unknown; options?: unknown; jobs?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.input !== "string" || !Array.isArray(r.jobs)) return undefined;
-  const jobs = r.jobs.flatMap((j: { id?: unknown; entries?: unknown; reads?: unknown } | null): StepJob[] =>
+  const jobs = r.jobs.flatMap((j: { id?: unknown; entries?: unknown; reads?: unknown; size?: unknown } | null): StepJob[] =>
     typeof j?.id === "string" && JOB.test(j.id) && Array.isArray(j.entries) && j.entries.every((i) => Number.isInteger(i) && i >= 0)
-      ? [{ id: j.id, entries: j.entries as number[], reads: Array.isArray(j.reads) ? j.reads.filter((n): n is string => typeof n === "string" && IN_FOLDER.test(n)) : [] }]
+      ? [
+          {
+            id: j.id,
+            entries: j.entries as number[],
+            reads: Array.isArray(j.reads) ? j.reads.filter((n): n is string => typeof n === "string" && IN_FOLDER.test(n)) : [],
+            // (a Render's: the size its picture takes on the page)
+            ...(Array.isArray(j.size) && j.size.length === 2 && j.size.every((n) => isNum(n) && n > 0) ? { size: [j.size[0], j.size[1]] as [number, number] } : {}),
+          },
+        ]
       : [],
   );
   const kind = (r as { kind?: unknown }).kind;

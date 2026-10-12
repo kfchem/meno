@@ -47,6 +47,7 @@ built* below.
 | **Calculation output**, through Open or a drop | `outputKindOf` (`lib/calc/catalog.ts`) - by content only, and only once `detectFormat` has found no structure format | every reader added that reads the kind (`readOutput`, `lib/calc/read.ts`) | a molecule in 3D with what the calculation found |
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
 | **`.meno`** (Open, drop) | the extension | `readWorkspace` (version 1 only); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too |
+| **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a new tab, as Open makes one |
 | **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
 
 ### Structure formats
@@ -475,10 +476,11 @@ work.meno (zip)
   step 4b). Slides are listed in `slides`, in the order a talk shows
   them, each by its middle and its size, `around: true` where the page
   about it is shown while it is (docs/PRESENTING.md). Shapes are listed in
-  `shapes`, from the back, each with its kind, its corners or ends and
-  what of its look is not as a shape is made; words in one say which
-  (`captions[].shape`; docs/PRESENTING.md, *Shapes*). Writing by hand is
-  listed in `inks`, each piece with its pen, width, colour and strokes -
+  `shapes`, from the back, each with its kind (a rectangle, a rounded one,
+  an ellipse, a line or a callout - an arrow is in `arrows`), its corners
+  or ends and what of its look is not as a shape is made; words in one say
+  which (`captions[].shape`; docs/PRESENTING.md, *Shapes*). Writing by hand
+  is listed in `inks`, each piece with its pen, width, colour and strokes -
   each stroke's points as x, y and pressure, three numbers to a point
   (docs/PRESENTING.md, *Handwriting*); writing on a PDF's page is kept with
   the PDF (`pdfs[].inks`, each piece with its page, its points the page's
@@ -493,6 +495,51 @@ work.meno (zip)
   nothing was added for it, and it is saved as a zip.
 - **The clipboard and Office keep the record**, JSON as before: a copy
   carries no file.
+
+### Opening a workspace file from the system
+
+Decided by the maintainer, 2026-10-12: Meno is the app for `.meno`, and for
+`.meno` alone - the other formats it reads stay with whatever opens them -
+so a workspace file double-clicked opens in Meno, with an icon of its own.
+
+- **Its icon** is a document's, not the app's: a sheet, its corner folded,
+  carrying Meno's mark (`src-tauri/icons/document/`: `meno-document.svg`,
+  and `meno-document-small.svg`, bolder, for 16 to 24 pixels). The
+  `.icns` and the `.ico` are made from them by
+  `scripts/icons/document_icon.py`: each size drawn by the Tauri CLI's own
+  `tauri icon`, the `.icns` put together by `iconutil`, the `.ico` written
+  with its images as PNGs.
+- **macOS** (`src-tauri/Info.plist`, merged by Tauri into the app's own):
+  Meno exports the type `com.kfchem.meno.workspace` - extension `meno`,
+  media type `application/vnd.kfchem.meno+zip`, described as "Meno
+  workspace" - and opens it as its owner (`LSHandlerRank` Owner, role
+  Editor), the document's icon in the app's `Resources`
+  (`tauri.macos.conf.json`). The type conforms to `public.data` and
+  `public.content`, not to `public.zip-archive`, though the file is a zip:
+  a workspace is a document, not an archive to unpack, and an app that
+  unpacks archives on its own - a browser opening "safe" downloads, the
+  system's Archive Utility - would take one that said it was an archive
+  apart.
+- **Windows** (`tauri.windows.conf.json`, `fileAssociations`): the
+  installer associates `.meno` with Meno under the ProgID `Meno.Workspace`,
+  "Meno workspace", opened with `Meno.exe "%1"`; its hook gives the ProgID
+  the document's icon, carried as `icons\document\meno-document.ico`
+  (`windows/hooks.nsh`). Uninstalling takes the ProgID away, and gives
+  `.meno` back what it was associated with before.
+- **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
+  `lib/openedFiles.ts`): each file is kept by the app until the page
+  takes it, so that one opened as Meno starts - before the page is there -
+  is not lost; then it opens in a tab of its own (in place of a blank one
+  in front), as Open opens it, with the same words where it cannot be
+  read. On macOS the system tells the running Meno (`RunEvent::Opened`) at
+  its start or at any time after. On Windows a file comes as an argument:
+  to the Meno it starts; or, where Meno is running already, to that one -
+  the second Meno passes it on and goes again at once
+  (`tauri-plugin-single-instance`), and the first comes to the front. A
+  Meno Office starts to serve a structure (`-Embedding`, `ole.rs`) is not
+  one of these: it stays, as it must.
+- **Not yet:** the Windows MSI, which Meno does not ship, associates
+  nothing.
 
 ### Response
 

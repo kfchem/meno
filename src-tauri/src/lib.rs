@@ -19,6 +19,7 @@ mod drop;
 mod jobs;
 mod pdf;
 mod net;
+mod opened;
 mod pixienv;
 mod plugfiles;
 mod present;
@@ -853,7 +854,19 @@ pub fn run() {
         }
     }
     let version = context.package_info().version.to_string();
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+    // One Meno on Windows: a workspace file opened while it runs comes to
+    // it, and the Meno started for it goes again (opened.rs) - not one
+    // Office starts to serve a structure, which must stay (ole.rs).
+    #[cfg(windows)]
+    if !ole::started_for_office() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            opened::open(app, opened::workspaces_in(args));
+            opened::show(app);
+        }));
+    }
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
@@ -864,8 +877,12 @@ pub fn run() {
         .manage(net::Net::default())
         .manage(pdf::PdfState::default())
         .manage(update::Updates::new(version))
+        .manage(opened::Opened::default())
         .setup(|app| {
             net::start(app.handle());
+            // a workspace file Windows started Meno to open (opened.rs)
+            #[cfg(windows)]
+            opened::open(app.handle(), opened::workspaces_in(std::env::args()));
             // drags from other programs the webview cannot read (Windows)
             #[cfg(windows)]
             drop::start(app.handle());
@@ -922,6 +939,8 @@ pub fn run() {
             plugfiles::plugin_files,
             // the window given over to a talk
             present::present_window,
+            // workspace files opened from outside Meno
+            opened::opened_files,
             // keeping Meno up to date
             update::update_state,
             update::update_check,
@@ -946,6 +965,11 @@ pub fn run() {
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
+            // a workspace file macOS asks Meno to open, as it starts or after (opened.rs)
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Opened { urls } = &event {
+                opened::open(app, opened::workspaces_of(urls));
+            }
             // Don't leave Python sidecars running after the window closes.
             if let RunEvent::Exit = event {
                 app.state::<ProcState>().kill_all();

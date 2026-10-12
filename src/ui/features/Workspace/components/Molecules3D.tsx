@@ -19,7 +19,7 @@ import { linkOf } from "../chem/make3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { eyeOf, pageAt } from "../utils/page";
 import { guideMove } from "../utils/guiding";
-import { schemeAmong } from "../utils/copyPaste";
+import { selectionScheme } from "../utils/selectionScheme";
 import { setMembers } from "../workflow/entries";
 import CalcList3D from "./CalcList3D";
 import { isAsk, readGrid, resultKey, resultsOn, type Ask, type ListResult } from "../../../../lib/calc/results";
@@ -335,9 +335,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat())]);
       const group = st.molecules3d.filter((x) => takenSolids.has(x.id)).map((x) => x.id);
       const withDrawing = takenAtoms.size > 0;
-      const among = withDrawing
-        ? schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, takenAtoms)
-        : { arrows: [], pluses: [], captions: [] };
+      // (the arrows, "+" signs and words among the atoms taken, and those selected for themselves)
+      const among = selectionScheme(st, takenAtoms);
       for (const id of group) spins.current.delete(id);
       const r = dom.getBoundingClientRect();
       const from = pageAt(((g.sx - r.left) / r.width) * 2 - 1, -(((g.sy - r.top) / r.height) * 2 - 1), camera);
@@ -681,6 +680,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                       : undefined
                   }
                   iso={surface?.value ? (open.iso ?? surface.value.iso ?? DEFAULT_ISO) : undefined}
+                  isoStart={surface?.value?.iso}
                   onIso={(iso) => store.getState().setIso3d(m.id, iso)}
                   scale={colourBy?.value && row?.colour ? { from: row.colour.from, to: row.colour.to, ...(row.colour.label ? { label: row.colour.label } : {}) } : undefined}
                   onClose={() => store.getState().closeList3d(m.id)}

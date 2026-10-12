@@ -4,7 +4,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { fillOutline, headsOf, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { fillOutline, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
@@ -294,7 +294,6 @@ export function drawingLayout(
       return {
         ...(area ? { fill: { points: area, color: s.fill! } } : {}),
         lines: lined ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
-        heads: lined ? headsOf(s, pointPx).map((points) => ({ points, color })) : [],
       };
     });
     const boxes = shapes.map((s) => shapeBounds(s, pointPx));

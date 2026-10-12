@@ -1734,16 +1734,15 @@ export function addShape(doc: WorkspaceDocument, shape: Omit<Shape, "id">): Work
   return { ...doc, shapes: [...(doc.shapes ?? []), { ...shape, id }], nextShapeId: id + 1 };
 }
 
-/** `s` as `patch` changes it: weight regular, plain, one head and no colour of its own being what a shape has when it says nothing. */
+/** `s` as `patch` changes it: weight regular, plain and no colour of its own being what a shape has when it says nothing. */
 function patched(s: Shape, patch: ShapePatch): Shape {
-  const { weight, dash, heads, stroke, fill, ...place } = patch;
-  const { weight: w0, dash: d0, heads: h0, stroke: s0, fill: f0, ...rest } = s;
+  const { weight, dash, stroke, fill, ...place } = patch;
+  const { weight: w0, dash: d0, stroke: s0, fill: f0, ...rest } = s;
   const w = weight === undefined ? w0 : weight === "regular" ? undefined : weight;
   const d = dash === undefined ? d0 : dash || undefined;
-  const h = heads === undefined ? h0 : heads === 2 ? 2 : undefined;
   const st = stroke === undefined ? s0 : (stroke ?? undefined);
   const f = fill === undefined ? f0 : (fill ?? undefined);
-  return { ...rest, ...place, ...(w ? { weight: w } : {}), ...(d ? { dash: true as const } : {}), ...(h ? { heads: 2 as const } : {}), ...(st ? { stroke: st } : {}), ...(f ? { fill: f } : {}) };
+  return { ...rest, ...place, ...(w ? { weight: w } : {}), ...(d ? { dash: true as const } : {}), ...(st ? { stroke: st } : {}), ...(f ? { fill: f } : {}) };
 }
 
 const sameShape = (a: Shape, b: Shape) => JSON.stringify(a) === JSON.stringify(b);
@@ -1758,7 +1757,7 @@ export function updateShape(doc: WorkspaceDocument, id: number, patch: ShapePatc
 }
 
 /** `doc` with the shapes `ids` changed alike as `patch` says - their look, not where they are. */
-export function restyleShapes(doc: WorkspaceDocument, ids: Iterable<number>, patch: Pick<ShapePatch, "weight" | "dash" | "heads" | "stroke" | "fill">): WorkspaceDocument {
+export function restyleShapes(doc: WorkspaceDocument, ids: Iterable<number>, patch: Pick<ShapePatch, "weight" | "dash" | "stroke" | "fill">): WorkspaceDocument {
   const take = new Set(ids);
   let changed = false;
   const shapes = (doc.shapes ?? []).map((x) => {

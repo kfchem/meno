@@ -1,5 +1,5 @@
 import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
-import type { SetKind, StepKind } from "../workflow/kinds";
+import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
@@ -268,13 +268,11 @@ export type Slide = { id: number; x: number; y: number; w: number; h: number; ar
 export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
 /**
  * A change to a shape: where it lies, its tail, its line's weight, dashed
- * or not, an arrow's heads (1 or 2), its line's colour and its fill (null,
- * none of its own).
+ * or not, its line's colour and its fill (null, none of its own).
  */
 export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
   weight?: ShapeWeight;
   dash?: boolean;
-  heads?: 1 | 2;
   stroke?: string | null;
   fill?: string | null;
 };
@@ -479,9 +477,9 @@ export type TextOf = { step: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
- * Made by a step: the step, the kind of set it holds, and the entries the
- * step set aside, listed struck through. Made by the chemist, a set is a
- * compound set.
+ * Made by a step: the step, the kind of set it holds - a Render step's,
+ * pictures - and the entries the step set aside, listed struck through.
+ * Made by the chemist, a set is a compound set.
  */
 export type WorkflowSet = {
   id: number;
@@ -489,7 +487,7 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  made?: { step: number; holds: SetKind };
+  made?: { step: number; holds: SetHolds };
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
@@ -513,7 +511,8 @@ export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; re
  * their place among those that came in; and the files of its folder its
  * plugin reads back once it is done.
  */
-export type StepJob = { id: string; entries: number[]; reads: string[] };
+/** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
+export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they
@@ -935,6 +934,18 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /**
+   * The arrows and "+" signs selected for themselves - one standing alone,
+   * pointing at something on a slide - beside those a selection carries as
+   * it lies among its atoms (utils/selectionScheme); the view's.
+   */
+  selArrows: Set<number>;
+  selPluses: Set<number>;
+  selectArrows: (ids: Iterable<number>, add?: boolean) => void;
+  selectPluses: (ids: Iterable<number>, add?: boolean) => void;
+  /** An arrow or a "+" added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  toggleArrowSel: (id: number) => void;
+  togglePlusSel: (id: number) => void;
   /** An arrow being drawn from Quick Add, from a point to its point - the view's (components/arrowFrom). */
   arrowDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
   setArrowDraft: (draft: EditorState["arrowDraft"]) => void;
@@ -946,8 +957,8 @@ export type EditorState = {
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
-  /** The shapes `ids` given the same look - their lines' weight, dashed or not, an arrow's heads - as one step. */
-  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash" | "heads">) => void;
+  /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
   /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
   colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
   /** The shapes `ids` brought over all the others, or put under them. */

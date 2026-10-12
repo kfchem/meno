@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { finished, followJob, runningOf, startJob } from "./jobs";
+import { finished, followJob, liveJobsOf, runningOf, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -69,5 +69,31 @@ describe("jobs", () => {
     const following = followJob("j", {}, 0);
     following.stop();
     expect((await following.done).state).toBe("running");
+  });
+});
+
+describe("a plugin's jobs, as it is taken away", () => {
+  const job = (id: string, plugin: string, state: Job["state"]): Job => ({ id, plugin, program: "p", state, created: 1 });
+
+  it("knows those that wait or run, of that plugin alone", async () => {
+    const list = async () => [job("a", "xtb", "running"), job("b", "xtb", "waiting"), job("c", "xtb", "done"), job("d", "orca", "running")];
+    expect((await liveJobsOf("xtb", list)).map((j) => j.id)).toEqual(["a", "b"]);
+  });
+
+  it("stops them, and waits until each has ended - or a while at most", async () => {
+    const asked: string[] = [];
+    let looks = 0;
+    const look = async (id: string) => job(id, "xtb", id === "a" && ++looks < 3 ? "running" : "stopped");
+    const pauses: number[] = [];
+    await stopJobsAndWait(["a", "b"], { stop: async (id) => void asked.push(id), look, pause: async (ms) => void pauses.push(ms) });
+    expect(asked).toEqual(["a", "b"]);
+    // (a looked at until it stopped; b ended at once)
+    expect(looks).toBe(3);
+    expect(pauses).toEqual([250, 250]);
+    // (one that never ends: waited for no longer than said; one whose stop or look fails, taken as ended)
+    let waited = 0;
+    await stopJobsAndWait(["x"], { stop: async () => {}, look: async (id) => job(id, "xtb", "running"), pause: async () => void waited++, most: 1000 });
+    expect(waited).toBe(4);
+    await stopJobsAndWait(["y"], { stop: () => Promise.reject(new Error("no")), look: () => Promise.reject(new Error("gone")), pause: async () => {} });
   });
 });

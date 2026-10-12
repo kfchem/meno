@@ -6,6 +6,14 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-ole'
+  ; A workspace file's own icon (icons\document, docs/FILE-IO.md): the
+  ; installer associates .meno with Meno (tauri.windows.conf.json,
+  ; fileAssociations) under the ProgID Meno.Workspace, with Meno's own icon;
+  ; the document's is put in its place, and Explorer told (UPDATEFILEASSOC,
+  ; the installer's own FileAssociation.nsh). Uninstalling
+  ; takes the ProgID away whole, its icon with it.
+  WriteRegStr SHCTX "Software\Classes\Meno.Workspace\DefaultIcon" "" "$INSTDIR\icons\document\meno-document.ico"
+  !insertmacro UPDATEFILEASSOC
   ; What earlier versions installed and this one no longer carries: an
   ; installer over them leaves their files where they were (seen in the
   ; v0.1.7 check). uv has been fetched when first needed since 0.1.7, and

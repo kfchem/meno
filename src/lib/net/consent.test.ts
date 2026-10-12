@@ -10,6 +10,8 @@ describe("asking to use the network", () => {
     expect(await askToConnect(request)).toBe(true);
     expect(useNetwork.getState().asking).toBeNull();
     const answer = askToConnect({ ...request, again: true });
+    // (asked in its turn, one question at a time: lib/net/network)
+    await new Promise((go) => setTimeout(go, 0));
     expect(useNetwork.getState().asking).toMatchObject({ title: "Download X?" });
     useNetwork.getState().asking!.answer(false);
     expect(await answer).toBe(false);

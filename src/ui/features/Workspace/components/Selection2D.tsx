@@ -10,7 +10,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -22,7 +22,7 @@ import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { selectionMoving } from "../utils/dragSelection";
-import { schemeAmong } from "../utils/copyPaste";
+import { selectionScheme } from "../utils/selectionScheme";
 import { TAU, follow } from "../../../theme/motion";
 import SelectionShade2D from "./SelectionShade2D";
 import { pressMovedUnder } from "./viewGoal";
@@ -191,6 +191,9 @@ export default function Selection2D() {
           const b = strokesBounds(k.strokes, 0);
           return b ? [{ id: k.id, at: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } }] : [];
         }), kind, points), add);
+        // (and arrows standing wholly in it - each end and corner - and "+" signs, by their middles: those among the atoms it takes are carried with them, once)
+        s.selectArrows(arrowsIn(s.arrows, kind, points), add);
+        s.selectPluses(molecules3dIn(s.pluses.map((x) => ({ id: x.id, at: x })), kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -336,9 +339,9 @@ export default function Selection2D() {
     const shapesAt = (angle: number) => shapes.map((s) => shapePlace(turnedShape(s, about, angle), { x: 0, y: 0 }));
     const inks = st.inks.filter((k) => st.selInks.has(k.id));
     const inksAt = (angle: number) => inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeTurned(s, about, angle)) }));
-    // (the arrows, "+" signs and words among it carried round too - the words' places, their letters upright - as a drag takes them)
-    const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
-    const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
+    // (the arrows, "+" signs and words among it, and those selected for themselves, carried round too - the words' places, their letters upright - as a drag takes them)
+    const among = selectionScheme(st);
+    const words = among.captions;
     const scheme = among.arrows.length || among.pluses.length || words.length;
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
