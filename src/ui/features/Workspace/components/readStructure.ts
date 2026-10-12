@@ -2,15 +2,16 @@
  * *Read as structure* (docs/PDF.md, *Stage 5*): the figure in a box drawn on
  * a PDF's page, or a picture cut out of one - its lines read by Meno, or,
  * where it is a picture, the picture by the plugin that reads them - or any
- * picture on the page, read as a structure and put on the page beside the
- * PDF or the picture - clear of what lies there - as one step, selected;
- * the view taking it in where it lies out of view.
+ * picture on the page, read as a structure - with a scheme's arrows, "+"
+ * signs and words, where the figure has them - and put on the page beside
+ * the PDF or the picture - clear of what lies there - as one step,
+ * selected; the view taking it in where it lies out of view.
  */
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { takenOnPage } from "../chem/make3d";
-import { placedBeside, readBox, readPicture } from "../utils/figures";
+import { placedBeside, readBox, readPicture, regionOf } from "../utils/figures";
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 
@@ -48,10 +49,11 @@ export async function readStructure(
     const st = store.getState();
     const taken: Region[] = [...takenOnPage(st, []), ...st.pictures.map(pictureRegion), ...st.pdfs.map(pdfRoom)];
     const placed = placedBeside(read, region, taken);
-    store.getState().putRead(placed);
+    store.getState().putRead(placed.model, placed.scheme);
     // (beyond the view, the view takes it in)
     const view = ui.view();
-    if (view && placed.atoms.some((a) => a.x < view.x0 || a.x > view.x1 || a.y < view.y0 || a.y > view.y1)) ui.fit();
+    const at = regionOf(placed);
+    if (view && at && (at.x0 < view.x0 || at.x1 > view.x1 || at.y0 < view.y0 || at.y1 > view.y1)) ui.fit();
   } catch (e: unknown) {
     ui.say(`The figure could not be read: ${e instanceof Error ? e.message : String(e)}`);
   } finally {

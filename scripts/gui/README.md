@@ -90,7 +90,7 @@ available:
 |---|---|
 | `Start-Meno` | start the app under test, sized and in front |
 | `Open-MenoFile -Path` | open a structure with Ctrl/Cmd+O: in place of the first tab's blank canvas, or in a tab of its own |
-| `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons: `Chain` begins a chain at the point, `SMILES` opens its field |
+| `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons, clicked where Quick Add is seen to stand in a shot (where it stands depends on the plugins added and procedures saved): `Chain` begins a chain at the point, `SMILES` opens its field, `Shapes` and `Calculations` theirs |
 | `Add-MenoSmiles -Smiles [-X -Y] [-WaitSec]` | a structure from a SMILES, by Quick Add, centred at the point (the middle of the canvas unless told), and let go of |
 | `Save-MenoFile -Path` | Save As (Ctrl/Cmd+Shift+S), under a path not already taken - a workspace (`.meno`), say |
 | `Save-Step -Name` | a numbered screenshot |
@@ -98,8 +98,8 @@ available:
 | `Invoke-MenoDrag -FromX -FromY -ToX -ToY [-Steps] [-PressMs] [-Count] [-AtStep] [-Right] [-Hold] [-Via]` | press, travel, release; `-PressMs 600` holds the button still first - a long press; `-Count 2` after an `Invoke-MenoClick` there is a double-click that drags, `-Count 3` after an `Invoke-MenoClick -Count 2` a triple; `-Right` with the other button; `-Hold` as for a click; `-Via @(@(x, y), ...)` passes through those points on the way - a lasso |
 | `Move-MenoPointer -X -Y` | hover |
 | `Move-MenoPointerAlong -Path @(@(x, y), ...) [-StepMs] [-AtStep]` | the pointer led through points with no button down - a chain traced with the button up |
-| `Invoke-MenoWheel -X -Y -Notches` | zoom; positive is away from you, in |
-| `Invoke-MenoSwipe -X -Y [-DX] [-DY] [-Steps]` | two fingers on a trackpad: moves the view; positive DY scrolls down |
+| `Invoke-MenoWheel -X -Y -Notches` | zoom; positive is away from you, in - out where Settings has the wheel turned the other way, as the settings the run starts from may |
+| `Invoke-MenoSwipe -X -Y [-DX] [-DY] [-Steps] [-Held]` | two fingers on a trackpad: moves the view; positive DY scrolls down; `-Held` swipes where the pointer is without moving it there first - in a drag's `-AtStep`, with the button down |
 | `Send-MenoText`, `Send-MenoKey` | typing (`Send-MenoKey Enter -Shift` for Shift+Enter) |
 | `Send-MenoShortcut -Key [-Shift]` | Ctrl (Windows) or Cmd (Mac) with a key: `Z` is undo, `1` fits the drawing to the view |
 | `Get-ClientSize`, `Wait-MenoSettled` | |

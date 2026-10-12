@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { FADE, RISE } from "../theme/motion";
 import { useEffect, useRef, useState } from "react";
+import { useAskedKeys } from "./asking";
 
 /**
  * Asks for a name - a procedure's, as it is saved. Drawn in the page, as
@@ -26,18 +27,13 @@ export default function NameDialog({
 }) {
   const [name, setName] = useState(initial);
   const inputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, []);
+  // (the keys its own while it asks: Escape cancels, and nothing behind it acts on one)
+  useAskedKeys(boxRef, onCancel);
   const ready = name.trim().length > 0;
   return (
     <motion.div
@@ -48,6 +44,7 @@ export default function NameDialog({
       }}
     >
       <motion.form
+        ref={boxRef}
         {...RISE}
         role="dialog"
         aria-modal="true"

@@ -21,17 +21,40 @@ describe("backToFront", () => {
     expect(Array.from(order)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
-  it("sorts a large surface in a few milliseconds, reusing what it is given", () => {
+  it("sorts a large surface in little more than the time it takes to read it, reusing what it is given", () => {
     const tris = 100_000;
     const positions = new Float32Array(9 * tris);
     for (let i = 0; i < positions.length; i++) positions[i] = Math.sin(i * 12.9898) * 10;
     const out = new Uint32Array(3 * tris);
     const scratch = { keys: new Float32Array(tris), counts: new Uint32Array(tris + 1) };
-    backToFront(positions, [0.3, -0.2, -0.93], out, scratch);
-    const t0 = performance.now();
+    // Timed against reading the surface once, each run of one beside a run
+    // of the other and the fastest of each kept: a busy machine only ever
+    // adds time, and to both alike, where a bound in milliseconds failed
+    // under load (99.8 ms at a load average of 34, 2026-10-12). Sorting is
+    // about 1.6 times the read on a Mac; a sort by comparisons takes over
+    // 30 times, and even the engine's own sort of the depths alone 10.
+    let sink = 0;
+    const read = () => {
+      let sum = 0;
+      for (let i = 0; i < positions.length; i++) sum += positions[i];
+      sink += sum;
+    };
+    let reading = Infinity;
+    let sorting = Infinity;
+    for (let run = 0; run < 15; run++) {
+      const t0 = performance.now();
+      read();
+      const t1 = performance.now();
+      expect(backToFront(positions, [0.3 + run / 1000, -0.2, -0.93], out, scratch)).toBe(out);
+      const t2 = performance.now();
+      reading = Math.min(reading, t1 - t0);
+      sorting = Math.min(sorting, t2 - t1);
+    }
+    expect(Number.isFinite(sink)).toBe(true);
+    expect(sorting).toBeLessThan(5 * reading);
     backToFront(positions, [0.31, -0.2, -0.93], out, scratch);
-    const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(50);
+    // (the depths went where it was given room for them)
+    expect(scratch.keys[1]).toBeCloseTo((positions[9] + positions[12] + positions[15]) * 0.31 + (positions[10] + positions[13] + positions[16]) * -0.2 + (positions[11] + positions[14] + positions[17]) * -0.93, 3);
     // each triangle once, and in order of depth
     const seen = new Uint8Array(tris);
     let last = Infinity;

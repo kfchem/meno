@@ -203,8 +203,8 @@ workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide or a picture made larger
-takes another's width or height, and words made wider another's width.
+thin line in Meno's accent showing each. A slide, a picture or a shape made
+larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
@@ -274,6 +274,11 @@ highlight's colour, under the drawing, and a small handle stands above it.
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
   each stereocentre keeps its configuration.
+- Turned over, a selection is mirrored about the middle of all it moves,
+  which so stays where it was. Pictures, texts, PDFs, slides, shapes
+  and molecules in 3D selected with it go to their mirrored places, each
+  drawn as it was: a picture's image, a PDF's pages and a molecule in 3D
+  are not mirrored, though a tilted picture tilts the other way.
 - Turned by the handle or turned over, a selection takes along the
   reaction arrows, "+" signs and words among it, as a drag does. An
   arrow is carried round and points as far round, or is mirrored and
@@ -911,7 +916,8 @@ All hover-based, as above.
       Shift+Enter in an item starts the next one, as deep, its number one
       on, and on an item with nothing after its bullet ends the list, the
       bullet taken away; Tab and Shift+Tab take the items the selection
-      touches a level in or out (anywhere else, Tab does as it did). Their
+      touches a level in or out (anywhere else, Tab does nothing: the words
+      keep the keys, where it once took them away and kept the words). Their
       menu's *Bullets* makes every line an item, or, all of them items,
       plain lines again.
     - *A box keeps its top*: words given a width, and over no arrow, keep

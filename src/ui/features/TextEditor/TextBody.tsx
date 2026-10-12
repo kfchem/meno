@@ -12,9 +12,10 @@ import type { ColumnTextEntry } from "./columnText";
 import { FONT, LINE_PX, TAB } from "./linePictures";
 import { hasEditContext, typingField, type TypingField } from "./typingField";
 
-type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void };
+/** `write`: a text just made to be written in, given the keys as it shows - `onWrite` told once it has them. */
+type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void };
 
-export default function TextBody({ entry, value, onChange }: Props) {
+export default function TextBody({ entry, value, onChange, write = false, onWrite }: Props) {
   const ed = entry.ed;
   const boxRef = useRef<HTMLDivElement>(null);
   // (typed through an EditContext on the text's own element, where the webview has one; else a textarea)
@@ -56,6 +57,14 @@ export default function TextBody({ entry, value, onChange }: Props) {
       ed.focused = false;
     };
   }, [ed]);
+  // (a text just made to be written in - New text: the keys its own as it shows, the caret at its start)
+  const wrote = useRef(onWrite);
+  wrote.current = onWrite;
+  useEffect(() => {
+    if (!write || !field.current) return;
+    field.current.focus();
+    wrote.current?.();
+  }, [write]);
 
   useLayoutEffect(() => {
     const box = boxRef.current!;

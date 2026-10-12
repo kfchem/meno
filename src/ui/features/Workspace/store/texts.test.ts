@@ -108,3 +108,25 @@ describe("a double-click on empty space", () => {
     expect(state().quickAdd).toEqual(quick);
   });
 });
+
+describe("New text", () => {
+  it("makes an empty text, shows it in the column and marks it to be given the keys there - once", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const s = () => store.getState();
+    s().newText({ x: 2, y: 3 });
+    const made = s().texts[s().texts.length - 1];
+    expect(made.text).toBe("");
+    expect(s().textShown).toBe(made.id);
+    expect(s().textsOpen).toBe(true);
+    // (what the column's text body gives the keys to, as it shows it - and then lets go of)
+    expect(s().textToWrite).toBe(made.id);
+    s().wroteText();
+    expect(s().textToWrite).toBeNull();
+    // (and a canvas let go of, made again: nothing left marked)
+    s().newText();
+    s().letGo();
+    expect(s().textToWrite).toBeNull();
+  });
+});

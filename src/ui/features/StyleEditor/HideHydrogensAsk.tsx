@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
+import { useAskedKeys } from "../../layouts/asking";
 import { FADE, RISE } from "../../theme/motion";
 import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensText";
 
@@ -16,18 +17,13 @@ import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensTex
 export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => void; onHide: () => void }) {
   const [understood, setUnderstood] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const id = useId();
   useEffect(() => {
     keepRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onKeep();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onKeep]);
+  }, []);
+  // (the keys its own while it asks: Escape keeps them, and nothing behind it acts on one)
+  useAskedKeys(boxRef, onKeep);
 
   return (
     <motion.div
@@ -39,6 +35,7 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
       }}
     >
       <motion.div
+        ref={boxRef}
         {...RISE}
         role="alertdialog"
         aria-modal="true"

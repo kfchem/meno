@@ -8,6 +8,7 @@ import { sheetMiddle } from "../../utils/textSheets";
 import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
+import { middleOf } from "../../../../../lib/chem/shapes";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -64,6 +65,8 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
         ),
       );
       st.selectCaptions(st.captions.filter((c) => c.arrow == null && within(c)).map((c) => c.id));
+      // (and the shapes whose middles lie in it)
+      st.selectShapes(st.shapes.filter((x) => within(middleOf(x))).map((x) => x.id));
       st.selectFlow(flowIn(st, "box", box));
       // (the drawing's last: a molecule in 3D selected alone lets it go)
       st.setSel(inBox(st.model, box[0], box[1]));
