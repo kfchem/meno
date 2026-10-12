@@ -147,6 +147,7 @@ export default function QuickAdd({
   procedures = [],
   onChoose,
   onChain,
+  onArrow,
   onShape,
   onSmiles,
   onStep,
@@ -165,6 +166,8 @@ export default function QuickAdd({
   onChoose: (what: QuickAddChoice) => void;
   /** A chain begun where Quick Add was opened, by a press on its icon. */
   onChain: (press: React.PointerEvent) => void;
+  /** An arrow begun where Quick Add was opened, by a press on its icon: drawn to where a drag goes, or - a click - put as one is made. */
+  onArrow?: (press: React.PointerEvent) => void;
   /** A shape begun where Quick Add was opened, by a press on its icon (docs/PRESENTING.md, *Shapes*). */
   onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
@@ -238,9 +241,9 @@ export default function QuickAdd({
               aria-label={c.name}
               title={c.name}
               aria-expanded={c.id === "smiles" || c.id === "shapes" ? open === c.id : undefined}
-              onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : undefined}
+              onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : c.id === "arrow" && onArrow ? (e) => e.button === 0 && onArrow(e) : undefined}
               onClick={
-                c.id === "chain"
+                c.id === "chain" || (c.id === "arrow" && onArrow)
                   ? undefined
                   : c.id === "smiles" || c.id === "shapes"
                     ? () => setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))

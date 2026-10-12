@@ -70,11 +70,14 @@ export function atomDepth(box: Box, p: { x: number; y: number }, labelled: boole
   return Math.min(p.x - box.x0 + room, box.x1 + room - p.x, p.y - box.y0 + 0.1 * L, box.y1 + 0.1 * L - p.y);
 }
 
-/** How deep two names' letters are in each other, a space beside them and a little between their lines reckoned, or how far apart (negative). */
+/** The paper between two lines of letters, one over the other, in bond lengths: less, and they read as touching (taxol's AcO on its OBz). */
+const LINE_SPACE = 0.25;
+
+/** How deep two names' letters are in each other, a space beside them and a line's space between their lines reckoned, or how far apart (negative). */
 export function boxesDepth(a: Box, b: Box, L: number): number {
   return Math.min(
     Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + 0.2 * L,
-    Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + 0.1 * L,
+    Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + LINE_SPACE * L,
   );
 }
 
@@ -83,7 +86,26 @@ export type NameGeometry = {
   y: readonly number[];
   edges: readonly Edge[];
   elements: readonly string[];
+  /** Each atom's H not drawn as atoms: a label's, written beside or under its symbol (OH), in a name's way as much as the symbol is. */
+  hydrogens?: readonly number[];
 };
+
+/**
+ * Where the drawing sets a labelled atom's H, from the atom, in bond
+ * lengths, given the ways its bonds leave it (unit vectors): beside the
+ * symbol on the side its bonds leave free - OH, or HO where they leave to
+ * the right - or under it (over it) where they leave on both sides. (The
+ * font is 0.69 of a bond: an H beside its symbol is half a bond off, one
+ * under it 0.6.)
+ */
+export function hydrogenSpot(ways: readonly { x: number; y: number }[]): { x: number; y: number } {
+  const band = Math.sin((10 * Math.PI) / 180);
+  const sx = ways.reduce((sum, w) => sum + w.x, 0);
+  const sy = ways.reduce((sum, w) => sum + w.y, 0);
+  if (ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
+  return { x: sx > Math.hypot(sx, sy) * band ? -0.5 : 0.5, y: 0 };
+}
+
 
 /**
  * Each name in a drawing, by its atom: which way its letters run, and
@@ -115,12 +137,25 @@ export function namesLaid(g: NameGeometry, L: number): Map<number, { left: boole
     out.set(a, place(a, d != null && d.x > len * BAND));
     if (d && Math.abs(d.x) <= len * UPRIGHT) either.push(a);
   }
+  // (each label's H, where the drawing sets it)
+  const spots: { x: number; y: number }[] = [];
+  for (let b = 0; b < n; b++) {
+    if (!labelled(b) || isName(g.elements[b]) || !((g.hydrogens?.[b] ?? 0) > 0) || !next[b].length) continue;
+    const h = hydrogenSpot(
+      next[b].map((c) => {
+        const d = Math.hypot(g.x[c] - g.x[b], g.y[c] - g.y[b]) || 1;
+        return { x: (g.x[c] - g.x[b]) / d, y: (g.y[c] - g.y[b]) / d };
+      }),
+    );
+    spots.push({ x: g.x[b] + h.x * L, y: g.y[b] + h.y * L });
+  }
   const runsInto = (a: number, box: Box) => {
     let count = 0;
     for (let b = 0; b < n; b++) {
       if (b === a || next[a].includes(b) || out.has(b)) continue;
       if (atomDepth(box, { x: g.x[b], y: g.y[b] }, labelled(b), L) > 0) count++;
     }
+    for (const h of spots) if (atomDepth(box, h, true, L) > 0) count++;
     for (const [p, q] of g.edges) {
       if (p === a || q === a) continue;
       if (segmentMeetsBox({ x: g.x[p], y: g.y[p] }, { x: g.x[q], y: g.y[q] }, box)) count++;

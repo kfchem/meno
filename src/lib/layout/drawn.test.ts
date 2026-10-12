@@ -132,6 +132,48 @@ describe("readStereo", () => {
     }
   });
 
+  it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
+    // an atom of a ring laid across another's face, behind it - gibberellic
+    // acid's 3-epimer's C3: its depth is a layer, not a place in space, and
+    // taken as one it tipped the bond to the ring in front up towards the
+    // viewer and turned the centre
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, hs: 1, z: -1 },
+      { x: -0.21, y: 0.98, hs: 0, z: 0 },
+      { x: -0.87, y: -0.5, hs: 0, z: -1 },
+      { x: 0.91, y: -0.4, el: "O", hs: 1 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "down" } },
+    ];
+    const flat = readStereo(atoms.map(({ z: _z, ...a }) => a), bonds).tetra.get(0);
+    expect(flat).toBeDefined();
+    expect(readStereo(atoms, bonds).tetra.get(0)).toEqual(flat);
+  });
+
+  it("reads a cage's bridgehead drawn all but flat from the cage as a whole", () => {
+    // camphor's skeleton with only its bridgehead C4 given, either way: the
+    // textbook chair draws that centre's three bonds into the cage all but
+    // in one plane on the page, which way round they go a matter of a hair
+    const bonded: [number, number, number?][] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 6], [6, 3], [1, 7, 2], [0, 8], [6, 9], [6, 10]];
+    const order = new Array(11).fill(0);
+    for (const [a, b, o] of bonded) [order[a], order[b]] = [order[a] + (o ?? 1), order[b] + (o ?? 1)];
+    for (const volume of [1, -1] as const) {
+      const input: LayoutInput = {
+        atoms: Array.from({ length: 11 }, (_, i) =>
+          i === 7 ? { el: "O", hs: 0 } : { el: "C", hs: 4 - order[i], ...(i === 3 ? { tetra: { neighbours: [2, 4, 6, -1], volume } } : {}) },
+        ),
+        bonds: bonded.map(([a, b, o]) => ({ a, b, order: o ?? 1 })),
+      };
+      const { atoms, bonds, out } = drawing(input);
+      expect(out.solid[3]).toBe(true);
+      const t = readStereo(atoms, bonds).tetra.get(3);
+      expect(t && sameConfiguration(input.atoms[3].tetra!, t), `volume ${volume}`).toBe(true);
+    }
+  });
+
   it("turns a centre in a cage when its substituent is drawn the other way", () => {
     // cocaine's C3, which carries the benzoate: as the bond to its O is
     // drawn round the carbon, it is read on one side of the cage or the

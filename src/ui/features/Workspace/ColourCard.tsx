@@ -7,8 +7,8 @@ import { useEditor, useEditorStore } from "./store";
 import { stylesOf } from "../../../lib/chem/captions";
 import { isBox, tintOf } from "../../../lib/chem/shapes";
 
-/** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, the electron-pushing arrows and words on the page it colours, and the shapes whose line it colours and which it fills. */
-export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; captions?: number[]; shapes?: number[] };
+/** What a colour card is for: the atoms and bonds it colours or highlights, the rings it fills, by key, the electron-pushing arrows, arrows and words on the page it colours, and the shapes whose line it colours and which it fills. */
+export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; pushes?: number[]; arrows?: number[]; captions?: number[]; shapes?: number[] };
 
 type Row = "color" | "highlight" | "ring" | "line" | "fill" | "tint";
 const ROW_NAME: Record<Row, string> = { color: "Colour", highlight: "Highlight", ring: "Fill ring", line: "Line", fill: "Fill", tint: "Light fill" };
@@ -64,6 +64,9 @@ export default function ColourCard({
   const parts = target.atoms.length + target.bonds.length > 0;
   const arrows = target.pushes ?? [];
   const pushes = useEditor((s) => s.pushes);
+  // (arrows - a reaction's, or any: their colour)
+  const lines = target.arrows ?? [];
+  const drawnArrows = useEditor((s) => s.arrows);
   // (words on the page: their letters' colour)
   const words = target.captions ?? [];
   const captions = useEditor((s) => s.captions);
@@ -73,7 +76,7 @@ export default function ColourCard({
   const shapes = useEditor((s) => s.shapes).filter((x) => shapeIds.includes(x.id));
   const boxes = shapes.filter((x) => isBox(x.kind));
   const rows: Row[] = [
-    ...(parts ? (["color", "highlight"] as const) : arrows.length || words.length ? (["color"] as const) : []),
+    ...(parts ? (["color", "highlight"] as const) : arrows.length || lines.length || words.length ? (["color"] as const) : []),
     ...(target.rings.length ? (["ring"] as const) : []),
     ...(shapes.length ? (["line"] as const) : []),
     ...(boxes.length ? (["fill", "tint"] as const) : []),
@@ -93,6 +96,7 @@ export default function ColourCard({
             ...model.atoms.filter((a) => atoms.has(a.id)),
             ...model.bonds.filter((b) => bonds.has(b.id)),
             ...(row === "color" ? pushes.filter((p) => arrows.includes(p.id)) : []),
+            ...(row === "color" ? drawnArrows.filter((a) => lines.includes(a.id)) : []),
           ]
             .map((p) => (p as { color?: string; highlight?: string })[row] ?? null)
             .concat(row === "color" ? captions.filter((c) => words.includes(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks).map((st) => st?.color ?? null)) : []);
@@ -108,6 +112,7 @@ export default function ColourCard({
     else {
       if (parts || arrows.length) s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
       if (words.length && row === "color") s.colourWords(words, color, gesture);
+      if (lines.length && row === "color") s.setArrowForm(lines, { color }, gesture);
     }
   };
   const width = 92 + (palette.length + 2) * (SWATCH + 4) + 12;

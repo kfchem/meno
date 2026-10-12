@@ -9,7 +9,7 @@ import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type 
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
-import { reactionFileText } from "./chem/reactionFile";
+import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
@@ -23,7 +23,7 @@ import { currentStyle3D } from "./style3d";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
-import { schemeOutlines } from "../../../lib/chem/reactionScheme";
+import { schemePieces } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
 import { extensionOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
@@ -47,16 +47,17 @@ function stem(path: string): string {
 export type Holds = { solid: boolean; reaction: boolean; drawn: boolean };
 
 /** What is on the canvas, as far as what it can be exported as goes. */
-export const holdsOf = (state: Pick<EditorState, "molecules3d" | "arrows" | "model">): Holds => ({
+export const holdsOf = (state: Pick<EditorState, "molecules3d" | "arrows" | "model"> & Partial<Pick<EditorState, "pluses">>): Holds => ({
   solid: state.molecules3d.length > 0,
-  reaction: state.arrows.length > 0,
+  // (an arrow with what reacts or what it gives beside it: one alone shows no reaction)
+  reaction: reactionArrows({ ...state.model, arrows: state.arrows, pluses: state.pluses ?? [] }).length > 0,
   drawn: state.model.atoms.length > 0,
 });
 
 /** What a part of the canvas holds - the selection, say - as far as what it can be exported as goes. */
 export const holdsOfDrawn = (part: Drawn): Holds => ({
   solid: (part.molecules3d?.length ?? 0) > 0,
-  reaction: (part.arrows?.length ?? 0) > 0,
+  reaction: reactionArrows(part).length > 0,
   drawn: part.atoms.length > 0,
 });
 
@@ -269,10 +270,10 @@ export function drawingLayout(
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
   const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
-  const outlines = schemeOutlines({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
-  if (outlines.length) {
-    const points = outlines.flat();
-    layout.polys.push(...outlines.map((o) => ({ points: o })));
+  const pieces = schemePieces({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
+  if (pieces.length) {
+    const points = pieces.flatMap((o) => o.points);
+    layout.polys.push(...pieces.map((o) => ({ points: o.points, ...(o.color ? { color: o.color } : {}) })));
     take(
       points.map((p) => p.x),
       points.map((p) => p.y),

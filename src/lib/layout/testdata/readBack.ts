@@ -4,7 +4,7 @@ import { kekuleOrders } from "../../chem/kekulize";
 import { readSmiles } from "../../chem/smiles";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "../drawn";
 import { layout2D } from "../engine";
-import type { LayoutInput } from "../perceive";
+import { perceive, type LayoutInput } from "../perceive";
 
 /** A molecule as its SMILES gives it: its bonds Kekulé, each atom's H, each centre's configuration. */
 function fromSmiles(smiles: string): LayoutInput {
@@ -28,12 +28,17 @@ function fromSmiles(smiles: string): LayoutInput {
 
 /**
  * The stereocentres a drawing the engine makes with depth does not show as
- * given, read as Meno reads a drawing (drawn.ts): each atom where it is and
- * as near the viewer as it is, a centre in a solid shown by the drawing
- * itself, the H's and wedges the engine places for the rest. None where the
- * molecule has no centre, or the drawing is flat throughout: that is read
- * by its wedges alone, as any reader reads it (scripts/layout/stereo.py has
- * RDKit read every one).
+ * given, read as Meno reads a drawing (drawn.ts): a centre in a solid shown
+ * by the drawing itself, each atom where it is and as near the viewer as it
+ * is; the rest by the H's and wedges the engine places. And read as a
+ * reader sees its depth: a centre with three bonds or more into its ring
+ * system, each to an atom drawn with depth - a cage's, one where a ring
+ * fused flat onto a cage joins it, a bridgehead of a ring laid across
+ * another's face - by where those atoms are and how near: the face of a
+ * cage a fused ring stands on, the side of a ring a bridge passes. None
+ * where the molecule has no centre, or the drawing is flat throughout: that
+ * is read by its wedges alone, as any reader reads it
+ * (scripts/layout/stereo.py has RDKit read every one).
  */
 function misread(input: LayoutInput): string[] {
   if (!input.atoms.some((a) => a.tetra)) return [];
@@ -61,12 +66,27 @@ function misread(input: LayoutInput): string[] {
     bond.wedge = { narrow: w.from, stereo: w.stereo };
   }
   const read = readStereo(atoms, bonds);
+  const { systemOf } = perceive(input);
+  const at = (a: number) => [out.x[a], out.y[a], out.depth[a]!];
   return input.atoms.flatMap((a, c) => {
     if (!a.tetra) return [];
     const t = read.tetra.get(c);
     const drawn = out.solid[c] ? "in the solid" : out.depth[c] != null ? "with depth" : "flat";
     if (!t) return [`${a.el}${c} (${drawn}): no configuration shown`];
-    return sameConfiguration(a.tetra, t, (n) => (n === drawnH.get(c) ? -1 : n)) ? [] : [`${a.el}${c} (${drawn}): the other configuration`];
+    if (!sameConfiguration(a.tetra, t, (n) => (n === drawnH.get(c) ? -1 : n))) return [`${a.el}${c} (${drawn}): the other configuration`];
+    // (each three of them that span a volume - not three in one plane, a
+    // flat ring's, which say nothing of depth - as the volume of the first
+    // three says it: the same, or the other way, by which one is left out)
+    if (out.depth[c] == null) return [];
+    const known = a.tetra.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && out.depth[n] != null && systemOf[n] === systemOf[c]);
+    const turned = [0, 1, 2, 3].some((left) => {
+      const three = known.filter(([, k]) => k !== left);
+      if (three.length !== 3) return false;
+      const [u, v, w] = three.map(([n]) => at(n).map((x, k) => x - at(c)[k]));
+      const volume = u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
+      return Math.abs(volume) > 1e-6 && Math.sign(volume) !== a.tetra!.volume * (left % 2 === 1 ? 1 : -1);
+    });
+    return turned ? [`${a.el}${c} (${drawn}): its depth shows the other configuration`] : [];
   });
 }
 

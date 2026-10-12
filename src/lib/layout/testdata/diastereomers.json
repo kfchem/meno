@@ -1,0 +1,252 @@
+{
+ "molecules": [
+  {
+   "name": "Morphine, atom 5 inverted",
+   "smiles": "CN1CC[C@]23[C@H]4[C@H]1Cc1c2c(c(O)cc1)O[C@H]3[C@@H](O)C=C4"
+  },
+  {
+   "name": "Morphine, atom 16 inverted",
+   "smiles": "CN1CC[C@]23[C@@H]4[C@H]1Cc1c2c(c(O)cc1)O[C@@H]3[C@@H](O)C=C4"
+  },
+  {
+   "name": "Morphine, atom 17 inverted",
+   "smiles": "CN1CC[C@]23[C@@H]4[C@H]1Cc1c2c(c(O)cc1)O[C@H]3[C@H](O)C=C4"
+  },
+  {
+   "name": "Codeine, atom 5 inverted",
+   "smiles": "CN1CC[C@]23[C@H]4[C@H]1Cc1c2c(c(OC)cc1)O[C@H]3[C@@H](O)C=C4"
+  },
+  {
+   "name": "Codeine, atom 17 inverted",
+   "smiles": "CN1CC[C@]23[C@@H]4[C@H]1Cc1c2c(c(OC)cc1)O[C@@H]3[C@@H](O)C=C4"
+  },
+  {
+   "name": "Codeine, atom 18 inverted",
+   "smiles": "CN1CC[C@]23[C@@H]4[C@H]1Cc1c2c(c(OC)cc1)O[C@H]3[C@H](O)C=C4"
+  },
+  {
+   "name": "Strychnine, atom 8 inverted",
+   "smiles": "C1CN2CC3=CCO[C@@H]4CC(=O)N5[C@H]6[C@H]4[C@H]3C[C@H]2[C@]16c1ccccc15"
+  },
+  {
+   "name": "Strychnine, atom 13 inverted",
+   "smiles": "C1CN2CC3=CCO[C@H]4CC(=O)N5[C@@H]6[C@H]4[C@H]3C[C@H]2[C@]16c1ccccc15"
+  },
+  {
+   "name": "Strychnine, atom 14 inverted",
+   "smiles": "C1CN2CC3=CCO[C@H]4CC(=O)N5[C@H]6[C@@H]4[C@H]3C[C@H]2[C@]16c1ccccc15"
+  },
+  {
+   "name": "Quinine, atom 12 inverted",
+   "smiles": "COc1cc2c([C@@H]([C@@H]3C[C@@H]4CCN3C[C@@H]4C=C)O)ccnc2cc1"
+  },
+  {
+   "name": "Quinine, atom 13 inverted",
+   "smiles": "COc1cc2c([C@H]([C@H]3C[C@@H]4CCN3C[C@@H]4C=C)O)ccnc2cc1"
+  },
+  {
+   "name": "Quinine, atom 15 inverted",
+   "smiles": "COc1cc2c([C@H]([C@@H]3C[C@H]4CCN3C[C@@H]4C=C)O)ccnc2cc1"
+  },
+  {
+   "name": "Quinine, atom 20 inverted",
+   "smiles": "COc1cc2c([C@H]([C@@H]3C[C@@H]4CCN3C[C@H]4C=C)O)ccnc2cc1"
+  },
+  {
+   "name": "Cocaine, atom 6 inverted",
+   "smiles": "CN1[C@H]2CC[C@@H]1[C@H](C(=O)OC)[C@@H](OC(=O)c1ccccc1)C2"
+  },
+  {
+   "name": "Cocaine, atom 7 inverted",
+   "smiles": "CN1[C@H]2CC[C@@H]1[C@@H](C(=O)OC)[C@H](OC(=O)c1ccccc1)C2"
+  },
+  {
+   "name": "Artemisinin, atom 1 inverted",
+   "smiles": "C[C@H]1CC[C@H]2[C@@H](C)C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](C)(O3)OO4"
+  },
+  {
+   "name": "Artemisinin, atom 4 inverted",
+   "smiles": "C[C@@H]1CC[C@@H]2[C@@H](C)C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](C)(O3)OO4"
+  },
+  {
+   "name": "Artemisinin, atom 5 inverted",
+   "smiles": "C[C@@H]1CC[C@H]2[C@H](C)C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](C)(O3)OO4"
+  },
+  {
+   "name": "Artemisinin, atom 9 inverted",
+   "smiles": "C[C@@H]1CC[C@H]2[C@@H](C)C(=O)O[C@@H]3[C@@]24[C@H]1CC[C@](C)(O3)OO4"
+  },
+  {
+   "name": "Artemisinin, atom 11 inverted",
+   "smiles": "C[C@@H]1CC[C@H]2[C@@H](C)C(=O)O[C@H]3[C@@]24[C@@H]1CC[C@](C)(O3)OO4"
+  },
+  {
+   "name": "Paclitaxel, atom 3 inverted",
+   "smiles": "CC1=C2[C@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 6 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 7 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 9 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 10 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 11 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 12 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 13 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 18 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@H]1OC(=O)[C@@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 22 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@H]([C@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Paclitaxel, atom 23 inverted",
+   "smiles": "CC1=C2[C@@H](OC(=O)C)C(=O)[C@]3(C)[C@@H](O)C[C@@H]4[C@](OC(=O)C)([C@H]3[C@H](OC(=O)c3ccccc3)[C@@](O)(C2(C)C)C[C@@H]1OC(=O)[C@@H]([C@@H](c1ccccc1)NC(=O)c1ccccc1)O)CO4"
+  },
+  {
+   "name": "Ibogaine, atom 2 inverted",
+   "smiles": "CC[C@@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCc1c3[nH]c2c1cc(OC)cc2"
+  },
+  {
+   "name": "Ibogaine, atom 6 inverted",
+   "smiles": "CC[C@H]1C[C@@H]2C[C@H]3[C@H]1N(C2)CCc1c3[nH]c2c1cc(OC)cc2"
+  },
+  {
+   "name": "Sparteine, atom 8 inverted",
+   "smiles": "C1CCN2C[C@@H]3C[C@H]([C@@H]2C1)CN1[C@H]3CCCC1"
+  },
+  {
+   "name": "Sparteine, atom 12 inverted",
+   "smiles": "C1CCN2C[C@@H]3C[C@H]([C@H]2C1)CN1[C@@H]3CCCC1"
+  },
+  {
+   "name": "Gelsemine, atom 7 inverted",
+   "smiles": "CN1C[C@@]2(C=C)[C@@H]3C[C@@H]4[C@@]5([C@H]2[C@H]1[C@H]3CO4)c1ccccc1NC5=O"
+  },
+  {
+   "name": "Picrotoxinin, atom 3 inverted",
+   "smiles": "CC(=C)[C@H]1[C@@H]2[C@@H]3[C@]4(C)[C@](O)([C@H]1C(=O)O2)C[C@@H]1[C@]4(O1)C(=O)O3"
+  },
+  {
+   "name": "Picrotoxinin, atom 5 inverted",
+   "smiles": "CC(=C)[C@@H]1[C@@H]2[C@H]3[C@]4(C)[C@](O)([C@H]1C(=O)O2)C[C@@H]1[C@]4(O1)C(=O)O3"
+  },
+  {
+   "name": "Picrotoxinin, atom 6 inverted",
+   "smiles": "CC(=C)[C@@H]1[C@@H]2[C@@H]3[C@@]4(C)[C@](O)([C@H]1C(=O)O2)C[C@@H]1[C@]4(O1)C(=O)O3"
+  },
+  {
+   "name": "Picrotoxinin, atom 7 inverted",
+   "smiles": "CC(=C)[C@@H]1[C@@H]2[C@@H]3[C@]4(C)[C@@](O)([C@H]1C(=O)O2)C[C@@H]1[C@]4(O1)C(=O)O3"
+  },
+  {
+   "name": "Gibberellic acid, atom 2 inverted",
+   "smiles": "C[C@@]12[C@H](O)C=C[C@@]3([C@@H]1[C@H](C(=O)O)[C@]14[C@H]3CC[C@](O)(C1)C(=C)C4)OC2=O"
+  },
+  {
+   "name": "Gibberellic acid, atom 6 inverted",
+   "smiles": "C[C@@]12[C@@H](O)C=C[C@@]3([C@H]1[C@H](C(=O)O)[C@]14[C@H]3CC[C@](O)(C1)C(=C)C4)OC2=O"
+  },
+  {
+   "name": "Gibberellic acid, atom 7 inverted",
+   "smiles": "C[C@@]12[C@@H](O)C=C[C@@]3([C@@H]1[C@@H](C(=O)O)[C@]14[C@H]3CC[C@](O)(C1)C(=C)C4)OC2=O"
+  },
+  {
+   "name": "Gibberellic acid, atom 9 inverted",
+   "smiles": "C[C@@]12[C@@H](O)C=C[C@@]3([C@@H]1[C@H](C(=O)O)[C@]14[C@@H]3CC[C@](O)(C1)C(=C)C4)OC2=O"
+  },
+  {
+   "name": "Ingenol, atom 1 inverted",
+   "smiles": "C[C@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 3 inverted",
+   "smiles": "C[C@@H]1C[C@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 4 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 8 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 11 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 12 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@]3(O)[C@@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 13 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@]1(C2=O)C=C(C)[C@@H]3O"
+  },
+  {
+   "name": "Ingenol, atom 18 inverted",
+   "smiles": "C[C@@H]1C[C@@H]2[C@@H](C2(C)C)[C@@H]2C=C(CO)[C@@H](O)[C@@]3(O)[C@@]1(C2=O)C=C(C)[C@H]3O"
+  },
+  {
+   "name": "Paeoniflorin, atom 22 inverted",
+   "smiles": "C[C@]12C[C@]3(O)[C@@H]4C[C@@]1(O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1)[C@]4(COC(=O)c1ccccc1)[C@H](O2)O3"
+  },
+  {
+   "name": "Paeoniflorin, atom 23 inverted",
+   "smiles": "C[C@]12C[C@]3(O)[C@@H]4C[C@@]1(O[C@H]1[C@@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1)[C@]4(COC(=O)c1ccccc1)[C@H](O2)O3"
+  },
+  {
+   "name": "Paeoniflorin, atom 24 inverted",
+   "smiles": "C[C@]12C[C@]3(O)[C@@H]4C[C@@]1(O[C@H]1[C@H](O)[C@H](O)[C@H](O)[C@@H](CO)O1)[C@]4(COC(=O)c1ccccc1)[C@H](O2)O3"
+  },
+  {
+   "name": "Paeoniflorin, atom 25 inverted",
+   "smiles": "C[C@]12C[C@]3(O)[C@@H]4C[C@@]1(O[C@H]1[C@H](O)[C@@H](O)[C@@H](O)[C@@H](CO)O1)[C@]4(COC(=O)c1ccccc1)[C@H](O2)O3"
+  },
+  {
+   "name": "Paeoniflorin, atom 26 inverted",
+   "smiles": "C[C@]12C[C@]3(O)[C@@H]4C[C@@]1(O[C@H]1[C@H](O)[C@@H](O)[C@H](O)[C@H](CO)O1)[C@]4(COC(=O)c1ccccc1)[C@H](O2)O3"
+  },
+  {
+   "name": "Tetrodotoxin, atom 1 inverted",
+   "smiles": "C([C@@]1(O)[C@H]2[C@@H]3[C@@H](O)N=C(N)N[C@@]34[C@H](O)[C@@H]1O[C@](O)([C@H]4O)O2)O"
+  },
+  {
+   "name": "Tetrodotoxin, atom 3 inverted",
+   "smiles": "C([C@]1(O)[C@H]2[C@H]3[C@@H](O)N=C(N)N[C@@]34[C@H](O)[C@@H]1O[C@](O)([C@H]4O)O2)O"
+  },
+  {
+   "name": "Tetrodotoxin, atom 4 inverted",
+   "smiles": "C([C@]1(O)[C@H]2[C@@H]3[C@H](O)N=C(N)N[C@@]34[C@H](O)[C@@H]1O[C@](O)([C@H]4O)O2)O"
+  },
+  {
+   "name": "Tetrodotoxin, atom 9 inverted",
+   "smiles": "C([C@]1(O)[C@H]2[C@@H]3[C@@H](O)N=C(N)N[C@@]34[C@@H](O)[C@@H]1O[C@](O)([C@H]4O)O2)O"
+  },
+  {
+   "name": "Tetrodotoxin, atom 13 inverted",
+   "smiles": "C([C@]1(O)[C@H]2[C@@H]3[C@@H](O)N=C(N)N[C@@]34[C@H](O)[C@@H]1O[C@](O)([C@@H]4O)O2)O"
+  }
+ ]
+}

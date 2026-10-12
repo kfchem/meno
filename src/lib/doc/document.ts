@@ -34,6 +34,17 @@ export type EditMeta = {
   coalesceWithinMs?: number;
 };
 
+/**
+ * An edit that is part of a gesture - a drag, a turn - its key naming the
+ * gesture, so that no other edit shares it: one undo step for the whole
+ * gesture however long it takes. A drag held still a while, to line
+ * something up, is still one step (with the window, each pause of more
+ * than DEFAULT_COALESCE_MS began a step of its own).
+ */
+export function gestureStep(coalesceKey: string): EditMeta {
+  return { coalesceKey, coalesceWithinMs: Infinity };
+}
+
 export type HistoryInfo = {
   undoDepth: number;
   redoDepth: number;

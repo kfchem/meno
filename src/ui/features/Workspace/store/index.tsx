@@ -220,6 +220,7 @@ export function createEditorStore(
     selShapes: new Set<number>(),
     hoveredShape: null,
     shapeDraft: null,
+    arrowDraft: null,
     presenting: null,
     guides: null,
     setGuides: (guides: EditorState["guides"]) => set({ guides }),
