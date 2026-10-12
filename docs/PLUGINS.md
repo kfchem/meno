@@ -476,6 +476,10 @@ The same for every plugin and for Meno's own parts:
   - in *Molecules in 3D*, who makes a structure in 3D and its conformers,
     and by what method;
   - in a workflow step, who runs it, defaulting to the choice in Settings.
+- **A choice taken away gives way** (the maintainer, 2026-10-12): when the
+  plugin chosen for a role is taken away and another plugin that fills it
+  is added, that one fills the role. With none other added, the role stays
+  with the one chosen, and says to add it again.
 - **What, never how** (the maintainer's rule): a choice names the program
   and the method a chemist would name, never how Meno talks to it.
 
