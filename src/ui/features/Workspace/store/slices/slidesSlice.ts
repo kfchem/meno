@@ -8,6 +8,7 @@ import { sheetMiddle } from "../../utils/textSheets";
 import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
+import { strokesBounds } from "../../../../../lib/chem/ink";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -53,6 +54,11 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.selectMolecules3d(molecules3dIn(st.molecules3d, "box", box));
       st.selectPictures(molecules3dIn(st.pictures.map((p) => ({ id: p.id, at: p })), "box", box));
       st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), "box", box));
+      // (and writing by hand on it, each piece by its middle, as a box takes it)
+      st.selectInks(st.inks.filter((k) => {
+        const m = strokesBounds(k.strokes, 0);
+        return m != null && within({ x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2 });
+      }).map((k) => k.id));
       st.selectPdfs(
         molecules3dIn(
           st.pdfs.map((p) => {

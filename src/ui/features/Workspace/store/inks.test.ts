@@ -46,6 +46,16 @@ describe("writing by hand on the page", () => {
     expect(doc.history().undoDepth).toBe(depth + 1);
   });
 
+  it("on a slide, is taken by its Select what is on it - a piece by its middle - and not off it", () => {
+    const { state } = editor();
+    const slide = state().addSlide({ x: 0, y: 0, w: 32, h: 18 })!;
+    const on = state().writeStroke(PEN, stroke(0))!;
+    const off = state().writeStroke({ pen: "marker", width: 1 }, stroke(40))!;
+    state().selectOnSlide(slide);
+    expect([...state().selInks]).toEqual([on]);
+    expect(state().selInks.has(off)).toBe(false);
+  });
+
   it("is coloured, selected, moved and deleted with the rest of the selection", () => {
     const { state } = editor();
     const a = state().writeStroke(PEN, stroke(0))!;
