@@ -469,13 +469,16 @@ export const createModelSlice = (
     }));
   },
 
-  putRead: (next: Model) => {
+  putRead: (next: Model, scheme?: ImportedScheme) => {
     const start = doc.getState().nextId;
-    if (!doc.edit("read structure", (d) => ops.appendModel(d, next))) return;
-    // (selected, as what is pasted is, to be moved or put right straight on)
+    const startCaption = doc.getState().nextCaptionId ?? 1;
+    if (!doc.edit("read structure", (d) => ops.withImportedScheme(ops.appendModel(d, next), scheme))) return;
+    // (selected, as what is pasted is, to be moved or put right straight on - a scheme's words with it, its compounds' numbers among them)
+    const endCaption = doc.getState().nextCaptionId ?? 1;
     set((prev: EditorState) => ({
       ...prev,
       sel: added(start, doc.getState().model),
+      selCaptions: new Set(Array.from({ length: endCaption - startCaption }, (_, i) => startCaption + i)),
       sel3d: new Set(),
       selPictures: new Set(),
       selAnchor: null,

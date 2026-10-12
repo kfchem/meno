@@ -8,7 +8,7 @@
  * the likeliest way, and said (`unsure`).
  */
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
-import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Stroke, type Wedge } from "./drawn";
+import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
  * An atom read: where it lies on the page, its label as drawn - none for a
@@ -365,23 +365,33 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number): 
 }
 
 /**
- * A figure read: the shapes its paths make read as bonds, their ends where
- * they meet as atoms, the words beside their ends as those atoms' labels,
- * and a word near the rest but at no bond's end - an ion - as an atom
- * alone.
+ * How long a figure's bonds are drawn, from the shapes its paths make and
+ * its letters: the length most of its lines that meet another share (a
+ * bond's line meets another's end, as a hash's strokes and a ring's inner
+ * lines do not), longer than its letters are tall.
  */
-export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = []): FigureRead {
-  const shapes = shapesOf(drawn);
-  // (a bond's line meets another's end, as a hash's strokes and a ring's inner lines do not)
-  const tips = [...shapes.strokes.flatMap((s) => [s.a, s.b]), ...shapes.wedges.flatMap((w) => [w.tip, w.base])];
+export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): number {
+  // (another's end: a line's in a path of several meets the next's, though they share the point)
+  const tips = [...shapes.strokes.flatMap((s) => [{ p: s.a, of: s as object }, { p: s.b, of: s as object }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, of: w as object }, { p: w.base, of: w as object }])];
   const meets = (s: Stroke) => {
     const r = 0.12 * len(s);
-    return [s.a, s.b].some((p) => tips.some((q) => q !== s.a && q !== s.b && dist(p, q) < r));
+    return [s.a, s.b].some((p) => tips.some((q) => q.of !== s && dist(p, q.p) < r));
   };
   const joined = shapes.strokes.filter(meets);
   const lengths = [...(joined.length ? joined : shapes.strokes).map(len), ...shapes.wedges.map((w) => dist(w.tip, w.base))];
-  const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
-  const bond = bondLength(lengths, sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0);
+  const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
+  return bondLength(lengths, sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0);
+}
+
+/**
+ * A figure read: the shapes its paths make (or `given`: those a scheme's
+ * arrows and signs were taken out of) read as bonds, their ends where they
+ * meet as atoms, the words beside their ends as those atoms' labels, and a
+ * word near the rest but at no bond's end - an ion - as an atom alone.
+ */
+export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes): FigureRead {
+  const shapes = given ?? shapesOf(drawn);
+  const bond = figureBond(shapes, drawn.letters);
   const empty: FigureRead = { atoms: [], bonds: [], bond, left: { letters: [...drawn.letters] } };
   if (!bond) return empty;
 

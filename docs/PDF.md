@@ -929,7 +929,7 @@ Two kinds of figure, read two ways:
    is changed.
 4. **Structures first.** A reaction scheme's arrows, plus signs,
    conditions and compound numbers, and letters drawn as outlines, come
-   after (letters drawn as outlines: built, below).
+   after (both built, below).
 5. **Two plugins read pictures, each standing alone** - MolScribe and
    MolNexTR - and the chemist chooses which, as any role's plugin is
    chosen. Meno does not read a picture with both to see whether they
@@ -1024,9 +1024,74 @@ Times), each placed in a page as a journal places a figure - every
 structure is read right, its stereochemistry with it, in about 35 ms for
 the figure of twenty, 65-75 ms where its letters are outlines.
 
-Not yet, and where it comes:
-- **Reaction schemes**: arrows, plus signs, conditions and compound
-  numbers, read as Meno's own arrows and words (a part of its own).
+### A reaction scheme read (built 2026-10-12)
+
+Decided by the maintainer (2026-10-11): Meno's arrows first gained the
+kinds a scheme draws (EDITOR-2D.md, *Arrows*), and each arrow is read as
+that kind. A compound's number is bold words on the page where it is
+drawn, not tied to a structure. Conditions over or under an arrow are
+written Meno's way, as words typed are. The scheme keeps the figure's
+layout.
+
+*Read as structure* reads a box as a scheme (`lib/figure/scheme`). Its
+arrows and "+" signs are taken out of what the figure is drawn with
+first; its structures are read from the rest, as above; and its letters
+that no structure took are read as words.
+
+- **Arrows**: a line - or a row of dashes, or lines joined at corners -
+  with a head at its end. The head can be filled, whole or half; an open
+  chevron of two strokes or an outline; or a single barb, a half head's.
+  An arrow drawn as one filled outline, its line and its head in one
+  shape, is read by how wide it is along its length.
+  - heads at both ends: two heads;
+  - two arrows side by side, pointing opposite ways, a short way apart
+    and alongside each other: an equilibrium, its heads full where both
+    are whole. It goes the way its upper line goes, as an equilibrium
+    is printed (the right-hand line where they stand upright);
+  - two lines ending within an open head: a retrosynthesis's arrow;
+  - a cross on its middle, of two strokes or a letter x: a reaction that
+    does not go;
+  - a line stroked dashed, or drawn as dashes: dashed;
+  - its corners, where its lines turn;
+  - its weight, from its line against the bonds' (thin under three
+    quarters of it, thick over 1.6 times), and its colour, where it is
+    drawn in one rather than black or near it.
+- **"+" signs**: a "+" set alone, two strokes crossing at their middles,
+  square to each other and as long, touching nothing, or a filled cross.
+- **Words**: letters set in lines - a smaller letter set high or low with
+  its line - and lines one close under another in blocks.
+  - A block over or under an arrow, along its longest stretch and near
+    it, is that arrow's words.
+  - The rest stand where they are drawn: a compound's number among them,
+    bold as its typeface is.
+  - Bold and italics come from the typeface. A letter set high or low is
+    marked so, except a formula's count and a charge, which Meno sets low
+    and high itself, and a raised o, which is a degree.
+  - Each block is written as Meno writes words typed (lib/text/smartWords
+    `writtenAsMeant`): a minus for a hyphen or a dash before a number, an
+    en dash in a range, one space before °C.
+- **The scale**: how long most of its bonds are drawn; with no structure
+  in the box, as its letters are tall.
+
+**What is put on the page**: the structures, the arrows of their kinds,
+the "+" signs and the words, as they stand to each other in the figure,
+with one middle and one scale for all of it (a bond as long as Meno draws
+one). All of it goes beside the PDF as one step, the words selected with
+the atoms. Words over an arrow go with it, and grow it to fit them, as
+words put over an arrow do.
+
+**How well**: on a scheme drawn for it - two reactants with a "+" and a
+product, an arrow with words over it and under it, three compounds'
+numbers in bold - and on a row of arrows of each kind, everything is read
+as drawn.
+
+Not yet:
+- **A curved arrow** (an electron-pushing arrow's curve) is not read.
+- **An equilibrium drawn with corners** is read as its two arrows, each
+  a reaction's. One whose lines differ in length, one way favoured, is
+  read as a plain equilibrium.
+- **A scheme in a picture** - a figure that is a picture - is read by the
+  plugin as one structure, not as a scheme.
 
 ### A picture read (part B, built 2026-10-11)
 
