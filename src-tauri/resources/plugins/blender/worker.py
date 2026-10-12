@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The Blender interface's worker. Copyright (C) 2026 Meno contributors.
+# The Blender plugin's worker. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this
 # folder's LICENSE.
-"""The Blender interface's worker: pictures and films of molecules in 3D, rendered by Blender.
+"""The Blender plugin's worker: pictures and films of molecules in 3D, rendered by Blender.
 
 A plugin's worker (docs/PLUGINS.md, docs/RENDER.md), run in an environment
-of its own - Python alone, no package. Blender itself is a program
-installed separately, under its own licence: never fetched or shipped by
-Meno, found where it is usually installed, where the system finds
-programs, or where the chemist located it (the manifest's `installed`).
+of its own - Python alone, no package. Blender itself, under its own
+licence, is Meno's own copy of its official build, fetched beside the
+environment as the plugin is set up (the manifest's `downloads`); a job
+runs it from there.
 One JSON object per line each way, as every plugin's:
 
     {"id": 4, "op": "prepare", "step": "render", "entries": [{"scene": "scene.gltf", "film": false, "width": 2400, "height": 1600, "frames": 1, "fps": 1}], "options": {...}, "cores": 8}
@@ -40,7 +40,7 @@ import os
 import re
 import sys
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 SETTINGS = "render.json"

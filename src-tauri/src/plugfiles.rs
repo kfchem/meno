@@ -11,6 +11,16 @@
 //! once the user has allowed that, having been told of these files and
 //! their size - its requests through Meno's proxy. A download cut short is
 //! taken up where it stopped, where the server allows it.
+//!
+//! One may instead be a program the plugin runs, Meno's own copy of it
+//! (`provides`: Blender, its official build for this system and processor;
+//! docs/PLUGINS.md, *A program Meno fetches*) - fetched as the rest are, as
+//! the plugin is set up. It is an archive, unpacked into the plugin's
+//! `files` once its SHA-256 is checked - a disk image mounted read-only and
+//! the app copied out of it as it is, signature and all; a zip or a tar.xz
+//! opened by the system's own `tar` - and the archive then thrown away; a
+//! stamp beside what it unpacked says it is whole. A job runs the program
+//! from there (jobs.rs `plugin_program`).
 
 use serde::Serialize;
 use serde_json::Value;
@@ -28,13 +38,69 @@ const MOST_BYTES: u64 = 20_000_000_000;
 
 /// A file a plugin downloads, as its manifest gives it: its name in the
 /// plugin's `files` folder, where it is fetched from, its SHA-256 and its
-/// size in bytes.
-#[derive(Debug, Clone, PartialEq)]
+/// size in bytes - and, for an archive, the system and processor it is for,
+/// how it is unpacked, where the program is in it, and the name the plugin
+/// runs it by (`provides`).
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Download {
     pub file: String,
     pub url: String,
     pub sha256: String,
     pub bytes: u64,
+    /// The system it is for (`macos`, `windows`, `linux`); none, every one.
+    pub system: Option<String>,
+    /// The processor it is for (`aarch64`, `x86_64`); none, every one.
+    pub arch: Option<String>,
+    /// How the archive it is is opened; none, it is kept as it is.
+    pub unpack: Option<Unpack>,
+    /// The program in what it unpacks to: a path inside it, `*` for the one folder there is.
+    pub program: Option<String>,
+    /// The program it is, by the name the plugin's steps and roles run it by.
+    pub provides: Option<String>,
+}
+
+/// How an archive a plugin fetches is opened.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Unpack {
+    /// A disk image (macOS): mounted read-only, the app named first in `program` copied out.
+    Dmg,
+    /// A zip, opened by the system's `tar`.
+    Zip,
+    /// A tar compressed with xz.
+    TarXz,
+}
+
+impl Unpack {
+    fn of(name: &str) -> Option<Unpack> {
+        match name {
+            "dmg" => Some(Unpack::Dmg),
+            "zip" => Some(Unpack::Zip),
+            "tar.xz" => Some(Unpack::TarXz),
+            _ => None,
+        }
+    }
+    /// What an archive of it is called at its end.
+    fn extension(self) -> &'static str {
+        match self {
+            Unpack::Dmg => ".dmg",
+            Unpack::Zip => ".zip",
+            Unpack::TarXz => ".tar.xz",
+        }
+    }
+}
+
+/// Whether `program` is a path inside an unpacked archive: names, or `*`
+/// for the one folder there is, never above it; at most a few deep.
+fn program_ok(program: &str) -> bool {
+    let parts: Vec<&str> = program.split('/').collect();
+    (1..=8).contains(&parts.len())
+        && program.len() <= 200
+        && parts.iter().all(|p| *p == "*" || (!p.is_empty() && *p != "." && *p != ".." && !p.contains(['\\', ':', '*']) && p.bytes().all(|b| b.is_ascii_graphic() || b == b' ')))
+}
+
+/// Whether a download is for this computer: its system and processor, where it says one.
+pub fn for_here(d: &Download) -> bool {
+    d.system.as_deref().is_none_or(|s| s == crate::jobs::system()) && d.arch.as_deref().is_none_or(|a| a == std::env::consts::ARCH)
 }
 
 /// Whether a name can be a kept file's: a name, not a path - lower case
@@ -79,13 +145,32 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         let url = text("url");
         let sha256 = text("sha256");
         let bytes = d.get("bytes").and_then(Value::as_u64).unwrap_or(0);
+        let given = |k: &str| d.get(k).map(|v| v.as_str().map(str::to_string).ok_or(()));
+        let refused = || format!("a download the manifest lists is not one Meno takes: {d}");
+        let system = given("system").transpose().map_err(|_| refused())?;
+        let arch = given("arch").transpose().map_err(|_| refused())?;
+        let unpack = match given("unpack").transpose().map_err(|_| refused())? {
+            None => None,
+            Some(u) => Some(Unpack::of(&u).ok_or_else(refused)?),
+        };
+        let program = given("program").transpose().map_err(|_| refused())?;
+        let provides = given("provides").transpose().map_err(|_| refused())?;
         if !file_ok(&file) || !url_ok(&url) || !sha_ok(&sha256) || bytes == 0 || bytes > MOST_BYTES {
-            return Err(format!("a download the manifest lists is not one Meno takes: {d}"));
+            return Err(refused());
+        }
+        // (a program: an archive for one system, the program in it said)
+        let system_ok = system.as_deref().is_none_or(|s| ["macos", "windows", "linux"].contains(&s));
+        let arch_ok = arch.as_deref().is_none_or(|a| ["aarch64", "x86_64"].contains(&a));
+        let archive_ok = unpack.is_none_or(|u| file.ends_with(u.extension()) && file.len() > u.extension().len());
+        let program_said = program.as_deref().is_none_or(|p| unpack.is_some() && program_ok(p) && (unpack != Some(Unpack::Dmg) || !p.starts_with('*')));
+        let copy_ok = provides.as_deref().is_none_or(|n| !n.is_empty() && n.len() <= 40 && n.bytes().all(|b| b.is_ascii_alphanumeric() || b"._+-".contains(&b)) && program.is_some() && system.is_some());
+        if !system_ok || !arch_ok || !archive_ok || !program_said || !copy_ok {
+            return Err(refused());
         }
         if out.iter().any(|o| o.file == file) {
             return Err(format!("{file} is listed twice"));
         }
-        out.push(Download { file, url, sha256, bytes });
+        out.push(Download { file, url, sha256, bytes, system, arch, unpack, program, provides });
     }
     Ok(out)
 }
@@ -97,12 +182,145 @@ pub fn folder(data: &Path, id: &str, pixi: bool) -> PathBuf {
     home.join(format!("plugin-{id}")).join("files")
 }
 
-/// The files not kept yet: those missing, or not the size they should be.
+/// The files not kept yet: those missing, or not the size they should be -
+/// or, an archive, not unpacked whole.
 pub fn missing<'a>(dir: &Path, downloads: &'a [Download]) -> Vec<&'a Download> {
     downloads
         .iter()
-        .filter(|d| std::fs::metadata(dir.join(&d.file)).map(|m| m.len() != d.bytes).unwrap_or(true))
+        .filter(|d| match d.unpack {
+            Some(_) => copy_of(dir, d).is_none(),
+            None => std::fs::metadata(dir.join(&d.file)).map(|m| m.len() != d.bytes).unwrap_or(true),
+        })
         .collect()
+}
+
+/// The files a plugin needs as it is set up: those for this computer.
+pub fn needed(downloads: &[Download]) -> Vec<Download> {
+    downloads.iter().filter(|d| for_here(d)).cloned().collect()
+}
+
+/// What says an archive was unpacked whole: beside what it unpacked to, its SHA-256.
+const STAMP: &str = ".meno-unpacked";
+
+/// The folder an archive is unpacked to in `dir`: its name, without the archive's ending.
+pub fn unpacked(dir: &Path, d: &Download) -> PathBuf {
+    let ext = d.unpack.map(Unpack::extension).unwrap_or("");
+    dir.join(d.file.strip_suffix(ext).unwrap_or(&d.file))
+}
+
+/// The program in `folder`, as `program` says where: `*` the one folder there is.
+fn program_in(folder: &Path, program: &str) -> Option<PathBuf> {
+    let mut at = folder.to_path_buf();
+    for part in program.split('/') {
+        if part == "*" {
+            let mut dirs = std::fs::read_dir(&at).ok()?.flatten().filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'));
+            let one = dirs.next()?;
+            if dirs.next().is_some() {
+                return None;
+            }
+            at = one.path();
+        } else {
+            at = at.join(part);
+        }
+    }
+    at.is_file().then_some(at)
+}
+
+/// Meno's own copy of a program, where it was fetched and unpacked whole: the program in it.
+pub fn copy_of(dir: &Path, d: &Download) -> Option<PathBuf> {
+    let folder = unpacked(dir, d);
+    let stamp = std::fs::read_to_string(folder.join(STAMP)).ok()?;
+    (stamp.trim() == d.sha256).then(|| program_in(&folder, d.program.as_deref()?)).flatten()
+}
+
+/// Plugin `id`'s program `name`, where its manifest says Meno fetches it
+/// (`provides`), in the app data `data`: the program itself, fetched for
+/// this computer as the plugin was set up; why not, where it is not there.
+/// None, where no download is it - a program of its environment's.
+pub fn provided(data: &Path, manifest: &Value, id: &str, name: &str) -> Result<Option<PathBuf>, String> {
+    let downloads = downloads_of(manifest)?;
+    let mut its = downloads.iter().filter(|d| d.provides.as_deref() == Some(name)).peekable();
+    if its.peek().is_none() {
+        return Ok(None);
+    }
+    let plugin = manifest.get("name").and_then(Value::as_str).unwrap_or(id);
+    let d = its.find(|d| for_here(d)).ok_or_else(|| format!("{plugin} is not for this computer"))?;
+    let dir = folder(data, id, manifest.get("environment").and_then(Value::as_str) == Some("pixi"));
+    copy_of(&dir, d).map(Some).ok_or_else(|| format!("{plugin} is not set up"))
+}
+
+/// A command run to its end, saying why where it did not end well.
+fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
+    let out = std::process::Command::new(program).args(args).output().map_err(|e| format!("{program}: {e}"))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let said = String::from_utf8_lossy(&out.stderr);
+    Err(format!("{program} {}", said.lines().last().unwrap_or("did not end well").trim()))
+}
+
+/// The system's `tar`: Windows' own, in its System32, where Windows is.
+fn tar() -> String {
+    if cfg!(windows) {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        format!(r"{root}\System32\tar.exe")
+    } else {
+        "/usr/bin/tar".into()
+    }
+}
+
+/// Where an archive is unpacked first: beside the folder it goes to, its
+/// name with `.part` after it - the whole name, dots and all, never cut at
+/// its last dot as a file's extension would be ("blender-5.2.2-macos-arm64").
+fn staging(folder: &Path) -> PathBuf {
+    let mut name = folder.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    folder.with_file_name(name)
+}
+
+/// An archive fetched (`archive`, its hash checked) unpacked as its download
+/// says, into the folder it goes to: first beside it - then put in place
+/// whole, and stamped. The program in it, where it is there; why not.
+pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, String> {
+    let how = d.unpack.ok_or("not an archive")?;
+    let program = d.program.as_deref().ok_or("no program said")?;
+    let folder = unpacked(dir, d);
+    let part = staging(&folder);
+    let _ = std::fs::remove_dir_all(&part);
+    std::fs::create_dir_all(&part).map_err(|e| format!("{}: {e}", part.display()))?;
+    let done = match how {
+        Unpack::Zip => run(&tar(), &["-xf".as_ref(), archive.as_os_str(), "-C".as_ref(), part.as_os_str()]),
+        Unpack::TarXz => run(&tar(), &["-xJf".as_ref(), archive.as_os_str(), "-C".as_ref(), part.as_os_str()]),
+        Unpack::Dmg => unpack_dmg(archive, program, &part, dir),
+    };
+    if let Err(e) = done {
+        let _ = std::fs::remove_dir_all(&part);
+        return Err(format!("{} could not be unpacked: {e}", d.file));
+    }
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::rename(&part, &folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+    let Some(found) = program_in(&folder, program) else {
+        return Err(format!("{} holds no {program}", d.file));
+    };
+    std::fs::write(folder.join(STAMP), &d.sha256).map_err(|e| format!("{}: {e}", folder.display()))?;
+    Ok(found)
+}
+
+/// A disk image mounted read-only where nothing is shown of it, the item
+/// `program` begins with copied out as it is - its signature kept - and the
+/// image put away again (macOS: hdiutil and ditto, as the system has them).
+fn unpack_dmg(image: &Path, program: &str, into: &Path, dir: &Path) -> Result<(), String> {
+    let item = program.split('/').next().unwrap_or_default();
+    let mount = dir.join(format!(".mount-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&mount).map_err(|e| format!("{}: {e}", mount.display()))?;
+    let attached = run("/usr/bin/hdiutil", &["attach".as_ref(), "-nobrowse".as_ref(), "-readonly".as_ref(), "-noautoopen".as_ref(), "-mountpoint".as_ref(), mount.as_os_str(), image.as_os_str()]);
+    let copied = attached.and_then(|_| run("/usr/bin/ditto", &[mount.join(item).as_os_str(), into.join(item).as_os_str()]));
+    // (put away however it went: asked, then made to)
+    if run("/usr/bin/hdiutil", &["detach".as_ref(), mount.as_os_str()]).is_err() {
+        let _ = run("/usr/bin/hdiutil", &["detach".as_ref(), "-force".as_ref(), mount.as_os_str()]);
+    }
+    let _ = std::fs::remove_dir(&mount);
+    copied
 }
 
 /// Where a plugin's files stand: the folder they are kept in, and those
@@ -135,14 +353,14 @@ fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
 /// A plugin's files: where they stand; and, with `fetch`, those not kept
 /// fetched - under the plugin's setting-up purpose, so refused unless the
 /// user has allowed that - and kept, how far they have come said as they
-/// come (`plugin-files:progress`).
+/// come (`plugin-files:progress`); an archive unpacked, and thrown away.
 #[tauri::command]
 pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool) -> Result<FilesState, String> {
     if !crate::plugin_id_ok(&plugin) {
         return Err(format!("not a plugin's id: {plugin}"));
     }
     let manifest = manifest_of(&app, &plugin)?;
-    let downloads = downloads_of(&manifest)?;
+    let downloads = needed(&downloads_of(&manifest)?);
     let pixi = manifest.get("environment").and_then(Value::as_str) == Some("pixi");
     let data = app.path().app_data_dir().map_err(|e| format!("app data dir: {e}"))?;
     let dir = folder(&data, &plugin, pixi);
@@ -177,11 +395,29 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool) -> Result
                 let _ = app.emit("plugin-files:progress", Progress { plugin: &plugin, done: before + had, total });
             }
         };
-        fetch_one(&client, d, &dir, tell).await?;
+        let archive = dir.join(&d.file);
+        // (an archive there whole - fetched, its unpacking cut short - is not fetched again)
+        if d.unpack.is_none() || !whole(&archive, d) {
+            fetch_one(&client, d, &dir, tell).await?;
+        }
         before += d.bytes;
+        if d.unpack.is_some() {
+            let _ = app.emit("plugin-files:progress", Progress { plugin: &plugin, done: before, total });
+            let (got, dir_for) = ((*d).clone(), dir.clone());
+            tauri::async_runtime::spawn_blocking(move || unpack(&dir_for.join(&got.file), &got, &dir_for))
+                .await
+                .map_err(|e| format!("unpacking: {e}"))??;
+            let _ = std::fs::remove_file(&archive);
+        }
     }
     task.finish(true);
     Ok(state(&[]))
+}
+
+/// Whether an archive fetched is there whole: its size, and its SHA-256, the manifest's.
+fn whole(archive: &Path, d: &Download) -> bool {
+    std::fs::metadata(archive).is_ok_and(|m| m.len() == d.bytes)
+        && hashed_so_far(archive).is_ok_and(|(h, _)| h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>() == d.sha256)
 }
 
 /// A client, the crypto it needs installed first (`rustls-no-provider`).
@@ -294,7 +530,7 @@ mod tests {
     fn takes_only_files_as_they_must_be() {
         let good = json!({"file": "model.pth", "url": "https://huggingface.co/x/y/resolve/abc/model.pth", "sha256": "a".repeat(64), "bytes": 10});
         let got = downloads_of(&json!({"downloads": [good]})).unwrap();
-        assert_eq!(got, vec![Download { file: "model.pth".into(), url: "https://huggingface.co/x/y/resolve/abc/model.pth".into(), sha256: "a".repeat(64), bytes: 10 }]);
+        assert_eq!(got, vec![Download { file: "model.pth".into(), url: "https://huggingface.co/x/y/resolve/abc/model.pth".into(), sha256: "a".repeat(64), bytes: 10, ..Default::default() }]);
         assert_eq!(downloads_of(&json!({"name": "x"})).unwrap(), vec![]);
         for bad in [
             json!({"file": "../model.pth", "url": "https://h/m", "sha256": "a".repeat(64), "bytes": 10}),
@@ -315,6 +551,201 @@ mod tests {
         assert!(downloads_of(&json!({"downloads": [one.clone(), one]})).is_err());
     }
 
+    /// A program, as a manifest gives one: an archive for this computer.
+    fn archive(file: &str, unpack: &str, program: &str) -> Value {
+        json!({"file": file, "url": "https://download.example.org/x", "sha256": "a".repeat(64), "bytes": 10,
+            "system": crate::jobs::system(), "arch": std::env::consts::ARCH, "unpack": unpack, "program": program, "provides": "blender"})
+    }
+
+    #[test]
+    fn takes_a_program_for_a_system_its_archive_and_where_the_program_is_in_it() {
+        let got = downloads_of(&json!({"downloads": [archive("blender-5.2.2-windows-x64.zip", "zip", "*/blender.exe")]})).unwrap();
+        assert_eq!(got[0].unpack, Some(Unpack::Zip));
+        assert_eq!((got[0].program.as_deref(), got[0].provides.as_deref()), (Some("*/blender.exe"), Some("blender")));
+        let with = |k: &str, v: Value| {
+            let mut a = archive("blender-5.2.2-macos-arm64.dmg", "dmg", "Blender.app/Contents/MacOS/Blender");
+            a[k] = v;
+            downloads_of(&json!({"downloads": [a]}))
+        };
+        assert!(with("unpack", json!("dmg")).is_ok());
+        for (k, v) in [
+            ("unpack", json!("rar")),
+            ("unpack", json!("zip")),
+            ("program", json!("../Blender")),
+            ("program", json!("*/Blender")),
+            ("program", json!("/Applications/Blender.app")),
+            ("system", json!("amiga")),
+            ("arch", json!("ppc")),
+            ("provides", json!("../blender")),
+            ("program", Value::Null),
+        ] {
+            assert!(with(k, v.clone()).is_err(), "{k}: {v}");
+        }
+        // (a program says what it is for, and where it is in its archive)
+        let mut a = archive("b.zip", "zip", "*/b.exe");
+        a.as_object_mut().unwrap().remove("program");
+        assert!(downloads_of(&json!({"downloads": [a]})).is_err());
+        let mut a = archive("b.zip", "zip", "*/b.exe");
+        a.as_object_mut().unwrap().remove("system");
+        assert!(downloads_of(&json!({"downloads": [a]})).is_err());
+    }
+
+    #[test]
+    fn reads_blender_s_official_builds_as_meno_carries_them() {
+        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/blender/manifest.json")).unwrap();
+        let all = downloads_of(&serde_json::from_str(&text).unwrap()).unwrap();
+        assert_eq!(all.len(), 3);
+        assert!(all.iter().all(|d| d.provides.as_deref() == Some("blender") && d.url.starts_with("https://download.blender.org/release/")));
+        let mac = all.iter().find(|d| d.system.as_deref() == Some("macos")).unwrap();
+        assert_eq!((mac.unpack, mac.program.as_deref()), (Some(Unpack::Dmg), Some("Blender.app/Contents/MacOS/Blender")));
+        // (the one for this computer fetched as the plugin is set up, where there is one)
+        assert!(needed(&all).len() <= 1);
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            assert_eq!(needed(&all)[0].file, "blender-5.2.2-macos-arm64.dmg");
+        }
+    }
+
+    #[test]
+    fn sets_a_plugin_up_with_what_is_for_this_computer_alone() {
+        let elsewhere = if crate::jobs::system() == "windows" { "macos" } else { "windows" };
+        let all = downloads_of(&json!({"downloads": [
+            {"file": "model.pth", "url": "https://h/m", "sha256": "a".repeat(64), "bytes": 10},
+            {"file": "other.pth", "url": "https://h/o", "sha256": "a".repeat(64), "bytes": 10, "system": elsewhere},
+            archive("blender.zip", "zip", "*/blender.exe"),
+        ]}))
+        .unwrap();
+        assert_eq!(needed(&all).iter().map(|d| d.file.as_str()).collect::<Vec<_>>(), ["model.pth", "blender.zip"]);
+    }
+
+    /// An archive's download, for the archive at `path`.
+    fn copy(path: &Path, unpack: Unpack, program: &str) -> Download {
+        let bytes = std::fs::read(path).unwrap();
+        Download {
+            file: path.file_name().unwrap().to_string_lossy().into_owned(),
+            url: "https://h/x".into(),
+            sha256: sha(&bytes),
+            bytes: bytes.len() as u64,
+            system: Some(crate::jobs::system().into()),
+            arch: None,
+            unpack: Some(unpack),
+            program: Some(program.into()),
+            provides: Some("blender".into()),
+        }
+    }
+
+    /// A folder holding a program in a folder of its own - as an archive holds Blender.
+    fn tree(root: &Path, top: &str, program: &str) {
+        let at = root.join(top).join(program);
+        std::fs::create_dir_all(at.parent().unwrap()).unwrap();
+        std::fs::write(&at, b"#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn unpacks_a_zip_finding_the_program_in_the_one_folder_there_is_and_stamps_it_whole() {
+        let dir = Scratch::new();
+        let src = Scratch::new();
+        tree(src.path(), "blender-5.2.2-windows-x64", "blender.exe");
+        let zip = dir.path().join("blender-5.2.2-windows-x64.zip");
+        run(&tar(), &["-a".as_ref(), "-cf".as_ref(), zip.as_os_str(), "-C".as_ref(), src.path().as_os_str(), "blender-5.2.2-windows-x64".as_ref()]).unwrap();
+        let d = copy(&zip, Unpack::Zip, "*/blender.exe");
+        assert_eq!(copy_of(dir.path(), &d), None);
+        let program = unpack(&zip, &d, dir.path()).unwrap();
+        assert_eq!(program, dir.path().join("blender-5.2.2-windows-x64").join("blender-5.2.2-windows-x64").join("blender.exe"));
+        assert_eq!(copy_of(dir.path(), &d), Some(program));
+        // (a stamp that is not this archive's: not a copy Meno takes)
+        std::fs::write(unpacked(dir.path(), &d).join(STAMP), "0".repeat(64)).unwrap();
+        assert_eq!(copy_of(dir.path(), &d), None);
+        // (one without the program said: refused, nothing left of it)
+        let bad = Download { program: Some("*/nothing.exe".into()), ..d };
+        assert!(unpack(&zip, &bad, dir.path()).unwrap_err().contains("holds no */nothing.exe"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unpacks_a_tar_xz() {
+        let dir = Scratch::new();
+        let src = Scratch::new();
+        tree(src.path(), "blender-5.2.2-linux-x64", "blender");
+        let archive = dir.path().join("blender-5.2.2-linux-x64.tar.xz");
+        run(&tar(), &["-cJf".as_ref(), archive.as_os_str(), "-C".as_ref(), src.path().as_os_str(), "blender-5.2.2-linux-x64".as_ref()]).unwrap();
+        let d = copy(&archive, Unpack::TarXz, "*/blender");
+        let program = unpack(&archive, &d, dir.path()).unwrap();
+        assert!(program.ends_with("blender-5.2.2-linux-x64/blender"));
+        assert_eq!(copy_of(dir.path(), &d), Some(program));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn copies_the_app_out_of_a_disk_image_and_puts_the_image_away() {
+        let dir = Scratch::new();
+        let src = Scratch::new();
+        tree(src.path(), "Blender.app", "Contents/MacOS/Blender");
+        std::os::unix::fs::symlink("/Applications", src.path().join("Applications")).unwrap();
+        let image = dir.path().join("blender-5.2.2-macos-arm64.dmg");
+        run("/usr/bin/hdiutil", &["create".as_ref(), "-quiet".as_ref(), "-srcfolder".as_ref(), src.path().as_os_str(), "-format".as_ref(), "UDZO".as_ref(), image.as_os_str()]).unwrap();
+        let d = copy(&image, Unpack::Dmg, "Blender.app/Contents/MacOS/Blender");
+        let program = unpack(&image, &d, dir.path()).unwrap();
+        assert_eq!(program, dir.path().join("blender-5.2.2-macos-arm64").join("Blender.app/Contents/MacOS/Blender"));
+        // (the app alone, not the rest of the image; the image put away)
+        let kept: Vec<String> = std::fs::read_dir(unpacked(dir.path(), &d)).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(kept.iter().filter(|n| !n.starts_with('.')).collect::<Vec<_>>(), ["Blender.app"]);
+        assert!(!std::fs::read_dir(dir.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with(".mount-")));
+    }
+
+    /// The real thing, where one is named (BLENDER_DMG: Blender's official
+    /// disk image, as Blender's site gives it): the app copied out whole,
+    /// its signature as Blender's makers made it.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn copies_blender_out_of_its_disk_image_its_signature_whole() {
+        let Ok(image) = std::env::var("BLENDER_DMG") else { return };
+        let dir = Scratch::new();
+        let d = copy(Path::new(&image), Unpack::Dmg, "Blender.app/Contents/MacOS/Blender");
+        let program = unpack(Path::new(&image), &d, dir.path()).unwrap();
+        let app = program.ancestors().nth(3).unwrap().to_path_buf();
+        run("/usr/bin/codesign", &["--verify".as_ref(), "--deep".as_ref(), "--strict".as_ref(), app.as_os_str()]).unwrap();
+        let said = std::process::Command::new(&program).arg("--version").output().unwrap();
+        assert!(String::from_utf8_lossy(&said.stdout).starts_with("Blender 5.2.2"));
+    }
+
+    #[test]
+    fn unpacks_first_beside_where_it_goes_its_whole_name_kept() {
+        let dir = Path::new("/data/files");
+        assert_eq!(staging(&dir.join("blender-5.2.2-macos-arm64")), dir.join("blender-5.2.2-macos-arm64.part"));
+        // (two archives of one version, for two processors: never the same place)
+        assert_ne!(staging(&dir.join("blender-5.2.2-windows-x64")), staging(&dir.join("blender-5.2.2-windows-arm64")));
+    }
+
+    #[test]
+    fn finds_the_program_a_plugin_fetched_as_it_was_set_up() {
+        let data = Scratch::new();
+        let manifest = json!({"name": "Blender", "environment": "uv", "downloads": [archive("blender-x.tar.xz", "tar.xz", "*/blender")]});
+        assert_eq!(provided(data.path(), &manifest, "blender", "blender").unwrap_err(), "Blender is not set up");
+        let d = &downloads_of(&manifest).unwrap()[0];
+        let dir = folder(data.path(), "blender", false);
+        // (not unpacked whole: still to be fetched)
+        assert_eq!(missing(&dir, std::slice::from_ref(d)).len(), 1);
+        tree(&unpacked(&dir, d), "blender-x", "blender");
+        std::fs::write(unpacked(&dir, d).join(STAMP), &d.sha256).unwrap();
+        assert!(missing(&dir, std::slice::from_ref(d)).is_empty());
+        assert_eq!(provided(data.path(), &manifest, "blender", "blender").unwrap(), Some(unpacked(&dir, d).join("blender-x").join("blender")));
+        // (a program of its environment's: none here)
+        assert_eq!(provided(data.path(), &manifest, "blender", "python").unwrap(), None);
+        // (one for another computer alone)
+        let elsewhere = if crate::jobs::system() == "windows" { "macos" } else { "windows" };
+        let mut other = archive("blender-y.zip", "zip", "*/blender");
+        other["system"] = json!(elsewhere);
+        let manifest = json!({"name": "Blender", "downloads": [other]});
+        assert_eq!(provided(data.path(), &manifest, "blender", "blender").unwrap_err(), "Blender is not for this computer");
+    }
+
     #[test]
     fn keeps_a_plugins_files_in_its_environments_folder() {
         let data = Path::new("/data");
@@ -325,7 +756,7 @@ mod tests {
     #[test]
     fn a_file_not_its_size_is_still_missing() {
         let dir = Scratch::new();
-        let d = |file: &str, bytes| Download { file: file.into(), url: "https://h/m".into(), sha256: "a".repeat(64), bytes };
+        let d = |file: &str, bytes| Download { file: file.into(), url: "https://h/m".into(), sha256: "a".repeat(64), bytes, ..Default::default() };
         std::fs::write(dir.path().join("whole"), b"12345").unwrap();
         std::fs::write(dir.path().join("short"), b"12").unwrap();
         let all = [d("whole", 5), d("short", 5), d("none", 5)];
@@ -368,7 +799,7 @@ mod tests {
 
     fn download(url: &str, body: &[u8]) -> Download {
         // (the tests' server is plain HTTP on this computer: the download is made as the manifest's would be, but for that)
-        Download { file: "model.bin".into(), url: url.into(), sha256: sha(body), bytes: body.len() as u64 }
+        Download { file: "model.bin".into(), url: url.into(), sha256: sha(body), bytes: body.len() as u64, ..Default::default() }
     }
 
     #[tokio::test]

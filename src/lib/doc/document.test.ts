@@ -144,6 +144,24 @@ describe("createDocument", () => {
     expect(doc.history().dirty).toBe(false);
   });
 
+  it("marks saved the state that was written, where it changed while it was: what changed meanwhile is still unsaved", () => {
+    const doc = createDocument(initial);
+    doc.edit("add C", addAtom("C"));
+    // (its writing begins: the state as it is)
+    const written = doc.getState();
+    // (typed on while it is written)
+    doc.edit("add O", addAtom("O"));
+    doc.markSaved(written);
+    expect(doc.history().dirty).toBe(true);
+    // (back at what was written: saved)
+    doc.undo();
+    expect(doc.history().dirty).toBe(false);
+    // (nothing changed meanwhile: saved as it is)
+    doc.edit("add N", addAtom("N"));
+    doc.markSaved(doc.getState());
+    expect(doc.history().dirty).toBe(false);
+  });
+
   it("forgets history on reset and treats the new content as saved", () => {
     const doc = createDocument(initial);
     doc.edit("add C", addAtom("C"));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPinch, looksLikeFingers, wheelReader, zoomTaken, type WheelLike } from "./wheel";
+import { isPinch, looksLikeFingers, scrollsAlong, wheelReader, zoomTaken, type WheelLike } from "./wheel";
 
 const ev = (over: Partial<WheelLike>): WheelLike => ({
   deltaX: 0,
@@ -107,5 +107,25 @@ describe("zoomTaken", () => {
     expect(zoomTaken(0.16, 5, 10)).toBeCloseTo(0.16 * (1 - Math.exp(-10 / 30)), 9);
     const { taken } = all(-0.16, [5, ...Array(500).fill(1 / 60)]);
     expect(taken).toBeCloseTo(-0.16, 9);
+  });
+});
+
+describe("scrollsAlong", () => {
+  // a list of rows 300 px long in a card 120 px tall, scrolled 50 px down
+  const list = { overflowX: "hidden", overflowY: "auto", scrollLeft: 0, scrollTop: 50, scrollWidth: 200, scrollHeight: 300, clientWidth: 200, clientHeight: 120 };
+
+  it("lets a list on the page take a wheel it can scroll further with", () => {
+    expect(scrollsAlong(list, 0, 40)).toBe(true);
+    expect(scrollsAlong(list, 0, -40)).toBe(true);
+  });
+
+  it("gives the wheel to the view once the list is at its end that way, or cannot scroll", () => {
+    expect(scrollsAlong({ ...list, scrollTop: 0 }, 0, -40)).toBe(false);
+    expect(scrollsAlong({ ...list, scrollTop: 180 }, 0, 40)).toBe(false);
+    // (sideways, where it does not scroll sideways)
+    expect(scrollsAlong(list, 40, 0)).toBe(false);
+    // (a chip, its words all in view, or clipped rather than scrolled)
+    expect(scrollsAlong({ ...list, scrollHeight: 120 }, 0, 40)).toBe(false);
+    expect(scrollsAlong({ ...list, overflowY: "hidden" }, 0, 40)).toBe(false);
   });
 });

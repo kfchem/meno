@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guided, nearOf, sizedLike, widthLike, type Box } from "./guides";
+import { guided, nearOf, sidesLike, sizedLike, widthLike, type Box } from "./guides";
 
 const box = (x0: number, y0: number, x1: number, y1: number): Box => ({ x0, y0, x1, y1 });
 
@@ -66,5 +66,17 @@ describe("guides as things are made larger or smaller", () => {
     const w = widthLike(box(0, 0, 19.8, 3), [box(0, 10, 20, 12), box(0, 20, 50, 22)], 0.5);
     expect(w.size).toBeCloseTo(20);
     expect(widthLike(box(0, 0, 30, 3), [box(0, 10, 20, 12)], 0.5).size).toBeNull();
+  });
+
+  it("take another's width by the side moved, and its height by the top or bottom, the sides across staying", () => {
+    const others = [box(50, 0, 70, 30)];
+    // (the right side dragged to 19.8 wide: 20, as the other is)
+    expect(sidesLike(box(0, 0, 19.8, 10), { x: "x1" }, others, 0.5).box).toEqual(box(0, 0, 20, 10));
+    // (a corner: the left side to 20 wide, the top to 30 tall)
+    const corner = sidesLike(box(0.2, 0, 20, 29.7), { x: "x0", y: "y1" }, others, 0.5);
+    expect(corner.box).toEqual(box(0, 0, 20, 30));
+    expect(corner.marks).toHaveLength(4);
+    // (nothing near that size: as it was)
+    expect(sidesLike(box(0, 0, 12, 10), { x: "x1" }, others, 0.5).marks).toEqual([]);
   });
 });

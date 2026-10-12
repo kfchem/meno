@@ -86,6 +86,24 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(glassy.materials[glassy.meshes.find((m: Json) => m.name.startsWith("surface")).primitives[0].material].extensions.KHR_materials_transmission).toBeTruthy();
   });
 
+  it("writes a surface another grid colours as one mesh, each point its colour, white beneath and not seen through", () => {
+    const positions = Float32Array.from([0, 0, 0, k, 0, 0, 0, k, 0]);
+    const plus = { positions, normals: Float32Array.from([0, 0, 1, 0, 0, 1, 0, 0, 1]), colours: Float32Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]) };
+    const g = parse(renderScene([{ m: ethene(), surfaces: { plus, minus: null } }], STYLE_3D, PICTURE).gltf);
+    const surfaces = g.meshes.filter((m: Json) => m.name.startsWith("surface"));
+    expect(surfaces).toHaveLength(1);
+    const prim = surfaces[0].primitives[0];
+    // (COLOR_0: RGBA, one a point - glTF 3.7.2.1 - multiplying a white base colour, 3.9.2)
+    expect(g.accessors[prim.attributes.COLOR_0]).toMatchObject({ type: "VEC4", count: 3 });
+    expect(g.materials[prim.material]).toMatchObject({ pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] }, doubleSided: true });
+    expect(g.materials[prim.material].alphaMode).toBeUndefined();
+    // (glossy as asked: white still, its points' colours over it)
+    const glossy = parse(renderScene([{ m: ethene(), surfaces: { plus, minus: null } }], STYLE_3D, { ...PICTURE, surfaces: "glossy" }).gltf);
+    const gp = glossy.meshes.find((m: Json) => m.name.startsWith("surface")).primitives[0];
+    expect(glossy.materials[gp.material].extensions.KHR_materials_clearcoat).toBeTruthy();
+    expect(gp.attributes.COLOR_0).toBeDefined();
+  });
+
   it("turns it once round in a film, about the page's up, ending a frame short of where it began - so that it loops", () => {
     const r = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "turn", seconds: 2, fps: 30 });
     expect(r.frames).toBe(60);

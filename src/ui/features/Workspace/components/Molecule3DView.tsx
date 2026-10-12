@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
-import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
+import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -279,11 +279,17 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const bondsMat = useRef<THREE.MeshStandardMaterial>(null);
   // (the atoms either look leaves out, and whether it leaves out any)
   const hidden = solid.hidden;
+  // (how much of atoms is drawn, as the molecule goes over from one look to
+  // the other: of one a look leaves out, its ring and any measurement of it
+  // go with it)
+  const seenOf = (...atoms: number[]) => seenShare(hidden, atoms, fill.current);
   // what it says of itself, as it is drawn now, and in either look
   const notesNow = useMemo(() => notesOf(m, solid, look), [m, solid, look]);
   const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
+  // (how many atoms each look draws: a very large drawing is counted by them - utils/largeDrawing)
+  const drawnAtoms = useMemo(() => ({ primary: hidden.primary.filter((h) => !h).length, secondary: hidden.secondary.filter((h) => !h).length }), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const rings = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const sleeves = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -686,6 +692,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     level.current = nextLevel;
     selLevel.current = nextSel;
 
+    // (both looks' atoms while it goes over from one to the other)
+    atoms.current.userData.shown = fill.current === 0 ? drawnAtoms.primary : fill.current === 1 ? drawnAtoms.secondary : Math.max(drawnAtoms.primary, drawnAtoms.secondary);
     const radius = (i: number) => {
       const r = solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
       return r * (swell.current.get(i)?.v ?? 1) * risen.current;
@@ -839,7 +847,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (reshaped || ringing || dirty.current) {
       const mesh = chosenHull.current;
       for (let i = 0; i < n; i++) {
-        const v = rings.current.get(i)?.v ?? 0;
+        const v = (rings.current.get(i)?.v ?? 0) * seenOf(i);
         const r = v > 0.001 ? radius(i) + CHOSEN_PX * px * v : 0;
         mtx.makeScale(r, r, r).setPosition(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
         mesh.setMatrixAt(i, mtx);
@@ -1029,13 +1037,19 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const texts: Record<number, string> = {};
     for (const [id, l] of measureLevels.current) {
       const marks = measureMarks(p, l.m.atoms);
-      const r = MEASURE_RADIUS * WORLD_PER_ANGSTROM * l.v;
-      for (const [s, e] of piecesOf(marks)) if (used < MEASURE_PIECES) placePiece(mesh, used++, s, e, r);
-      for (const v of marks.fan) fanPoints.push(v.x, v.y, v.z);
+      // (of an atom the look leaves out: going with it)
+      const seen = l.v * seenOf(...l.m.atoms);
+      const r = MEASURE_RADIUS * WORLD_PER_ANGSTROM * seen;
+      if (seen > 0.001) {
+        for (const [s, e] of piecesOf(marks)) if (used < MEASURE_PIECES) placePiece(mesh, used++, s, e, r);
+        for (const v of marks.fan) fanPoints.push(v.x, v.y, v.z);
+      }
       texts[id] = measureText(kindOf(l.m.atoms), measureValue(p, l.m.atoms));
       const label = labels.current.get(id);
       if (label?.anchor) label.anchor.position.copy(marks.label);
-      if (label?.el) label.el.style.opacity = String(l.v);
+      if (label?.el) label.el.style.opacity = String(seen);
+      // (its value being written, gone out of sight: written no more)
+      if (props.editingMeasure === id && seen < 0.5 && l.v > 0.5) props.onEditDone?.();
     }
     mesh.count = used;
     mesh.instanceMatrix.needsUpdate = true;

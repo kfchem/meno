@@ -39,6 +39,7 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_plugin_blender.py
       - run: python3 -m unittest scripts/calc/test_plugin_nci.py
       - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
+      - run: python3 -m unittest scripts/calc/test_plugin_wfx.py
 
   rust:
     name: Rust backend (check, clippy, test)
