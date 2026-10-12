@@ -18,7 +18,9 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     setInkMode: (mode: EditorState["inkMode"]) => set({ inkMode: mode }),
     setInkDraft: (draft: EditorState["inkDraft"]) => set({ inkDraft: draft }),
     setHoveredInk: (id: number | null) => set((prev: EditorState) => (prev.hoveredInk === id ? prev : { ...prev, hoveredInk: id })),
-    selectInks: (ids: Iterable<number>, add = false) => set((prev: EditorState) => ({ ...prev, selInks: new Set([...(add ? prev.selInks : []), ...ids]) })),
+    // (only those there: an id an undo has taken away is no selection - as for shapes)
+    selectInks: (ids: Iterable<number>, add = false) =>
+      set((prev: EditorState) => ({ ...prev, selInks: new Set([...(add ? prev.selInks : []), ...[...ids].filter((id) => prev.inks.some((k) => k.id === id))]) })),
     toggleInkSel: (id: number) =>
       set((prev: EditorState) => {
         const selInks = new Set(prev.selInks);

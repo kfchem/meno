@@ -54,6 +54,11 @@ describe("writing by hand on the page", () => {
     state().selectOnSlide(slide);
     expect([...state().selInks]).toEqual([on]);
     expect(state().selInks.has(off)).toBe(false);
+    // (a piece an undo took away: no selection)
+    state().clearSel();
+    state().removeInk(off);
+    state().selectInks([off]);
+    expect(state().selInks.size).toBe(0);
   });
 
   it("is coloured, selected, moved and deleted with the rest of the selection", () => {
