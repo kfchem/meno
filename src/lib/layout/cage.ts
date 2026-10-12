@@ -1091,24 +1091,34 @@ export function cageCore(mol: Molecule, sys: RingSystem): RingSystem | null {
  * from how far apart the bonds put its atoms may have one the wrong way.
  */
 export function keepsConfigurations(mol: Molecule, atoms: readonly number[], pos: Map<number, Point>, depth: Map<number, number>): boolean {
+  return turnedConfigurations(mol, atoms, pos, depth) === 0;
+}
+
+/** How many of those stereocentres the drawing shows the other way, or not at all. */
+export function turnedConfigurations(mol: Molecule, atoms: readonly number[], pos: Map<number, Point>, depth: Map<number, number>): number {
   const inside = new Set(atoms);
   const at = (a: number): Vec3 => [pos.get(a)!.x, pos.get(a)!.y, depth.get(a) ?? 0];
+  let turned = 0;
   for (const c of atoms) {
     const t = mol.tetra.get(c);
     if (!t) continue;
     const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && inside.has(n));
     if (known.length < 3) continue;
-    // (the volume of three of its four, as the volume of the first three says
-    // it: the same, or the other way, by which one is left out)
-    const three = known.slice(0, 3);
-    const left = [0, 1, 2, 3].find((k) => !three.some(([, q]) => q === k))!;
+    // (each three of its four that span a volume - three in one plane, a
+    // flat ring's, say nothing - as the volume of the first three says it:
+    // the same, or the other way, by which one is left out; a centre none
+    // of whose threes spans one shows nothing)
     const p = at(c);
-    const v = three.map(([n]) => subV(at(n), p));
-    const d = dotV(v[0], crossV(v[1], v[2]));
-    if (Math.abs(d) < 1e-6) return false;
-    if (Math.sign(d) !== t.volume * (left % 2 === 1 ? 1 : -1)) return false;
+    const signs = [0, 1, 2, 3].flatMap((left) => {
+      const three = known.filter(([, k]) => k !== left);
+      if (three.length !== 3) return [];
+      const v = three.map(([n]) => subV(at(n), p));
+      const d = dotV(v[0], crossV(v[1], v[2]));
+      return Math.abs(d) < 1e-6 ? [] : [Math.sign(d) === t.volume * (left % 2 === 1 ? 1 : -1)];
+    });
+    if (!signs.length || signs.includes(false)) turned++;
   }
-  return true;
+  return turned;
 }
 
 /** How badly a flat layout of a ring system reads, by the same measure. */

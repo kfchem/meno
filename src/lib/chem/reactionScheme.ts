@@ -1,4 +1,4 @@
-import { arrowMeasures, arrowOutline, type ArrowLook } from "./reactionArrow";
+import { arrowMeasures, arrowPath, arrowPieces, type ArrowForm, type ArrowLook } from "./reactionArrow";
 import { bondFraction, resolveStyle, type DrawingStyle } from "./style";
 
 /**
@@ -53,6 +53,31 @@ export function arrowEnds(a: SchemeArrow): { from: P; to: P } {
   const dx = (Math.cos(a.angle) * a.length) / 2;
   const dy = (Math.sin(a.angle) * a.length) / 2;
   return { from: { x: a.x - dx, y: a.y - dy }, to: { x: a.x + dx, y: a.y + dy } };
+}
+
+/** The points an arrow's line runs through: its tail, the corners it turns at, its point. */
+export function arrowPoints(a: SchemeArrow & Pick<ArrowForm, "corners">): P[] {
+  const { from, to } = arrowEnds(a);
+  return arrowPath(from, to, a.corners);
+}
+
+/**
+ * The straight line an arrow's words are over and under: the arrow itself,
+ * where it runs straight; where it turns, the longest stretch of it - its
+ * middle, which way it runs, how long it is.
+ */
+export function wordsLine<A extends SchemeArrow & Pick<ArrowForm, "corners">>(a: A): A {
+  if (!a.corners?.length) return a;
+  const pts = arrowPoints(a);
+  let best = 0;
+  let longest = -1;
+  for (let i = 1; i < pts.length; i++) {
+    const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (l > longest) [best, longest] = [i, l];
+  }
+  const p = pts[best - 1];
+  const q = pts[best];
+  return { ...a, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, angle: Math.atan2(q.y - p.y, q.x - p.x), length: longest };
 }
 
 type RoleAtom = { id: number; x: number; y: number; sgroups?: readonly { id: number }[] };
@@ -171,24 +196,32 @@ export function reactionRoles(
   };
 }
 
+/** A scheme's arrow as a picture is given it: where it lies, its form, what it sets for itself, its colour. */
+type DrawnArrow = SchemeArrow & ArrowForm & { look?: ArrowLook; color?: string };
+
 /**
- * The outlines of a scheme's arrows and pluses as `style` draws them - each
- * arrow over what it sets for itself - with a bond `bondLength` long: what
- * a picture of the drawing fills in the bonds' colour.
+ * What a picture of a scheme fills - each arrow's pieces as `style` and its
+ * form draw them, over what it sets for itself, in its colour where it has
+ * one; each "+" - with a bond `bondLength` long.
  */
-export function schemeOutlines(
-  scheme: { arrows?: readonly (SchemeArrow & { look?: ArrowLook })[]; pluses?: readonly SchemePlus[] },
+export function schemePieces(
+  scheme: { arrows?: readonly DrawnArrow[]; pluses?: readonly SchemePlus[] },
   style: DrawingStyle,
   bondLength: number,
-): P[][] {
+): { points: P[]; color?: string }[] {
   const plus = plusMeasures(style, bondLength);
   return [
-    ...(scheme.arrows ?? []).map((a) => {
+    ...(scheme.arrows ?? []).flatMap((a) => {
       const { from, to } = arrowEnds(a);
-      return arrowOutline(from, to, arrowMeasures(resolveStyle(style, a.look), bondLength));
+      return arrowPieces(from, to, a, arrowMeasures(resolveStyle(style, a.look), bondLength)).map((points) => ({ points, ...(a.color ? { color: a.color } : {}) }));
     }),
-    ...(scheme.pluses ?? []).map((p) => plusOutline(p, plus)),
-  ].filter((o) => o.length > 2);
+    ...(scheme.pluses ?? []).map((p) => ({ points: plusOutline(p, plus) })),
+  ].filter((o) => o.points.length > 2);
+}
+
+/** The outlines of a scheme's arrows and pluses (`schemePieces`), their colours aside. */
+export function schemeOutlines(scheme: { arrows?: readonly DrawnArrow[]; pluses?: readonly SchemePlus[] }, style: DrawingStyle, bondLength: number): P[][] {
+  return schemePieces(scheme, style, bondLength).map((o) => o.points);
 }
 
 /** A new reaction arrow's length, in bonds: what a file's arrow is given too. */

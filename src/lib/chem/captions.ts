@@ -9,7 +9,8 @@
  */
 import { italicUnits, labelUnits, unitRuns } from "./abbreviations";
 import { ACS_LABEL_SET, labelBox, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
-import type { SchemeArrow } from "./reactionScheme";
+import { wordsLine, type SchemeArrow } from "./reactionScheme";
+import type { ArrowCorner } from "./reactionArrow";
 
 /** How far apart a caption's lines are, baseline to baseline, in ems. */
 export const CAPTION_LINE = 1.25;
@@ -535,12 +536,13 @@ export const ARROW_CLEAR = 0.5;
 export function captionPlace(
   at: { x: number; y: number },
   half: { w: number; h: number },
-  arrows: readonly (SchemeArrow & { id: number })[],
+  arrows: readonly (SchemeArrow & { id: number; corners?: readonly ArrowCorner[] })[],
   fontSize: number,
   others: readonly { x: number; y: number; arrow?: number; halfW: number; halfH: number }[] = [],
 ): { x: number; y: number; arrow?: number } {
   let best: { a: SchemeArrow & { id: number }; across: number } | null = null;
-  for (const a of arrows) {
+  // (each over the straight line its words go by: an arrow that turns, its longest stretch)
+  for (const a of arrows.map(wordsLine)) {
     const ux = Math.cos(a.angle);
     const uy = Math.sin(a.angle);
     const dx = at.x - a.x;
@@ -581,12 +583,12 @@ export type ArrowWords = { arrow?: number; x: number; y: number; halfW: number; 
  * stands. An arrow with no words needs nothing, and is not named.
  */
 export function wordsNeed(
-  arrows: readonly (SchemeArrow & { id: number })[],
+  arrows: readonly (SchemeArrow & { id: number; corners?: readonly ArrowCorner[] })[],
   words: readonly ArrowWords[],
   fontSize: number,
 ): Map<number, number> {
   const need = new Map<number, number>();
-  for (const a of arrows) {
+  for (const a of arrows.map(wordsLine)) {
     const ux = Math.cos(a.angle);
     const uy = Math.sin(a.angle);
     for (const w of words) {
@@ -603,10 +605,12 @@ export function wordsNeed(
  * words needing more - as long as they need (`wordsNeed`), its middle where
  * it is (the maintainer, 2026-10-11).
  */
-export function withWordsNeed<A extends SchemeArrow & { id: number }>(arrows: readonly A[], need: ReadonlyMap<number, number>): A[] {
+export function withWordsNeed<A extends SchemeArrow & { id: number; corners?: readonly ArrowCorner[] }>(arrows: readonly A[], need: ReadonlyMap<number, number>): A[] {
   return arrows.map((a) => {
     const n = need.get(a.id) ?? 0;
-    return n > a.length ? { ...a, length: n } : a;
+    // (an arrow that turns grows as a whole, until the stretch its words go by is as long as they need)
+    const along = wordsLine(a).length;
+    return n > along && along > 0 ? { ...a, length: (a.length * n) / along } : a;
   });
 }
 

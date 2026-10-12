@@ -1,3 +1,4 @@
+import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
@@ -159,7 +160,7 @@ import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf,
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
-import type { Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
@@ -168,6 +169,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import Shapes2D from "./components/Shapes2D";
 import { shapeFrom } from "./components/shapeFrom";
+import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
 import { SHAPE_PAD } from "./document";
 import Presenter from "./presenting/Presenter";
@@ -1383,6 +1385,11 @@ function WorkspaceContent({
               store.getState().setQuickAdd(null);
               chainFrom(store, press, at, clientToWorld);
             }}
+            onArrow={(press) => {
+              const { at } = quickAdd;
+              store.getState().setQuickAdd(null);
+              arrowFrom(store, press, at, clientToWorld);
+            }}
             onShape={(kind, press) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
@@ -1740,6 +1747,26 @@ function WorkspaceContent({
             const from = menu.kind === "atom" ? { atom: menu.id! } : { bond: menu.id! };
             st.setPushDraw({ from, half, pointer: press ? clientToWorld(press.clientX, press.clientY) ?? menu.at : menu.at, to: null });
           } : undefined}
+          arrow={(() => {
+            // (an arrow right-clicked: what it is, each choice one step)
+            const st = store.getState();
+            const a = menu.kind === "arrow" && menu.id != null ? st.arrows.find((x) => x.id === menu.id) : undefined;
+            if (!a) return undefined;
+            const set = (patch: ArrowFormPatch) => store.getState().setArrowForm([a.id], patch);
+            return {
+              kind: a.kind ?? null,
+              setKind: (kind: ArrowKind | null) => set({ kind }),
+              heads: a.heads === 2 ? 2 : 1,
+              setHeads: (heads: 1 | 2) => set({ heads }),
+              full: !!a.full,
+              setFull: (full: boolean) => set({ full }),
+              dash: !!a.dash,
+              setDash: (dash: boolean) => set({ dash }),
+              weight: a.weight ?? "regular",
+              setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
+              ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
+            };
+          })()}
           push={(() => {
             if (menu.kind !== "push" || menu.id == null) return undefined;
             const st = store.getState();
@@ -1773,6 +1800,8 @@ function WorkspaceContent({
                     ? { atoms: [], bonds: [menu.id], rings: [] }
                     : menu.kind === "push" && menu.id != null
                     ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
+                    : menu.kind === "arrow" && menu.id != null
+                    ? { atoms: [], bonds: [], rings: [], arrows: [menu.id] }
                     : menu.kind === "ring" && menu.ring
                       ? (() => {
                           const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
