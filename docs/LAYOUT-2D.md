@@ -185,7 +185,15 @@ they hang from.
 - **At a ring atom**: one bond out goes straight out, along the bisector;
   two (a gem-dimethyl) go close together, 60 degrees apart about it; more
   split the room evenly. A substituent never takes the 120-degree side of
-  a zigzag's corner; only a small ring's own angles excuse it.
+  a zigzag's corner; only a small ring's own angles excuse it. Beside a
+  narrow gap between rings - three five-membered rings round one atom
+  leave 36 degrees between two of its neighbours - each of the two leans
+  its bonds out of the gap, up to 40 degrees and keeping 35 from its own
+  ring bonds, rather than pointing them across it at the other's
+  (bilobalide's C4 and C9: pointed at each other, C4's OH was turned into
+  its ring, and its four bonds left in half the page). Not in a bridged
+  system laid flat, whose narrow gaps are where a bridge was pressed into
+  the page.
 - **Parts joined**: where two parts each with rings of their own meet at a
   single bond - a sugar on its glycosidic oxygen, taxol's side chain on
   its ester - each is drawn well on its own and then joined, the angle at

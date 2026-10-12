@@ -186,10 +186,11 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   bilobalide's carbon between its lactones). A wedge is now first taken
   only where it reads the same with any bond in the page turned 12 degrees
   either way, and with the bonds spread round the centre; an H drawn and
-  wedged, or another bond, before that. Bilobalide is still read the other
-  way: no choice is sure there, its four bonds all in half the page - a
-  cage's drawing, not a wedge, is its answer. Until it has one, the canvas
-  marks such a centre (EDITOR-2D.md, *Stereochemistry drawn by luck*);
+  wedged, or another bond, before that. Bilobalide was still read the
+  other way, its four bonds all in half the page, until its groups at the
+  36-degree gap beside its C4 leant out of the gap (2026-10-12,
+  `LAYOUT-2D.md` *At a ring atom*); now every reader reads it as given.
+  For a centre with no such answer, the canvas marks it (EDITOR-2D.md, *Stereochemistry drawn by luck*);
   checking every centre of the bench's 700 takes about 5 ms.
 - **Speed.** One measure takes 0.1 to 0.3 ms; the calls multiply by frames,
   shapes and passes. The sheet takes about 8 s; ciclosporin, at about 1 s,

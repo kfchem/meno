@@ -7,6 +7,8 @@ import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
 import { solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -131,6 +133,27 @@ describe("layout2D", () => {
       .filter((i) => s.atoms[i].el === "O" && bondedTo(i).some((c) => bondedTo(c).filter((o) => s.atoms[o].el === "O").length === 2));
     expect(dioxy).toHaveLength(2);
     for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
+  });
+
+  it("draws bilobalide's C4 with its bonds spread round it, its wedges read one way only", () => {
+    // three five-membered rings round one carbon leave 36 degrees between
+    // C4 and C9: their groups, pointed into that gap at each other, sent
+    // C4's OH into its ring and left all four of C4's bonds in half the page
+    const s = readSmiles("CC(C)(C)[C@@]1(C[C@H]2[C@@]3([C@]14[C@H](C(=O)O[C@H]4OC3=O)O)CC(=O)O2)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const input: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+    const { x, y } = layout2D(input);
+    const c4 = 4;
+    const around = input.bonds.flatMap((b) => (b.a === c4 ? [b.b] : b.b === c4 ? [b.a] : []));
+    expect(around).toHaveLength(4);
+    const t = around.map((n) => Math.atan2(y[n] - y[c4], x[n] - x[c4])).sort((p, q) => p - q);
+    const widest = Math.max(...t.map((v, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - v));
+    expect(widest).toBeLessThan(Math.PI - (12 * Math.PI) / 180);
   });
 
   it("draws huperzine A with room for its ethylidene, no atom on another", () => {
