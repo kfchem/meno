@@ -17,7 +17,7 @@
  * The press is the writing's alone: nothing else on the page sees it. The
  * other buttons and the wheel still move and zoom the view.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { InkLook } from "../store/types";
@@ -40,8 +40,8 @@ const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 type Pt = { x: number; y: number };
 type Box = { x0: number; y0: number; x1: number; y1: number };
 
-/** The stroke written last: its piece - on the page, or on a PDF's page, by its place there - when it ended, its look and the box round its piece (in a PDF's points, on one) - what the next may join. */
-let last: { on: { id: number } | { pdf: number; page: number; piece: number }; t: number; look: InkLook; box: Box } | null = null;
+/** The stroke written last: its piece - on the page, or on a PDF's page, by its place there - when it ended, its look and the box round its piece (in a PDF's points, on one) - what the next may join. Each workspace's own: one written in another tab joins nothing here. */
+type Last = { on: { id: number } | { pdf: number; page: number; piece: number }; t: number; look: InkLook; box: Box };
 
 export default function InkWriting() {
   const store = useEditorStore();
@@ -49,6 +49,7 @@ export default function InkWriting() {
   const { opts } = useDrawnLayout();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const em = opts.fontPx;
+  const lastRef = useRef<Last | null>(null);
 
   // (the pointer over the page, while the card is open: one to write with)
   useEffect(() => {
@@ -141,7 +142,8 @@ export default function InkWriting() {
         if (!box) return;
         // (joining the piece before it: in the same pen, on the same page, soon after, and near it)
         const near = 6 * width + nearBy;
-        const sameOn = (a: NonNullable<typeof last>["on"]) => (on ? "pdf" in a && a.pdf === on.pdf && a.page === on.page : "id" in a);
+        const last = lastRef.current;
+        const sameOn = (a: Last["on"]) => (on ? "pdf" in a && a.pdf === on.pdf && a.page === on.page : "id" in a);
         const joins =
           last && sameOn(last.on) && e.timeStamp - last.t < JOIN_MS && last.look.pen === look.pen && last.look.width === look.width && (last.look.color ?? null) === (look.color ?? null) && box.x0 <= last.box.x1 + near && box.x1 >= last.box.x0 - near && box.y0 <= last.box.y1 + near && box.y1 >= last.box.y0 - near;
         if (on) {
@@ -149,13 +151,13 @@ export default function InkWriting() {
           const piece = st.writePdfStroke(on.pdf, on.page, look, stroke, prev);
           if (piece == null) return;
           const kept = store.getState().pdfs.find((p) => p.id === on.pdf)?.inks?.[piece];
-          last = { on: { pdf: on.pdf, page: on.page, piece }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+          lastRef.current = { on: { pdf: on.pdf, page: on.page, piece }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
         } else {
           const prev = joins && last && "id" in last.on ? last.on.id : null;
           const id = st.writeStroke(look, stroke, prev);
           if (id == null) return;
           const kept = store.getState().inks.find((k) => k.id === id);
-          last = { on: { id }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+          lastRef.current = { on: { id }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
         }
         invalidate();
       };
