@@ -382,7 +382,6 @@ function readShape(raw: unknown): Shape | null {
     ...(kind === "callout" && tail && isNum(tail.x) && isNum(tail.y) ? { tail: { x: tail.x, y: tail.y } } : {}),
     ...(s.weight === "thin" || s.weight === "thick" ? { weight: s.weight } : {}),
     ...(s.dash === true ? { dash: true as const } : {}),
-    ...(kind === "arrow" && s.heads === 2 ? { heads: 2 as const } : {}),
     ...(typeof s.stroke === "string" && (s.stroke === "none" || COLOUR.test(s.stroke)) ? { stroke: s.stroke.toLowerCase() } : {}),
     ...(typeof s.fill === "string" && COLOUR.test(s.fill) && isBox(kind) ? { fill: s.fill.toLowerCase() } : {}),
   };

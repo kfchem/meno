@@ -297,8 +297,7 @@ export default function PartMenu({
   /**
    * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*):
    * words written in it (a box); its line thin, regular or thick, dashed or
-   * not; an arrow's heads at one end or both; and brought over the other
-   * shapes or put under them.
+   * not; and brought over the other shapes or put under them.
    */
   shape?: {
     onWrite?: () => void;
@@ -306,7 +305,6 @@ export default function PartMenu({
     onWeight: (weight: "thin" | "regular" | "thick") => void;
     dash: boolean;
     onDash: () => void;
-    heads?: { both: boolean; onBoth: () => void };
     onFront: () => void;
     onBack: () => void;
   };
@@ -435,7 +433,7 @@ export default function PartMenu({
       : target.kind === "arrow"
       ? [
           ...colour,
-          del("Delete reaction arrow"),
+          del("Delete arrow"),
           // (what it is, ticked as it is: its kind; its heads; dashed or not; straight again; its line's weight)
           ...(arrow
             ? [
@@ -564,7 +562,7 @@ export default function PartMenu({
           ...(shape.onWrite ? [{ name: "Edit text", keys: "", run: shape.onWrite, icon: MENU_ICONS.edit }] : []),
           ...colour,
           del("Delete shape"),
-          // (its line's weight, ticked as it is; dashed or not; an arrow's heads)
+          // (its line's weight, ticked as it is; dashed or not)
           ...(
             [
               ["thin", "Thin line"],
@@ -573,7 +571,6 @@ export default function PartMenu({
             ] as const
           ).map(([w, name]) => ({ name, keys: "", run: () => shape.onWeight(w), checked: shape.weight === w })),
           { name: "Dashed line", keys: "", run: shape.onDash, checked: shape.dash },
-          ...(shape.heads ? [{ name: "Head at both ends", keys: "", run: shape.heads.onBoth, checked: shape.heads.both }] : []),
           { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
           { name: "Send to back", keys: "", run: shape.onBack },
         ]
@@ -690,7 +687,7 @@ export default function PartMenu({
             : target.kind === "bond"
               ? "Bond"
               : target.kind === "arrow"
-                ? "Reaction arrow"
+                ? "Arrow"
                 : target.kind === "plus"
                   ? "Plus"
                   : target.kind === "caption"

@@ -175,6 +175,8 @@ export function connectStoreToDocument(
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         selSlides: picturesHeld(prev.selSlides, mirrored.slides),
         selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
+        selArrows: picturesHeld(prev.selArrows, mirrored.arrows),
+        selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
         hoveredShape: prev.hoveredShape != null && !mirrored.shapes.some((s) => s.id === prev.hoveredShape) ? null : prev.hoveredShape,
         hoveredSlide: prev.hoveredSlide != null && !mirrored.slides.some((s) => s.id === prev.hoveredSlide) ? null : prev.hoveredSlide,
         // (a talk given from slides an undo took away: ended; from fewer, at the last there is)
@@ -261,6 +263,8 @@ export function createEditorStore(
     selSlides: new Set<number>(),
     hoveredSlide: null,
     selShapes: new Set<number>(),
+    selArrows: new Set<number>(),
+    selPluses: new Set<number>(),
     hoveredShape: null,
     shapeDraft: null,
     arrowDraft: null,

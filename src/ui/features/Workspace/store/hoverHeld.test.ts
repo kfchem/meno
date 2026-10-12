@@ -154,12 +154,12 @@ describe("words, a text's sheet, a slide or a shape an undo took away", () => {
     doc.undo();
     state().selectSlides([slide]);
     expect(state().selSlides.size).toBe(0);
-    const shape = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 5 })!;
+    const shape = state().addShape({ kind: "line", x0: 0, y0: 0, x1: 5, y1: 5 })!;
     doc.undo();
     state().selectShapes([shape]);
     expect(state().selShapes.size).toBe(0);
     // (one still there is selected)
-    const kept = state().addShape({ kind: "arrow", x0: 0, y0: 0, x1: 5, y1: 5 })!;
+    const kept = state().addShape({ kind: "line", x0: 0, y0: 0, x1: 5, y1: 5 })!;
     state().selectShapes([kept]);
     expect([...state().selShapes]).toEqual([kept]);
   });

@@ -10,6 +10,7 @@
  */
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
+import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 
 type Pt = { x: number; y: number };
 
@@ -58,6 +59,16 @@ export function molecules3dIn(molecules: readonly { id: number; at: Pt }[], kind
   }
   if (points.length < 3) return [];
   return molecules.filter((m) => insidePolygon(m.at, points)).map((m) => m.id);
+}
+
+/** Whether `q` lies in a box (its two corners) or within a lasso, as `molecules3dIn` takes a middle. */
+export function inPlace(q: Pt, kind: "box" | "lasso", points: readonly Pt[]): boolean {
+  return molecules3dIn([{ id: 0, at: q }], kind, points).length > 0;
+}
+
+/** The arrows standing wholly in a box or a lasso - each end and each corner its line turns at - by id. */
+export function arrowsIn(arrows: readonly (Parameters<typeof arrowPoints>[0] & { id: number })[], kind: "box" | "lasso", points: readonly Pt[]): number[] {
+  return arrows.filter((a) => arrowPoints(a).every((q) => inPlace(q, kind, points))).map((a) => a.id);
 }
 
 /** A picture's corners on the page, as it is turned: lower left, lower right, upper right, upper left, before it is. */
