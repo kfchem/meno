@@ -227,6 +227,7 @@ export function createEditorStore(
     selTexts: new Set<number>(),
     selPdfs: new Set<number>(),
     textFlight: null,
+    textToWrite: null,
     pdfPicture: null,
 
     // Ephemeral view state: hover, gestures, camera requests, edit buffers.

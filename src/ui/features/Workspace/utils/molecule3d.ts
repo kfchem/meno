@@ -251,6 +251,22 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
 }
 
 /**
+ * How much of atoms `atoms` is drawn as a molecule goes over from its
+ * primary look to its secondary (`fill`, 0 to 1): none of an atom either
+ * look leaves out, while that look is shown - what is drawn of one of
+ * them, a chosen atom's ring or a measurement, goes with it, as a bond to
+ * it does; the least of any of them.
+ */
+export function seenShare(hidden: Solid["hidden"], atoms: readonly number[], fill: number): number {
+  let least = 1;
+  for (const i of atoms) {
+    const p = hidden.primary[i] ? 0 : 1;
+    least = Math.min(least, p + ((hidden.secondary[i] ? 0 : 1) - p) * fill);
+  }
+  return least;
+}
+
+/**
  * A molecule's bonds frame by frame, where they are where its atoms stand
  * close enough (`bondsFrom`): every bond any of its frames has, and which
  * of them each frame has - a bond forming and breaking along a reaction's

@@ -226,7 +226,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     else if (mod && !e.altKey && equals) ed.toggle("sub");
     else if (mod && e.shiftKey && (k === ">" || k === ".")) resize(1);
     else if (mod && e.shiftKey && (k === "<" || k === ",")) resize(-1);
-    else if (k === "Tab" && !mod && !e.altKey) return ed.indent(e.shiftKey ? -1 : 1);
+    // (Tab: a list's items in or out a level - and elsewhere nothing, the keys kept by the words rather than gone to the window, which would keep them)
+    else if (k === "Tab" && !mod && !e.altKey) ed.indent(e.shiftKey ? -1 : 1);
     else if (k === "Enter" && e.shiftKey && !mod && !e.altKey) ed.newLine();
     else return false;
     return true;

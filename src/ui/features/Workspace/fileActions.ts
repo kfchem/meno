@@ -414,8 +414,10 @@ export function useFileActions(nameTab?: (label: string) => void) {
 
   const saveTo = useCallback(
     async (path: string) => {
+      // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
+      const written = store.getState().writing();
       await writeFile(path, await workspaceFile(store.getState()));
-      store.getState().markSavedAs(path);
+      store.getState().markSavedAs(path, written);
       naming.current?.(fileNameOf(path));
     },
     [store],

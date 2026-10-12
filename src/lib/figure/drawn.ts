@@ -11,8 +11,8 @@ export type Box = [number, number, number, number];
 /** A path's step: a move, a line or a curve to a point - a curve's three steps its two control points and its end - or the path closed. */
 export type PathStep = ["M" | "L" | "C", number, number] | ["Z"];
 
-/** A path as drawn: filled or stroked, in a colour (#rrggbbaa), how thick its stroke is, and its steps. */
-export type FigurePath = { fill: string | null; stroke: string | null; width: number; d: PathStep[] };
+/** A path as drawn: filled or stroked, in a colour (#rrggbbaa), how thick its stroke is, its steps, and whether its stroke is dashed. */
+export type FigurePath = { fill: string | null; stroke: string | null; width: number; d: PathStep[]; dash?: boolean };
 
 /** A letter as drawn: what it is, its box, where its baseline starts, its size in points, and its typeface. */
 export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string };
@@ -22,17 +22,17 @@ export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictur
 
 export type Point = { x: number; y: number };
 
-/** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick; a bar's own outline kept, as a letter's stem may be one. */
-export type Stroke = { a: Point; b: Point; w: number; outline?: Point[] };
+/** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick; a bar's own outline kept, as a letter's stem may be one; its colour (#rrggbbaa), and whether it is stroked dashed. */
+export type Stroke = { a: Point; b: Point; w: number; outline?: Point[]; ink?: string; dash?: true };
 
-/** A filled wedge: its narrow end, the middle of its wide end, and how wide that is. */
-export type Wedge = { tip: Point; base: Point; w: number };
+/** A filled wedge: its narrow end, the middle of its wide end, and how wide that is; its outline, and its colour. */
+export type Wedge = { tip: Point; base: Point; w: number; outline?: Point[]; ink?: string };
 
-/** A curve stroked, as points along it: a wavy bond, a ring's circle, an arrow's arc. */
-export type Curve = { pts: Point[]; closed: boolean; w: number };
+/** A curve stroked, as points along it: a wavy bond, a ring's circle, an arrow's arc; its colour. */
+export type Curve = { pts: Point[]; closed: boolean; w: number; ink?: string };
 
-/** A filled shape that is none of the above - a letter drawn as its outline, a dot, an arrow's head: its outlines, each closed, a hole within another where the path has one. */
-export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean };
+/** A filled shape that is none of the above - a letter drawn as its outline, a dot, an arrow's head: its outlines, each closed, a hole within another where the path has one; its colour. */
+export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean; ink?: string };
 
 /** What a figure's paths make: strokes, wedges, curves and other shapes. */
 export type Shapes = { strokes: Stroke[]; wedges: Wedge[]; curves: Curve[]; blobs: Blob[] };
@@ -176,7 +176,7 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     const tip = narrow.reduce((p, q) => ({ x: p.x + q.x / narrow.length, y: p.y + q.y / narrow.length }), { x: 0, y: 0 });
     const lo = wide.reduce((p, q) => (b(q) < b(p) ? q : p));
     const hi = wide.reduce((p, q) => (b(q) > b(p) ? q : p));
-    return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: Math.max(w0, w1) } };
+    return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: Math.max(w0, w1), outline: pts } };
   }
   if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short, outline: pts } };
   return null;
@@ -190,30 +190,33 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     const filled = !blank(path.fill);
     const stroked = !blank(path.stroke) && path.width >= 0;
     if (filled) {
+      const ink = path.fill!;
       // (a letter drawn as its outline - several parts in one path, curved, a hole in some - is a blob whole)
       const curved = parts.some((p) => p.straight.some((s) => !s));
       if (parts.length > 1 && curved) {
         const pts = parts.flatMap((p) => p.pts);
-        out.blobs.push({ pts, parts: parts.map((p) => p.pts), box: boxOf(pts), curved });
+        out.blobs.push({ pts, parts: parts.map((p) => p.pts), box: boxOf(pts), curved, ink });
         continue;
       }
       for (const p of parts) {
         const pc = p.straight.some((s) => !s);
         const read = filledShape(p.pts, pc);
-        if (read && "stroke" in read) out.strokes.push(read.stroke);
-        else if (read && "wedge" in read) out.wedges.push(read.wedge);
-        else out.blobs.push({ pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc });
+        if (read && "stroke" in read) out.strokes.push({ ...read.stroke, ink });
+        else if (read && "wedge" in read) out.wedges.push({ ...read.wedge, ink });
+        else out.blobs.push({ pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc, ink });
       }
       if (!stroked) continue;
     }
     if (!stroked) continue;
     const w = Math.max(path.width, 0.1);
+    const ink = path.stroke!;
+    const dash = path.dash ? { dash: true as const } : {};
     for (const p of parts) {
       if (p.straight.every(Boolean)) {
         const pts = p.closed && dist(p.pts[0], p.pts[p.pts.length - 1]) > 1e-3 ? [...p.pts, p.pts[0]] : p.pts;
-        for (let i = 1; i < pts.length; i++) if (dist(pts[i - 1], pts[i]) > 1e-3) out.strokes.push({ a: pts[i - 1], b: pts[i], w });
+        for (let i = 1; i < pts.length; i++) if (dist(pts[i - 1], pts[i]) > 1e-3) out.strokes.push({ a: pts[i - 1], b: pts[i], w, ink, ...dash });
       } else {
-        out.curves.push({ pts: p.pts, closed: p.closed, w });
+        out.curves.push({ pts: p.pts, closed: p.closed, w, ink });
       }
     }
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
-import { guideMove, guideWidth } from "../utils/guiding";
+import { guideMove, guideSides, guideWidth } from "../utils/guiding";
 
 function editor() {
   const doc = createWorkspaceDocument();
@@ -44,5 +44,18 @@ describe("guides as what is selected is moved", () => {
     // (its own 8, as it was, is nothing to line up with)
     expect(g.step({ x0: -4, x1: 3.98, y0: -0.5, y1: 0.5 }, keys)).toBeNull();
     g.end();
+  });
+
+  it("make a shape as wide as another near it by the side its handle moves, and as tall by its top or bottom", () => {
+    const { store, state } = editor();
+    const a = state().addShape({ kind: "rect", x0: 0, y0: 0, x1: 4, y1: 2 })!;
+    state().addShape({ kind: "rounded", x0: 6, y0: 0, x1: 11, y1: 3 });
+    state().selectShapes([a]);
+    const g = guideSides(store, toWorld, { x: 0, y: 0 });
+    // (its right side dragged to 4.98 wide: 5, as the other is; its top to 2.97 tall: 3)
+    expect(g.step({ x0: 0, y0: 0, x1: 4.98, y1: 2.97 }, { x: "x1", y: "y1" }, keys)).toEqual({ x0: 0, y0: 0, x1: 5, y1: 3 });
+    expect(state().guides?.marks.length).toBe(4);
+    g.end();
+    expect(state().guides).toBeNull();
   });
 });

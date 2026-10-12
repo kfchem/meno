@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
 import { useThree, type ThreeEvent } from "@react-three/fiber";
+import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { dragSelection } from "../utils/dragSelection";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -444,10 +445,13 @@ export function Atoms2D() {
       let held = false;
       store.getState().setPressHold({ atomId: a.id, start: now });
       const hold = window.setTimeout(() => {
-        if (!cand.current.active || cand.current.started) return;
+        // (nor where the view has moved under the press: viewGoal)
+        if (!cand.current.active || cand.current.started || pressMovedUnder(camera)) return;
         held = true;
         cancelPendingEdit();
         forgetPresses();
+        // (the structure alone: what else was selected let go, as a hold on words or a shape does)
+        store.getState().clearSel();
         store.getState().selectStructure(a.id);
         store.getState().setPressHold(null);
       }, LONG_PRESS_MS);
@@ -478,6 +482,11 @@ export function Atoms2D() {
         // (a long press: the structure is selected, and that is all)
         if (held) {
           suppressDoubleClick?.(DOUBLE_CLICK_MS);
+          return;
+        }
+        // (the view moved under the press: the atom is no longer under the pointer - no click)
+        if (pressMovedUnder(camera)) {
+          forgetPresses();
           return;
         }
         // A click: its label is edited, unless a second click follows -
