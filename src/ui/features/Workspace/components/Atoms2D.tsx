@@ -410,6 +410,8 @@ export function Atoms2D() {
           held = true;
           cancelPendingEdit();
           forgetPresses();
+          // (the structure alone: what else was selected let go, as a hold on words or a shape does)
+          store.getState().clearSel();
           store.getState().selectStructure(a.id);
           store.getState().setPressHold(null);
         }, LONG_PRESS_MS);

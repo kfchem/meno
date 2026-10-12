@@ -327,6 +327,8 @@ export default function BondsPick2D() {
             // (no click of the bond's, now)
             clickState.current.armed = false;
             clickState.current.downBondId = null;
+            // (the structure alone: what else was selected let go, as a hold on words or a shape does)
+            store.getState().clearSel();
             store.getState().selectStructure(b.a);
             dragSelection(store, toWorld, { x: sx, y: sy }, (ev) => {
               store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
