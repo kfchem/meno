@@ -885,6 +885,8 @@ export type EditorState = {
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
+  /** A drag of a picture's (`gesture`, as updatePicture took it) let go of by Escape: taken back, nothing left to redo. */
+  dropPictureChange: (id: number, gesture: string) => void;
   removePicture: (id: number) => void;
   /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
   slides: Slide[];

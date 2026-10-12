@@ -164,3 +164,18 @@ describe("words, a text's sheet, a slide or a shape an undo took away", () => {
     expect([...state().selShapes]).toEqual([kept]);
   });
 });
+
+describe("a picture made larger by its corner, let go of by Escape", () => {
+  it("is as large as it was, nothing left to undo or redo of it", async () => {
+    const { doc, state } = editor();
+    const p = (await holdPicture(png()))!;
+    const [id] = state().addPictures([{ name: "figure.png", sha256: p.sha256, media: p.media, width: p.width, height: p.height }], { x: 0, y: 0 });
+    const was = { ...state().pictures[0] };
+    const depth = doc.history().undoDepth;
+    state().updatePicture(id, { w: was.w * 1.5, h: was.h * 1.5 }, "scale-1");
+    state().updatePicture(id, { w: was.w * 2, h: was.h * 2 }, "scale-1");
+    state().dropPictureChange(id, "scale-1");
+    expect(state().pictures[0]).toMatchObject({ w: was.w, h: was.h });
+    expect(doc.history()).toMatchObject({ undoDepth: depth, redoDepth: 0 });
+  });
+});

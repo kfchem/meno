@@ -51,6 +51,9 @@ export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         (d) => ops.updatePicture(d, id, patch),
         gesture ? gestureStep(`picture:${id}:${gesture}`) : {},
       ),
+    dropPictureChange: (id: number, gesture: string) => {
+      doc.drop(`picture:${id}:${gesture}`);
+    },
     removePicture: (id: number) => {
       if (doc.edit("delete picture", (d) => ops.removePictures(d, [id])))
         set((prev: EditorState) => ({ ...prev, hoveredPicture: prev.hoveredPicture === id ? null : prev.hoveredPicture }));
