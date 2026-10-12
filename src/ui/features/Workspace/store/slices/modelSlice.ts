@@ -7,7 +7,8 @@ import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
-import { marksAtOf, middleOf, turnedOver, turnedOverArrows } from "../../utils/selection";
+import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
+import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { schemeAmong } from "../../utils/copyPaste";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
@@ -135,30 +136,33 @@ export const createModelSlice = (
   },
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
-    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), {
-      coalesceKey: `move-atoms:${gesture}`,
-    });
+    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+  },
+
+  dropMoveAtoms: (gesture: string) => {
+    doc.drop(`move-atoms:${gesture}`);
   },
 
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
     const { sel, model } = get();
     if (!sel.atoms.size) return;
-    const over = turnedOver(model, sel.atoms, axis);
     // (marks put by hand turned over with them)
     const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
     // (the arrows, "+" signs and words among them too - the words' places, their letters upright - as a drag takes them)
     const { arrows, pluses, captions, selCaptions } = get();
     const among = schemeAmong({ ...model, arrows, pluses, captions }, sel.atoms);
     const words = [...among.captions, ...captions.filter((c) => selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
-    const mid = middleOf(model, sel.atoms)!;
+    // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
+    const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
+    const over = turnedOver(model, sel.atoms, axis, mid);
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts, ...scheme }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
-    doc.edit(at ? "move mark" : "put mark back", (d) => ops.putMark(d, of, at), gesture ? { coalesceKey: `mark:${gesture}` } : undefined);
+    doc.edit(at ? "move mark" : "put mark back", (d) => ops.putMark(d, of, at), gesture ? gestureStep(`mark:${gesture}`) : undefined);
   },
 
   deleteSelection: () => {
@@ -478,13 +482,16 @@ export const createModelSlice = (
     }));
   },
 
-  putRead: (next: Model) => {
+  putRead: (next: Model, scheme?: ImportedScheme) => {
     const start = doc.getState().nextId;
-    if (!doc.edit("read structure", (d) => ops.appendModel(d, next))) return;
-    // (selected, as what is pasted is, to be moved or put right straight on)
+    const startCaption = doc.getState().nextCaptionId ?? 1;
+    if (!doc.edit("read structure", (d) => ops.withImportedScheme(ops.appendModel(d, next), scheme))) return;
+    // (selected, as what is pasted is, to be moved or put right straight on - a scheme's words with it, its compounds' numbers among them)
+    const endCaption = doc.getState().nextCaptionId ?? 1;
     set((prev: EditorState) => ({
       ...prev,
       sel: added(start, doc.getState().model),
+      selCaptions: new Set(Array.from({ length: endCaption - startCaption }, (_, i) => startCaption + i)),
       sel3d: new Set(),
       selPictures: new Set(),
       selAnchor: null,
@@ -533,7 +540,7 @@ export const createModelSlice = (
   },
 
   updatePush: (id: number, patch: Parameters<EditorState["updatePush"]>[1], gesture?: string) => {
-    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? { coalesceKey: `push:${id}:${gesture}` } : undefined);
+    doc.edit("change electron arrow", (d) => ops.updatePush(d, id, patch), gesture ? gestureStep(`push:${id}:${gesture}`) : undefined);
   },
 
   removePush: (id: number) => {

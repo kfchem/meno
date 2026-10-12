@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { valuesOf } from "../../../../../lib/options";
@@ -25,7 +26,7 @@ export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
  * what is under the pointer, chosen, open or being drawn, the view's.
  */
 export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
-  const coalesce = (what: string, id: number, gesture?: string) => (gesture ? { coalesceKey: `${what}:${id}:${gesture}` } : {});
+  const coalesce = (what: string, id: number, gesture?: string) => (gesture ? gestureStep(`${what}:${id}:${gesture}`) : {});
   const { forgetJobs, ...runs } = createStepRuns(doc, set, get, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn) });
   return {
     ...runs,
@@ -84,6 +85,21 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           hoveredStep: prev.hoveredStep === id ? null : prev.hoveredStep,
         }));
       }
+    },
+    holdUndo: (direction: "undo" | "redo") => {
+      const gone = wf.runningGone(doc.getState(), doc.peek(direction));
+      if (!gone.length) return false;
+      set({ askUndo: { direction, steps: gone.length } });
+      return true;
+    },
+    letUndo: (go: boolean) => {
+      const asked = get().askUndo;
+      set({ askUndo: null });
+      if (!asked || !go) return;
+      // (stopped as deleting them stops them: their jobs, and their files once ended)
+      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.direction))) forgetJobs(step);
+      if (asked.direction === "undo") doc.undo();
+      else doc.redo();
     },
     putDownProcedure: (id: string, x: number, y: number) => {
       const procedure = proceduresSaved().find((p) => p.id === id);

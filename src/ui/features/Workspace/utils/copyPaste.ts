@@ -568,6 +568,25 @@ export function looksLikeSmiles(text: string): boolean {
   return t.length > 0 && t.length < 5000 && /^[A-Za-z0-9@+\-=#$%:.()[\]/\\*~>]+$/.test(t);
 }
 
+/** How far a paste asked for where the last one was goes on from it: down and to the right, by half a bond. */
+export const PASTE_STEP = NOMINAL_BOND_LENGTH / 2;
+
+/** The pastes asked for at one place, one after another: where, and how many. */
+export type PastesAt = { at: Pt; count: number };
+
+/**
+ * Where a paste lands, asked for at `at`: there - or, asked for where the
+ * last one was (the pointer not moved, the view as it was), a step down and
+ * to the right of the last one there, so that a copy pasted again is seen
+ * and not lost under the first (the maintainer, 2026-10-12). With the
+ * pastes at that place now, for the next.
+ */
+export function pastePlace(last: PastesAt | null, at: Pt): { place: Pt; pastes: PastesAt } {
+  const again = !!last && Math.abs(last.at.x - at.x) < 1e-9 && Math.abs(last.at.y - at.y) < 1e-9;
+  const n = again ? last!.count : 0;
+  return { place: { x: at.x + n * PASTE_STEP, y: at.y - n * PASTE_STEP }, pastes: { at, count: n + 1 } };
+}
+
 /** `drawn` moved so that the middle of the box round it - its arrows and pluses too, and a workflow's sets and steps - is at `p`. */
 export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
   const flow = drawn.flow ? partsBounds(drawn.flow) : null;

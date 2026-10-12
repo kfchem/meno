@@ -23,6 +23,7 @@ import { sheetRoom } from "../utils/textSheets";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
+import { schemeExtent } from "../utils/schemeExtent";
 
 export default function FitToContent2D({
   paddingPx = 48,
@@ -34,6 +35,8 @@ export default function FitToContent2D({
   const { model, autoFitSuspended } = useEditor();
   const molecules3d = useEditor((s) => s.molecules3d);
   const captions = useEditor((s) => s.captions);
+  const arrows = useEditor((s) => s.arrows);
+  const pluses = useEditor((s) => s.pluses);
   const pdfs = useEditor((s) => s.pdfs);
   const pictures = useEditor((s) => s.pictures);
   const slides = useEditor((s) => s.slides);
@@ -62,7 +65,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && inks.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && inks.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -90,6 +93,12 @@ export default function FitToContent2D({
     const bounds = atoms.length
       ? layoutMolecule(la, lb, opts, cam.zoom || 1).bounds
       : { min: { x: Infinity, y: Infinity }, max: { x: -Infinity, y: -Infinity } };
+    // and the arrows and "+" signs - those standing alone too, a reaction's being among its atoms
+    const scheme = schemeExtent(arrows, pluses, opts.fontPx);
+    if (scheme) {
+      bounds.min = { x: Math.min(bounds.min.x, scheme.x0), y: Math.min(bounds.min.y, scheme.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, scheme.x1), y: Math.max(bounds.max.y, scheme.y1) };
+    }
     // and the words on the page, as they are set
     for (const c of captions) {
       const set = wordsSet(c, opts, labelSetOf(opts));
@@ -188,6 +197,8 @@ export default function FitToContent2D({
     model.atoms,
     model.bonds,
     molecules3d,
+    arrows,
+    pluses,
     captions,
     pdfs,
     pictures,

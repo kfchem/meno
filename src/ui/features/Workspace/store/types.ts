@@ -1,4 +1,4 @@
-import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } from "../document";
+import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
@@ -671,6 +671,11 @@ export type EditorState = {
    */
   /** Texts added - each a sheet on the page too, in a row from `onPage`, where it is given - and the last shown in the column. */
   addTexts: (texts: Omit<WorkspaceText, "id">[], onPage?: { x: number; y: number }) => void;
+  /** A new text, empty - its sheet at `onPage` - shown in the column, and given the keys there as it shows (`textToWrite`). */
+  newText: (onPage?: { x: number; y: number }) => void;
+  /** The text just made to be written in: the column gives it the keys as it shows it, and lets go of this. */
+  textToWrite: number | null;
+  wroteText: () => void;
   /** A text as typed: a run of typing in it is one undo step. */
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */
@@ -771,7 +776,7 @@ export type EditorState = {
   setHoveredAtom3d: (id: number, atom: number | null) => void;
   setFigureLit: (atom: number | null) => void;
   /** A structure read from a figure put on the page - selected - as one step. */
-  putRead: (model: Model) => void;
+  putRead: (model: Model, scheme?: ImportedScheme) => void;
   setTurn3d: (id: number, turn: Turn3D) => void;
   /**
    * Molecules in 3D made from a drawing, as one undo step: each where it is
@@ -813,6 +818,8 @@ export type EditorState = {
     drawing?: { id: number; x: number; y: number }[],
     marks?: MarkPlaces,
   ) => void;
+  /** A turn made with turnMolecules3d (`gesture`) let go of by Escape: taken back, nothing left to redo, and the molecules turned as they were (`turnsBefore`). */
+  dropTurnMolecules3d: (gesture: string, turnsBefore: Record<number, Turn3D | undefined>) => void;
   /**
    * Molecules in 3D turned where they stand, by the selection's handle, from
    * `turnsBefore` to `turnsAfter` (each set as it turned): one undo step,
@@ -904,6 +911,8 @@ export type EditorState = {
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
+  /** A drag of a picture's (`gesture`, as updatePicture took it) let go of by Escape: taken back, nothing left to redo. */
+  dropPictureChange: (id: number, gesture: string) => void;
   removePicture: (id: number) => void;
   /** The slides on the page, in the talk's order (docs/PRESENTING.md); which are selected, and which is under the pointer - the view's. */
   slides: Slide[];
@@ -1099,6 +1108,17 @@ export type EditorState = {
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */
   askDeleteStep: number | null;
+  /**
+   * An undo (or a redo) that would take away a running step: held, and the
+   * question deleting it asks asked first (`askUndo`, Workspace) - true
+   * where it is held so; false where it takes nothing running away, left to
+   * be done as any undo.
+   */
+  holdUndo: (direction: "undo" | "redo") => boolean;
+  /** The undo held (`holdUndo`) let go: done - the running steps it takes away stopped first, their jobs as deleting them stops them - or, `go` false, not. */
+  letUndo: (go: boolean) => void;
+  /** An undo or a redo held, that would take away running steps (`holdUndo`). */
+  askUndo: { direction: "undo" | "redo"; steps: number } | null;
   /** A wire from what gives into a step, where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number) => boolean;
   removeWire: (id: number) => void;
@@ -1266,6 +1286,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
+  dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
   /** The selection deleted, as one undo step. */
@@ -1340,8 +1362,14 @@ export type EditorState = {
    * being saved nowhere since.
    */
   openedName: string | null;
-  /** The document has just been written to `path`: it is saved there. */
-  markSavedAs: (path: string) => void;
+  /**
+   * The document has just been written to `path`: it is saved there - as
+   * it was when its writing began (`written`, from `writing`), where it may
+   * have changed since.
+   */
+  markSavedAs: (path: string, written?: WorkspaceDocument) => void;
+  /** The document as it is: what is about to be written, for `markSavedAs` once it is. */
+  writing: () => WorkspaceDocument;
   /**
    * A file - where it is, or its name - has been opened on the canvas, as
    * what it starts with: it is saved nowhere yet, and Save asks where,

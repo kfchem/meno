@@ -32,6 +32,26 @@ function editor() {
 describe("molecules in 3D turned together, as one body", () => {
   const half: [number, number, number, number] = [0, 1, 0, 0]; // (a half turn about the upright)
 
+  // (the maintainer, 2026-10-12: Escape during a turn puts everything back as it was)
+  it("go back where they stood, turned as they were, when the turn is let go of by Escape", () => {
+    const { doc, state } = editor();
+    state().setTurn3d(1, [0, 0, 0, 1]);
+    state().turnMolecules3d(
+      [
+        { id: 1, at: { x: 6, y: 0, z: 2 }, turn: half },
+        { id: 2, at: { x: 0, y: 0, z: 2 }, turn: half },
+      ],
+      "turn-1",
+    );
+    state().dropTurnMolecules3d("turn-1", { 1: [0, 0, 0, 1], 2: undefined });
+    expect(state().molecules3d.map((m) => m.at)).toEqual([
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+    ]);
+    expect(state().turns3d).toEqual({ 1: [0, 0, 0, 1] });
+    expect(doc.history()).toMatchObject({ undoLabel: "add", redoDepth: 0 });
+  });
+
   it("move as the turn takes them, as one undo step, and the undo puts their turns back too", () => {
     const { doc, state } = editor();
     state().setTurn3d(1, [0, 0, 0, 1]);
@@ -189,6 +209,30 @@ describe("molecules in 3D, chosen and selected", () => {
     expect(state().sel3d.size).toBe(0);
     doc.undo();
     expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2]);
+  });
+
+  it("come back from an undo of their deletion turned as they were, showing the frame they showed", () => {
+    const { doc, state } = editor();
+    const half: [number, number, number, number] = [0, 1, 0, 0];
+    state().setTurn3d(2, half);
+    state().setFrame3d(2, 0);
+    state().selectMolecules3d([2]);
+    state().deleteSelection();
+    expect(state().turns3d).toEqual({});
+    doc.undo();
+    expect(state().turns3d).toEqual({ 2: half });
+    expect(state().frames3d).toEqual({ 2: 0 });
+    doc.redo();
+    expect(state().turns3d).toEqual({});
+    doc.undo();
+    expect(state().turns3d).toEqual({ 2: half });
+    // (one new where one was undone, numbered as it was, is seen as its file has it)
+    doc.edit("add", (d) => addMolecule3d(d, { ...water, at: { x: 12, y: 0 } }));
+    state().setTurn3d(3, half);
+    doc.undo();
+    doc.edit("add", (d) => addMolecule3d(d, { ...water, at: { x: 12, y: 0 } }));
+    expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2, 3]);
+    expect(state().turns3d).toEqual({ 2: half });
   });
 
   it("are forgotten by the view when the document no longer has them", () => {

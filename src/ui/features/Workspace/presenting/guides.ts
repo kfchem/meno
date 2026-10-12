@@ -156,3 +156,26 @@ export function nearOf(m: Box, boxes: readonly Box[], room: number): Box[] {
   const r = room;
   return boxes.filter((b) => b.x1 >= m.x0 - r && b.x0 <= m.x1 + r && b.y1 >= m.y0 - r && b.y0 <= m.y1 + r);
 }
+
+/**
+ * A box made larger or smaller by a side or a corner, the sides across from
+ * them staying: each side moved (`moving`) comes to where the box is as
+ * wide - or as tall - as one of `others`, within `reach`; and marks across
+ * both, where it does.
+ */
+export function sidesLike(now: Box, moving: { x?: "x0" | "x1"; y?: "y0" | "y1" }, others: readonly Box[], reach: number): { box: Box } & GuideMarks {
+  const box = { ...now };
+  const marks: Seg[] = [];
+  for (const along of ["x", "y"] as const) {
+    const side = along === "x" ? moving.x : moving.y;
+    if (!side) continue;
+    const w = widthLike(now, others, reach, along);
+    if (w.size == null) continue;
+    if (side === "x0") box.x0 = box.x1 - w.size;
+    else if (side === "x1") box.x1 = box.x0 + w.size;
+    else if (side === "y0") box.y0 = box.y1 - w.size;
+    else box.y1 = box.y0 + w.size;
+    marks.push(sizeMark(box, along), ...w.marks);
+  }
+  return { box, lines: [], marks };
+}

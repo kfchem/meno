@@ -9,7 +9,7 @@
 import { labelSetOf, layoutMolecule, type Atom as LAtom, type Bond as LBond } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet } from "../../../../lib/chem/captions";
-import { shapeBounds } from "../../../../lib/chem/shapes";
+import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 
@@ -39,7 +39,7 @@ type Selected = Pick<
 >;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
-export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeight?: number): Box | null {
+export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeight?: number, frames = false): Box | null {
   const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   const take = (x0: number, y0: number, x1: number, y1: number) => {
     b.x0 = Math.min(b.x0, x0);
@@ -98,7 +98,8 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     take(r.x0, r.y0, r.x1, r.y1);
   }
   for (const s of st.shapes) if (st.selShapes.has(s.id)) {
-    const r = shapeBounds(s, opts.pointPx ?? 0);
+    // (for guides, its frame: what lines up and is sized)
+    const r = frames ? shapeFrame(s) : shapeBounds(s, opts.pointPx ?? 0);
     take(r.x0, r.y0, r.x1, r.y1);
   }
   for (const k of st.inks) if (st.selInks.has(k.id)) {
@@ -172,7 +173,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   }
   for (const s of st.slides) if (!st.selSlides.has(s.id)) out.push(boxOf(s));
   // and the shapes, all each draws (docs/PRESENTING.md, *Shapes*)
-  for (const s of st.shapes) if (!st.selShapes.has(s.id)) out.push(shapeBounds(s, opts.pointPx ?? 0));
+  for (const s of st.shapes) if (!st.selShapes.has(s.id)) out.push(shapeFrame(s));
   // and writing by hand, each piece
   for (const k of st.inks) {
     if (st.selInks.has(k.id)) continue;
@@ -180,4 +181,14 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
     if (r) out.push(r);
   }
   return out;
+}
+
+/**
+ * A shape's frame, as guides line it up and size it: the box its line runs
+ * round - the middle of its line - or a line's or an arrow's ends; a
+ * callout's tail and an arrow's heads not counted. Shapes line up by it as
+ * drawn, whatever their lines' weights.
+ */
+export function shapeFrame(s: ShapeGeometry): Box {
+  return { x0: Math.min(s.x0, s.x1), y0: Math.min(s.y0, s.y1), x1: Math.max(s.x0, s.x1), y1: Math.max(s.y0, s.y1) };
 }

@@ -48,6 +48,8 @@ export type ConsentRequest = {
   detail: string;
   /** Where from: "Python itself: github.com". */
   sources: string[];
+  /** Asked even where the purpose is allowed already: what it fetches is more than the user was told of when they allowed it. */
+  again?: boolean;
 };
 
 type NetworkState = {
@@ -207,7 +209,7 @@ async function grant(purpose: string): Promise<void> {
 export function askToConnect(request: ConsentRequest): Promise<boolean> {
   const s = useNetwork.getState();
   if (s.offline) return Promise.resolve(false);
-  if (s.granted.includes(request.purpose)) return Promise.resolve(true);
+  if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
   return new Promise((resolve) => {
     const answer = (yes: boolean) => {
       useNetwork.setState({ asking: null });

@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -14,8 +15,9 @@ type SetState = StoreApi<EditorState>["setState"];
 export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState) {
   return {
     setHoveredPicture: (id: number | null) => set({ hoveredPicture: id }),
+    // (only those on the page: a long press held on one an undo took away selects nothing when its time comes)
     selectPictures: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selPictures: new Set([...(add ? prev.selPictures : []), ...ids]) })),
+      set((prev: EditorState) => ({ ...prev, selPictures: new Set([...(add ? prev.selPictures : []), ...[...ids].filter((id) => prev.pictures.some((p) => p.id === id))]) })),
     togglePictureSel: (id: number) =>
       set((prev: EditorState) => {
         const selPictures = new Set(prev.selPictures);
@@ -47,8 +49,11 @@ export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit(
         patch.w !== undefined || patch.h !== undefined ? "resize picture" : patch.turn !== undefined ? "turn picture" : "move picture",
         (d) => ops.updatePicture(d, id, patch),
-        { ...(gesture ? { coalesceKey: `picture:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`picture:${id}:${gesture}`) : {},
       ),
+    dropPictureChange: (id: number, gesture: string) => {
+      doc.drop(`picture:${id}:${gesture}`);
+    },
     removePicture: (id: number) => {
       if (doc.edit("delete picture", (d) => ops.removePictures(d, [id])))
         set((prev: EditorState) => ({ ...prev, hoveredPicture: prev.hoveredPicture === id ? null : prev.hoveredPicture }));

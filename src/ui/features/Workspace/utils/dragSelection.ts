@@ -19,9 +19,11 @@ export const selectionMoving = { active: false };
  * as much as the pointer goes, off the grid, with the arrows, "+" signs and
  * words among it, the molecules in 3D, pictures, texts' sheets, PDFs, slides and shapes selected with it, and a
  * workflow's sets - with what they hold - and steps selected, as one undo step - one
- * move a frame, as every move lays the drawing out again. `toWorld` takes a
- * point of the screen to the page; `done` is told when the button comes up,
- * and whether it moved.
+ * move a frame, as every move lays the drawing out again. Escape lets it go:
+ * all of it back where it was, as if it had not been dragged (the
+ * maintainer, 2026-10-12). `toWorld` takes a point of the screen to the
+ * page; `done` is told when the button comes up, and whether it moved (one
+ * let go of by Escape did: it was no click).
  */
 export function dragSelection(
   store: EditorStore,
@@ -81,9 +83,26 @@ export function dragSelection(
     keys = ev;
     if (frame == null) frame = window.requestAnimationFrame(apply);
   };
+  let letGo = false;
+  const onKey = (ev: KeyboardEvent) => {
+    if (ev.key !== "Escape") return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    // (back where it was; the button's release still ends the press)
+    letGo = true;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("keydown", onKey, true);
+    if (frame != null) window.cancelAnimationFrame(frame);
+    frame = null;
+    guide.end();
+    selectionMoving.active = false;
+    store.getState().dropMoveAtoms(gesture);
+  };
   const onUp = (ev: PointerEvent) => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp, true);
+    window.removeEventListener("keydown", onKey, true);
+    if (letGo) return done(ev, true);
     if (frame != null) {
       window.cancelAnimationFrame(frame);
       last = toWorld(ev.clientX, ev.clientY);
@@ -96,4 +115,5 @@ export function dragSelection(
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp, true);
+  window.addEventListener("keydown", onKey, true);
 }

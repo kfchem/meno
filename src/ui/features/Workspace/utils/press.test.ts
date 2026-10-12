@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { endsDrag, movePress, startPress } from "./press";
+import { chordedPress, endsDrag, movePress, startPress, swallowPress } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -24,5 +24,76 @@ describe("press", () => {
 
   it("is a click when no press was seen", () => {
     expect(endsDrag(null, 500, 500)).toBe(false);
+  });
+});
+
+describe("a right press", () => {
+  it("in the middle of a drag - the primary button held - is chorded, and opens no menu", () => {
+    // (the menu's event, or the move the press came as, with both buttons held)
+    expect(chordedPress(3, 1)).toBe(true);
+    expect(chordedPress(2, 3)).toBe(true);
+    // a right-click of its own; a Ctrl-click on a Mac, the primary button alone
+    expect(chordedPress(2, 2)).toBe(false);
+    expect(chordedPress(1, 1)).toBe(false);
+    expect(chordedPress(0, 0)).toBe(false);
+  });
+});
+
+/**
+ * A press that closes a menu or Quick Add went on to what was under it: an
+ * atom's label began to be written half a second later. It only closes it
+ * now, as on a Mac (the maintainer, 2026-10-12).
+ */
+describe("a press swallowed", () => {
+  const event = (type: string) => new Event(type, { cancelable: true });
+
+  it("goes no further, nor does its release, its click or its menu", () => {
+    vi.useFakeTimers();
+    try {
+      const on = new EventTarget();
+      const down = event("pointerdown");
+      swallowPress(down, on);
+      expect(down.defaultPrevented).toBe(true);
+      for (const type of ["mousedown", "contextmenu", "pointerup", "mouseup", "click"]) {
+        const e = event(type);
+        on.dispatchEvent(e);
+        expect(e.defaultPrevented, type).toBe(true);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is over once it has been let go: the next press is heard", () => {
+    vi.useFakeTimers();
+    try {
+      const on = new EventTarget();
+      swallowPress(event("pointerdown"), on);
+      on.dispatchEvent(event("pointerup"));
+      on.dispatchEvent(event("click"));
+      vi.runAllTimers();
+      const next = event("mousedown");
+      on.dispatchEvent(next);
+      expect(next.defaultPrevented).toBe(false);
+      const click = event("click");
+      on.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is over after a while should no release come", () => {
+    vi.useFakeTimers();
+    try {
+      const on = new EventTarget();
+      swallowPress(event("pointerdown"), on, 1000);
+      vi.advanceTimersByTime(1001);
+      const click = event("click");
+      on.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

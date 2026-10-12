@@ -111,6 +111,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     kept(ask.molecules === "clay" ? "clay" : `${ask.molecules ?? "meno"} ${colour} ${look.roughness} ${look.metalness}`, () => moleculeMaterial(colour, look, ask.molecules ?? "meno"));
   /** A surface's: its sign's colour, as the material asked for makes it. */
   const surfaceMaterial = (colour: string) => kept(`surface ${ask.surfaces ?? "meno"} ${colour}`, () => surfaceMade(colour, ask.surfaces ?? "meno"));
+  /** A surface coloured point by point by another grid: white, its points' colours over it. */
+  const colouredMaterial = () => kept(`surface ${ask.surfaces ?? "meno"} coloured`, () => colouredSurfaceMade(ask.surfaces ?? "meno"));
   const meshes: GltfMesh[] = [];
   // (a ball or a stick in each material: one mesh each, every atom or bond of it a node placing it)
   const shapeMeshes = new Map<string, number>();
@@ -250,17 +252,23 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       }
     }
 
-    // the surface it shows, where it shows one: its two signs in their colours, seen through, as the canvas draws it
+    // the surface it shows, where it shows one: its two signs in their colours, seen through, as the canvas draws it - or,
+    // coloured by another grid (NCI's), one surface, each point its colour on the scale, not seen through
     if (surfaces) {
-      const sides: [Mesh | null, string][] = [
-        [surfaces.plus, style.surfacePlus],
-        [surfaces.minus, style.surfaceMinus],
-      ];
+      const coloured = !surfaces.minus && !!surfaces.plus.colours && surfaces.plus.colours.length === surfaces.plus.positions.length;
+      const sides: [Mesh | null, string][] = coloured
+        ? [[surfaces.plus, "coloured"]]
+        : [
+            [surfaces.plus, style.surfacePlus],
+            [surfaces.minus, style.surfaceMinus],
+          ];
       for (const [mesh, colour] of sides) {
         if (!mesh || mesh.positions.length < 9) continue;
-        const mat = surfaceMaterial(colour);
+        const mat = coloured ? colouredMaterial() : surfaceMaterial(colour);
         const positions = Float32Array.from(mesh.positions, (x) => x / k);
-        meshes.push({ name: `surface ${colour}`, positions, normals: normalised(mesh.normals), material: mat });
+        // (COLOR_0: RGBA, linear, as the canvas's colours are - glTF 3.7.2.1)
+        const colours = coloured ? rgba(mesh.colours!) : undefined;
+        meshes.push({ name: `surface ${colour}`, positions, normals: normalised(mesh.normals), ...(colours ? { colours } : {}), material: mat });
         const node = nodes.length;
         nodes.push({ mesh: meshes.length - 1 });
         children.push(node);
@@ -358,6 +366,39 @@ export function moleculeMaterial(colour: string, look: Pick<MoleculeLook, "rough
       return { name: "clay", colour: linear(CLAY), metallic: 0, roughness: 0.9 };
     default:
       return { name: colour, colour: linear(colour), metallic: look.metalness, roughness: look.roughness };
+  }
+}
+
+/** Linear RGB colours, three a point, as RGBA - each alpha 1 - within 0 to 1. */
+function rgba(rgb: Float32Array): Float32Array {
+  const out = new Float32Array((rgb.length / 3) * 4);
+  for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
+    out[j] = Math.min(1, Math.max(0, rgb[i]));
+    out[j + 1] = Math.min(1, Math.max(0, rgb[i + 1]));
+    out[j + 2] = Math.min(1, Math.max(0, rgb[i + 2]));
+    out[j + 3] = 1;
+  }
+  return out;
+}
+
+/**
+ * What a surface coloured by another grid is made of: white, so that its
+ * points' colours (COLOR_0, multiplying the base colour: glTF 3.9.2) are
+ * what is seen - not seen through as the canvas draws it, since its
+ * colours are what it says; glass, glossy or matte as asked.
+ */
+export function colouredSurfaceMade(made: SurfaceMaterial): GltfMaterial {
+  const both = { doubleSided: true };
+  const white: [number, number, number, number] = [1, 1, 1, 1];
+  switch (made) {
+    case "glass":
+      return { name: "coloured glass", colour: white, metallic: 0, roughness: 0.03, transmission: 1, ior: 1.33, ...both };
+    case "glossy":
+      return { name: "coloured glossy", colour: white, metallic: 0, roughness: 0.35, clearcoat: { factor: 1, roughness: 0.04 }, ...both };
+    case "matte":
+      return { name: "coloured matte", colour: white, metallic: 0, roughness: 1, ...both };
+    default:
+      return { name: "coloured surface", colour: white, metallic: 0, roughness: SURFACE_ROUGHNESS, ...both };
   }
 }
 

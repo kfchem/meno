@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -9,6 +10,7 @@ import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
 import { strokesBounds } from "../../../../../lib/chem/ink";
+import { middleOf } from "../../../../../lib/chem/shapes";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -21,8 +23,9 @@ type GetState = StoreApi<EditorState>["getState"];
 export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
   return {
     setHoveredSlide: (id: number | null) => set((prev: EditorState) => (prev.hoveredSlide === id ? prev : { ...prev, hoveredSlide: id })),
+    // (only those on the page, as pictures)
     selectSlides: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selSlides: new Set([...(add ? prev.selSlides : []), ...ids]) })),
+      set((prev: EditorState) => ({ ...prev, selSlides: new Set([...(add ? prev.selSlides : []), ...[...ids].filter((id) => prev.slides.some((x) => x.id === id))]) })),
     toggleSlideSel: (id: number) =>
       set((prev: EditorState) => {
         const selSlides = new Set(prev.selSlides);
@@ -37,7 +40,7 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       doc.edit(
         patch.around !== undefined ? "show the page about a slide" : patch.w !== undefined || patch.h !== undefined ? "resize slide" : "move slide",
         (d) => ops.updateSlide(d, id, patch),
-        { ...(gesture ? { coalesceKey: `slide:${id}:${gesture}` } : {}) },
+        gesture ? gestureStep(`slide:${id}:${gesture}`) : {},
       ),
     // what is on a slide, selected - all of it whose middle lies in it, as a box selects; the slide, and the slides within it, with it
     selectOnSlide: (id: number) => {
@@ -70,6 +73,8 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
         ),
       );
       st.selectCaptions(st.captions.filter((c) => c.arrow == null && within(c)).map((c) => c.id));
+      // (and the shapes whose middles lie in it)
+      st.selectShapes(st.shapes.filter((x) => within(middleOf(x))).map((x) => x.id));
       st.selectFlow(flowIn(st, "box", box));
       // (the drawing's last: a molecule in 3D selected alone lets it go)
       st.setSel(inBox(st.model, box[0], box[1]));
