@@ -830,6 +830,18 @@ function WorkspaceContent({
         onMeasure: () => store.getState().measureChosen3d(),
         ...(chosenSettable ? { onSetChosen: () => store.getState().setChosen3d() } : {}),
         onResetTurn: () => store.getState().resetTurn3d(menuMolecule.id),
+        // (one of a stack: laid out as a grid, or stacked again - utils/stacks)
+        ...(menuMolecule.stack && molecules3d.filter((m) => m.stack?.id === menuMolecule.stack!.id).length > 1
+          ? {
+              stack: {
+                spread: !!menuMolecule.stack.spread,
+                run: () =>
+                  menuMolecule.stack!.spread
+                    ? store.getState().gatherStack(menuMolecule.stack!.id, menuMolecule.id)
+                    : store.getState().spreadStack(menuMolecule.stack!.id),
+              },
+            }
+          : {}),
         onCut: () => void clip.cut(menuMolecule.id),
         onCopy: () => void clip.copy(menuMolecule.id),
         ...(menuLink === "live" || menuLink === "changed" ? { onTurnLikeDrawing: () => turnLikeDrawing(menuMolecule.id) } : {}),

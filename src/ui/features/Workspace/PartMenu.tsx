@@ -113,6 +113,8 @@ export type MenuMolecule3D = {
   lists?: { name: string; open: () => void }[];
   /** The output it was read from, shown in a tab of its own, by its name: unset, where it was read from none. */
   output?: { name: string; show: () => void };
+  /** One of a stack (utils/stacks): its molecules laid out as a grid, or - laid out - stacked again; unset, where it is none. */
+  stack?: { spread: boolean; run: () => void };
 };
 
 /**
@@ -399,6 +401,7 @@ export default function PartMenu({
               },
             ]
           : []),
+        ...(molecule3d.stack ? [{ name: molecule3d.stack.spread ? "Stack again" : "Lay out as a grid", keys: "", run: molecule3d.stack.run }] : []),
         ...(molecule3d.lists ?? []).map((l) => ({ name: l.name, keys: "", run: l.open })),
         ...(molecule3d.output ? [{ name: `Show ${molecule3d.output.name}`, keys: "", run: molecule3d.output.show }] : []),
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),

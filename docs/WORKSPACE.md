@@ -907,6 +907,42 @@ reading in Meno is.
   (the bitmap); where there is no WebGL, as sticks along each ribbon.
   NMR models and trajectories: the ribbon follows each frame.
 
+## Stacks
+
+Asked for by the maintainer on 2026-10-12: many molecules opened from one
+file are shown the way a molecule's frames are, one at a time.
+
+- **What makes one.** A file that brings several molecules in 3D - an SD
+  file's 3D records, a PDB entry's models of different atoms - opened,
+  dropped or pasted as a file. They stand in one place, where the first
+  stood in a row before, as a stack of their own (`Molecule3D.stack`,
+  `utils/stacks.ts`), numbered after the document's own stacks. A file of
+  one molecule, a calculation's output (one molecule and its frames) and a
+  workflow's results are no stack. One pasted out of its stack, or left
+  alone in it as the rest are deleted, is a molecule of its own.
+- **One shown.** The stack shows one molecule. Its chip, just below it,
+  says which of how many (*3 / 60*) and, hovered or selected, is a slider
+  through them, as a molecule's frames' chip is (`StackChip3D`). It is the
+  stack's chip, not its molecules', so a drag along it goes on through the
+  stack. Which one is shown is the view's (`stacksShown`), as a frame is,
+  not an undo step. Workspace files keep it, as they keep frames.
+- **Going over.** The molecule let go of comes towards the viewer, larger
+  and fading out of sight, while the next rises from behind, smaller at
+  first, fading in: 0.42 s, eased. Gone through quickly, only the last two
+  let go of are still drawn as they go. The next is turned as the one let
+  go of was, so that each is seen against the last as it was.
+- **What it is to the rest.** What is out of sight is not drawn, not under
+  the pointer, not taken by a box or a lasso, and not taken by Select all.
+  Selected, the one shown is what is copied, cut or deleted. The one shown
+  moved, the stack moves with it: it stands in one place.
+- **A grid.** *Lay out as a grid*, on the molecule's menu, lays the stack's
+  molecules out where it stood, in rows about as many as its columns, each
+  cell as wide as the widest molecule and a bond's room between: every one
+  shown, each a molecule as any other, one undo step. *Stack again*, on any
+  of them, stacks them again where the grid was, that one shown.
+- **Saved.** Each molecule says its stack and whether it is laid out as a
+  grid; the one a stack shows says so.
+
 ## Hydrogens and bond orders
 
 Built in lane L5 on 2026-10-11, as the maintainer asked: a file of

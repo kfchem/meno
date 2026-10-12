@@ -364,6 +364,12 @@ export type Molecule3D = {
   /** The file it came from. */
   name?: string;
   /**
+   * One of a stack: the molecules one file brought - an SD file's records -
+   * standing in one place, one shown at a time (utils/stacks), by the
+   * stack's id; laid out as a grid instead (`spread`), each where it stands.
+   */
+  stack?: { id: number; spread?: true };
+  /**
    * The drawing it was made from: the drawing's atom each of its atoms is,
    * by id; null, a hydrogen made for it or an atom written out of an
    * abbreviation.
@@ -541,7 +547,7 @@ export type Rising3D = { from: { x: number; y: number }; start: number; flat?: n
  */
 /** One of its calculation's lists, open, as a file carries it: the list, the row chosen, and the value its surface is drawn at. */
 export type CarriedList = { id: string; row: number | null; iso?: number };
-export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList };
+export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList; shown?: true };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
 export type Drawn = Model & {
   pushes?: PushArrow[];
@@ -689,6 +695,14 @@ export type EditorState = {
   turns3d: Record<number, Turn3D>;
   /** Which frame each molecule in 3D shows, by id; the first if absent. */
   frames3d: Record<number, number>;
+  /** Which molecule each stack of molecules in 3D shows, by the stack's id: by the molecule's id; its first if absent (utils/stacks). */
+  stacksShown: Record<number, number>;
+  /** A stack shows another of its molecules - turned as the one it showed was. */
+  showInStack: (stack: number, id: number) => void;
+  /** A stack's molecules laid out as a grid where it stands, each shown: one undo step. */
+  spreadStack: (stack: number) => void;
+  /** A stack's molecules, laid out as a grid, stacked again in its middle, `shown` the one it shows: one undo step. */
+  gatherStack: (stack: number, shown: number) => void;
   /** The molecules in 3D selected, whole, by id: besides `sel`, which is the drawing's. */
   sel3d: Set<number>;
   /** The sets and steps selected, with the rest - by a box, a lasso, Ctrl or ⌘ and a click, or Select all. */

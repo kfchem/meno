@@ -93,18 +93,25 @@ export function useStructureEvents(
     const a = result.arrow;
     const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
     const style = currentStyle3D();
+    // (several - an SD file's records - a stack, standing in one place, one
+    // shown at a time: utils/stacks; numbered as the document's own when added)
+    const stacked = solids.length > 1;
     const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
+    const room = stacked ? [Math.max(...reaches)] : reaches;
     // (beside a drawing the same file brings, to its right)
     const drawn = result.model?.atoms ?? [];
-    const places = drawn.length
+    const row = drawn.length
       ? rowAfter(
           Math.max(...drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
           drawn.reduce((y, a) => y + a.y, 0) / drawn.length + dy,
-          reaches,
+          room,
         )
-      : rowAbout(at, reaches);
+      : rowAbout(at, room);
+    const places = stacked ? solids.map(() => row[0]) : row;
     return {
-      ...(solids.length ? { molecules3d: solids.map(({ id: _id, ...m }, i) => ({ ...m, at: places[i] })) } : {}),
+      ...(solids.length
+        ? { molecules3d: solids.map(({ id: _id, ...m }, i) => ({ ...m, at: places[i], ...(stacked ? { stack: { id: 1 } } : {}) })) }
+        : {}),
       arrows: a
         ? [
             {

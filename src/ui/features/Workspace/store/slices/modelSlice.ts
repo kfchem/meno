@@ -346,7 +346,12 @@ export const createModelSlice = (
     const turns3d: EditorState["turns3d"] = {};
     const frames3d: EditorState["frames3d"] = {};
     const lists3d: EditorState["lists3d"] = {};
+    // (and each stack showing the one it showed, as its stack is numbered now)
+    const stacksShown: EditorState["stacksShown"] = {};
+    const opened3d = doc.getState().molecules3d ?? [];
     (drawn.molecules3d ?? []).forEach((m, i) => {
+      const stack = opened3d[i]?.stack;
+      if (m.shown && stack) stacksShown[stack.id] = i + 1;
       if (m.turn) turns3d[i + 1] = m.turn;
       if (m.frame) frames3d[i + 1] = m.frame;
       // (a list open as it was saved, its row chosen and its surface's value)
@@ -354,7 +359,7 @@ export const createModelSlice = (
     });
     // (and its column showing the text or the PDF it showed, or closed)
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */

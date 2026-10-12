@@ -199,6 +199,7 @@ export function createEditorStore(
     overlay3d: {},
     lists3d: {},
     frames3d: {},
+    stacksShown: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
     chosen3d: null,

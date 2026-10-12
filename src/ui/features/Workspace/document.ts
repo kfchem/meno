@@ -16,6 +16,7 @@ import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reacti
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
+import { freshStackId } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
@@ -843,7 +844,7 @@ export type ImportedScheme = {
   /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), or in a shape it brings (`shapeAt`), where it is. */
   captions?: (Omit<Caption, "id" | "arrow" | "shape"> & { arrowAt?: number; shapeAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
-  molecules3d?: (Omit<Molecule3D, "id"> & { frame?: number; list?: CarriedList })[];
+  molecules3d?: (Omit<Molecule3D, "id"> & { frame?: number; list?: CarriedList; shown?: true })[];
 };
 
 /** The arrows and pluses drawn with a part - a paste, a document's record - as a scheme to add. */
@@ -877,8 +878,17 @@ export function withImportedScheme(
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
   for (const { arrowAt, shapeAt, ...c } of scheme?.captions ?? [])
     next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}), ...(shapeAt != null ? { shape: firstShape + shapeAt } : {}) });
-  // (the frame each shows is the canvas's to keep, not the document's)
-  for (const { frame: _frame, list: _list, ...m } of scheme?.molecules3d ?? []) next = addMolecule3d(next, m);
+  // (the frame each shows is the canvas's to keep, not the document's; a
+  // stack it brings, numbered after the document's own - utils/stacks)
+  // (a stack of one - one pasted out of its stack - is that molecule alone)
+  const counts = new Map<number, number>();
+  for (const m of scheme?.molecules3d ?? []) if (m.stack) counts.set(m.stack.id, (counts.get(m.stack.id) ?? 0) + 1);
+  const stacks = new Map<number, number>();
+  for (const { frame: _frame, list: _list, shown: _shown, stack, ...m } of scheme?.molecules3d ?? []) {
+    if (stack && (counts.get(stack.id) ?? 0) > 1 && !stacks.has(stack.id)) stacks.set(stack.id, freshStackId(next.molecules3d ?? []));
+    const id = stack ? stacks.get(stack.id) : undefined;
+    next = addMolecule3d(next, stack && id != null ? { ...m, stack: { ...stack, id } } : m);
+  }
   return next;
 }
 
@@ -946,9 +956,20 @@ export function moveMolecules3d(
   moves: { id: number; at: { x: number; y: number; z?: number } }[],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m.at]));
+  // (one of a stack moved, the rest of it with it: they stand in one place - utils/stacks)
+  const all = doc.molecules3d ?? [];
+  const by = new Map<number, { dx: number; dy: number }>();
+  for (const m of all) {
+    const at = to.get(m.id);
+    if (at && m.stack && !m.stack.spread && !by.has(m.stack.id)) by.set(m.stack.id, { dx: at.x - m.at.x, dy: at.y - m.at.y });
+  }
+  for (const m of all) {
+    const d = m.stack && !m.stack.spread && !to.has(m.id) ? by.get(m.stack.id) : undefined;
+    if (d) to.set(m.id, { x: m.at.x + d.dx, y: m.at.y + d.dy });
+  }
   return {
     ...doc,
-    molecules3d: (doc.molecules3d ?? []).map((m) => {
+    molecules3d: all.map((m) => {
       const at = to.get(m.id);
       if (!at) return m;
       const z = at.z ?? m.at.z;
@@ -964,7 +985,42 @@ export function removeMolecule3d(doc: WorkspaceDocument, id: number): WorkspaceD
 export function removeMolecules3d(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
   const gone = new Set(ids);
   const kept = (doc.molecules3d ?? []).filter((m) => !gone.has(m.id));
-  return kept.length === (doc.molecules3d ?? []).length ? doc : { ...doc, molecules3d: kept };
+  if (kept.length === (doc.molecules3d ?? []).length) return doc;
+  // (a stack left with one molecule is that molecule alone)
+  const left = new Map<number, number>();
+  for (const m of kept) if (m.stack) left.set(m.stack.id, (left.get(m.stack.id) ?? 0) + 1);
+  return {
+    ...doc,
+    molecules3d: kept.map((m) => {
+      if (!m.stack || (left.get(m.stack.id) ?? 0) > 1) return m;
+      const { stack: _alone, ...rest } = m;
+      return rest;
+    }),
+  };
+}
+
+/** A stack's molecules laid out as a grid: each where `places` says, by id, all of them shown (utils/stacks). */
+export function spreadStack(doc: WorkspaceDocument, stack: number, places: ReadonlyMap<number, { x: number; y: number }>): WorkspaceDocument {
+  return {
+    ...doc,
+    molecules3d: (doc.molecules3d ?? []).map((m) => {
+      if (m.stack?.id !== stack) return m;
+      const at = places.get(m.id) ?? m.at;
+      return { ...m, at: { x: at.x, y: at.y, ...(m.at.z != null ? { z: m.at.z } : {}) }, stack: { id: stack, spread: true } };
+    }),
+  };
+}
+
+/** A stack's molecules, laid out as a grid, stacked again: all of them at `at`. */
+export function gatherStack(doc: WorkspaceDocument, stack: number, at: { x: number; y: number }): WorkspaceDocument {
+  return {
+    ...doc,
+    molecules3d: (doc.molecules3d ?? []).map((m) => {
+      if (m.stack?.id !== stack) return m;
+      const { z: _z, ...was } = m.at;
+      return { ...m, at: { ...was, x: at.x, y: at.y }, stack: { id: stack } };
+    }),
+  };
 }
 
 function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule3D) => Molecule3D): WorkspaceDocument {

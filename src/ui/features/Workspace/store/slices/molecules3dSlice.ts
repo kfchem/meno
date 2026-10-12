@@ -11,6 +11,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
+import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -136,6 +137,32 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       }),
     setFrame3d: (id: number, frame: number) =>
       set((prev) => (prev.frames3d[id] === frame ? prev : { ...prev, frames3d: { ...prev.frames3d, [id]: frame } })),
+    showInStack: (stack: number, id: number) =>
+      set((prev) => {
+        const was = shownOf(prev.molecules3d, stack, prev.stacksShown);
+        if (was === id || !stackMembers(prev.molecules3d, stack).some((m) => m.id === id)) return prev;
+        // (turned as the one it showed was, so that each is seen against the last as it was)
+        const turn = was != null ? prev.turns3d[was] : undefined;
+        const turns3d = { ...prev.turns3d };
+        if (turn) turns3d[id] = turn;
+        else delete turns3d[id];
+        // (selected, the one shown now is, in place of the one out of sight)
+        const sel3d = was != null && prev.sel3d.has(was) ? new Set([...prev.sel3d].filter((x) => x !== was).concat(id)) : prev.sel3d;
+        return { ...prev, stacksShown: { ...prev.stacksShown, [stack]: id }, turns3d, sel3d };
+      }),
+    spreadStack: (stack: number) => {
+      const members = stackMembers(get().molecules3d, stack);
+      if (members.length < 2 || members[0].stack?.spread) return;
+      const style = currentStyle3D();
+      const places = gridPlaces(members[0].at, members.map((m) => solidOf(m, style).reach[lookOf(m)]));
+      doc.edit("lay out as a grid", (d) => ops.spreadStack(d, stack, new Map(members.map((m, i) => [m.id, places[i]]))));
+    },
+    gatherStack: (stack: number, shown: number) => {
+      const members = stackMembers(get().molecules3d, stack);
+      if (members.length < 2 || !members[0].stack?.spread) return;
+      doc.edit("stack again", (d) => ops.gatherStack(d, stack, middleOf(members.map((m) => m.at))));
+      get().showInStack(stack, shown);
+    },
     selectMolecules3d: (ids: Iterable<number>, add = false) =>
       set((prev) => {
         const sel3d = new Set(add ? prev.sel3d : []);
@@ -333,7 +360,13 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     return rows > 0 && (l.row == null || l.row < rows) && (l.pointed == null || l.pointed < rows);
   });
   const lists3d = open.length === Object.keys(prev.lists3d).length ? prev.lists3d : Object.fromEntries(open);
+  // (a stack shows one it still has: utils/stacks)
+  const shownStays = (id: number) => !!by.get(id)?.stack;
+  const stacksShown = Object.values(prev.stacksShown).every(shownStays)
+    ? prev.stacksShown
+    : Object.fromEntries(Object.entries(prev.stacksShown).filter(([, id]) => shownStays(id)));
   return {
+    stacksShown,
     hoveredMeasure3d: measureStays ? hm : null,
     measureEdit3d: editStays ? em : null,
     lists3d,

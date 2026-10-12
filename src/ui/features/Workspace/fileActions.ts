@@ -1,3 +1,4 @@
+import { seenOnly } from "./utils/stacks";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
@@ -373,11 +374,12 @@ export function drawingSvg(
   style: DrawingStyle,
   seen = false,
 ): string {
-  const { layout, opts } = drawingLayout(model, aromatic, style);
+  // (of a stack, the one it shows: utils/stacks)
+  const { layout, opts } = drawingLayout(model.molecules3d ? { ...model, molecules3d: seenOnly(model.molecules3d) } : model, aromatic, style);
   if (seen) {
     try {
       // (at the resolution copied pictures are made at)
-      withSolidsImage(model.molecules3d ?? [], layout, currentStyle3D(), useAppSettings.getState().pictures.dpi);
+      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, currentStyle3D(), useAppSettings.getState().pictures.dpi);
     } catch {
       // (the marks, then)
     }

@@ -454,6 +454,13 @@ function listOf(v: unknown): CarriedList | undefined {
   return { id: l.id, row: l.row as number | null, ...(isNum(l.iso) && l.iso > 0 ? { iso: l.iso } : {}) };
 }
 
+/** A molecule's stack, where it reads as one: its id, and whether it is laid out as a grid (utils/stacks). */
+function stackOf(given: unknown): Carried3D["stack"] | undefined {
+  const s = given as { id?: unknown; spread?: unknown } | undefined;
+  if (!s || !Number.isInteger(s.id) || (s.id as number) < 1) return undefined;
+  return { id: s.id as number, ...(s.spread === true ? { spread: true as const } : {}) };
+}
+
 /** A molecule in 3D in Meno's own record, or null where it does not read as one. */
 export function readCarried3D(given: unknown): Carried3D | null {
   const m = given as Partial<Record<keyof Carried3D, unknown>>;
@@ -493,6 +500,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.look === "secondary" ? { look: m.look } : {}),
     ...(measures.length ? { measures } : {}),
     ...(typeof m.name === "string" ? { name: m.name } : {}),
+    ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
+    ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),
     ...(Number.isInteger(m.frame) ? { frame: m.frame as number } : {}),
     ...(listOf(m.list) ? { list: listOf(m.list) } : {}),
