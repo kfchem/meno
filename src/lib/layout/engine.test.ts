@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
-import { layout2D, roomForHydrogens, scorer } from "./engine";
+import { layout2D, roomForHydrogens, scorer, SOLID_STEREO } from "./engine";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, layoutMetrics } from "./metrics";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
-import { solidOf } from "./cage";
+import { shownByShape, solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -135,7 +135,7 @@ describe("layout2D", () => {
     for (const o of dioxy) expect(y[n]).toBeLessThan(y[o]);
   });
 
-  it("draws tetrodotoxin as the solid it is, and morphine still flat with its bridge across", () => {
+  it("draws tetrodotoxin as a solid only with every stereocentre on the page, and morphine still flat with its bridge across", () => {
     const input = (smiles: string): LayoutInput => {
       const s = readSmiles(smiles);
       const orders = kekuleOrders(s.atoms, s.bonds);
@@ -147,9 +147,26 @@ describe("layout2D", () => {
       };
     };
     // (tetrodotoxin's flat drawing crosses bonds; its solid, once its C4a is
-    // turned the way it is given, has none)
-    const ttx = layout2D(input("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O"));
-    expect(ttx.solid.filter(Boolean).length).toBe(14);
+    // turned the way it is given, has none - but only two of its rings are
+    // drawn as chairs or boats, and its other centres show nothing by their
+    // shape: with SOLID_STEREO "wedges" it is the solid, every such centre
+    // wedged; with "chairs", flat)
+    const smiles = "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O";
+    const given = input(smiles);
+    const ttx = layout2D(given);
+    const centres = given.atoms.flatMap((a, i) => (a.tetra && ttx.depth[i] != null ? [i] : []));
+    if (SOLID_STEREO === "wedges") {
+      expect(given.atoms.filter((_, i) => ttx.depth[i] != null)).toHaveLength(14);
+      const mol = perceive(given);
+      const shown = shownByShape(mol, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
+      for (const c of centres) {
+        if (ttx.solid[c]) expect(shown.has(c), `C${c} in a chair or boat`).toBe(true);
+        else expect(ttx.wedges.some((w) => w.from === c), `C${c} wedged`).toBe(true);
+      }
+      expect(centres.filter((c) => !ttx.solid[c]).length).toBeGreaterThan(0);
+    } else {
+      expect(ttx.solid.some(Boolean)).toBe(false);
+    }
     // (morphine's solid reads as given now too, but its flat drawing has no
     // fault - its bonds a little uneven, its bridge passing behind a ring -
     // and it is drawn so, as everywhere)

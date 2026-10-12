@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cageCore, keepsConfigurations, projectCage } from "./cage";
+import { cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -43,6 +43,33 @@ describe("a cage within a ring system", () => {
     const { x, y, solid } = layout2D(input);
     expect(solid.slice(0, 10).every(Boolean)).toBe(true);
     for (const { a, b } of input.bonds) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(0.6);
+  });
+});
+
+describe("a six-membered ring drawn as a chair or a boat", () => {
+  // the template's chair: two zigzags 15 degrees off level, joined by two bonds 60 degrees steep
+  const c = Math.cos((15 * Math.PI) / 180);
+  const s = Math.sin((15 * Math.PI) / 180);
+  const o = { x: -Math.cos(Math.PI / 3), y: -Math.sin(Math.PI / 3) };
+  const chair = [
+    { x: 0, y: 0 },
+    { x: c, y: s },
+    { x: c + o.x, y: s + o.y },
+    { x: o.x, y: o.y + 2 * s },
+    { x: -c + o.x, y: s + o.y },
+    { x: -c, y: s },
+  ];
+  it("is told by its shape, any way round, mirrored or at any size", () => {
+    const turned = chair.map((p) => ({ x: 3 * (p.x * Math.cos(1) - p.y * Math.sin(1)) + 5, y: 3 * (p.x * Math.sin(1) + p.y * Math.cos(1)) - 2 }));
+    expect(drawnAsChairOrBoat(turned)).toBe(true);
+    expect(drawnAsChairOrBoat(chair.map((p) => ({ x: -p.x, y: p.y })))).toBe(true);
+    expect(drawnAsChairOrBoat([...chair.slice(2), ...chair.slice(0, 2)].reverse())).toBe(true);
+  });
+
+  it("is not a regular hexagon, nor a chair pulled out of its shape", () => {
+    const hexagon = Array.from({ length: 6 }, (_, k) => ({ x: Math.cos((k * Math.PI) / 3), y: Math.sin((k * Math.PI) / 3) }));
+    expect(drawnAsChairOrBoat(hexagon)).toBe(false);
+    expect(drawnAsChairOrBoat(chair.map((p, k) => (k === 3 ? { x: p.x + 0.25, y: p.y + 0.2 } : p)))).toBe(false);
   });
 });
 

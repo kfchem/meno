@@ -474,6 +474,70 @@ function ringTemplate(top: number, bottom: number, hand: number): Point[] {
   ];
 }
 
+/**
+ * Whether six points, in order round a ring, are drawn as a chair or a boat
+ * always is (`ringTemplate`): two zigzags of three atoms, 15 degrees off
+ * level, one above the other and joined by two bonds 60 degrees steep -
+ * any way round or mirrored, at any size. Drawn so, a ring shows by its
+ * shape alone which way each bond out of it goes, up or down; drawn any
+ * other way - a ring of a solid seen as it falls - it does not.
+ */
+export function drawnAsChairOrBoat(pts: readonly Point[]): boolean {
+  if (pts.length !== 6) return false;
+  const lens = pts.map((p, k) => Math.hypot(pts[(k + 1) % 6].x - p.x, pts[(k + 1) % 6].y - p.y));
+  const bond = lens.reduce((sum, v) => sum + v, 0) / 6;
+  const mid = (ps: readonly Point[]) => ({ x: ps.reduce((sum, p) => sum + p.x, 0) / 6, y: ps.reduce((sum, p) => sum + p.y, 0) / 6 });
+  const m = mid(pts);
+  const q = pts.map((p) => ({ x: p.x - m.x, y: p.y - m.y }));
+  for (const top of [1, -1]) {
+    for (const bottom of [1, -1]) {
+      for (const hand of [1, -1]) {
+        const tpl = ringTemplate(top, bottom, hand);
+        const c = mid(tpl);
+        const t0 = tpl.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
+        for (const mirror of [1, -1]) {
+          const t = t0.map((p) => ({ x: p.x, y: mirror * p.y }));
+          for (let start = 0; start < 6; start++) {
+            for (const dir of [1, -1]) {
+              const at = (k: number) => q[(start + dir * k + 12) % 6];
+              // (the turn and scale that lay the template best on the drawing)
+              let re = 0;
+              let im = 0;
+              let tt = 0;
+              t.forEach((p, k) => {
+                const d = at(k);
+                re += p.x * d.x + p.y * d.y;
+                im += p.x * d.y - p.y * d.x;
+                tt += p.x * p.x + p.y * p.y;
+              });
+              const a = re / tt;
+              const b = im / tt;
+              const off = t.reduce((sum, p, k) => sum + (at(k).x - (a * p.x - b * p.y)) ** 2 + (at(k).y - (b * p.x + a * p.y)) ** 2, 0);
+              if (Math.sqrt(off / 6) < 0.05 * bond) return true;
+            }
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * The stereocentres among `atoms`, drawn as a solid at `pos`, that the
+ * drawing shows by its shape: each in a six-membered ring of them drawn as
+ * a chair or a boat (`drawnAsChairOrBoat`).
+ */
+export function shownByShape(mol: Molecule, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
+  const out = new Set<number>();
+  for (const cycle of sixCycles(mol, atoms)) {
+    if (!cycle.some((a) => mol.tetra.has(a))) continue;
+    if (!drawnAsChairOrBoat(cycle.map(pos))) continue;
+    for (const a of cycle) if (mol.tetra.has(a)) out.add(a);
+  }
+  return out;
+}
+
 /** Every six-membered cycle through the given atoms, each in order round it. */
 function sixCycles(mol: Molecule, atoms: readonly number[]): number[][] {
   const inside = new Set(atoms);

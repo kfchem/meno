@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, sameConfiguration, unsureStereo, type DrawnAtom, type DrawnBond } from "./drawn";
-import { layout2D } from "./engine";
+import { readStereo, sameConfiguration, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
+import { readSmiles } from "../chem/smiles";
+import { kekuleOrders } from "../chem/kekulize";
+import { implicitHydrogens } from "../chem/molecule";
+import { layout2D, SOLID_STEREO } from "./engine";
 import type { LayoutInput } from "./perceive";
 import cages from "./testdata/cages.json";
 
@@ -93,7 +96,8 @@ describe("readStereo", () => {
     for (const [name, g] of Object.entries(cages)) {
       const input = g as LayoutInput;
       const { atoms, bonds, out, hydrogen } = drawing(input);
-      expect(out.solid.some(Boolean), name).toBe(true);
+      // (a solid only with every centre shown by a chair or a boat, where SOLID_STEREO says so)
+      expect(out.solid.some(Boolean) || SOLID_STEREO === "chairs", name).toBe(true);
       const read = readStereo(atoms, bonds);
       input.atoms.forEach((a, i) => {
         if (!a.tetra) return;
@@ -128,7 +132,29 @@ describe("readStereo", () => {
           }
         }
       }
-      expect(out.solid.some(Boolean), name).toBe(true);
+      // (a solid only with every centre shown by a chair or a boat, where SOLID_STEREO says so)
+      expect(out.solid.some(Boolean) || SOLID_STEREO === "chairs", name).toBe(true);
+    }
+  });
+
+  it("says a perspective centre to a flat reader on a bond no other centre's wedge is on", () => {
+    // tetrodotoxin drawn as a solid, its C4 wedged on its bond to C4a, which
+    // its shape shows: C4a's wedge for a flat reader went on the same bond
+    // and took C4's away
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const drawn = drawing({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+    // (each atom what it is, as a drawing has it)
+    const atoms = drawn.atoms.map((a, i) => ({ ...a, el: s.atoms[i]?.el ?? "H" }));
+    const { bonds } = drawn;
+    const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [[b.a, b.b].sort((p, q) => p - q).join(",")] : [])));
+    for (const w of wedgesForFlat(atoms, bonds).wedges) {
+      if (w.to >= 0) expect(wedged.has([w.from, w.to].sort((p, q) => p - q).join(",")), `${w.from}-${w.to}`).toBe(false);
     }
   });
 

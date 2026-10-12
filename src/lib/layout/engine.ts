@@ -26,7 +26,7 @@ import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./nam
 import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, type CageView } from "./cage";
+import { cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownByShape, type CageView } from "./cage";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
@@ -394,6 +394,16 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   for (const d of mol.dienes) d.ring.forEach((a, i) => perspective(a, d.ring[(i + 1) % d.ring.length]));
   // a stereocentre in a cage drawn in perspective shows itself there
   const tetra = new Map<number, Tetrahedral>();
+  // (and, a solid showing them with wedges, each centre in it its shape
+  // does not show: in no six-membered ring drawn as a chair or a boat)
+  if (SOLID_STEREO === "wedges") {
+    mol.systems.forEach((sys) => {
+      const own = sys.atoms.filter((a) => solid[a]);
+      if (!own.some((a) => input.atoms[a].tetra)) return;
+      const shown = shownByShape(mol, own, (a) => ({ x: x[a], y: y[a] }));
+      for (const a of own) if (input.atoms[a].tetra && !shown.has(a)) solid[a] = false;
+    });
+  }
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));
   // and an axis of chirality, by a wedge at an end of it
@@ -541,11 +551,35 @@ type SystemLayout = {
   other?: Omit<CageView, "other">;
 };
 
+/**
+ * How a solid shows a stereocentre its shape does not: one in no
+ * six-membered ring drawn as a chair or a boat (cage.ts `shownByShape`),
+ * whose bonds' depth the page does not show a reader.
+ * - "chairs": it is not drawn as a solid at all, but flat, with wedges,
+ *   unless every stereocentre in it is so shown.
+ * - "wedges": it is drawn as the solid, and each such centre carries a
+ *   wedge or hashes on its bond out of the solid, or an H drawn upright.
+ * (The maintainer chooses, from the pictures of both.)
+ */
+export const SOLID_STEREO: "chairs" | "wedges" = "wedges";
+
+/** Whether every stereocentre among `atoms`, drawn at `pos`, is shown by the solid's shape - or a solid need not show them so. */
+function shapeShowsAll(mol: Molecule, atoms: readonly number[], pos: Map<number, Point>): boolean {
+  if (SOLID_STEREO !== "chairs") return true;
+  const centres = atoms.filter((a) => mol.tetra.has(a));
+  if (!centres.length) return true;
+  const shown = shownByShape(mol, atoms, (a) => pos.get(a)!);
+  return centres.every((c) => shown.has(c));
+}
+
 function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const sys = mol.systems[i];
   // a cage - norbornane, tropane, quinuclidine, adamantane - is drawn in
   // perspective, the way it always is; anything else flat
-  if (isCage(mol, sys)) return { ...projectCage(mol, sys), solid: true };
+  if (isCage(mol, sys)) {
+    const cage = projectCage(mol, sys);
+    if (shapeShowsAll(mol, sys.atoms, cage.pos)) return { ...cage, other: cage.other && shapeShowsAll(mol, sys.atoms, cage.other.pos) ? cage.other : undefined, solid: true };
+  }
   const flat = layoutFlat(mol, sys);
   // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
   const flatFaults = flatCost(mol, sys, flat.pos, flat.depth, true);
@@ -568,7 +602,7 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   const wholeFits = sys.atoms.length <= 20 && rings.every((r) => r.length <= 8) && !sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]));
   // (and only a solid with every stereocentre in it as given)
   const projected = wholeFits ? projectCage(mol, sys) : null;
-  const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) ? projected : null;
+  const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) && shapeShowsAll(mol, sys.atoms, projected.pos) ? projected : null;
   const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth, true) : Infinity;
   const core = cageCore(mol, sys);
   if (!core) return whole && wholeFaults < flatFaults - 1 ? { ...whole, solid: true } : flat;
@@ -592,7 +626,11 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   // ring stands on one face of the cage there or the other, and only one is
   // the molecule: scopolamine's epoxide laid towards its three-carbon
   // bridge, not its N, was another)
-  const shows = (v: Omit<CageView, "other">) => sys.atoms.every((a) => v.pos.has(a)) && keepsConfigurations(mol, sys.atoms, v.pos, v.depth);
+  const inSys = new Set(sys.atoms);
+  const coreAtoms = new Set(core.atoms);
+  const solidAtoms = core.atoms.filter((a) => mol.neighbours[a].every((b) => !inSys.has(b) || coreAtoms.has(b)));
+  const shows = (v: Omit<CageView, "other">) =>
+    sys.atoms.every((a) => v.pos.has(a)) && keepsConfigurations(mol, sys.atoms, v.pos, v.depth) && shapeShowsAll(mol, solidAtoms, v.pos);
   const persp = onto(view);
   const perspFaults = shows(persp) ? flatCost(mol, sys, persp.pos, persp.depth, true) : Infinity;
   // (the cage alone in perspective before the whole, its fused rings flat
@@ -601,11 +639,8 @@ function layoutSystem(mol: Molecule, i: number): SystemLayout {
   if (perspFaults >= flatFaults - 1) return flat;
   // (an atom of the cage bonded to a ring fused flat onto it shows its
   // configuration by a wedge, as a flat ring's atoms do: its bond into that
-  // ring lies where the flat ring puts it, not where the solid would)
-  const inSys = new Set(sys.atoms);
-  const coreAtoms = new Set(core.atoms);
-  const solidAtoms = core.atoms.filter((a) => mol.neighbours[a].every((b) => !inSys.has(b) || coreAtoms.has(b)));
-  // (and seen from its other side, for a mirrored frame, only so too)
+  // ring lies where the flat ring puts it, not where the solid would - and
+  // seen from its other side, for a mirrored frame, only so too)
   const other = view.other && onto(view.other);
   return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}) };
 }

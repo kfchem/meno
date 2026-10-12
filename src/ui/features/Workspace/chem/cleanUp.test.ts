@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { readStereo, sameConfiguration, wedgesForFlat } from "../../../../lib/layout/drawn";
-import { layout2D, type LayoutInput } from "../../../../lib/layout/engine";
+import { layout2D, SOLID_STEREO, type LayoutInput } from "../../../../lib/layout/engine";
 import { layoutMetrics } from "../../../../lib/layout/metrics";
 import cages from "../../../../lib/layout/testdata/cages.json";
 import { kekuleOrders } from "../../../../lib/chem/kekulize";
@@ -162,8 +162,9 @@ describe("cleanUp", () => {
       const { store } = canvas(flat);
       await cleanUp(store);
       const after = store.getState().model;
-      expect(after.atoms.some((a) => a.z != null), name).toBe(true);
-      expect(after.atoms.some((a) => a.stereoCentre), name).toBe(true);
+      // (a solid only with every centre shown by a chair or a boat, where SOLID_STEREO says so)
+      expect(after.atoms.some((a) => a.z != null) || SOLID_STEREO === "chairs", name).toBe(true);
+      expect(after.atoms.some((a) => a.stereoCentre) || SOLID_STEREO === "chairs", name).toBe(true);
       const [s0, s1] = [stereo(flat), stereo(after)];
       for (const [c, t] of s0) {
         expect(s1.get(c), `${name} ${c}`).toBeDefined();
