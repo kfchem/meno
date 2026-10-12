@@ -255,6 +255,21 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.find((x) => x.el === "I")?.charge).toBe(-1);
   });
 
+  it("reads a compound's number set close under a bond's free end as no label", () => {
+    // a chain, its last bond pointing down, the number's top a third of a bond under its end
+    const a: P = [100, 100];
+    const c = step(step(a, -30), 30);
+    const d: P = [c[0], c[1] + L];
+    for (const n of ["1", "2a", "3'", "(4)"]) {
+      const f = readFigure(figure([stroke(a, step(a, -30), c), stroke(c, d)], word(n, [d[0], d[1] + 0.3 * L + 3.6])), (l) => readDrawnLabel(l, reads).read);
+      expect(f.atoms.map((x) => x.label ?? "C")).toEqual(["C", "C", "C", "C"]);
+      expect(f.left.letters.map((l) => l.c).join("")).toBe(n);
+    }
+    // (an isotope's label is one: 13C, its capital)
+    const f = readFigure(figure([stroke(a, step(a, -30), c), stroke(c, d)], word("13C", [d[0], d[1] + 0.3 * L + 3.6])), (l) => readDrawnLabel(l, reads).read);
+    expect(f.atoms.some((x) => x.label === "13C")).toBe(true);
+  });
+
   it("joins a bond broken where another passes in front of it", () => {
     const a: P = [40, 40];
     const b: P = [40 + 2 * L, 40];

@@ -274,6 +274,11 @@ highlight's colour, under the drawing, and a small handle stands above it.
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
   each stereocentre keeps its configuration.
+- Turned over, a selection is mirrored about the middle of all it moves,
+  which so stays where it was. Pictures, texts, PDFs, slides, shapes
+  and molecules in 3D selected with it go to their mirrored places, each
+  drawn as it was: a picture's image, a PDF's pages and a molecule in 3D
+  are not mirrored, though a tilted picture tilts the other way.
 - Turned by the handle or turned over, a selection takes along the
   reaction arrows, "+" signs and words among it, as a drag does. An
   arrow is carried round and points as far round, or is mirrored and

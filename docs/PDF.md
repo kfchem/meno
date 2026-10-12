@@ -987,7 +987,9 @@ workspace holds.
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
   a charge. A lone H takes one bond: its wedge's, where it has one. A word
-  with a charge beside the structure, at no bond's end, is an ion.
+  with a charge beside the structure, at no bond's end, is an ion. A word
+  written as a compound's number - 1, 12b, 3', (4) - is no atom's label,
+  however close under a bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - a label that writes more or fewer hydrogens than its atom's bonds leave
