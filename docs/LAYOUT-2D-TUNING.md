@@ -20,10 +20,10 @@ decided. Read both before changing anything.
 | `assemble.ts` | the structure grown out from its root system in one frame: each bond's direction, zigzags, a cis double bond as a step, a phosphate as a cross, an amino acid's backbone |
 | `engine.ts` | `layout2D`: the steps below, and the local search (`improve`, `rejoin`, `untangle`, `faceSugars`, `roomForHydrogens`, `squareUp`) |
 | `stereo.ts` | wedges and hashes, and the H's drawn to carry them |
-| `drawn.ts` | a drawing's stereochemistry read back out of it - wedges as RDKit reads them, a cage in perspective from its solid - which is what the app gives the engine; and the wedges a flat reader needs for such a cage |
+| `drawn.ts` | a drawing's stereochemistry read back out of it - wedges read flat, depth or none; a centre a cage in perspective shows by itself from the cage, a bridgehead drawn all but flat from the cage's solid as fitted - which is what the app gives the engine; and the wedges a flat reader needs for such a cage |
 | `metrics.ts` | the measure: every rule as a number, `SCORE_WEIGHTS`, and where the drawing sets a label's H (`hydrogenSpot`) |
 
-Tests: `engine.test.ts`, `metrics.test.ts`, `stereo.test.ts`, `rings.test.ts`, `drawn.test.ts`; and `readBack.benchmark.test.ts` and `readBack.heldout.test.ts`, which read back every drawing the engine makes with depth of the molecules on both lists, as Meno reads a drawing, each stereocentre as given.
+Tests: `engine.test.ts`, `metrics.test.ts`, `stereo.test.ts`, `rings.test.ts`, `drawn.test.ts`; and `readBack.benchmark.test.ts`, `readBack.heldout.test.ts` and `readBack.diastereomers.test.ts`, which read back every drawing the engine makes with depth - of the molecules on both lists, and of every diastereomer that can exist one centre inverted makes of the bridged ones (`scripts/layout/diastereomers.py`) - as Meno reads a drawing, and by its depth where a centre has three bonds into its ring system: each stereocentre as given.
 
 In the app, `src/ui/features/Workspace/chem/engineLayout.ts` turns a
 drawing into what the engine is given and its layout back into edits, and
@@ -165,6 +165,20 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   opposite. Every atom of such a system is now checked as drawn, and the
   read-back tests read every drawing with depth on both lists as Meno
   does, the perspective with the wedges.
+- **One isomer drawn well, the next one wrong.** The read-back tests
+  passed on every molecule listed, but of the one-centre diastereomers of
+  the bridged ones, 13 of 62 read wrong. Three faults:
+  - a bridge across a ring was put in front or behind as the solid from
+    bond distances had it, which can have a ring fusion the wrong way
+    (morphine's and codeine's 5-epimers, an artemisinin isomer);
+  - the reader took the depth of a ring laid across another's face for a
+    place in space, so that a centre on the bridge, shown by its wedge,
+    read the other way (gibberellic acid's 3-epimer);
+  - it read a centre with three bonds into a cage partly from where the
+    fourth would be in the solid fitted to a drawing that is not quite its
+    projection (paeoniflorin with another sugar), and a bridgehead drawn
+    all but flat by a hair (camphor's skeleton with one centre given).
+  The diastereomers are a test now.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two

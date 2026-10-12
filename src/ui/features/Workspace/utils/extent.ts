@@ -11,7 +11,15 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
-import { arrowEnds } from "../../../../lib/chem/reactionScheme";
+import { arrowPoints } from "../../../../lib/chem/reactionScheme";
+
+/** The box round an arrow's line: its ends and the corners it turns at. */
+function arrowBox(a: Parameters<typeof arrowPoints>[0]): { x0: number; y0: number; x1: number; y1: number } {
+  const pts = arrowPoints(a);
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
@@ -58,8 +66,8 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   // the arrows, "+" signs and words among them, and the words selected
   const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
   for (const a of among.arrows) {
-    const e = arrowEnds(a);
-    take(Math.min(e.from.x, e.to.x), Math.min(e.from.y, e.to.y), Math.max(e.from.x, e.to.x), Math.max(e.from.y, e.to.y));
+    const b = arrowBox(a);
+    take(b.x0, b.y0, b.x1, b.y1);
   }
   for (const p of among.pluses) take(p.x - opts.fontPx / 2, p.y - opts.fontPx / 2, p.x + opts.fontPx / 2, p.y + opts.fontPx / 2);
   const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
@@ -136,8 +144,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   const taken = (xs: readonly { id: number }[], id: number) => xs.some((x) => x.id === id);
   for (const a of st.arrows) {
     if (taken(among.arrows, a.id)) continue;
-    const e = arrowEnds(a);
-    out.push({ x0: Math.min(e.from.x, e.to.x), y0: Math.min(e.from.y, e.to.y), x1: Math.max(e.from.x, e.to.x), y1: Math.max(e.from.y, e.to.y) });
+    out.push(arrowBox(a));
   }
   for (const p of st.pluses) if (!taken(among.pluses, p.id)) out.push({ x0: p.x - opts.fontPx / 2, y0: p.y - opts.fontPx / 2, x1: p.x + opts.fontPx / 2, y1: p.y + opts.fontPx / 2 });
   for (const c of st.captions) {

@@ -1,3 +1,4 @@
+import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -152,6 +153,7 @@ export default function PartMenu({
   onExport,
   onPush,
   push,
+  arrow,
   onColour,
   onRender,
   picture,
@@ -259,6 +261,24 @@ export default function PartMenu({
     source?: { fromPair: boolean; set: (fromPair: boolean) => void };
     pair?: { shown: boolean; set: (shown: boolean) => void };
     onUnbend?: () => void;
+  };
+  /**
+   * What an arrow right-clicked can be (docs/EDITOR-2D.md, *Arrows*): its
+   * kind, its heads - one or two; an equilibrium's half or full - dashed or
+   * not, how heavy its line is, and straight again where it turns.
+   */
+  arrow?: {
+    kind: ArrowKind | null;
+    setKind: (kind: ArrowKind | null) => void;
+    heads: 1 | 2;
+    setHeads: (heads: 1 | 2) => void;
+    full: boolean;
+    setFull: (full: boolean) => void;
+    dash: boolean;
+    setDash: (dash: boolean) => void;
+    weight: ArrowWeight | "regular";
+    setWeight: (weight: ArrowWeight | "regular") => void;
+    onStraighten?: () => void;
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
@@ -411,7 +431,44 @@ export default function PartMenu({
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
         ]
       : target.kind === "arrow"
-      ? [del("Delete reaction arrow"), { name: "Arrow style…", keys: "", run: onArrowStyle }]
+      ? [
+          ...colour,
+          del("Delete reaction arrow"),
+          // (what it is, ticked as it is: its kind; its heads; dashed or not; straight again; its line's weight)
+          ...(arrow
+            ? [
+                ...(
+                  [
+                    [null, "Reaction arrow"],
+                    ["equilibrium", "Equilibrium"],
+                    ["retrosynthetic", "Retrosynthetic"],
+                    ["noReaction", "No reaction"],
+                  ] as const
+                ).map(([k, name]) => ({ name, keys: "", run: () => arrow.setKind(k), checked: arrow.kind === k })),
+                ...(arrow.kind === "equilibrium"
+                  ? [
+                      { name: "Half heads", keys: "", run: () => arrow.setFull(false), checked: !arrow.full, divider: true },
+                      { name: "Full heads", keys: "", run: () => arrow.setFull(true), checked: arrow.full },
+                    ]
+                  : arrow.kind === "retrosynthetic"
+                    ? []
+                    : [
+                        { name: "Head at the end", keys: "", run: () => arrow.setHeads(1), checked: arrow.heads === 1, divider: true },
+                        { name: "Heads at both ends", keys: "", run: () => arrow.setHeads(2), checked: arrow.heads === 2 },
+                      ]),
+                { name: "Dashed line", keys: "", run: () => arrow.setDash(!arrow.dash), checked: arrow.dash, divider: true },
+                ...(arrow.onStraighten ? [{ name: "Straighten", keys: "", run: arrow.onStraighten }] : []),
+                ...(
+                  [
+                    ["thin", "Thin line"],
+                    ["regular", "Regular line"],
+                    ["thick", "Thick line"],
+                  ] as const
+                ).map(([w, name], i) => ({ name, keys: "", run: () => arrow.setWeight(w), checked: arrow.weight === w, divider: i === 0 })),
+              ]
+            : []),
+          { name: "Arrow style…", keys: "", run: onArrowStyle, divider: true },
+        ]
       : target.kind === "plus"
       ? [del("Delete plus")]
       : target.kind === "caption"

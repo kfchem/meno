@@ -12,8 +12,9 @@ import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
-import type { ArrowLook } from "../../../lib/chem/reactionArrow";
-import type { Arrow, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
+import { arrowPoints } from "../../../lib/chem/reactionScheme";
+import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
@@ -874,10 +875,7 @@ export function withImportedScheme(
   let next = doc;
   // (the words over an arrow it brings are over that arrow, as it is numbered here)
   const firstArrow = doc.nextArrowId;
-  for (const a of scheme?.arrows ?? []) {
-    next = addArrow(next, a.x, a.y, a.angle, a.length);
-    if (a.look) next = setArrowLook(next, next.nextArrowId - 1, a.look);
-  }
+  for (const { x, y, angle, length, ...rest } of scheme?.arrows ?? []) next = addArrow(next, x, y, angle, length, rest);
   for (const p of scheme?.pluses ?? []) next = addPlus(next, p.x, p.y);
   // (and the words in a shape it brings, in that shape)
   const firstShape = next.nextShapeId ?? 1;
@@ -1055,8 +1053,10 @@ export function addArrow(
   y: number,
   angle: number,
   length: number,
+  /** What else it is: its look, form and colour, as a file or a copy brings them. */
+  rest: Omit<Arrow, "id" | "x" | "y" | "angle" | "length"> = {},
 ): WorkspaceDocument {
-  const arrow: Arrow = { id: doc.nextArrowId, x, y, angle, length };
+  const arrow: Arrow = { ...rest, id: doc.nextArrowId, x, y, angle, length };
   return {
     ...doc,
     nextArrowId: doc.nextArrowId + 1,
@@ -1074,8 +1074,106 @@ export function updateArrow(
   const next = doc.arrows.slice();
   const was = next[index];
   next[index] = { ...was, ...patch };
-  // (the words over it, or under it, go where its middle goes)
+  // (the words over it, or under it, go where its middle goes - or, where it turns or turned, its line)
+  if (was.corners?.length || next[index].corners?.length) return withWordsAlong({ ...doc, arrows: next }, [[was, next[index]]]);
   return withCaptionsBy({ ...doc, arrows: next }, new Map([[id, { x: next[index].x - was.x, y: next[index].y - was.y }]]));
+}
+
+/**
+ * Where words stand by an arrow's line through `points`, its tail first: how
+ * far along the line the point they are by is - the point it passes level
+ * with them, measured along its tail-to-point chord, the nearest where it
+ * passes more than once; its end, where they lie past it - and how far
+ * from that point they are, along the chord and across it.
+ */
+function wordsAnchor(points: readonly { x: number; y: number }[], p: { x: number; y: number }): { s: number; along: number; across: number } {
+  const o = points[0];
+  const end = points[points.length - 1];
+  const l = Math.hypot(end.x - o.x, end.y - o.y) || 1;
+  const u = { x: (end.x - o.x) / l, y: (end.y - o.y) / l };
+  const chord = (q: { x: number; y: number }) => ({ x: (q.x - o.x) * u.x + (q.y - o.y) * u.y, y: -(q.x - o.x) * u.y + (q.y - o.y) * u.x });
+  const at = chord(p);
+  const cs = points.map(chord);
+  let best: { s: number; along: number; across: number } | null = null;
+  let gone = 0;
+  for (let i = 1; i < cs.length; i++) {
+    const a = cs[i - 1];
+    const b = cs[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (Math.abs(b.x - a.x) > 1e-12 && (at.x - a.x) * (at.x - b.x) <= 0) {
+      const t = (at.x - a.x) / (b.x - a.x);
+      const across = at.y - (a.y + (b.y - a.y) * t);
+      if (!best || Math.abs(across) < Math.abs(best.across)) best = { s: gone + len * t, along: 0, across };
+    }
+    gone += len;
+  }
+  if (best) return best;
+  // (past an end: by that end)
+  const first = cs[0];
+  const last = cs[cs.length - 1];
+  const tail = Math.hypot(at.x - first.x, at.y - first.y) <= Math.hypot(at.x - last.x, at.y - last.y);
+  const e = tail ? first : last;
+  return { s: tail ? 0 : gone, along: at.x - e.x, across: at.y - e.y };
+}
+
+/**
+ * `doc` with the words by each arrow changed from `was` to `now` going with
+ * the point of its line they are by - as far along it, as a share of it -
+ * and as far from it, along its chord and across it: words over a stretch
+ * stay over it as a corner is made, moved or taken away, or the arrow
+ * grows or turns.
+ */
+function withWordsAlong(doc: WorkspaceDocument, changed: readonly (readonly [Arrow, Arrow])[]): WorkspaceDocument {
+  const by = new Map(changed.map(([was, now]) => [now.id, { was: arrowPoints(was), now: arrowPoints(now) }]));
+  if (!doc.captions?.some((c) => c.arrow != null && by.has(c.arrow))) return doc;
+  return {
+    ...doc,
+    captions: doc.captions.map((c) => {
+      const line = c.arrow != null ? by.get(c.arrow) : undefined;
+      if (!line) return c;
+      const was = pathLength(line.was);
+      const k = wordsAnchor(line.was, c);
+      const at = pointAlong(line.now, was > 0 ? (k.s / was) * pathLength(line.now) : 0).at;
+      const o = line.now[0];
+      const end = line.now[line.now.length - 1];
+      const l = Math.hypot(end.x - o.x, end.y - o.y) || 1;
+      const u = { x: (end.x - o.x) / l, y: (end.y - o.y) / l };
+      const x = at.x + u.x * k.along - u.y * k.across;
+      const y = at.y + u.y * k.along + u.x * k.across;
+      return Math.abs(x - c.x) > 1e-12 || Math.abs(y - c.y) > 1e-12 ? { ...c, x, y } : c;
+    }),
+  };
+}
+
+/**
+ * `doc` with the arrows `ids` given what `patch` says - a kind, heads, an
+ * equilibrium's full heads, dashes, a weight, corners, a colour - each set
+ * as it says, or (null, "regular", 1 head, false) taken away.
+ */
+export function setArrowForm(doc: WorkspaceDocument, ids: readonly number[], patch: ArrowFormPatch): WorkspaceDocument {
+  const want = new Set(ids);
+  let changed = false;
+  const arrows = doc.arrows.map((a) => {
+    if (!want.has(a.id)) return a;
+    const next: Arrow = { ...a };
+    const put = <K extends keyof Arrow>(k: K, v: Arrow[K] | undefined) => {
+      if (v === undefined) delete next[k];
+      else next[k] = v;
+    };
+    if (patch.kind !== undefined) put("kind", patch.kind ?? undefined);
+    if (patch.heads !== undefined) put("heads", patch.heads === 2 ? 2 : undefined);
+    if (patch.full !== undefined) put("full", patch.full ? true : undefined);
+    if (patch.dash !== undefined) put("dash", patch.dash ? true : undefined);
+    if (patch.weight !== undefined) put("weight", patch.weight === "regular" ? undefined : patch.weight);
+    if (patch.corners !== undefined) put("corners", patch.corners?.length ? patch.corners : undefined);
+    if (patch.color !== undefined) put("color", patch.color ?? undefined);
+    changed ||= JSON.stringify(next) !== JSON.stringify(a);
+    return next;
+  });
+  if (!changed) return doc;
+  // (straightened, or given corners: the words by it go with its line)
+  const bent = arrows.flatMap((next, i) => (JSON.stringify(next.corners) !== JSON.stringify(doc.arrows[i].corners) ? [[doc.arrows[i], next] as const] : []));
+  return withWordsAlong({ ...doc, arrows }, bent);
 }
 
 /** `doc` with the arrow setting `look` for itself, in place of what it set. */
@@ -1213,7 +1311,8 @@ export type MarkPlaces = {
   pictures?: { id: number; x: number; y: number; turn?: number }[];
   pdfs?: { id: number; x: number; y: number }[];
   texts?: { id: number; x: number; y: number }[];
-  arrows?: { id: number; x: number; y: number }[];
+  /** Arrows moved with the rest: where each one's middle now is - and, carried round or turned over with it, which way it points and its corners. */
+  arrows?: { id: number; x: number; y: number; angle?: number; corners?: readonly { along: number; across: number }[] }[];
   pluses?: { id: number; x: number; y: number }[];
   captions?: { id: number; x: number; y: number }[];
   /** Molecules in 3D moved with the rest: where each now stands. */
@@ -1311,7 +1410,10 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
   }
   const moved = {
     ...doc,
-    arrows: doc.arrows.map((a) => at(a, arrowAt)),
+    arrows: doc.arrows.map((a) => {
+      const p = arrowAt.get(a.id);
+      return p ? { ...a, x: p.x, y: p.y, ...(p.angle != null ? { angle: p.angle } : {}), ...(p.corners ? { corners: p.corners.map((c) => ({ ...c })) } : {}) } : a;
+    }),
     pluses: (doc.pluses ?? []).map((p) => at(p, plusAt)),
     ...(doc.captions ? { captions: doc.captions.map((c) => at(c, captionAt)) } : {}),
   };

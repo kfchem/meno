@@ -11,7 +11,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedBy } from "../utils/selection";
+import { cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -23,6 +23,7 @@ import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { selectionMoving } from "../utils/dragSelection";
+import { schemeAmong } from "../utils/copyPaste";
 import { TAU, follow } from "../../../theme/motion";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
@@ -332,6 +333,10 @@ export default function Selection2D() {
     const shapesAt = (angle: number) => shapes.map((s) => shapePlace(turnedShape(s, about, angle), { x: 0, y: 0 }));
     const inks = st.inks.filter((k) => st.selInks.has(k.id));
     const inksAt = (angle: number) => inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeTurned(s, about, angle)) }));
+    // (the arrows, "+" signs and words among it carried round too - the words' places, their letters upright - as a drag takes them)
+    const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+    const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
+    const scheme = among.arrows.length || among.pluses.length || words.length;
     const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
@@ -351,8 +356,9 @@ export default function Selection2D() {
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
-        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length
+        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length || scheme
           ? {
+              ...(scheme ? { arrows: turnedArrows(among.arrows, about, angle), pluses: turned(among.pluses, about, angle), captions: turned(words, about, angle) } : {}),
               ...(pics.length ? { pictures: picturesAt(angle) } : {}),
               ...(markAts ? { markAts } : {}),
               ...(sheets.length ? { texts: sheetsAt(angle) } : {}),

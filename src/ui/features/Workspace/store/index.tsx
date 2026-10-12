@@ -229,6 +229,7 @@ export function createEditorStore(
     inkMode: null,
     inkDraft: null,
     talkInk: [],
+    arrowDraft: null,
     presenting: null,
     guides: null,
     setGuides: (guides: EditorState["guides"]) => set({ guides }),
