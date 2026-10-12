@@ -1,3 +1,4 @@
+import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -5,7 +6,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, middleOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { schemeAmong } from "../../utils/copyPaste";
 import { relinked } from "../../utils/drawnLink";
@@ -531,10 +532,20 @@ export const createModelSlice = (
       set((prev: EditorState) => (prev.hoveredPush === id ? { ...prev, hoveredPush: null } : prev));
   },
 
+  addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const id = doc.getState().nextArrowId;
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    doc.edit("add arrow", (d) => ops.addArrow(d, (from.x + to.x) / 2, (from.y + to.y) / 2, angle, length));
+    return id;
+  },
+
+  setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => {
+    doc.edit("arrow", (d) => ops.setArrowForm(d, ids, patch), gesture ? { coalesceKey: `arrow-form:${gesture}` } : undefined);
+  },
+
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {
-    doc.edit("move arrow", (d) => ops.updateArrow(d, id, patch), {
-      coalesceKey: `arrow:${id}:${gesture ?? ""}`,
-    });
+    doc.edit("move arrow", (d) => ops.updateArrow(d, id, patch), gesture ? gestureStep(`arrow:${id}:${gesture}`) : { coalesceKey: `arrow:${id}:` });
   },
 
   addPlus: (x: number, y: number) => {
@@ -548,7 +559,7 @@ export const createModelSlice = (
   },
 
   movePlus: (id: number, x: number, y: number, gesture?: string) => {
-    doc.edit("move plus", (d) => ops.movePlus(d, id, x, y), { coalesceKey: `plus:${id}:${gesture ?? ""}` });
+    doc.edit("move plus", (d) => ops.movePlus(d, id, x, y), gesture ? gestureStep(`plus:${id}:${gesture}`) : { coalesceKey: `plus:${id}:` });
   },
 
   removePlus: (id: number) => {
