@@ -26,7 +26,7 @@
     {"plugin": "multiwfn", "for": "Shows non-covalent interactions from a wavefunction or a geometry, with Multiwfn installed separately"},
     {"plugin": "molscribe", "for": "Reads structures from pictures with a trained model: about 1.5 GB to download"},
     {"plugin": "molnextr", "for": "Reads structures from pictures with a trained model: about 1.5 GB to download"},
-    {"plugin": "wfx", "for": "Opens wavefunction files (WFX): the molecule, its energy and its orbitals"}
+    {"plugin": "wfx", "for": "Opens wavefunction files (WFX): the molecule, its energy and its orbitals, drawn as surfaces"}
   ],
   "files": [
     {"id": "adf", "name": "ADF output", "extensions": [".out", ".log"], "marks": [{"text": "Amsterdam Density Functional", "anyCase": true}], "suggest": ["cclib"]},

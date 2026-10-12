@@ -1,8 +1,8 @@
 {
   "id": "wfx",
   "name": "WFX reader",
-  "version": "0.1.0",
-  "description": "Reads AIM extended wavefunction files (WFX) - the molecule, its energy, charge and spin, and its orbitals' energies and occupations - as the format's specification has them.",
+  "version": "0.2.0",
+  "description": "Reads AIM extended wavefunction files (WFX) - the molecule, its energy, charge and spin, and its orbitals' energies and occupations, each drawn as a surface - as the format's specification has them.",
   "licence": "Apache-2.0",
   "homepage": "https://aim.tkgristmill.com/wfxformat.html",
   "environment": "uv",
