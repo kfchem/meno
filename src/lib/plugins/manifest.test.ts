@@ -30,7 +30,7 @@ describe("a plugin's manifest", () => {
     const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
