@@ -3,6 +3,7 @@ import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
+import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { dragSelection } from "../utils/dragSelection";
@@ -321,7 +322,8 @@ export default function BondsPick2D() {
           };
           const hold = window.setTimeout(() => {
             letGo();
-            if (!clickState.current.armed || clickState.current.downBondId !== b.id) return;
+            // (nor where the view has moved under the press: viewGoal)
+            if (!clickState.current.armed || clickState.current.downBondId !== b.id || pressMovedUnder(camera)) return;
             // (no click of the bond's, now)
             clickState.current.armed = false;
             clickState.current.downBondId = null;
@@ -359,7 +361,7 @@ export default function BondsPick2D() {
           const dx = (ev.clientX ?? 0) - down.x;
           const dy = (ev.clientY ?? 0) - down.y;
           return Math.hypot(dx, dy) > 6; // >6px is considered a drag
-        })();
+        })() || pressMovedUnder(camera); // (or the view moved under it: no click)
         if (moveDrag.active || moved) {
           // Drop click aggregation
           if (st.timer != null) {

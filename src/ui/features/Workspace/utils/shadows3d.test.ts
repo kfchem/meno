@@ -49,4 +49,13 @@ describe("the key light's shadows", () => {
     group.visible = false;
     expect(castersNow([caster]).spheres).toEqual([]);
   });
+
+  it("count the atoms drawn, not those a look leaves out or its ribbons stand for", () => {
+    // (a protein of 22 000 atoms in ribbons, its ligands' 384 drawn as balls)
+    const drawn = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 8), new THREE.MeshStandardMaterial(), 22_000);
+    const caster = casterOf(drawn, "balls");
+    expect(castersNow([caster]).atoms).toBe(22_000);
+    drawn.userData.shown = 384;
+    expect(castersNow([caster]).atoms).toBe(384);
+  });
 });

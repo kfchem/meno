@@ -512,11 +512,14 @@ function Move-MenoPointerAlong {
 function Invoke-MenoSwipe {
     param(
         [Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y,
-        [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10
+        [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10, [switch] $Held
     )
     $p = ConvertTo-Screen $X $Y
-    [NativeGui]::MoveTo($p.X, $p.Y)
-    Start-Sleep -Milliseconds 60
+    # (-Held: where the pointer is, a button held down - in a drag's -AtStep)
+    if (-not $Held) {
+        [NativeGui]::MoveTo($p.X, $p.Y)
+        Start-Sleep -Milliseconds 60
+    }
     [NativeGui]::Swipe($p.X, $p.Y, $DX, $DY, $Steps)
     Start-Sleep -Milliseconds 200
 }

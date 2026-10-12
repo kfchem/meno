@@ -97,3 +97,31 @@ export function zoomTaken(left: number, dt: number, rate: number): number {
   const share = 1 - Math.exp(-rate * Math.min(Math.max(dt, 0), 1 / 30));
   return Math.abs(left) * (1 - share) < 1e-4 ? left : left * share;
 }
+
+/** What a wheel needs to know of a box to tell whether it scrolls: its overflow and how far it is scrolled. */
+export type ScrollBox = {
+  overflowX: string;
+  overflowY: string;
+  scrollLeft: number;
+  scrollTop: number;
+  scrollWidth: number;
+  scrollHeight: number;
+  clientWidth: number;
+  clientHeight: number;
+};
+
+const scrolls = (overflow: string) => overflow === "auto" || overflow === "scroll";
+
+/**
+ * Whether a box - a list on the page, its rows longer than it is tall -
+ * scrolls further the way a wheel goes, and so takes the wheel for itself,
+ * rather than the view. Scrolled to its end that way, it gives it up.
+ */
+export function scrollsAlong(b: ScrollBox, dx: number, dy: number): boolean {
+  const along = (d: number, at: number, size: number, seen: number) =>
+    d < 0 ? at > 0 : d > 0 ? at + seen < size - 0.5 : false;
+  return (
+    (scrolls(b.overflowY) && b.scrollHeight > b.clientHeight && along(dy, b.scrollTop, b.scrollHeight, b.clientHeight)) ||
+    (scrolls(b.overflowX) && b.scrollWidth > b.clientWidth && along(dx, b.scrollLeft, b.scrollWidth, b.clientWidth))
+  );
+}
