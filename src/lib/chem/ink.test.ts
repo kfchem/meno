@@ -20,6 +20,10 @@ describe("a stroke written by hand", () => {
     expect(top(5)).toBeGreaterThan(top(0) * 2);
     // (a dot: round)
     expect(strokeOutline({ points: [3, 3, 0.5] }, 2)).toHaveLength(12);
+    // (its ends round outward, beyond its first and last points - never back over it, where a marker would be seen twice)
+    const even = strokeOutline(line, 2, false);
+    expect(Math.max(...even.map((q) => q.x))).toBeCloseTo(11);
+    expect(Math.min(...even.map((q) => q.x))).toBeCloseTo(-1);
   });
 
   it("is made of triangles for the canvas, a strip and a fan at each end", () => {

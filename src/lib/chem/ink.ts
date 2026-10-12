@@ -54,11 +54,11 @@ function thickness(s: InkStroke, pts: readonly Vec2[], width: number, taper: boo
   return along.map((d) => (reach > 0 ? 0.3 + 0.7 * Math.min(1, d / reach, (total - d) / reach) : 1));
 }
 
-/** Points round a half circle about `c`, from the direction `a` turning to its opposite, `r` out. */
+/** Points round a half circle about `c`, from the direction `a` turning clockwise to its opposite, `r` out: from a stroke's left side round its end to its right, outward. */
 function cap(c: Vec2, a: number, r: number, out: Vec2[]): void {
   const steps = 6;
   for (let k = 1; k < steps; k++) {
-    const t = a + (Math.PI * k) / steps;
+    const t = a - (Math.PI * k) / steps;
     out.push({ x: c.x + r * Math.cos(t), y: c.y + r * Math.sin(t) });
   }
 }
