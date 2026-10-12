@@ -337,8 +337,9 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
         path.push(dist(m.a, end) < near ? m.b : m.a);
       }
       path.reverse();
-      const total = path.slice(1).reduce((s, p, i) => s + dist(path[i], p), 0);
-      if (total < 1.0 * bond || head.length > 0.6 * total) continue;
+      // (as long as a bond or so at least, its head and its point with it; its head the lesser part)
+      const total = path.slice(1).reduce((s, p, i) => s + dist(path[i], p), 0) + dist(e, head.tip);
+      if (total < 0.8 * bond || head.length > 0.6 * total) continue;
       // (a corner where it turns, not where a line merely goes on)
       const pts = path.filter((p, i) => i === 0 || i === path.length - 1 || Math.abs(cross(unit(path[i - 1], p), unit(p, path[i + 1]))) > Math.sin((4 * Math.PI) / 180));
       // its point is the head's; a head at its tail too, where it has one
@@ -680,8 +681,11 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
  */
 export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = []): SchemeRead {
   const shapes = shapesOf(drawn);
+  // (how long its bonds are drawn: as most of its lines are - unless, its letters telling, those are arrows, there being no structure)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
-  const bond = figureBond(shapes, drawn.letters) || (sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 14.4);
+  const byLetters = sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 0;
+  const byLines = figureBond(shapes, drawn.letters);
+  const bond = byLines && !(byLetters && byLines > 2 * byLetters) ? byLines : byLetters || byLines || 14.4;
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;

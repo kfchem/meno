@@ -154,6 +154,18 @@ describe("a reaction scheme's arrows", () => {
     expect(thin.arrows[0].form).toEqual({ weight: "thin" });
   });
 
+  it("reads arrows drawn alone, with no structure by them, each from its tail to its point", () => {
+    // (three as long, one of them thick and coloured: no bond to measure them by but themselves)
+    const s = readScheme({
+      paths: [stroke([[0, 0], [44, 0]]), head([50, 0], [1, 0]), stroke([[0, 30], [44, 30]]), head([50, 30], [1, 0]), stroke([[0, 60], [43, 60]], 1.4, { stroke: "#c44848ff" }), head([50, 60], [1, 0], 0, "#c44848ff")],
+      letters: [],
+      pictures: [],
+    });
+    expect(s.arrows).toHaveLength(3);
+    expect(s.figure.atoms).toEqual([]);
+    expect(s.arrows.find((a) => a.color)).toMatchObject({ form: { weight: "thick" }, color: "#c44848" });
+  });
+
   it("reads no arrow in a structure alone: a wedge is no head", () => {
     // (a chain with a wedge at its end, along it)
     const s = read({
