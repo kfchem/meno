@@ -12,7 +12,7 @@ import type { EditorState, Molecule3D, Turn3D } from "../store/types";
 import { atomAt, bondAt, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { movingFor, placesOf, valueOf } from "../utils/edit3d";
 import { kindOf, type MeasureKind } from "../utils/measure3d";
-import { setViewGoal } from "./viewGoal";
+import { movedUnderPointer, pressMovedUnder, setViewGoal } from "./viewGoal";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
@@ -380,6 +380,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         const frame = st.frames3d[label.id] ?? 0;
         if (m && x && movingFor(m, x.id, frame)) {
           e.stopPropagation();
+          spins.current.delete(m.id);
           try {
             dom.setPointerCapture(e.pointerId);
           } catch {}
@@ -396,6 +397,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const m = st.molecules3d.find((x) => x.id === h.id);
       if (!m) return;
       e.stopPropagation();
+      // (turning on after it was let go, it is caught: what the press is on stays under the pointer)
+      spins.current.delete(m.id);
       try {
         dom.setPointerCapture(e.pointerId);
       } catch {}
@@ -411,7 +414,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         ? null
         : window.setTimeout(() => {
             const g = gesture.current;
-            if (g?.kind !== "press" || g.moved) return;
+            // (nor where the view has moved under the press: viewGoal)
+            if (g?.kind !== "press" || g.moved || pressMovedUnder(camera)) return;
             g.held = true;
             g.timer = null;
             setHold(null);
@@ -434,6 +438,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         scrub.current = null;
         setScrubbing(null);
         swallowClick();
+        // (the moves went to the value set: what is under the pointer is found once it is let go)
+        movedUnderPointer(camera);
+        invalidate();
         return;
       }
       const g = gesture.current;
@@ -450,7 +457,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       if (g.kind === "press") {
         if (g.timer != null) window.clearTimeout(g.timer);
         // a click: the molecule taken into the selection or out, or an atom or a bond chosen
-        if (!g.held) {
+        // (not where the view has moved under the press: what it was on is no longer under it)
+        if (!g.held && !pressMovedUnder(camera)) {
           if (g.add) st.toggleMolecule3dSel(g.id);
           else if (g.atom != null) st.chooseAtom3d(g.id, g.atom);
           else if (g.bond != null) st.chooseBond3d(g.id, g.bond);
@@ -466,6 +474,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       }
       swallowClick();
       st.setHovered3d(hit(e));
+      // (the moves went to the gesture: which atom is under the pointer is found once it is let go)
+      movedUnderPointer(camera);
       invalidate();
     };
 
@@ -560,6 +570,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       s.speed *= Math.pow(1 - style.turnDamping, dt * 60);
       if (s.speed < STILL) spins.current.delete(id);
     }
+    // (turning on under a pointer resting on it: the atom under it changes)
+    movedUnderPointer(camera);
     invalidate();
   });
 

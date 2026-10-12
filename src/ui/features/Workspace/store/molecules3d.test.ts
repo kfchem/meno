@@ -191,6 +191,30 @@ describe("molecules in 3D, chosen and selected", () => {
     expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2]);
   });
 
+  it("come back from an undo of their deletion turned as they were, showing the frame they showed", () => {
+    const { doc, state } = editor();
+    const half: [number, number, number, number] = [0, 1, 0, 0];
+    state().setTurn3d(2, half);
+    state().setFrame3d(2, 0);
+    state().selectMolecules3d([2]);
+    state().deleteSelection();
+    expect(state().turns3d).toEqual({});
+    doc.undo();
+    expect(state().turns3d).toEqual({ 2: half });
+    expect(state().frames3d).toEqual({ 2: 0 });
+    doc.redo();
+    expect(state().turns3d).toEqual({});
+    doc.undo();
+    expect(state().turns3d).toEqual({ 2: half });
+    // (one new where one was undone, numbered as it was, is seen as its file has it)
+    doc.edit("add", (d) => addMolecule3d(d, { ...water, at: { x: 12, y: 0 } }));
+    state().setTurn3d(3, half);
+    doc.undo();
+    doc.edit("add", (d) => addMolecule3d(d, { ...water, at: { x: 12, y: 0 } }));
+    expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2, 3]);
+    expect(state().turns3d).toEqual({ 2: half });
+  });
+
   it("are forgotten by the view when the document no longer has them", () => {
     const { doc, state } = editor();
     state().selectMolecules3d([1, 2]);

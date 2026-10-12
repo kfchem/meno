@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The Blender interface's render script: a picture or a film of the scene
+# The Blender plugin's render script: a picture or a film of the scene
 # Meno wrote, rendered by Blender.
 #
 # Copyright (C) 2026 Meno contributors

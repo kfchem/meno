@@ -1,12 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
-import { isPinch, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
+import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, viewDriven, viewGoalOf } from "./viewGoal";
+import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
+import { movedUnderPress, stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
+import { MOV_PX } from "../constants";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 
 /** WebKit's pinch on a trackpad, which it gives as gestures, not wheels. */
@@ -52,6 +55,8 @@ export function PanZoom2D() {
   const { extend } = useEditor();
   const fitNonce = useEditor((s) => s.fitNonce);
   const store = useEditorStore();
+  // (the layer what is on the page in HTML is laid in: coverLayer)
+  const layer = useContext(PageHtmlLayer);
   const extendRef = useRef(extend.active);
   // Keep pan-hold state in a ref to avoid stale closures during event sequence
   const panHoldRef = useRef(false);
@@ -80,15 +85,24 @@ export function PanZoom2D() {
   const zoomGlide = useRef(0);
   const pinchSteps = useRef<Move[]>([]);
   const anchor = useRef({ cx: 0, cy: 0 });
+  // where the pointer rests over the canvas, and whether something has moved
+  // under it; and the view as last drawn
+  const pointer = useRef(stillPointer());
+  const seenView = useRef<View | null>(null);
+  // the page point a press held now began on, to tell whether the view has moved under it
+  const pressPage = useRef<{ x: number; y: number } | null>(null);
   // (the camera's zoom: CSS pixels per world unit on the page, whether it is
   // orthographic - the canvas's - or in perspective, as PageCamera keeps it)
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       // (a talk given has the view: presenting/Presenter)
       if (viewDriven(camera)) return;
-      // (the user takes the view: a fit on its way gives way, and a pinch's glide)
+      // (the user takes the view: a fit on its way gives way, and a pinch's
+      // glide, and a drag's - whatever the press is on: an atom or a
+      // molecule pressed stays under the pointer)
       letViewGoalGo(camera);
       zoomGlide.current = 0;
+      vel.current.set(0, 0);
       // disable pan during bond extension or on a double-click down
       if (extendRef.current) return;
       const btn = (e as any).button;
@@ -178,10 +192,9 @@ export function PanZoom2D() {
           vel.current.set(sum.x / took, sum.y / took);
         }
         recent.current = [];
-        // The view may glide on after the release: what was under the
-        // pointer need not be any more. The next move finds what is.
-        store.getState().clearAtomHover();
-        store.getState().clearBondHover();
+        // (what the drag brought under the pointer is found once it is let go)
+        pointer.current.moved();
+        invalidate();
       }
       dragging.current = false;
       maybe.current.active = false;
@@ -290,19 +303,64 @@ export function PanZoom2D() {
       invalidate();
     };
 
+    // (heard first, so the pointer is known to rest before a frame finds again)
+    const pageUnder = (clientX: number, clientY: number) => {
+      const r = dom.getBoundingClientRect();
+      return pageAt(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1), camera);
+    };
+    // (a press the view moved under is no click: the click it ends in goes nowhere)
+    const swallowClick = () => {
+      const swallow = (ev: MouseEvent) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      window.addEventListener("click", swallow, { capture: true, once: true });
+      window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+    };
+    const heard = (e: PointerEvent) => {
+      if (!e.isTrusted) return;
+      if (pointer.current.heard(e)) invalidate();
+      if (e.type === "pointerdown") {
+        pressPage.current = pageUnder(e.clientX, e.clientY);
+        setPressMovedUnder(camera, false);
+      } else if (e.type === "pointerup" || e.type === "pointercancel") {
+        pressPage.current = null;
+        if (e.type === "pointerup" && pressMovedUnder(camera)) swallowClick();
+      }
+    };
+    const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
+    for (const name of HEARD) dom.addEventListener(name, heard);
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
-    // (the wheel and a pinch over what is laid on the canvas - a molecule's
-    // frames chip, its note - zoom as over the canvas: they are heard on
-    // the box the canvas's events are, where drei's Html lays those)
+    // (the wheel and a pinch over what is laid on the canvas zoom as over
+    // the canvas: they are heard on the box the canvas's events are, where
+    // drei's Html lays what has no layer of its own)
     const box = events.connected instanceof HTMLElement ? events.connected : dom;
     box.addEventListener("wheel", onWheel, { passive: false });
     box.addEventListener("gesturestart", onGestureStart);
     box.addEventListener("gesturechange", onGestureChange);
     box.addEventListener("gestureend", onGestureEnd);
+    // ...and over what is laid on the page in its own layer (coverLayer): a
+    // molecule's frames chip, its list, a step's card - save where a list
+    // scrolls on that way, which takes the wheel for itself
+    const onLayerWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && layer) {
+        for (let el = e.target instanceof Element ? e.target : null; el && el !== layer; el = el.parentElement) {
+          const css = getComputedStyle(el);
+          const b = { overflowX: css.overflowX, overflowY: css.overflowY, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop, scrollWidth: el.scrollWidth, scrollHeight: el.scrollHeight, clientWidth: el.clientWidth, clientHeight: el.clientHeight };
+          if (scrollsAlong(b, e.deltaX, e.deltaY)) return;
+        }
+      }
+      onWheel(e);
+    };
+    layer?.addEventListener("wheel", onLayerWheel, { passive: false });
+    layer?.addEventListener("gesturestart", onGestureStart);
+    layer?.addEventListener("gesturechange", onGestureChange);
+    layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
+      for (const name of HEARD) dom.removeEventListener(name, heard);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointermove", onMove);
       dom.removeEventListener("pointerup", onUp);
@@ -310,8 +368,12 @@ export function PanZoom2D() {
       box.removeEventListener("gesturestart", onGestureStart);
       box.removeEventListener("gesturechange", onGestureChange);
       box.removeEventListener("gestureend", onGestureEnd);
+      layer?.removeEventListener("wheel", onLayerWheel);
+      layer?.removeEventListener("gesturestart", onGestureStart);
+      layer?.removeEventListener("gesturechange", onGestureChange);
+      layer?.removeEventListener("gestureend", onGestureEnd);
     };
-  }, [camera, gl, invalidate, dom, extend.active, store, events.connected]);
+  }, [camera, gl, invalidate, dom, extend.active, store, events.connected, layer]);
 
   // When camera is updated externally (e.g., FitToContent2D), mirror it internally to avoid overrides
   useEffect(() => {
@@ -345,7 +407,7 @@ export function PanZoom2D() {
 
   // (a talk given: the view is its own, taken up again from where it left it)
   const drivenBefore = useRef(false);
-  useFrame((_, dt) => {
+  useFrame(({ size }, dt) => {
     const cam = camera as any;
     if (viewDriven(camera)) {
       drivenBefore.current = true;
@@ -358,6 +420,23 @@ export function PanZoom2D() {
       zoomLeft.current = 0;
       zoomGlide.current = 0;
     }
+    // The view moved last frame under a pointer held still on it, or
+    // something did on it (viewGoal): what is under the pointer now is lit,
+    // and taken hold of by a press - or what a press drags follows it - as a
+    // move of no distance finds it, drawn as it was moved to, so the hit
+    // areas are too. (A drag of the view keeps the page under the pointer:
+    // nothing to find till it is let go.)
+    if (tookMovedUnderPointer(camera)) pointer.current.moved();
+    const at = dragging.current ? null : pointer.current.findAgain();
+    // (and a press held still that the view has moved under is neither a
+    // click nor a long press: said before the press's handlers hear the move)
+    const was = pressPage.current;
+    if (at && at.buttons !== 0 && was && !pressMovedUnder(camera)) {
+      const r = dom.getBoundingClientRect();
+      const now = pageAt(((at.clientX - r.left) / r.width) * 2 - 1, -(((at.clientY - r.top) / r.height) * 2 - 1), camera);
+      if (movedUnderPress(was, now, cam.zoom || 1, MOV_PX)) setPressMovedUnder(camera, true);
+    }
+    if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, button: -1, pointerType: "mouse", bubbles: true, cancelable: true }));
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one
     const goal = viewGoalOf(camera);
@@ -424,6 +503,13 @@ export function PanZoom2D() {
       pos.current.set(cam.position.x, cam.position.y);
       if (Math.abs(zoomGlide.current) < 0.02 || next !== old * Math.exp(take)) zoomGlide.current = 0;
     }
+
+    const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1, width: size.width, height: size.height };
+    if (viewMoved(seenView.current, view)) {
+      pointer.current.moved();
+      invalidate();
+    }
+    seenView.current = view;
 
     // On-demand rendering: request the next frame while the camera is still
     // moving, otherwise dragging and inertia would stop after one frame.

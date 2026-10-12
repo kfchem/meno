@@ -565,8 +565,31 @@ export function regularize(mol: Molecule, sys: RingSystem, pos: Map<number, Poin
   const crowded = sys.atoms.some((a, i) =>
     sys.atoms.slice(i + 1).some((b) => !mol.neighbours[a].includes(b) && dist(pos.get(a)!, pos.get(b)!) < 0.6),
   );
-  if (!crowded && !shaped.some((r) => misfit(r) > 0.002)) return;
+  if (!crowded && !narrowGap(mol, sys, pos) && !shaped.some((r) => misfit(r) > 0.002)) return;
   easeRings(mol, sys, pos, shaped, misfit);
+}
+
+/**
+ * How many pairs of a ring system's atoms, each with a bond out of the
+ * system, a bond apart from an atom they share, are closer than what hangs
+ * from them needs: under 0.8 of a bond, where three five-membered rings
+ * round one atom leave a gap of 36 degrees between two of them
+ * (bilobalide's C4 and C9, each with its groups out of that gap). Easing
+ * the rings (`easeRings`) holds them 0.85 apart.
+ */
+export function narrowGap(mol: Molecule, sys: RingSystem, pos: Map<number, Point>): number {
+  const inSys = new Set(sys.atoms);
+  const out = (a: number) => mol.neighbours[a].some((b) => !inSys.has(b));
+  let gaps = 0;
+  for (const c of sys.atoms) {
+    const near = mol.neighbours[c].filter((a) => inSys.has(a) && out(a));
+    for (let i = 0; i < near.length; i++)
+      for (let j = i + 1; j < near.length; j++) {
+        const [a, b] = [near[i], near[j]];
+        if (!mol.neighbours[a].includes(b) && dist(pos.get(a)!, pos.get(b)!) < 0.8) gaps++;
+      }
+  }
+  return gaps;
 }
 
 /**

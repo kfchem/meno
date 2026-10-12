@@ -48,6 +48,8 @@ export type ConsentRequest = {
   detail: string;
   /** Where from: "Python itself: github.com". */
   sources: string[];
+  /** Asked even where the purpose is allowed already: what it fetches is more than the user was told of when they allowed it. */
+  again?: boolean;
 };
 
 type NetworkState = {
@@ -213,21 +215,23 @@ const waiting = new Map<string, Promise<boolean>>();
 export function askToConnect(request: ConsentRequest): Promise<boolean> {
   const s = useNetwork.getState();
   if (s.offline) return Promise.resolve(false);
-  if (s.granted.includes(request.purpose)) return Promise.resolve(true);
-  const same = waiting.get(request.purpose);
+  if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
+  // (one asked again - what it fetches having grown - does not share the answer of one that is not)
+  const key = request.again ? `${request.purpose} again` : request.purpose;
+  const same = waiting.get(key);
   if (same) return same;
   const asked = questions.then(() => askNow(request));
-  waiting.set(request.purpose, asked);
-  void asked.finally(() => waiting.delete(request.purpose));
+  waiting.set(key, asked);
+  void asked.finally(() => waiting.delete(key));
   questions = asked.catch(() => undefined);
   return asked;
 }
 
-/** A question, its turn come: asked - unless meanwhile Meno went offline, or the purpose was allowed. */
+/** A question, its turn come: asked - unless meanwhile Meno went offline, or the purpose was allowed (and it is not to be asked again). */
 function askNow(request: ConsentRequest): Promise<boolean> {
   const s = useNetwork.getState();
   if (s.offline) return Promise.resolve(false);
-  if (s.granted.includes(request.purpose)) return Promise.resolve(true);
+  if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
   return new Promise((resolve) => {
     const answer = (yes: boolean) => {
       useNetwork.setState({ asking: null });

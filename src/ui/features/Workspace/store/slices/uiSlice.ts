@@ -23,10 +23,11 @@ export function createUiSlice(
     setCover: (px: number) => {
       if (Math.abs(get().cover - px) > 0.25) set({ cover: px });
     },
-    markSavedAs: (path: string) => {
+    markSavedAs: (path: string, written?: WorkspaceDocument) => {
       set((prev: EditorState) => ({ ...prev, savedPath: path }));
-      doc.markSaved();
+      doc.markSaved(written);
     },
+    writing: () => doc.getState(),
     markOpenedOver: (name: string) =>
       set((prev: EditorState) => ({ ...prev, savedPath: null, openedName: name })),
 

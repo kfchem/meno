@@ -92,6 +92,15 @@ describe("slides on the page", () => {
     expect([...state().sel.atoms].every((id) => Math.abs(state().model.atoms.find((x) => x.id === id)!.x) < 2)).toBe(true);
   });
 
+  it("select the shapes on them too, by their middles", () => {
+    const { state } = editor();
+    const slide = state().addSlide({ x: 0, y: 0, w: 64, h: 36 })!;
+    const inside = state().addShape({ kind: "rounded", x0: -5, y0: -3, x1: 5, y1: 3 })!;
+    state().addShape({ kind: "rect", x0: 100, y0: 0, x1: 110, y1: 5 });
+    state().selectOnSlide(slide);
+    expect([...state().selShapes]).toEqual([inside]);
+  });
+
   it("are copied and pasted, last in the talk, selected - in Meno's own record alone", () => {
     const { state } = editor();
     state().addSlide({ x: 0, y: 0, ...WIDE });

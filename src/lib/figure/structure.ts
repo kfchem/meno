@@ -41,17 +41,18 @@ function drawnHydrogens(label: string): number | null {
 
 /**
  * The structure a figure reads as: the page's points made Meno's units,
- * a bond as long as Meno draws one, its middle at naught; a ring drawn
+ * a bond as long as Meno draws one, its middle at naught (or `about`); a ring drawn
  * with its circle given its double bonds. An atom whose label writes more
  * or fewer hydrogens than its bonds leave it is unsure, as is a label
  * nothing reads.
  */
-export function structureOf(read: FigureRead, reads: LabelReader): { atoms: StructureAtom[]; bonds: StructureBond[] } {
+export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: number; y: number }): { atoms: StructureAtom[]; bonds: StructureBond[] } {
   const k = read.bond ? NOMINAL_BOND_LENGTH / read.bond : 1;
   const xs = read.atoms.map((a) => a.x);
   const ys = read.atoms.map((a) => a.y);
-  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  // (its middle at naught - or `about`, the middle of the scheme it is in)
+  const cx = about?.x ?? (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = about?.y ?? (Math.min(...ys) + Math.max(...ys)) / 2;
   // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
   const labels = read.atoms.map((a) => {
     if (a.el) return { el: a.el, ...(a.charge ? { charge: a.charge } : {}), read: true };

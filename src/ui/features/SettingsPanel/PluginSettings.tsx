@@ -66,13 +66,13 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         } else run(removePlugin);
       });
   };
-  // (its files besides its packages, as they come)
+  // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
   const share = useDownloads((s) => s[p.id]);
   const status =
     state === "added"
       ? "Added"
       : state === "adding"
-        ? share != null
+        ? share != null && share < 1
           ? `Adding… ${Math.floor(share * 100)}%`
           : "Adding…"
         : state === "removing"
