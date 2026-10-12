@@ -183,6 +183,10 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   given (a bond out of it drawn nearer the other of the two ways the
   solid leaves free) is drawn again, without its view from the other
   side, then flat - three tetrodotoxin and ibogaine isomers were so.
+- **Measure a drawing as it is drawn.** Choosing between a solid and a
+  flat drawing on a measure that left out the H's its wedges stand on
+  took aconitine's crowded solid over its flat drawing; the sheet, which
+  draws them, scored it 48 against 24.
 - **A better solid moves the view.** The solid found with real angles and
   flat double bonds (2026-10-12) is nearer the molecule, and changed which
   textbook view of a cage scored best, and which of flat, cage alone and
@@ -339,11 +343,13 @@ and the held-out list takes new ones. What it showed, by kind:
   ring-junction carbons the other way round, from every view tried; it
   stands a quarter turn from the usual drawing; and the OH in the middle
   of the cage reads O|H.
-- **The solids' rules still to build** (the maintainer, 2026-10-12): ring
-  fusions drawn as the chairs they are, side by side, trans or cis as the
-  configuration says (decalin style); a group axial on a chair upright
-  wherever it is (quinine's OH); chair or boat everywhere as the solid
-  has it (paeoniflorin: which ring is to be a boat is asked in #269).
+- **The solids' rules still open** (the maintainer, 2026-10-12): quinine's
+  OH on C9, which is no ring atom, drawn straight down (asked in #269);
+  which of paeoniflorin's six-membered rings is to be the boat (asked in
+  #269). Fused chairs are drawn decalin style inside a solid, but no
+  molecule on either list has a solid with such a pair: strychnine and
+  artemisinin are drawn flat as decided, sparteine and aconitine read
+  better flat.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

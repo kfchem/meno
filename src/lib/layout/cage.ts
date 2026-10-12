@@ -854,6 +854,12 @@ function textbook(
   ];
   const at = (a: number) => X[index.get(a)!];
   type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
+  // (the atoms of every six-membered ring the solid has as a chair or a
+  // boat: a bond axial to one is drawn upright, the ring drawn by the
+  // template or not)
+  const axialRings = new Set(
+    cycles.filter((r) => ["chair", "boat"].includes(ringShape(mol, r, at).kind)).flatMap((r) => r),
+  );
   // the best seen with its front zigzag set off each way: one the other
   // seen from its other side
   const best = new Map<number, Found[]>();
@@ -904,23 +910,28 @@ function textbook(
             // the lower zigzag in front
             if (dotV(subV(at(order[3]), at(order[0])), view) <= 0) continue;
             const cost0 = 2 * fit.residual;
-            const pts = drawOn(mol, atoms, X, index, bonds, order, place, fit, pageUp);
             const depth = X.map((p) => dotV(p, view));
-            const hints = exits(mol, atoms, X, index, bonds, pts, pageUp, fit, order);
-            // the rest of the cage above the ring, where it is looked for,
-            // and room for what hangs from it - from the front of the ring
-            // rather than the back, where it would pass behind the cage
-            const behind = [order[5], order[0], order[1]].reduce(
-              (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
-              0,
-            );
-            const cost =
-              viewCost(pts, bonds, 0.45, 0.2) +
-              cost0 +
-              (restUp ? 0 : 0.5) +
-              exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
-              0.25 * behind;
-            best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
+            // (with the rings fused to it on a bond drawn by the template
+            // too, and without: a ring fused flat onto the cage may read as
+            // given only from the one)
+            for (const fused of [true, false]) {
+              const { pts, drawn, uprights } = drawOn(mol, atoms, X, index, bonds, order, place, fit, pageUp, fused);
+              const hints = exits(mol, atoms, X, index, bonds, pts, pageUp, fit, drawn, axialRings, uprights);
+              // the rest of the cage above the ring, where it is looked for,
+              // and room for what hangs from it - from the front of the ring
+              // rather than the back, where it would pass behind the cage
+              const behind = [order[5], order[0], order[1]].reduce(
+                (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
+                0,
+              );
+              const cost =
+                viewCost(pts, bonds, 0.45, 0.2) +
+                cost0 +
+                (restUp ? 0 : 0.5) +
+                exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
+                0.25 * behind;
+              best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
+            }
           }
         }
       }
@@ -1057,6 +1068,52 @@ function twinChairs(
 }
 
 /**
+ * A six-membered ring drawn by the template (`ringTemplate`) on a bond
+ * already drawn, from `P` to `Q`, as a chair or a boat: its other four
+ * atoms, in order on from `Q`, where the template - turned, mirrored and
+ * started every way - puts them nearest `targets` (where the solid puts
+ * them), clear of `avoid`. Null where none comes within 0.6 of a bond.
+ */
+export function templateOnBond(
+  kind: "chair" | "boat",
+  P: Point,
+  Q: Point,
+  targets: readonly Point[],
+  avoid: readonly Point[],
+): { at: Point[]; up: Point } | null {
+  let best: { at: Point[]; up: Point; miss: number } | null = null;
+  for (const [top, bottom] of [[1, -1], [-1, 1], [1, 1], [-1, -1]]) {
+    if ((kind === "chair") !== (top === -bottom)) continue;
+    for (const hand of [1, -1])
+      for (const flip of [1, -1]) {
+        const tpl = ringTemplate(top, bottom, hand).map((t) => ({ x: t.x, y: flip * t.y }));
+        for (let start = 0; start < 6; start++)
+          for (const dir of [1, -1]) {
+            const t = (k: number) => tpl[(start + dir * k + 12) % 6];
+            // (the turn and scale that take the template's two onto the bond)
+            const a0 = t(0);
+            const a1 = t(1);
+            const u = { x: a1.x - a0.x, y: a1.y - a0.y };
+            const v = { x: Q.x - P.x, y: Q.y - P.y };
+            const uu = u.x * u.x + u.y * u.y || 1;
+            const zr = (v.x * u.x + v.y * u.y) / uu;
+            const zi = (v.y * u.x - v.x * u.y) / uu;
+            const map = (w: Point) => ({ x: P.x + zr * (w.x - a0.x) - zi * (w.y - a0.y), y: P.y + zi * (w.x - a0.x) + zr * (w.y - a0.y) });
+            const at = [2, 3, 4, 5].map((k) => map(t(k)));
+            let miss = at.reduce((sum, p, j) => sum + (p.x - targets[j].x) ** 2 + (p.y - targets[j].y) ** 2, 0);
+            // (never onto what is drawn already)
+            for (const p of at) for (const f of avoid) if (Math.hypot(p.x - f.x, p.y - f.y) < 0.5) miss += 10;
+            // (the template's upright, its axial bonds' way, as laid)
+            const l = Math.hypot(zr, zi) || 1;
+            const up = { x: (-zi * flip) / l, y: (zr * flip) / l };
+            if (!best || miss < best.miss) best = { at, up, miss };
+          }
+      }
+  }
+  return best && Math.sqrt(best.miss / 4) <= 0.6 ? { at: best.at, up: best.up } : null;
+}
+
+/**
  * Where the bonds out of a cage drawn by the template go: a double bond
  * straight out, between the atom's two bonds in the cage. From an atom of
  * the chair or boat itself (`ring`), a bond parallel in the solid to one
@@ -1076,6 +1133,8 @@ function exits(
   pageUp: Vec3,
   fit: { x: number[]; y: number[] },
   ring: readonly number[],
+  axialRings: ReadonlySet<number> = new Set(),
+  uprights: ReadonlyMap<string, Point> = new Map(),
 ): Map<number, Map<number, Point>> {
   const hints = new Map<number, Map<number, Point>>();
   // the side a direction in the solid comes out on, seen the same way
@@ -1103,6 +1162,8 @@ function exits(
       const bi = mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`);
       let flat: Point | null = null;
       if (bi != null && mol.bonds[bi].order === 2 && open) flat = { x: Math.cos(away), y: Math.sin(away) };
+      // (axial to a ring drawn by the template on a bond: along its upright)
+      if (!flat && uprights.has(`${a}>${b}`)) flat = uprights.get(`${a}>${b}`)!;
       // (the chair's or boat's own rules, for its own atoms)
       const own = ring.includes(a);
       if (!flat && own) {
@@ -1116,7 +1177,10 @@ function exits(
           }
         }
       }
-      if (!flat && own && Math.abs(dotV(d, pageUp)) > Math.cos((35 * Math.PI) / 180)) {
+      // (and an axial bond upright from any chair or boat of the solid:
+      // drawn by the template or not, a group axial on a chair stands
+      // straight up or down)
+      if (!flat && (own || axialRings.has(a)) && Math.abs(dotV(d, pageUp)) > Math.cos((35 * Math.PI) / 180)) {
         flat = { x: 0, y: Math.sign(dotV(d, pageUp)) };
       }
       if (!flat) {
@@ -1194,7 +1258,8 @@ function drawOn(
   place: Point[],
   fit: { x: number[]; y: number[] },
   pageUp: Vec3,
-): Point[] {
+  fused = true,
+): { pts: Point[]; drawn: number[]; uprights: Map<string, Point> } {
   const proj = (p: Vec3): Point => ({
     x: fit.x[0] * p[0] + fit.x[1] * p[1] + fit.x[2] * p[2] + fit.x[3],
     y: fit.y[0] * p[0] + fit.y[1] * p[1] + fit.y[2] * p[2] + fit.y[3],
@@ -1204,6 +1269,60 @@ function drawOn(
     return k >= 0 ? { ...place[k] } : proj(X[index.get(a)!]);
   });
   const fixed = new Set(order.map((a) => index.get(a)!));
+  const drawn = [...order];
+  const uprights = new Map<string, Point>();
+  // A six-membered ring the solid has as a chair or a boat, fused on a bond
+  // to a ring drawn by the template, drawn by the template too - decalin's
+  // second chair beside its first, trans or cis as the solid has it: the
+  // template laid on the bond they share, turned, mirrored and started
+  // where its other four atoms fall nearest where the solid puts them.
+  // (or fused on a bond to the rest of the solid, its other four atoms in
+  // no other ring: laid on that bond where the solid puts it)
+  const cycles = sixCycles(mol, atoms);
+  const inOthers = (a: number, cycle: number[]) =>
+    cycles.some((r) => r !== cycle && r.includes(a)) ||
+    mol.rings.some((r) => r.length !== 6 && r.includes(a) && r.every((v) => index.has(v)));
+  const tried = new Set<string>();
+  for (let grew = fused; grew; ) {
+    grew = false;
+    for (const cycle of cycles) {
+      const key = [...cycle].sort((p, q) => p - q).join(",");
+      const idx = cycle.map((a) => index.get(a)!);
+      let shared = idx.flatMap((i, k) => (fixed.has(i) ? [k] : []));
+      if (shared.length === 0) shared = cycle.flatMap((a, k) => (inOthers(a, cycle) ? [k] : []));
+      if (tried.has(key) || shared.length !== 2 || (shared[1] - shared[0] !== 1 && shared[1] - shared[0] !== 5)) continue;
+      tried.add(key);
+      const shape = ringShape(mol, cycle, (a) => X[index.get(a)!]);
+      if (shape.kind !== "chair" && shape.kind !== "boat") continue;
+      // (round the ring from the bond it shares: its two atoms first)
+      const [k0, k1] = shared[1] - shared[0] === 1 ? shared : [shared[1], shared[0]];
+      const step = (k1 - k0 + 6) % 6 === 1 ? 1 : -1;
+      const seq = [0, 1, 2, 3, 4, 5].map((k) => idx[(k0 + step * k + 12) % 6]);
+      const at = templateOnBond(
+        shape.kind,
+        pts[seq[0]],
+        pts[seq[1]],
+        seq.slice(2).map((i) => proj(X[i])),
+        [...fixed].map((f) => pts[f]),
+      );
+      if (!at) continue;
+      at.at.forEach((p, j) => {
+        pts[seq[j + 2]] = p;
+        fixed.add(seq[j + 2]);
+      });
+      fixed.add(seq[0]);
+      fixed.add(seq[1]);
+      drawn.push(...cycle.filter((a) => !drawn.includes(a)));
+      // (its axial bonds along the template's upright as laid, up or down
+      // as the solid has them, seen the same way)
+      for (const { from, to, dir } of axialOut(mol, { atoms: [...atoms], rings: [] }, cycle, new Map(atoms.map((a, i) => [a, X[i]])))) {
+        const seen = { x: fit.x[0] * dir[0] + fit.x[1] * dir[1] + fit.x[2] * dir[2], y: fit.y[0] * dir[0] + fit.y[1] * dir[1] + fit.y[2] * dir[2] };
+        const sign = seen.x * at.up.x + seen.y * at.up.y >= 0 ? 1 : -1;
+        uprights.set(`${from}>${to}`, { x: at.up.x * sign, y: at.up.y * sign });
+      }
+      grew = true;
+    }
+  }
   const hold = new Map<number, number>();
   atoms.forEach((a, i) => {
     if (fixed.has(i)) return;
@@ -1264,7 +1383,7 @@ function drawOn(
       p.y += (anchor[i].y - p.y) * w;
     });
   }
-  return pts;
+  return { pts, drawn, uprights };
 }
 
 /**
@@ -1353,6 +1472,36 @@ function handedness(mol: Molecule, atoms: number[], index: Map<number, number>, 
 function awayFrom(us: readonly Vec3[]): Vec3 {
   const sum: Vec3 = [0, 1, 2].map((c) => us.reduce((s, u) => s + u[c], 0)) as Vec3;
   return normalise([-sum[0], -sum[1], -sum[2]]);
+}
+
+/**
+ * The bonds out of a ring system that are axial to a six-membered ring of
+ * it the solid has as a chair or a boat (`ring`): for each of the ring's
+ * atoms, the atom out of the system and its way in the solid (`outward`),
+ * where that is within 35 degrees of the ring's normal.
+ */
+export function axialOut(mol: Molecule, sys: RingSystem, ring: readonly number[], solid: Map<number, Vec3>): { from: number; to: number; dir: Vec3 }[] {
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const X = atoms.map((a) => solid.get(a)!);
+  const P = ring.map((a) => solid.get(a)!);
+  const c: Vec3 = [0, 1, 2].map((k) => P.reduce((sum, p) => sum + p[k], 0) / P.length) as Vec3;
+  let nrm: Vec3 = [0, 0, 0];
+  for (let i = 0; i < P.length; i++) {
+    const w = crossV(subV(P[i], c), subV(P[(i + 1) % P.length], c));
+    nrm = [nrm[0] + w[0], nrm[1] + w[1], nrm[2] + w[2]];
+  }
+  nrm = normalise(nrm);
+  const found: { from: number; to: number; dir: Vec3 }[] = [];
+  for (const a of ring) {
+    const out = mol.neighbours[a].filter((b) => !index.has(b));
+    if (!out.length) continue;
+    const dirs = outward(mol, a, index.get(a)!, X, index, out);
+    out.forEach((b, k) => {
+      if (Math.abs(dotV(dirs[k], nrm)) > Math.cos((35 * Math.PI) / 180)) found.push({ from: a, to: b, dir: dirs[k] });
+    });
+  }
+  return found;
 }
 
 /**

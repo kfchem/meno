@@ -155,7 +155,19 @@ they hang from.
   several sides (quinine's quinuclidine) is tried from its best few
   textbook views with what hangs from it, the best kept - another view
   only where it reads clearly better (by 3), so that camphor stays as it
-  is always drawn.
+  is always drawn. A six-membered ring the solid has as a chair or a
+  boat, with no double bond in it, fused on a bond to a ring drawn by the
+  template - or to the rest of the cage, its other four atoms in no other
+  ring - is drawn by the template too, as decalin's second chair beside
+  its first: the template laid on the bond they share, turned, mirrored
+  and started where its other atoms fall nearest where the solid puts
+  them, so that the fusion comes out trans or cis as it is. The same goes
+  for such a ring fused onto a cage drawn alone in perspective, the rest
+  of the system flat onto it - taken unless it reads clearly worse than
+  the ring laid flat, and only from a view the flat ring reads as given
+  from too. A bond axial to any chair or boat of the solid is drawn along
+  that ring's upright as laid - straight up or down where the ring stands
+  as the template does - up or down as the solid has it.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
   atom on another or on a bond, a bond crossing one not behind it, or an
@@ -174,13 +186,17 @@ they hang from.
   the one that leaves the rest room taken (ibogaine). Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
-  better. Then the whole drawing decides, its substituents and labels
+  better. Then the whole drawing decides, measured as it will be drawn -
+  its substituents and labels, its wedges and the H's they stand on
   counted: a solid is kept only where the drawing reads at least as well
   as with the system flat (ginkgolide B's OHs crowded in its solid), and a
   flat drawing with a fault a reader cannot miss - an atom on another,
   bonds crossing - is drawn as the solid too, and that kept where it reads
   better (aconitine). A clean flat drawing is not given up for a solid the
-  measure merely prefers (scopolamine). A solid is taken
+  measure merely prefers (scopolamine). A ring with a double bond in it
+  is drawn flat: where the cage alone can be drawn in perspective with
+  such rings flat onto it, the whole is not drawn as a solid (gelsemine's
+  oxindole, its benzene ring otherwise foreshortened). A solid is taken
   only with every stereocentre in it as given: a ring fusion is cis or
   trans with the same bonds between the same atoms, so a solid found from
   how far apart the bonds put its atoms may have one the wrong way. Such a

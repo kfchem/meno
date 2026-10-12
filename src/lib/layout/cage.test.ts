@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
+import { axialOut, cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -125,6 +125,53 @@ describe("a solid found from its bonds", () => {
     expect(Math.abs(torsion(X, 5, 0, 1, 2))).toBeLessThan(5);
     expect(angle(X, 5, 0, 1)).toBeCloseTo(120, -1);
     expect(angle(X, 0, 1, 2)).toBeCloseTo(120, -1);
+  });
+});
+
+describe("a six-membered ring fused on a bond to a cage", () => {
+  const input = (smiles: string): LayoutInput => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+  };
+
+  it("is drawn as the chair the solid has it as, beside the cage, not flat", () => {
+    // a cyclohexane fused to adamantane: its atoms 0-3 and the two it shares
+    const g = input("C1CCC2C3CC4CC(C3)CC2(C4)C1");
+    const { x, y, depth } = layout2D(g);
+    const mol = perceive(g);
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(0))!;
+    expect(ring.every((a) => depth[a] != null)).toBe(true);
+    expect(drawnAsChairOrBoat(ring.map((a) => ({ x: x[a], y: y[a] })))).toBe(true);
+  });
+
+  it("has a group axial to that chair drawn along the chair's upright", () => {
+    // (one methyl of a gem pair on the fused ring is axial; drawn as the
+    // template has it - its upright 75 or 105 degrees from each level
+    // bond, 30 or 150 from each steep one - the ring turned as its bond to
+    // the cage lies)
+    const g = input("CC1(C)CCC2C3CC4CC(C3)CC2(C4)C1");
+    const { x, y } = layout2D(g);
+    const mol = perceive(g);
+    const sys = mol.systems[0];
+    const ring = mol.rings.find((r) => r.length === 6 && r.includes(1))!;
+    const axial = axialOut(mol, sys, ring, solidOf(mol, sys));
+    expect(axial.length).toBeGreaterThan(0);
+    const angle = (ax: number, ay: number, bx: number, by: number) =>
+      (Math.acos(Math.abs(ax * bx + ay * by) / Math.hypot(ax, ay) / Math.hypot(bx, by)) * 180) / Math.PI;
+    for (const { from, to } of axial) {
+      const [ux, uy] = [x[to] - x[from], y[to] - y[from]];
+      ring.forEach((a, k) => {
+        const b = ring[(k + 1) % 6];
+        const t = angle(ux, uy, x[b] - x[a], y[b] - y[a]);
+        expect(Math.min(Math.abs(t - 30), Math.abs(t - 75)), `${a}-${b}`).toBeLessThan(4);
+      });
+    }
   });
 });
 
