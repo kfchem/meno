@@ -124,7 +124,8 @@ export default function ColourCard({
       if (inks.length && row === "color") s.colourInks(inks.map((k) => k.id), color, gesture);
     }
   };
-  const width = 92 + (palette.length + 2) * (SWATCH + 4) + 12;
+  // (a marker's own colour not listed twice: a swatch fewer)
+  const width = 92 + (palette.length + 2 - (markerOwn && palette.includes(markerOwn) ? 1 : 0)) * (SWATCH + 4) + 12;
   const height = rows.length * (SWATCH + 10) + 12;
   return (
     <motion.div
