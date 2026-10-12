@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -116,6 +116,11 @@ const NO_WIRES: Wire[] = [];
  * moved nothing else says so: its light would stay where it was, and a key
  * - a letter, Delete - act on what is gone.
  */
+/** Whether what a wire comes out of - a set, a step - is still in the workflow. */
+function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: readonly { id: number }[]): boolean {
+  return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
+}
+
 function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>) {
   const kept = (id: number | null, there: readonly { id: number }[]) => (id != null && !there.some((x) => x.id === id) ? null : id);
   const { atoms, bonds } = now.model;
@@ -163,6 +168,8 @@ export function connectStoreToDocument(
         extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,
         moveDrag: prev.moveDrag.active && !mirrored.model.atoms.some((a) => a.id === prev.moveDrag.atomId) ? noMoveDrag : prev.moveDrag,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
+        // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
+        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),

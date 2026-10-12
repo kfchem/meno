@@ -113,3 +113,27 @@ describe("a picture or a PDF an undo took away", () => {
     expect(state().selPdfs.size).toBe(0);
   });
 });
+
+/**
+ * Quick Add opened by a wire let go on empty space offers the calculations
+ * that take what the wire comes out of: Cmd+Z, taking that set away, left
+ * it open offering every calculation there is, for nothing.
+ */
+describe("Quick Add opened by a wire", () => {
+  it("shuts when an undo takes away the set the wire comes out of", () => {
+    const { doc, state } = editor();
+    const set = state().addSet({ x0: 0, y0: 0, x1: 4, y1: 4 });
+    const open = { at: { x: 8, y: 0 }, x: 400, y: 300, within: { width: 800, height: 600 } };
+    state().setQuickAdd({ ...open, wire: { set } });
+    state().addAtom(9, 9, "C");
+    doc.undo();
+    expect(state().quickAdd).not.toBeNull();
+    doc.undo();
+    expect(state().quickAdd).toBeNull();
+    // (opened on empty space, from nothing: kept)
+    state().setQuickAdd(open);
+    state().addAtom(9, 9, "C");
+    doc.undo();
+    expect(state().quickAdd).not.toBeNull();
+  });
+});
