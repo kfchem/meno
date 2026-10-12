@@ -175,7 +175,13 @@ they hang from.
   chains, lying level and side by side). A triple bond, or two double bonds on
   one atom, runs straight.
 - **At an atom in no ring**: its bonds evenly spread - three at 120 degrees,
-  four at 90.
+  four at 90. A tert-butyl is drawn as it always is: its three methyls
+  fanned 60 degrees apart about the line of the bond into it, 120 from
+  that bond - and a trimethylsilyl likewise; neopentane's middle carbon,
+  four methyls, stays a cross. The fan is compact, and once the rest of
+  the drawing is set it is turned about its bond, five degrees at a time,
+  to where the drawing reads best, its bonds kept clear of the whole
+  letter of an H beside it (ginkgolide B's OH).
 - **A phosphate, a sulfonyl**: a phosphorus or sulfur with four bonds is a
   cross square to the page, the chain straight through it and a
   double-bonded O above it, as IUPAC puts double-bonded substituents on a

@@ -161,20 +161,24 @@ export function grow(
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
     const orders = along.map((v) => orderOf(mol, middle, v));
     const linear = deg === 2 && along.length === 2 && (orders.includes(3) || orders.every((o) => o === 2));
+    // (a tert-butyl fanned, the bond into it level to the right)
+    const fan = isTertButyl(mol, middle) ? mol.neighbours[middle].find((v) => !isMethyl(mol, v))! : -1;
     const slots =
       deg === 1
         ? [0]
-        : between || linear
-          ? [Math.PI, 0]
-          : cross && along.length === 2
-            ? [Math.PI, 0, Math.PI / 2, -Math.PI / 2]
-            : deg === 2
-              ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180]
-              : deg === 3
-                ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, Math.PI / 2]
-                : splitWidestGap([], deg, Math.PI);
+        : fan >= 0
+          ? [0, Math.PI, (2 * Math.PI) / 3, (4 * Math.PI) / 3]
+          : between || linear
+            ? [Math.PI, 0]
+            : cross && along.length === 2
+              ? [Math.PI, 0, Math.PI / 2, -Math.PI / 2]
+              : deg === 2
+                ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180]
+                : deg === 3
+                  ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, Math.PI / 2]
+                  : splitWidestGap([], deg, Math.PI);
     if (cross) others.sort((u, v) => orderOf(mol, middle, v) - orderOf(mol, middle, u));
-    const order = [...along, ...others];
+    const order = fan >= 0 ? [fan, ...mol.neighbours[middle].filter((v) => v !== fan)] : [...along, ...others];
     order.forEach((v, k) => {
       const t = slots[k] ?? slots[slots.length - 1];
       placeChild(mol, pos, local, queue, middle, v, setFrameAngle(frame, t), transforms, hints, upright);
@@ -368,6 +372,19 @@ function assign(
         [lo, up === slots[1] ? slots[2] : slots[1]],
       ];
     }
+    // a tert-butyl: its methyls fanned 60 degrees apart about the line of
+    // the bond into it, as it is drawn, not a cross - grown from one of its
+    // methyls, that one the fan's middle one
+    if (isTertButyl(mol, a)) {
+      const end = children.find((c) => !isMethyl(mol, c));
+      if (end == null) return children.map((c, i) => [c, p + Math.PI + ((i - 1) * Math.PI) / 3]);
+      const [m1, m2] = children.filter((c) => c !== end);
+      return [
+        [end, p + Math.PI],
+        [m1, p + Math.PI / 3],
+        [m2, p - Math.PI / 3],
+      ];
+    }
     return byWeight.map((c, i) => [c, slots[i]]);
   }
   if (deg > 4) {
@@ -531,6 +548,19 @@ function placements(
 export function isCross(mol: Molecule, a: number): boolean {
   return (mol.el[a] === "P" || mol.el[a] === "S") && mol.neighbours[a].length === 4 && mol.systemOf[a] < 0;
 }
+
+/**
+ * The middle atom of a tert-butyl, or of a trimethylsilyl: a carbon or
+ * silicon in no ring with four bonds, three of them to methyls and the
+ * fourth to anything else (neopentane's middle carbon, four methyls, is a
+ * cross).
+ */
+export function isTertButyl(mol: Molecule, a: number): boolean {
+  if ((mol.el[a] !== "C" && mol.el[a] !== "Si") || mol.systemOf[a] >= 0 || mol.neighbours[a].length !== 4) return false;
+  return mol.neighbours[a].filter((v) => isMethyl(mol, v)).length === 3;
+}
+
+const isMethyl = (mol: Molecule, v: number) => mol.el[v] === "C" && mol.neighbours[v].length === 1;
 
 /** A carbonyl carbon of an acid, an ester or an amide: C(=O)O or C(=O)N. */
 function isCarbonyl(mol: Molecule, c: number): boolean {

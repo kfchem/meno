@@ -88,6 +88,25 @@ describe("layoutMetrics", () => {
     expect(layoutMetrics({ ...straight, orders: [1, 3, 1] }).angleError).toBeCloseTo(0, 6);
   });
 
+  it("takes a tert-butyl's fan as right and a cross as wrong, but a cross for neopentane", () => {
+    // O-C(CH3)3: the O to the left of the middle carbon, the methyls
+    // fanned 60 degrees apart about the O's line, or set as a cross
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+    const tBu = (degs: number[]) => {
+      const ps = [{ x: 0, y: 0 }, at(180), ...degs.map(at)];
+      return {
+        x: ps.map((p) => p.x),
+        y: ps.map((p) => p.y),
+        edges: [[0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][],
+        elements: ["C", "O", "C", "C", "C"],
+      };
+    };
+    expect(layoutMetrics(tBu([-60, 0, 60])).angleError).toBeCloseTo(0, 6);
+    expect(layoutMetrics(tBu([-90, 0, 90])).angleError).toBeCloseTo(30, 6);
+    const neopentane = { ...tBu([-90, 0, 90]), elements: ["C", "C", "C", "C", "C"] };
+    expect(layoutMetrics(neopentane).angleError).toBeCloseTo(0, 6);
+  });
+
   it("sees a ring's shape whatever it is turned to", () => {
     const h = polygon(6, 3, 4, 0.7);
     expect(ringIrregularity(h.x, h.y, [0, 1, 2, 3, 4, 5], 1)).toBeCloseTo(0, 9);

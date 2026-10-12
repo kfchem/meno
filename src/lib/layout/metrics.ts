@@ -62,6 +62,13 @@ export type Geometry = {
    */
   hydrogenRoom?: number;
   /**
+   * Whether a bond is kept clear of a label's H by the H's ink - 0.46 of a
+   * bond across, half a bond high, with a little paper round it - rather
+   * than by its middle: a bond 0.4 off its middle, at a slant, can touch a
+   * corner of it (a tert-butyl's methyl under an OH).
+   */
+  hydrogenInk?: boolean;
+  /**
    * What a name's letters running into something count for (OTBS over an
    * atom), in crowdings: one unless given. A layout sets its parts first,
    * counting them lightly, and makes room for them last, with its H's.
@@ -421,10 +428,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const cross = (a: number) =>
     (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
 
+  // A tert-butyl's middle carbon (or a trimethylsilyl's Si): three of its
+  // four bonds to methyls, drawn fanned 60° apart about the line of the
+  // fourth - the bond into it 120° from the outer two
+  const methyl = (b: number) => g.elements?.[b] === "C" && neighbours[b].length === 1;
+  const tertButyl = (a: number) =>
+    (g.elements?.[a] === "C" || g.elements?.[a] === "Si") && neighbours[a].length === 4 && !inRing.has(a) && neighbours[a].filter(methyl).length === 3;
+
   // angles: at an atom in no ring, its bonds evenly spread (a pair at 120°,
   // or 180° across a triple bond or between two double bonds, or between
   // two crosses - the O of a P-O-P - so that a run of them is one line; the
-  // bond joining a cross to a zigzag gives way, to 150°)
+  // bond joining a cross to a zigzag gives way, to 150°); a tert-butyl's fanned
   let angleSum = 0;
   let angleCount = 0;
   for (let a = 0; a < n; a++) {
@@ -444,6 +458,13 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       // either way round: the smaller gap against the ideal
       const off = Math.abs(deg(Math.min(...gaps) - (linear ? Math.PI : ideal)));
       angleSum += nb.some(cross) && !linear ? Math.min(off, Math.abs(deg(Math.min(...gaps)) - 150)) : off;
+    } else if (tertButyl(a)) {
+      const end = nb.find((b) => !methyl(b))!;
+      const e = dirs.indexOf(Math.atan2(y[end] - y[a], x[end] - x[a]));
+      gaps.forEach((gap, i) => {
+        const beside = i === e || (i + 1) % gaps.length === e;
+        angleSum += Math.abs(deg(gap - (beside ? (2 * Math.PI) / 3 : Math.PI / 3))) / gaps.length;
+      });
     } else {
       for (const gap of gaps) angleSum += Math.abs(deg(gap - ideal)) / gaps.length;
     }
@@ -542,7 +563,10 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       for (const [p, q] of edges) {
         if (crowded) break;
         if (p === h.a || q === h.a) continue;
-        if (pointToSegment(h.x, h.y, x[p], y[p], x[q], y[q]) < 0.3 * L) crowded = true;
+        const near = g.hydrogenInk
+          ? segmentMeetsBox({ x: x[p], y: y[p] }, { x: x[q], y: y[q] }, { x0: h.x - 0.35 * L, x1: h.x + 0.35 * L, y0: h.y - 0.35 * L, y1: h.y + 0.35 * L })
+          : pointToSegment(h.x, h.y, x[p], y[p], x[q], y[q]) < 0.3 * L;
+        if (near) crowded = true;
       }
       if (crowded) crowdedLabels += hydrogenRoom;
     }

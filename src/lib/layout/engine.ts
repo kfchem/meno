@@ -13,6 +13,7 @@ import {
   framesFor,
   flippable,
   grow,
+  isTertButyl,
   sideAtoms,
   sidesOf,
   stretchSide,
@@ -230,6 +231,10 @@ export function layout2D(input: LayoutInput): Layout2D {
     best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
+    // (a tert-butyl settled last, its bonds kept clear of an H's ink)
+    const scoreFan = scorer(mol, piece, depth, measured, 1, undefined, true);
+    const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
+    best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
     // a cage in a mirrored frame is the one seen from its other side
     if (best.mirrored) {
       for (const [i, view] of others) {
@@ -1254,6 +1259,57 @@ export function roomForHydrogens(
 }
 
 /**
+ * Each tert-butyl turned about the bond into it, a few degrees at a time,
+ * to where the drawing reads best: its fan of methyls is compact, and its
+ * best place often lies between the coarser turns that cleared it of the
+ * rest (untangle) - ginkgolide B's, turned off its ring until a methyl
+ * touched the corner of the H of the OH beside it. No turn that crosses
+ * bonds is taken.
+ */
+function settleFans(
+  mol: Molecule,
+  piece: number[],
+  start: Grown,
+  startScore: number,
+  score: (pos: Grown) => number,
+  fixed: (atoms: readonly number[]) => boolean,
+): { pos: Grown; score: number } {
+  let pos = start;
+  let current = startScore;
+  const bonds = [...mol.bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]).filter(([a]) => pos.has(a));
+  const crossingsIn = (p: Grown) => {
+    let count = 0;
+    for (let i = 0; i < bonds.length; i++)
+      for (let j = i + 1; j < bonds.length; j++) {
+        const [a, b] = bonds[i];
+        const [c, d] = bonds[j];
+        if (a !== c && a !== d && b !== c && b !== d && segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
+      }
+    return count;
+  };
+  for (const a of piece) {
+    if (!isTertButyl(mol, a)) continue;
+    const end = mol.neighbours[a].find((v) => !(mol.el[v] === "C" && mol.neighbours[v].length === 1))!;
+    const side = sideAtoms(mol, end, a);
+    if (fixed(side)) continue;
+    const crossings = crossingsIn(pos);
+    let found: Grown | null = null;
+    for (let t = -45; t <= 45; t += 5) {
+      if (!t) continue;
+      const trial = new Map(pos);
+      turnSide(trial, side, trial.get(end)!, (t * Math.PI) / 180);
+      const s = score(trial);
+      if (s < current - 1e-6 && crossingsIn(trial) <= crossings) {
+        found = trial;
+        current = s;
+      }
+    }
+    if (found) pos = found;
+  }
+  return { pos, score: current };
+}
+
+/**
  * A sugar hung on a macrolide seen from the face its carbons number
  * clockwise from, the aglycone staying as it is: turned over on one side or
  * the other of its glycosidic O, and swung round that link as far as it
@@ -1358,6 +1414,7 @@ export function scorer(
   solid: readonly boolean[] = [],
   hydrogenRoom?: number,
   sugarFaces?: boolean,
+  hydrogenInk?: boolean,
 ): (pos: Grown) => number {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
@@ -1402,6 +1459,7 @@ export function scorer(
       depth: depths,
       tetra,
       hydrogenRoom,
+      hydrogenInk,
       // (names' letters counted lightly while the parts are set - the way
       // a molecule is turned comes first - and made room for last, with
       // the H's)
