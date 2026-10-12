@@ -18,8 +18,9 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
   return {
     setHoveredPdf: (id: number | null) => set({ hoveredPdf: id }),
     // (selected with the rest, as a whole: its words or a box drawn on one let go - one selection)
+    // (only those on the page, as pictures)
     selectPdfs: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selPdfs: new Set([...(add ? prev.selPdfs : []), ...ids]), pdfSel: null, pdfBox: null })),
+      set((prev: EditorState) => ({ ...prev, selPdfs: new Set([...(add ? prev.selPdfs : []), ...[...ids].filter((id) => prev.pdfs.some((p) => p.id === id))]), pdfSel: null, pdfBox: null })),
     togglePdfSel: (id: number) =>
       set((prev: EditorState) => {
         const selPdfs = new Set(prev.selPdfs);

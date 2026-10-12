@@ -91,3 +91,25 @@ describe("what is under the pointer, an undo taking it away", () => {
     expect(state().hoveredArrow).toBe(arrow);
   });
 });
+
+/**
+ * A long press on a picture takes hold of it - selects it - a moment after
+ * the press: an undo meanwhile, taking the picture away, left it selected,
+ * gone, when that moment came.
+ */
+describe("a picture or a PDF an undo took away", () => {
+  it("is not selected when a long press on it comes to take hold of it", async () => {
+    const { doc, state } = editor();
+    const p = (await holdPicture(png()))!;
+    const [picture] = state().addPictures([{ name: "figure.png", sha256: p.sha256, media: p.media, width: p.width, height: p.height }], { x: 0, y: 0 });
+    state().clearSel();
+    doc.undo();
+    state().selectPictures([picture]);
+    expect(state().selPictures.size).toBe(0);
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: 0 });
+    const pdf = state().pdfs[0].id;
+    doc.undo();
+    state().selectPdfs([pdf]);
+    expect(state().selPdfs.size).toBe(0);
+  });
+});

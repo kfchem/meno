@@ -15,8 +15,9 @@ type SetState = StoreApi<EditorState>["setState"];
 export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState) {
   return {
     setHoveredPicture: (id: number | null) => set({ hoveredPicture: id }),
+    // (only those on the page: a long press held on one an undo took away selects nothing when its time comes)
     selectPictures: (ids: Iterable<number>, add = false) =>
-      set((prev: EditorState) => ({ ...prev, selPictures: new Set([...(add ? prev.selPictures : []), ...ids]) })),
+      set((prev: EditorState) => ({ ...prev, selPictures: new Set([...(add ? prev.selPictures : []), ...[...ids].filter((id) => prev.pictures.some((p) => p.id === id))]) })),
     togglePictureSel: (id: number) =>
       set((prev: EditorState) => {
         const selPictures = new Set(prev.selPictures);
