@@ -174,7 +174,7 @@ export function useClipboardActions(
           return;
         }
         const found = await structureOnClipboard();
-        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length)) {
+        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;
