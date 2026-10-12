@@ -1,4 +1,6 @@
 import type { StoreApi } from "zustand";
+import { join } from "@tauri-apps/api/path";
+import { readFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { anyKindById, pluginById, type PythonPlugin } from "../../../../../lib/calc/catalog";
@@ -23,7 +25,14 @@ import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pl
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import type { EditorState, JobSeen, StepJob, StepRan, Turn3D } from "../types";
+import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
+import { askOf } from "../../render/renderOptions";
+import { SCENE } from "../../render/renders";
+import { renderScene } from "../../render/renderScene";
+import { currentStyle3D } from "../../style3d";
+import { holdPicture } from "../../../../../lib/picture/held";
+import { entryCarried, picturesSaid, placePictures, type Rendered } from "../../workflow/renderStep";
+import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -106,14 +115,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
+    if (step.kind === "render") return renderEach(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
     return runAtOnce(id, plugin, at);
   }
 
-  /** The kind of set a step's results make, for what came in. */
+  /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */
   const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): SetKind => {
     const g = kindInfo(kind).gives;
-    return g === "same" ? holds : g;
+    return g === "same" || g === "pictures" ? holds : g;
   };
 
   /** The results of a step put in, as one edit - with the entries it set aside - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
@@ -193,6 +203,22 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * wires give - those that do not wait on one another at once (*Several at
    * once*); a step after one that failed, not. Kept when all have ended.
    */
+  /**
+   * The runs this window has begun, by step: so that a step asked to run
+   * again while its run starts - Run pressed twice, Run all after Run -
+   * waits for that run, never starting its jobs twice (its `running` is
+   * set only once they have started).
+   */
+  const begun = new Map<number, Promise<void>>();
+  const runOnce = (id: number): Promise<void> => {
+    let going = begun.get(id);
+    if (!going) {
+      going = runOne(id).finally(() => begun.delete(id));
+      begun.set(id, going);
+    }
+    return going;
+  };
+
   async function runSteps(targets: readonly number[]): Promise<void> {
     const d = doc.getState();
     const wanted = new Set<number>();
@@ -208,8 +234,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           } else if (prior?.running) await ended(prior.id);
           const step = stepOf(doc.getState(), id);
           if (!step) return false;
-          if (step.running) await ended(id);
-          else await runOne(id);
+          if (begun.has(id) || step.running) {
+            // (a run already under way, waited for - and, where it ended stopped, run anew: Run pressed after Stop)
+            await (begun.get(id) ?? ended(id));
+            if (stepOf(doc.getState(), id)?.ran?.stopped) await runOnce(id);
+          } else await runOnce(id);
           return !!stepOf(doc.getState(), id)?.ran?.ok;
         })();
         runs.set(id, going);
@@ -363,6 +392,119 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     await ended(id);
   }
 
+  /** A Render step's options split: Meno's own choices (the picture's size, shape and materials), and the plugin's. */
+  const renderChoices = (kind: StepKind, options: OptionValues) => {
+    const own = new Set((kindInfo(kind).own ?? []).map((o) => o.id));
+    return { ask: askOf("picture", options), theirs: Object.fromEntries(Object.entries(options).filter(([k]) => !own.has(k))) as OptionValues };
+  };
+
+  /**
+   * Render, as a step (docs/RENDER.md, *Render as a step*): each entry a
+   * picture of its own - its scene written by Meno as the render command
+   * writes one, a job of the plugin's for each - laid beside the step as
+   * they end (`finishRender`).
+   */
+  async function renderEach(id: number, plugin: PythonPlugin, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, plugin.id);
+    const input = inputOf(d, id)!;
+    const entries = input.holds === "structures" ? [] : setEntries(input.molecules, input.holds);
+    if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const { ask, theirs } = renderChoices(step.kind, options);
+    const { slots, cores } = runningOf(useAppSettings.getState().calculations);
+    const paths = new Map<string, string>();
+    for (const decl of installedFor(step.kind, plugin.id)) {
+      const where = await lookFor(plugin.id, decl.name);
+      if (!where) return void fail(id, tooOld(plugin.id, decl.name) ?? notFound(decl.label), at, key);
+      paths.set(decl.name, where);
+    }
+    const style = currentStyle3D();
+    const turns = get().turns3d;
+    const jobs: StepJob[] = [];
+    try {
+      const client = await pluginClient(plugin);
+      for (const [i, e] of entries.entries()) {
+        const source = input.molecules.find((m) => m.id === e.from);
+        const rendered = renderScene([{ m: entryCarried(e, source, e.from != null ? turns[e.from] : undefined) }], style, ask);
+        const entry = { scene: SCENE, film: false, width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps };
+        const prepared = readPrepared(await client.prepare("render", [entry], theirs, cores), 1);
+        if (typeof prepared === "string") throw new Error(prepared);
+        const p = prepared[0];
+        if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
+        const path = paths.get(p.program);
+        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], slots, cores, ...(path ? { path } : {}) });
+        const { page } = rendered;
+        jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
+      }
+    } catch (e) {
+      for (const j of jobs) void stopJob(j.id).catch(() => {});
+      return void fail(id, `It could not be started: ${message(e)}`, at, key);
+    }
+    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind }), { unsaved: true });
+    set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
+    void lookAtJobs();
+    await ended(id);
+  }
+
+  /**
+   * A Render step's jobs ended: the picture each made read, and - where
+   * any was made - put in the step's result set, a set of pictures, in
+   * place of those it held, with what it did, as one edit; why not, where
+   * none was.
+   */
+  async function finishRender(id: number, run: StepRunning, records: readonly (Job | null)[], plugin: PythonPlugin | undefined, ran: Omit<StepRan, "ok" | "said">) {
+    const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
+    const { theirs } = renderChoices("render", run.options);
+    const made: Rendered[] = [];
+    const whys: string[] = [];
+    for (const [k, j] of run.jobs.entries()) {
+      if (!client) {
+        whys.push("What did it is not added");
+        continue;
+      }
+      try {
+        const said = (await client.collect("render", [{ scene: SCENE, film: false }], theirs, {}, await wholeLog(j.id), records[k]!.state)) as { why?: unknown; made?: unknown };
+        if (typeof said?.why === "string") {
+          whys.push(said.why.trim().slice(0, 300) || "It did not say why");
+          continue;
+        }
+        const m = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
+        const file = typeof m?.file === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(m.file) ? m.file : null;
+        if (!file || m?.media !== "image/png") {
+          whys.push("It said it made nothing Meno can show");
+          continue;
+        }
+        const name = `Render ${id}.${k + 1}.png`;
+        // (held as it is: a render's PNG, no camera's turn to read)
+        const held = await holdPicture(await readFile(await join(await jobFolder(j.id), file)));
+        if (!held) {
+          whys.push("What it made cannot be shown");
+          continue;
+        }
+        // (as large as its molecules are drawn; where that was not kept, its pixels' shape, ten bonds wide)
+        const size = j.size ?? [10 * NOMINAL_BOND_LENGTH, (10 * NOMINAL_BOND_LENGTH * held.height) / held.width];
+        made.push({ picture: { name, sha256: held.sha256, media: held.media, px: [held.width, held.height] }, size });
+      } catch (e) {
+        whys.push(message(e));
+      }
+    }
+    const total = run.jobs.length;
+    const ok = !whys.length && made.length > 0;
+    const said = ok ? `${clock(ran.took ?? 0)} \u00b7 ${picturesSaid(made.length, total)}` : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
+    const first = doc.getState().nextPictureId ?? 1;
+    // (one edit: what it did before kept, its pictures - where it made any - in its set in place of those it held, and what it did)
+    doc.edit("render", (x) => {
+      if (!stepOf(x, id)) return x;
+      const kept = keepRun(x, stepOf(x, id)!);
+      const next = made.length ? placePictures(kept, stepOf(kept, id)!, made) : kept;
+      return setRan(next, id, { ...ran, ok, said });
+    });
+    // (laid as the view is: a step's pictures come in its set, not where the chemist looks)
+    if (made.length) set((prev) => ({ ...prev, picturesLaid: new Set([...prev.picturesLaid, ...made.map((_, i) => first + i)]) }));
+  }
+
   /** A job's log, all of it. */
   async function wholeLog(job: string): Promise<string> {
     let text = "";
@@ -429,6 +571,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // stopped - or gone without saying how it ended: nothing comes in
       if (records.some((r) => !r || r.state === "stopped" || r.state === "gone")) {
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
+        return close();
+      }
+      // (Render's: pictures, beside the step - no set)
+      if (kind === "render") {
+        await finishRender(id, run, records, plugin, { at: run.at, input: run.input, took, jobs: ids, ...as });
         return close();
       }
       // (what comes in now, where it is what came in when it started - its options aside, which may change as it runs)

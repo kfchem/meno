@@ -52,8 +52,11 @@ export function useClipboardActions(
   const part = useCallback((only?: number): { part: Drawn; ids3d: number[] } | null => {
     const state = store.getState();
     const { model, hovered, hovered3d, molecules3d, selFlow } = state;
-    // (the pictures selected go with it, and the words)
-    const pictures = only != null ? [] : state.pictures.filter((p) => state.selPictures.has(p.id));
+    // (a set selected takes what it holds along, selected or not - as it does when dragged)
+    const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
+    // (the pictures selected go with it - and a set's, a Render step's - and the words)
+    const heldPictures = new Set(held.flatMap((h) => h.pictures));
+    const pictures = only != null ? [] : state.pictures.filter((p) => state.selPictures.has(p.id) || heldPictures.has(p.id));
     const words = only != null ? [] : state.captions.filter((c) => state.selCaptions.has(c.id));
     // (and the PDFs and texts' sheets selected: carried whole, by what they are)
     const pdfs = only != null ? [] : state.pdfs.filter((p) => state.selPdfs.has(p.id));
@@ -68,8 +71,6 @@ export function useClipboardActions(
     const lonePluses = only != null ? [] : state.pluses.filter((p) => state.selPluses.has(p.id));
     words.push(...state.captions.filter((c) => c.arrow != null && lone.some((a) => a.id === c.arrow) && !words.some((w) => w.id === c.id)));
     const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length > 0;
-    // (a set selected takes what it holds along, selected or not - as it does when dragged)
-    const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
     const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
     const sel = heldAtoms.size
       ? { atoms: new Set([...state.sel.atoms, ...heldAtoms]), bonds: new Set([...state.sel.bonds, ...bondsAmong(model, heldAtoms)]) }

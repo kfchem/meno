@@ -87,13 +87,20 @@ export class NotMenoFile extends Error {}
 export function readMenoFile(bytes: Uint8Array): MenoFile {
   if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno workspace.");
   let entries = 0;
-  const head = unzipSync(bytes, {
-    filter: (f) => {
-      entries++;
-      if (f.name === "workspace.json" && f.originalSize > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
-      return f.name === "workspace.json" || (f.name === "files.json" && f.originalSize <= MOST_WORKSPACE);
-    },
-  });
+  let head: ReturnType<typeof unzipSync>;
+  try {
+    head = unzipSync(bytes, {
+      filter: (f) => {
+        entries++;
+        if (f.name === "workspace.json" && f.originalSize > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
+        return f.name === "workspace.json" || (f.name === "files.json" && f.originalSize <= MOST_WORKSPACE);
+      },
+    });
+  } catch (e) {
+    if (e instanceof NotMenoFile) throw e;
+    // (begun as a workspace, but not read through: said so, not in the zip reader's words)
+    throw new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
+  }
   if (entries > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
   const json = head["workspace.json"];
   if (!json) throw new NotMenoFile("It holds no workspace.");

@@ -6,12 +6,16 @@
  */
 import type { Option } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
+import { renderOptions } from "../render/renderOptions";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "band" | "twins" | "bars" | "grouped" | "pointer";
+/** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
+export type SetHolds = SetKind | "pictures";
+
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
 
 export type KindInfo = {
   kind: StepKind;
@@ -19,12 +23,14 @@ export type KindInfo = {
   icon: StepIcon;
   /** The sets it takes. */
   takes: readonly SetKind[];
-  /** What it gives, for what it took: `same`, the kind of set that came in. */
-  gives: SetKind | "same";
+  /** What it gives, for what it took: `same`, the kind of set that came in; `pictures`, a set of pictures (Render's), which no step takes. */
+  gives: SetKind | "same" | "pictures";
   /** Whether it runs a program (a plugin's) or works on entries alone. */
   runs: "program" | "entries";
   /** Its options, where Meno does it. */
   options?: readonly Option[];
+  /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
+  own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
   made: string;
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
@@ -38,6 +44,8 @@ export const KINDS: readonly KindInfo[] = [
   { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies" },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
   { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions" },
+  // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
+  { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",
     name: "Energy window",
