@@ -313,7 +313,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 - **Blender** (real pictures and films of molecules in 3D): built
   (2026-10-11) - the role *Render*, the glTF 2.0 scene Meno writes, the
   Blender plugin, and pictures and films on the page:
-  [`RENDER.md`](./RENDER.md). *Render* as a workflow's step comes later.
+  [`RENDER.md`](./RENDER.md); and *Render* as a workflow's step
+  (2026-10-12), its pictures in a result set (RENDER.md, *Render as a
+  step*).
 - **NCI**: built (2026-10-11) - the kind of step *NCI*, a surface
   coloured by another grid as a general form, a step's `files`, and the
   NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).

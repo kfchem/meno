@@ -1,5 +1,5 @@
 import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
-import type { SetKind, StepKind } from "../workflow/kinds";
+import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
@@ -460,9 +460,9 @@ export type TextOf = { step: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
- * Made by a step: the step, the kind of set it holds, and the entries the
- * step set aside, listed struck through. Made by the chemist, a set is a
- * compound set.
+ * Made by a step: the step, the kind of set it holds - a Render step's,
+ * pictures - and the entries the step set aside, listed struck through.
+ * Made by the chemist, a set is a compound set.
  */
 export type WorkflowSet = {
   id: number;
@@ -470,7 +470,7 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  made?: { step: number; holds: SetKind };
+  made?: { step: number; holds: SetHolds };
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
@@ -494,7 +494,8 @@ export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; re
  * their place among those that came in; and the files of its folder its
  * plugin reads back once it is done.
  */
-export type StepJob = { id: string; entries: number[]; reads: string[] };
+/** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
+export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they
