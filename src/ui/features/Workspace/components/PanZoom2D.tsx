@@ -4,11 +4,12 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
-import { stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
+import { movedUnderPress, stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
+import { MOV_PX } from "../constants";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 
 /** WebKit's pinch on a trackpad, which it gives as gestures, not wheels. */
@@ -88,6 +89,8 @@ export function PanZoom2D() {
   // under it; and the view as last drawn
   const pointer = useRef(stillPointer());
   const seenView = useRef<View | null>(null);
+  // the page point a press held now began on, to tell whether the view has moved under it
+  const pressPage = useRef<{ x: number; y: number } | null>(null);
   // (the camera's zoom: CSS pixels per world unit on the page, whether it is
   // orthographic - the canvas's - or in perspective, as PageCamera keeps it)
   useEffect(() => {
@@ -301,8 +304,29 @@ export function PanZoom2D() {
     };
 
     // (heard first, so the pointer is known to rest before a frame finds again)
+    const pageUnder = (clientX: number, clientY: number) => {
+      const r = dom.getBoundingClientRect();
+      return pageAt(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1), camera);
+    };
+    // (a press the view moved under is no click: the click it ends in goes nowhere)
+    const swallowClick = () => {
+      const swallow = (ev: MouseEvent) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      window.addEventListener("click", swallow, { capture: true, once: true });
+      window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+    };
     const heard = (e: PointerEvent) => {
-      if (e.isTrusted && pointer.current.heard(e)) invalidate();
+      if (!e.isTrusted) return;
+      if (pointer.current.heard(e)) invalidate();
+      if (e.type === "pointerdown") {
+        pressPage.current = pageUnder(e.clientX, e.clientY);
+        setPressMovedUnder(camera, false);
+      } else if (e.type === "pointerup" || e.type === "pointercancel") {
+        pressPage.current = null;
+        if (e.type === "pointerup" && pressMovedUnder(camera)) swallowClick();
+      }
     };
     const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
     for (const name of HEARD) dom.addEventListener(name, heard);
@@ -404,6 +428,14 @@ export function PanZoom2D() {
     // nothing to find till it is let go.)
     if (tookMovedUnderPointer(camera)) pointer.current.moved();
     const at = dragging.current ? null : pointer.current.findAgain();
+    // (and a press held still that the view has moved under is neither a
+    // click nor a long press: said before the press's handlers hear the move)
+    const was = pressPage.current;
+    if (at && at.buttons !== 0 && was && !pressMovedUnder(camera)) {
+      const r = dom.getBoundingClientRect();
+      const now = pageAt(((at.clientX - r.left) / r.width) * 2 - 1, -(((at.clientY - r.top) / r.height) * 2 - 1), camera);
+      if (movedUnderPress(was, now, cam.zoom || 1, MOV_PX)) setPressMovedUnder(camera, true);
+    }
     if (at) dom.dispatchEvent(new PointerEvent("pointermove", { ...at, button: -1, pointerType: "mouse", bubbles: true, cancelable: true }));
     // a fit on its way: the view going there - its zoom by ratio, so a large
     // change takes no longer than a small one

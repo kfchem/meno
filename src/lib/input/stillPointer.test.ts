@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stillPointer, viewMoved } from "./stillPointer";
+import { movedUnderPress, stillPointer, viewMoved } from "./stillPointer";
 
 const ev = (type: string, x: number, y: number, more: { buttons?: number; pointerType?: string } = {}) => ({
   type,
@@ -77,5 +77,16 @@ describe("a view moved", () => {
     expect(viewMoved(was, { ...was, x: -6 })).toBe(true);
     expect(viewMoved(was, { ...was, zoom: 46 })).toBe(true);
     expect(viewMoved(was, { ...was, width: 1000 })).toBe(true);
+  });
+});
+
+describe("a press the view moved under", () => {
+  it("is one once the page under the pointer has gone as far as a press may travel and still be a click", () => {
+    // (at 40 px a page unit, a press may travel 5 px: an eighth of a unit)
+    expect(movedUnderPress({ x: 0, y: 0 }, { x: 0.1, y: 0 }, 40, 5)).toBe(false);
+    expect(movedUnderPress({ x: 0, y: 0 }, { x: 0.125, y: 0 }, 40, 5)).toBe(true);
+    expect(movedUnderPress({ x: 0, y: 0 }, { x: 3, y: 4 }, 1, 5)).toBe(true);
+    // (a wheel's zoom about the pointer leaves the page under it where it was)
+    expect(movedUnderPress({ x: 2, y: 1 }, { x: 2, y: 1 }, 300, 5)).toBe(false);
   });
 });

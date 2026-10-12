@@ -24,6 +24,7 @@ import { selectionMoving } from "../utils/dragSelection";
 import { schemeAmong } from "../utils/copyPaste";
 import { TAU, follow } from "../../../theme/motion";
 import SelectionShade2D from "./SelectionShade2D";
+import { pressMovedUnder } from "./viewGoal";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
 const HANDLE_ABOVE = 0.75;
@@ -234,7 +235,8 @@ export default function Selection2D() {
         };
         const onSecondUp = () => {
           done();
-          if (lastEmpty.count !== 2) return;
+          // (nor where the view has moved under the press: viewGoal)
+          if (lastEmpty.count !== 2 || pressMovedUnder(camera)) return;
           const r = host.getBoundingClientRect();
           store.getState().doubleClickOnEmpty({ at: toWorld(sx, sy), x: sx - r.left, y: sy - r.top, within: { width: r.width, height: r.height } });
         };
@@ -255,7 +257,8 @@ export default function Selection2D() {
         cleanUp();
         store.getState().setPressHold(null);
         lastEmpty = none;
-        box(e, sx, sy, kind, false);
+        // (no box where the view has moved under the press: viewGoal)
+        if (!pressMovedUnder(camera)) box(e, sx, sy, kind, false);
       }, LONG_PRESS_MS);
       const onFirstMove = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;

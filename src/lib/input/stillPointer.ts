@@ -72,3 +72,13 @@ export function viewMoved(was: View | null, now: View): boolean {
   if (!was) return false;
   return was.x !== now.x || was.y !== now.y || was.zoom !== now.zoom || was.width !== now.width || was.height !== now.height;
 }
+
+/**
+ * Whether the view has moved under a press held still: the page point under
+ * the pointer `now` lies `px` screen pixels or more from the one the press
+ * began on, `was`, at `zoom` pixels a page unit - as far as a press may
+ * travel before it is no click (MOV_PX).
+ */
+export function movedUnderPress(was: { x: number; y: number }, now: { x: number; y: number }, zoom: number, px: number): boolean {
+  return Math.hypot(now.x - was.x, now.y - was.y) * zoom >= px;
+}
