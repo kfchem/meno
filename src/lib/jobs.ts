@@ -69,6 +69,30 @@ export const removeJob = (id: string) => invoke<void>("job_remove", { id });
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => invoke<number>("jobs_clear_finished");
 
+/** A plugin's jobs that wait or run: those taking it away would stop. */
+export async function liveJobsOf(plugin: string, list: () => Promise<Job[]> = listJobs): Promise<Job[]> {
+  return (await list()).filter((j) => j.plugin === plugin && !finished(j.state));
+}
+
+/**
+ * Jobs stopped, and waited for until each has ended - its program gone, so
+ * that nothing it runs from is taken away under it - for `most` ms at most;
+ * a job gone or ended already is ended.
+ */
+export async function stopJobsAndWait(
+  ids: readonly string[],
+  w: { stop?: (id: string) => Promise<void>; look?: (id: string) => Promise<Job>; pause?: (ms: number) => Promise<void>; most?: number } = {},
+): Promise<void> {
+  const { stop = stopJob, look = jobOf, pause = (ms) => new Promise((go) => setTimeout(go, ms)), most = 20_000 } = w;
+  await Promise.all(ids.map((id) => stop(id).catch(() => {})));
+  let left = [...ids];
+  for (let waited = 0; left.length && waited < most; waited += 250) {
+    const states = await Promise.all(left.map((id) => look(id).then((j) => j.state).catch((): JobState => "gone")));
+    left = left.filter((_, i) => !finished(states[i]));
+    if (left.length) await pause(250);
+  }
+}
+
 /** This computer's cores, as far as the webview can tell. */
 export const computerCores = () => Math.max(1, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 1);
 
