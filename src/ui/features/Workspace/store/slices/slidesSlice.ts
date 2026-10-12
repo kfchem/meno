@@ -3,7 +3,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Slide } from "../types";
-import { inBox, molecules3dIn } from "../../utils/selection";
+import { arrowsIn, inBox, molecules3dIn } from "../../utils/selection";
 import { sheetMiddle } from "../../utils/textSheets";
 import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
@@ -68,6 +68,9 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       // (the drawing's last: a molecule in 3D selected alone lets it go)
       st.setSel(inBox(st.model, box[0], box[1]));
       st.selectSlides([id, ...st.slides.filter((x) => x.id !== id && within(x) && within({ x: x.x - x.w / 2, y: x.y - x.h / 2 }) && within({ x: x.x + x.w / 2, y: x.y + x.h / 2 })).map((x) => x.id)]);
+      // (and the arrows standing wholly on it - each end and corner - and the "+" signs: those among its atoms carried with them, once)
+      st.selectArrows(arrowsIn(st.arrows, "box", box));
+      st.selectPluses(st.pluses.filter(within).map((p) => p.id));
     },
     orderSlide: (id: number, to: number) => doc.edit("reorder slides", (d) => ops.orderSlide(d, id, to)),
     removeSlide: (id: number) => {

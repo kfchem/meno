@@ -4,17 +4,26 @@ import { useEffect, useMemo, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
-import { useEditor } from "../store";
+import { useEditor, useEditorStore } from "../store";
+import { COLORS } from "../../../theme/colors";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
+import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { dragSelection } from "../utils/dragSelection";
+import { carriedWithMore } from "../utils/selectionScheme";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout } from "./drawnLayoutContext";
 
 /**
  * The "+" signs of a reaction scheme, as the drawing style draws them, in
- * the bonds' colour: each dragged to move it, and the one under the pointer
+ * the bonds' colour: each dragged to move it - or, carried by a selection
+ * with more, all of that - a click selecting it alone, Ctrl or ⌘ and a click
+ * adding it to the selection or taking it out; the one under the pointer
  * the one a right-click's menu is for.
  */
 export default function Pluses2D() {
   const pluses = useEditor((s) => s.pluses);
+  const selPluses = useEditor((s) => s.selPluses);
+  const store = useEditorStore();
   const movePlus = useEditor((s) => s.movePlus);
   const beginPanHold = useEditor((s) => s.beginPanHold);
   const endPanHold = useEditor((s) => s.endPanHold);
@@ -62,11 +71,27 @@ export default function Pluses2D() {
             e.stopPropagation();
             const cx = (e as any).clientX ?? (e as any).nativeEvent?.clientX;
             const cy = (e as any).clientY ?? (e as any).nativeEvent?.clientY;
+            const keys = { ctrlKey: !!e.nativeEvent?.ctrlKey, metaKey: !!e.nativeEvent?.metaKey };
+            if (addsToSelection(keys)) {
+              store.getState().togglePlusSel(p.id);
+              store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+              return;
+            }
+            beginPanHold((e as any).pointerId ?? (e as any).nativeEvent?.pointerId ?? null);
+            if (carriedWithMore(store, "plus", p.id)) {
+              dragSelection(store, toWorld, { x: cx, y: cy }, (u) => {
+                endPanHold(u.pointerId);
+                store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+              });
+              return;
+            }
             const at = toWorld(cx, cy);
             dragRef.current = { id: p.id, offx: p.x - at.x, offy: p.y - at.y, gesture: `move-${performance.now()}` };
-            beginPanHold((e as any).pointerId ?? (e as any).nativeEvent?.pointerId ?? null);
+            let moved = false;
             const onMove = (ev: PointerEvent) => {
               if (!dragRef.current) return;
+              if (!moved && Math.hypot(ev.clientX - cx, ev.clientY - cy) < MOV_PX) return;
+              moved = true;
               const q = toWorld(ev.clientX, ev.clientY);
               const d = dragRef.current;
               movePlus(d.id, q.x + d.offx, q.y + d.offy, d.gesture);
@@ -80,6 +105,13 @@ export default function Pluses2D() {
               } catch {
                 endPanHold(null);
               }
+              // (a click: it alone selected)
+              if (!moved) {
+                const s = store.getState();
+                s.clearSel();
+                s.selectPluses([p.id]);
+                s.suppressDoubleClick(DOUBLE_CLICK_MS);
+              }
             };
             window.addEventListener("pointermove", onMove);
             window.addEventListener("pointerup", onUp, true);
@@ -88,6 +120,13 @@ export default function Pluses2D() {
           <mesh geometry={geometry}>
             <meshBasicMaterial color={fill} toneMapped={false} depthTest={false} depthWrite={false} />
           </mesh>
+          {/* (selected: lit round, as a shape is) */}
+          {selPluses.has(p.id) && (
+            <mesh position={[0, 0, -0.006]}>
+              <circleGeometry args={[0.55, 32]} />
+              <meshBasicMaterial color={COLORS.highlight} transparent opacity={0.38} depthTest={false} depthWrite={false} toneMapped={false} />
+            </mesh>
+          )}
           {/* an invisible square round it, easier to take hold of */}
           <mesh position={[0, 0, -0.005]}>
             <boxGeometry args={[0.8, 0.8, 0.001]} />

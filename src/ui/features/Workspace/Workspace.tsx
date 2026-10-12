@@ -977,8 +977,10 @@ function WorkspaceContent({
       open({ kind: "push", id: hoveredPush, selection: "none", ...place });
       return;
     }
-    // on a reaction arrow, and nothing else: the arrow's menu
-    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow)) {
+    // on an arrow, and nothing else - or selected alone - the arrow's menu
+    const { selArrows, selPluses } = store.getState();
+    const arrowWithMore = selectedOf({ ...store.getState(), selArrows: new Set() }).any || selArrows.size > 1;
+    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow) && !(selArrows.has(hoveredArrow) && arrowWithMore)) {
       const target: MenuTarget = { kind: "arrow", id: hoveredArrow, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -993,7 +995,7 @@ function WorkspaceContent({
     // likewise words on the page, unless they are selected with more
     const wordsWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 1;
+      return selectedOf({ ...s, selCaptions: new Set() }).any || s.selCaptions.size > 1;
     })();
     if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
       const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
@@ -1005,7 +1007,7 @@ function WorkspaceContent({
     const { hoveredText, texts, selTexts } = store.getState();
     const withOthers = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selTexts.size > 1;
+      return selectedOf({ ...s, selTexts: new Set() }).any || selTexts.size > 1;
     })();
     if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
       const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
@@ -1029,7 +1031,7 @@ function WorkspaceContent({
     const { hoveredPicture, pictures, selPictures } = store.getState();
     const withMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selTexts.size > 0 || s.selPdfs.size > 0 || s.selCaptions.size > 0 || selPictures.size > 1;
+      return selectedOf({ ...s, selPictures: new Set() }).any || selPictures.size > 1;
     })();
     if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
       const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
@@ -1041,7 +1043,7 @@ function WorkspaceContent({
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
     const pdfWithMore = (() => {
       const s = store.getState();
-      return s.sel.atoms.size > 0 || s.sel3d.size > 0 || s.selSlides.size > 0 || s.selFlow.sets.size > 0 || s.selFlow.steps.size > 0 || s.selPictures.size > 0 || s.selTexts.size > 0 || s.selCaptions.size > 0 || selPdfs.size > 1;
+      return selectedOf({ ...s, selPdfs: new Set() }).any || selPdfs.size > 1;
     })();
     if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
       const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
@@ -1061,8 +1063,9 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
-    // likewise a "+"
-    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus)) {
+    // likewise a "+", unless it is selected with more
+    const plusWithMore = selectedOf({ ...store.getState(), selPluses: new Set() }).any || selPluses.size > 1;
+    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus) && !(selPluses.has(hoveredPlus) && plusWithMore)) {
       const target: MenuTarget = { kind: "plus", id: hoveredPlus, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
@@ -1782,8 +1785,8 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }

@@ -8,7 +8,7 @@ import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, middleOf, turnedOver, turnedOverArrows } from "../../utils/selection";
-import { schemeAmong } from "../../utils/copyPaste";
+import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
 import { resultKey } from "../../../../../lib/calc/results";
@@ -146,10 +146,9 @@ export const createModelSlice = (
     const over = turnedOver(model, sel.atoms, axis);
     // (marks put by hand turned over with them)
     const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
-    // (the arrows, "+" signs and words among them too - the words' places, their letters upright - as a drag takes them)
-    const { arrows, pluses, captions, selCaptions } = get();
-    const among = schemeAmong({ ...model, arrows, pluses, captions }, sel.atoms);
-    const words = [...among.captions, ...captions.filter((c) => selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
+    // (the arrows, "+" signs and words among them, and those selected for themselves, too - the words' places, their letters upright - as a drag takes them)
+    const among = selectionScheme(get());
+    const words = among.captions;
     const mid = middleOf(model, sel.atoms)!;
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
@@ -162,12 +161,13 @@ export const createModelSlice = (
   },
 
   deleteSelection: () => {
-    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, steps, model, arrows, pluses, captions } = get();
-    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size) return;
-    // the arrows and pluses among it go with it, as with a cut; the
-    // molecules in 3D selected, and a workflow's sets and steps, in the same
-    // step - but not a step running, which is asked about on its own
-    const among = schemeAmong({ ...model, arrows, pluses, captions }, sel.atoms);
+    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, selArrows, selPluses, steps } = get();
+    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size && !selArrows.size && !selPluses.size) return;
+    // the arrows and pluses among it go with it, as with a cut, and those
+    // selected for themselves; the molecules in 3D selected, and a
+    // workflow's sets and steps, in the same step - but not a step running,
+    // which is asked about on its own
+    const among = selectionScheme(get());
     const ids = (xs: { id: number }[]) => new Set(xs.map((x) => x.id));
     const idle = [...selFlow.steps].filter((id) => !steps.find((s) => s.id === id)?.running);
     const gone = steps.filter((s) => idle.includes(s.id));
@@ -177,7 +177,7 @@ export const createModelSlice = (
         ops.removeSlides(
           ops.removePdfs(
             ops.removeTexts(
-              ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), new Set([...ids(among.captions), ...selCaptions])), sel3d), selPictures),
+              ops.removePictures(ops.removeMolecules3d(ops.deleteDrawn(d, sel.atoms, sel.bonds, ids(among.arrows), ids(among.pluses), ids(among.captions)), sel3d), selPictures),
               selTexts,
             ),
             selPdfs,
@@ -412,7 +412,12 @@ export const createModelSlice = (
     // (slides last in the talk's order, as they were among themselves; shapes over those there are)
     const slides = next.slides ?? [];
     const shapes = next.shapes ?? [];
-    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length) return;
+    // (arrows and "+" signs: a reaction's, or alone - one pointing at something)
+    const arrows = next.arrows ?? [];
+    const pluses = next.pluses ?? [];
+    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length && !arrows.length && !pluses.length) return;
+    const startArrow = doc.getState().nextArrowId;
+    const startPlus = doc.getState().nextPlusId ?? 1;
     const startSlide = doc.getState().nextSlideId ?? 1;
     const startShape = doc.getState().nextShapeId ?? 1;
     const startPdf = doc.getState().nextPdfId ?? 1;
@@ -428,7 +433,7 @@ export const createModelSlice = (
     const tied = { ...next, molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))) };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit("paste", (d) => {
-      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
+      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
       const withSlides = slides.reduce((doc2, { id: _, ...s }) => ops.addSlide(doc2, s), withPdfs);
@@ -457,6 +462,9 @@ export const createModelSlice = (
       selPdfs: new Set(pdfs.map((_, i) => startPdf + i)),
       selSlides: new Set(slides.map((_, i) => startSlide + i)),
       selShapes: new Set(shapes.map((_, i) => startShape + i)),
+      // (the arrows and "+" signs pasted selected for themselves too: those among the atoms are carried with them, once)
+      selArrows: new Set(arrows.map((_, i) => startArrow + i)),
+      selPluses: new Set(pluses.map((_, i) => startPlus + i)),
       selTexts: new Set(sheetIds),
       // (the words pasted selected too: alone, they are all that is)
       selCaptions: new Set(words.map((_, i) => startCaption + i)),

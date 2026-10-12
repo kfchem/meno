@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
+import { selectedOf } from "../store/slices/selectionSlice";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
@@ -253,7 +254,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
         });
         return;
       }
-      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || s.sel.atoms.size || s.sel3d.size || s.selPictures.size || s.selTexts.size || s.selPdfs.size || s.selSlides.size || s.selShapes.size || s.selFlow.sets.size || s.selFlow.steps.size)) {
+      if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || selectedOf({ ...s, selCaptions: new Set() }).any)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
           s2.endPanHold(u.pointerId);

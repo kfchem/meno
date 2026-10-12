@@ -279,6 +279,18 @@ highlight's colour, under the drawing, and a small handle stands above it.
   arrow is carried round and points as far round, or is mirrored and
   points the mirrored way. Words move to their new places, their letters
   upright, and words over an arrow stay with it.
+- **Arrows and "+" signs are selected for themselves too** (2026-10-12):
+  one standing alone - an arrow pointing at something on a slide - as a
+  shape is. A click selects one alone, Ctrl/⌘ and a click adds it or takes
+  it out, and a box or a lasso takes an arrow wholly in it (each end and
+  each corner) and a "+" by its middle; Select All and a slide's *Select
+  what is on it* take them as well. Selected, one is lit round, and goes
+  with the selection when it is moved, turned, copied, cut, deleted,
+  coloured (an arrow) or pasted, the words over an arrow with it. An
+  arrow or a "+" among the selection's atoms is carried as before, and
+  once only, selected for itself or not (`utils/selectionScheme.ts`). A
+  press on one carried by a selection with more takes all of it; else a
+  drag moves it alone, as before.
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,

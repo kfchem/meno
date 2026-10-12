@@ -63,7 +63,11 @@ export function useClipboardActions(
     const shapes = only != null ? [] : state.shapes.filter((s) => state.selShapes.has(s.id));
     const inShapes = state.captions.filter((c) => c.shape != null && shapes.some((s) => s.id === c.shape) && !words.some((w) => w.id === c.id));
     words.push(...inShapes);
-    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length > 0;
+    // (and the arrows and "+" signs selected for themselves - one pointing at something - with the words over those arrows)
+    const lone = only != null ? [] : state.arrows.filter((a) => state.selArrows.has(a.id));
+    const lonePluses = only != null ? [] : state.pluses.filter((p) => state.selPluses.has(p.id));
+    words.push(...state.captions.filter((c) => c.arrow != null && lone.some((a) => a.id === c.arrow) && !words.some((w) => w.id === c.id)));
+    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length > 0;
     // (a set selected takes what it holds along, selected or not - as it does when dragged)
     const held = only != null ? [] : state.sets.filter((b) => selFlow.sets.has(b.id)).map((b) => setMembers(state, b));
     const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
@@ -82,9 +86,14 @@ export function useClipboardActions(
     if (!drawn && !carried.length && !flow && !others) return null;
     const amongWords = drawn?.captions ?? [];
     const allWords = [...amongWords, ...words.filter((c) => !amongWords.some((a) => a.id === c.id))];
+    // (each arrow and "+" once: among the atoms, or selected for itself)
+    const allArrows = [...(drawn?.arrows ?? []), ...lone.filter((a) => !drawn?.arrows?.some((x) => x.id === a.id))];
+    const allPluses = [...(drawn?.pluses ?? []), ...lonePluses.filter((p) => !drawn?.pluses?.some((x) => x.id === p.id))];
     return {
       part: {
         ...(drawn ?? { atoms: [], bonds: [] }),
+        ...(allArrows.length ? { arrows: allArrows } : {}),
+        ...(allPluses.length ? { pluses: allPluses } : {}),
         ...(allWords.length ? { captions: allWords } : {}),
         ...(carried.length ? { molecules3d: carried } : {}),
         ...(flow ? { flow } : {}),

@@ -903,6 +903,18 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /**
+   * The arrows and "+" signs selected for themselves - one standing alone,
+   * pointing at something on a slide - beside those a selection carries as
+   * it lies among its atoms (utils/selectionScheme); the view's.
+   */
+  selArrows: Set<number>;
+  selPluses: Set<number>;
+  selectArrows: (ids: Iterable<number>, add?: boolean) => void;
+  selectPluses: (ids: Iterable<number>, add?: boolean) => void;
+  /** An arrow or a "+" added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
+  toggleArrowSel: (id: number) => void;
+  togglePlusSel: (id: number) => void;
   /** An arrow being drawn from Quick Add, from a point to its point - the view's (components/arrowFrom). */
   arrowDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
   setArrowDraft: (draft: EditorState["arrowDraft"]) => void;

@@ -27,14 +27,14 @@ import type { EditorState } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { cornersOf } from "./selection";
 import { sheetRoom } from "./textSheets";
-import { schemeAmong } from "./copyPaste";
+import { selectionScheme } from "./selectionScheme";
 import { boxOf } from "../presenting/slides";
 
 export type Box = { x0: number; y0: number; x1: number; y1: number };
 
 type Selected = Pick<
   EditorState,
-  "model" | "sel" | "sel3d" | "selCaptions" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes"
+  "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes"
 >;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
@@ -62,15 +62,14 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     const r = layoutMolecule(la, lb, opts, zoom).bounds;
     take(r.min.x, r.min.y, r.max.x, r.max.y);
   }
-  // the arrows, "+" signs and words among them, and the words selected
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+  // the arrows, "+" signs and words among them, and those selected for themselves
+  const among = selectionScheme(st);
   for (const a of among.arrows) {
     const b = arrowBox(a);
     take(b.x0, b.y0, b.x1, b.y1);
   }
   for (const p of among.pluses) take(p.x - opts.fontPx / 2, p.y - opts.fontPx / 2, p.x + opts.fontPx / 2, p.y + opts.fontPx / 2);
-  const words = [...among.captions, ...st.captions.filter((c) => st.selCaptions.has(c.id) && !among.captions.some((x) => x.id === c.id))];
-  for (const c of words) {
+  for (const c of among.captions) {
     // (at their own size, their letters as they are marked)
     const set = wordsSet(c, opts, labelSetOf(opts));
     take(c.x - set.halfW, c.y - set.halfH, c.x + set.halfW, c.y + set.halfH);
@@ -135,7 +134,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
     out.push(...boxes.values());
   }
   // the arrows, "+" signs and words not among what is selected, nor selected themselves
-  const among = schemeAmong({ ...st.model, arrows: st.arrows, pluses: st.pluses, captions: st.captions }, st.sel.atoms);
+  const among = selectionScheme(st);
   const taken = (xs: readonly { id: number }[], id: number) => xs.some((x) => x.id === id);
   for (const a of st.arrows) {
     if (taken(among.arrows, a.id)) continue;
@@ -143,7 +142,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   }
   for (const p of st.pluses) if (!taken(among.pluses, p.id)) out.push({ x0: p.x - opts.fontPx / 2, y0: p.y - opts.fontPx / 2, x1: p.x + opts.fontPx / 2, y1: p.y + opts.fontPx / 2 });
   for (const c of st.captions) {
-    if (taken(among.captions, c.id) || st.selCaptions.has(c.id) || c.id === leave?.caption) continue;
+    if (taken(among.captions, c.id) || c.id === leave?.caption) continue;
     const set = wordsSet(c, opts, labelSetOf(opts));
     out.push({ x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH });
   }
