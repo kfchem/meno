@@ -1,7 +1,7 @@
 /**
  * Rendering (docs/RENDER.md): molecules in 3D written as a scene
  * (./renderScene), given to the plugin that fills the role Render - the
- * Blender interface - which prepares a job; the job run apart from Meno,
+ * Blender plugin - which prepares a job; the job run apart from Meno,
  * as a workflow's are (lib/jobs), looked at until it ends - how far it is,
  * as its log says ("progress 12/240") - and what it made, a picture or a
  * film, put on the page beside the molecules: where a placeholder of its
