@@ -14,9 +14,9 @@ import * as THREE from "three";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { drawPart, type DrawnPart } from "../../../../lib/pdf/reader";
 import type { Sheet } from "../../../../lib/pdf/layout";
-import { INK_WIDTHS_PT, inkColour, MARKER_OPACITY } from "../../../../lib/chem/ink";
+import { INK_WIDTHS_PT, inkColour } from "../../../../lib/chem/ink";
 import type { PdfInk } from "../store/types";
-import { strokesGeometry } from "./inkGeometry";
+import { pageInkLook, strokesGeometry } from "./inkGeometry";
 
 /** Meno's hairline and its grey (App.css: --color-gh-line, --color-gh-gray, --color-gh-base). */
 export const LINE = "#d1d9e0";
@@ -313,14 +313,11 @@ function PageInk({ ink, left, topY, unit, opacity }: { ink: readonly PdfInk[]; l
   useEffect(() => () => pieces.forEach((p) => p.geometry.dispose()), [pieces]);
   return (
     <>
-      {pieces.map(({ k, geometry }, i) => {
-        const o = (k.pen === "marker" ? MARKER_OPACITY : 1) * opacity;
-        return (
-          <mesh key={i} geometry={geometry} position={[0, 0, 0.00245]} frustumCulled={false} raycast={() => {}}>
-            <meshBasicMaterial color={inkColour(k, "#000000")} transparent={o < 1} opacity={o} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
-          </mesh>
-        );
-      })}
+      {pieces.map(({ k, geometry }, i) => (
+        <mesh key={i} geometry={geometry} position={[0, 0, 0.00245]} frustumCulled={false} raycast={() => {}}>
+          <meshBasicMaterial color={inkColour(k, "#000000")} {...pageInkLook(k.pen, opacity)} toneMapped={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
     </>
   );
 }
