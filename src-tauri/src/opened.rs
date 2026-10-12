@@ -9,12 +9,14 @@
 //! Each is kept here until the page takes it (`opened_files`), so that one
 //! opened as Meno starts - before the page is there to hear of it - is not
 //! lost; the page is told there are some (`opened-files`) and takes them,
-//! each in a tab, as Open opens a file. Only workspace files: Meno is the
-//! app for .meno alone.
+//! each in a tab, as Open opens a file - the page let read and write each,
+//! as Open's dialog lets it a file picked there. Only workspace files: Meno
+//! is the app for .meno alone.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_fs::FsExt;
 
 /// The workspace files opened from outside and not yet taken by the page.
 #[derive(Default)]
@@ -32,7 +34,7 @@ pub fn workspaces_in<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
     args.into_iter()
         .skip(1)
         .filter(|a| !a.starts_with('-'))
-        .map(PathBuf::from)
+        .map(std::path::PathBuf::from)
         .filter(|p| p.is_absolute() && is_workspace(p))
         .map(|p| p.to_string_lossy().into_owned())
         .collect()
@@ -49,10 +51,17 @@ pub fn workspaces_of(urls: &[tauri::Url]) -> Vec<String> {
         .collect()
 }
 
-/// Workspace files to open: kept, and the page told.
+/// Workspace files to open: the page let read and write each - as Open's
+/// dialog lets it a file picked there - kept, and the page told.
 pub fn open(app: &AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;
+    }
+    for p in &paths {
+        if let Some(scope) = app.try_fs_scope() {
+            let _ = scope.allow_file(p);
+        }
+        let _ = app.state::<tauri::scope::Scopes>().allow_file(p);
     }
     if let Ok(mut kept) = app.state::<Opened>().0.lock() {
         kept.extend(paths);
@@ -80,6 +89,7 @@ pub fn opened_files(state: tauri::State<'_, Opened>) -> Vec<String> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
 
     fn scratch() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("meno-opened-{}", uuid::Uuid::new_v4()));
