@@ -16,6 +16,7 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
   return {
     setHoveredShape: (id: number | null) => set((prev: EditorState) => (prev.hoveredShape === id ? prev : { ...prev, hoveredShape: id })),
     setShapeDraft: (draft: EditorState["shapeDraft"]) => set({ shapeDraft: draft }),
+    setArrowDraft: (draft: EditorState["arrowDraft"]) => set({ arrowDraft: draft }),
     selectShapes: (ids: Iterable<number>, add = false) =>
       set((prev: EditorState) => ({ ...prev, selShapes: new Set([...(add ? prev.selShapes : []), ...ids]) })),
     toggleShapeSel: (id: number) =>

@@ -10,7 +10,8 @@ import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
-import { arrowEnds } from "../../../../lib/chem/reactionScheme";
+import { arrowPoints } from "../../../../lib/chem/reactionScheme";
+import { ARROW_KINDS, WEIGHT_SHARE } from "../../../../lib/chem/reactionArrow";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
@@ -84,10 +85,8 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
     p.x <= Math.max(...xs) + reach &&
     p.y >= Math.min(...ys) - reach &&
     p.y <= Math.max(...ys) + reach;
-  const arrows = (drawn.arrows ?? []).filter((a) => {
-    const { from, to } = arrowEnds(a);
-    return within(from) && within(to);
-  });
+  // (its ends and the corners it turns at, all of them)
+  const arrows = (drawn.arrows ?? []).filter((a) => arrowPoints(a).every(within));
   const taken = new Set(arrows.map((a) => a.id));
   return {
     arrows,
@@ -171,6 +170,25 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 /** A colour as Meno keeps one: #rrggbb. */
 export const isColour = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
+/** The most corners an arrow is read with. */
+const CORNERS_MOST = 64;
+
+/** An arrow as it reads: its kind, heads, dashes, weight, corners and colour kept only where each is one Meno knows. */
+function withArrowForm(a: Arrow): Arrow {
+  const { kind, heads, full, dash, weight, corners, color, ...rest } = a;
+  const turns = Array.isArray(corners) ? corners.filter((c) => c && isNum(c.along) && isNum(c.across)).slice(0, CORNERS_MOST).map((c) => ({ along: c.along, across: c.across })) : [];
+  return {
+    ...rest,
+    ...(ARROW_KINDS.includes(kind as never) ? { kind } : {}),
+    ...(heads === 2 ? { heads: 2 as const } : {}),
+    ...(full === true ? { full: true as const } : {}),
+    ...(dash === true ? { dash: true as const } : {}),
+    ...(weight && weight in WEIGHT_SHARE ? { weight } : {}),
+    ...(turns.length ? { corners: turns } : {}),
+    ...(isColour(color) ? { color } : {}),
+  };
+}
+
 /** The structure in Meno's own record, or null if `text` is not one this version reads. */
 export function readRecord(text: string): Drawn | null {
   let data: unknown;
@@ -224,9 +242,9 @@ export function readDrawn(data: unknown): Drawn | null {
     return null;
   }
   // (arrows and pluses that do not read are left out, not the structure)
-  const arrows = (Array.isArray(r.arrows) ? (r.arrows as Partial<Arrow>[]) : []).filter(
-    (a) => isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length),
-  ) as Arrow[];
+  const arrows = (Array.isArray(r.arrows) ? (r.arrows as Partial<Arrow>[]) : [])
+    .filter((a) => isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
+    .map((a) => withArrowForm(a as Arrow));
   const pluses = (Array.isArray(r.pluses) ? (r.pluses as Partial<Plus>[]) : []).filter(
     (p) => isNum(p.id) && isNum(p.x) && isNum(p.y),
   ) as Plus[];
@@ -556,7 +574,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
   const flow = drawn.flow ? partsBounds(drawn.flow) : null;
   const points = [
     ...drawn.atoms,
-    ...(drawn.arrows ?? []).flatMap((a) => Object.values(arrowEnds(a))),
+    ...(drawn.arrows ?? []).flatMap((a) => arrowPoints(a)),
     ...(drawn.pluses ?? []),
     ...(drawn.captions ?? []),
     ...(drawn.molecules3d ?? []).map((m) => m.at),

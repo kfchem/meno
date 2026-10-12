@@ -1,7 +1,7 @@
 import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } from "../document";
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
-import type { ArrowLook } from "../../../../lib/chem/reactionArrow";
+import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
 import type { EditorAtom } from "../../../../utils/importers";
@@ -98,7 +98,14 @@ export type SelFlow = { sets: Set<number>; steps: Set<number> };
 export type Model = { atoms: Atom[]; bonds: Bond[] };
 /** Rings filled with a colour (#rrggbb), behind the drawing, by each ring's key: its atoms' ids, ascending, joined by "-" (utils/rings). */
 export type RingFills = Record<string, string>;
-export type Arrow = {
+/**
+ * An arrow (docs/EDITOR-2D.md, *Arrows*): a reaction's, or any - where its
+ * middle is, which way it points from its tail to its point and how far
+ * apart they are; its kind, heads, dashes, weight and the corners its line
+ * turns at (lib/chem/reactionArrow `ArrowForm`); its colour (#rrggbb; none
+ * of its own, the bonds' ink).
+ */
+export type Arrow = ArrowForm & {
   id: number;
   x: number;
   y: number;
@@ -106,6 +113,17 @@ export type Arrow = {
   length: number; // world units
   /** What it sets for itself over the drawing style: its line and its head. */
   look?: ArrowLook;
+  color?: string;
+};
+/** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
+export type ArrowFormPatch = {
+  kind?: ArrowKind | null;
+  heads?: 1 | 2;
+  full?: boolean;
+  dash?: boolean;
+  weight?: ArrowWeight | "regular";
+  corners?: ArrowCorner[] | null;
+  color?: string | null;
 };
 /** A "+" between two structures of a reaction scheme: where its middle is. */
 export type Plus = { id: number; x: number; y: number };
@@ -889,6 +907,9 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** An arrow being drawn from Quick Add, from a point to its point - the view's (components/arrowFrom). */
+  arrowDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
+  setArrowDraft: (draft: EditorState["arrowDraft"]) => void;
   setHoveredShape: (id: number | null) => void;
   setShapeDraft: (draft: ShapeDraft | null) => void;
   selectShapes: (ids: Iterable<number>, add?: boolean) => void;
@@ -1307,8 +1328,12 @@ export type EditorState = {
   forgetInteraction: () => void;
   /** A reaction arrow added, pointing `angle` radians from the x axis (right), as one step; its id. */
   addArrow: (x: number, y: number, angle?: number, length?: number) => number;
+  /** An arrow drawn from a point to its point, as one step; its id. */
+  addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => number;
   /** An arrow moved or reshaped; a run of changes in one gesture - a drag - is one step. */
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
+  /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
+  setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** A "+" added, as one step; its id. */
   addPlus: (x: number, y: number) => number;
   removeArrow: (id: number) => void;
