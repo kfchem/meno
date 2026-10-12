@@ -72,6 +72,12 @@ describe("the right-click menu", () => {
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
+  it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
+    expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
+    expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);
+    expect(menu({ ...target({ selection: "here", drawing: true }), kind: "atom", id: 1 }, { records: { spread: false, run: none } }).listed).toContain("Lay out as a grid");
+  });
+
   it("offers on empty space Paste and Select all, and what the workspace does as a whole - nothing Quick Add puts down", () => {
     const { icons, listed } = menu(target({}), { canvas: [{ name: "Open…", keys: "", run: none }, { name: "Fit to content", keys: "", run: none, divider: true }] });
     expect(icons).toEqual(["Paste", "Select all"]);

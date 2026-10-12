@@ -114,6 +114,8 @@ export type MenuMolecule3D = {
   lists?: { name: string; open: () => void }[];
   /** The output it was read from, shown in a tab of its own, by its name: unset, where it was read from none. */
   output?: { name: string; show: () => void };
+  /** One of a stack (utils/stacks): its molecules laid out as a grid, or - laid out - stacked again; unset, where it is none. */
+  stack?: { spread: boolean; run: () => void };
 };
 
 /**
@@ -126,6 +128,7 @@ export type MenuMolecule3D = {
  */
 export default function PartMenu({
   target,
+  records,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -317,6 +320,8 @@ export default function PartMenu({
   clipboard: MenuClipboard;
   /** The molecule in 3D right-clicked, when it is one. */
   molecule3d?: MenuMolecule3D;
+  /** The stack of drawings what was right-clicked is a record of (utils/stacks): whether it is laid out as a grid, and laid out so, or stacked again. */
+  records?: { spread: boolean; run: () => void };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   onClose: () => void;
@@ -377,6 +382,8 @@ export default function PartMenu({
     : [];
   // (a colour, a highlight or a ring's fill, for what is drawn)
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
+  // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
+  const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -403,6 +410,7 @@ export default function PartMenu({
               },
             ]
           : []),
+        ...(molecule3d.stack ? [{ name: molecule3d.stack.spread ? "Stack again" : "Lay out as a grid", keys: "", run: molecule3d.stack.run }] : []),
         ...(molecule3d.lists ?? []).map((l) => ({ name: l.name, keys: "", run: l.open })),
         ...(molecule3d.output ? [{ name: `Show ${molecule3d.output.name}`, keys: "", run: molecule3d.output.show }] : []),
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),
@@ -621,6 +629,7 @@ export default function PartMenu({
                 { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
               ]
             : []),
+          ...stackItem,
           ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
@@ -670,6 +679,7 @@ export default function PartMenu({
               ]
             : []),
           { name: "Select this structure", keys: "", run: onSelectStructure },
+          ...stackItem,
         ];
   const row = items.filter((i) => i.icon);
   const list = items.filter((i) => !i.icon);

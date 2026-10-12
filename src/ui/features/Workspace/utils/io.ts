@@ -8,6 +8,8 @@ import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc
 import { bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
+import type { StructureRead } from "../../../../lib/io/structures";
+import { stackedRecords } from "./stacks";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -74,8 +76,24 @@ export async function processFileContent(
   if (kind.id === MENO_KINDS.workspace.id || kind.id === MENO_KINDS.record.id) {
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
-  // a structure's file: what it holds, as its reader gives it, checked
-  return readStructureFile(filename, content, kind);
+  // a structure's file: what it holds, as its reader gives it, checked -
+  // its several records drawn flat a stack of drawings
+  return stackedRead(await readStructureFile(filename, content, kind));
+}
+
+/**
+ * A structure's file read, its several records drawn flat - an SD file's -
+ * one stack of drawings (utils/stacks): each record standing where the
+ * drawing's middle was, and the file centred on the first, which the stack
+ * shows.
+ */
+export function stackedRead({ records, ...read }: StructureRead): ProcessedFileResult {
+  if (!records || records.length < 2) return read;
+  const model = stackedRecords(read.model, records);
+  const first = new Set(records[0].atoms);
+  const atoms = model.atoms.filter((a) => first.has(a.id));
+  const centroid = atoms.length ? { x: atoms.reduce((t, a) => t + a.x, 0) / atoms.length, y: atoms.reduce((t, a) => t + a.y, 0) / atoms.length } : read.centroid;
+  return { ...read, model, centroid };
 }
 
 /**
@@ -91,6 +109,8 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
       r: a.r ?? 0.9,
       el: a.el ?? "C",
       ...chemistry(a),
+      // (of a stack of drawings, its stack and record: utils/stacks)
+      ...(a.stack ? { stack: a.stack } : {}),
     })),
     bonds: mdl.bonds.map((b) => ({
       id: b.id,

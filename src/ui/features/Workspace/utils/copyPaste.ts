@@ -19,7 +19,7 @@ import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../..
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
-import type { Arrow, Atom, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -345,6 +345,21 @@ export function readDrawn(data: unknown): Drawn | null {
     if (!u || !Array.isArray(u.said) || !u.said.length || u.said.length > 8 || !u.said.every((t) => typeof t === "string" && t.length <= 400) || typeof u.as !== "string" || u.as.length > 4000) delete out.unsure;
     return out;
   };
+  // (of a stack of drawings, its stack and record where they read - and only what of them does: utils/stacks)
+  const withStack = <T extends { stack?: unknown }>(x: T): T => {
+    const out = { ...x };
+    const t = x.stack as Partial<Record<keyof AtomStack, unknown>> | undefined;
+    if (!t || !Number.isInteger(t.id) || (t.id as number) < 1 || !Number.isInteger(t.record) || (t.record as number) < 0) delete out.stack;
+    else
+      out.stack = {
+        id: t.id,
+        record: t.record,
+        ...(typeof t.title === "string" && t.title.trim() ? { title: t.title.slice(0, TITLE_MOST) } : {}),
+        ...(t.spread === true ? { spread: true } : {}),
+        ...(t.shown === true ? { shown: true } : {}),
+      };
+    return out;
+  };
   // (a ring's fill where its key and its colour read)
   const ringFills = Object.fromEntries(
     Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
@@ -352,7 +367,7 @@ export function readDrawn(data: unknown): Drawn | null {
     ),
   ) as Record<string, string>;
   return {
-    atoms: atoms.map((a) => withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]))) as Atom),
+    atoms: atoms.map((a) => withStack(withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"])))) as Atom),
     bonds: bonds.map((b) => withRead(withColours(withMarks(b, ["stereoAt"])))) as Bond[],
     ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
@@ -382,6 +397,8 @@ function readInk(raw: unknown): Ink | null {
 }
 
 const COLOUR = /^#[0-9a-f]{6}$/i;
+/** The longest a record's title is kept, in characters. */
+const TITLE_MOST = 400;
 
 /** A shape as a copy or a workspace carries it, where it reads: its kind and where it lies, its tail, and its look - what does not read left as a shape has it unsaid. */
 function readShape(raw: unknown): Shape | null {
@@ -471,6 +488,13 @@ function listOf(v: unknown): CarriedList | undefined {
   return { id: l.id, row: l.row as number | null, ...(isNum(l.iso) && l.iso > 0 ? { iso: l.iso } : {}) };
 }
 
+/** A molecule's stack, where it reads as one: its id, and whether it is laid out as a grid (utils/stacks). */
+function stackOf(given: unknown): Carried3D["stack"] | undefined {
+  const s = given as { id?: unknown; spread?: unknown } | undefined;
+  if (!s || !Number.isInteger(s.id) || (s.id as number) < 1) return undefined;
+  return { id: s.id as number, ...(s.spread === true ? { spread: true as const } : {}) };
+}
+
 /** A molecule in 3D in Meno's own record, or null where it does not read as one. */
 export function readCarried3D(given: unknown): Carried3D | null {
   const m = given as Partial<Record<keyof Carried3D, unknown>>;
@@ -510,6 +534,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.look === "secondary" ? { look: m.look } : {}),
     ...(measures.length ? { measures } : {}),
     ...(typeof m.name === "string" ? { name: m.name } : {}),
+    ...(typeof m.title === "string" && m.title ? { title: m.title } : {}),
+    ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
+    ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),
     ...(Number.isInteger(m.frame) ? { frame: m.frame as number } : {}),
     ...(listOf(m.list) ? { list: listOf(m.list) } : {}),

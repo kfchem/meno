@@ -11,6 +11,7 @@ import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
 import Frames3D from "./Frames3D";
+import { STACK_SWAP_MS } from "../utils/stacks";
 import Overlay3D from "./Overlay3D";
 import StereoText from "./StereoText";
 import { calcLine } from "../../../../lib/calc/output";
@@ -93,6 +94,16 @@ const easeInOutCubic = (u: number) => {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 };
 const SPRING = { stiffness: 150, damping: 15 };
+/**
+ * A stack going over from one molecule to the next (utils/stacks, as long as
+ * STACK_SWAP_MS): how much larger the one let go of grows as it
+ * comes towards the viewer and fades, and how much smaller the next starts
+ * as it rises from behind; and how far each travels in depth, as a share of
+ * its reach.
+ */
+const SWAP_NEAR = 0.35;
+const SWAP_FAR = 0.3;
+const SWAP_DEPTH = 1.5;
 /** The most dashes and arc steps one molecule's measurements are drawn with. */
 const MEASURE_PIECES = 2048;
 
@@ -184,6 +195,15 @@ export type Molecule3DViewProps = {
   surfaceColour?: { grid: Grid; from: number; to: number } | null;
   /** Its measurement whose value is being typed, by id: its chip a field; none, none. */
   editingMeasure?: number | null;
+  /** One of a stack, the one it shows (utils/stacks): the stack's chip, not its own, says which (StackChip3D). */
+  stacked?: boolean;
+  /**
+   * Its stack going over to it or from it (`dir`), since `start`
+   * (`performance.now()`): the one let go of comes towards the viewer and
+   * fades, and says so once gone (`onSwapped`); the next rises from behind.
+   */
+  swap?: { dir: "in" | "out"; start: number };
+  onSwapped?: () => void;
   /** A value typed for a measurement, and Enter pressed: set it (utils/edit3d). */
   onSetMeasure?: (measure: number, value: number) => void;
   /** The typing let go of - Escape, or the field left. */
@@ -331,8 +351,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // how far each drawn bond is there, on its way to what the frame shown has
   const there = useRef<Float32Array>(Float32Array.from(fb ? fb.present[frameOf(solid, frame)] : []));
   if (fb && there.current.length !== fb.bonds.length) there.current = Float32Array.from(fb.present[frameOf(solid, frame)]);
-  // (rising out of a drawing, it is its full size from the first: its atoms grow instead)
-  const grown = useRef({ v: leaving || props.rising ? 1 : 0, vel: 0, to: leaving ? 0 : 1 });
+  // (rising out of a drawing, it is its full size from the first: its atoms grow instead;
+  // and coming or going in its stack, it is its full size too: STACK_SWAP_MS)
+  const grown = useRef({ v: leaving || props.rising || props.swap ? 1 : 0, vel: 0, to: leaving ? 0 : 1 });
   // how far its atoms have grown, rising out of a drawing
   const risen = useRef(props.rising ? 0 : 1);
   const level = useRef(0);
@@ -635,6 +656,30 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
     }
     placed.current.scale.setScalar(Math.max(grown.current.v, 1e-3));
+    // its stack going over to the next: towards the viewer and out of sight,
+    // or up from behind into it
+    const sw = props.swap;
+    let seenBy = 1;
+    if (sw) {
+      const t = Math.min(1, (performance.now() - sw.start) / STACK_SWAP_MS);
+      const u = easeInOutCubic(t);
+      const near = sw.dir === "out" ? u : u - 1;
+      placed.current.scale.multiplyScalar(sw.dir === "out" ? 1 + SWAP_NEAR * u : 1 - SWAP_FAR * (1 - u));
+      placed.current.position.z += near * SWAP_DEPTH * solid.reach[look];
+      seenBy = sw.dir === "out" ? 1 - u : u;
+      if (t < 1) moving = true;
+      else if (sw.dir === "out") {
+        placed.current.visible = false;
+        props.onSwapped?.();
+        invalidate();
+        return;
+      }
+    }
+    if (atomsMat.current.opacity !== seenBy) {
+      atomsMat.current.opacity = seenBy;
+      if (bondsMat.current) bondsMat.current.opacity = seenBy;
+      if (ribbonMat.current) ribbonMat.current.opacity = seenBy;
+    }
     // the atom under the pointer, and the chosen atoms' rings
     for (const [i, s] of swell.current) {
       if (spring(s, step)) reshaped = moving = true;
@@ -1322,7 +1367,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           single geometry's only when it is pointed at) */}
       {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited) && !props.rising && (
         <group ref={pill}>
-          {solid.frames.length > 1 || m.calc ? (
+          {/* (one of a stack: its stack's chip says which, not its own - StackChip3D) */}
+          {(solid.frames.length > 1 || m.calc) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}

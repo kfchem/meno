@@ -27,6 +27,27 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     broken({ ...read, molecules3d: [{ ...m, bonds: [{ a1: 0, a2: 7, order: 1 }] }] }, /bond of a molecule in 3D joins no atoms/);
     broken({ ...read, molecules3d: [{ ...m, frames: [[0, 0, 0]] }] }, /frame of a molecule in 3D is not whole/);
     broken({ ...read, pluses: [{ x: 1 }] }, /"\+" sign is not placed/);
+    broken({ ...mol, records: [{ atoms: [mol.model.atoms[0].id] }, { atoms: [-9] }] }, /record of its drawing holds atoms it does not have/);
+  });
+});
+
+describe("an SD file of records drawn flat, as Meno's own reader gives it", () => {
+  // (two records, each a C-O drawn flat, titled on their first lines - one not)
+  const record = (title: string) =>
+    [title, "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+      "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+      "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+      "  1  2  1  0", "M  END", "$$$$"].join("\n");
+  it("is one drawing, saying each record's atoms and its title where it gives one: a stack of them on the page", () => {
+    const read = readStructures("sdf", "m.sdf", [record("methanol"), record("")].join("\n") + "\n");
+    expect(read.records?.map((r) => [r.atoms.length, r.title ?? null])).toEqual([
+      [2, "methanol"],
+      [2, null],
+    ]);
+    expect(new Set(read.records!.flatMap((r) => r.atoms))).toEqual(new Set(read.model.atoms.map((a) => a.id)));
+    expect(checkedStructures(read, "m.sdf")).toBe(read);
+    // (one record: none said)
+    expect(readStructures("sdf", "m.sdf", record("methanol") + "\n").records).toBeUndefined();
   });
 });
 
@@ -48,6 +69,23 @@ function het(serial: number, el: string, x: number, y: number, z: number, more: 
   return line.join("");
 }
 const conect = (from: number, ...to: number[]) => "CONECT" + [from, ...to].map((n) => String(n).padStart(5)).join("");
+
+describe("an SD file of records in 3D, as Meno's own reader gives it", () => {
+  // (two records, each three atoms spread in depth, titled on their first lines - one not)
+  const record = (title: string, z: number) =>
+    [title, "  Meno            3D", "", "  3  2  0  0  0  0  0  0  0  0999 V2000",
+      `    0.0000    0.0000    ${z.toFixed(4)} O   0  0  0  0  0  0  0  0  0  0  0  0`,
+      "    0.7600    0.5900    0.5000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+      "   -0.7600    0.5900   -0.5000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+      "  1  2  1  0", "  1  3  1  0", "M  END", "$$$$"].join("\n");
+  it("is a molecule in 3D for each record, each with its record's title where it gives one", () => {
+    const read = readStructures("sdf", "w.sdf", [record("aspirin", 0), record("", 0.2)].join("\n") + "\n");
+    expect(read.molecules3d?.map((m) => [m.name, m.title ?? null])).toEqual([
+      ["w.sdf", "aspirin"],
+      ["w.sdf", null],
+    ]);
+  });
+});
 
 describe("a PDB file, as Meno's own reader gives it", () => {
   it("is a molecule in 3D: its atoms, and its bonds from CONECT records and from its atoms' distances", () => {

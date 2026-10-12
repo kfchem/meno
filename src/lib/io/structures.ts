@@ -25,6 +25,8 @@ export type FileMolecule3D = {
   energies?: number[];
   /** The file it came from. */
   name?: string;
+  /** Its record's title, where its file gives one: an SD file's record's first line. */
+  title?: string;
   frame?: number;
   /** Its bonds are where its atoms stand close enough, frame by frame: its file gives none (an XYZ file). */
   bondsFrom?: "distance";
@@ -47,6 +49,8 @@ export type StructureRead = {
   /** A reaction's "+" signs: their middles. */
   pluses?: { x: number; y: number }[];
   molecules3d?: FileMolecule3D[];
+  /** A file's several records drawn flat - an SD file's: each one's atoms in the drawing, by id, and its title where it gives one. */
+  records?: { atoms: number[]; title?: string }[];
 };
 
 /**
@@ -150,16 +154,22 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && (said[i] || depthOf(m) > 0.1);
   const molecules3d = molecules
     .filter(inDepth)
-    .map((m) => ({ atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}) }));
+    .map((m) => {
+      // (and its record's title, its first line, where it gives one)
+      const title = m.ct?.name.trim();
+      return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}) };
+    });
   const flat = molecules.filter((m, i) => !inDepth(m, i));
   if (molecules3d.length && !flat.some((m) => m.atoms.length)) {
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
   }
-  const { model, centroid } = moleculesToEditorModel(flat);
+  const { model, centroid, records } = moleculesToEditorModel(flat);
   // The MOL parser returns an empty molecule rather than nothing for
   // unrecognised text, so check atoms, not molecules.
   if (!model.atoms.length) throw noMolecules(name);
-  return { model, centroid, ...(molecules3d.length ? { molecules3d } : {}) };
+  // (several records with atoms: each one's atoms and title, for a stack of them)
+  const held = records.filter((r) => r.atoms.length);
+  return { model, centroid, ...(held.length > 1 ? { records: held } : {}), ...(molecules3d.length ? { molecules3d } : {}) };
 }
 
 /**
@@ -265,6 +275,9 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
   if (!bonds.every((b) => finite(b.id) && ids.has(b.a) && ids.has(b.b))) throw bad("a bond of its drawing joins no atoms");
   if (s!.arrow != null && ![s!.arrow.x1, s!.arrow.y1, s!.arrow.x2, s!.arrow.y2].every(finite)) throw bad("its arrow is not placed");
   if (s!.pluses != null && !(Array.isArray(s!.pluses) && s!.pluses.every(isPoint))) throw bad("a \"+\" sign is not placed");
+  if (s!.records != null && !(Array.isArray(s!.records) && s!.records.every((r) => Array.isArray(r?.atoms) && r.atoms.every((id) => ids.has(id)) && (r.title == null || typeof r.title === "string")))) {
+    throw bad("a record of its drawing holds atoms it does not have");
+  }
   for (const m of s!.molecules3d ?? []) {
     const n = m?.atoms?.length ?? 0;
     if (!n || !m.atoms.every((a) => isPoint(a) && finite(a.z) && typeof a.el === "string")) throw bad("a molecule in 3D is not placed");

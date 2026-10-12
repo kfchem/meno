@@ -71,6 +71,7 @@ export default function Frames3D({
   unread,
   made,
   area,
+  title,
 }: {
   count: number;
   frame: number;
@@ -95,6 +96,8 @@ export default function Frames3D({
   made?: { label: string; text: string }[];
   /** What it keeps within: the canvas. */
   area?: Element;
+  /** What the one told is called - a stack's molecule's record's title - said after which it is (utils/stacks). */
+  title?: string;
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -244,6 +247,7 @@ export default function Frames3D({
                   <>
                     {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
                     {told + 1} / {count}
+                    {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
                     {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
                     {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
                   </>

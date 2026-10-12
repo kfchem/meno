@@ -538,6 +538,8 @@ export function convertMolToEditorModel(m: ParsedMol, scale: number) {
 export function moleculesToEditorModel(mols: ParsedMol[]): {
   model: EditorModel;
   centroid: { x: number; y: number };
+  /** Each molecule's atoms, by id, in the order given, and its title where its record gives one (an SD file's records). */
+  records: { atoms: number[]; title?: string }[];
 } {
   // Merge all molecules into one model, keep relative positions.
   // Compute average 2D bond length to scale to NOMINAL_BOND_LENGTH.
@@ -562,6 +564,7 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
 
   const atoms: EditorAtom[] = [];
   const bonds: EditorBond[] = [];
+  const records: { atoms: number[]; title?: string }[] = [];
   // Use a single idCounter for both atoms and bonds to keep IDs unique across the model
   let idCounter = 1;
   for (const m of mols) {
@@ -596,6 +599,8 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     idCounter = markSgroups(mine, theirBonds, m, (i) => base + i, (i) => base + m.atoms.length + i, idCounter);
     atoms.push(...mine);
     bonds.push(...theirBonds);
+    const title = m.ct?.name.trim();
+    records.push({ atoms: mine.map((a) => a.id), ...(title ? { title } : {}) });
   }
   // centroid after scaling
   let cx = 0,
@@ -608,7 +613,7 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     cx /= atoms.length;
     cy /= atoms.length;
   }
-  return { model: { atoms, bonds }, centroid: { x: cx, y: cy } };
+  return { model: { atoms, bonds }, centroid: { x: cx, y: cy }, records };
 }
 
 /**

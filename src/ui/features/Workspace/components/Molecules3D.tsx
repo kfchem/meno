@@ -13,6 +13,7 @@ import { atomAt, bondAt, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, so
 import { movingFor, placesOf, valueOf } from "../utils/edit3d";
 import { kindOf, type MeasureKind } from "../utils/measure3d";
 import { movedUnderPointer, pressMovedUnder, setViewGoal } from "./viewGoal";
+import { hiddenInStacks, placeInStack, STACK_SWAP_MS } from "../utils/stacks";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
@@ -28,6 +29,7 @@ import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "
 import { titled } from "../../../../lib/calc/sources";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import Molecule3DView from "./Molecule3DView";
+import StackChip3D from "./StackChip3D";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { editorLayoutOptions } from "../layoutOptions";
 import { MARK_SCALE } from "../chem/marks";
@@ -131,8 +133,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   });
   // the drawing's atom under the pointer: lit in the molecules made from it
   const hoveredDrawn = useEditor((s) => s.hovered.atomId);
-  // and the drawing each was made from, which may have changed since
-  const drawing = useEditor((s) => s.model);
+  // and the drawing each was made from, which may have changed since (a
+  // record of a stack of drawings out of sight still there: utils/stacks)
+  const drawing = useEditor((s) => s.fullModel);
   const remake = useContext(Remake3D);
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
   const stereoLabels = useAppSettings((s) => s.chemistry.stereoLabels);
@@ -180,6 +183,42 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const [hold, setHold] = useState<{ id: number; from: number; start: number } | null>(null);
   // molecules taken away, shrinking out of view: as they were, and how they were turned and shown
   const [leaving, setLeaving] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number }[]>([]);
+  // of each stack, the molecule it shows (utils/stacks): those out of sight not drawn; and a stack
+  // going over to another, the one let go of drawn as it goes (`receding`), the next as it comes (`arriving`)
+  const stacksShown = useEditor((s) => s.stacksShown);
+  const hiddenStacked = useMemo(() => hiddenInStacks(molecules, stacksShown), [molecules, stacksShown]);
+  const [receding, setReceding] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number; start: number }[]>([]);
+  const arriving = useRef(new Map<number, number>());
+  const showingBefore = useRef<{ shown: Map<number, number>; turns: typeof turns; frames: typeof frames } | null>(null);
+  useEffect(() => {
+    const shown = new Map<number, number>();
+    for (const m of molecules) if (m.stack && !m.stack.spread && !hiddenStacked.has(m.id)) shown.set(m.stack.id, m.id);
+    const was = showingBefore.current;
+    showingBefore.current = { shown, turns, frames };
+    if (!was) return;
+    const now = performance.now();
+    const going: typeof receding = [];
+    for (const [stack, id] of shown) {
+      const before = was.shown.get(stack);
+      const m = before != null && before !== id ? molecules.find((x) => x.id === before) : undefined;
+      if (!m) continue;
+      // (one let go of before it had all come into view goes from as far as it had come)
+      const came = arriving.current.get(before!);
+      const t = came != null ? Math.min(1, (now - came) / STACK_SWAP_MS) : 1;
+      going.push({ m, turn: was.turns[before!], frame: was.frames[before!] ?? 0, start: now - (1 - t) * STACK_SWAP_MS });
+      arriving.current.set(id, now);
+    }
+    // (gone through quickly, a stack draws the last two it let go of as they go, no more)
+    const stacks = new Set(going.map((g) => g.m.stack?.id));
+    if (going.length)
+      setReceding((r) => {
+        const last = new Map<number | undefined, (typeof r)[number]>();
+        for (const x of r) if (stacks.has(x.m.stack?.id)) last.set(x.m.stack?.id, x);
+        return [...r.filter((x) => !stacks.has(x.m.stack?.id) || last.get(x.m.stack?.id) === x), ...going];
+      });
+    const start = now;
+    for (const [id, at] of arriving.current) if (start - at > 1000) arriving.current.delete(id);
+  }, [molecules, hiddenStacked, turns, frames]);
   const before = useRef({ molecules, turns, frames });
   useEffect(() => {
     const now = new Set(molecules.map((m) => m.id));
@@ -208,8 +247,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     const hit = (e: PointerEvent): { id: number } | null => {
       const p = pageOf(e);
       const st = store.getState();
+      // (of a stack, only the one it shows: utils/stacks)
+      const hidden = hiddenInStacks(st.molecules3d, st.stacksShown);
       for (let i = st.molecules3d.length - 1; i >= 0; i--) {
         const m = st.molecules3d[i];
+        if (hidden.has(m.id)) continue;
         if (onMolecule(m, poseNow(m), eyeOf(camera), p.x, p.y, camera.zoom, bondRadiusOf(style[lookOf(m)]))) return { id: m.id };
       }
       return null;
@@ -591,7 +633,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     invalidate();
   };
 
-  if (!molecules.length && !leaving.length) return null;
+  if (!molecules.length && !leaving.length && !receding.length) return null;
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
     return hovered?.id === id ? 1 : 0;
@@ -607,6 +649,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       />
       <ScreenShade3D />
       {molecules.map((m) => {
+        if (hiddenStacked.has(m.id)) return null;
+        const inStack = placeInStack(molecules, m);
+        const arrived = arriving.current.get(m.id);
         // (one of its lists open under it: the row chosen moves it, the row pointed at - or chosen - marks its atoms)
         const open = lists[m.id];
         const list = open ? resultsOn(m.calc?.results, "list").find((r) => resultKey(r) === open.list) : undefined;
@@ -660,6 +705,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
               st.setMeasure3d(m.id, measure, value);
             }}
             onEditDone={() => store.getState().editMeasure3d(null)}
+            stacked={!!inStack}
+            swap={arrived != null && performance.now() - arrived < 1000 ? { dir: "in", start: arrived } : undefined}
             list={
               list ? (
                 <CalcList3D
@@ -692,6 +739,48 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           />
         );
       })}
+      {/* each stack's chip, below the one it shows: the stack's, kept as its molecules go over one to the next */}
+      {molecules.map((m) => {
+        const inStack = !hiddenStacked.has(m.id) ? placeInStack(molecules, m) : null;
+        if (!inStack || !m.stack) return null;
+        const stack = m.stack.id;
+        return (
+          <StackChip3D
+            key={`stack-${stack}`}
+            shown={m}
+            turn={turns[m.id]}
+            frame={frames[m.id] ?? 0}
+            style={style}
+            index={inStack.index}
+            count={inStack.count}
+            open={hovered?.id === m.id || sel3d.has(m.id)}
+            onShow={(k) => store.getState().showInStack(stack, inStack.members[k])}
+          />
+        );
+      })}
+      {receding.map(({ m, turn, frame, start }) => (
+        <Molecule3DView
+          key={`receding-${m.id}-${start}`}
+          m={m}
+          style={style}
+          look={lookOf(m)}
+          frame={frame}
+          turn={turn}
+          lit={0}
+          selected={false}
+          chosen={NONE}
+          chosenBonds={NONE}
+          holding={null}
+          following={false}
+          framesOpen={false}
+          onFrame={() => {}}
+          hoveredMeasure={null}
+          stereoShown={null}
+          stereoFont={stereoFont}
+          swap={{ dir: "out", start }}
+          onSwapped={() => setReceding((r) => r.filter((x) => x.start !== start || x.m !== m))}
+        />
+      ))}
       {leaving.map(({ m, turn, frame }) => (
         <Molecule3DView
           key={`leaving-${m.id}`}

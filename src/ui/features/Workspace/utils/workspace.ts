@@ -10,6 +10,7 @@
  * calculations' outputs its molecules were read from, its texts, its PDFs
  * and its pictures.
  */
+import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -55,18 +56,23 @@ type Saved = Pick<
 > &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "stacksShown" | "fullModel" | "recordsShown">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
  * showing the frame, as it is - and a calculation's promise it is showing
  * (a surface, a motion), given, as what it came to (lib/calc/asks).
  */
-export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<Saved, "lists3d">>): Carried3D[] {
+const NO_STACKS: Record<number, number> = {};
+
+export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<Saved, "lists3d" | "stacksShown">>): Carried3D[] {
+  // (and, of a stack, the one it shows: utils/stacks)
+  const hidden = hiddenInStacks(state.molecules3d, state.stacksShown ?? NO_STACKS);
   return state.molecules3d.map(({ id, ...m }) => {
     const open = state.lists3d?.[id];
     return {
       ...m,
+      ...(m.stack && !m.stack.spread && !hidden.has(id) ? { shown: true as const } : {}),
       ...(m.calc && open ? { calc: calcShowing(m.calc, open.list, open.row) } : {}),
       ...(state.turns3d[id] ? { turn: state.turns3d[id] } : {}),
       ...(state.frames3d[id] ? { frame: state.frames3d[id] } : {}),
@@ -96,17 +102,18 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
     const at = state.molecules3d.findIndex((m) => m.id === of.molecule);
     return at < 0 ? {} : { of: { molecule: at } };
   };
+  // (the whole drawing - every record of each stack of drawings, the one it shows marked: utils/stacks)
+  const drawing = carriedDrawing(state.fullModel ?? state.model, state.recordsShown ?? NO_STACKS);
+  const fills = fillsAmong(state.ringFills, new Set(drawing.atoms.map((a) => a.id)));
   return (
     JSON.stringify({
       format: WORKSPACE,
       version: WORKSPACE_VERSION,
-      atoms: state.model.atoms,
-      bonds: state.model.bonds,
+      atoms: drawing.atoms,
+      bonds: drawing.bonds,
       ...(state.pushes?.length ? { pushes: state.pushes } : {}),
       // (the fills of rings still drawn)
-      ...(Object.keys(fillsAmong(state.ringFills, new Set(state.model.atoms.map((a) => a.id)))).length
-        ? { ringFills: fillsAmong(state.ringFills, new Set(state.model.atoms.map((a) => a.id))) }
-        : {}),
+      ...(Object.keys(fills).length ? { ringFills: fills } : {}),
       arrows: state.arrows,
       pluses: state.pluses,
       ...(state.captions.length ? { captions: state.captions } : {}),

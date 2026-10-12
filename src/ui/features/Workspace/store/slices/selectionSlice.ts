@@ -1,3 +1,4 @@
+import { hiddenInStacks } from "../../utils/stacks";
 import { EditorState, type Sel, type SelFlow } from "../types";
 import { StoreApi } from "zustand";
 import { fragmentOf } from "../../chem/cleanUp";
@@ -102,21 +103,25 @@ export function createSelectionSlice(set: SetState) {
 
     /** Everything on the canvas, the molecules in 3D, the pictures, texts' sheets, PDFs, slides, shapes, arrows, "+" signs, the words and the workflow's sets and steps with it. */
     selectAll: () =>
-      set((prev: EditorState) => ({
-        ...prev,
-        sel: { atoms: new Set(prev.model.atoms.map((a) => a.id)), bonds: new Set(prev.model.bonds.map((b) => b.id)) },
-        sel3d: new Set(prev.molecules3d.map((m) => m.id)),
-        selPictures: new Set(prev.pictures.map((p) => p.id)),
-        selTexts: new Set(prev.texts.filter((t) => t.at).map((t) => t.id)),
-        selPdfs: new Set(prev.pdfs.map((p) => p.id)),
-        selCaptions: new Set(prev.captions.map((c) => c.id)),
-        selSlides: new Set(prev.slides.map((s) => s.id)),
-        selShapes: new Set(prev.shapes.map((s) => s.id)),
-        selArrows: new Set(prev.arrows.map((a) => a.id)),
-        selPluses: new Set(prev.pluses.map((p) => p.id)),
-        selInks: new Set(prev.inks.map((k) => k.id)),
-        selFlow: { sets: new Set(prev.sets.map((b) => b.id)), steps: new Set(prev.steps.map((s) => s.id)) },
-      })),
+      set((prev: EditorState) => {
+        // (of a stack, the one it shows: utils/stacks)
+        const outOfSight = hiddenInStacks(prev.molecules3d, prev.stacksShown);
+        return {
+          ...prev,
+          sel: { atoms: new Set(prev.model.atoms.map((a) => a.id)), bonds: new Set(prev.model.bonds.map((b) => b.id)) },
+          sel3d: new Set(prev.molecules3d.filter((m) => !outOfSight.has(m.id)).map((m) => m.id)),
+          selPictures: new Set(prev.pictures.map((p) => p.id)),
+          selTexts: new Set(prev.texts.filter((t) => t.at).map((t) => t.id)),
+          selPdfs: new Set(prev.pdfs.map((p) => p.id)),
+          selCaptions: new Set(prev.captions.map((c) => c.id)),
+          selSlides: new Set(prev.slides.map((s) => s.id)),
+          selShapes: new Set(prev.shapes.map((s) => s.id)),
+          selArrows: new Set(prev.arrows.map((a) => a.id)),
+          selPluses: new Set(prev.pluses.map((p) => p.id)),
+          selInks: new Set(prev.inks.map((k) => k.id)),
+          selFlow: { sets: new Set(prev.sets.map((b) => b.id)), steps: new Set(prev.steps.map((s) => s.id)) },
+        };
+      }),
 
     /** Nothing selected, and no atom of a molecule in 3D chosen. */
     clearSel: () =>

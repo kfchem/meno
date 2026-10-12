@@ -24,6 +24,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { selectionMoving } from "../utils/dragSelection";
 import { selectionScheme } from "../utils/selectionScheme";
 import { TAU, follow } from "../../../theme/motion";
+import { hiddenInStacks } from "../utils/stacks";
 import SelectionShade2D from "./SelectionShade2D";
 import { pressMovedUnder } from "./viewGoal";
 
@@ -168,7 +169,9 @@ export default function Selection2D() {
         const bonds = add ? new Set([...s.sel.bonds, ...got.bonds]) : got.bonds;
         const taken = [...got.atoms];
         // (the molecules in 3D whose centres it takes, with the drawing - and pictures, and a workflow's sets and steps, likewise)
-        s.selectMolecules3d(molecules3dIn(s.molecules3d, kind, points), add);
+        // (of a stack, only the one it shows: utils/stacks)
+        const outOfSight = hiddenInStacks(s.molecules3d, s.stacksShown);
+        s.selectMolecules3d(molecules3dIn(s.molecules3d.filter((m) => !outOfSight.has(m.id)), kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
         // (and texts' sheets, by their middles - and PDFs, by the middle of what they cover)
         s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), kind, points), add);

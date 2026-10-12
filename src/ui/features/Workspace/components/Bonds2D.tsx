@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { colorInstances } from "./instances";
@@ -7,6 +8,7 @@ import { colorInstances } from "./instances";
 /** The drawing's lines, from the shared layout: bonds, hashes, waves. */
 export function Bonds2D() {
   const { layout, opts } = useDrawnLayout();
+  const invalidate = useThree((s) => s.invalidate);
   const inst = useRef<THREE.InstancedMesh>(null!);
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
   const tmpQ = useMemo(() => new THREE.Quaternion(), []);
@@ -51,7 +53,11 @@ export function Bonds2D() {
     m.instanceMatrix.needsUpdate = true;
     // (each in its own colour, where it has one)
     colorInstances(m, segs.map((s) => s.color), opts.bondColor ?? "black");
-  }, [layout, countCap, tmpM, tmpQ, opts.bondColor]);
+    // (drawn again with them: a large drawing's frame may have been drawn
+    // before this ran - a stack of a thousand records laid out as a grid -
+    // and nothing else would draw it again until the view moved)
+    invalidate();
+  }, [layout, countCap, tmpM, tmpQ, opts.bondColor, invalidate]);
 
   return (
     <instancedMesh

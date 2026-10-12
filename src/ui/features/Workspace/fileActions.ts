@@ -1,3 +1,4 @@
+import { carriedDrawing, recordDrawings, seenDrawing, seenOnly } from "./utils/stacks";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
@@ -138,11 +139,12 @@ export function suggestedExportPath(
 export function structureFileText(drawn: Drawn, path: string, options: OptionValues = {}): string {
   const title = stem(path);
   const version = options.version === "V3000" ? "V3000" : "auto";
-  if (/\.rxn$/i.test(path)) return reactionFileText(drawn, title, version);
+  // (of a stack of drawings, the record it shows - but in an SD file, every record: utils/stacks)
+  if (/\.rxn$/i.test(path)) return reactionFileText(seenDrawing(drawn), title, version);
   if (/\.pdb$/i.test(path)) return pdbFileText(drawn.molecules3d ?? [], options);
-  const flat = forFlatReaders(drawn);
-  if (!/\.sdf$/i.test(path)) return writeMolfile(flat, { title, version });
-  // an SD file: the drawing, and each molecule in 3D a record of its own,
+  if (!/\.sdf$/i.test(path)) return writeMolfile(forFlatReaders(seenDrawing(drawn)), { title, version });
+  // an SD file: the drawing, each record of a stack of drawings a record of
+  // its own, titled as its file titled it, and each molecule in 3D a record of its own,
   // in 3D - the frame it shows, where its file had it, or each of its
   // frames, numbered, with its energy where it is known
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
@@ -156,7 +158,12 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}` }) + data + "$$$$\n";
     });
   });
-  return (drawn.atoms.length ? writeSdf(flat, { title, version }) : "") + records.join("");
+  const { loose, stacked } = recordDrawings(drawn);
+  return (
+    (loose.atoms.length ? writeSdf(forFlatReaders(loose), { title, version }) : "") +
+    stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
+    records.join("")
+  );
 }
 
 /**
@@ -395,11 +402,13 @@ export function drawingSvg(
   style: DrawingStyle,
   seen = false,
 ): string {
-  const { layout, opts } = drawingLayout(model, aromatic, style);
+  // (of a stack, the one it shows - of a stack of drawings, the record: utils/stacks)
+  const seenModel = seenDrawing(model);
+  const { layout, opts } = drawingLayout(seenModel.molecules3d ? { ...seenModel, molecules3d: seenOnly(seenModel.molecules3d) } : seenModel, aromatic, style);
   if (seen) {
     try {
       // (at the resolution copied pictures are made at)
-      withSolidsImage(model.molecules3d ?? [], layout, currentStyle3D(), useAppSettings.getState().pictures.dpi);
+      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, currentStyle3D(), useAppSettings.getState().pictures.dpi);
     } catch {
       // (the marks, then)
     }
@@ -514,10 +523,13 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
+const NO_RECORDS: Record<number, number> = {};
+
 /** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks">>): Drawn {
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks" | "fullModel" | "recordsShown">>): Drawn {
   return {
-    ...state.model,
+    // (every record of each stack of drawings, the one it shows marked: utils/stacks)
+    ...carriedDrawing(state.fullModel ?? state.model, state.recordsShown ?? NO_RECORDS),
     ...(state.pushes?.length ? { pushes: state.pushes } : {}),
     ...(state.ringFills && Object.keys(state.ringFills).length ? { ringFills: state.ringFills } : {}),
     arrows: state.arrows,
