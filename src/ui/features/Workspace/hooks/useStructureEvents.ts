@@ -16,7 +16,7 @@ import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
 import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
-import { workspaceOfFile } from "../../../views/openFile";
+import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
 import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
@@ -457,9 +457,9 @@ export function useStructureEvents(
 
   /**
    * Files put on the page at `at`, dropped or pasted - copied in the Finder
-   * or Explorer: PDFs and pictures held and laid there; a workspace's or a
-   * record's drawing, a text's sheet, or a structure read from its file,
-   * there, selected.
+   * or Explorer: PDFs and pictures held and laid there; a record's drawing,
+   * a text's sheet, or a structure read from its file, there, selected; a
+   * workspace file opened as Open opens it, in a tab of its own.
    */
   const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void) => {
     const f = files[0];
@@ -492,16 +492,10 @@ export function useStructureEvents(
       }
       return;
     }
-    // a workspace file: its workspace - its outputs held - beside what is drawn, selected
-    if (isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer()))) {
-      try {
-        const drawn = readWorkspace(workspaceOfFile(new Uint8Array(await f.arrayBuffer())) ?? "")?.drawn;
-        if (!drawn) throw new Error(`${f.name} could not be read.`);
-        store.getState().pasteModel(centredAt(drawn, at));
-        setImportError(null);
-      } catch (e) {
-        reportImportError("append", e);
-      }
+    // a workspace file: opened as Open opens it - in a tab of its own - not pasted in part (the maintainer, 2026-10-12)
+    if (opensAsWorkspace(isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer())), kind?.id, MENO_KINDS.workspace.id)) {
+      askToOpenFiles(files.filter((g) => g === f || isWorkspaceFile(g.name)));
+      setImportError(null);
       return;
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
@@ -511,9 +505,9 @@ export function useStructureEvents(
       return;
     }
     const text = await f.text();
-    // a workspace dropped, or a record: what it holds, beside what is drawn, selected
-    if (kind?.id === MENO_KINDS.workspace.id || kind?.id === MENO_KINDS.record.id) {
-      const drawn = kind.id === MENO_KINDS.workspace.id ? readWorkspace(text)?.drawn : readRecord(text);
+    // a record dropped: what it holds, beside what is drawn, selected
+    if (kind?.id === MENO_KINDS.record.id) {
+      const drawn = readRecord(text);
       if (drawn) {
         store.getState().pasteModel(centredAt(drawn, at));
         setImportError(null);

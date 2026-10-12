@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { FADE, RISE } from "../theme/motion";
 import { useEffect, useRef } from "react";
+import { useAskedKeys } from "./asking";
 
 /**
  * Asks before something with unsaved changes is closed. Drawn in the page
@@ -27,18 +28,13 @@ export default function ConfirmDiscard({
   onSave?: () => void;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Keeping is the safe answer, so it is the one a stray Enter gives.
     cancelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, []);
+  // (the keys its own while it asks: Escape keeps it open, and nothing behind it acts on one)
+  useAskedKeys(boxRef, onCancel);
 
   return (
     <motion.div
@@ -50,6 +46,7 @@ export default function ConfirmDiscard({
       }}
     >
       <motion.div
+        ref={boxRef}
         {...RISE}
         role="alertdialog"
         aria-modal="true"

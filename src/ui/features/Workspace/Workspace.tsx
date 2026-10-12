@@ -61,6 +61,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
@@ -874,6 +875,13 @@ function WorkspaceContent({
       }
     : undefined;
   useEffect(() => setMenu(null), [model]); // what it was about may be gone
+  // (what it was about gone otherwise - words, a picture, a PDF undone away while it is open: no menu left over nothing)
+  useEffect(() => {
+    if (!menu?.kind) return;
+    return store.subscribe((s) => {
+      if (menuTargetGone(menu, s)) setMenu(null);
+    });
+  }, [menu, store]);
   // the selection as a box would take it, where it holds whole structures or molecules in 3D
   const selectionAsSet = () => {
     const st = store.getState();
@@ -1187,7 +1195,7 @@ function WorkspaceContent({
           { name: "Open…", keys: shortcutLabel("O"), run: askToOpen },
           { name: "Save As…", keys: shortcutLabel("S", true), run: () => void saveAs() },
           // (a text of its own, in the column of texts)
-          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().addTexts([{ name: "", text: "" }], at) }] : []),
+          ...(officeId == null ? [{ name: "New text", keys: "", run: () => store.getState().newText(at) }] : []),
         ]
       : []),
     // (a talk given from the slides on the page: docs/PRESENTING.md)

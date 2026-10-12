@@ -1,4 +1,4 @@
-import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WrittenAsLabel } from "../document";
+import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
@@ -650,6 +650,11 @@ export type EditorState = {
    */
   /** Texts added - each a sheet on the page too, in a row from `onPage`, where it is given - and the last shown in the column. */
   addTexts: (texts: Omit<WorkspaceText, "id">[], onPage?: { x: number; y: number }) => void;
+  /** A new text, empty - its sheet at `onPage` - shown in the column, and given the keys there as it shows (`textToWrite`). */
+  newText: (onPage?: { x: number; y: number }) => void;
+  /** The text just made to be written in: the column gives it the keys as it shows it, and lets go of this. */
+  textToWrite: number | null;
+  wroteText: () => void;
   /** A text as typed: a run of typing in it is one undo step. */
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */
@@ -1293,8 +1298,14 @@ export type EditorState = {
    * being saved nowhere since.
    */
   openedName: string | null;
-  /** The document has just been written to `path`: it is saved there. */
-  markSavedAs: (path: string) => void;
+  /**
+   * The document has just been written to `path`: it is saved there - as
+   * it was when its writing began (`written`, from `writing`), where it may
+   * have changed since.
+   */
+  markSavedAs: (path: string, written?: WorkspaceDocument) => void;
+  /** The document as it is: what is about to be written, for `markSavedAs` once it is. */
+  writing: () => WorkspaceDocument;
   /**
    * A file - where it is, or its name - has been opened on the canvas, as
    * what it starts with: it is saved nowhere yet, and Save asks where,
