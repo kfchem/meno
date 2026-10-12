@@ -428,17 +428,28 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const cross = (a: number) =>
     (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
 
-  // A tert-butyl's middle carbon (or a trimethylsilyl's Si): three of its
-  // four bonds to methyls, drawn fanned 60° apart about the line of the
-  // fourth - the bond into it 120° from the outer two
-  const methyl = (b: number) => g.elements?.[b] === "C" && neighbours[b].length === 1;
-  const tertButyl = (a: number) =>
-    (g.elements?.[a] === "C" || g.elements?.[a] === "Si") && neighbours[a].length === 4 && !inRing.has(a) && neighbours[a].filter(methyl).length === 3;
+  // A trident's middle atom - a tert-butyl's, a trimethylsilyl's, a
+  // trimethylammonium's, a CF3's or a CCl3's (assemble.ts `tridentEnds`):
+  // three of its four bonds to like ends, drawn fanned 60° apart about the
+  // line of the fourth - the bond into it 120° from the outer two
+  const endKind = (b: number) => {
+    const el = g.elements?.[b];
+    return el != null && neighbours[b].length === 1 && ["C", "F", "Cl", "Br", "I"].includes(el) ? el : null;
+  };
+  const tridentEnds = (a: number): number[] | null => {
+    const el = g.elements?.[a];
+    if ((el !== "C" && el !== "Si" && el !== "N") || neighbours[a].length !== 4 || inRing.has(a)) return null;
+    for (const k of ["C", "F", "Cl", "Br", "I"]) {
+      const ends = neighbours[a].filter((b) => endKind(b) === k);
+      if (ends.length === 3) return ends;
+    }
+    return null;
+  };
 
   // angles: at an atom in no ring, its bonds evenly spread (a pair at 120°,
   // or 180° across a triple bond or between two double bonds, or between
   // two crosses - the O of a P-O-P - so that a run of them is one line; the
-  // bond joining a cross to a zigzag gives way, to 150°); a tert-butyl's fanned
+  // bond joining a cross to a zigzag gives way, to 150°); a trident's fanned
   let angleSum = 0;
   let angleCount = 0;
   for (let a = 0; a < n; a++) {
@@ -458,8 +469,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       // either way round: the smaller gap against the ideal
       const off = Math.abs(deg(Math.min(...gaps) - (linear ? Math.PI : ideal)));
       angleSum += nb.some(cross) && !linear ? Math.min(off, Math.abs(deg(Math.min(...gaps)) - 150)) : off;
-    } else if (tertButyl(a)) {
-      const end = nb.find((b) => !methyl(b))!;
+    } else if (tridentEnds(a)) {
+      const ends = tridentEnds(a)!;
+      const end = nb.find((b) => !ends.includes(b))!;
       const e = dirs.indexOf(Math.atan2(y[end] - y[a], x[end] - x[a]));
       gaps.forEach((gap, i) => {
         const beside = i === e || (i + 1) % gaps.length === e;

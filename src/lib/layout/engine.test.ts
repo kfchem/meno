@@ -673,7 +673,7 @@ describe("layout2D", () => {
   });
 });
 
-describe("a tert-butyl", () => {
+describe("a tert-butyl, and the other tridents", () => {
   const input = (smiles: string): LayoutInput => {
     const s = readSmiles(smiles);
     const orders = kekuleOrders(s.atoms, s.bonds);
@@ -685,14 +685,15 @@ describe("a tert-butyl", () => {
     };
   };
   const around = (g: LayoutInput, a: number) => g.bonds.flatMap((b) => (b.a === a ? [b.b] : b.b === a ? [b.a] : []));
-  const methyl = (g: LayoutInput, v: number) => g.atoms[v].el === "C" && around(g, v).length === 1;
+  // (an end: a methyl or a halogen atom, bonded to nothing else)
+  const end = (g: LayoutInput, v: number) => ["C", "F", "Cl"].includes(g.atoms[v].el) && around(g, v).length === 1;
   // (the angles round its middle atom, in degrees, from the bond into it on)
   const fan = (smiles: string) => {
     const g = input(smiles);
     const { x, y } = layout2D(g);
-    const middles = g.atoms.flatMap((_, a) => (around(g, a).length === 4 && around(g, a).filter((v) => methyl(g, v)).length === 3 ? [a] : []));
+    const middles = g.atoms.flatMap((_, a) => (around(g, a).length === 4 && around(g, a).filter((v) => end(g, v)).length === 3 ? [a] : []));
     return middles.map((a) => {
-      const into = around(g, a).find((v) => !methyl(g, v))!;
+      const into = around(g, a).find((v) => !end(g, v))!;
       const t0 = Math.atan2(y[into] - y[a], x[into] - x[a]);
       const ts = around(g, a)
         .filter((v) => v !== into)
@@ -704,8 +705,18 @@ describe("a tert-butyl", () => {
 
   it("has its methyls fanned 60 degrees apart about the line of the bond into it", () => {
     // (an ester's, a carbamate's, an alcohol's, on a ring, and a
-    // trimethylsilyl's - grown from its middle atom, too)
-    for (const smiles of ["CC(=O)OC(C)(C)C", "CC(C)(C)OC(=O)NCC(=O)O", "CC(C)(C)O", "CC1=CC(=C(C(=C1)C(C)(C)C)O)C(C)(C)C", "C[Si](C)(C)C#C"]) {
+    // trimethylsilyl's - grown from its middle atom, too - and the other
+    // tridents: choline's trimethylammonium, a CF3, a CCl3)
+    for (const smiles of [
+      "CC(=O)OC(C)(C)C",
+      "CC(C)(C)OC(=O)NCC(=O)O",
+      "CC(C)(C)O",
+      "CC1=CC(=C(C(=C1)C(C)(C)C)O)C(C)(C)C",
+      "C[Si](C)(C)C#C",
+      "C[N+](C)(C)CCO",
+      "OC(=O)C(F)(F)F",
+      "OC(O)C(Cl)(Cl)Cl",
+    ]) {
       const fans = fan(smiles);
       expect(fans.length).toBeGreaterThan(0);
       for (const ts of fans) {
@@ -716,13 +727,15 @@ describe("a tert-butyl", () => {
     }
   });
 
-  it("is not neopentane: four methyls make a cross", () => {
-    const g = input("CC(C)(C)C");
-    const { x, y } = layout2D(g);
-    const ts = around(g, 1)
-      .map((v) => (Math.atan2(y[v] - y[1], x[v] - x[1]) * 180) / Math.PI)
-      .sort((p, q) => p - q);
-    for (let i = 1; i < 4; i++) expect(ts[i] - ts[i - 1]).toBeCloseTo(90, 0);
+  it("is not neopentane, nor CF4: four like ends make a cross", () => {
+    for (const smiles of ["CC(C)(C)C", "FC(F)(F)F"]) {
+      const g = input(smiles);
+      const { x, y } = layout2D(g);
+      const ts = around(g, 1)
+        .map((v) => (Math.atan2(y[v] - y[1], x[v] - x[1]) * 180) / Math.PI)
+        .sort((p, q) => p - q);
+      for (let i = 1; i < 4; i++) expect(ts[i] - ts[i - 1]).toBeCloseTo(90, 0);
+    }
   });
 
   it("is settled clear of the H of ginkgolide B's OH beside it", () => {

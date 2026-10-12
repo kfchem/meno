@@ -13,7 +13,7 @@ import {
   framesFor,
   flippable,
   grow,
-  isTertButyl,
+  tridentEnds,
   sideAtoms,
   sidesOf,
   stretchSide,
@@ -231,7 +231,7 @@ export function layout2D(input: LayoutInput): Layout2D {
     best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
-    // (a tert-butyl settled last, its bonds kept clear of an H's ink)
+    // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
     const scoreFan = scorer(mol, piece, depth, measured, 1, undefined, true);
     const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
     best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
@@ -1259,7 +1259,7 @@ export function roomForHydrogens(
 }
 
 /**
- * Each tert-butyl turned about the bond into it, a few degrees at a time,
+ * Each tert-butyl (or other trident, `tridentEnds`) turned about the bond into it, a few degrees at a time,
  * to where the drawing reads best: its fan of methyls is compact, and its
  * best place often lies between the coarser turns that cleared it of the
  * rest (untangle) - ginkgolide B's, turned off its ring until a methyl
@@ -1288,8 +1288,9 @@ function settleFans(
     return count;
   };
   for (const a of piece) {
-    if (!isTertButyl(mol, a)) continue;
-    const end = mol.neighbours[a].find((v) => !(mol.el[v] === "C" && mol.neighbours[v].length === 1))!;
+    const ends = tridentEnds(mol, a);
+    if (!ends) continue;
+    const end = mol.neighbours[a].find((v) => !ends.includes(v))!;
     const side = sideAtoms(mol, end, a);
     if (fixed(side)) continue;
     const crossings = crossingsIn(pos);

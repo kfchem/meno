@@ -229,8 +229,10 @@ now kept by a rule in `LAYOUT-2D.md`:
     (lovastatin's, yohimbine's), but a steroid's straight up or down
     stays as it is;
   - both of a ring atom's two groups marked.
-- **A tert-butyl** fanned, its methyls 60 degrees apart, not a cross (the
-  maintainer, 2026-10-12).
+- **A tert-butyl** fanned, its methyls 60 degrees apart, not a cross; and
+  so a trimethylsilyl, a trimethylammonium, a CF3 and a CCl3. A molecule
+  grown from one (tert-butanol) has its other bond level, the fan to one
+  side (the maintainer, 2026-10-12).
 - **Chains**: gem-dimethyls drawn close together; symmetry kept. Lipids
   are straight, a cis double bond a step; prostaglandins drawn as their
   fatty acid folded, the acid's chain on top.

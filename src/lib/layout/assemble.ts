@@ -161,8 +161,9 @@ export function grow(
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
     const orders = along.map((v) => orderOf(mol, middle, v));
     const linear = deg === 2 && along.length === 2 && (orders.includes(3) || orders.every((o) => o === 2));
-    // (a tert-butyl fanned, the bond into it level to the right)
-    const fan = isTertButyl(mol, middle) ? mol.neighbours[middle].find((v) => !isMethyl(mol, v))! : -1;
+    // (a trident fanned, the bond into it level to the right)
+    const fanEnds = tridentEnds(mol, middle);
+    const fan = fanEnds ? mol.neighbours[middle].find((v) => !fanEnds.includes(v))! : -1;
     const slots =
       deg === 1
         ? [0]
@@ -372,11 +373,12 @@ function assign(
         [lo, up === slots[1] ? slots[2] : slots[1]],
       ];
     }
-    // a tert-butyl: its methyls fanned 60 degrees apart about the line of
-    // the bond into it, as it is drawn, not a cross - grown from one of its
-    // methyls, that one the fan's middle one
-    if (isTertButyl(mol, a)) {
-      const end = children.find((c) => !isMethyl(mol, c));
+    // a tert-butyl, a CF3: its three ends fanned 60 degrees apart about the
+    // line of the bond into it, as it is drawn, not a cross - grown from
+    // one of its ends, that one the fan's middle one
+    const ends = tridentEnds(mol, a);
+    if (ends) {
+      const end = children.find((c) => !ends.includes(c));
       if (end == null) return children.map((c, i) => [c, p + Math.PI + ((i - 1) * Math.PI) / 3]);
       const [m1, m2] = children.filter((c) => c !== end);
       return [
@@ -550,17 +552,27 @@ export function isCross(mol: Molecule, a: number): boolean {
 }
 
 /**
- * The middle atom of a tert-butyl, or of a trimethylsilyl: a carbon or
- * silicon in no ring with four bonds, three of them to methyls and the
- * fourth to anything else (neopentane's middle carbon, four methyls, is a
- * cross).
+ * The three ends of a group drawn as a trident, from its middle atom `a`:
+ * a tert-butyl's methyls, a trimethylsilyl's, a trimethylammonium's
+ * (choline's), a CF3's or a CCl3's halogens. Its middle a carbon, a
+ * silicon or a nitrogen in no ring, with four bonds - three to like ends,
+ * each bonded to nothing else, and the fourth to anything but another
+ * such end (neopentane's middle carbon, four methyls, is a cross; CF4's
+ * likewise). Null for any other atom.
  */
-export function isTertButyl(mol: Molecule, a: number): boolean {
-  if ((mol.el[a] !== "C" && mol.el[a] !== "Si") || mol.systemOf[a] >= 0 || mol.neighbours[a].length !== 4) return false;
-  return mol.neighbours[a].filter((v) => isMethyl(mol, v)).length === 3;
+export function tridentEnds(mol: Molecule, a: number): number[] | null {
+  if (!TRIDENT_MIDDLES.has(mol.el[a]) || mol.systemOf[a] >= 0 || mol.neighbours[a].length !== 4) return null;
+  const kind = (v: number) => (mol.neighbours[v].length === 1 && TRIDENT_ENDS.has(mol.el[v]) ? mol.el[v] : null);
+  for (const el of TRIDENT_ENDS) {
+    const ends = mol.neighbours[a].filter((v) => kind(v) === el);
+    if (ends.length === 3) return ends;
+  }
+  return null;
 }
 
-const isMethyl = (mol: Molecule, v: number) => mol.el[v] === "C" && mol.neighbours[v].length === 1;
+/** What a trident's middle atom may be, and its ends. */
+const TRIDENT_MIDDLES = new Set(["C", "Si", "N"]);
+const TRIDENT_ENDS = new Set(["C", "F", "Cl", "Br", "I"]);
 
 /** A carbonyl carbon of an acid, an ester or an amide: C(=O)O or C(=O)N. */
 function isCarbonyl(mol: Molecule, c: number): boolean {
