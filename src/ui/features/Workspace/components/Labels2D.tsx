@@ -1,4 +1,5 @@
 import { Text } from "@react-three/drei";
+import { fadedTo } from "./fadedTo";
 import * as THREE from "three";
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -120,9 +121,7 @@ export function Texts2D({
     const n = follow(s.level, 1, Math.min(dt, 1 / 20), TAU.quick);
     s.level = n > 0.99 ? 1 : n;
     if (moved) return;
-    group.current?.traverse((o) => {
-      if ("fillOpacity" in o) (o as unknown as { fillOpacity: number }).fillOpacity = s.level;
-    });
+    group.current?.traverse((o) => fadedTo(o, s.level));
     invalidate();
   });
   // (labels sized in the drawing's own units are the same at any zoom: the
