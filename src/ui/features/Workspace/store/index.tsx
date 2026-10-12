@@ -207,6 +207,7 @@ export function createEditorStore(
     frames3d: {},
     stacksShown: {},
     recordsShown: NO_RECORDS,
+    recordSwaps: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
     chosen3d: null,

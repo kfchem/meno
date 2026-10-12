@@ -8,10 +8,9 @@ import {
   type Atom as LAtom,
   type Bond as LBond,
 } from "../../../../lib/chem/layout2d";
-import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { editorLayoutOptions, layoutAtomOf, layoutBonds } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
-import { chemistry } from "../../../../lib/chem/molecule";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DrawnLayoutContext } from "./drawnLayoutContext";
 import { NEW_ATOM } from "../utils/stroke";
@@ -65,7 +64,15 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     if (z !== zoom) setZoom(z);
   });
-  const model = useEditor((s) => s.model);
+  const shownModel = useEditor((s) => s.model);
+  const fullModel = useEditor((s) => s.fullModel);
+  // (a record coming into view in its stack drawn as it comes, not here, until it is there: StackSwap2D)
+  const swaps = useEditor((s) => s.recordSwaps);
+  const model = useMemo(() => {
+    const coming = new Set(Object.values(swaps).flatMap((w) => w.to));
+    if (!coming.size) return shownModel;
+    return { atoms: shownModel.atoms.filter((a) => !coming.has(a.id)), bonds: shownModel.bonds.filter((b) => !coming.has(b.a) && !coming.has(b.b)) };
+  }, [shownModel, swaps]);
   const moveDrag = useEditor((s) => s.moveDrag);
   const extend = useEditor((s) => s.extend);
   const aromaticEnabled = useEditor((s) => s.aromaticEnabled);
@@ -82,20 +89,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const stroke = extend.active ? extend.stroke : null;
   const preview = extend.active ? extend.preview : null;
   const atoms: LAtom[] = useMemo(() => {
-    // (with its depth, where it is drawn in perspective: a bond behind
-    // another is broken where they cross)
-    const out: LAtom[] = model.atoms.map((a) => ({
-      id: a.id,
-      ...(a.id === draggedId && dragX != null && dragY != null ? { x: dragX, y: dragY } : { x: a.x, y: a.y }),
-      el: a.el,
-      ...chemistry(a),
-      ...(a.z != null ? { z: a.z } : {}),
-      // (its charge where a hand put it)
-      ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
-      // (its colour, and its highlight)
-      ...(a.color ? { color: a.color } : {}),
-      ...(a.highlight ? { highlight: a.highlight } : {}),
-    }));
+    const out: LAtom[] = model.atoms.map((a) => layoutAtomOf(a, a.id === draggedId && dragX != null && dragY != null ? { x: dragX, y: dragY } : undefined));
     // (a stroke on empty space: its own new atom where it starts)
     if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
       out.push({ id: STROKE_START_ID, x: stroke.start.x, y: stroke.start.y, el: "C" });
@@ -118,12 +112,22 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const shown = useRef(new Map<number, Pt>());
   const glide = useRef<{ plan: GlidePlan; from: Map<number, Pt>; start: number } | null>(null);
   const planned = useRef<LAtom[] | null>(null);
+  // (the whole drawing as it was when last planned: a record of a stack of
+  // drawings coming into sight - its stack laid out as a grid - goes from
+  // where it stood in the stack, out of sight: utils/stacks)
+  const fullBefore = useRef(fullModel);
   const [step, setStep] = useState(0);
   const drawnAtoms: LAtom[] = useMemo(() => {
-    const was = shown.current;
+    let was = shown.current;
     if (planned.current !== atoms) {
       // what changed: drawn there at once, or on its way
       planned.current = atoms;
+      const before = fullBefore.current;
+      fullBefore.current = fullModel;
+      if (before !== fullModel && atoms.some((a) => !was.has(a.id) && a.id >= 0)) {
+        const stacked = new Map(before.atoms.filter((a) => a.stack && !was.has(a.id)).map((a) => [a.id, { x: a.x, y: a.y }]));
+        if (stacked.size) was = new Map([...stacked, ...was]);
+      }
       let far = 0;
       // (the one way every atom that moved went, where they all went alike)
       let shift: { dx: number; dy: number } | null | undefined;
@@ -168,7 +172,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     });
     shown.current = next;
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- step: a frame of the way there; model: its structures, read as the way is planned
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- step: a frame of the way there; model: its structures, and fullModel, where what comes into sight stood, read as the way is planned
   }, [atoms, draggedId, step]);
   // On the way: drawn again every frame until there.
   useFrame(() => {

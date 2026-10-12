@@ -1,8 +1,8 @@
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import type { Bond as LBond, LayoutOptions } from "../../../lib/chem/layout2d";
+import type { Atom as LAtom, Bond as LBond, LayoutOptions } from "../../../lib/chem/layout2d";
 import { layoutOptionsFor, type DrawingStyle } from "../../../lib/chem/style";
-import type { Bond } from "./store/types";
-import { bondChem } from "../../../lib/chem/molecule";
+import type { Atom, Bond } from "./store/types";
+import { bondChem, chemistry } from "../../../lib/chem/molecule";
 
 /**
  * A model bond as the layout takes it, between the atoms at layout indices
@@ -23,6 +23,24 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     ...(b.color ? { color: b.color } : {}),
     ...(b.highlight ? { highlight: b.highlight } : {}),
     ...bondChem(b),
+  };
+}
+
+/** An atom as the layout takes it - where it is, or `at`. */
+export function layoutAtomOf(a: Atom, at?: { x: number; y: number }): LAtom {
+  return {
+    id: a.id,
+    ...(at ?? { x: a.x, y: a.y }),
+    el: a.el,
+    ...chemistry(a),
+    // (with its depth, where it is drawn in perspective: a bond behind
+    // another is broken where they cross)
+    ...(a.z != null ? { z: a.z } : {}),
+    // (its charge where a hand put it)
+    ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    // (its colour, and its highlight)
+    ...(a.color ? { color: a.color } : {}),
+    ...(a.highlight ? { highlight: a.highlight } : {}),
   };
 }
 

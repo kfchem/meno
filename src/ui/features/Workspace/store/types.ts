@@ -59,6 +59,12 @@ export type Atom = EditorAtom & {
  */
 export type AtomStack = { id: number; record: number; title?: string; spread?: true; shown?: true };
 /**
+ * A stack of drawings going over from one record to the next (EditorState
+ * `recordSwaps`) - or, stacked again, from all of them to one: the records
+ * going out of sight then, as they stood (`gone`).
+ */
+export type RecordSwap = { from: number[]; to: number[]; start: number; gone?: Model };
+/**
  * A place on a PDF's page - the PDF, by its SHA-256, the page, and the
  * point, in points from its top left - or in a picture: the picture, by its
  * SHA-256, no page, and the point in its pixels from its top left; and how
@@ -722,6 +728,13 @@ export type EditorState = {
   recordsShown: Record<number, number>;
   /** A stack of drawings shows another of its records - selected in its place, where the one it showed was. */
   showRecord: (stack: number, record: number) => void;
+  /**
+   * Stacks of drawings going over from one record to the next, by the
+   * stack's id: the atoms of the record let go of and of the next, by id,
+   * and since when (STACK_SWAP_MS). The next is drawn as it comes
+   * (components/StackSwap2D), not by the drawing, until it is there.
+   */
+  recordSwaps: Record<number, RecordSwap>;
   /** A stack of drawings laid out as a grid where it stands, every record shown: one undo step. */
   spreadRecords: (stack: number) => void;
   /** A stack of drawings, laid out as a grid, stacked again in its middle, `shown` the record it shows: one undo step. */

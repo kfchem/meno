@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { partToCopy, readRecord, recordText } from "../utils/copyPaste";
 import { drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf, stackedRead } from "../utils/io";
-import { recordsOf, seenDrawing } from "../utils/stacks";
+import { recordsOf, seenDrawing, STACK_SWAP_MS } from "../utils/stacks";
 
 const TITLES = ["methanol", "ethanol", "propanol"];
 
@@ -57,6 +57,25 @@ describe("a stack of drawings", () => {
     // (not one it does not have)
     state().showRecord(1, 7);
     expect(state().recordsShown).toEqual({ 1: 2 });
+  });
+
+  it("goes over from one record to the next, the next drawn as it comes until it is there - and, stacked again, the others going where they stood", () => {
+    vi.useFakeTimers();
+    try {
+      const { state } = editor();
+      state().showRecord(1, 1);
+      expect(state().recordSwaps[1]).toMatchObject({ from: [1, 2], to: [3, 4] });
+      vi.advanceTimersByTime(STACK_SWAP_MS);
+      expect(state().recordSwaps).toEqual({});
+      state().spreadRecords(1);
+      state().gatherRecords(1, 2);
+      expect(state().recordSwaps[1].to).toEqual([]);
+      expect(ids(state().recordSwaps[1].gone!.atoms).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+      vi.advanceTimersByTime(STACK_SWAP_MS);
+      expect(state().recordSwaps).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("is selected all by the record it shows, with the rest of the drawing", () => {

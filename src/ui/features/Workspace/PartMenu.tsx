@@ -127,6 +127,7 @@ export type MenuMolecule3D = {
  */
 export default function PartMenu({
   target,
+  records,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -318,6 +319,8 @@ export default function PartMenu({
   clipboard: MenuClipboard;
   /** The molecule in 3D right-clicked, when it is one. */
   molecule3d?: MenuMolecule3D;
+  /** The stack of drawings what was right-clicked is a record of (utils/stacks): whether it is laid out as a grid, and laid out so, or stacked again. */
+  records?: { spread: boolean; run: () => void };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   onClose: () => void;
@@ -375,6 +378,8 @@ export default function PartMenu({
     : [];
   // (a colour, a highlight or a ring's fill, for what is drawn)
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
+  // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
+  const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -618,6 +623,7 @@ export default function PartMenu({
                 { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
               ]
             : []),
+          ...stackItem,
           ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
@@ -667,6 +673,7 @@ export default function PartMenu({
               ]
             : []),
           { name: "Select this structure", keys: "", run: onSelectStructure },
+          ...stackItem,
         ];
   const row = items.filter((i) => i.icon);
   const list = items.filter((i) => !i.icon);
