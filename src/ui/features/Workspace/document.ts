@@ -16,7 +16,7 @@ import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reacti
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
-import { freshStackId } from "./utils/stacks";
+import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
@@ -135,8 +135,16 @@ export function createWorkspaceDocument(data?: unknown): DocumentStore<Workspace
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
-  // (each edit's sets grown to keep what is drawn on in them inside them, as part of it)
-  return createDocument<WorkspaceDocument>(doc, { settle: fitSets });
+  // (each edit's sets grown to keep what is drawn on in them inside them, as
+  // part of it - and its stacks of drawings kept whole: utils/stacks)
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before) });
+}
+
+/** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
+export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
+  if (before && doc.model === before.model) return doc;
+  const model = settledRecords(doc.model, before?.model);
+  return model === doc.model ? doc : { ...doc, model };
 }
 
 /** PDFs held, as they go on the page: the first's top page in the middle of `at`, the others to its right, a little apart. */
@@ -738,7 +746,8 @@ export function replaceModel(
   );
   return {
     ...doc,
-    model: { atoms: next.atoms.slice(), bonds: next.bonds.slice() },
+    // (which record each stack of drawings shows is the view's, not the document's)
+    model: { atoms: unmarked(next.atoms), bonds: next.bonds.slice() },
     arrows: [],
     nextArrowId: 1,
     pluses: [],
@@ -776,7 +785,8 @@ export function appendModel(
     if (!groups.has(g)) groups.set(g, cursor++);
     return groups.get(g)!;
   };
-  const atoms = next.atoms.map((a) => ({
+  // (a stack of drawings it brings numbered after the document's own; one record copied out of its stack, that record alone)
+  const atoms = addedStacks(next.atoms, freshRecordsId(doc.model.atoms)).map((a) => ({
     ...a,
     id: idMap.get(a.id)!,
     ...(a.sgroups
@@ -1021,6 +1031,28 @@ export function gatherStack(doc: WorkspaceDocument, stack: number, at: { x: numb
       return { ...m, at: { ...was, x: at.x, y: at.y }, stack: { id: stack } };
     }),
   };
+}
+
+/** A stack of drawings laid out as a grid: each record moved as `moves` says, by record, and every one shown. */
+export function spreadRecords(doc: WorkspaceDocument, stack: number, moves: ReadonlyMap<number, { dx: number; dy: number }>): WorkspaceDocument {
+  return recordsMoved(doc, stack, moves, true);
+}
+
+/** A stack of drawings, laid out as a grid, stacked again: each record moved as `moves` says, by record. */
+export function gatherRecords(doc: WorkspaceDocument, stack: number, moves: ReadonlyMap<number, { dx: number; dy: number }>): WorkspaceDocument {
+  return recordsMoved(doc, stack, moves, false);
+}
+
+function recordsMoved(doc: WorkspaceDocument, stack: number, moves: ReadonlyMap<number, { dx: number; dy: number }>, spread: boolean): WorkspaceDocument {
+  let changed = false;
+  const atoms = doc.model.atoms.map((a) => {
+    if (a.stack?.id !== stack) return a;
+    changed = true;
+    const m = moves.get(a.stack.record) ?? { dx: 0, dy: 0 };
+    const { spread: _spread, ...kept } = a.stack;
+    return { ...a, x: a.x + m.dx, y: a.y + m.dy, stack: spread ? { ...kept, spread: true as const } : kept };
+  });
+  return changed ? { ...doc, model: { atoms, bonds: doc.model.bonds } } : doc;
 }
 
 function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule3D) => Molecule3D): WorkspaceDocument {

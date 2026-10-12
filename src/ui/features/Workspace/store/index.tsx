@@ -22,6 +22,8 @@ import { createPicturesSlice } from "./slices/picturesSlice";
 import { createWorkflowSlice } from "./slices/workflowSlice";
 import { createSlidesSlice } from "./slices/slidesSlice";
 import { createShapesSlice } from "./slices/shapesSlice";
+import { createRecordsSlice } from "./slices/recordsSlice";
+import { shownModel } from "../utils/stacks";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
 
@@ -35,9 +37,12 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
  * `model`, `arrows` and the aromatic flags from the store, while the document
  * is what actually holds them - which is how undo and redo reach the canvas.
  */
-function mirrorOf(doc: WorkspaceDocument) {
+function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>) {
   return {
-    model: doc.model,
+    // (of each stack of drawings, the record it shows: the canvas works on
+    // that, the whole kept beside it for what keeps the document - utils/stacks)
+    model: shownModel(doc.model, recordsShown),
+    fullModel: doc.model,
     arrows: doc.arrows,
     pluses: doc.pluses ?? [],
     pushes: doc.pushes ?? NO_PUSHES,
@@ -103,6 +108,7 @@ const NO_FILLS: RingFills = {};
 const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
+const NO_RECORDS: Record<number, number> = {};
 
 /**
  * Mirrors the document into the store and keeps doing so. Returns the
@@ -118,7 +124,7 @@ export function connectStoreToDocument(
   const sync = () =>
     store.setState((prev) => {
       const now = doc.getState();
-      const mirrored = mirrorOf(now);
+      const mirrored = mirrorOf(now, prev.recordsShown);
       // (a turn of several as one body undone or redone: their turns too)
       const turns = turnsAcross(doc, was, now);
       was = now;
@@ -164,7 +170,7 @@ export function createEditorStore(
   const store = create<EditorState>((set, get) => ({
     // Document state, mirrored. Never written directly: the slices edit the
     // document and the subscription below brings the change back here.
-    ...mirrorOf(doc.getState()),
+    ...mirrorOf(doc.getState(), NO_RECORDS),
     // (a canvas opened for a text shows it)
     textShown: doc.getState().texts?.slice(-1)[0]?.id ?? null,
     textsOpen: !!doc.getState().texts?.length,
@@ -201,6 +207,8 @@ export function createEditorStore(
     lists3d: {},
     frames3d: {},
     stacksShown: {},
+    recordsShown: NO_RECORDS,
+    recordSwaps: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
     chosen3d: null,
@@ -271,6 +279,7 @@ export function createEditorStore(
     ...createWorkflowSlice(doc, set, get),
     ...createSlidesSlice(doc, set, get),
     ...createShapesSlice(doc, set),
+    ...createRecordsSlice(doc, set, get),
   }));
 
   return store;

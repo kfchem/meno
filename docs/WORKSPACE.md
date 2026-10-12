@@ -945,6 +945,53 @@ file are shown the way a molecule's frames are, one at a time.
 - **Saved.** Each molecule says its stack and whether it is laid out as a
   grid; the one a stack shows says so.
 
+### Stacks of drawings
+
+Asked for by the maintainer on 2026-10-12, after the stacks of molecules:
+a file's several records drawn flat - an SD file's 2D records - stack the
+same way.
+
+- **What makes one.** A file read as several records drawn flat (its
+  reader says each record's atoms and its title: `StructureRead.records`).
+  Each record's atoms say their stack, their record and its title
+  (`Atom.stack`), and every record stands where the drawing's middle was;
+  the file is centred on the first. Added to a canvas, a stack is numbered
+  after the document's own. One record pasted out of its stack is a
+  drawing of its own.
+- **One shown.** The stack shows one record, with the chip a stack of
+  molecules has (`StackChips2D`): which of how many and the title, and,
+  the record hovered or selected, a slider. Which is shown is the view's
+  (`recordsShown`), not an undo step.
+- **What is drawn and what is kept.** The canvas works on the drawing as
+  shown: the store's `model` is the records shown and the rest, made from
+  the document's whole drawing (`fullModel`), so drawing, the pointer, a
+  box, Select all, Clean-up and the keys only ever meet what is in sight.
+  Every edit goes to the document by atom and bond ids; nothing writes the
+  store's `model` back, which would drop the records out of sight. Save,
+  Export and a document's link carry the whole drawing, the record each
+  stack shows marked (`carriedDrawing`).
+- **Edits keep it whole** (the document's `settle`, `settledRecords`). An
+  atom drawn onto a record - bonded to it, however far along - is of that
+  record; records bonded together become one. A stack left with one record
+  is that record alone, and one whose record shown is deleted shows its
+  first. The record shown moved whole, every atom alike, takes its stack
+  with it.
+- **Going over.** As a stack of molecules goes over: the record let go of
+  grows a little as it fades, the next comes up from smaller into view,
+  0.42 s, eased (`StackSwap2D`). Each is drawn on a layer of its own in the
+  drawing's style, and the drawing draws the next once it is there. The
+  record shown is kept ready on that layer, out of sight, so its labels are
+  set when it goes.
+- **A grid.** *Lay out as a grid* on a record's menu lays the records out
+  round their middle, in rows about as many as its columns, each cell as
+  wide as the widest record and as tall as the tallest, two bonds' room
+  between; the records come out of the stack to their places. *Stack again*
+  stacks them where the grid stood, the record chosen shown; the others
+  fade where they stood.
+- **Out of the canvas.** A picture shows the record shown. An SD export
+  writes every record as a record of its own, titled as its file titled
+  it; MOL and RXN exports write the record shown.
+
 ## Hydrogens and bond orders
 
 Built in lane L5 on 2026-10-11, as the maintainer asked: a file of

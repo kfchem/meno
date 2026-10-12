@@ -44,6 +44,14 @@ describe("the clipboard's items", () => {
     const bad = JSON.stringify({ format: "meno-structure", version: 1, atoms: [atom(1, 0, 0)], bonds: [{ id: 2, a: 1, b: 9, order: 1 }] });
     expect(readRecord(bad)).toBeNull();
   });
+
+  it("read a record's stack of drawings where it reads, and only what of it does", () => {
+    const stacked = (stack: unknown) => JSON.stringify({ format: "meno-structure", version: 1, atoms: [{ ...atom(1, 0, 0), stack }], bonds: [] });
+    expect(readRecord(stacked({ id: 2, record: 0, title: "aspirin", shown: true, spread: false, more: 1 }))!.atoms[0].stack).toEqual({ id: 2, record: 0, title: "aspirin", shown: true });
+    expect(readRecord(stacked({ id: 0, record: 0 }))!.atoms[0].stack).toBeUndefined();
+    expect(readRecord(stacked({ id: 1, record: -1 }))!.atoms[0].stack).toBeUndefined();
+    expect(readRecord(stacked({ id: 1, record: 1, title: 7 }))!.atoms[0].stack).toEqual({ id: 1, record: 1 });
+  });
 });
 
 describe("plain text", () => {

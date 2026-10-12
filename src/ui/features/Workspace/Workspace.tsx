@@ -113,6 +113,7 @@ import { editorLayoutOptions, startingZoom } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
+import { recordsOf } from "./utils/stacks";
 import { useOfficeLink } from "./hooks/useOfficeLink";
 import { useDropZone } from "../../../lib/drop";
 import type { DocumentStore } from "../../../lib/doc";
@@ -168,6 +169,8 @@ import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
+import StackChips2D from "./components/StackChips2D";
+import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
@@ -812,7 +815,18 @@ function WorkspaceContent({
       setChemError(e instanceof Error ? e.message : String(e));
     }
   };
-  const menuLink = menuMolecule ? linkOf(menuMolecule, model) : null;
+  // (a record of a stack of drawings out of sight is still the drawing it was made from: utils/stacks)
+  const menuLink = menuMolecule ? linkOf(menuMolecule, store.getState().fullModel) : null;
+  // a record of a stack of drawings right-clicked: its stack laid out as a grid, or stacked again
+  const menuAtom = menu && (menu.kind === "atom" || menu.kind === "bond") && menu.id != null ? structureAt(menu.kind, menu.id) : null;
+  const menuStack = menuAtom != null ? model.atoms.find((a) => a.id === menuAtom)?.stack : undefined;
+  const menuRecords =
+    menuStack && recordsOf(store.getState().fullModel, menuStack.id).length > 1
+      ? {
+          spread: !!menuStack.spread,
+          run: () => (menuStack.spread ? store.getState().gatherRecords(menuStack.id, menuStack.record) : store.getState().spreadRecords(menuStack.id)),
+        }
+      : undefined;
   const menuPart = menuMolecule ? partOf(menuMolecule, menu?.atom ?? null) : null;
   // (what is chosen of it, or the measurement right-clicked, can be set: utils/edit3d)
   const frameShown = (id: number) => store.getState().frames3d[id] ?? 0;
@@ -1516,6 +1530,7 @@ function WorkspaceContent({
             else if (menu.kind && menu.id != null) deletePart(menu.kind, menu.id);
           }}
           molecule3d={menu3d}
+          records={menuRecords}
           measure3d={measure3dMenu}
           onArrowStyle={() => {
             if (menu.kind === "arrow" && menu.id != null) openArrowStyle(menu.id);
@@ -1946,6 +1961,9 @@ function WorkspaceContent({
           <Slides2D />
           {/* Guides, as something is moved or made larger (docs/PRESENTING.md, *Guides*) */}
           <Guides2D />
+          {/* Stacks of drawings: each one's chip, under the record it shows, and one going over to the next (utils/stacks) */}
+          <StackSwap2D />
+          <StackChips2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />

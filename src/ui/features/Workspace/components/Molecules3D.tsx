@@ -133,8 +133,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   });
   // the drawing's atom under the pointer: lit in the molecules made from it
   const hoveredDrawn = useEditor((s) => s.hovered.atomId);
-  // and the drawing each was made from, which may have changed since
-  const drawing = useEditor((s) => s.model);
+  // and the drawing each was made from, which may have changed since (a
+  // record of a stack of drawings out of sight still there: utils/stacks)
+  const drawing = useEditor((s) => s.fullModel);
   const remake = useContext(Remake3D);
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
   const stereoLabels = useAppSettings((s) => s.chemistry.stereoLabels);
