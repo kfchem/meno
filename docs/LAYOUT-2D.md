@@ -63,7 +63,12 @@ they hang from.
   share, closer than their own angles leave room for - saxitoxin's two
   five-membered rings beside its six: each is drawn whole, on its own side,
   and the gap between them opened by the same easing, never one of them
-  squeezed flat against the other's side.
+  squeezed flat against the other's side. So is a gap that leaves what
+  hangs from its two sides no room: two atoms each with a bond out of the
+  system, beside one atom they share, under 0.8 of a bond apart - three
+  five-membered rings round one atom leave 36 degrees, 0.62 of a bond,
+  between two of its neighbours (bilobalide's C4 and C9, whose groups
+  crossed each other's). Eased, they are 0.85 apart.
 - **Macrocycles** (nine and more): a chain closed on itself, drawn as one:
   two zigzags, one above the other, joined at their ends, every angle 120
   or 240 degrees - never round. At every corner a substituent takes the
@@ -190,10 +195,10 @@ they hang from.
   leave 36 degrees between two of its neighbours - each of the two leans
   its bonds out of the gap, up to 40 degrees and keeping 35 from its own
   ring bonds, rather than pointing them across it at the other's
-  (bilobalide's C4 and C9: pointed at each other, C4's OH was turned into
-  its ring, and its four bonds left in half the page). Not in a bridged
-  system laid flat, whose narrow gaps are where a bridge was pressed into
-  the page.
+  (bilobalide's C4 and C9, even with the gap eased: pointed at each other,
+  C4's OH was turned into its ring, and its four bonds left in half the
+  page). Not in a bridged system laid flat, whose narrow gaps are where a
+  bridge was pressed into the page.
 - **Parts joined**: where two parts each with rings of their own meet at a
   single bond - a sugar on its glycosidic oxygen, taxol's side chain on
   its ester - each is drawn well on its own and then joined, the angle at
