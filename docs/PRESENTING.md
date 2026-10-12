@@ -187,7 +187,8 @@ words, a width they break into lines at, and how their lines lie.
 - **Strokes written one after another**, within a second and a half and
   near each other, are one piece of writing: selected, moved, coloured and
   deleted together. The eraser takes a stroke at a time. A marker is see-
-  through and lies under the words.
+  through, in the first colour of the set in use unless given another, and
+  lies under the words.
 - **While a talk is given**, a pen writes over the slide, and what it wrote
   goes as the slide does.
 - **Saved and undone, a stroke at a time; in pictures as vectors.**
@@ -318,6 +319,64 @@ Shift+Enter, since Enter keeps the words, as it did before.
 - `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
   pixel on the screen at any zoom, coming and going in a short ease.
 
-Not yet, and where it comes: everything under *Handwriting* (its own pull
-request); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
+### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
+
+- `lib/chem/ink.ts`, the same for the canvas, SVG and EMF: a stroke's
+  outline - as thick as the pen was pressed (from 0.35 to 1.65 of its
+  width) where the system said, else even with its ends tapered over two
+  and a half widths; a marker's flat - its triangles for the canvas, where
+  a press takes it, how far it reaches; the 1€ filter (Casiez, Roussel and
+  Vogel, 2012) that smooths what the pointer gives as it comes; and points
+  nearer than 0.6 pixels to the one before dropped as it is kept. The pen
+  writes 0.75, 1.5 or 3 points wide, the marker 6, 10 or 16, see-through
+  (0.38). Given no colour of its own, a pen writes in the drawing's ink and
+  a marker in the first colour of the set in use (`markerColour`).
+- `store/types.ts` `Ink` (a piece: its pen, width, colour and strokes,
+  each its points - x, y and the pressure - and whether the pressure was
+  the pen's own) and `InkMode` (the card); `document.ts` `addInkStroke`
+  (a stroke on the piece before it, where it is in the same pen),
+  `addInk`, `removeInkStrokes`, `colourInks`, `removeInks` and
+  `MarkPlaces.inks`; `store/slices/inksSlice.ts`; `selInks`, `hoveredInk`,
+  `inkMode` and `inkDraft` beside the other kinds'; the clipboard's
+  record, a cut, a paste and the workspace's file (`inks`).
+- `components/InkWriting.tsx`: a press on the canvas by a pen - or by the
+  mouse's button while the card is open - is the writing's alone; a pen's
+  eraser end or its button, or the card's eraser, rubs out the strokes it
+  passes over, one step for a rub. A stroke joins the piece before it when
+  it comes within 1.5 seconds, in the same pen, and its box within six
+  widths and an em of that piece's. `components/Inks2D.tsx`: the pieces -
+  a pen's at 0.3, over the drawing, a marker's at -0.12, under it - the
+  stroke being written, the light round a piece, and a press, a hold and a
+  click on one, as on a picture.
+- `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
+  eraser, the colours of the set in use and the pen's own (a marker's own
+  being the set's first, shown once), three widths, Done (or Escape).
+  Quick Add's *Pen* opens it; the pointer is a cross while it is open.
+  Writing's menu: *Colour…* - whose card, for a marker's writing alone,
+  shows the marker's own colour (the set's first) in place of *None*, as
+  the pen's card does - and *Delete writing*.
+- Pictures (`Layout.inks`): a marker's under the drawing, see-through in
+  SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
+  everything.
+
+### Handwriting on PDFs and in a talk (lane L8, fifth part, second half, 2026-10-12)
+
+- A stroke begun on a PDF's page - the top one of a stack, or one spread,
+  not an icon - is that page's (`utils/pdfInk.ts` `pageUnder`): kept with
+  the PDF (`PdfItem.inks`, each piece on its page, its points the page's,
+  from its top left), and drawn with the page (`pdfPictures` `Page`, at
+  0.00245 - over its pictures, under the marks a search or a box puts on it
+  and a ring round an atom read from a figure, as agreed with lane L12) -
+  so it goes wherever the page goes: stacked, spread, put in a place of its
+  own, made an icon and back, and read in the column. A stroke joins a
+  piece on the same page only. The eraser rubs out what is written on the
+  pages under it too. A PDF's menu has *Write on it*, which opens the pen's
+  card. Saved and copied with the PDF.
+- While a talk is given, a pen - not the mouse - writes over the slide
+  (`talkInk`, the view's, never the document's: no step to undo), its
+  eraser end rubbing out; what it wrote goes as the slide does, and when
+  the talk ends.
+
+Not yet, and where it comes: writing in the column itself (what is written
+on the page shows there); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
 than it has room for run past its edge.

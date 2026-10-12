@@ -49,6 +49,7 @@ import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
 import { layOut } from "../../TextEditor/markdownLayout";
 import { measureText } from "../../TextEditor/markdownType";
 import { spotMoving } from "./figureTie";
+import { inkOnPage } from "../utils/pdfInk";
 
 /** How long a page takes between the page and the column, in ms; and a text's lines, once settled, to hand over to the column's own. */
 export const FLIGHT_MS = 420;
@@ -412,6 +413,7 @@ function ColumnPass({
             preview={pics.preview(pdf, i)}
             tiles={pics.tilesOf(pdf.sha256, i, clock.current.levels.get(i) ?? 0)}
             marks={marksOn(pdf, i, pdfSel, pdfFind?.found ?? [], pdfFind ? (pdfFind.found[pdfFind.now] ?? null) : null, redraw, pdfFlash, pdfBox)}
+            ink={inkOnPage(pdf, i)}
           />
         );
       });

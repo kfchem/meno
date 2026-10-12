@@ -14,10 +14,11 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { StyleChoice } from "../../../lib/chem/style";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf } from "./utils/rings";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
+import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
@@ -80,6 +81,9 @@ export type WorkspaceDocument = {
   /** The shapes on the page, from the back (docs/PRESENTING.md, *Shapes*). */
   shapes?: Shape[];
   nextShapeId?: number;
+  /** Writing by hand on the page, each piece of it in the order written (docs/PRESENTING.md, *Handwriting*). */
+  inks?: Ink[];
+  nextInkId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -95,6 +99,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.pictures?.length &&
     !doc.slides?.length &&
     !doc.shapes?.length &&
+    !doc.inks?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -1317,6 +1322,8 @@ export type MarkPlaces = {
   steps?: { id: number; x: number; y: number }[];
   /** Slides moved with the rest: where each one's middle now is. */
   slides?: { id: number; x: number; y: number }[];
+  /** Writing by hand moved or carried round with the rest: each piece's strokes where they now are. */
+  inks?: { id: number; strokes: InkStroke[] }[];
   /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
   shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
@@ -1334,6 +1341,11 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
     const at = new Map(places.pdfs.map((p) => [p.id, p]));
     const placed = { ...doc, pdfs: (doc.pdfs ?? []).map((p) => (at.has(p.id) ? { ...p, x: at.get(p.id)!.x, y: at.get(p.id)!.y } : p)) };
     return placeMarks(placed, { ...places, pdfs: [] });
+  }
+  if (places?.inks?.length) {
+    const at = new Map(places.inks.map((p) => [p.id, p.strokes]));
+    const placed = { ...doc, inks: (doc.inks ?? []).map((k) => (at.has(k.id) ? { ...k, strokes: at.get(k.id)! } : k)) };
+    return placeMarks(placed, { ...places, inks: [] });
   }
   if (places?.shapes?.length) {
     const at = new Map(places.shapes.map((p) => [p.id, p]));
@@ -1769,6 +1781,97 @@ export function orderShapes(doc: WorkspaceDocument, ids: Iterable<number>, front
 }
 
 /** `doc` without the shapes `ids`, and without the words in them. */
+// --- writing by hand -----------------------------------------------------------
+
+const sameLook = (a: InkLook, b: InkLook) => a.pen === b.pen && a.width === b.width && (a.color ?? null) === (b.color ?? null);
+
+/** `doc` with a stroke written: on the piece `join` where that is in the same pen, else a piece of its own, numbered `nextInkId`. */
+export function addInkStroke(doc: WorkspaceDocument, look: InkLook, stroke: InkStroke, join?: number | null): WorkspaceDocument {
+  if (stroke.points.length < 3 || !stroke.points.every(Number.isFinite)) return doc;
+  const piece = join != null ? doc.inks?.find((k) => k.id === join) : undefined;
+  if (piece && sameLook(piece, look)) return { ...doc, inks: doc.inks!.map((k) => (k.id === piece.id ? { ...k, strokes: [...k.strokes, stroke] } : k)) };
+  const id = doc.nextInkId ?? 1;
+  return { ...doc, inks: [...(doc.inks ?? []), { id, pen: look.pen, width: look.width, ...(look.color ? { color: look.color } : {}), strokes: [stroke] }], nextInkId: id + 1 };
+}
+
+/** `doc` with a piece of writing added whole - pasted, say - numbered `nextInkId`. */
+export function addInk(doc: WorkspaceDocument, piece: Omit<Ink, "id">): WorkspaceDocument {
+  if (!piece.strokes.length) return doc;
+  const id = doc.nextInkId ?? 1;
+  return { ...doc, inks: [...(doc.inks ?? []), { ...piece, id }], nextInkId: id + 1 };
+}
+
+/** `doc` with a stroke written on page `page` of the PDF `pdf`: on its piece `join` (by place) where that is on the same page in the same pen, else a piece of its own. */
+export function addPdfInkStroke(doc: WorkspaceDocument, pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null): WorkspaceDocument {
+  const p = doc.pdfs?.find((x) => x.id === pdf);
+  if (!p || page < 0 || page >= p.pages.length || stroke.points.length < 3 || !stroke.points.every(Number.isFinite)) return doc;
+  const inks = p.inks ?? [];
+  const piece = join != null ? inks[join] : undefined;
+  const next =
+    piece && piece.page === page && sameLook(piece, look)
+      ? inks.map((k, i) => (i === join ? { ...k, strokes: [...k.strokes, stroke] } : k))
+      : [...inks, { page, pen: look.pen, width: look.width, ...(look.color ? { color: look.color } : {}), strokes: [stroke] }];
+  return { ...doc, pdfs: doc.pdfs!.map((x) => (x.id === pdf ? { ...x, inks: next } : x)) };
+}
+
+/** `doc` without the strokes `cuts` names on PDFs' pages - a piece left with none, gone. */
+export function removePdfInkStrokes(doc: WorkspaceDocument, cuts: readonly { pdf: number; piece: number; index: number }[]): WorkspaceDocument {
+  if (!cuts.length || !doc.pdfs?.length) return doc;
+  let changed = false;
+  const pdfs = doc.pdfs.map((p) => {
+    const mine = cuts.filter((c) => c.pdf === p.id);
+    if (!mine.length || !p.inks?.length) return p;
+    const inks = p.inks.flatMap((k, i) => {
+      const gone = new Set(mine.filter((c) => c.piece === i).map((c) => c.index));
+      if (!gone.size) return [k];
+      changed = true;
+      const strokes = k.strokes.filter((_, j) => !gone.has(j));
+      return strokes.length ? [{ ...k, strokes }] : [];
+    });
+    if (inks.length === p.inks.length && !changed) return p;
+    const { inks: _was, ...rest } = p;
+    return inks.length ? { ...rest, inks } : rest;
+  });
+  return changed ? { ...doc, pdfs } : doc;
+}
+
+/** `doc` without the strokes `cuts` names - a piece left with none, gone. */
+export function removeInkStrokes(doc: WorkspaceDocument, cuts: readonly { id: number; index: number }[]): WorkspaceDocument {
+  if (!cuts.length || !doc.inks?.length) return doc;
+  const gone = new Map<number, Set<number>>();
+  for (const c of cuts) gone.set(c.id, (gone.get(c.id) ?? new Set()).add(c.index));
+  let changed = false;
+  const inks = doc.inks.flatMap((k) => {
+    const g = gone.get(k.id);
+    if (!g) return [k];
+    const strokes = k.strokes.filter((_, i) => !g.has(i));
+    if (strokes.length === k.strokes.length) return [k];
+    changed = true;
+    return strokes.length ? [{ ...k, strokes }] : [];
+  });
+  return changed ? { ...doc, inks } : doc;
+}
+
+/** `doc` with the pieces `ids` in `color` - or, null, the pen's own. */
+export function colourInks(doc: WorkspaceDocument, ids: Iterable<number>, color: string | null): WorkspaceDocument {
+  const take = new Set(ids);
+  let changed = false;
+  const inks = (doc.inks ?? []).map((k) => {
+    if (!take.has(k.id) || (k.color ?? null) === color) return k;
+    changed = true;
+    const { color: _was, ...rest } = k;
+    return color ? { ...rest, color } : rest;
+  });
+  return changed ? { ...doc, inks } : doc;
+}
+
+/** `doc` without the pieces of writing `ids`. */
+export function removeInks(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  if (!doc.inks?.some((k) => gone.has(k.id))) return doc;
+  return { ...doc, inks: doc.inks.filter((k) => !gone.has(k.id)) };
+}
+
 export function removeShapes(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
   const gone = new Set(ids);
   if (!doc.shapes?.some((x) => gone.has(x.id))) return doc;

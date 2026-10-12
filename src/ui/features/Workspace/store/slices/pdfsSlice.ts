@@ -70,7 +70,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     setPdfBox: (box: EditorState["pdfBox"]) =>
       set((prev: EditorState) =>
         box
-          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>() }
+          ? { ...prev, pdfBox: box, pdfSel: null, sel: { atoms: new Set<number>(), bonds: new Set<number>() }, selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>(), selInks: new Set<number>() }
           : prev.pdfBox
             ? { ...prev, pdfBox: null }
             : prev,

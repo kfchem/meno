@@ -10,6 +10,7 @@ import { labelSetOf, layoutMolecule, type Atom as LAtom, type Bond as LBond } fr
 import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
+import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 
 /** The box round an arrow's line: its ends and the corners it turns at. */
@@ -34,7 +35,7 @@ export type Box = { x0: number; y0: number; x1: number; y1: number };
 
 type Selected = Pick<
   EditorState,
-  "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes"
+  "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "selInks" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes" | "inks"
 >;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
@@ -99,6 +100,10 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     // (for guides, its frame: what lines up and is sized)
     const r = frames ? shapeFrame(s) : shapeBounds(s, opts.pointPx ?? 0);
     take(r.x0, r.y0, r.x1, r.y1);
+  }
+  for (const k of st.inks) if (st.selInks.has(k.id)) {
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    if (r) take(r.x0, r.y0, r.x1, r.y1);
   }
   return Number.isFinite(b.x0) && Number.isFinite(b.y0) ? b : null;
 }
@@ -168,6 +173,12 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   for (const s of st.slides) if (!st.selSlides.has(s.id)) out.push(boxOf(s));
   // and the shapes, all each draws (docs/PRESENTING.md, *Shapes*)
   for (const s of st.shapes) if (!st.selShapes.has(s.id)) out.push(shapeFrame(s));
+  // and writing by hand, each piece
+  for (const k of st.inks) {
+    if (st.selInks.has(k.id)) continue;
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    if (r) out.push(r);
+  }
   return out;
 }
 

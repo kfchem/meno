@@ -41,6 +41,14 @@ describe("a right-click menu over a part gone (Workspace closes it)", () => {
     expect(menuTargetGone(on("caption", words), state())).toBe(false);
   });
 
+  it("knows writing by hand rubbed out or undone away", () => {
+    const { doc, state } = editor();
+    const k = state().writeStroke({ pen: "pen", width: 1 }, { points: [0, 0, 0.5, 1, 1, 0.5] })!;
+    expect(menuTargetGone(on("ink", k), state())).toBe(false);
+    doc.undo();
+    expect(menuTargetGone(on("ink", k), state())).toBe(true);
+  });
+
   it("knows an atom deleted, and leaves a menu on empty space be", () => {
     const { state } = editor();
     const c = state().addAtom(0, 0, "C");

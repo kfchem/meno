@@ -96,4 +96,22 @@ describe("a selection turned over with the things selected with it", () => {
     expect(st().slides[0].x).toBe(-6);
     expect(st().model.atoms.find((x) => x.id === a)!.x).toBe(0);
   });
+
+  it("carries writing by hand by its middle, its strokes as written - not mirrored, as words are not", () => {
+    const { st } = editor();
+    const a = st().addAtom(0, 0, "C");
+    st().addAtomBonded(a, L, 0, "O");
+    // (a stroke from 6 to 8, rising: its middle at 7)
+    const k = st().writeStroke({ pen: "pen", width: 1 }, { points: [6, 0, 0.5, 8, 1, 0.5] })!;
+    st().setSel({ atoms: new Set(st().model.atoms.map((x) => x.id)), bonds: new Set() });
+    st().selectInks([k], true);
+    const m = turnOverMiddle(st(), { arrows: [], pluses: [], captions: [] })!;
+    expect(m.x).toBeCloseTo(4, 6);
+    st().turnSelectionOver("vertical");
+    const pts = st().inks[0].strokes[0].points;
+    // (its middle mirrored, 7 to 1; still rising left to right)
+    expect((pts[0] + pts[3]) / 2).toBeCloseTo(2 * m.x - 7, 6);
+    expect(pts[3]).toBeGreaterThan(pts[0]);
+    expect(pts[4]).toBeGreaterThan(pts[1]);
+  });
 });

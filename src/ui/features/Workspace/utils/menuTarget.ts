@@ -4,7 +4,7 @@ import type { EditorState } from "../store/types";
 /** What a right-click menu's part is looked for in. */
 type Parts = Pick<
   EditorState,
-  "model" | "captions" | "pdfs" | "pictures" | "texts" | "arrows" | "pluses" | "pushes" | "slides" | "shapes" | "molecules3d" | "sets" | "steps" | "wires"
+  "model" | "captions" | "pdfs" | "pictures" | "texts" | "arrows" | "pluses" | "pushes" | "slides" | "shapes" | "inks" | "molecules3d" | "sets" | "steps" | "wires"
 >;
 
 const has = (items: readonly { id: number }[], id: number | null) => id != null && items.some((x) => x.id === id);
@@ -43,6 +43,8 @@ export function menuTargetGone(target: MenuTarget, s: Parts): boolean {
       return !has(s.slides, id);
     case "shape":
       return !has(s.shapes, id);
+    case "ink":
+      return !has(s.inks, id);
     case "molecule3d":
       return !has(s.molecules3d, id);
     case "measure3d": {

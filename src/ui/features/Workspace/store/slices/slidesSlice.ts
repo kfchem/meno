@@ -9,6 +9,7 @@ import { sheetMiddle } from "../../utils/textSheets";
 import { pdfBounds } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
+import { strokesBounds } from "../../../../../lib/chem/ink";
 import { middleOf } from "../../../../../lib/chem/shapes";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -56,6 +57,11 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.selectMolecules3d(molecules3dIn(st.molecules3d, "box", box));
       st.selectPictures(molecules3dIn(st.pictures.map((p) => ({ id: p.id, at: p })), "box", box));
       st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), "box", box));
+      // (and writing by hand on it, each piece by its middle, as a box takes it)
+      st.selectInks(st.inks.filter((k) => {
+        const m = strokesBounds(k.strokes, 0);
+        return m != null && within({ x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2 });
+      }).map((k) => k.id));
       st.selectPdfs(
         molecules3dIn(
           st.pdfs.map((p) => {
@@ -91,13 +97,15 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       st.letGo();
       st.clearSel();
       st.setWorkflowView({ openStep: null, chosenSet: null, workflowMenu: null });
-      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) } }));
+      // (and no pen's card over the talk: a pen writes over the slide as it is)
+      set((prev: EditorState) => ({ ...prev, presenting: { at: Math.max(0, Math.min(n - 1, from)) }, talkInk: [], inkMode: null }));
     },
     presentAt: (at: number) =>
       set((prev: EditorState) => {
         if (!prev.presenting || at < 0 || at >= prev.slides.length || at === prev.presenting.at) return prev;
-        return { ...prev, presenting: { at } };
+        // (a pen's writing over the slide goes as the slide does)
+        return { ...prev, presenting: { at }, talkInk: [] };
       }),
-    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null } : prev)),
+    endPresenting: () => set((prev: EditorState) => (prev.presenting ? { ...prev, presenting: null, talkInk: [] } : prev)),
   };
 }

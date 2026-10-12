@@ -13,7 +13,7 @@ const none = (): Sel => ({ atoms: new Set(), bonds: new Set() });
  * arrows and "+" signs - and whether any of it is the drawing's: what the
  * keys act on, and whose menu a right-click on empty space opens.
  */
-export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "selPictures" | "selTexts" | "selCaptions" | "selPdfs"> & Partial<Pick<EditorState, "selSlides" | "selShapes" | "selArrows" | "selPluses">>): { any: boolean; drawing: boolean } {
+export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "selPictures" | "selTexts" | "selCaptions" | "selPdfs"> & Partial<Pick<EditorState, "selSlides" | "selShapes" | "selArrows" | "selPluses" | "selInks">>): { any: boolean; drawing: boolean } {
   const drawing = st.sel.atoms.size > 0 || st.sel.bonds.size > 0;
   return {
     drawing,
@@ -29,7 +29,8 @@ export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "
       (st.selSlides?.size ?? 0) > 0 ||
       (st.selShapes?.size ?? 0) > 0 ||
       (st.selArrows?.size ?? 0) > 0 ||
-      (st.selPluses?.size ?? 0) > 0,
+      (st.selPluses?.size ?? 0) > 0 ||
+      (st.selInks?.size ?? 0) > 0,
   };
 }
 const noFlow = (): SelFlow => ({ sets: new Set(), steps: new Set() });
@@ -113,14 +114,15 @@ export function createSelectionSlice(set: SetState) {
         selShapes: new Set(prev.shapes.map((s) => s.id)),
         selArrows: new Set(prev.arrows.map((a) => a.id)),
         selPluses: new Set(prev.pluses.map((p) => p.id)),
+        selInks: new Set(prev.inks.map((k) => k.id)),
         selFlow: { sets: new Set(prev.sets.map((b) => b.id)), steps: new Set(prev.steps.map((s) => s.id)) },
       })),
 
     /** Nothing selected, and no atom of a molecule in 3D chosen. */
     clearSel: () =>
       set((prev: EditorState) =>
-        prev.sel.atoms.size || prev.sel.bonds.size || prev.sel3d.size || prev.chosen3d || prev.selFlow.sets.size || prev.selFlow.steps.size || prev.pdfSel || prev.pdfBox || prev.selPictures.size || prev.selTexts.size || prev.selCaptions.size || prev.selPdfs.size || prev.selSlides.size || prev.selShapes.size || prev.selArrows.size || prev.selPluses.size
-          ? { ...prev, sel: none(), selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selFlow: noFlow(), pdfSel: null, pdfBox: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>() }
+        prev.sel.atoms.size || prev.sel.bonds.size || prev.sel3d.size || prev.chosen3d || prev.selFlow.sets.size || prev.selFlow.steps.size || prev.pdfSel || prev.pdfBox || prev.selPictures.size || prev.selTexts.size || prev.selCaptions.size || prev.selPdfs.size || prev.selSlides.size || prev.selShapes.size || prev.selArrows.size || prev.selPluses.size || prev.selInks.size
+          ? { ...prev, sel: none(), selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selFlow: noFlow(), pdfSel: null, pdfBox: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>(), selInks: new Set<number>() }
           : prev,
       ),
 
