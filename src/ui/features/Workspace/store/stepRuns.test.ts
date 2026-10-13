@@ -201,6 +201,24 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.running).toBeUndefined();
   });
 
+  it("reads how far its job is, and what it says last, from whole lines - a line read in part waits for the rest", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    const job = jobs.get(idOf(1))!;
+    // ("progress 12/240" read as far as "progress 12/24": not taken for how far it is)
+    Object.assign(job, { state: "running", started: Date.now(), log: "cycle 1\nprogress 3/240\nprogress 12/24" });
+    await st().lookAtJobs();
+    expect(st().jobsSeen[idOf(1)]).toMatchObject({ line: "cycle 1", progress: { done: 3, total: 240 } });
+    job.log += "0\ncycle 2\n";
+    await st().lookAtJobs();
+    expect(st().jobsSeen[idOf(1)]).toMatchObject({ line: "cycle 2", progress: { done: 12, total: 240 } });
+    Object.assign(job, { state: "done", ended: Date.now() + 1000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+  });
+
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";

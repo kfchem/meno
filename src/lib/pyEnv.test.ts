@@ -102,6 +102,26 @@ describe("setting a plugin up, with what it downloads besides", () => {
     expect(lookedIn.get(VENV_PYTHON)).toBe(3);
   });
 
+  it("sends the hosts the consent named with what sets it up, and with what fetches its files: all each may reach", async () => {
+    await ensurePyEnv("plugin-blender");
+    expect(asked[0].hosts).toEqual(["releases.astral.sh", "download.blender.org"]);
+    const setUp = commands.find((c) => c.cmd === "py_env_setup_uv")!;
+    expect((setUp.args?.payload as { hosts: string[] }).hosts).toEqual(asked[0].hosts);
+    // (the files alone, from their own host)
+    expect(commands.find((c) => c.cmd === "plugin_files" && c.args?.fetch === true)?.args?.hosts).toEqual(["download.blender.org"]);
+    // (where they stand is asked with none: nothing is fetched)
+    expect(commands.find((c) => c.cmd === "plugin_files" && c.args?.fetch === false)?.args?.hosts).toBeUndefined();
+  });
+
+  it("sends the hosts the files' own consent named, where only the files are fetched", async () => {
+    state.granted.add("python-env:plugin-blender");
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12" }));
+    await ensurePyEnv("plugin-blender");
+    expect(asked[0].hosts).toEqual(["download.blender.org"]);
+    expect(commands.find((c) => c.cmd === "plugin_files" && c.args?.fetch === true)?.args?.hosts).toEqual(asked[0].hosts);
+  });
+
   it("asks again, even where setting it up was allowed, where it has come to need a file the user was not told of", async () => {
     state.granted.add("python-env:plugin-blender");
     files.set(VENV_PYTHON, "");
