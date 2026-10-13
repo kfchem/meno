@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { unsureOf, type Unsure } from "../chem/drawing";
 import type { Atom, Bond, Model } from "../store/types";
-import { byStructure, type StructureValues } from "./byStructure";
+import { byStructure, structureValues } from "./byStructure";
 
 const at = (id: number, deg: number, from = { x: 0, y: 0 }): Atom => ({ id, el: "C", x: from.x + 1.5 * Math.cos((deg * Math.PI) / 180), y: from.y + 1.5 * Math.sin((deg * Math.PI) / 180) }) as Atom;
 
@@ -22,7 +22,7 @@ function join(...ms: Model[]): Model {
 describe("what is made of each structure of a drawing", () => {
   it("is made once for each structure, in the drawing's order, and again only for one whose atoms or bonds changed", () => {
     const m = join(fan(100, 0), fan(200, 10), fan(300, 20));
-    const kept: StructureValues<number> = new Map();
+    const kept = structureValues<number>();
     const made: number[] = [];
     const of = (part: Model) => (made.push(part.atoms[0].id), part.atoms.length * 100 + part.bonds.length);
     expect(byStructure(m, kept, of)).toEqual([504, 504, 504]);
@@ -36,14 +36,28 @@ describe("what is made of each structure of a drawing", () => {
     expect(made).toEqual([200, 300]);
   });
 
+  it("splits the drawing again as bonds join structures or atoms go, and not as atoms only move", () => {
+    const m = join(fan(100, 0), fan(200, 10));
+    const kept = structureValues<string>();
+    const ids = (part: Model) => part.atoms.map((a) => a.id).join();
+    expect(byStructure(m, kept, ids)).toEqual(["100,101,102,103,104", "200,201,202,203,204"]);
+    const split = kept.split;
+    byStructure({ atoms: m.atoms.map((a) => ({ ...a, x: a.x + 1 })), bonds: [...m.bonds] }, kept, ids);
+    expect(kept.split).toBe(split);
+    const joined = { ...m, bonds: [...m.bonds, { id: 999, a: 104, b: 201, order: 1 } as Bond] };
+    expect(byStructure(joined, kept, ids)).toEqual(["100,101,102,103,104,200,201,202,203,204"]);
+    const fewer = { ...joined, atoms: joined.atoms.filter((a) => a.id !== 104) };
+    expect(byStructure(fewer, kept, ids)).toEqual(["100,101,102,103", "200,201,202,203,204"]);
+  });
+
   it("leaves out a bond to an atom the drawing does not have, and keeps a lone atom a structure of its own", () => {
     const m: Model = { atoms: [{ id: 1, el: "C", x: 0, y: 0 } as Atom, { id: 2, el: "O", x: 5, y: 0 } as Atom], bonds: [{ id: 9, a: 1, b: 7, order: 1 } as Bond] };
-    expect(byStructure(m, new Map(), (part) => part.atoms.map((a) => a.id).join() + "/" + part.bonds.length)).toEqual(["1/0", "2/0"]);
+    expect(byStructure(m, structureValues<string>(), (part) => part.atoms.map((a) => a.id).join() + "/" + part.bonds.length)).toEqual(["1/0", "2/0"]);
   });
 
   it("finds what a drawing shows only by luck as the whole drawing read at once does, as structures move", () => {
     const m = join(fan(100, 0), fan(200, 10));
-    const kept: StructureValues<Unsure> = new Map();
+    const kept = structureValues<Unsure>();
     expect(unsureOf(m, kept)).toEqual(unsureOf(m));
     expect(unsureOf(m, kept).atoms).toEqual(new Set([100, 200]));
     // (the second's bonds spread round it: no longer by luck)
@@ -54,7 +68,7 @@ describe("what is made of each structure of a drawing", () => {
 
   it("works out one structure of a thousand moved in a small share of the time the thousand take", () => {
     const m = join(...Array.from({ length: 1000 }, (_, k) => fan(100 * (k + 1), 10 * k)));
-    const kept: StructureValues<Unsure> = new Map();
+    const kept = structureValues<Unsure>();
     const cpu = (f: () => void) => {
       const c = process.cpuUsage();
       f();
