@@ -212,9 +212,11 @@ Nothing a part shows lives in the part, so a part made again shows the same:
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
-there is none yet: its document is kept while Meno runs, but Save is the
-canvas's own (`useFileActions`, `setSaver`), and so is not there until the
-canvas draws again.
+there is none yet, but its document is kept while Meno runs, and Save is
+the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
+`useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
+the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
+the document, and a save that fails says so under the canvas's card.
 
 ## How things move
 
