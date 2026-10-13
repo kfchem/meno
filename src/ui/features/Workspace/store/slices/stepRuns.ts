@@ -84,7 +84,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
-  /** The steps to run to run `id`, in order: those before it that have not run, or have changed, or are running - and it. */
+  /** The steps to run to run `id`, in order: those before it back to one that is done - each not run, changed, failed, stopped or running - and it. */
   const chainTo = (d: WorkspaceDocument, id: number): number[] => {
     const out = [id];
     for (let prior = before(d, id); prior && out.length < 200; prior = before(d, prior.id)) {
@@ -771,7 +771,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     runFrom: (id: number) => runSteps([id, ...after(doc.getState(), id)]),
     runAll: () => {
       const d = doc.getState();
-      // (every step that has not run or has changed - one with nothing coming in left as it is)
+      // (every step that is not done - not run, changed, failed or stopped - or is running; one with nothing coming in left as it is)
       return runSteps((d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id));
     },
     stopStep: (id: number) => {
