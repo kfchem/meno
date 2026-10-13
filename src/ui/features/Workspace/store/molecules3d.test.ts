@@ -545,3 +545,25 @@ describe("a molecule in 3D shown overlaid, undone away", () => {
     expect(state().overlay3d[first]).toBeUndefined();
   });
 });
+
+describe("molecules in 3D turned together, then something amended", () => {
+  it("are turned back by the undo all the same - a PDF scrolled in the column replaces the document's states", () => {
+    const { doc, state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: -40 });
+    const half: [number, number, number, number] = [0, 1, 0, 0];
+    state().turnMolecules3d(
+      [
+        { id: 1, at: { x: 6, y: 0 }, turn: half },
+        { id: 2, at: { x: 0, y: 0 }, turn: half },
+      ],
+      "turn-1",
+    );
+    // the PDF read in the column, scrolled: an amend, no step of its own
+    state().setPdfReading(state().pdfs[0].id, { at: 0, zoom: 1.5 });
+    doc.undo();
+    expect(state().molecules3d.find((m) => m.id === 1)!.at.x).toBe(0);
+    expect(state().turns3d[1]).toBeUndefined();
+    doc.redo();
+    expect(state().turns3d[1]).toEqual(half);
+  });
+});

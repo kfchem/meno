@@ -1,4 +1,4 @@
-import { DEFAULT_HISTORY_LIMIT } from "../../../../lib/doc/document";
+import { amendedState, DEFAULT_HISTORY_LIMIT } from "../../../../lib/doc/document";
 import type { Turn3D } from "./types";
 
 /**
@@ -57,8 +57,11 @@ export function turnsAcross(doc: object, was: object, now: object): Record<numbe
   if (!steps) return null;
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i];
-    if (was === s.after && now === s.before) return s.turnsBefore;
-    if (was === s.before && now === s.after) return s.turnsAfter;
+    // (the states as amends have made them since: a PDF scrolled in the
+    // column, a step's run - each replaces every state it changes)
+    const [before, after] = [amendedState(s.before), amendedState(s.after)];
+    if (was === after && now === before) return s.turnsBefore;
+    if (was === before && now === after) return s.turnsAfter;
   }
   return null;
 }

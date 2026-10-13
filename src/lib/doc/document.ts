@@ -144,6 +144,21 @@ export type DocumentOptions<T = unknown> = {
   budget?: number;
 };
 
+/** Each state an amend replaced, and what it became (`DocumentStore.amend`). */
+const amendedTo = new WeakMap<object, unknown>();
+
+/**
+ * What a state has become through amends - the state itself if none has
+ * replaced it: something that knows the document by its states (a journal
+ * of turns in 3D) finds them again after an amend, which replaces every
+ * state it changes.
+ */
+export function amendedState<T>(state: T): T {
+  let s: unknown = state;
+  while (typeof s === "object" && s !== null && amendedTo.has(s)) s = amendedTo.get(s);
+  return s as T;
+}
+
 export function createDocument<T>(
   initial: T,
   options: DocumentOptions<T> = {},
@@ -266,7 +281,11 @@ export function createDocument<T>(
       // (one state held twice - the saved one is one of the history's - amended once, so it is still the same state)
       const amended = new Map<T, T>();
       const next = (state: T) => {
-        if (!amended.has(state)) amended.set(state, updater(state));
+        if (!amended.has(state)) {
+          const to = updater(state);
+          amended.set(state, to);
+          if (typeof state === "object" && state !== null && !Object.is(to, state)) amendedTo.set(state, to);
+        }
         return amended.get(state)!;
       };
       const map = (e: Entry<T>): Entry<T> => {
