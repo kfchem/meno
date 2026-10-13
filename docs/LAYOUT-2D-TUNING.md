@@ -346,6 +346,14 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
+- **Two double bonds in a ring of ten to twelve** (hunter B's sweep of
+  cycloalkadienes, 2026-10-13): one of them still comes out the other way
+  round in 13 of the 126 rings of 8 to 16 atoms - four of eight atoms
+  (drawn regular; hunter B's 8-ring dent is a PR of its own), and nine of
+  10 to 12, where the lattice has one shape or none that holds both (a
+  twelve has a single shape with no dents, and no dented one without a
+  turn of five). Rings of 14 and 16 take a shape from further down now.
+  Not yet checked: the macrolides of 16 to 43 atoms the sweep found.
 - **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
   the perspective drawing read better than the flat one, and both faced
   the wrong way). Its whole solid now reads as given, its centres the

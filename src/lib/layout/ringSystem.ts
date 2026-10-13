@@ -27,7 +27,7 @@ import {
   sub,
   type Point,
 } from "./geometry";
-import { macrocycleShapes } from "./macrocycle";
+import { macrocyclePool, macrocycleShapes } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
@@ -64,7 +64,65 @@ export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
   const rings = sys.rings.map((i) => mol.rings[i]);
   const big = Math.max(0, ...rings.map((r) => r.length));
   if (big < MACROCYCLE || hubOf(rings)) return 1;
-  return macrocycleShapes(big).length;
+  return Math.max(...rings.filter((r) => r.length === big).map((r) => shapesFor(mol, r).length));
+}
+
+/**
+ * The shapes a macrocycle is tried in: those offered for its size - or,
+ * where none of them can keep its double bonds' cis or trans as given
+ * (two of them a few bonds apart want corners and zigzags at places no
+ * offered shape has together), the best of the size that can.
+ */
+function shapesFor(mol: Molecule, ring: number[]): Point[][] {
+  const offered = macrocycleShapes(ring.length);
+  const fixed = fixedDoubles(mol, ring);
+  if (!fixed.length || offered.some((shape) => keepsDoubles(shape, fixed))) return offered;
+  const keeping = macrocyclePool(ring.length).filter((shape) => keepsDoubles(shape, fixed));
+  return keeping.length ? keeping.slice(0, offered.length) : offered;
+}
+
+/**
+ * A ring's double bonds whose cis or trans is given, by place in the ring:
+ * taken against the ring atoms either side of each (a substituent is on the
+ * other side from its ring neighbour, so a configuration given against it
+ * is turned round).
+ */
+function fixedDoubles(mol: Molecule, ring: number[]): { i: number; cis: boolean }[] {
+  const n = ring.length;
+  const fixed: { i: number; cis: boolean }[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % n];
+    const bi = mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`);
+    const st = bi != null ? mol.bonds[bi].stereo : undefined;
+    if (!st || mol.bonds[bi!].order !== 2) continue;
+    const before = ring[(i - 1 + n) % n];
+    const after = ring[(i + 2) % n];
+    const onA = mol.neighbours[a].includes(st.refs[0]) && st.refs[0] !== b ? st.refs[0] : st.refs[1];
+    const onB = onA === st.refs[0] ? st.refs[1] : st.refs[0];
+    fixed.push({ i, cis: st.cis !== (onA !== before) !== (onB !== after) });
+  }
+  return fixed;
+}
+
+/** How many of a ring's fixed double bonds a shape, its atoms placed from `shift` round `way`, draws the other way round. */
+function wrongDoubles(shape: Point[], fixed: { i: number; cis: boolean }[], shift: number, way: number): number {
+  const n = shape.length;
+  const at = (k: number) => shape[(((shift + way * k) % n) + n) % n];
+  let wrong = 0;
+  for (const { i, cis } of fixed) {
+    const pa = at(i);
+    const pb = at(i + 1);
+    const side = (k: number) => Math.sign(cross(sub(pb, pa), sub(at(k), pa)));
+    if ((side(i - 1) === side(i + 2)) !== cis) wrong++;
+  }
+  return wrong;
+}
+
+/** Whether a shape can carry all of a ring's fixed double bonds as given, placed some way round. */
+function keepsDoubles(shape: Point[], fixed: { i: number; cis: boolean }[]): boolean {
+  for (const way of [1, -1]) for (let shift = 0; shift < shape.length; shift++) if (!wrongDoubles(shape, fixed, shift, way)) return true;
+  return false;
 }
 
 export function placeRingSystem(
@@ -110,7 +168,7 @@ export function placeRingSystem(
       .filter((r) => r !== first && r.filter((a) => first.includes(a)).length >= 3)
       .flatMap((r) => r.filter((a) => first.includes(a))),
   );
-  const shapes = first.length >= MACROCYCLE ? macrocycleShapes(first.length) : [];
+  const shapes = first.length >= MACROCYCLE ? shapesFor(mol, first) : [];
   if (first.length >= MACROCYCLE && through.size >= 0.4 * first.length && shortLinks(first, through)) {
     ringOfBlocks(mol, first, rings, pos).forEach((i) => placedRing.add(i));
   } else if (first.length >= MACROCYCLE) {
@@ -404,23 +462,8 @@ function macrocycleFit(
       (shared.length === 3 ? pointIn : pointOut).push(i);
     }
   }
-  // a double bond in the ring keeps its cis or trans: taken against the
-  // ring atoms either side of it (a substituent is on the other side from
-  // its ring neighbour, so a configuration given against it is turned round)
-  const fixed: { i: number; cis: boolean }[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = ring[i];
-    const b = ring[(i + 1) % n];
-    const bi = mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`);
-    const st = bi != null ? mol.bonds[bi].stereo : undefined;
-    if (!st || mol.bonds[bi!].order !== 2) continue;
-    const before = ring[(i - 1 + n) % n];
-    const after = ring[(i + 2) % n];
-    const onA = mol.neighbours[a].includes(st.refs[0]) && st.refs[0] !== b ? st.refs[0] : st.refs[1];
-    const onB = onA === st.refs[0] ? st.refs[1] : st.refs[0];
-    const cis = st.cis !== (onA !== before) !== (onB !== after);
-    fixed.push({ i, cis });
-  }
+  // a double bond in the ring keeps its cis or trans
+  const fixed = fixedDoubles(mol, ring);
   // A macrolide's lactone at the lower left, the ring numbered from its
   // carbonyl carbon counterclockwise (docs/LAYOUT-2D.md, section 4): among
   // fits that put the heavy groups outside as well, the one that does
@@ -430,13 +473,7 @@ function macrocycleFit(
   let bestCost = Infinity;
   for (const way of [1, -1]) {
     for (let shift = 0; shift < n; shift++) {
-      let cost = 0;
-      for (const { i, cis } of fixed) {
-        const pa = at(shift, way, i);
-        const pb = at(shift, way, i + 1);
-        const side = (k: number) => Math.sign(cross(sub(pb, pa), sub(at(shift, way, k), pa)));
-        if ((side(i - 1) === side(i + 2)) !== cis) cost += 1000;
-      }
+      let cost = 1000 * wrongDoubles(shape, fixed, shift, way);
       for (let i = 0; i < n; i++) {
         if (inward[(((shift + way * i) % n) + n) % n]) cost += load[i];
       }

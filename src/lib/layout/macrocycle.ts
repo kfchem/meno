@@ -38,6 +38,31 @@ export function macrocycleShapes(n: number): Point[][] {
   return shapes.map((shape) => shape.map((p) => ({ ...p })));
 }
 
+const pools = new Map<number, Point[][]>();
+
+/** How many shapes of a size are looked through where none offered keeps what the ring must. */
+const POOL = 60;
+
+/**
+ * More shapes of a size than are offered, best first, as `macrocycleShapes`
+ * gives them: where none of those offered keeps what a ring must keep -
+ * its double bonds' cis or trans, which need a corner or a zigzag at given
+ * places round it - those further down that do.
+ */
+export function macrocyclePool(n: number): Point[][] {
+  let shapes = pools.get(n);
+  if (!shapes) {
+    const even = (m: number) => [...evenShapes(m, POOL), ...dentedShapes(m)];
+    shapes = (n % 2 === 0 ? even(n) : even(n + 1).map((base) => contract(base))).map((shape) => {
+      const w = widest(shape);
+      const c = centreOf(w);
+      return w.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
+    });
+    pools.set(n, shapes);
+  }
+  return shapes.map((shape) => shape.map((p) => ({ ...p })));
+}
+
 /** The shape that lies best for a ring of `n` atoms. */
 export function macrocycleShape(n: number): Point[] {
   return macrocycleShapes(n)[0];
@@ -143,7 +168,7 @@ function shapeCost(ps: readonly Point[]): number {
   return 4 * (best - 0.55) ** 2 - open - (symmetric(ps) ? 0.1 : 0);
 }
 
-function evenShapes(n: number): Point[][] {
+function evenShapes(n: number, count = OFFERED): Point[][] {
   // clockwise: six more right turns than left, none of the left ones together
   const lefts = (n - 6) / 2;
   const extras = 6;
@@ -178,9 +203,50 @@ function evenShapes(n: number): Point[][] {
       }
     }
   }
-  const best = [...found.values()].sort((p, q) => p.cost - q.cost).slice(0, OFFERED);
+  const best = [...found.values()].sort((p, q) => p.cost - q.cost).slice(0, count);
   // no lattice ring of this size (eight): a regular polygon
   return best.length ? best.map((b) => b.pts) : [regular(n)];
+}
+
+/** The largest ring given dented shapes (`dentedShapes`): past it, too many walks to look through. */
+const DENTED_UP_TO = 24;
+
+/**
+ * Rings of `n` atoms on the lattice with a dent or two - two left turns
+ * together, a corner pointing in - best first: no shape lies better for
+ * having one, but a cis double bond can sit in a dent where the ring has no
+ * room for it at a corner pointing out (two of them a bond apart, in a ring
+ * of twelve). Only for the pool, and only up to `DENTED_UP_TO`.
+ */
+function dentedShapes(n: number): Point[][] {
+  if (n > DENTED_UP_TO) return [];
+  const lefts = (n - 6) / 2;
+  const total = lefts + 6;
+  const found = new Map<string, { pts: Point[]; cost: number }>();
+  // the right turns after each left: no more than four together, a dent (none) at most twice
+  const rec = (gaps: number[], left: number, dents: number) => {
+    if (gaps.length === lefts) {
+      if (left !== 0 || !dents) return;
+      const turns: number[] = [];
+      for (const g of gaps) {
+        turns.push(1);
+        for (let i = 0; i < g; i++) turns.push(-1);
+      }
+      const pts = walk(turns);
+      if (!pts) return;
+      const key = signature(pts);
+      const cost = shapeCost(pts);
+      const had = found.get(key);
+      if (!had || cost < had.cost) found.set(key, { pts, cost });
+      return;
+    }
+    for (let g = 0; g <= Math.min(4, left); g++) {
+      if (g === 0 && dents === 2) continue;
+      rec([...gaps, g], left - g, dents + (g === 0 ? 1 : 0));
+    }
+  };
+  rec([], total, 0);
+  return [...found.values()].sort((p, q) => p.cost - q.cost).slice(0, POOL).map((b) => b.pts);
 }
 
 /** Ordered ways of writing `total` as `count` parts of 1 to `most`, for count up to `maxCount`. */

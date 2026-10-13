@@ -76,6 +76,25 @@ describe("layout2D", () => {
     }
   });
 
+  it("draws both double bonds of a macrocycle cis or trans as they are, where no shape offered has room for both", () => {
+    // cyclotetradeca- and cyclohexadecadienes: two double bonds the shapes
+    // offered for the size put a corner and a zigzag at the wrong places for
+    for (const [n, k, cis0, cisK] of [
+      [14, 7, true, false],
+      [16, 2, true, true],
+      [16, 8, true, true],
+    ] as const) {
+      const bonds = ring(0, n).map(([a, b], i): [number, number, number] => [a, b, i === 0 || i === k ? 2 : 1]);
+      const extra = bonds.map((_, i) =>
+        i === 0 ? { stereo: { refs: [n - 1, 2] as [number, number], cis: cis0 } } : i === k ? { stereo: { refs: [k - 1, k + 2] as [number, number], cis: cisK } } : {},
+      );
+      const { x, y } = layout2D(carbons(n, bonds, extra));
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      expect(side(n - 1, 0, 1) === side(2, 0, 1), `${n} bond 0`).toBe(cis0);
+      expect(side(k - 1, k, k + 1) === side(k + 2, k, k + 1), `${n} bond ${k}`).toBe(cisK);
+    }
+  });
+
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line
     const bonds: [number, number, number?][] = Array.from({ length: 17 }, (_, i) => [i, i + 1, i === 8 ? 2 : 1]);

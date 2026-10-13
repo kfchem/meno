@@ -79,8 +79,13 @@ they hang from.
   among the few that lie well, for the room it leaves inside. A ring fused
   on its side sits where the shape turns (both ends of that side corners
   pointing out), a ring it runs through at three atoms stands outside a
-  corner pointing in, and every double bond in it keeps its cis or trans.
-  A macrolide has its lactone at the lower left, the ring numbered from
+  corner pointing in, and every double bond in it keeps its cis or trans:
+  a cis one at a corner, a trans one along a zigzag. Where none of the
+  shapes offered has corners and zigzags at the places two of them need
+  (a cyclohexadecadiene's, a bond apart), the shapes of the size that lie
+  less well are looked through, those with a dent or two among them (two
+  turns inward together, for rings of up to 24), and the best few that
+  keep them all are offered instead. A macrolide has its lactone at the lower left, the ring numbered from
   its carbonyl carbon counterclockwise - C2 to its right along the bottom,
   the ring O last, above it - as erythromycin and epothilone are drawn: of
   the ways of fitting the ring to its shape that put the heavy groups
