@@ -41,7 +41,7 @@ import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
-import ExportCard, { type Offered3D } from "./ExportCard";
+import ExportCard from "./ExportCard";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
@@ -50,6 +50,7 @@ import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
 import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
+import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import NameDialog from "../../layouts/NameDialog";
@@ -59,7 +60,7 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { knownOf, pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
-import { offeredNames, writtenOf } from "./utils/written";
+import { writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
@@ -181,7 +182,10 @@ import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
-import { SHAPE_PAD } from "./document";
+import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
+import { freePlace, pageBoxes } from "./utils/freePlace";
+import { sheetRoom } from "./utils/textSheets";
+import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -255,8 +259,30 @@ function WorkspaceContent({
     handleMouseDownCapture,
     clientToWorld,
     pasteTarget,
+    viewMiddle,
   } = useStructureEvents(initialPayload, initialFilename, officeId == null, initialKind, initialPath);
   pdfTarget.current = pasteTarget;
+  // (where what is opened onto the page goes, of what it takes up about the
+  // point it is put at: in free space near the middle of the view, clear of
+  // all that is there - as files opened go, utils/freePlace)
+  const freeNear = useRef<(rooms: readonly { x0: number; y0: number; x1: number; y1: number }[]) => { x: number; y: number }>(() => ({ x: 0, y: 0 }));
+  freeNear.current = (rooms) => {
+    const st = store.getState();
+    const middle = viewMiddle();
+    if (!rooms.length) return middle;
+    const foot = { x0: Math.min(...rooms.map((r) => r.x0)), y0: Math.min(...rooms.map((r) => r.y0)), x1: Math.max(...rooms.map((r) => r.x1)), y1: Math.max(...rooms.map((r) => r.y1)) };
+    return freePlace(pageBoxes(st, styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle)), foot, middle, NOMINAL_BOND_LENGTH);
+  };
+  // (how files opened are put on the page: as a drop puts them, in free space near the middle of the view - this render's)
+  const openedFiles = useRef<(files: OpenedFile[]) => Promise<void>>(async () => {});
+  openedFiles.current = async (opened) => {
+    // (opened onto a page with nothing on it: Save suggests the first file's name beside it, as for a file opened on a canvas of its own)
+    const blank = isBlankDocument(store.getState().writing());
+    for (const [i, f] of opened.entries()) {
+      const put = () => openFilesAt([new File([f.bytes as BlobPart], f.name)], viewMiddle(), () => void put(), { path: f.path, free: true });
+      if ((await put()) && blank && i === 0) store.getState().markOpenedOver(f.path ?? f.name);
+    }
+  };
   useOfficeLink(officeId);
 
   const onCreated = useCanvasSetup(camRef, domRef);
@@ -286,17 +312,34 @@ function WorkspaceContent({
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
   useEffect(
-    () => (ownTab && officeId == null ? setTextTaker(tabId, (texts) => store.getState().addTexts(texts, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setTextTaker(tabId, (texts) => {
+            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState()).flatMap((t) => sheetRoom(t) ?? []);
+            store.getState().addTexts(texts, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
   );
   // (and PDFs and pictures opened, on its page where it is looked at: docs/PDF.md)
   useEffect(
-    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, pdfTarget.current())) : undefined),
+    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }).map(pdfRoom)))) : undefined),
     [ownTab, officeId, tabId, store],
   );
   useEffect(
-    () => (ownTab && officeId == null ? setPictureTaker(tabId, (pictures) => void store.getState().addPictures(pictures, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setPictureTaker(tabId, (pictures) => {
+            const rooms = picturesInRow(pictures, { x: 0, y: 0 }).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
+            void store.getState().addPictures(pictures, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
+  );
+  // (and structures' files and calculations' outputs opened, as a drop on it puts them: ui/views/files)
+  useEffect(
+    () => (ownTab && officeId == null ? setFileTaker(tabId, (files) => void openedFiles.current(files)) : undefined),
+    [ownTab, officeId, tabId],
   );
   // What readers reading an output as well find, joined to each molecule
   // read from it as it comes - or as the molecule comes to stand here
@@ -1261,7 +1304,7 @@ function WorkspaceContent({
     setRendering({ ids: ms.map((m) => m.id), motions, surfaces: ms.some((m) => !!shownRow(m.id)?.surface) });
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
-  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
 
   // Export: what is selected - its structures, arrows and words, its
   // molecules in 3D - as Meno writes it, or a plugin added that writes
@@ -1272,9 +1315,7 @@ function WorkspaceContent({
     const what = holdsOfDrawn(taken.part);
     const added = useReaders.getState().state;
     const theirs = what.solid ? pluginWriters(WRITER_PLUGINS.filter((p) => added[p.id] === "added")) : [];
-    const names = offeredNames(state.molecules3d);
-    const molecules = state.molecules3d.flatMap((m, i) => (taken.ids3d.includes(m.id) ? [{ id: m.id, name: names[i] }] : []));
-    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, molecules, selected: taken.ids3d, part: taken });
+    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, selected: taken.ids3d, part: taken });
   };
 
   // What the workspace does as a whole - opening, saving as, fitting, R and
@@ -1446,7 +1487,6 @@ function WorkspaceContent({
             writers={exporting.writers}
             from={exporting.from}
             what={exporting.what}
-            molecules={exporting.molecules}
             selected={exporting.selected}
             known={(ids) => {
               const state = store.getState();
