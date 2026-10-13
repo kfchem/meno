@@ -758,6 +758,14 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
   });
 
+  it("reads a line a little over a quarter of a bond, from a joint into a label, as the label's bond", () => {
+    // (as RDKit draws a crowded OH by default - ouabain's - its bond cut back at the label to 0.3 of a bond)
+    const c: P = [60, 60];
+    const o = step(c, -90, 0.6);
+    const s = read(figure([stroke(step(c, 150), c, step(c, 30)), stroke(c, along(c, o, 0.47))], word("OH", o)));
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-O"]);
+  });
+
   it("reads a short line running straight out of a label to nothing as a bond to a methyl", () => {
     // (cocaine as RDKit's ACS 1996 mode draws it: its bridge's N-methyl squeezed to half a bond, cut back at the N - a quarter
     // of a bond shows)

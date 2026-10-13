@@ -1036,7 +1036,10 @@ workspace holds.
   - a short line, a sixth of a bond long or more, running straight out
     of a label to nothing - no line's end and no other word by its far
     end - is a bond to a methyl: an N-methyl in a bridge squeezed short
-    and cut back at its N.
+    and cut back at its N;
+  - a line a quarter of a bond long or more, from a joint - another
+    bond's end, a wedge's or a hash's, at its own - into a label, is that
+    label's bond: one cut back at the label further than most.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
