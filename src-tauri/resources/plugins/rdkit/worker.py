@@ -109,16 +109,23 @@ def is_element(symbol):
         return False
 
 
+def with_charge(atom):
+    """An atom's symbol and charge as written: O-, N+, Fe2+."""
+    q = atom.GetFormalCharge()
+    return atom.GetSymbol() + ("" if q == 0 else ("" if abs(q) == 1 else str(abs(q))) + ("+" if q > 0 else "-"))
+
+
 def why_unreadable(smiles):
     """Why a SMILES cannot be read, in a few plain words about the SMILES
     itself - a ring left open, a parenthesis or bracket not closed, a symbol
-    that is no element, an atom with more bonds than it can take - or None
-    where none of these says it."""
+    that is no element or wants brackets, an atom with more bonds than it can
+    take - or None where none of these says it."""
     s = smiles.strip()
     if not s:
         return "it is empty"
     depth = 0
     rings = {}
+    atoms = []  # (where each atom is written, as it is written), in order
     i = 0
     while i < len(s):
         ch = s[i]
@@ -133,6 +140,7 @@ def why_unreadable(smiles):
             name = sym.group(1)
             if name != "*" and not (name in AROMATIC_IN_BRACKETS or is_element(name)):
                 return f"{name} is not an element"
+            atoms.append((i, s[i : end + 1]))
             i = end + 1
             continue
         if ch == "]":
@@ -144,19 +152,27 @@ def why_unreadable(smiles):
                 return "a ) closes no ("
             depth -= 1
         elif ch.isdigit() or ch == "%":
-            digit = s[i + 1 : i + 3] if ch == "%" else ch
-            label = f"%{digit}" if ch == "%" else digit
+            if ch == "%" and s[i + 1 : i + 2] == "(":
+                close = s.find(")", i)
+                label = s[i : close + 1] if close > 0 else s[i:]
+                step = len(label)
+            else:
+                label = s[i : i + 3] if ch == "%" else ch
+                step = len(label)
             if label in rings:
                 del rings[label]
             else:
                 rings[label] = i
-            i += 3 if ch == "%" else 1
+            i += step
             continue
         elif ch.isalpha() or ch == "*":
             two = s[i : i + 2]
             if two in ("Cl", "Br"):
+                atoms.append((i, two))
                 i += 2
                 continue
+            if ch == "H":
+                return "H is left out of a SMILES, or written in brackets with its atom: CCO, or [CH3]"
             if ch not in ORGANIC:
                 # (an element written without the brackets it needs - Na, Fe, the
                 # capital read as an atom of its own - or no element at all)
@@ -167,6 +183,7 @@ def why_unreadable(smiles):
                 if own[0].isupper() and is_element(own):
                     return f"{own} is written in brackets: [{own}]"
                 return f"{ch} is not an element"
+            atoms.append((i, ch))
         i += 1
     if rings:
         label = min(rings, key=rings.get)
@@ -182,19 +199,33 @@ def why_unreadable(smiles):
             k = problem.GetAtomIdx()
             atom = mol.GetAtomWithIdx(k)
             bonds = int(round(sum(b.GetBondTypeAsDouble() for b in atom.GetBonds()) + atom.GetNumExplicitHs()))
-            return f"its {ordinal(k + 1)} atom, {atom.GetSymbol()}, has {bonds} bonds, more than it can take"
-        if kind in ("KekulizeException", "AtomKekulizeException"):
-            atoms = sorted(problem.GetAtomIndices())
-            if len(atoms) > 1:
-                return f"the aromatic ring of its atoms {atoms[0] + 1} to {atoms[-1] + 1} cannot have alternating double bonds"
-            return "an aromatic atom (in lowercase) is in no ring that can be aromatic"
+            return f"its {ordinal(k + 1)} atom, {with_charge(atom)}, has {bonds} bonds, more than it can take"
+        if kind == "AtomKekulizeException":
+            # (an aromatic atom, in lowercase, in no ring: an element written
+            # without its brackets - Co, Cs, Pb, read as C and o - or so)
+            k = problem.GetAtomIdx()
+            if k < len(atoms):
+                at, written = atoms[k]
+                pair = s[at - 1] + written if at > 0 and len(written) == 1 and written.islower() and s[at - 1].isupper() else None
+                if pair and is_element(pair):
+                    return f"{pair} is written in brackets: [{pair}]"
+            atom = mol.GetAtomWithIdx(k)
+            return f"its {ordinal(k + 1)} atom, {atom.GetSymbol().lower()}, is written aromatic, in lowercase, but is in no ring"
+        if kind == "KekulizeException":
+            ring = sorted(problem.GetAtomIndices())
+            listed = ", ".join(str(a + 1) for a in ring[:-1]) + f" and {ring[-1] + 1}"
+            return f"its aromatic ring of {len(ring)} atoms ({listed}) cannot have alternating double bonds"
     return None
 
 
 def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
-        why = why_unreadable(m["smiles"])
+        # (and where saying why fails, said as it always was)
+        try:
+            why = why_unreadable(m["smiles"])
+        except Exception:
+            why = None
         raise ValueError(f"This SMILES could not be read: {why}." if why else "This SMILES could not be read.")
     lay_out_2d(mol)
     block = Chem.MolToV3KMolBlock(mol)

@@ -259,9 +259,11 @@ the first time, once the plugin that reads SMILES is set up; what went
 wrong is said under the field, in a few words about the SMILES itself - a
 ring left open (and which: "1 is opened and not closed"), a ( or [ not
 closed, a symbol that is no element, an element written without its
-brackets ("Na is written in brackets: [Na]"), an atom with more bonds
-than it can take (which: "its 1st atom, C, has 5 bonds"), an aromatic
-ring that cannot alternate. A double-click on an atom still draws one
+brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
+an atom and an aromatic one), an H written as an atom ("H is left out of
+a SMILES"), an atom with more bonds than it can take (which, with its
+charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
+aromatic ring that cannot alternate. A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
