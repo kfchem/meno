@@ -851,7 +851,8 @@ function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number
   ];
   const [near0, far0, near1, far1] = pairs.reduce((p, q) => (dist(q[0], q[2]) < dist(p[0], p[2]) ? q : p));
   const gap = dist(near0, near1);
-  if (gap < 0.05 * bond || gap > 0.4 * bond) return null;
+  // (near half a bond at most: a figure with many labels, more of its lines cut short of them than whole, has its bonds read short)
+  if (gap < 0.05 * bond || gap > 0.45 * bond) return null;
   // (it must lie between them, not past one: the far ends further apart than the near ones)
   if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) return null;
   const m = mid(near0, near1);

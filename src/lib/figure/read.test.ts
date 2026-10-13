@@ -7,6 +7,7 @@ import monensin from "./fixtures/monensin-rsc.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
+import tetrodotoxinNature from "./fixtures/tetrodotoxin-nature.json";
 import tetrodotoxin from "./fixtures/tetrodotoxin-rsc.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
@@ -644,6 +645,14 @@ describe("a figure read as a structure", () => {
     const r = readFigure(tetrodotoxinMeno as unknown as FigureDrawn);
     const nh = r.atoms.findIndex((a) => a.label === "NH");
     expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
+  });
+
+  it("joins a bond broken round one in front where most bonds are drawn cut short of labels", () => {
+    // (tetrodotoxin as the Nature style prints it: its many labels cut more bonds short than are drawn whole, so bonds read
+    // shorter than they are, and a back bond's gap is two fifths of that)
+    const r = readFigure(tetrodotoxinNature as unknown as FigureDrawn);
+    expect(r.atoms.filter((a) => !a.label && Math.abs(a.x - 101.5) < 0.5 && a.y > 96 && a.y < 105)).toHaveLength(0);
+    expect(r.atoms).toHaveLength(22);
   });
 
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
