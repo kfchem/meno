@@ -264,7 +264,11 @@ Shift+Enter, since Enter keeps the words, as it did before.
   drawing's fills: each shape and one being drawn; a press on its line or,
   filled, inside it - none through what is drawn over it; a hold, a click,
   a second click to write in it; the handles. `components/shapeFrom.ts`:
-  drawn from Quick Add, led by a drag or traced with the button up.
+  drawn from Quick Add, led by a drag or traced with the button up - its
+  icon double-clicked too: the second press, as the trace begins and where
+  it began, is not the click that ends it (`traceEndedBy`, utils/press;
+  before, it ended the shape at once, too small to be kept, and nothing
+  was drawn).
 - Quick Add's *Shapes* opens a row of the five; the shape's menu
   (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
   regular or thick line, dashed, *Bring to front*, *Send to back*. The
