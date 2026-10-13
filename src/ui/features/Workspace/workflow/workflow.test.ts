@@ -12,6 +12,7 @@ import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run
 import { offeredSteps } from "./offered";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
+import { populations } from "../utils/molecule3d";
 import { selectionFrame } from "./selectionSet";
 import { readWorkflow } from "./saved";
 
@@ -192,6 +193,24 @@ describe("Meno's own steps", () => {
     expect(out.ok && out.aside.map((e) => e.number)).toEqual([1]);
   });
 
+  it("never take entries of different charge or spin for one compound, nor set one aside as alike to another", () => {
+    // (water, and its radical cation in the very same shape)
+    const water = setEntries([{ ...bent({ x: 0, y: 0 }), id: 1 }], "molecules");
+    const cation = setEntries([{ ...bent({ x: 0, y: 0 }), id: 2 }], "molecules").map((e) => ({
+      ...e,
+      compound: 1,
+      atoms: e.atoms.map((a, i) => (i === 0 ? { ...a, charge: 1 } : a)),
+    }));
+    const both = runMeno("as-conformers", [...water, ...cation], "molecules");
+    expect(both.ok && both.kept.map((e) => [e.compound, e.number])).toEqual([[0, 1], [1, 1]]);
+    const kept = runMeno("duplicates", [...water, ...cation], "molecules", { rmsd: 0.125 });
+    expect(kept.ok && kept.kept).toHaveLength(2);
+    // (in a conformer set too, whatever compound each is said to be)
+    const one = [...water, ...cation].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
+    const conformers = runMeno("duplicates", one, "conformers", { rmsd: 0.125 });
+    expect(conformers.ok && conformers.kept).toHaveLength(2);
+  });
+
   it("choose one conformer of each compound on purpose - its lowest, or one by its number - and set the rest aside", () => {
     const set = entries(bent({ x: 0, y: 0 }, 3, [kcal(2), 0, kcal(1)]), "conformers");
     const lowest = runMeno("choose", set, "conformers", undefined, "RDKit · MMFF94");
@@ -222,6 +241,23 @@ describe("Meno's own steps", () => {
     expect(out.shares![1] / out.shares![0]).toBeCloseTo(0.1849, 3);
     const hot = boltzmann([0, kcal(1)], 1000);
     expect(hot[1]).toBeGreaterThan(out.shares![1]);
+  });
+
+  it("count each conformer's rotamers in, where its search said how many - as CREST's own weights do", () => {
+    // (n-butane by GFN-FF, as CREST 2.12 found it: anti, and gauche 0.4527 kcal/mol above, found twice alike; CREGEN's weights 0.51759 and 0.48241)
+    const crest = [0.51759, 0.48241];
+    // (to 3e-4: the energies here are CREST's own, rounded as it prints them)
+    const near = (got: number[]) => got.forEach((p, i) => expect(Math.abs(p - crest[i])).toBeLessThan(3e-4));
+    near(boltzmann([0, kcal(0.4527)], 298.15, [1, 2]));
+    // (counted once each, the gauche form's share is half as much)
+    expect(boltzmann([0, kcal(0.4527)], 298.15)[1]).toBeCloseTo(0.318, 3);
+    // a Populations step over CREST's conformers counts them in too: its shares, CREST's
+    const m = { ...bent({ x: 0, y: 0 }, 2, [0, kcal(0.4527)]), conformerSet: true, degeneracies: [1, 2] };
+    const out = runMeno("populations", entries(m, "conformers"), "conformers", { temperature: 298.15 });
+    if (!out.ok) throw new Error(out.said);
+    near(out.shares!);
+    // (and the canvas's own shares, where no step found them)
+    near(populations(m.energies!, m.degeneracies));
   });
 });
 
@@ -266,6 +302,14 @@ describe("running", () => {
     // (its result set's entries replaced, not added to)
     expect(doc.molecules3d!.length).toBe(before);
     expect(resultOf(doc, 3)!.aside).toBeUndefined();
+  });
+
+  it("says a step has changed when what comes in changes only in a charge", () => {
+    let doc = runStep(chain(), 3, W);
+    expect(stateOf(doc, doc.steps![0], "meno")).toBe("done");
+    const m = doc.molecules3d![0];
+    doc = { ...doc, molecules3d: [{ ...m, atoms: m.atoms.map((a, i) => (i === 0 ? { ...a, charge: -1 } : a)) }, ...doc.molecules3d!.slice(1)] };
+    expect(stateOf(doc, doc.steps![0], "meno")).toBe("changed");
   });
 
   it("fails, saying why, where it cannot run", () => {

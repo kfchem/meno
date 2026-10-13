@@ -63,9 +63,10 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
-import { menuTargetGone } from "./utils/menuTarget";
+import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
-import { unsureOf } from "./chem/drawing";
+import { unsureOf, type Unsure } from "./chem/drawing";
+import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -351,7 +352,8 @@ function WorkspaceContent({
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
-  const unsure = useMemo(() => unsureOf(model), [model]);
+  const unsureKept = useRef(structureValues<Unsure>());
+  const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
   const readUnsure = useMemo(() => readMarks(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
@@ -983,7 +985,8 @@ function WorkspaceContent({
           : {}),
       }
     : undefined;
-  useEffect(() => setMenu(null), [model]); // what it was about may be gone
+  // (a change to the drawing: a menu about the drawing closed, what it was about may be gone - no other, a step's say)
+  useEffect(() => setMenu((m) => (m && aboutDrawing(m) ? null : m)), [model]);
   // (what it was about gone otherwise - words, a picture, a PDF undone away while it is open: no menu left over nothing)
   useEffect(() => {
     if (!menu?.kind) return;
@@ -1677,7 +1680,8 @@ function WorkspaceContent({
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
             if (!s) return undefined;
             const st = store.getState();
-            const jobs = !!(s.running?.jobs.length || s.ran?.jobs?.length);
+            // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
+            const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               ...(s.running ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),

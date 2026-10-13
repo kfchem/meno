@@ -32,6 +32,7 @@ import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { heldEach } from "../utils/heldEach";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -486,15 +487,12 @@ export function useStructureEvents(
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
     const pdfs = files.filter((g) => /\.pdf$/i.test(g.name) || g.type === "application/pdf");
     if (pdfs.length) {
-      try {
-        const held = await Promise.all(pdfs.map(async (g) => ({ name: g.name, ...(await holdPdfBytes(new Uint8Array(await g.arrayBuffer()))) })));
-        store.getState().addPdfs(held, at);
-        setImportError(null);
-      } catch (e) {
-        reportImportError("append", e);
-        return false;
-      }
-      return true;
+      // (each held where it can be: one refused, named with why, keeps none of the rest off the page)
+      const { held, refused } = await heldEach(pdfs, async (g) => ({ name: g.name, ...(await holdPdfBytes(new Uint8Array(await g.arrayBuffer()))) }));
+      if (held.length) store.getState().addPdfs(held, at);
+      if (refused) reportImportError("append", new Error(refused));
+      else setImportError(null);
+      return held.length > 0;
     }
     // pictures: held, and put on the page where they were dropped (docs/PDF.md, *A picture*)
     const images = files.filter((g) => isPictureName(g.name) || g.type === "image/png" || g.type === "image/jpeg");

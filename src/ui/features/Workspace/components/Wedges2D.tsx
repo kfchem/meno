@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import type { Poly } from "../../../../lib/chem/layout2d";
 import { polyTriangles } from "./polyTriangles";
 import { useDrawnLayout } from "./drawnLayoutContext";
 
@@ -17,23 +18,51 @@ import { useDrawnLayout } from "./drawnLayoutContext";
  */
 export default function Wedges2D() {
   const { layout, opts } = useDrawnLayout();
+  // (each shape's triangles, kept while the layout keeps the shape: a
+  // structure not laid out again - lib/chem/layoutStructures - is not cut
+  // into triangles again either)
+  const triangles = useRef(new WeakMap<Poly, Float32Array>());
   const geometry = useMemo(() => {
-    const positions: number[] = [];
-    // (each shape in its own colour, where it has one)
-    const colors: number[] = [];
-    const base = new THREE.Color(opts.bondColor ?? "black");
-    const c = new THREE.Color();
+    const kept = triangles.current;
+    const shapes: Float32Array[] = [];
+    let n = 0;
     for (const p of layout.polys) {
       if (p.points.length < 3) continue;
-      const col = p.color ? c.set(p.color) : base;
-      for (const i of polyTriangles(p.points)) {
-        positions.push(p.points[i].x, p.points[i].y, 0);
-        colors.push(col.r, col.g, col.b);
+      let t = kept.get(p);
+      if (!t) {
+        const at = polyTriangles(p.points);
+        t = new Float32Array(at.length * 3);
+        at.forEach((i, k) => {
+          t![3 * k] = p.points[i].x;
+          t![3 * k + 1] = p.points[i].y;
+        });
+        kept.set(p, t);
       }
+      shapes.push(t);
+      n += t.length;
+    }
+    const positions = new Float32Array(n);
+    // (each shape in its own colour, where it has one)
+    const colors = new Float32Array(n);
+    const base = new THREE.Color(opts.bondColor ?? "black");
+    const c = new THREE.Color();
+    let k = 0;
+    let s = 0;
+    for (const p of layout.polys) {
+      if (p.points.length < 3) continue;
+      const t = shapes[s++];
+      const col = p.color ? c.set(p.color) : base;
+      positions.set(t, k);
+      for (let j = k; j < k + t.length; j += 3) {
+        colors[j] = col.r;
+        colors[j + 1] = col.g;
+        colors[j + 2] = col.b;
+      }
+      k += t.length;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     return g;
   }, [layout, opts.bondColor]);
   useEffect(() => () => geometry.dispose(), [geometry]);

@@ -379,10 +379,13 @@ export function deleteParts(
   }
   const left = bonds.filter((b) => !bondsGone.has(b.id));
   const stillBonded = new Set(left.flatMap((b) => [b.a, b.b]));
+  // (each bond's ends by id, not looked for among every atom: everything
+  // selected in a drawing of 28 000 atoms took 10.5 s that way)
+  const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const b of bonds) {
     if (!bondsGone.has(b.id)) continue;
     for (const end of [b.a, b.b]) {
-      const atom = atoms.find((a) => a.id === end);
+      const atom = byId.get(end);
       if (atom && atom.el === "C" && !stillBonded.has(end)) atomsGone.add(end);
     }
   }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
@@ -32,7 +32,9 @@ export default function AtomsHoverRings2D() {
   // each ring: how far in it is (0 out, 1 in), and where its atom was last
   const rings = useRef(new Map<number, { u: number; x: number; y: number }>());
   const [, setFrame] = useState(0);
-  const at = useMemo(() => new Map(drawn.atoms.map((a) => [a.id, a])), [drawn.atoms]);
+  // (each ring's atom looked for by itself - one or two of them - not a
+  // map of every atom made at every frame of a drag)
+  const at = { get: (id: number) => drawn.atoms.find((a) => a.id === id) };
   const radius = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
 
   // (where its atom is drawn now, on its way somewhere or not)
