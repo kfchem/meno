@@ -255,12 +255,13 @@ Taken on 2026-10-03:
   - held as a style, as the 2D drawing's is, so that it can be set the
     same way later.
   - Since 2026-10-04 it is set in Settings, under Molecules in 3D, as
-    the drawing style is: a preset - Meno (the viewer's look), Glossy or
-    Space-filling - and what was changed from it, each change marked and
-    taken back alone or all at once. The settings are how molecules are
-    drawn unless one has a look of its own, ball size, bond thickness and
-    colour, the surface, the two lights, and how a molecule turns and
-    coasts when let go. A molecule beside them shows the look and can be
+    the drawing style is: a preset - Ball and stick (the viewer's look;
+    named Meno until 2026-10-10), Glossy or Space-filling - and what was
+    changed from it, each change marked and taken back alone or all at
+    once. The settings are how molecules are drawn unless one has a look
+    of its own, ball size, bond thickness and colour, the surface, the two
+    lights, and how a molecule turns and coasts when let go. A molecule
+    beside them shows the look and can be
     turned, to try the turning. The canvas, the selection's handle, a fit
     and the pictures for other programs all take the look from there. A
     document of its own look, as a drawing can have its own style, is not
@@ -325,11 +326,18 @@ Taken while stage 1 was built, on 2026-10-03:
   shows are not undone, save a turn by the selection's handle. They are kept by a copy and by the workspace file,
   so that what is pasted or opened looks as it did.
 - **Saving.**
-  - `.meno` is JSON (`meno-workspace`, version 1).
-  - An SD file holds each 3D molecule as a record in 3D beside the
-    drawing.
-  - With 3D molecules on the canvas, Save offers only what keeps them: a
-    workspace or an SD file.
+  - `.meno` is a zip (since 2026-10-06, #158: docs/FILE-IO.md, *The
+    workspace file*). Its `workspace.json` is the JSON `.meno` was at
+    first (`meno-workspace`, version 1); the outputs, texts, PDFs and
+    pictures it keeps are files beside it (`lib/doc/menoFile.ts`).
+  - Save and Save As write `.meno`, and nothing else (since 2026-10-06,
+    #151; before, with 3D molecules on the canvas, Save offered a
+    workspace or an SD file). Other kinds are written by *Export…*, on
+    the selection's menu: MOL, SDF, RXN, PDB and SVG, by Meno
+    (`lib/io/writers.ts`), and, for molecules in 3D, what the plugins
+    added write. An SD file holds each 3D molecule as a record in 3D
+    beside the drawing, in the frame shown or every frame a record; a PDB
+    file holds the molecules in 3D alone.
 - **Calculation readers** (the maintainer): reading what calculation
   programs write is to be plugins, added and removed online. Meno itself
   reads geometry. The one reader so far, energies on an XYZ file's comment
