@@ -1011,8 +1011,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 
 - **Said over it.** *No H in file* where the molecule - for a PDB entry,
   its chains while they are drawn as atoms, or a ligand - has no
-  hydrogens and either has carbon, its orders unknown, or has an atom
-  whose valence, its orders known, leaves room for some; *Bond orders
+  hydrogens and either has a carbon whose neighbours leave room for some,
+  its orders unknown (none or one, but for the end of a C≡O or C≡N; two
+  not in a line; three not in a plane: so not C60, carbon dioxide, CCl4
+  or a metal's carbonyls), or has an atom whose valence, its orders
+  known, leaves room for some; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
   side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
