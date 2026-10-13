@@ -52,6 +52,7 @@ import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
 import TextColumn from "./TextColumn";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
 import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
@@ -1391,6 +1392,8 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
+      <AboveGuide over={dropRef} shown={active}>
       <AnimatePresence>
         {ask3d && (
           <Ask3D
@@ -1942,6 +1945,7 @@ function WorkspaceContent({
         />
       )}
       </AnimatePresence>
+      </AboveGuide>
       {/* (a molecule in 3D made again from its changed drawing: asked of the plugin here) */}
       <Remake3D.Provider value={remake3d}>
       <PageHtmlLayer.Provider value={htmlLayer}>
