@@ -190,8 +190,8 @@ they hang from.
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there - one of the solid's behind a group leaving it
-  too, the group's first atom set at the depth of the atom it leaves
-  (aconitine's N-ethyl, over its cage). Bonds out of the ring follow it - an equatorial
+  too, or leaving a ring fused flat onto it, the group's first atom set at
+  the depth of the atom it leaves (aconitine's N-ethyl, over its cage). Bonds out of the ring follow it - an equatorial
   bond parallel to the ring bonds but one, an axial one upright - and what
   hangs from the cage hangs from its front where it can. A
   bicyclo[3.3.1] cage - two six-membered rings sharing three atoms, 9-BBN,

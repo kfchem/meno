@@ -549,10 +549,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // (a group off a solid, its first atom at the depth of the solid's atom it
   // leaves: where its bond crosses one of the solid's further back, that
   // one is drawn broken, as in front of it - aconitine's N-ethyl)
+  // (and off a ring fused flat onto the solid, at its depth there)
+  const withSolid = new Set(mol.systemOf.filter((sys, a) => sys >= 0 && solid[a]));
   for (const [k] of mol.bondIndex) {
     const [a, b] = k.split(",").map(Number);
     for (const [c, d] of [[a, b], [b, a]]) {
-      if (solid[c] && depth[c] != null && depth[d] == null && mol.systemOf[d] !== mol.systemOf[c]) depth[d] = depth[c];
+      if (withSolid.has(mol.systemOf[c]) && depth[c] != null && depth[d] == null && mol.systemOf[d] !== mol.systemOf[c]) depth[d] = depth[c];
     }
   }
   // a ring in perspective - bound face-on, or turned on its bond - drawn as
