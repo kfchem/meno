@@ -453,7 +453,10 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
     changed = true;
     const { display: _display, stereoAt: _at, ...rest } = b;
-    return [{ ...rest, stereo: p.stereo, stereoOrient: p.stereoOrient, ...(display ? { display } : {}) }];
+    // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
+    const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
+    const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
+    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
   let nextId = doc.nextId;
