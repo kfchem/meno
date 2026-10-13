@@ -12,7 +12,7 @@
  * of the ring one larger with two atoms drawn together into one, and eased
  * until its bonds are even again.
  */
-import { dir, rad, type Point } from "./geometry";
+import { cross, dir, rad, sub, type Point } from "./geometry";
 
 const cache = new Map<number, Point[][]>();
 
@@ -28,39 +28,157 @@ const OFFERED = 5;
 export function macrocycleShapes(n: number): Point[][] {
   let shapes = cache.get(n);
   if (!shapes) {
-    shapes = (n % 2 === 0 ? evenShapes(n) : oddShapes(n)).map((shape) => {
-      const w = widest(shape);
-      const c = centreOf(w);
-      return w.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
-    });
+    shapes = (n % 2 === 0 ? evenShapes(n) : oddShapes(n)).map(centred);
     cache.set(n, shapes);
   }
   return shapes.map((shape) => shape.map((p) => ({ ...p })));
 }
 
-const pools = new Map<number, Point[][]>();
+/**
+ * A double bond in a ring, by place - from the ring's atom `i` to the next -
+ * and whether it is cis: a cis one sits at a corner, both its atoms turning
+ * the same way round the ring, a trans one along a zigzag.
+ */
+export type RingDouble = { i: number; cis: boolean };
 
-/** How many shapes of a size are looked through where none offered keeps what the ring must. */
+/** Whether a ring drawn in `shape`, its atoms placed from some atom one way round or the other, has its double bonds as given. */
+export function keepsDoubles(shape: readonly Point[], fixed: readonly RingDouble[]): boolean {
+  return keepsTurns(turnsOf(shape), fixed);
+}
+
+/** How many shapes of a size are looked through where none offered keeps a ring's double bonds. */
 const POOL = 60;
 
 /**
- * More shapes of a size than are offered, best first, as `macrocycleShapes`
- * gives them: where none of those offered keeps what a ring must keep -
- * its double bonds' cis or trans, which need a corner or a zigzag at given
- * places round it - those further down that do.
+ * The best few shapes of a size, at most `count`, that keep a ring's double
+ * bonds as given, for where none of those offered does: two of them a few
+ * bonds apart can want corners and zigzags at places none of those has
+ * together. The lattice rings of the size are looked through best first,
+ * as they lie, those with a dent among them (`latticePool`); for an odd
+ * ring, the rings one larger, each drawn together where that eases best
+ * of the places that keep the bonds.
  */
-export function macrocyclePool(n: number): Point[][] {
-  let shapes = pools.get(n);
-  if (!shapes) {
-    const even = (m: number) => [...evenShapes(m, POOL), ...dentedShapes(m)];
-    shapes = (n % 2 === 0 ? even(n) : even(n + 1).map((base) => contract(base))).map((shape) => {
-      const w = widest(shape);
-      const c = centreOf(w);
-      return w.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
-    });
-    pools.set(n, shapes);
+export function macrocycleKeeping(n: number, fixed: readonly RingDouble[], count: number): Point[][] {
+  const out: Point[][] = [];
+  if (n % 2 === 0) {
+    for (const { pts, turns } of latticePool(n)) {
+      if (out.length === count) break;
+      if (keepsTurns(turns, fixed)) out.push(centred(pts));
+    }
+    return out;
   }
-  return shapes.map((shape) => shape.map((p) => ({ ...p })));
+  const m = n + 1;
+  const bases = latticePool(m);
+  for (let b = 0; b < bases.length && out.length < count; b++) {
+    const { pts, turns } = bases[b];
+    // eased only where the turns left could keep them (easing is slow)
+    let best: Point[] | null = null;
+    let bestStrain = Infinity;
+    for (let drop = 0; drop < m; drop++) {
+      if (!keepsTurns(dropped(turns, drop), fixed)) continue;
+      const key = `${m},${b},${drop}`;
+      let tried = contracted.get(key);
+      if (!tried) {
+        tried = contractAt(pts, drop);
+        contracted.set(key, tried);
+      }
+      if (tried.strain < bestStrain && keepsDoubles(tried.ring, fixed)) {
+        bestStrain = tried.strain;
+        best = tried.ring;
+      }
+    }
+    if (best) out.push(centred(best));
+  }
+  return out;
+}
+
+const pools = new Map<number, { pts: Point[]; turns: number[] }[]>();
+
+/** Each lattice ring's contractions eased so far, by size, place in its pool and atom taken out. */
+const contracted = new Map<string, { ring: Point[]; strain: number }>();
+
+/**
+ * The lattice rings of an even size looked through for `macrocycleKeeping`:
+ * the best `POOL` as they lie (`shapeCost`), best first, of those
+ * `macrocycleShapes` offers from and those with a dent or two, each shape
+ * once however it is turned or mirrored. Built when first asked for, and
+ * kept.
+ */
+function latticePool(m: number): { pts: Point[]; turns: number[] }[] {
+  let walks = pools.get(m);
+  if (!walks) {
+    const seen = new Set<string>();
+    walks = [];
+    for (const { pts } of [...evenWalks(m), ...dentedWalks(m)].sort((p, q) => p.cost - q.cost)) {
+      const turns = turnsOf(pts);
+      const key = turnsKey(turns);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      walks.push({ pts, turns });
+      if (walks.length === POOL) break;
+    }
+    pools.set(m, walks);
+  }
+  return walks;
+}
+
+/** A ring's turns as one key, the same wherever round it they are read from and either way. */
+function turnsKey(turns: readonly number[]): string {
+  const n = turns.length;
+  let key = "";
+  // (walked the other way round, a mirror image turns the same ways in reverse)
+  for (const seq of [turns, [...turns].reverse()]) {
+    const s = seq.map((t) => (t > 0 ? "l" : "r")).join("");
+    for (let r = 0; r < n; r++) {
+      const k = s.slice(r) + s.slice(0, r);
+      if (!key || k < key) key = k;
+    }
+  }
+  return key;
+}
+
+/** Which way a shape turns at each of its atoms, walked round in order: 1 left, -1 right. */
+function turnsOf(ps: readonly Point[]): number[] {
+  const n = ps.length;
+  return ps.map((p, i) => Math.sign(cross(sub(p, ps[(i - 1 + n) % n]), sub(ps[(i + 1) % n], p))));
+}
+
+/** `keepsDoubles`, read from a ring's turns (one of 0: either way). */
+function keepsTurns(turns: readonly number[], fixed: readonly RingDouble[]): boolean {
+  const n = turns.length;
+  const at = (shift: number, way: number, k: number) => turns[(((shift + way * k) % n) + n) % n];
+  for (const way of [1, -1]) {
+    for (let shift = 0; shift < n; shift++) {
+      const kept = fixed.every(({ i, cis }) => {
+        const a = at(shift, way, i);
+        const b = at(shift, way, i + 1);
+        return !a || !b || (a === b) === cis;
+      });
+      if (kept) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The turns of a lattice ring with its atom `drop` taken out, as
+ * `contractAt` leaves them: the rest turn as they did, and so do the two
+ * drawn together where it was a corner with either; where it was a zigzag,
+ * turning the other way from both, either of them can turn round.
+ */
+function dropped(turns: readonly number[], drop: number): number[] {
+  const m = turns.length;
+  const before = (drop - 1 + m) % m;
+  const after = (drop + 1) % m;
+  const zigzag = turns[before] !== turns[drop] && turns[after] !== turns[drop];
+  return turns.flatMap((t, i) => (i === drop ? [] : [zigzag && (i === before || i === after) ? 0 : t]));
+}
+
+/** A shape turned, by a step of the lattice, the way it lies widest, and centred on the origin. */
+function centred(shape: Point[]): Point[] {
+  const w = widest(shape);
+  const c = centreOf(w);
+  return w.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
 }
 
 /** The shape that lies best for a ring of `n` atoms. */
@@ -168,7 +286,14 @@ function shapeCost(ps: readonly Point[]): number {
   return 4 * (best - 0.55) ** 2 - open - (symmetric(ps) ? 0.1 : 0);
 }
 
-function evenShapes(n: number, count = OFFERED): Point[][] {
+function evenShapes(n: number): Point[][] {
+  const best = evenWalks(n).slice(0, OFFERED);
+  // no lattice ring of this size (eight): a regular polygon
+  return best.length ? best.map((b) => b.pts) : [regular(n)];
+}
+
+/** The rings of `n` atoms on the lattice with no dent, all different, best first. */
+function evenWalks(n: number): { pts: Point[]; cost: number }[] {
   // clockwise: six more right turns than left, none of the left ones together
   const lefts = (n - 6) / 2;
   const extras = 6;
@@ -203,30 +328,30 @@ function evenShapes(n: number, count = OFFERED): Point[][] {
       }
     }
   }
-  const best = [...found.values()].sort((p, q) => p.cost - q.cost).slice(0, count);
-  // no lattice ring of this size (eight): a regular polygon
-  return best.length ? best.map((b) => b.pts) : [regular(n)];
+  return [...found.values()].sort((p, q) => p.cost - q.cost);
 }
 
-/** The largest ring given dented shapes (`dentedShapes`): past it, too many walks to look through. */
+/** The largest ring given dented shapes (`dentedWalks`): past it, too many walks to look through. */
 const DENTED_UP_TO = 24;
 
 /**
  * Rings of `n` atoms on the lattice with a dent or two - two left turns
- * together, a corner pointing in - best first: no shape lies better for
- * having one, but a cis double bond can sit in a dent where the ring has no
- * room for it at a corner pointing out (two of them a bond apart, in a ring
- * of twelve). Only for the pool, and only up to `DENTED_UP_TO`.
+ * together, a corner pointing in: a cis double bond can sit in
+ * a dent where the ring has no room for it at a corner pointing out (two of
+ * them a bond apart, in a ring of twelve). Only for the pool, and only up
+ * to `DENTED_UP_TO`.
  */
-function dentedShapes(n: number): Point[][] {
+function dentedWalks(n: number): { pts: Point[]; cost: number }[] {
   if (n > DENTED_UP_TO) return [];
   const lefts = (n - 6) / 2;
   const total = lefts + 6;
   const found = new Map<string, { pts: Point[]; cost: number }>();
-  // the right turns after each left: no more than four together, a dent (none) at most twice
+  // the right turns after each left: no more than four together, a dent
+  // (none) at most twice - the first one a dent (a shape turned round to
+  // start at one is the same shape)
   const rec = (gaps: number[], left: number, dents: number) => {
     if (gaps.length === lefts) {
-      if (left !== 0 || !dents) return;
+      if (left !== 0) return;
       const turns: number[] = [];
       for (const g of gaps) {
         turns.push(1);
@@ -245,8 +370,8 @@ function dentedShapes(n: number): Point[][] {
       rec([...gaps, g], left - g, dents + (g === 0 ? 1 : 0));
     }
   };
-  rec([], total, 0);
-  return [...found.values()].sort((p, q) => p.cost - q.cost).slice(0, POOL).map((b) => b.pts);
+  rec([0], total, 1);
+  return [...found.values()];
 }
 
 /** Ordered ways of writing `total` as `count` parts of 1 to `most`, for count up to `maxCount`. */
@@ -293,29 +418,33 @@ function oddShapes(n: number): Point[][] {
     .map((base) => contract(base));
 }
 
-/** A ring one smaller than `base`: two neighbours drawn together into one, the ring eased. */
+/** A ring one smaller than `base`: two neighbours drawn together into one, where that eases best. */
 function contract(base: Point[]): Point[] {
   const n = base.length - 1;
   let best: Point[] | null = null;
   let bestStrain = Infinity;
   for (let drop = 0; drop < base.length; drop++) {
-    const ring = base.filter((_, i) => i !== drop).map((p) => ({ ...p }));
-    // the two either side of the one taken out drawn together to a bond apart
-    const iB = (drop - 1 + ring.length) % ring.length;
-    const iA = drop % ring.length;
-    const dx = ring[iA].x - ring[iB].x;
-    const dy = ring[iA].y - ring[iB].y;
-    const d = Math.hypot(dx, dy);
-    const k = (d - 1) / (2 * d);
-    ring[iB] = { x: ring[iB].x + dx * k, y: ring[iB].y + dy * k };
-    ring[iA] = { x: ring[iA].x - dx * k, y: ring[iA].y - dy * k };
-    const strain = relaxRing(ring);
+    const { ring, strain } = contractAt(base, drop);
     if (strain < bestStrain) {
       bestStrain = strain;
       best = ring;
     }
   }
   return best ?? regular(n);
+}
+
+/** `base` with its atom `drop` taken out, the two either side drawn together to a bond apart, and the ring eased: with the strain left. */
+function contractAt(base: readonly Point[], drop: number): { ring: Point[]; strain: number } {
+  const ring = base.filter((_, i) => i !== drop).map((p) => ({ ...p }));
+  const iB = (drop - 1 + ring.length) % ring.length;
+  const iA = drop % ring.length;
+  const dx = ring[iA].x - ring[iB].x;
+  const dy = ring[iA].y - ring[iB].y;
+  const d = Math.hypot(dx, dy);
+  const k = (d - 1) / (2 * d);
+  ring[iB] = { x: ring[iB].x + dx * k, y: ring[iB].y + dy * k };
+  ring[iA] = { x: ring[iA].x - dx * k, y: ring[iA].y - dy * k };
+  return { ring, strain: relaxRing(ring) };
 }
 
 /**

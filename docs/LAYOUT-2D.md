@@ -83,10 +83,13 @@ they hang from.
   a cis one at a corner, a trans one along a zigzag. Where none of the
   shapes offered has corners and zigzags at the places two of them need
   (a cyclohexadecadiene's, a bond apart), the shapes of the size that lie
-  less well are looked through, those with a dent or two among them (two
-  turns inward together, for rings of up to 24), and the best few that
-  keep them all are offered instead. A macrolide has its lactone at the lower left, the ring numbered from
-  its carbonyl carbon counterclockwise - C2 to its right along the bottom,
+  less well are looked through, best first and each once, those with a
+  dent or two among them (two turns inward together, for rings of up to
+  24), and the best few that keep them all are offered instead; for an
+  odd ring, the rings one larger, each drawn together where that eases
+  best of the places that keep them. A macrolide has its lactone at the
+  lower left, the ring numbered from its carbonyl carbon
+  counterclockwise - C2 to its right along the bottom,
   the ring O last, above it - as erythromycin and epothilone are drawn: of
   the ways of fitting the ring to its shape that put the heavy groups
   outside, the one that does so. A ring of up to fifteen, seven bonds a

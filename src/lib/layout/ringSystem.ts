@@ -27,7 +27,7 @@ import {
   sub,
   type Point,
 } from "./geometry";
-import { macrocyclePool, macrocycleShapes } from "./macrocycle";
+import { keepsDoubles, macrocycleKeeping, macrocycleShapes, type RingDouble } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
@@ -71,14 +71,15 @@ export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
  * The shapes a macrocycle is tried in: those offered for its size - or,
  * where none of them can keep its double bonds' cis or trans as given
  * (two of them a few bonds apart want corners and zigzags at places no
- * offered shape has together), the best of the size that can.
+ * offered shape has together), the best few of the size that can, as
+ * many as are offered (`macrocycleKeeping`, looked for only then).
  */
 function shapesFor(mol: Molecule, ring: number[]): Point[][] {
   const offered = macrocycleShapes(ring.length);
   const fixed = fixedDoubles(mol, ring);
   if (!fixed.length || offered.some((shape) => keepsDoubles(shape, fixed))) return offered;
-  const keeping = macrocyclePool(ring.length).filter((shape) => keepsDoubles(shape, fixed));
-  return keeping.length ? keeping.slice(0, offered.length) : offered;
+  const keeping = macrocycleKeeping(ring.length, fixed, offered.length);
+  return keeping.length ? keeping : offered;
 }
 
 /**
@@ -87,9 +88,9 @@ function shapesFor(mol: Molecule, ring: number[]): Point[][] {
  * other side from its ring neighbour, so a configuration given against it
  * is turned round).
  */
-function fixedDoubles(mol: Molecule, ring: number[]): { i: number; cis: boolean }[] {
+function fixedDoubles(mol: Molecule, ring: number[]): RingDouble[] {
   const n = ring.length;
-  const fixed: { i: number; cis: boolean }[] = [];
+  const fixed: RingDouble[] = [];
   for (let i = 0; i < n; i++) {
     const a = ring[i];
     const b = ring[(i + 1) % n];
@@ -106,7 +107,7 @@ function fixedDoubles(mol: Molecule, ring: number[]): { i: number; cis: boolean 
 }
 
 /** How many of a ring's fixed double bonds a shape, its atoms placed from `shift` round `way`, draws the other way round. */
-function wrongDoubles(shape: Point[], fixed: { i: number; cis: boolean }[], shift: number, way: number): number {
+function wrongDoubles(shape: Point[], fixed: RingDouble[], shift: number, way: number): number {
   const n = shape.length;
   const at = (k: number) => shape[(((shift + way * k) % n) + n) % n];
   let wrong = 0;
@@ -117,12 +118,6 @@ function wrongDoubles(shape: Point[], fixed: { i: number; cis: boolean }[], shif
     if ((side(i - 1) === side(i + 2)) !== cis) wrong++;
   }
   return wrong;
-}
-
-/** Whether a shape can carry all of a ring's fixed double bonds as given, placed some way round. */
-function keepsDoubles(shape: Point[], fixed: { i: number; cis: boolean }[]): boolean {
-  for (const way of [1, -1]) for (let shift = 0; shift < shape.length; shift++) if (!wrongDoubles(shape, fixed, shift, way)) return true;
-  return false;
 }
 
 export function placeRingSystem(
