@@ -5,6 +5,7 @@ import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
+import cisplatin from "./fixtures/cisplatin-rdkit.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
@@ -759,6 +760,15 @@ describe("a figure drawn in colour by another program", () => {
     expect(r.atoms).toHaveLength(10);
     const oh = r.atoms.findIndex((a) => a.label === "OH" && a.x > 360 && a.y < 130);
     expect(r.bonds.filter((b) => b.a === oh || b.b === oh).map((b) => b.stereo)).toEqual(["up"]);
+  });
+
+  it("reads two bonds drawn short of one label from two sides as that label's, however near their ends lie", () => {
+    // (cisplatin as RDKit draws it by default: its Pt's bonds to NH2 and Cl above it end a fifth of a bond apart, short of
+    // the Pt - where two bonds' ends meet, a carbon, but for both pointing into the Pt)
+    const r = readFigure(cisplatin as unknown as FigureDrawn);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
+    const pt = r.atoms.findIndex((a) => a.label === "Pt");
+    expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
   });
 
   it("reads a radical's dot drawn as a polygon of many corners, small beside the bonds, as its unpaired electron", () => {

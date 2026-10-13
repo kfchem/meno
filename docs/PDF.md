@@ -1022,7 +1022,9 @@ workspace holds.
   (l or I, O or 0) is read as the one that makes its label read; one that
   matched weakly is marked ("Its letters are drawn as shapes: read as
   "Cl".").
-- **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
+- **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
+  one word do not meet each other there: bonds drawn short of a metal
+  from two sides); where a bond points into a
   word - its letters side by side on one line: two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
   are two - the word is its atom's label (at its element: an end outside it,

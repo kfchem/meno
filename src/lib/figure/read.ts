@@ -589,7 +589,15 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   ]);
   const tol = 0.2 * bond;
   const meeting = new Map<End, number>();
-  for (const e of ends) meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol).length);
+  // (two ends both pointing into one label - bonds to a metal, drawn short of it from two sides - do not meet each other there)
+  const into = new Map<End, number[]>(
+    ends.map((e) => {
+      const d = drawnBonds[e.bond];
+      const out = unit(e.side === 0 ? d.b : d.a, e.p);
+      return [e, words.flatMap((w, k) => (reaches(e.p, out, w.box, bond) ? [k] : []))];
+    }),
+  );
+  for (const e of ends) meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w)));
