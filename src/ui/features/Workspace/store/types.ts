@@ -388,6 +388,10 @@ export type Molecule3D = {
   unknownOrders?: number[];
   /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
   chainOrders?: "dictionary";
+  /** How many of its file's frames were left out as it was read - cut short, or with an atom whose place does not read: said over it (utils/completeness `leftOutMark`). */
+  framesLeftOut?: number;
+  /** How many of its atoms stood in one place with another as it was read - a damaged file, or none of a molecule's: said over it (utils/completeness `TOGETHER_MARK`). */
+  together?: number;
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
@@ -444,6 +448,8 @@ export type Molecule3D = {
   numbers?: number[];
   /** Each frame's share of its compound, as a *Populations* step worked it out; unset, by Boltzmann at room temperature where it is a conformer set. */
   shares?: number[];
+  /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
+  degeneracies?: number[];
   /**
    * Its frames are the path to its last geometry - an optimisation's, made
    * by a step (docs/WORKFLOWS.md, *Results*) - so that a set takes it as

@@ -18,6 +18,7 @@ the files are not there.
 import importlib.util
 import json
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -59,6 +60,22 @@ class Protocol(unittest.TestCase):
         self.assertTrue(a["error"])
         self.assertFalse(worker.answer(json.dumps({"id": 5, "op": "read", "name": "x.out", "text": ""}))["ok"])
         self.assertFalse(worker.answer(json.dumps({"id": 6, "op": "run", "code": "1"}))["ok"])
+
+
+class Energies(unittest.TestCase):
+    def test_an_energy_is_the_outputs_value_as_printed(self):
+        # (cclib gives electronvolts by its own factor; back by the same one, an energy is the output's to the last digit)
+        from cclib.parser.utils import convertor
+
+        for printed in (-76.0105049953, -1.1167593073, -2573.987654321098):
+            self.assertAlmostEqual(worker.hartrees(convertor(printed, "hartree", "eV")), printed, delta=1e-10)
+
+    def test_each_frame_s_energy_as_the_output_prints_it(self):
+        for rel, printed in (("ORCA/dvb_gopt.out", r"FINAL SINGLE POINT ENERGY\s+(-?\d+\.\d+)"), ("Gaussian/dvb_gopt.out", r"SCF Done:\s+E\(\w+\)\s+=\s+(-?\d+\.\d+)")):
+            path = sample(rel)
+            values = [float(v) for v in re.findall(printed, path.read_text(encoding="utf-8"))]
+            r = read(path)["result"]
+            self.assertAlmostEqual(r["energies"][-1], values[-1], delta=1e-9, msg=rel)
 
 
 class Orca(unittest.TestCase):

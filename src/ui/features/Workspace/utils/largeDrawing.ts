@@ -1,7 +1,8 @@
 /**
- * A canvas with very many atoms on it: past `LARGE_ATOMS`, where Settings
- * says so ("Very large drawings: Lighter"), it is drawn lighter - no
- * shadows, and hollows shaded per atom where a style shades them on the
+ * A canvas with very many atoms on it - those drawn, and those ribbons
+ * stand for (lib/chem/style3d `countedAtoms`): past `LARGE_ATOMS`, where
+ * Settings says so ("Very large drawings: Lighter"), it is drawn lighter -
+ * no shadows, and hollows shaded per atom where a style shades them on the
  * screen - so that turning stays smooth; and it says so, once. Kept by the
  * canvas's renderer: the key light (../components/KeyLight3D), which counts
  * the atoms, sets it; the molecules read it.

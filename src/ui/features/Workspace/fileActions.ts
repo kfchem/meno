@@ -5,7 +5,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { fillOutline, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
@@ -305,9 +305,13 @@ export function drawingLayout(
       const lined = s.stroke !== "none";
       const color = s.stroke && s.stroke !== "none" ? s.stroke : ink;
       const width = lineWidthOf(s, pointPx);
+      // (where it curves, the curve itself: its line, whole, and its fill's edge)
+      const curve = outlineCurve(s, pointPx);
+      const whole = lined && curve && !s.dash;
       return {
-        ...(area ? { fill: { points: area, color: s.fill! } } : {}),
-        lines: lined ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
+        ...(area ? { fill: curve ? { points: flattenedCurve(curve), color: s.fill!, curve } : { points: area, color: s.fill! } } : {}),
+        lines: lined && !whole ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
+        ...(whole ? { curve: { points: curve, width, color } } : {}),
       };
     });
     const boxes = shapes.map((s) => shapeBounds(s, pointPx));

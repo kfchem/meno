@@ -129,6 +129,8 @@ export type SetEntry = {
   xyz: readonly number[];
   /** In hartrees, where it has one. */
   energy?: number;
+  /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
+  degeneracy?: number;
   name?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
@@ -153,6 +155,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   molecules.forEach((m, i) => {
     const n = framesOf(m);
     const energies = m.energies?.length === n ? m.energies : undefined;
+    const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       out.push({
@@ -162,6 +165,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz: frameXyz(m, f),
         ...(energies ? { energy: energies[f] } : {}),
+        ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         from: m.id,
         frame: f,

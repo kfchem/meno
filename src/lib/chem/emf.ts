@@ -388,6 +388,17 @@ export function layoutEmf(
         drawLines(id, points(l.closed ? [...l.points, l.points[0], l.points[1]] : l.points));
       }
     }
+    // (a curved line - an ellipse, a rounded corner - as the Bezier curves it is, smooth however far the picture is enlarged)
+    if (m.curve && m.curve.points.length >= 4) {
+      select(NULL_BRUSH);
+      const id = penFor(m.curve.width * zoom, colorRef(m.curve.color));
+      const pts = points(m.curve.points);
+      w.plus(PLUS.DRAW_BEZIERS, id, 4 + 8 * pts.length, (v) => {
+        v.setUint32(0, pts.length, true);
+        plusPoints(v, 4, pts);
+      });
+      poly(EMR.POLYBEZIER, pts);
+    }
   }
   // writing by hand, filled: a marker's see-through for EMF+ - GDI, which
   // has no way to fill faintly, as far toward white as it shows - a pen's solid

@@ -159,7 +159,7 @@ export type Molecule3DViewProps = {
   holding: { from: number; start: number } | null;
   /** Being moved by the pointer: where it stands is where it is put, at once. */
   following: boolean;
-  /** Its frames shown in full beside it - hovered or selected - or as a count. */
+  /** It is pointed at or selected: a single geometry's chip is seen then (Frames3D, which a click opens). */
   framesOpen: boolean;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
@@ -272,6 +272,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useEffect(() => () => ribbonGeo.dispose(), [ribbonGeo]);
   const hullMat = useMemo(() => grownMaterial(), []);
   useEffect(() => () => hullMat.dispose(), [hullMat]);
+  // (each vertex's residue, for what the pointer is over)
   const ribbonResidues = useRef<Int32Array>(new Int32Array(0));
   // (going over to a look without ribbons, the residue pointed at is let go)
   const ribbonsNow = solid.ribbons[look];
@@ -323,8 +324,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
-  // (how many atoms each look draws: a very large drawing is counted by them - utils/largeDrawing)
-  const drawnAtoms = useMemo(() => ({ primary: hidden.primary.filter((h) => !h).length, secondary: hidden.secondary.filter((h) => !h).length }), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const rings = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const sleeves = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -390,9 +389,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       m.shares?.length === solid.frames.length
         ? m.shares
         : m.conformerSet && m.energies?.length === solid.frames.length
-          ? populations(m.energies)
+          ? populations(m.energies, m.degeneracies)
           : undefined,
-    [m.shares, m.conformerSet, m.energies, solid.frames.length],
+    [m.shares, m.conformerSet, m.energies, m.degeneracies, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
@@ -774,8 +773,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     level.current = nextLevel;
     selLevel.current = nextSel;
 
-    // (both looks' atoms while it goes over from one to the other)
-    atoms.current.userData.shown = fill.current === 0 ? drawnAtoms.primary : fill.current === 1 ? drawnAtoms.secondary : Math.max(drawnAtoms.primary, drawnAtoms.secondary);
+    // (the atoms a very large drawing is counted by - utils/largeDrawing - both looks' while it goes over from one to the other)
+    const { counted } = solid;
+    atoms.current.userData.counted = fill.current === 0 ? counted.primary : fill.current === 1 ? counted.secondary : Math.max(counted.primary, counted.secondary);
     const radius = (i: number) => {
       const r = solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
       return r * (swell.current.get(i)?.v ?? 1) * risen.current;

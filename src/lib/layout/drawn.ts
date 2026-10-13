@@ -89,6 +89,13 @@ const WEDGE_LIFT = 0.8;
  */
 const HAIR = 0.2;
 
+/**
+ * The elements a stereocentre with three groups and a lone pair for its
+ * fourth is of - a sulfoxide's S, a phosphine's P - as RDKit reads one:
+ * such an atom at the end of a single bond is no axis's end.
+ */
+const LONE_PAIR_CENTRES = new Set(["S", "Se", "Te", "P", "As", "Sb"]);
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],
@@ -160,6 +167,9 @@ export function readStereo(
       const near = neighbours[i].filter((n) => n !== j);
       const far = neighbours[j].filter((n) => n !== i);
       if (near.length !== 2 || far.length !== 2 || atoms[i].hs || atoms[j].hs || tetra.has(i)) continue;
+      // (read as an axis's, the wedge from a sulfoxide's S to its methyl
+      // turned the S over: laid out, the axis was kept and the centre not)
+      if (LONE_PAIR_CENTRES.has(atoms[i].el ?? "C")) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
       if (lifted == null || inRing(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C"))) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Molecule3D } from "../store/types";
 import type { Component } from "../../../../lib/chem/ccd";
+import { bondsByDistance } from "../../../../utils/structureParsers";
 import { blockOf, ligandGroups, noHydrogensInFile, ordersUnknown, partOf, withComponents, withHydrogens, withOrders } from "./completeness";
 
 /** Acetic acid's heavy atoms, all bonds single, as a file of coordinates gives them. */
@@ -70,6 +71,31 @@ describe("what a molecule's file leaves out", () => {
     expect(ordersUnknown(withLigand(), false)).toBe(true);
     expect(ordersUnknown({ ...withLigand(), unknownOrders: [] }, false)).toBe(false);
     expect(ordersUnknown({ ...withLigand(), bonds: [] }, false)).toBe(false);
+  });
+
+  it("says nothing is left out of a file of carbon with no room for hydrogens - C60, carbon dioxide, CCl4, a metal's carbonyls - its orders unknown", () => {
+    const of = (atoms: { el: string; x: number; y: number; z: number }[]) => noHydrogensInFile({ atoms, bonds: bondsByDistance(atoms), bondOrders: "unknown" });
+    const t = 1.77 / Math.sqrt(3);
+    const ring = (el: string, r: number, out: string | null, ro: number) =>
+      Array.from({ length: 6 }, (_, k) => {
+        const a = (k * Math.PI) / 3;
+        return [{ el, x: r * Math.cos(a), y: r * Math.sin(a), z: 0 }, ...(out ? [{ el: out, x: ro * Math.cos(a), y: ro * Math.sin(a), z: 0 }] : [])];
+      }).flat();
+    // (none wanted: two in a line, four, three in a plane, the end of a triple bond)
+    expect(of([{ el: "O", x: -1.16, y: 0, z: 0 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.16, y: 0, z: 0 }])).toBe(false);
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, ...[[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]].map(([x, y, z]) => ({ el: "Cl", x: x * t, y: y * t, z: z * t }))])).toBe(false);
+    expect(of(ring("C", 1.39, "Cl", 1.39 + 1.73))).toBe(false);
+    expect(of([{ el: "Fe", x: 0, y: 0, z: 0 }, { el: "C", x: 1.8, y: 0, z: 0 }, { el: "O", x: 2.95, y: 0, z: 0 }, { el: "C", x: -1.8, y: 0, z: 0 }, { el: "O", x: -2.95, y: 0, z: 0 }])).toBe(false);
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.13, y: 0, z: 0 }])).toBe(false);
+    // (wanted: an end, two bent, three in a pyramid, a C=O's carbon with nothing else, a lone carbon)
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 1.54, y: 0, z: 0 }])).toBe(true);
+    expect(of(ring("C", 1.39, null, 0))).toBe(true);
+    // (chloroform's carbon, its three chlorines in a pyramid about it, wants one; three in a plane, none)
+    const tri = (z: number, r: number) => [{ el: "C", x: 0, y: 0, z }, ...[0, 1, 2].map((k) => ({ el: "Cl", x: r * Math.cos((2 * Math.PI * k) / 3), y: r * Math.sin((2 * Math.PI * k) / 3), z: 0 }))];
+    expect(of(tri(0.59, 1.669))).toBe(true);
+    expect(of(tri(0, 1.73))).toBe(false);
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.21, y: 0, z: 0 }])).toBe(true);
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }])).toBe(true);
   });
 
   it("says its file has no hydrogens where it has carbon and none - or, its orders known, an atom takes some", () => {
@@ -155,5 +181,15 @@ describe("what a molecule's file leaves out", () => {
     expect(withComponents(m, new Map([["LIG", { ...lig, bonds: [{ a: "C1", b: "O1", order: null }] }]]))!.given).toEqual([]);
     // (no PDB entry: none)
     expect(withComponents(acetic(), new Map())).toBeNull();
+  });
+});
+
+describe("what a molecule says of its file", () => {
+  it("says how many frames were left out as it was read, and that atoms stood in one place", async () => {
+    const { notesOf, solidOf } = await import("./molecule3d");
+    const { STYLE_3D } = await import("../../../../lib/chem/style3d");
+    const m = { id: 1, at: { x: 0, y: 0 }, atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0.96, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], framesLeftOut: 1, together: 1 };
+    expect(notesOf(m, solidOf(m, STYLE_3D), "primary")).toEqual(["1 frame left out", "Atoms in one place"]);
+    expect(notesOf({ ...m, framesLeftOut: 3, together: undefined }, solidOf(m, STYLE_3D), "primary")).toEqual(["3 frames left out"]);
   });
 });
