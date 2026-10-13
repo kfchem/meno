@@ -321,13 +321,19 @@ export function drawnBox(model: EditorModel): { minX: number; maxX: number; minY
     const a1 = index.get(b.a);
     const a2 = index.get(b.b);
     if (a1 == null || a2 == null) continue;
+    // (a haptic bond's endpoints are atoms' ids, which the layout takes by
+    // index: as indices, or none where the part lacks its ring - read as
+    // indices, they put the box at NaN, and a set round it was dropped on saving)
+    const { endpoints, attach: _attach, ...chem } = bondChem(b);
+    const ends = endpoints?.map((e) => index.get(e));
     bonds.push({
       a1,
       a2,
       order: b.order,
       stereo: b.stereo ?? "none",
       ...(b.dative ? { dative: true } : {}),
-      ...bondChem(b),
+      ...chem,
+      ...(ends?.length && ends.every((e) => e != null) ? { endpoints: ends as number[], attach: b.attach ?? "all" } : {}),
     });
   }
   const opts = layoutOptionsFor(MENO, NOMINAL_BOND_LENGTH, { units: "world" });

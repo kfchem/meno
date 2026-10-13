@@ -730,3 +730,30 @@ describe("a haptic bond's endpoints, held to the ring it binds (the command cent
     expect(part.bonds.find((b) => b.id === hap.id)?.endpoints).toBeUndefined();
   });
 });
+
+describe("a complex written out inside a workflow set (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("leaves the set's frame finite, and a part without its ring measurable - a NaN frame was dropped with its set on saving", async () => {
+    const { drawnBox } = await import("../../../../utils/importers");
+    const { structuresOf } = await import("../workflow/entries");
+    for (const label of ["Cp*", "FeCp2"]) {
+      const { doc, state } = editor();
+      const a = state().addAtom(0, 0, "C");
+      const x = state().addAtomBonded(a, 1.8, 0, "C");
+      const set = state().addSet({ x0: -5, y0: -5, x1: 8, y1: 5 });
+      state().beginLabelEdit(x, label);
+      state().commitLabelEdit();
+      state().expandAbbreviation(x);
+      const d = doc.getState();
+      const frame = (d.sets ?? []).find((s) => s.id === set)!;
+      for (const v of [frame.x0, frame.x1, frame.y0, frame.y1]) expect(Number.isFinite(v)).toBe(true);
+      // the metal and its star alone: measured, not NaN
+      const hap = d.model.bonds.find((b) => b.endpoints?.length)!;
+      const part = { atoms: d.model.atoms.filter((y) => y.id === hap.a || y.id === hap.b), bonds: [hap] };
+      const box = drawnBox(part);
+      for (const v of [box.minX, box.maxX, box.minY, box.maxY]) expect(Number.isFinite(v)).toBe(true);
+      // and the complex one structure, its rings with its metal
+      const ring = hap.endpoints![0];
+      expect(structuresOf(d.model).find((s) => s.includes(hap.a))).toContain(ring);
+    }
+  });
+});

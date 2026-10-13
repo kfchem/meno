@@ -19,9 +19,16 @@ export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= 
 /** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
 export function structuresOf(model: Model): number[][] {
   const around = new Map<number, number[]>();
+  const join = (p: number, q: number) => {
+    around.set(p, [...(around.get(p) ?? []), q]);
+    around.set(q, [...(around.get(q) ?? []), p]);
+  };
   for (const b of model.bonds) {
-    around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
-    around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
+    join(b.a, b.b);
+    // (a haptic bond's ring with its metal and star, as fragmentOf has them:
+    // walked by its bonds alone, the metal and the star were a structure
+    // without the ring)
+    for (const e of b.endpoints ?? []) join(b.a, e);
   }
   const seen = new Set<number>();
   const out: number[][] = [];
