@@ -695,6 +695,12 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     chain, occupancy and the rest - though Meno shows only the atoms;
   - an atom's element from its element columns, or - where they are
     blank - from how its name is aligned, as the format says;
+  - a file in which an ATOM or HETATM record does not read - its
+    coordinates no numbers, or its element none Meno knows - is not
+    opened, the chemist told how many such records there are and the
+    first by its line and columns (since 2026-10-13: before, such atoms
+    were left out unsaid). An atom left out leaves another molecule - a
+    hydrogen short, a ring open - so the file is not read without it;
   - MODELs as one molecule's frames, where each holds the same atoms;
     else each model a molecule of its own;
   - where an atom is given in more than one place, its residue's first

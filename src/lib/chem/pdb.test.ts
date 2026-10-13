@@ -154,6 +154,32 @@ describe("a PDB file, read", () => {
     expect(entry.unread).toEqual({ REMARK: 2, CRYST1: 1 });
     expect(entry.unreadable).toBe(2);
     expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([2]);
+    // (the atom among them by its line, for the rest of Meno to say)
+    expect(entry.unreadableAtoms).toEqual([{ line: 5, what: "coordinates" }]);
+  });
+
+  it("keeps each atom's record that does not read by its line, and what of it does not: where it is, or its element", () => {
+    const entry = readPdb(
+      [
+        "REMARK   1",
+        atomLine({ record: "HETATM", serial: 1, name: " O", x: 0, y: 0, z: 0, element: "O" }),
+        // (a blank z, and a z that is no number)
+        "HETATM    2  H1  HOH A   1       0.957   0.000          1.00  0.00           H",
+        "HETATM    3  H2  HOH A   1      -0.240   0.927     NaN  1.00  0.00           H",
+        // (an element there is none of, given; and none given, nor by the name)
+        atomLine({ record: "HETATM", serial: 4, name: " Q1", x: 3, y: 0, z: 0, element: "QQ" }),
+        atomLine({ record: "HETATM", serial: 5, name: "XX1", x: 6, y: 0, z: 0 }),
+        atomLine({ record: "HETATM", serial: 6, name: " C", x: 9, y: 0, z: 0, element: "C" }),
+      ].join("\n"),
+    );
+    expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([1, 6]);
+    expect(entry.unreadableAtoms).toEqual([
+      { line: 3, what: "coordinates" },
+      { line: 4, what: "coordinates" },
+      { line: 5, what: "element" },
+      { line: 6, what: "name" },
+    ]);
+    expect(entry.unreadable).toBe(4);
   });
 
   it("knows a line's record name by its first six columns", () => {

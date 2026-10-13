@@ -173,4 +173,16 @@ describe("a PDB file, as Meno's own reader gives it", () => {
   it("says so where it holds no atoms", () => {
     expect(() => readStructures("pdb", "x.pdb", "REMARK   1\nEND\n")).toThrow(/No molecules found in x.pdb/);
   });
+
+  it("is not read where an atom's record does not read, saying how many and the first by its line: an atom left out would leave another molecule", () => {
+    const water = (z: number) => [het(1, "O", 0, 0, 0), het(2, "H", 0.957, 0, 0), het(3, "H", -0.24, 0.927, z), "END"].join("\n") + "\n";
+    expect(readStructures("pdb", "w.pdb", water(0)).molecules3d![0].atoms).toHaveLength(3);
+    expect(() => readStructures("pdb", "w.pdb", water(Number.NaN))).toThrow("w.pdb could not be read: the atom on line 3 does not read (its coordinates, columns 31-54).");
+    // (several: how many, and the first)
+    const two = ["REMARK   1", het(1, "O", Number.NaN, 0, 0), het(2, "H", 0.957, 0, 0), het(3, "QQ", 1, 1, 0)].join("\n");
+    expect(() => readStructures("pdb", "w.pdb", two)).toThrow("w.pdb could not be read: 2 of its atoms do not read, the first on line 2 (its coordinates, columns 31-54).");
+    expect(() => readStructures("pdb", "w.pdb", het(1, "QQ", 0, 0, 0))).toThrow("w.pdb could not be read: the atom on line 1 does not read (its element, columns 77-78).");
+    // (none reading: said by its line all the same)
+    expect(() => readStructures("pdb", "w.pdb", [het(1, "O", Number.NaN, 0, 0), het(2, "H", Number.NaN, 0, 0)].join("\n"))).toThrow(/2 of its atoms do not read, the first on line 1/);
+  });
 });

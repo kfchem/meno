@@ -9,7 +9,7 @@ import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText,
 import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
-import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
+import { readPdb, type PdbAtom, type PdbEntry, type PdbUnreadableAtom } from "../chem/pdb";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
@@ -96,18 +96,40 @@ function depthOf(m: Molecule): number {
 /** Why a file holds nothing to read, as the chemist is told. */
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
+/** What of an atom's record does not read, as the chemist is told it: the columns it is in. */
+const UNREADABLE: Record<PdbUnreadableAtom["what"], string> = {
+  coordinates: "its coordinates, columns 31-54",
+  element: "its element, columns 77-78",
+  name: "its element: columns 77-78 are blank, and its name, columns 13-16, gives none",
+};
+
+/**
+ * Why a PDB file whose atoms do not all read is not opened, as the chemist
+ * is told: how many, and the first, by its line and what of it does not
+ * read. An atom left out would leave another molecule - a hydrogen short, a
+ * ring open - not the file's, so the file is not read without it.
+ */
+function atomsUnreadable(name: string, atoms: readonly PdbUnreadableAtom[]): Error {
+  const [first] = atoms;
+  const which = atoms.length === 1 ? `the atom on line ${first.line} does not read` : `${atoms.length.toLocaleString("en")} of its atoms do not read, the first on line ${first.line}`;
+  return new Error(`${name} could not be read: ${which} (${UNREADABLE[first.what]}).`);
+}
+
 /**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
  * with its arrow and "+" signs; an XYZ file's frames, one molecule's, in
  * 3D, each with its energy where the comment lines give one; a PDB file's
- * models, in 3D (`pdbMolecules`); a MOL or SD file's records, each a
+ * models, in 3D (`pdbMolecules`) - or, where an atom's record does not
+ * read, none, and the first such line said; a MOL or SD file's records, each a
  * drawing or - where the file says it is 3D, or its atoms spread in depth -
  * a molecule in 3D.
  */
 export function readStructures(kind: StructureKind, filename: string, content: string): StructureRead {
   const name = filename || "the file";
   if (kind === "pdb") {
-    const molecules3d = pdbMolecules(readPdb(content), filename);
+    const entry = readPdb(content);
+    if (entry.unreadableAtoms.length) throw atomsUnreadable(name, entry.unreadableAtoms);
+    const molecules3d = pdbMolecules(entry, filename);
     if (!molecules3d.length) throw noMolecules(name);
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
   }

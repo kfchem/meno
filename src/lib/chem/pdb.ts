@@ -8,7 +8,8 @@
  * that more can be made of a file later than Meno makes of it now. Each
  * record it reads has a handler of its own (`RECORDS`); a record it does
  * not read yet is counted, by name, and a handler is all it takes to read
- * it. What the rest of Meno makes of an entry - molecules in 3D - is its
+ * it; an atom's record that does not read, by its line, and what of it does
+ * not. What the rest of Meno makes of an entry - molecules in 3D - is its
  * own business (lib/io/structures).
  *
  * Writing writes the coordinate records of molecules in 3D - HETATM, MODEL
@@ -47,6 +48,13 @@ export type PdbAtom = {
   /** Its charge (79-80): 2+, 1-... */
   charge?: number;
 };
+
+/**
+ * An ATOM or HETATM record that does not read: its line, numbered from 1,
+ * and what of it does not - where it is (31-54), its element (77-78), or,
+ * where those columns are blank, its element as its name gives it (13-16).
+ */
+export type PdbUnreadableAtom = { line: number; what: "coordinates" | "element" | "name" };
 
 /** A model: the coordinates between a MODEL record and its ENDMDL - or, in an entry of one, all of them. */
 export type PdbModel = {
@@ -111,8 +119,10 @@ export type PdbEntry = {
   strands: PdbStrand[];
   /** The records not read, by name, and how many lines of each. */
   unread: Record<string, number>;
-  /** Lines that are no record the format names, or an atom's whose coordinates do not read. */
+  /** Lines that are no record the format names, or a record's that does not read. */
   unreadable: number;
+  /** The ATOM and HETATM records among them, in order: atoms the entry has, which are not in its models. */
+  unreadableAtoms: PdbUnreadableAtom[];
 };
 
 /**
@@ -176,8 +186,8 @@ function chargeOf(line: string): number | undefined {
   return n === 0 ? undefined : m[2] === "-" ? -n : n;
 }
 
-/** An entry as it is read, line by line. */
-type Reading = PdbEntry & { model: PdbModel | null; titleParts: string[]; bonds: Set<string> };
+/** An entry as it is read, line by line: `at`, the line being read, numbered from 1. */
+type Reading = PdbEntry & { model: PdbModel | null; titleParts: string[]; bonds: Set<string>; at: number };
 
 /** What a record's handler does with a line: "end" where the entry ends. */
 type Handler = (line: string, r: Reading) => void | "end";
@@ -200,7 +210,10 @@ const atomRecord =
     const z = real(line, 47, 54);
     const element = elementOf(line);
     if (x === undefined || y === undefined || z === undefined || !element) {
+      // (counted, and its line kept: an atom of the entry's that is in none of its models)
       r.unreadable++;
+      const what = x === undefined || y === undefined || z === undefined ? "coordinates" : text(line, 77, 78) ? "element" : "name";
+      r.unreadableAtoms.push({ line: r.at, what });
       return;
     }
     const occupancy = real(line, 55, 60);
@@ -311,8 +324,9 @@ function residueAt(line: string, name: number, chain: number, seq: number, code:
 
 /** A PDB file's records, as far as Meno reads them; the rest counted. */
 export function readPdb(content: string): PdbEntry {
-  const r: Reading = { models: [], conect: [], helices: [], strands: [], unread: {}, unreadable: 0, model: null, titleParts: [], bonds: new Set() };
+  const r: Reading = { models: [], conect: [], helices: [], strands: [], unread: {}, unreadable: 0, unreadableAtoms: [], model: null, titleParts: [], bonds: new Set(), at: 0 };
   for (const raw of content.split("\n")) {
+    r.at++;
     const line = raw.replace(/\r$/, "");
     if (!line.trim()) continue;
     const name = recordName(line);
@@ -334,6 +348,7 @@ export function readPdb(content: string): PdbEntry {
     strands: r.strands,
     unread: r.unread,
     unreadable: r.unreadable,
+    unreadableAtoms: r.unreadableAtoms,
   };
 }
 
