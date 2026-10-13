@@ -315,7 +315,9 @@ Taken while stage 1 was built, on 2026-10-03:
     measured (found on Windows, 2026-10-05).
 - **Frames.**
   - A molecule with frames has a chip under it: which frame, of how many.
-    Hovered or selected, the chip opens to a slider.
+    Clicked, the chip opens to a slider; clicked again, or with a press
+    anywhere else or Escape, it shuts (the maintainer, 2026-10-13: it
+    opens on a click, not as its molecule is pointed at or selected).
   - The old viewer's ladder of energies became bars above the slider:
     each frame as high as it is above the lowest, and the chip says by
     how much in kcal/mol. One control serves both a trajectory and a
@@ -923,7 +925,7 @@ file are shown the way a molecule's frames are, one at a time.
 - **One shown.** The stack shows one molecule. Its chip, just below it,
   says which of how many and the record's title where its file gives one
   (*3 / 60  aspirin*: an SD record's first line, kept on the molecule as
-  `title`) and, hovered or selected, is a slider
+  `title`) and, clicked, is a slider
   through them, as a molecule's frames' chip is (`StackChip3D`). It is the
   stack's chip, not its molecules', so a drag along it goes on through the
   stack. Which one is shown is the view's (`stacksShown`), as a frame is,
@@ -960,7 +962,7 @@ same way.
   drawing of its own.
 - **One shown.** The stack shows one record, with the chip a stack of
   molecules has (`StackChips2D`): which of how many and the title, and,
-  the record hovered or selected, a slider. Which is shown is the view's
+  clicked, a slider. Which is shown is the view's
   (`recordsShown`), not an undo step.
 - **What is drawn and what is kept.** The canvas works on the drawing as
   shown: the store's `model` is the records shown and the rest, made from

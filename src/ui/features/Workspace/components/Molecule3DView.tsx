@@ -156,7 +156,7 @@ export type Molecule3DViewProps = {
   holding: { from: number; start: number } | null;
   /** Being moved by the pointer: where it stands is where it is put, at once. */
   following: boolean;
-  /** Its frames shown in full beside it - hovered or selected - or as a count. */
+  /** It is pointed at or selected: a single geometry's chip is seen then (Frames3D, which a click opens). */
   framesOpen: boolean;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
