@@ -721,7 +721,9 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   the writer's options ask; every bond the frame written has in CONECT
   records - one set of them serves every model, so with a MODEL for each
   frame, the first frame's; END. No HEADER, CRYST1 or MASTER: a file of
-  coordinates, not an entry of the archive. One molecule is written where
+  coordinates, not an entry of the archive. A coordinate that rounds to
+  nothing in its three decimals is written 0.000, never -0.000, as a MOL
+  file's never has -0.0000. One molecule is written where
   its file had it; several, one system, as they stand on the page - each
   turned and placed as it is seen, its ångströms kept - as a plugin's
   writer is given them (utils/written `writtenAtoms`; *Which molecule*,

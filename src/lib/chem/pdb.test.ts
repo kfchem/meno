@@ -260,6 +260,14 @@ describe("a PDB file, written", () => {
     expect(cols(fe, 77, 80)).toBe("FE3+");
   });
 
+  it("writes a coordinate that rounds to nothing as 0.000, never -0.000", () => {
+    const [line] = writePdb([[{ atoms: [{ el: "C", x: -0.0004, y: -1e-12, z: -0.0005 }], bonds: [] }]]).split("\n");
+    expect(cols(line, 31, 38)).toBe("   0.000");
+    expect(cols(line, 39, 46)).toBe("   0.000");
+    // (one that rounds to a thousandth keeps its sign)
+    expect(cols(line, 47, 54)).toBe("  -0.001");
+  });
+
   it("names an atom by its element alone where its number among them does not fit", () => {
     const carbons = Array.from({ length: 100 }, (_, i) => ({ el: "C", x: i, y: 0, z: 0 }));
     const lines = writePdb([[{ atoms: carbons, bonds: [] }]]).split("\n");

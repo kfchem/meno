@@ -349,9 +349,12 @@ const MOST_RESIDUES = 9_999;
 
 /** `s` right-justified in `n` columns. */
 const right = (s: string, n: number) => s.padStart(n);
-/** A Real(n.m) field, right-justified; throws where it does not fit. */
+/**
+ * A Real(n.m) field, right-justified; throws where it does not fit. A value
+ * that rounds to nothing in m decimals is written as 0, never as -0.000.
+ */
 function realField(v: number, n: number, m: number): string {
-  const s = v.toFixed(m);
+  const s = (Math.abs(v) < 0.5 * 10 ** -m ? 0 : v).toFixed(m);
   if (s.length > n || !Number.isFinite(v)) throw new Error(`${v} does not fit a PDB file's ${n}-column field.`);
   return right(s, n);
 }
