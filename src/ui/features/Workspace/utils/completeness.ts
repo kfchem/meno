@@ -19,7 +19,7 @@ import type { Molecule3D } from "../store/types";
 export const NO_H_MARK = "No H in file";
 export const ORDERS_MARK = "Bond orders unknown";
 /** What a molecule says of the atoms its file has and it leaves out, their element not read: "1 atom left out", "3 atoms left out". */
-export const leftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
+export const atomsLeftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
 
 /** The most atoms a molecule's bond orders are sought for from its shape, at once: more, and they are left unknown. */
 export const MOST_PERCEIVED = 400;
