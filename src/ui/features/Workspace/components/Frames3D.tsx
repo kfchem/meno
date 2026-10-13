@@ -21,14 +21,15 @@ const EDGE = 8;
 /** How far below its molecule it hangs, in page pixels (workflow/look CHIP makes room for it). */
 const GAP = 10;
 
-/** A conformer's share of its set, as it is written: "62%", "<1%". */
+/** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
 function share(p: number): string {
-  return p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`;
+  return p < 0.005 ? "<1%" : p > 0.995 && p < 1 ? ">99%" : `${Math.round(p * 100)}%`;
 }
 
-/** An energy above the lowest, as it is written: "1.23 kcal/mol". */
+/** An energy above the lowest, as it is written: "1.23 kcal/mol", "12.3 kcal/mol" - by what it rounds to, so never "10.00". */
 function relative(e: number): string {
-  return `${e < 10 ? e.toFixed(2) : e.toFixed(1)} kcal/mol`;
+  const fine = e.toFixed(2);
+  return `${Number(fine) < 10 ? fine : e.toFixed(1)} kcal/mol`;
 }
 
 /** An energy as a calculation gives it, as it is written: "−382.055117 Eh". */
