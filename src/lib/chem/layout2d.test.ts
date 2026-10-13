@@ -117,6 +117,11 @@ describe("buildTextLabels", () => {
     // one side free: the hydrogens go there, on the same line
     expect(at(150, 270).stack).toBeUndefined();
     expect(at(150, 270).text).toBe("NH");
+    // two bonds nearly in a line, steep, on both sides: the line above and
+    // below on a bond, the row beside the symbol open - written there
+    // (tetrodotoxin's guanidine NH, its H on the bond from above)
+    expect(at(115, 295).stack).toBeUndefined();
+    expect(at(65, 245).stack).toBeUndefined();
   });
 
   it("writes them on the side further from every bond where three spread evenly, a hair either way", () => {

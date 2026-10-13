@@ -402,7 +402,9 @@ much else a crossing would clear.
 And last, room for the H of every label: the drawing writes it beside the
 symbol on the side the bonds leave free (OH, or HO where they leave to the
 right; under or over the symbol only between bonds on both sides, as in a
-chain's NH). Where it - or its count, NH2's 2 after it and set lower -
+chain's NH, and only where that line is clearer of the bonds than the row
+beside the symbol - two bonds nearly in a line, steep, leave the row open
+and the line above or below on a bond, as tetrodotoxin's guanidine NH). Where it - or its count, NH2's 2 after it and set lower -
 would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a

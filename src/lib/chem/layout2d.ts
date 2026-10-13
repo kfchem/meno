@@ -2417,7 +2417,15 @@ export function buildTextLabels(
     // and above it when they fall - on the side further from every bond, so
     // that three bonds evenly spread, one of them straight down (a borate's
     // BH), keep the line clear of it; where neither is, as the bonds lean.
-    if (leftward.has(i) && rightward.has(i)) {
+    // (and only where the line above or below is clearer of the bonds
+    // than the row beside the symbol: two bonds nearly in a line, steep -
+    // tetrodotoxin's guanidine NH - leave the sides open and the line
+    // above or below on a bond)
+    const clearOf = (v: { x: number; y: number }) =>
+      Math.min(...(ways.get(i) ?? []).map((w) => Math.acos(Math.max(-1, Math.min(1, w.dir.x * v.x + w.dir.y * v.y)))));
+    const stackedRoom = Math.max(clearOf({ x: 0, y: 1 }), clearOf({ x: 0, y: -1 }));
+    const besideRoom = Math.max(clearOf({ x: 1, y: 0 }), clearOf({ x: -1, y: 0 }));
+    if (leftward.has(i) && rightward.has(i) && stackedRoom >= besideRoom - 1e-6) {
       const rise = Math.max(...(ways.get(i) ?? []).map((w) => w.dir.y));
       const fall = Math.max(...(ways.get(i) ?? []).map((w) => -w.dir.y));
       const stack = rise < fall - 1e-6 ? "above" : fall < rise - 1e-6 ? "below" : toward.y >= 0 ? "below" : "above";

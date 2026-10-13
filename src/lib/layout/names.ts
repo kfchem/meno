@@ -94,7 +94,8 @@ export type NameGeometry = {
  * Where the drawing sets a labelled atom's H, from the atom, in bond
  * lengths, given the ways its bonds leave it (unit vectors): beside the
  * symbol on the side its bonds leave free - OH, or HO where they leave to
- * the right - or under it (over it) where they leave on both sides. (The
+ * the right - or under it (over it) where they leave on both sides and
+ * that line is clearer of them than the row beside it. (The
  * font is 0.69 of a bond: an H beside its symbol is half a bond off, one
  * under it 0.6.)
  */
@@ -102,7 +103,11 @@ export function hydrogenSpot(ways: readonly { x: number; y: number }[]): { x: nu
   const band = Math.sin((10 * Math.PI) / 180);
   const sx = ways.reduce((sum, w) => sum + w.x, 0);
   const sy = ways.reduce((sum, w) => sum + w.y, 0);
-  if (ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
+  // (and only where that line is clearer of the bonds than the row beside
+  // the symbol, as the drawing sets it)
+  const clearOf = (vx: number, vy: number) => Math.min(...ways.map((w) => Math.acos(Math.max(-1, Math.min(1, w.x * vx + w.y * vy)))));
+  const stacked = Math.max(clearOf(0, 1), clearOf(0, -1)) >= Math.max(clearOf(1, 0), clearOf(-1, 0)) - 1e-6;
+  if (stacked && ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
   return { x: sx > Math.hypot(sx, sy) * band ? -0.5 : 0.5, y: 0 };
 }
 
