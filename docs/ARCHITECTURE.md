@@ -1189,7 +1189,13 @@ to be able to work with nothing going out at all.
   half second while open) and to `network-log.jsonl` in the app's data
   folder when it ends. A child that may not use the network - a plugin's
   worker, a job - is pointed at the proxy with no task, so whatever it
-  reaches for is refused and on the record.
+  reaches for is refused and on the record. What Meno fetches itself is a
+  task too, under the purpose of what asked for it: uv and pixi the first
+  time an environment needs one (`tools.rs`), a plugin's downloads as it
+  is set up - a model's weights, Blender (`plugfiles.rs`, under the
+  plugin's setting-up purpose, each checked by its SHA-256 and size and
+  kept in `files` beside its environment) - and a chemical component
+  looked up (`ccd.rs`).
   What comes back is read up to a bound: a tool's archive 256 MiB, a
   chemical component's file 4 MiB (`tools.rs` `body_within`); a plugin's
   downloads, the `bytes` its manifest gives.
