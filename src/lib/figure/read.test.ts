@@ -6,6 +6,7 @@ import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
+import tetrodotoxin from "./fixtures/tetrodotoxin-rsc.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
@@ -627,6 +628,14 @@ describe("a figure read as a structure", () => {
     const b = s.bonds.find((x) => x.a === hAtom || x.b === hAtom);
     expect(b?.stereo).toBe("down");
     expect(s.atoms[b!.a === hAtom ? b!.b : b!.a].el).toBe("C");
+  });
+
+  it("reads an NH with its H stacked over the N, a short bond from above cut back at the H, as the N's", () => {
+    // (tetrodotoxin as the RSC style prints it: its guanidine's NH set between two bonds, its H over its N, the bond from the
+    // cage above cut short at the H)
+    const r = readFigure(tetrodotoxin as unknown as FigureDrawn);
+    const nh = r.atoms.findIndex((a) => a.label === "NH" && Math.hypot(a.x - 116.2, a.y - 131.3) < 2);
+    expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
   });
 
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {

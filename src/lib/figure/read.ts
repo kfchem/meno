@@ -349,13 +349,13 @@ const centre = (b: Box): Point => ({ x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2 
  * word's box - a label's - soon: within a third of a bond, the box taken
  * a little wider, as a bond is cut short of its label.
  */
-function reaches(p: Point, out: Point, b: Box, bond: number): boolean {
+function reaches(p: Point, out: Point, b: Box, bond: number, within = 0.35): boolean {
   const pad = 0.08 * bond;
   const [x0, y0, x1, y1] = [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad];
   if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) return true;
   // (where the ray from p meets the box: slab by slab)
   let t0 = 0;
-  let t1 = 0.35 * bond;
+  let t1 = within * bond;
   for (const [o, d, lo, hi] of [
     [p.x, out.x, x0, x1],
     [p.y, out.y, y0, y1],
@@ -500,6 +500,23 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     : [];
   for (const l of fromShapes) for (const f of l.from) inLetters.add(f);
   const words = wordsOf([...drawn.letters, ...fromShapes]);
+  // (an H set right over or under an element's letter - an NH with its H stacked, as Meno sets one between two bonds - is
+  // that label's: one word, NH, a bond to either part its atom's)
+  for (let i = words.length - 1; i >= 0; i--) {
+    const h = words[i];
+    if (!/^H\d?$/.test(labelText(h))) continue;
+    const hc = centre(h.box);
+    const k = words.findIndex((w, j) => {
+      if (j === i || !/^[NOSP]$/.test(labelText(w))) return false;
+      const c = centre(w.box);
+      const gap = Math.max(w.box[1] - h.box[3], h.box[1] - w.box[3]);
+      return Math.abs(c.x - hc.x) < 0.3 * w.size && gap > -0.1 * w.size && gap < 0.3 * w.size;
+    });
+    if (k < 0) continue;
+    const w = words[k];
+    words[k] = { letters: [...w.letters, ...h.letters], box: boxOfBoxes([w.box, h.box]), size: w.size };
+    words.splice(i, 1);
+  }
   const labelled = (p: Point, out: Point) => words.some((w) => reaches(p, out, w.box, bond));
   const between = (s: Stroke) => labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b));
   // (short lines side by side, each from one label to another - N≡N+ - are a bond between them, double or triple, not a hash)
@@ -574,10 +591,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       const caps = w.letters.filter((l) => /[A-Z]/.test(l.c) && l.size >= 0.85 * w.size);
       const toH = Math.min(...caps.filter((l) => l.c === "H").map((l) => dist(centre(l.box), e.p)));
       const toEl = Math.min(...caps.filter((l) => l.c !== "H").map((l) => dist(centre(l.box), e.p)));
-      if (dd > 0 && Number.isFinite(toEl) && toH < 0.6 * toEl) return;
+      // (unless it points on at the element - an H stacked over its N, the bond coming past the H)
+      const atEl = caps.some((l) => l.c !== "H" && reaches(e.p, out, l.box, bond, 1));
+      if (dd > 0 && Number.isFinite(toEl) && toH < 0.6 * toEl && !atEl) return;
       // (where other bonds meet it, an end is a carbon - unless it lies on a capital of the word, its bonds drawn to its middle under it)
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
-      if ((meeting.get(e)! === 0 || onCapital) && dd < bestD && reaches(e.p, out, w.box, bond)) {
+      // (a bond drawn short - under half a bond, cut back at a label stacked tall, an NH with its H over it - may stop farther off)
+      const within = len({ a: d.a, b: d.b }) < 0.5 * bond ? 0.6 : 0.35;
+      if ((meeting.get(e)! === 0 || onCapital) && dd < bestD && reaches(e.p, out, w.box, bond, within)) {
         best = k;
         bestD = dd;
       }
