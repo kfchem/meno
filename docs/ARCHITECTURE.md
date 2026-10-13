@@ -331,6 +331,13 @@ What is left before the editor counts as finished, and in what order, is in
   the pointer (`PartMenu.tsx`), which offers the same actions to the mouse
   alone. Only the main button works atoms and bonds; the other is the
   menu's. Over a button or a card nothing counts as hovered.
+- **A press keeps its hover**: a handler that stops a press lets R3F take
+  back the hover of the object it is on, where the mesh pressed is not the
+  mesh the object was first hovered by - a PDF's page drawn finer since the
+  pointer came to it is another of its meshes - and the object is told the
+  pointer is out. What is pressed is under the pointer, so a PDF pressed is
+  hovered again (`components/keptHover`); its hover goes at the next move
+  unless the canvas hovers it again by then.
 - **Strokes**: bonds drawn in one gesture are a stroke (`utils/stroke.ts`,
   with the angles in `utils/extendSnap.ts`) - a bond, or a chain - held in
   `extend.stroke` while it is drawn. A chain walks a honeycomb

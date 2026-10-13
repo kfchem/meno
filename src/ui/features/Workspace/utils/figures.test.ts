@@ -86,6 +86,39 @@ describe("a figure read as a structure for the page", () => {
   });
 });
 
+describe("a figure set sideways", () => {
+  /** The figure turned a quarter as the page shows it: its words reading down the page - each point turned, each letter's line reading down. */
+  const sideways = (f: FigureDrawn): FigureDrawn => {
+    const t = (x: number, y: number): [number, number] => [800 - y, x];
+    return {
+      paths: f.paths.map((p) => ({ ...p, d: p.d.map((st): PathStep => (st[0] === "Z" ? st : [st[0], ...t(st[1], st[2])])) })),
+      letters: f.letters.map((l): FigureLetter => {
+        const [a, b] = [t(l.box[0], l.box[1]), t(l.box[2], l.box[3])];
+        return { ...l, box: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])], at: l.at ? t(l.at[0], l.at[1]) : null, dir: Math.PI / 2 };
+      }),
+      pictures: [],
+    };
+  };
+
+  it("is read turned upright, its labels whole, each atom tied to where it lies on the page", () => {
+    const upright = (figureFrom(drawn(), SHA, 2) as FigureResult).model;
+    const turned = (figureFrom(sideways(drawn()), SHA, 2) as FigureResult).model;
+    // (the same structure: the OH read as one label, not an O and a lone H)
+    expect(turned.atoms.map((a) => a.el).sort()).toEqual(upright.atoms.map((a) => a.el).sort());
+    expect(turned.bonds).toHaveLength(upright.bonds.length);
+    // (drawn upright, as it was drawn before it was set sideways)
+    for (let i = 0; i < upright.atoms.length; i++) {
+      expect(turned.atoms[i].x).toBeCloseTo(upright.atoms[i].x, 6);
+      expect(turned.atoms[i].y).toBeCloseTo(upright.atoms[i].y, 6);
+    }
+    // (each tied to where it lies on the page as it is shown)
+    const o = turned.atoms.find((a) => a.el === "O")!.seen!;
+    const o0 = upright.atoms.find((a) => a.el === "O")!.seen!;
+    expect(o.x).toBeCloseTo(800 - o0.y, 6);
+    expect(o.y).toBeCloseTo(o0.x, 6);
+  });
+});
+
 describe("where a structure read goes", () => {
   const m: Model = {
     atoms: [
