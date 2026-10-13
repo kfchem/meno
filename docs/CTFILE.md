@@ -249,9 +249,14 @@ Hoveyda-Grubbs or Hoveyda–Grubbs). A reagent's name is one unit of a label,
 its digits not counts (T3P, 9-BBN); a formula's are (NaBH4, B2pin2).
 
 The list holds only what no rule reads: Ac2O, Boc2O, Tf2O, TfOH, TsOH,
-HOBt, KOt-Bu, NaH, EtOAc, NaBH4, LiAlH4, NaIO4 and K2CO3 are read by rule
+KOt-Bu, NaH, EtOAc, NaBH4, LiAlH4, NaIO4 and K2CO3 are read by rule
 (below), not listed - and the tests check that no name in it is read by
-rule as the same molecule.
+rule as the same molecule. But for five formulas chemists write as the
+reagents' names - HOAc, HOBt, HOAt, HOSu, TMSCl - listed as names, so
+that typed small they are read as the reagent before a metal's formula
+(hoac is HOAc, not HoAc; the maintainer, 2026-10-13: docs/EDITOR-2D.md,
+*Labels read as they are meant*, rule 6). They are written and drawn as
+the rule reads them, the same molecule.
 Settings › Dictionary shows every entry of it, Meno's groups and
 ligands (by family, the Buchwald ligands one of them), the counter-anion
 no rule reads (BArF), and Buchwald's precatalysts by generation - what

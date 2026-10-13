@@ -16,10 +16,13 @@ import { readSmiles } from "./smiles";
  * as one enantiomer, with the descriptors that name it and its mirror
  * image (./enantiomers).
  *
- * What is read by rule is not listed: simple formulas - Et3N, n-BuLi, TMSCl,
- * Ac2O, KOt-Bu, HOBt, TsOH - (./condensed), adducts (BF3·OEt2) and
- * Buchwald's precatalysts (below). A reagent named otherwise as well (TEA,
- * LiHMDS) is listed by that name alone.
+ * What is read by rule is not listed: simple formulas - Et3N, n-BuLi, Ac2O,
+ * KOt-Bu, TsOH - (./condensed), adducts (BF3·OEt2) and Buchwald's
+ * precatalysts (below). A reagent named otherwise as well (TEA, LiHMDS) is
+ * listed by that name alone. But a few simple formulas chemists write as
+ * the reagents' names - HOAc, HOBt, HOAt, HOSu, TMSCl - are listed, as
+ * names: so that typed small they are read as the reagent before a metal's
+ * formula (hoac is HOAc, not HoAc; the maintainer, 2026-10-13).
  */
 
 export type ReagentUse =
@@ -169,6 +172,7 @@ export const REAGENTS: Reagent[] = [
   },
   { label: "PPTS", use: "acid", smiles: "Cc1ccc(cc1)S(=O)(=O)[O-].c1cc[nH+]cc1", name: "pyridinium p-toluenesulfonate" },
   { label: "H2SO4", use: "acid", smiles: "OS(=O)(=O)O", name: "sulfuric acid", formula: true },
+  { label: "HOAc", use: "acid", smiles: "CC(=O)O", name: "acetic acid", formula: true },
 
   // --- coupling, condensation and the Mitsunobu reaction -----------------------
   { label: "DCC", use: "coupling", smiles: "C(=NC1CCCCC1)=NC1CCCCC1", name: "N,N'-dicyclohexylcarbodiimide" },
@@ -187,6 +191,11 @@ export const REAGENTS: Reagent[] = [
   { label: "DMTMM", use: "coupling", smiles: "COc1nc(OC)nc([N+]2(C)CCOCC2)n1.[Cl-]", name: "4-(4,6-dimethoxy-1,3,5-triazin-2-yl)-4-methylmorpholinium chloride" },
   { label: "Oxyma", also: ["OxymaPure"], use: "coupling", smiles: "CCOC(=O)C(C#N)=NO", name: "ethyl cyano(hydroxyimino)acetate" },
   { label: "NHS", use: "coupling", smiles: "ON1C(=O)CCC1=O", name: "N-hydroxysuccinimide" },
+  // (the triazoles in Kekulé form, as Bt and At are: so the same as read by rule)
+  { label: "HOBt", use: "coupling", smiles: "ON1N=NC2=C1C=CC=C2", name: "1-hydroxybenzotriazole", formula: true },
+  { label: "HOAt", use: "coupling", smiles: "ON1N=NC2=C1N=CC=C2", name: "1-hydroxy-7-azabenzotriazole", formula: true },
+  // (NHS, written as its formula)
+  { label: "HOSu", use: "coupling", smiles: "ON1C(=O)CCC1=O", name: "N-hydroxysuccinimide", formula: true },
   { label: "Yamaguchi reagent", also: ["TCBC"], use: "coupling", smiles: "O=C(Cl)c1c(Cl)cc(Cl)cc1Cl", name: "2,4,6-trichlorobenzoyl chloride" },
   { label: "Mukaiyama reagent", also: ["Mukaiyama's reagent"], use: "coupling", smiles: "C[n+]1ccccc1Cl.[I-]", name: "2-chloro-1-methylpyridinium iodide" },
   { label: "DPPA", use: "coupling", smiles: "[N-]=[N+]=NP(=O)(Oc1ccccc1)Oc1ccccc1", name: "diphenyl phosphorazidate" },
@@ -215,6 +224,7 @@ export const REAGENTS: Reagent[] = [
   { label: "TFAA", also: ["(CF3CO)2O"], use: "electrophile", smiles: "O=C(OC(=O)C(F)(F)F)C(F)(F)F", name: "trifluoroacetic anhydride" },
   { label: "Comins' reagent", also: ["Comins reagent", "Comins’ reagent"], use: "electrophile", smiles: "O=S(=O)(N(c1ccc(Cl)cn1)S(=O)(=O)C(F)(F)F)C(F)(F)F", name: "N-(5-chloro-2-pyridyl)bis(trifluoromethanesulfonimide)" },
   { label: "HMDS", use: "electrophile", smiles: "C[Si](C)(C)N[Si](C)(C)C", name: "hexamethyldisilazane" },
+  { label: "TMSCl", use: "electrophile", smiles: "C[Si](C)(C)Cl", name: "chlorotrimethylsilane", formula: true },
   { label: "Meerwein's salt", also: ["Me3OBF4", "Meerwein salt"], use: "electrophile", smiles: `C[O+](C)C.${BF4}`, name: "trimethyloxonium tetrafluoroborate" },
   { label: "Eschenmoser's salt", also: ["Eschenmoser salt"], use: "electrophile", smiles: "C=[N+](C)C.[I-]", name: "N,N-dimethylmethyleneiminium iodide" },
   { label: "TMSCHN2", use: "electrophile", smiles: "C[Si](C)(C)C=[N+]=[N-]", name: "(trimethylsilyl)diazomethane", formula: true },
