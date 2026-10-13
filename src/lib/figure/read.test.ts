@@ -4,6 +4,7 @@ import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
+import junction from "./fixtures/monensin-nature-junction.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
@@ -290,6 +291,14 @@ describe("a figure read as a structure", () => {
     const between = (i: number, j: number) => r.bonds.find((b) => (b.a === i && b.b === j) || (b.a === j && b.b === i));
     expect(between(left, right)?.stereo).toBe("down");
     expect(between(left, h)?.stereo).toBe("down");
+  });
+
+  it("reads a hash of two lines, its first a dot the other hash at its atom took", () => {
+    // (monensin's ring junction as the Nature style prints it, cut out: the hash up to the H has two lines left)
+    const r = readFigure(junction as unknown as FigureDrawn);
+    const c = r.atoms.findIndex((a) => Math.hypot(a.x - 140.3, a.y - 120.6) < 2);
+    const h = r.atoms.findIndex((a) => a.label === "H" && Math.hypot(a.x - 143, a.y - 110.5) < 3);
+    expect(r.bonds.find((b) => (b.a === c && b.b === h) || (b.a === h && b.b === c))?.stereo).toBe("down");
   });
 
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {

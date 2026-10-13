@@ -975,7 +975,7 @@ workspace holds.
     lines all go one way, so two hashes meeting at an atom, joined there
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's, is carried on to
-    the bond end it points at;
+    the bond end it points at - such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however

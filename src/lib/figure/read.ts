@@ -110,6 +110,7 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
   const left = new Set(short);
   // (each in turn - those a group let go again at the end, to group anew)
   const queue = [...short];
+  const letGo = new Set<Stroke>();
   for (let q = 0; q < queue.length; q++) {
     const s = queue[q];
     if (!left.has(s)) continue;
@@ -135,11 +136,13 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
         group.splice(group.indexOf(g), 1);
         left.add(g);
         queue.push(g);
+        letGo.add(g);
       }
     }
     // (three at the least, one a line of some width: the dots of joints by a bond's end and a sliver of nothing - a
     // C=O's joints - are none)
-    if (group.length < 3 || !group.some((g) => !dot_(g) && g.w > 0.01 * bond)) {
+    // (lines let go by another hash - its first dot kept there - may be two)
+    if (group.length < (group.every((g) => letGo.has(g)) ? 2 : 3) || !group.some((g) => !dot_(g) && g.w > 0.01 * bond)) {
       for (const t of group) if (t !== s) left.add(t);
       continue;
     }
