@@ -240,6 +240,20 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.find((a) => a.el === "N")?.charge).toBe(1);
   });
 
+  it("reads two labels set side by side as one word apart where both read: NH2 by H2N", () => {
+    // (a chain's NH2 from the left, and an H2N its bond comes to from the right - its N last - touching it)
+    const n: P = [80, 60];
+    const lastN = n[0] + 6.8 + 6.8 + 4.76 + 6.8 + 4.76;
+    const s = read(
+      figure(
+        [stroke(step(n, 180, 1.6), step(n, 180, 0.5)), stroke([lastN + 5, n[1]], [lastN + 5 + 0.8 * L, n[1]], [lastN + 5 + 0.8 * L + L * 0.866, n[1] - L / 2])],
+        word("NH_2H_2N", n),
+      ),
+    );
+    expect(s.atoms.filter((a) => a.el === "N")).toHaveLength(2);
+    expect(s.atoms.some((a) => a.unsure?.some((u) => /not read/.test(u)))).toBe(false);
+  });
+
   it("reads a group drawn on its bond's left from the bond out: TBSO as OTBS", () => {
     const c: P = [80, 60];
     const o = step(c, 180);

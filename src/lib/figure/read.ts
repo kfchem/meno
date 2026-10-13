@@ -507,7 +507,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (best >= 0) wordOf.set(e, best);
   }
   // (two labels set side by side, read as one word that reads as nothing - H H - are each
-  // their own, where their bonds come to different capitals of it)
+  // their own, where their bonds come to different capitals of it, cut where both read)
   for (let k = 0; k < words.length; k++) {
     const w = words[k];
     const at = ends.filter((e) => wordOf.get(e) === k);
@@ -519,6 +519,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const starts = [...new Set(at.map(nearest))].sort((a, b) => a - b);
     if (starts.length < 2) continue;
     const cuts = caps.map((c) => c.i).filter((i) => starts.includes(i) || i === caps[0].i);
+    // (two of them: cut where both read - a label on its bond's left starts before the capital its bond comes to, NH2 H2N)
+    if (starts.length === 2) {
+      const piece = (from: number, to: number) => labelText({ ...w, letters: w.letters.slice(from, to) });
+      const at = caps.map((c) => c.i).find((c) => c > starts[0] && c <= starts[1] && reads(piece(caps[0].i, c)) && reads(piece(c, w.letters.length)));
+      if (at != null) cuts.splice(0, cuts.length, caps[0].i, at);
+    }
     const pieces = cuts.map((from, j) => w.letters.slice(from, cuts[j + 1] ?? w.letters.length)).filter((ls) => ls.length);
     const made = pieces.map((ls): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: w.size }));
     words[k] = made[0];
