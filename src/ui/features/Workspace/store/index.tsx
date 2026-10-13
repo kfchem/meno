@@ -190,6 +190,10 @@ export function connectStoreToDocument(
         extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,
         moveDrag: prev.moveDrag.active && !mirrored.model.atoms.some((a) => a.id === prev.moveDrag.atomId) ? noMoveDrag : prev.moveDrag,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
+        // (a step's options card, or a set chosen, an undo took away: shut - a redo
+        // brought the card back, and a step pasted into the id it freed opened with it)
+        openStep: prev.openStep != null && !mirrored.steps.some((x) => x.id === prev.openStep) ? null : prev.openStep,
+        chosenSet: prev.chosenSet != null && !mirrored.sets.some((x) => x.id === prev.chosenSet) ? null : prev.chosenSet,
         // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
         quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),

@@ -386,6 +386,23 @@ describe("editor store over a document", () => {
     expect([...state().sel.atoms]).toEqual([base]);
   });
 
+  it("shuts a step's options card, and forgets a set chosen, when an undo takes it away", () => {
+    const { doc, state } = editor();
+    const step = state().addStep("energy" as never, "xtb", 0, 0);
+    state().setWorkflowView({ openStep: step });
+    doc.undo();
+    expect(state().openStep).toBeNull();
+    // a redo brings the step back, not its card
+    doc.redo();
+    expect(state().steps.some((x) => x.id === step)).toBe(true);
+    expect(state().openStep).toBeNull();
+    // a step still there keeps its card open over an undo of something else
+    state().setWorkflowView({ openStep: step });
+    state().addAtom(9, 9, "C");
+    doc.undo();
+    expect(state().openStep).toBe(step);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");
