@@ -176,6 +176,27 @@ describe("a reaction scheme's arrows", () => {
     expect(s.arrows).toEqual([]);
     expect(s.figure.bonds.some((b) => b.stereo === "up")).toBe(true);
   });
+
+  it("reads no arrow where a stereo wedge goes off a ring's atom, its wide end behind the bond ending there", () => {
+    // (cholesterol's C13 as Meno exports it, printed: three bonds meeting, and the methyl's wedge drawn in perspective,
+    // one side square - read as a half head on the bond from C17 before)
+    const s = read({
+      paths: [
+        stroke([[213.68, 91.61], [232.46, 87.62]], 0.8),
+        stroke([[213.68, 91.61], [207.74, 109.87]], 0.8),
+        stroke([[207.74, 109.87], [219.03, 125.4]], 0.8),
+        stroke([[189.48, 135.0], [189.48, 115.8]], 0.8),
+        stroke([[189.48, 115.8], [172.86, 106.2]], 0.8),
+        stroke([[189.48, 115.8], [207.74, 109.87]], 0.8),
+        filled([[193.48, 96.92], [189.5, 96.5], [189.04, 116.16], [189.84, 116.24]]),
+      ],
+      letters: [],
+      pictures: [],
+    });
+    expect(s.arrows).toEqual([]);
+    expect(s.figure.bonds).toHaveLength(7);
+    expect(s.figure.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+  });
 });
 
 describe("a reaction scheme's signs and words", () => {

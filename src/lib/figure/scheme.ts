@@ -38,7 +38,8 @@ const along = (p: Point, u: Point, t: number): Point => ({ x: p.x + u.x * t, y: 
 type Line = { a: Point; b: Point; w: number; ink?: string; dash: boolean; of: object[] };
 
 /** A head's outline as it may be at a line's end: its points, whether it is drawn open (a chevron), and what it was drawn as. */
-type HeadShape = { pts: Point[]; open: boolean; of: object[] };
+/** What may be a head: its outline's points, whether it is open, what it was drawn as - and, a wedge, from its wide end to its narrow one. */
+type HeadShape = { pts: Point[]; open: boolean; of: object[]; axis?: { base: Point; tip: Point } };
 
 /** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, and what it was drawn as. */
 type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[] };
@@ -127,10 +128,15 @@ function colourOf(ink: string | undefined): string | undefined {
  * outline; or a single barb, a half head's. Its point lies on the line
  * ahead of the end, or at it, and its back by the end.
  */
+/** How nearly along the line a wedge-shaped head points, from its wide end to its narrow one: within 35 degrees (a half head's leans off it by half its width). */
+const HEAD_ALONG = Math.cos((35 * Math.PI) / 180);
+
 function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], barbs: readonly Stroke[], bond: number): Head | null {
   const tol = Math.max(0.06 * bond, 2 * w);
   let best: (Head & { off: number }) | null = null;
   for (const h of shapes) {
+    // (a wedge pointing along the line, its narrow end ahead - not a stereo bond going off the same atom, sideways or straight on)
+    if (h.axis && dot(unit(h.axis.base, h.axis.tip), u) < HEAD_ALONG) continue;
     const ts = h.pts.map((p) => dot(sub(p, e), u));
     const cs = h.pts.map((p) => cross(u, sub(p, e)));
     const i = ts.indexOf(Math.max(...ts));
@@ -270,7 +276,7 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   ];
   // what may be a head: filled shapes no longer than a bond - a wedge's outline, a blob of one part - and chevrons of two strokes
   const filled: HeadShape[] = [
-    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x] })),
+    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x], axis: { base: x.base, tip: x.tip } })),
     ...shapes.blobs
       .filter((b: Blob) => b.parts.length === 1 && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 1.2 * bond && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) > 0.06 * bond)
       .map((b): HeadShape => {
