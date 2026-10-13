@@ -251,7 +251,10 @@ the next thing done, not one to close it. It opens as the second click's button 
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
 Quick Add waited 0.28 s for a third click that would draw one, and the
 maintainer found it slow). *Chain* begins one where the double-click was,
-led by a drag from the icon or traced with the button up. *SMILES* opens a
+led by a drag from the icon or traced with the button up - the icon
+double-clicked too: the second press, as the trace begins and where it
+began, is not the click that ends it (`traceEndedBy`, utils/press;
+before, it ended the chain at its first bond). *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went

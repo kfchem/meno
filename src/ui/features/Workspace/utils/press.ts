@@ -77,6 +77,20 @@ export function onChord(held: number, chord: () => void): () => void {
 /** What says a button has joined a press: the move with more buttons, and the second button's own mousedown and menu. */
 const CHORD_EVENTS = ["pointermove", "mousedown", "contextmenu"] as const;
 
+/**
+ * What a press does to a chain traced with the button up (ChainGuide2D),
+ * `since` ms after the trace began and the pointer `moved` or not since:
+ * the primary button ends it, the other lets it go - but a primary press
+ * as the trace begins, where it began, is the second of the double-click
+ * that began it (Quick Add's chain icon double-clicked), and does nothing:
+ * it ended the chain at its first bond, the trace that followed drawing
+ * none.
+ */
+export function traceEndedBy(button: number, since: number, moved: boolean, doubleClickMs: number): "end" | "let go" | "second click" {
+  if (button !== 0) return "let go";
+  return !moved && since < doubleClickMs ? "second click" : "end";
+}
+
 /** What comes of a press after its pointerdown: none of it is heard of a press swallowed. */
 const AFTER_PRESS = ["mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"] as const;
 

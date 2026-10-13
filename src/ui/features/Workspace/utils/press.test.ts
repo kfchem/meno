@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress, traceEndedBy } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -133,5 +133,21 @@ describe("a long press another button joins", () => {
     } finally {
       (globalThis as { window?: unknown }).window = had;
     }
+  });
+});
+
+describe("a press on a chain traced with the button up", () => {
+  it("ends it with the primary button, and lets it go with the other", () => {
+    expect(traceEndedBy(0, 2000, true, 500)).toBe("end");
+    expect(traceEndedBy(2, 2000, true, 500)).toBe("let go");
+  });
+
+  it("takes the second press of the double-click that began it - as it begins, where it began - as nothing", () => {
+    expect(traceEndedBy(0, 120, false, 500)).toBe("second click");
+    // (a click once the pointer has gone on, or a moment later, ends it)
+    expect(traceEndedBy(0, 120, true, 500)).toBe("end");
+    expect(traceEndedBy(0, 800, false, 500)).toBe("end");
+    // (the other button lets it go, whenever)
+    expect(traceEndedBy(2, 120, false, 500)).toBe("let go");
   });
 });
