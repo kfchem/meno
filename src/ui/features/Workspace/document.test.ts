@@ -2,8 +2,27 @@ import { describe, expect, it } from "vitest";
 import * as ops from "./document";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
 import { pt } from "../../../lib/chem/style";
+import type { Model } from "./store/types";
 
 const doc = () => emptyWorkspaceDocument();
+
+/**
+ * How many times as long `run` takes on `large` as on `small`: the least of
+ * five runs of each, taken by turns - so that a machine busy with other
+ * work, or a pause to collect garbage, slows neither alone.
+ */
+function slower<T>(small: T, large: T, run: (x: T) => void): number {
+  const least = [Infinity, Infinity];
+  run(small);
+  for (let k = 0; k < 5; k++) {
+    [small, large].forEach((x, i) => {
+      const started = performance.now();
+      run(x);
+      least[i] = Math.min(least[i], performance.now() - started);
+    });
+  }
+  return least[1] / least[0];
+}
 
 /** Two bonded carbons, as a starting point. */
 function ethane(): WorkspaceDocument {
@@ -85,6 +104,29 @@ describe("structure document operations", () => {
     expect(next.model.bonds).toHaveLength(1);
     // nothing to delete, nothing changed
     expect(ops.deleteParts(d, [99], [98])).toBe(d);
+  });
+
+  it("deletes everything selected in a large drawing in time in step with its size", () => {
+    // (rings of six carbons side by side, all selected: each bond's ends were
+    // looked for among every atom - 10.5 s for 28 000 atoms. Four times the
+    // rings now take about four times as long, not sixteen)
+    const page = (rings: number): WorkspaceDocument => {
+      const atoms: Model["atoms"] = [];
+      const bonds: Model["bonds"] = [];
+      for (let r = 0; r < rings; r++) {
+        for (let k = 0; k < 6; k++) {
+          const id = 6 * r + k + 1;
+          atoms.push({ id, x: 3 * r + Math.cos(k), y: Math.sin(k), r: 0.9, el: "C" });
+          bonds.push({ id: 1_000_000 + id, a: id, b: 6 * r + ((k + 1) % 6) + 1, order: 1 });
+        }
+      }
+      return { ...doc(), model: { atoms, bonds } };
+    };
+    const deleted = (d: WorkspaceDocument) => {
+      const next = ops.deleteParts(d, d.model.atoms.map((a) => a.id), d.model.bonds.map((b) => b.id));
+      expect(next.model.atoms).toHaveLength(0);
+    };
+    expect(slower(page(500), page(2000), deleted)).toBeLessThan(9);
   });
 
   it("lays some of the structure out afresh in one operation", () => {
