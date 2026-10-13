@@ -196,6 +196,19 @@ describe("molecules in 3D on the clipboard", () => {
     expect(items.some((i) => i.flavor === "rxn")).toBe(false);
   });
 
+  it("keep their radicals in the molfile other programs are given", () => {
+    const hydroxyl = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0, radical: "doublet" as const },
+        { el: "H", x: 0.97, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+    };
+    const mol = clipItems({ atoms: [], bonds: [], molecules3d: [hydroxyl] }).find((i) => i.flavor === "mol")!.text!;
+    expect(mol).toContain("M  RAD  1   1   2\n");
+  });
+
   it("are pasted about the point asked for, with the rest", () => {
     const moved = centredAt({ atoms: [], bonds: [], molecules3d: [water3d, { ...water3d, at: { x: 8, y: 2 } }] }, { x: 0, y: 0 });
     expect(moved.molecules3d!.map((m) => m.at)).toEqual([

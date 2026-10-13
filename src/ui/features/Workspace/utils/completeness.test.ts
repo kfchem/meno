@@ -107,6 +107,12 @@ describe("what a molecule's file leaves out", () => {
     expect(withOrders(m, [3, 4, 5], answer)).toBeNull();
   });
 
+  it("gives the worker a part's radicals with its charges", () => {
+    const m = withLigand();
+    m.atoms[4] = { ...m.atoms[4], radical: "doublet" };
+    expect(blockOf(m, [3, 4]).molblock).toContain("M  RAD  1   2   2\n");
+  });
+
   it("takes the hydrogens the worker added: after its atoms, bonded to theirs, in their residue", () => {
     const m = withLigand();
     const answer = writeMolfile3d(

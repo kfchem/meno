@@ -390,7 +390,8 @@ As this part of step 5 was built (#155, from main beside step 3):
     written in V2000, or in V3000 where V2000 cannot hold them, as before.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
-    (`> <Energy (Eh)>`).
+    (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
+    isotopes, as a copy's MOL file does (docs/CTFILE.md).
   - **SVG** takes no options yet.
 - **What a writer takes** is said by it (step 7): Meno's own take the
   page, as before; a plugin's, one molecule - the molecules in 3D

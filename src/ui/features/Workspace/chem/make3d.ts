@@ -373,7 +373,7 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
-  const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
+  const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
   const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);

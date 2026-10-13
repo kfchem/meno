@@ -742,7 +742,7 @@ export function asSeen(
   turn?: Turn3D,
   frame?: number,
   placed = false,
-): { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[] {
+): { el: string; x: number; y: number; z: number; charge?: number; radical?: Molecule3D["atoms"][number]["radical"]; isotope?: number }[] {
   const n = m.atoms.length;
   const frames = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...(m.frames ?? []).filter((f) => f.length === 3 * n)];
   const xyz = frames[Math.min(Math.max(0, Math.round(frame ?? 0)), frames.length - 1)];
@@ -757,7 +757,7 @@ export function asSeen(
       v.y += m.at.y / k;
       v.z += (m.at.z ?? 0) / k;
     }
-    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
+    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
   });
 }
 

@@ -197,6 +197,7 @@ function frameAtoms(m: Carried3D, frame = 0): Atom3D[] {
     y: xyz[3 * i + 1],
     z: xyz[3 * i + 2],
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     ...(a.isotope ? { isotope: a.isotope } : {}),
   }));
 }

@@ -16,6 +16,7 @@ import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { readStructures } from "../../../lib/io/structures";
+import type { OptionValues } from "../../../lib/options";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -321,6 +322,26 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     expect(back.molecules3d![2].atoms[1]).toMatchObject({ el: "H", x: 0.98 });
     // (the frame shown, unless asked)
     expect(structureFileText({ atoms: [], bonds: [], molecules3d: [conformers] }, "/tmp/oh.sdf").match(/\$\$\$\$/g)).toHaveLength(1);
+  });
+
+  it("keeps a molecule in 3D's radicals, in the frame it shows and in every frame", () => {
+    const hydroxyl = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0, radical: "doublet" as const },
+        { el: "H", x: 0.97, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+      frames: [[0, 0, 0, 0.98, 0, 0]],
+      frame: 1,
+      name: "hydroxyl.xyz",
+    };
+    for (const options of [{}, { frames: "all" }] as OptionValues[]) {
+      const text = structureFileText({ atoms: [], bonds: [], molecules3d: [hydroxyl] }, "/tmp/hydroxyl.sdf", options);
+      expect(text).toContain("M  RAD  1   1   2\n");
+      const back = readStructures("sdf", "hydroxyl.sdf", text).molecules3d!;
+      expect(back.map((m) => m.atoms.map((a) => a.radical))).toEqual(back.map(() => ["doublet", undefined]));
+    }
   });
 
   it("writes molecules in 3D as a PDB file - each a residue, the frame shown or a model for each frame - which reads back as they were", async () => {

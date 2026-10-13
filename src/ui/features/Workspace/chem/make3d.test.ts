@@ -215,9 +215,9 @@ describe("takenOnPage", () => {
 describe("a molecule in 3D drawn as a formula", () => {
   /** The worker as these tests have it: what it was asked, and ethane drawn back - its orders found, or not. */
   const worker = (perceived: boolean) => {
-    const asked: { perceive?: boolean }[] = [];
+    const asked: { perceive?: boolean; molblock?: string }[] = [];
     const ethane = writeMolfile3d([{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 1.5, y: 0, z: 0 }], [{ a1: 0, a2: 1, order: 1 }]);
-    const chem = { request: async (_op: string, args: { perceive?: boolean }) => (asked.push(args), { molblock: ethane, perceived }) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: { perceive?: boolean; molblock?: string }) => (asked.push(args), { molblock: ethane, perceived }) } as unknown as ChemClient;
     return { chem, asked };
   };
   /** A chain of carbons, every bond single, as a file of coordinates gives it. */
@@ -239,5 +239,12 @@ describe("a molecule in 3D drawn as a formula", () => {
     const known = worker(false);
     expect((await formulaOf(known.chem, given, 0)).ordersUnknown).toBe(false);
     expect(known.asked[0].perceive).toBe(false);
+  });
+
+  it("is drawn with its radicals", async () => {
+    const asked = worker(true);
+    const radical = { ...chain(2), atoms: chain(2).atoms.map((a, i) => (i === 0 ? { ...a, radical: "doublet" as const } : a)) };
+    await formulaOf(asked.chem, radical, 0);
+    expect(asked.asked[0].molblock).toContain("M  RAD  1   1   2\n");
   });
 });

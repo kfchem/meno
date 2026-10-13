@@ -138,7 +138,7 @@ export function blockOf(m: Pick<Molecule3D, "atoms" | "bonds">, atoms?: readonly
     return a1 != null && a2 != null ? [{ a1, a2, order: b.order >= 1 && b.order <= 3 ? b.order : 1 }] : [];
   });
   const block = writeMolfile3d(
-    which.map((i) => ({ el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}) })),
+    which.map((i) => ({ el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}), ...(m.atoms[i].radical ? { radical: m.atoms[i].radical } : {}) })),
     bonds,
   );
   return { molblock: block, atoms: which };

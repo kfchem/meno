@@ -2,7 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
+import type { AbbreviationStructure, AtomChem, BondChem, Radical } from "./molecule";
 import { ELEMENTS } from "./elements";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
@@ -664,7 +664,7 @@ export function writeRxnfile(
 }
 
 /** An atom or a bond of a molecule in 3D, as a file gives it: in ångströms, its bonds by atom index. */
-export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; isotope?: number };
+export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical; isotope?: number };
 export type Bond3D = { a1: number; a2: number; order: number };
 
 /** The second header line of a molfile in 3D: the program, no date, and that it is 3D. */
@@ -688,10 +688,12 @@ export function needsV3000In3d(atoms: readonly Atom3D[], bonds: readonly Bond3D[
 
 /**
  * A molecule in 3D as a molfile: its atoms where they are, in ångströms,
- * its bonds by type as given, its charges and isotopes, and a header that
- * says it is 3D ("CTfile Formats"). V2000 - charges and isotopes as M  CHG
- * and M  ISO lines - wherever V2000 holds it, and V3000 - CHG and MASS on
- * the atoms - where it cannot (`needsV3000In3d`), unless one is asked for.
+ * its bonds by type as given, its charges, radicals and isotopes, and a
+ * header that says it is 3D ("CTfile Formats"). V2000 - charges, radicals
+ * and isotopes as M  CHG, M  RAD and M  ISO lines - wherever V2000 holds
+ * it, and V3000 - CHG, RAD and MASS on the atoms - where it cannot
+ * (`needsV3000In3d`), unless one is asked for. A radical is written as the
+ * format codes it: 1 singlet, 2 doublet, 3 triplet.
  */
 export function writeMolfile3d(
   atoms: Atom3D[],
@@ -712,6 +714,7 @@ export function writeMolfile3d(
       lines.push(
         `M  V30 ${i + 1} ${v30String(a.el)} ${v30Number(a.x)} ${v30Number(a.y)} ${v30Number(a.z)} 0` +
           (a.charge ? ` CHG=${a.charge}` : "") +
+          (a.radical ? ` RAD=${RADICAL_CODE[a.radical]}` : "") +
           (a.isotope ? ` MASS=${a.isotope}` : ""),
       ),
     );
@@ -735,6 +738,7 @@ export function writeMolfile3d(
     }
   };
   props("CHG", atoms.flatMap((a, i) => (a.charge ? [[i + 1, a.charge] as [number, number]] : [])));
+  props("RAD", atoms.flatMap((a, i) => (a.radical ? [[i + 1, RADICAL_CODE[a.radical]] as [number, number]] : [])));
   props("ISO", atoms.flatMap((a, i) => (a.isotope ? [[i + 1, a.isotope] as [number, number]] : [])));
   lines.push("M  END");
   return lines.join("\n") + "\n";
