@@ -24,6 +24,25 @@ export const onLayer = (x: number, y: number, above = false): { position: "absol
   ...(above ? { zIndex: 1 } : {}),
 });
 
+/**
+ * The card just shut, kept over the others while it shrinks back (`ms`,
+ * `DURATION.base`) rather than dropped under the card below mid-way: told
+ * each card opened in turn (`open`), it says which card is shutting
+ * (`onShutting`) - null once that one is down.
+ */
+export function shuttingCard(onShutting: (id: number | null) => void, ms: number): (open: number | null) => void {
+  let was: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return (open) => {
+    if (open === was) return;
+    const shut = was;
+    was = open;
+    clearTimeout(timer);
+    onShutting(shut);
+    if (shut != null) timer = setTimeout(() => onShutting(null), ms);
+  };
+}
+
 /** A step's card: how wide, and how tall closed, about. */
 export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;

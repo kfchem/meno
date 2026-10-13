@@ -20,7 +20,7 @@ import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PX } from "../workflow/look";
+import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PX, shuttingCard } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -210,11 +210,6 @@ function runRows(s: WorkflowStep): RunRow[] {
 }
 
 /**
- * Where on the page's layer of HTML a point of the page is: the layer's
- * origin is the page's, its pixels `PX` world units, downwards.
- */
-
-/**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
  * selection's right edge that makes it an input, while it holds whole
@@ -234,6 +229,13 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  // (the card just shut kept over the others while it shrinks back)
+  const [shutting, setShutting] = useState<number | null>(null);
+  const toldOpen = useRef<((open: number | null) => void) | null>(null);
+  useEffect(() => {
+    toldOpen.current ??= shuttingCard(setShutting, DURATION.base * 1000);
+    toldOpen.current(openStep);
+  }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -646,7 +648,7 @@ export default function Workflow2D() {
       const run = runs.get(s.id);
       return (
         // (its top at its place: the card grows downwards as it opens - over the cards below it)
-        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id)}>
+        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id || shutting === s.id)}>
           <StepCard
             step={s}
             info={info}
