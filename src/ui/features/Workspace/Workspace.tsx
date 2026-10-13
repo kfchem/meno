@@ -1638,7 +1638,8 @@ function WorkspaceContent({
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
             if (!s) return undefined;
             const st = store.getState();
-            const jobs = !!(s.running?.jobs.length || s.ran?.jobs?.length);
+            // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
+            const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               ...(s.running ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
