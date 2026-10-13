@@ -424,6 +424,18 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
+- **Two rule tests skipped at two orders** (2026-10-13). Laid out in two of
+  its own orders (`OWN_ORDERS`), the engine fails two of its rule tests,
+  which pass at four:
+  - adamantane with a gem-dimethyl cyclohexane fused to it
+    (`cage.test.ts`, the axial methyl): adamantane's views, alike in
+    themselves, leave the fused chair alike too, and both orders take one
+    where the equatorial methyl crosses the chair; the flat drawing wins.
+    Tried and not taken: the equatorial bond drawn as the template draws
+    one (the two methyls swapped roles), and the tied views tried with
+    what hangs from them (tetrodotoxin broke).
+  - macrocycles strung through benzene rings (`engine.test.ts`): main drew
+    this one wrong in three of eight input orders too.
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
 - **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
