@@ -29,7 +29,7 @@
  * letters, where they were typed, so that the caret stays where it is;
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
-import { labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
+import { customAbbreviations, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 
 /**
@@ -52,12 +52,21 @@ let tokens: { from: readonly string[]; words: Token[]; names: Set<string> } | nu
 function vocabulary(): { words: Token[]; names: Set<string> } {
   const units = labelUnitNames();
   if (tokens?.from !== units) {
+    const symbols = ELEMENTS.map((e) => e.symbol).sort();
+    // (a group's name of one letter - Z, for Cbz - is no unit a label is read
+    // into, a letter being one on its own: a word, all the same)
+    const letters = new Set(
+      [...GROUPS, ...customAbbreviations()]
+        .flatMap((g) => [g.label, ...(g.also ?? [])])
+        .filter((t) => t.length === 1 && t !== "R" && !symbols.includes(t)),
+    );
     const words = [
       // (by symbol, as ever: ties among writings keep this order)
-      ...ELEMENTS.map((e) => e.symbol).sort().map((text) => ({ text })),
+      ...symbols.map((text) => ({ text })),
       ...units.map((text) => ({ text })),
       // (an Rgroup's R)
       { text: "R" },
+      ...[...letters].map((text) => ({ text })),
     ];
     tokens = { from: units, words, names: new Set(words.map((w) => w.text)) };
   }

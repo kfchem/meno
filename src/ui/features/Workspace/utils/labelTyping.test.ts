@@ -162,6 +162,16 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     }
   });
 
+  it("reads a group's name of one letter from letters typed small: z is Z, for Cbz", () => {
+    for (const [typed, label] of [
+      ["z", "Z"], ["Z", "Z"], ["oz", "OZ"], ["zo", "OZ"], ["ZO", "OZ"], ["co2z", "CO2Z"], ["nhz", "NHZ"], ["hnz", "NHZ"],
+    ]) expect(kept(typed), typed).toBe(label);
+    expect(live("oz")).toBe("OZ");
+    // (zinc and zirconium, and the groups whose names have a z, as ever)
+    for (const [typed, label] of [["zn", "Zn"], ["zr", "Zr"], ["cbz", "Cbz"], ["bz", "Bz"], ["obz", "OBz"], ["moz", "Moz"]])
+      expect(kept(typed), typed).toBe(label);
+  });
+
   it("keeps a charge typed last where it was, turned round or not", () => {
     for (const typed of ["ho-", "HO-", "oh-", "OH-"]) {
       expect(kept(typed), typed).toBe("OH-");
