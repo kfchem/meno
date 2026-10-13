@@ -5,6 +5,7 @@ import {
   atomRadius,
   BALL_AND_STICK,
   bondRadiusOf,
+  countedAtoms,
   DEFAULT_STYLE_3D_CHOICE,
   hiddenAtoms,
   hidesCarbonHydrogens,
@@ -115,6 +116,15 @@ describe("a biopolymer's chains in a look", () => {
     expect([...hiddenAtoms(m, look3dPreset("space").look)]).toEqual([0, 0, 0, 0, 0, 0]);
     expect(ribbonsOf(m, BALL_AND_STICK)).toBe(true);
     expect(ribbonsOf(m, look3dPreset("space").look)).toBe(false);
+  });
+  it("counts toward a very large drawing what it draws and what its ribbons stand for - not water, nor hydrogens it hides", () => {
+    const hiding = { ...BALL_AND_STICK, hydrogens: "carbonHidden" as const };
+    // (the chain's three atoms, the ligand's two; with C-H hidden, the chain's own C-H still stood for)
+    expect(countedAtoms(m, BALL_AND_STICK)).toBe(5);
+    expect(countedAtoms(m, hiding)).toBe(4);
+    // (as atoms, the water drawn too)
+    expect(countedAtoms(m, look3dPreset("space").look)).toBe(6);
+    expect(countedAtoms(m, { ...hiding, biopolymers: "atoms" })).toBe(4);
   });
   it("says it hides hydrogens on carbon only where one it would draw is hidden", () => {
     const hiding = { ...BALL_AND_STICK, hydrogens: "carbonHidden" as const };

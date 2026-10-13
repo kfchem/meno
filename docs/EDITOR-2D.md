@@ -134,6 +134,16 @@ moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
 80 ms.
+A drawing is laid out again as the view zooms only once the zoom has
+moved a hundredth from the one it was laid out at: the last of a wheel's
+zoom, in steps too small to see for most of a second, lays nothing out
+again (`utils/largeZoom.ts`). A very large drawing - more than 20 000
+atoms - is laid out once the view has stayed within a hundredth of one
+zoom for 150 ms, not at every step (the maintainer, 2026-10-13, chosen
+from a trial of two ways, #295): meanwhile its lines and their round caps
+are kept as wide on the screen as a layout at the zoom would have them,
+on the graphics card, and its wedges, the mitres where lines meet and its
+labels scale with the view.
 A step within a thousandth of a pixel of whole counts as whole: Windows'
 display scaling leaves notches that close (ten notches at once came as
 999.99993 px at 175 %), and read as fingers they moved the view a thousand
@@ -901,8 +911,11 @@ All hover-based, as above.
       size, as the drawing style says.
     - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
       mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
-      what is selected bold or in italics, Ctrl/Cmd+Shift+= (+) raises it
-      and Ctrl/Cmd+= lowers it - or, nothing selected, what is typed next
+      what is selected bold or in italics, Ctrl/Cmd with + raises it and
+      Ctrl/Cmd with = lowers it - the keys that give + and =, wherever a
+      keyboard has them: Shift and = for + on most, Shift and ; for + and
+      Shift and - for = on a Japanese keyboard; the menu names them Ctrl++
+      and Ctrl+= (⌘+ and ⌘=) - or, nothing selected, what is typed next
       - and set it back where all of it is already so; a letter typed is
       set as the one before it. From their menu, *Bold* and *Italic*
       (ticked where all their letters are), *Superscript* and *Subscript*
@@ -997,7 +1010,12 @@ lipids each have their own way of being drawn, which it should know.
      S), which the engine has no way to take - rather than lose it. A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
-     the ring is drawn.
+     the ring is drawn. Nor does a double bond cumulated with another - an
+     azide's N=N, an allene's C=C - whose shared atom is straight through:
+     it has no cis or trans, however a drawing bends it (phenyl azide from
+     a SMILES was refused, 2026-10-13). A chain of three cumulated double
+     bonds (hexa-2,3,4-triene) does have a cis or trans across it, end to
+     end; that is not read, before or after Clean-up.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).

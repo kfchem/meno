@@ -174,7 +174,10 @@ describe("cleanUp", () => {
       const s2 = stereo({ atoms: told.atoms.map(({ id, x, y, el }) => atom(id, x, y, el)), bonds: told.bonds as Bond[] });
       for (const [c, t] of s0) expect(sameConfiguration(t, s2.get(c)!), `${name} ${c}, flat`).toBe(true);
     }
-  });
+    // (the whole engine on each of the cages, drawn and read back: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
     // cocaine drawn flat has an H on each bridgehead, to carry its wedge;
@@ -195,6 +198,28 @@ describe("cleanUp", () => {
     expect(laid.atoms.some((a) => a.z != null)).toBe(true);
     const [s0, s1] = [stereo(flat), stereo(laid)];
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!), `${c}`).toBe(true);
+  });
+
+  it("lays out phenyl azide that has just arrived with its azide bent: no cis or trans to keep there", async () => {
+    // RDKit's drawing as it may come, N(-)=N(+)=N off a straight line
+    const ring = Array.from({ length: 6 }, (_, i) => atom(i + 1, 1.8 * Math.cos((i * Math.PI) / 3), 1.8 * Math.sin((i * Math.PI) / 3)));
+    const model: Model = {
+      atoms: [...ring, atom(7, 3.6, 0, "N"), { ...atom(8, 5.2, 0.6, "N"), charge: 1 }, { ...atom(9, 6.8, 0.2, "N"), charge: -1 }],
+      bonds: [
+        ...ring.map((_, i): Bond => ({ id: 100 + i, a: i + 1, b: ((i + 1) % 6) + 1, order: i % 2 ? 1 : 2 })),
+        { id: 106, a: 1, b: 7, order: 1 },
+        { id: 107, a: 7, b: 8, order: 2 },
+        { id: 108, a: 8, b: 9, order: 2 },
+      ],
+    };
+    const laid = await laidOut(model);
+    expect(laid.atoms).toHaveLength(9);
+    // and drawn straight, as an azide is: N-N-N 180 degrees
+    const at = (id: number) => laid.atoms.find((a) => a.id === id)!;
+    const [p, q, r] = [at(7), at(8), at(9)];
+    const cos = ((p.x - q.x) * (r.x - q.x) + (p.y - q.y) * (r.y - q.y)) / Math.hypot(p.x - q.x, p.y - q.y) / Math.hypot(r.x - q.x, r.y - q.y);
+    const t = Math.acos(Math.max(-1, Math.min(1, cos)));
+    expect((t * 180) / Math.PI).toBeGreaterThan(175);
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
@@ -251,7 +276,10 @@ describe("cleanUp", () => {
     // (OBz and OAc side by side on a line, a hair - 0.005 of a bond - within
     // the space reckoned between two names: not letters running together)
     expect(crowding(1) - crowding(0)).toBeLessThan(0.05);
-  });
+    // (the whole engine on taxol, each of its ways of being written: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("cleans up taxol drawn any which way with its names and its ring-fusion H clear of one another", async () => {
     // (a drawing a reader cleaned up to find C3's H standing on the A of

@@ -135,8 +135,8 @@ words, a width they break into lines at, and how their lines lie.
   *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
   down. Unset, the drawing's labels' size, as reaction conditions are now.
 - **Letters marked**: bold, italic, a colour, superscript and subscript
-  (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd+Shift+= and
-  Ctrl/Cmd+=. The words stay plain text; the marks are kept beside them as
+  (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd with + and
+  with = (the keys that give + and =, wherever a keyboard has them). The words stay plain text; the marks are kept beside them as
   ranges, so that copying, smart words and searching are as they were.
 - **Lists**: a line starting "• " is a list's item, its lines after the
   first hanging under its words; "- " typed at a line's start becomes "• ",
@@ -305,7 +305,15 @@ Shift+Enter, since Enter keeps the words, as it did before.
   shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
   quarter of the way from white).
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
-  pens, under everything else, from the back.
+  pens, under everything else, from the back. An ellipse, and a rounded
+  rectangle's or a callout's corners, go as the curves they are
+  (`outlineCurve`: cubic Bezier segments, begun at a smooth point so that a
+  line drawn round meets itself with no seam) - SVG curves, EMF+
+  DrawBeziers and GDI PolyBezier for a whole line, and the fill's edge
+  likewise in SVG and in fine steps in EMF - so that they stay smooth
+  however far a picture is enlarged in Word or PowerPoint (before
+  0.1.12, an ellipse went as about 74 points, its corners seen enlarged);
+  a dashed line goes in its dashes, as before.
 - **An arrow is not a shape** (2026-10-12, once arrows were one): `Shape`
   lost its `arrow` kind and its heads, and the shapes' row its arrow.
   Quick Add has one arrow, *Arrow* (the maintainer: one entry, in the

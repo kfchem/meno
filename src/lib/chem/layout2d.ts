@@ -210,13 +210,19 @@ export type Under = { points: Vec2[]; color: string };
 /**
  * A shape on the page as a picture draws it, under everything of the
  * drawing (lib/chem/shapes): its fill, and its line - whole or in dashes,
- * each `width` wide in the layout's units, its corners mitred.
+ * each `width` wide in the layout's units, its corners mitred. Where it
+ * curves - an ellipse, a rounded corner - and its line is whole, the line
+ * is that curve (`curve`: cubic Bezier segments end to end, closed where it
+ * began, as EMF's PolyBezier takes them), and so is the fill's edge
+ * (`fill.curve`, its `points` the same edge in fine steps for a picture
+ * that fills polygons): smooth however far the picture is enlarged.
  */
 /** Writing by hand as a picture draws it: each stroke's outline, filled in its colour - a marker's see-through (`opacity`) and under the drawing, a pen's over everything (`over`). */
 export type InkMark = { points: Vec2[]; color: string; opacity?: number; over: boolean };
 export type ShapeMark = {
-  fill?: { points: Vec2[]; color: string };
+  fill?: { points: Vec2[]; color: string; curve?: Vec2[] };
   lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
+  curve?: { points: Vec2[]; width: number; color: string };
 };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
@@ -4445,8 +4451,14 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
   // under it all: the shapes on the page, each filled, its line over its fill
+  const curvePath = (pts: readonly Vec2[]) => {
+    let d = `M${pts[0].x} ${-pts[0].y}`;
+    for (let i = 1; i + 2 < pts.length; i += 3) d += `C${pts[i].x} ${-pts[i].y} ${pts[i + 1].x} ${-pts[i + 1].y} ${pts[i + 2].x} ${-pts[i + 2].y}`;
+    return d + "Z";
+  };
   for (const m of layout.shapes ?? []) {
-    if (m.fill) s += `<path d="${toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${svgColor(m.curve.color)}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     for (const l of m.lines) {
       const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
       s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;

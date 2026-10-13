@@ -1,14 +1,21 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { colorInstances } from "./instances";
+import { colorInstances, widenedMaterial } from "./instances";
+import { lineWidening } from "../utils/largeZoom";
 
 /** The drawing's lines, from the shared layout: bonds, hashes, waves. */
 export function Bonds2D() {
   const { layout, opts } = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
+  // (as wide as a layout at the view's zoom would have them, laid out at another: utils/largeZoom)
+  const drawn = useMemo(() => widenedMaterial("y", { color: "#ffffff", vertexColors: false, toneMapped: false }), []);
+  useEffect(() => () => drawn.material.dispose(), [drawn]);
+  useFrame(({ camera }) => {
+    drawn.width.value = lineWidening(opts, layout.zoom, (camera as THREE.OrthographicCamera).zoom || 1);
+  });
   const inst = useRef<THREE.InstancedMesh>(null!);
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
   const tmpQ = useMemo(() => new THREE.Quaternion(), []);
@@ -67,7 +74,7 @@ export function Bonds2D() {
       frustumCulled={false}
     >
       <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial color="#ffffff" vertexColors={false} toneMapped={false} />
+      <primitive object={drawn.material} attach="material" dispose={null} />
     </instancedMesh>
   );
 }
