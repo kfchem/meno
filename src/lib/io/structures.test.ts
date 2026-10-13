@@ -31,6 +31,26 @@ describe("a structure's file, as Meno's own reader gives it", () => {
   });
 });
 
+describe("a file cut short, as Meno's own reader gives it", () => {
+  // (a C-O drawn flat; the file ending after its first atom)
+  const lines = ["c", "  Meno", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+    "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+    "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+    "  1  2  1  0", "M  END"];
+  const whole = lines.join("\n");
+  const cut = lines.slice(0, 5).join("\n");
+
+  it("is not read, the chemist told why: not a part of a structure drawn as the whole", () => {
+    // (it was read on from what was not there: a carbon at 0, 0 for every atom to come)
+    expect(readStructures("mol", "c.mol", whole).model.atoms).toHaveLength(2);
+    expect(() => readStructures("mol", "c.mol", cut)).toThrow("c.mol could not be read: it ends before all its atoms and bonds are given.");
+    expect(() => readStructures("sdf", "c.sdf", `${whole}\n$$$$\n${cut}\n`)).toThrow("c.sdf could not be read: its record 2 ends before all its atoms and bonds are given.");
+    const rxn = (last: string) => ["$RXN", "", "  Meno", "", "  1  1", "$MOL", whole, "$MOL", last].join("\n");
+    expect(readStructures("rxn", "c.rxn", rxn(whole)).arrow).toBeDefined();
+    expect(() => readStructures("rxn", "c.rxn", rxn(cut))).toThrow("c.rxn could not be read: one of its molecules ends before all its atoms and bonds are given.");
+  });
+});
+
 describe("an SD file of records drawn flat, as Meno's own reader gives it", () => {
   // (two records, each a C-O drawn flat, titled on their first lines - one not)
   const record = (title: string) =>

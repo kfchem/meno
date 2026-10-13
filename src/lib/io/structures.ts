@@ -95,6 +95,12 @@ function depthOf(m: Molecule): number {
 
 /** Why a file holds nothing to read, as the chemist is told. */
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
+/**
+ * Why a file cut short is not read, as the chemist is told: `what` of it
+ * ends early (lib/chem/ctfile's `cutShort`). What it has would be a part of
+ * a structure, drawn as though it were the whole.
+ */
+const cutShort = (name: string, what = "it") => new Error(`${name} could not be read: ${what} ends before all its atoms and bonds are given.`);
 
 /**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
@@ -114,6 +120,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   if (kind === "rxn") {
     // RXN format: uses pre-computed layout with arrow
     const rxnLayout = buildEditorModelFromRXN(content);
+    if (rxnLayout.cutShort) throw cutShort(name, "one of its molecules");
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
     return {
       model: rxnLayout.model,
@@ -125,6 +132,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
 
   // MOL, SDF, XYZ formats: parse molecules and convert to editor model
   const molecules = readMoleculesFromText(content, kind);
+  const short = molecules.findIndex((m) => m.ct?.cutShort);
+  if (short >= 0) throw cutShort(name, molecules.length > 1 ? `its record ${short + 1}` : "it");
 
   // 3D structures stand on the page as they are: an XYZ file's frames are
   // one molecule's, a MOL or SD file's records each a molecule of its own -

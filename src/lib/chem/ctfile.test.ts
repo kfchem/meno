@@ -195,11 +195,29 @@ describe("a V2000 molfile", () => {
     expect(mol.atoms[0].charge).toBeUndefined();
     expect(mol.chiral).toBe(true);
   });
+
+  it("cut short - ending before the atoms and bonds its counts line gives - is what it has, and says so", () => {
+    // (it was read on from what was not there: a carbon at 0, 0 for every atom to come)
+    const whole = ["cut", "  Meno", "", counts(3, 2), atomLine(0, 0, "C"), atomLine(1.5, 0, "C"), atomLine(2.25, 1.3, "O"), bondLine(1, 2, 1), bondLine(2, 3, 1), "M  END"];
+    const read = (n: number) => readMolfile(whole.slice(0, n).join("\n"))!;
+    expect(read(whole.length).cutShort).toBeUndefined();
+    expect(read(6)).toMatchObject({ cutShort: true, atoms: [{ symbol: "C" }, { symbol: "C" }], bonds: [] });
+    expect(read(8)).toMatchObject({ cutShort: true, atoms: { length: 3 }, bonds: { length: 1 } });
+    // (its M  END come too soon, or a blank line where an atom should be)
+    expect(readMolfile([...whole.slice(0, 6), "M  END"].join("\n"))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
+    expect(readMolfile([...whole.slice(0, 6), "", ...whole.slice(6)].join("\n"))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
+  });
 });
 
 describe("a V3000 molfile", () => {
   const v3 = (...body: string[]) =>
     ["v3000", "  Meno", "", "  0  0  0     0  0            999 V3000", ...body.map((l) => `M  V30 ${l}`), "M  END"].join("\n");
+
+  it("cut short - with no END CTAB - says so", () => {
+    const table = ["BEGIN CTAB", "COUNTS 2 1 0 0 0", "BEGIN ATOM", "1 C 0 0 0 0", "2 O 1.5 0 0 0", "END ATOM", "BEGIN BOND", "1 1 1 2", "END BOND", "END CTAB"];
+    expect(readMolfile(v3(...table))!.cutShort).toBeUndefined();
+    expect(readMolfile(v3(...table.slice(0, 5)))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
+  });
 
   it("reads atoms by their own indices, with every keyword, across continued lines", () => {
     const mol = readMolfile(

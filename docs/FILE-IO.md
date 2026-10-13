@@ -54,9 +54,9 @@ built* below.
 
 | Format | Read by, where | Written | Notes |
 | --- | --- | --- | --- |
-| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth |
-| SDF | the same | Save (drawing as one record, each molecule in 3D as one) | |
-| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | |
+| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; a file cut short - ending before the atoms and bonds its counts line gives, or with no END CTAB - not read, and the chemist told so (a part of a structure is not drawn as the whole) |
+| SDF | the same | Save (drawing as one record, each molecule in 3D as one) | a record cut short, the same: the file not read, the record named |
+| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | a molecule cut short, the same |
 | XYZ, many frames | `parseXYZ` (`utils/structureParsers.ts`), main thread; bonds from covalent radii | never | each frame's energy from its comment line (`lib/calc/readers.ts`) |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |

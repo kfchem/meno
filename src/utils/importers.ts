@@ -93,6 +93,8 @@ export type RXNLayout = {
   /** The "+" signs between the molecules on either side of the arrow: their middles. */
   pluses: { x: number; y: number }[];
   centroid: { x: number; y: number };
+  /** One of its molecules ends before its atoms and bonds do (lib/chem/ctfile's `cutShort`): a file cut short. */
+  cutShort?: true;
 };
 
 /**
@@ -121,12 +123,13 @@ export function parseRXNGroups(text: string): RXNGroups {
 export function buildEditorModelFromRXN(text: string): RXNLayout {
   const groups = parseRXNGroups(text);
   const allMols = [...groups.reactants, ...groups.products, ...groups.agents];
-  if (!allMols.length)
+  if (!allMols.length || allMols.some((m) => m.ct?.cutShort))
     return {
       model: { atoms: [], bonds: [] },
       arrow: null,
       pluses: [],
       centroid: { x: 0, y: 0 },
+      ...(allMols.length ? { cutShort: true as const } : {}),
     };
   const scale = computeScaleForMols(allMols);
   const conv = allMols.map((m) => convertMolToEditorModel(m, scale));

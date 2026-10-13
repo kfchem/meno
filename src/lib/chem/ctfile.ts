@@ -162,6 +162,12 @@ export type CtMolecule = {
   chiral: boolean;
   /** Which version the block was written in. */
   version: "V2000" | "V3000";
+  /**
+   * Its connection table ends before it does - a file cut short: before
+   * the atoms and bonds its counts line gives (V2000), or with no END CTAB
+   * (V3000). What it has, and no more.
+   */
+  cutShort?: boolean;
 };
 
 export type CtReaction = {
@@ -355,10 +361,20 @@ function ctabV2000(ls: string[], at: number, name: string): { mol: CtMolecule; n
   const mol = emptyMolecule("V2000", name);
   mol.chiral = counts.chiral;
   let i = at + 1;
-  for (let k = 0; k < (counts.atoms || 0); k++, i++) mol.atoms.push(atomV2000(ls[i] ?? ""));
-  for (let k = 0; k < (counts.bonds || 0); k++, i++) {
-    const b = bondV2000(ls[i] ?? "");
-    if (b) mol.bonds.push(b);
+  // (the file ending, or its M  END coming, where an atom or a bond is
+  // still to come: cut short - the rest not read from what is not there,
+  // carbons at 0, 0)
+  const short = (l: string | undefined) => l == null || !l.trim() || /^(M {2}END|\${4}|\$MOL)/.test(l);
+  for (let k = 0; k < (counts.atoms || 0) + (counts.bonds || 0); k++, i++) {
+    if (short(ls[i])) {
+      mol.cutShort = true;
+      return { mol, next: i };
+    }
+    if (k < (counts.atoms || 0)) mol.atoms.push(atomV2000(ls[i]));
+    else {
+      const b = bondV2000(ls[i]);
+      if (b) mol.bonds.push(b);
+    }
   }
   // the atom list block: "aaa kSSSSn 111 222 333 444 555", atomic numbers
   for (let k = 0; k < counts.lists; k++, i++) {
@@ -828,12 +844,14 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
   const atomsOf = (value: string | undefined) => list(value).map(atomOf).filter((a) => a >= 0);
   let block = "";
   let defaults: string[] = [];
+  let ended = false;
   let i = at + 1;
   for (; i < v.length; i++) {
     const text = v[i];
     const items = v30Items(text);
     const head = (items[0] ?? "").toUpperCase();
     if (head === "END" && (items[1] ?? "").toUpperCase() === "CTAB") {
+      ended = true;
       i++;
       break;
     }
@@ -1003,6 +1021,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
     }
     // OBJ3D and TEMPLATE blocks are not read
   }
+  if (!ended) mol.cutShort = true;
   // Rgroups follow their root's CTAB
   while (i < v.length) {
     const items = v30Items(v[i]);
