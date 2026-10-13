@@ -966,7 +966,8 @@ workspace holds.
     triple bond - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it, else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its
-    narrow end a point, or cut flat a line's width across;
+    narrow end a point, rounded, or cut flat a line's width across, and
+    its wide end cut slanting along the bond it meets however far;
   - short strokes side by side across a line, evenly spaced, are a bond
     behind, narrow where its lines are shortest (its lines, not the joints
     of the bonds at its ends, drawn as dots or thinner pieces);

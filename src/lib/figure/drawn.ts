@@ -176,7 +176,12 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     }
     return bs.length >= 2 ? Math.max(...bs) - Math.min(...bs) : 0;
   };
-  const [w0, w1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
+  // (the wider end measured where it is widest in its half: one cut slanting far along - a tip rounded, its wide end cut
+  // along the bond it meets for a sixth of its length - is narrower a tenth in)
+  const widest = (sign: number) => Math.max(...[0.1, 0.2, 0.3, 0.4].map((f) => widthAt(sign * f * long)));
+  const [n0, n1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
+  const [m0, m1] = [widest(-1), widest(1)];
+  const [w0, w1] = m1 >= m0 ? [n0, m1] : [m0, n1];
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
   if (!curved && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {

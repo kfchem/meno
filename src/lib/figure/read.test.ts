@@ -191,6 +191,20 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toEqual(["C#C", "C-C", "C-C"]);
   });
 
+  it("reads a wedge with its tip rounded and its wide end cut slanting for a sixth of its length", () => {
+    // (a sugar's C5 to its CH2OH as the Meno style exports it: the tip round at the ring's carbon, the wide end cut along the next bond)
+    const c: P = [109.62, 101.82];
+    const s = read(
+      figure([
+        stroke(step(c, -150), c, step(c, -30)),
+        filled([111.26, 85.65], [108.18, 88.23], [109.3, 101.84], [109.32, 101.95], [109.39, 102.04], [109.49, 102.1], [109.59, 102.12], [109.64, 102.12], [109.75, 102.1], [109.84, 102.04], [109.91, 101.95], [109.94, 101.84]),
+        stroke([109.72, 86.94], step([109.72, 86.94], 30)),
+      ]),
+    );
+    expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    expect(s.bonds).toHaveLength(4);
+  });
+
   it("reads a wedge cut flat at its narrow end, a line's width across, as a wedge", () => {
     // (four corners: the narrow end 0.6 across at the stereocentre, the wide end 2.8 across - drawn from a ring's carbon to a CH2)
     const c: P = [100, 81.4];
