@@ -269,6 +269,16 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     out, the first being bonded to it). Through two benzene rings off a
     hub, a benzene came down on the hub's atom the run ends at. The run is
     now kept off both ends and looked for from each, the better kept.
+- **Which side of a sugar a ring of sugars runs along** (2026-10-14).
+  alpha-Cyclodextrin's macrocycle passes each glucose by four atoms, and
+  the two ways round between them are as long: by C2 and C3, or by the
+  ring O and C5. The smallest set holds one by the order of the atoms; in
+  the molecule's own order it held C2 and C3, and their twelve OHs, facing
+  into the circle, crowded it (12.26, against 5.45 on main). A ring of
+  rings now runs along the side that carries fewer groups out of the
+  system. Applied to every macrocycle, it turned vancomycin's chlorinated
+  aryls over (6.74 -> 10.16): a macrocycle drawn as a chain does not face
+  the groups of a ring's passage into it, so it is kept to rings of rings.
 - **Atoms alike to the ranks, not alike** (2026-10-14, L8's review).
   Atoms the ranks leave alike were told apart by taking the first of them
   in the input's order. That is the same molecule whichever is taken only

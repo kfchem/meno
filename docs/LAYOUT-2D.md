@@ -115,7 +115,10 @@ they hang from.
 - **Rings of rings**: a macrocycle that is rings strung together and
   nothing else - a porphyrin's pyrroles, a cyclodextrin's glucoses, each
   linked to the next by an atom or two - is set round a circle, each ring
-  it runs through regular and outside it. One with chains between its
+  it runs through regular and outside it, the macrocycle running along the
+  side of each that carries fewer groups where two are as long (the
+  groups on that side face into the circle: a cyclodextrin's CH2OHs
+  inside, its secondary OHs out). One with chains between its
   rings (vancomycin's peptide) is a chain like any other macrocycle:
   where several run through the same ring, that ring is drawn first and
   each macrocycle is a zigzag from ring to ring, turning as a hexagon

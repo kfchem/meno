@@ -112,7 +112,12 @@ export function placeRingSystem(
   );
   const shapes = first.length >= MACROCYCLE ? macrocycleShapes(first.length) : [];
   if (first.length >= MACROCYCLE && through.size >= 0.4 * first.length && shortLinks(first, through)) {
-    ringOfBlocks(mol, first, rings, pos).forEach((i) => placedRing.add(i));
+    // (run along the side of each ring that carries the fewest groups,
+    // where two sides are as long: the groups on that side face into the
+    // ring of rings)
+    const barer = alongBarerSides(mol, sys, first, rings);
+    rings[rings.indexOf(first)] = barer;
+    ringOfBlocks(mol, barer, rings, pos).forEach((i) => placedRing.add(i));
   } else if (first.length >= MACROCYCLE) {
     const shape = shapes[variant % shapes.length];
     const at = macrocycleFit(mol, first, shape, rings);
@@ -176,6 +181,53 @@ export function placeRingSystem(
     placedRing.add(next);
   }
   return pos;
+}
+
+/**
+ * A macrocycle run along the barer side of each ring it passes by two or
+ * more atoms where the ring's two sides between them are as long: the
+ * smallest set of rings holds one side by the order of the atoms, and the
+ * groups on the side it holds face into the macrocycle. Of the two, the
+ * side whose atoms carry fewer groups out of the ring system (a glucose's
+ * ring O and C5, its CH2OH, not its C2 and C3 with their OHs: an
+ * alpha-cyclodextrin's twelve OHs crowded inside it, in one order), the
+ * same in any order; sides alike in that are left as they are.
+ */
+function alongBarerSides(mol: Molecule, sys: RingSystem, macro: number[], rings: number[][]): number[] {
+  const inSys = new Set(sys.atoms);
+  const groups = (atoms: readonly number[]) => atoms.reduce((s, a) => s + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0);
+  let m = macro;
+  for (const r of rings) {
+    if (r === macro || r.length > 8) continue;
+    const n = m.length;
+    const shared = r.filter((a) => m.includes(a));
+    if (shared.length < 3 || shared.length === r.length) continue;
+    // the passage in the macrocycle's order: its first atom, the ones
+    // inside, its last - one run of the ring's atoms
+    const at = m.findIndex((a, t) => r.includes(a) && !r.includes(m[(t - 1 + n) % n]));
+    if (at < 0) continue;
+    const run: number[] = [];
+    for (let k = 0; k < n && r.includes(m[(at + k) % n]); k++) run.push(m[(at + k) % n]);
+    if (run.length !== shared.length) continue;
+    const inner = run.slice(1, -1);
+    // the ring's other way from the passage's first atom to its last
+    const k = r.length;
+    const ia = r.indexOf(run[0]);
+    const step = r[(ia + 1) % k] === run[1] ? -1 : 1;
+    const other: number[] = [];
+    for (let j = 1; j < k; j++) {
+      const v = r[(((ia + step * j) % k) + k) % k];
+      if (v === run[run.length - 1]) break;
+      other.push(v);
+    }
+    if (other.length !== inner.length || other.some((v) => m.includes(v))) continue;
+    if (groups(other) >= groups(inner)) continue;
+    m = m.map((v, t) => {
+      const j = (t - at + n) % n;
+      return j >= 1 && j <= inner.length ? other[j - 1] : v;
+    });
+  }
+  return m;
 }
 
 /**
