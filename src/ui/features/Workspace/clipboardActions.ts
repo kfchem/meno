@@ -10,7 +10,7 @@ import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
 import type { Carried3D, Drawn } from "./store/types";
-import { centredAt, clipItems, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
+import { centredAt, clipItems, drawsPicture, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
 import { pictureOnClipboard, picturePng, pictureToAdd } from "./utils/pictures";
 import { bondsAmong } from "./utils/selection";
 import { carriedOf } from "./utils/workspace";
@@ -123,7 +123,7 @@ export function useClipboardActions(
       const alone = !p.atoms.length && !p.molecules3d?.length && !hasFlow(p) && !p.pdfs?.length && !p.sheets?.length && p.pictures?.length === 1 ? p.pictures[0] : null;
       const pictures = alone
         ? await picturePng(alone).then((png) => (png ? [{ flavor: "png" as const, bytes: png }] : [])).catch(() => [])
-        : !p.atoms.length && !p.molecules3d?.length
+        : !drawsPicture(p)
         ? []
         : await pictureItems(
             p,

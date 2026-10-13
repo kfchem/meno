@@ -101,6 +101,17 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
 /** How far from what it is of a mark put by hand is read, in ems of the labels: farther, it is put back. */
 const MARK_REACH = 50;
 
+/**
+ * Whether a copy holds what a picture draws - a structure, molecules in 3D,
+ * or words, shapes, writing by hand, arrows and "+" signs alone (the
+ * maintainer's docs/PRESENTING.md: a slide's content goes into pictures, so
+ * that it pastes into slides software and word processors). Slides, PDFs,
+ * texts' sheets and pictures on the page are not drawn in one.
+ */
+export function drawsPicture(p: Pick<Drawn, "atoms" | "molecules3d" | "captions" | "shapes" | "inks" | "arrows" | "pluses" | "pushes">): boolean {
+  return !!(p.atoms.length || p.molecules3d?.length || p.captions?.length || p.shapes?.length || p.inks?.length || p.arrows?.length || p.pluses?.length || p.pushes?.length);
+}
+
 /** Meno's own record of a structure on the clipboard, and its version. */
 const RECORD = "meno-structure";
 const VERSION = 1;
