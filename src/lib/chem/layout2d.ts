@@ -4223,15 +4223,32 @@ export function layoutMolecule(
 /** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
 const HIGHLIGHT_REACH = 0.4;
 
+/** What finding rings by their keys looks up: the atoms' indices by id, and each atom's bonds by their indices - made once, for every ring. */
+type RingLookup = { index: Map<number, number>; bondsAt: Map<number, number[]> };
+
+function ringLookup(atoms: readonly Atom[], bonds: readonly Bond[]): RingLookup {
+  const bondsAt = new Map<number, number[]>();
+  bonds.forEach((b, k) => {
+    for (const i of b.a1 === b.a2 ? [b.a1] : [b.a1, b.a2]) {
+      const here = bondsAt.get(i);
+      if (here) here.push(k);
+      else bondsAt.set(i, [k]);
+    }
+  });
+  return { index: new Map(atoms.map((a, i) => [a.id, i])), bondsAt };
+}
+
 /** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
-export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
+export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string, lookup: RingLookup = ringLookup(atoms, bonds)): number[] | null {
   const ids = key.split("-").map(Number);
-  const index = new Map(atoms.map((a, i) => [a.id, i]));
-  const ring = ids.map((id) => index.get(id));
+  const ring = ids.map((id) => lookup.index.get(id));
   if (ring.length < 3 || ring.some((i) => i == null)) return null;
   const inRing = new Set(ring as number[]);
+  // (the bonds at its atoms, each once - from its first atom - in the
+  // drawing's order, as the whole list would give them)
+  const among = [...inRing].flatMap((i) => (lookup.bondsAt.get(i) ?? []).filter((k) => bonds[k].a1 === i)).sort((p, q) => p - q);
   const next = new Map<number, number[]>();
-  for (const b of bonds) {
+  for (const b of among.map((k) => bonds[k])) {
     if (b.endpoints?.length || !inRing.has(b.a1) || !inRing.has(b.a2) || b.a1 === b.a2) continue;
     next.set(b.a1, [...(next.get(b.a1) ?? []), b.a2]);
     next.set(b.a2, [...(next.get(b.a2) ?? []), b.a1]);
@@ -4291,8 +4308,11 @@ function roundedBox(left: number, bottom: number, right: number, top: number, r:
  */
 function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
   const out: Under[] = [];
-  for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
-    const ring = ringOfKey(atoms, bonds, key);
+  const fills = Object.entries(opts.ringFills ?? {});
+  // (looked up in once for every ring, not made again for each)
+  const lookup = fills.length ? ringLookup(atoms, bonds) : null;
+  for (const [key, color] of fills) {
+    const ring = ringOfKey(atoms, bonds, key, lookup!);
     // (in the colour given, exactly - the maintainer, 2026-10-11)
     if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color });
   }

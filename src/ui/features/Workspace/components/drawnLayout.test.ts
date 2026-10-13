@@ -153,4 +153,32 @@ describe("a drawing laid out for the canvas", () => {
     // without them, so that a machine busy with other work slows both alike)
     expect(ms).toBeLessThan(2 * plain.ms + 50);
   });
+
+  it("fills two thousand rings at little more than the drawing's own cost", () => {
+    const atoms: LAtom[] = [];
+    const bonds: LBond[] = [];
+    const ringFills: Record<string, string> = {};
+    for (let r = 0; r < 2000; r++) {
+      for (let k = 0; k < 6; k++) atoms.push({ id: r * 6 + k + 1, x: (r % 40) * 4 + Math.cos((Math.PI / 3) * k), y: Math.floor(r / 40) * 4 + Math.sin((Math.PI / 3) * k), el: "C" });
+      for (let k = 0; k < 6; k++) bonds.push({ a1: r * 6 + k, a2: r * 6 + ((k + 1) % 6), order: k % 2 ? 1 : 2, stereo: "none" });
+      ringFills[Array.from({ length: 6 }, (_, k) => r * 6 + k + 1).join("-")] = "#f0e442";
+    }
+    const timed = (filled: boolean) => {
+      const opts = { ...editorLayoutOptions(ACS_1996), ...(filled ? { ringFills } : {}) };
+      // (once first, so that neither is timed starting cold)
+      layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
+      const started = performance.now();
+      const laid = layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
+      return { laid, ms: performance.now() - started };
+    };
+    const plain = timed(false);
+    const { laid, ms } = timed(true);
+    expect(laid.under).toHaveLength(2000);
+    // (each ring's atoms in order round it)
+    expect(laid.under![1].points).toEqual(atoms.slice(6, 12).map((a) => ({ x: a.x, y: a.y })));
+    // (where every bond was looked through for every ring filled, ten times
+    // the drawing's own time: timed beside the same drawing unfilled, so
+    // that a machine busy with other work slows both alike)
+    expect(ms).toBeLessThan(2 * plain.ms + 50);
+  });
 });
