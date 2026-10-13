@@ -759,7 +759,7 @@ Decided while building it, for the maintainer to confirm:
 - **A picture carried out lies just where it was let go**, over another picture if it was let go there; one opened or put on the page is put clear of the rest.
 
 Not yet, and where it comes:
-- **A scanned page**: it is one picture over most of the page, so no figure is found on it. A box drawn by hand takes part of it.
+- **A scanned page**: it is one picture over most of the page - or several, strips or tiles that cover it together - so no figure is found on it. A box drawn by hand takes part of it.
 - **Reading a figure as a structure**: stage 5.
 
 ### Step 5: texts drawn by Meno (2026-10-10, under way)

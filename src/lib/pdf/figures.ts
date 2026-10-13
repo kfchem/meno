@@ -70,6 +70,8 @@ const LEAST_THICK_PT = 4;
 const RULE_THICK_PT = 1.5;
 const RULE_LONG_PT = 150;
 const MOST_OF_PAGE = 0.8;
+/** How far apart a scanned page's strips may lie, in points, to be one picture of it. */
+const SCAN_GAP_PT = 1;
 /**
  * A reaction scheme's parts lie farther apart than a structure's: an arrow
  * - long and thin - joins what lies beyond its ends, level with it, this
@@ -94,6 +96,8 @@ const COLUMN_LINE_PT = 150;
 
 const grow = (b: Box, d: number): Box => [b[0] - d, b[1] - d, b[2] + d, b[3] + d];
 const meet = (a: Box, b: Box) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+const within = (a: Box, b: Box) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
+const area = (b: Box) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
 const union = (a: Box, b: Box): Box => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 
 /** Boxes joined where they meet, `d` points apart at most, until none meet: each the box round its group. */
@@ -118,7 +122,8 @@ function joined(boxes: Box[], d: number): Box[] {
 /**
  * The figures on a page, from what it is made of: its pictures and paths,
  * joined where they lie within `JOIN_PT` of one another - not a rule nor
- * what covers most of the page - each at least `LEAST_PT` one way and
+ * what covers most of the page, nor pictures that cover it together, as a
+ * page scanned in strips is - each at least `LEAST_PT` one way and
  * `LEAST_THICK_PT` the other (a chain drawn flat is a figure, a word's
  * underline none), or holding a picture; and each widened to take the words over it or
  * right beside it, its labels, but not a column's lines of words beside it.
@@ -127,8 +132,12 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   const all = objects.map((o) => o.box);
   const page: Box = all.length ? all.reduce(union) : [0, 0, 0, 0];
   const pageArea = Math.max(1, (page[2] - page[0]) * (page[3] - page[1]));
+  // (a page scanned in pieces - strips, or tiles - is no more a figure than a page scanned whole)
+  const images = objects.filter((o) => o.kind === "image").map((o) => o.box);
+  const scans = joined(images, SCAN_GAP_PT).filter((g) => images.filter((b) => within(b, g)).reduce((sum, b) => sum + area(b), 0) >= MOST_OF_PAGE * pageArea);
   const drawn = objects.filter((o) => {
     if (o.kind === "text" || o.kind === "plus") return false;
+    if (o.kind === "image" && scans.some((g) => within(o.box, g))) return false;
     const [x0, y0, x1, y1] = o.box;
     const w = x1 - x0;
     const h = y1 - y0;

@@ -52,6 +52,19 @@ describe("a PDF page's figures", () => {
     expect(figuresOf([rule, frame])).toEqual([]);
   });
 
+  it("are none on a page scanned in strips, as on a page scanned whole; a picture beside its words still one", () => {
+    // (a page scanned as eight strips, one under another, its words read over them)
+    const strips: PageObject[] = Array.from({ length: 8 }, (_, i) => ({ kind: "image", box: [0, i * 105.25, 595, (i + 1) * 105.25] }));
+    expect(figuresOf([...strips, text([72, 300, 520, 310]), text([253, 214, 268, 224])])).toEqual([]);
+    expect(figuresOf([{ kind: "image", box: [0, 0, 595, 842] }])).toEqual([]);
+    // (pictures side by side, over less of the page: a figure)
+    const panels: PageObject[] = [
+      { kind: "image", box: [72, 100, 200, 200] },
+      { kind: "image", box: [200, 100, 328, 200] },
+    ];
+    expect(figuresOf([...panels, text([72, 300, 520, 310]), text([72, 700, 520, 710])])).toEqual([[72, 100, 328, 200]]);
+  });
+
   it("take a reaction scheme whole: its arrow joins the compounds beyond its ends, a + joins those beside it, and its conditions and numbers are its", () => {
     // (two compounds and a "+", an arrow 20 points on - its line straight and long, its head - and a product 20 points beyond)
     const plus: PageObject = { kind: "plus", box: [192, 305, 199, 312] };
