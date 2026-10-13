@@ -11,6 +11,7 @@ import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
+import { laidOutWhereUnplaced, unplaced } from "./unplaced";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -93,19 +94,6 @@ function depthOf(m: Molecule): number {
   return hi - lo;
 }
 
-/**
- * Whether a molecule's atoms - two or more - all stand at one point: a file
- * written with no coordinates, as some programs write one, every atom at
- * 0, 0, 0. Such a record is no molecule in 3D, whatever its header says,
- * and is laid out as it is opened (`placed`, ui/features/Workspace/utils/io).
- */
-export function unplaced(atoms: readonly { x: number; y: number; z?: number }[]): boolean {
-  if (atoms.length < 2) return false;
-  const [a] = atoms;
-  const near = (p: number, q: number) => Math.abs(p - q) < 1e-6;
-  return atoms.every((b) => near(b.x, a.x) && near(b.y, a.y) && near(b.z ?? 0, a.z ?? 0));
-}
-
 /** Why a file holds nothing to read, as the chemist is told. */
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
@@ -126,7 +114,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   if (kind === "rxn") {
     // RXN format: uses pre-computed layout with arrow
-    const rxnLayout = buildEditorModelFromRXN(content);
+    // (a molecule given no coordinates laid out before the scheme is: ./unplaced)
+    const rxnLayout = buildEditorModelFromRXN(content, laidOutWhereUnplaced);
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
     return {
       model: rxnLayout.model,
@@ -137,7 +126,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
 
   // MOL, SDF, XYZ formats: parse molecules and convert to editor model
-  const molecules = readMoleculesFromText(content, kind);
+  const read = readMoleculesFromText(content, kind);
+  // (a MOL or SD record given no coordinates: laid out, and flat whatever its header says - ./unplaced)
+  const noPlaces = read.map((m) => kind !== "xyz" && unplaced(m.atoms));
+  const molecules = kind === "xyz" ? read : laidOutWhereUnplaced(read);
 
   // 3D structures stand on the page as they are: an XYZ file's frames are
   // one molecule's, a MOL or SD file's records each a molecule of its own -
@@ -164,7 +156,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   // (in a MOL or SD file, each record is a drawing or a molecule in 3D)
   const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
-  const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && !unplaced(m.atoms) && (said[i] || depthOf(m) > 0.1);
+  const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && !noPlaces[i] && (said[i] || depthOf(m) > 0.1);
   const molecules3d = molecules
     .filter(inDepth)
     .map((m) => {

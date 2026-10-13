@@ -75,6 +75,21 @@ describe("a file with no coordinates", () => {
     expect(spread(salt.model.atoms, salt.model.bonds).nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
   });
 
+  it("lays out a reaction's molecules before the scheme is laid out: each clear of the arrow and the + between them", async () => {
+    // (ethanol + acetic acid -> ethyl acetate, every atom of each at 0, 0)
+    const rxn = ["$RXN", "", "  Meno", "", "  2  1", "$MOL", molfile("ethanol", ["C", "C", "O"], [[1, 2, 1], [2, 3, 1]]),
+      "$MOL", molfile("acid", ["C", "C", "O", "O"], [[1, 2, 1], [2, 3, 2], [2, 4, 1]]),
+      "$MOL", molfile("ester", ["C", "C", "O", "O", "C", "C"], [[1, 2, 1], [2, 3, 2], [2, 4, 1], [4, 5, 1], [5, 6, 1]])].join("\n");
+    const r = await processFileContent("esterification.rxn", rxn);
+    expect(r.model.atoms).toHaveLength(13);
+    const s = spread(r.model.atoms, r.model.bonds);
+    expect(s.shortest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.8);
+    expect(s.nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
+    // (the arrow between the reactants and the product, none of their atoms on it)
+    const a = r.arrow!;
+    expect(r.model.atoms.filter((at) => at.x > a.x1 && at.x < a.x2)).toHaveLength(0);
+  });
+
   it("lays out the records of an SD file that have none, and leaves the rest where they are", async () => {
     // (a first record drawn, a C-O; a second with no coordinates)
     const drawn = molfile("drawn", ["C", "O"], [[1, 2, 1]], "  Meno", (i) => [i * 1.5, 0]);

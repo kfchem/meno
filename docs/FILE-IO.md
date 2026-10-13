@@ -54,9 +54,9 @@ built* below.
 
 | Format | Read by, where | Written | Notes |
 | --- | --- | --- | --- |
-| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as it is opened, as Clean-up lays a structure out (`placed`, `ui/features/Workspace/utils/io.ts`), and never 3D |
+| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as it is read, by Meno's own layout engine, at the bond length of any others in the file (`laidOutWhereUnplaced`, `lib/io/unplaced.ts`), and never 3D |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) | each record with no coordinates laid out, the same |
-| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | |
+| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | a molecule with no coordinates laid out, the same, before the scheme is |
 | XYZ, many frames | `parseXYZ` (`utils/structureParsers.ts`), main thread; bonds from covalent radii | never | each frame's energy from its comment line (`lib/calc/readers.ts`) |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |

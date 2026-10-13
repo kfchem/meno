@@ -118,8 +118,12 @@ export function parseRXNGroups(text: string): RXNGroups {
  * them either side. Returns the model, the arrow's ends, the
  * pluses and the atoms' centroid.
  */
-export function buildEditorModelFromRXN(text: string): RXNLayout {
-  const groups = parseRXNGroups(text);
+export function buildEditorModelFromRXN(text: string, place: (mols: ParsedMol[]) => ParsedMol[] = (mols) => mols): RXNLayout {
+  // (its molecules as `place` has them - one given no coordinates, laid out: lib/io/unplaced)
+  const read = parseRXNGroups(text);
+  const [r, p] = [read.reactants.length, read.products.length];
+  const all = place([...read.reactants, ...read.products, ...read.agents]);
+  const groups: RXNGroups = { reactants: all.slice(0, r), products: all.slice(r, r + p), agents: all.slice(r + p) };
   const allMols = [...groups.reactants, ...groups.products, ...groups.agents];
   if (!allMols.length)
     return {
