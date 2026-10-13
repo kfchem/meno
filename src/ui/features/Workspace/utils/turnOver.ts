@@ -16,6 +16,7 @@ import { pdfRoom } from "../../../../lib/pdf/layout";
 import { sheetOf } from "./textSheets";
 import { cornersOf } from "./selection";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
+import { middleOfPoints } from "../../../../lib/extremes";
 
 type Pt = { x: number; y: number };
 type Axis = "vertical" | "horizontal";
@@ -62,9 +63,7 @@ export function turnOverMiddle(st: EditorState, scheme: Scheme): Pt | null {
     const b = st.selInks.has(k.id) ? strokesBounds(k.strokes, 0) : null;
     if (b) pts.push({ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y1 });
   }
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  return middleOfPoints(pts) ?? { x: NaN, y: NaN };
 }
 
 /**

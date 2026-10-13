@@ -10,6 +10,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
+import { least } from "../../../../lib/extremes";
 
 /** Kilocalories per mole in a hartree (CODATA 2018). */
 export const KCAL_PER_HARTREE = 627.5094740631;
@@ -93,7 +94,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
-    const lowest = Math.min(...g.map((e) => e.energy!));
+    const lowest = least(g.map((e) => e.energy!));
     for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept` };
@@ -181,7 +182,7 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
  */
 export function boltzmann(energies: readonly number[], kelvin: number, degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
-  const lowest = Math.min(...energies);
+  const lowest = least(energies);
   const w = energies.map((e, i) => (degeneracies?.[i] ?? 1) * Math.exp(-(e - lowest) / (R_HARTREE * kelvin)));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);

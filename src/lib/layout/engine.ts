@@ -33,6 +33,7 @@ import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from ".
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
+import { least, most } from "../extremes";
 
 export type { LayoutInput } from "./perceive";
 
@@ -386,14 +387,14 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const reach = piece.map((a) => inkReach(mol, a, best.pos));
     const shift =
       right == null
-        ? -Math.min(...xs)
-        : right + 1.5 - Math.min(...xs.map((v, i) => v - reach[i].left));
-    const midY = (Math.min(...ys) + Math.max(...ys)) / 2;
+        ? -least(xs)
+        : right + 1.5 - least(xs.map((v, i) => v - reach[i].left));
+    const midY = (least(ys) + most(ys)) / 2;
     for (const a of piece) {
       x[a] = best.pos.get(a)!.x + shift;
       y[a] = best.pos.get(a)!.y - midY;
     }
-    right = Math.max(...piece.map((a, i) => x[a] + reach[i].right));
+    right = most(piece.map((a, i) => x[a] + reach[i].right));
   }
   // a flat system drawn with depth (a bridge across a ring), seen from its
   // other side (the frame mirrored), is nearer where it was further: the

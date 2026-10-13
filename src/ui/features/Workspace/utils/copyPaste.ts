@@ -8,6 +8,7 @@ import type { ClipItem } from "../../../../lib/clipboard";
 import { pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { boundsOf, middleOfPoints } from "../../../../lib/extremes";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -80,13 +81,9 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   const atoms = drawn.atoms.filter((a) => ids.has(a.id));
   if (!atoms.length) return { arrows: [], pluses: [], captions: [] };
   const reach = NOMINAL_BOND_LENGTH / 2;
-  const xs = atoms.map((a) => a.x);
-  const ys = atoms.map((a) => a.y);
-  const within = (p: Pt) =>
-    p.x >= Math.min(...xs) - reach &&
-    p.x <= Math.max(...xs) + reach &&
-    p.y >= Math.min(...ys) - reach &&
-    p.y <= Math.max(...ys) + reach;
+  // (the box round them found once: not again for every word, arrow and "+" asked about)
+  const b = boundsOf(atoms)!;
+  const within = (p: Pt) => p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach;
   // (its ends and the corners it turns at, all of them)
   const arrows = (drawn.arrows ?? []).filter((a) => arrowPoints(a).every(within));
   const taken = new Set(arrows.map((a) => a.id));
@@ -636,10 +633,9 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ]),
   ];
   if (!points.length) return drawn;
-  const xs = points.map((a) => a.x);
-  const ys = points.map((a) => a.y);
-  const dx = p.x - (Math.min(...xs) + Math.max(...xs)) / 2;
-  const dy = p.y - (Math.min(...ys) + Math.max(...ys)) / 2;
+  const mid = middleOfPoints(points)!;
+  const dx = p.x - mid.x;
+  const dy = p.y - mid.y;
   const moved = <T extends Pt>(t: T): T => ({ ...t, x: t.x + dx, y: t.y + dy });
   return {
     ...drawn,

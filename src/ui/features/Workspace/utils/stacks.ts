@@ -9,6 +9,7 @@
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { AtomStack, Molecule3D } from "../store/types";
+import { middleOfPoints } from "../../../../lib/extremes";
 
 type Stacked = Pick<Molecule3D, "id" | "stack">;
 
@@ -81,10 +82,7 @@ export function gridPlaces(at: { x: number; y: number }, reaches: readonly numbe
  * short or not.
  */
 export function middleOf(places: readonly { x: number; y: number }[]): { x: number; y: number } {
-  if (!places.length) return { x: 0, y: 0 };
-  const xs = places.map((p) => p.x);
-  const ys = places.map((p) => p.y);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  return middleOfPoints(places) ?? { x: 0, y: 0 };
 }
 
 /**

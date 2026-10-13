@@ -20,6 +20,7 @@
  * multiple of four, which PowerPoint's reader is strict about.
  */
 import { labelFont } from "./labelFonts";
+import { least, most } from "../extremes";
 import {
   BALL_SHADE,
   circlePoints,
@@ -252,10 +253,10 @@ export function layoutEmf(
   const bounds = (pts: readonly (readonly [number, number])[], v: DataView) => {
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
-    v.setInt32(0, Math.min(...xs), true);
-    v.setInt32(4, Math.min(...ys), true);
-    v.setInt32(8, Math.max(...xs), true);
-    v.setInt32(12, Math.max(...ys), true);
+    v.setInt32(0, least(xs), true);
+    v.setInt32(4, least(ys), true);
+    v.setInt32(8, most(xs), true);
+    v.setInt32(12, most(ys), true);
   };
   const poly = (type: number, pts: readonly (readonly [number, number])[]) =>
     w.add(type, 20 + 8 * pts.length, (v) => {

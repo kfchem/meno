@@ -9,6 +9,7 @@ import type { Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
 import { removeSet, removeStep } from "./model";
+import { least, most } from "../../../../lib/extremes";
 
 type Pt = { x: number; y: number };
 type Flow = Pick<WorkspaceDocument, "sets" | "steps" | "wires">;
@@ -124,7 +125,7 @@ export function partsBounds(parts: FlowParts): { x0: number; y0: number; x1: num
     xs.push(s.x, s.x + CARD_W);
     ys.push(s.y - CARD_H, s.y);
   }
-  return xs.length ? { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) } : null;
+  return xs.length ? { x0: least(xs), x1: most(xs), y0: least(ys), y1: most(ys) } : null;
 }
 
 /**

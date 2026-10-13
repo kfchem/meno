@@ -9,6 +9,7 @@ import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
+import { least } from "../../../../lib/extremes";
 
 /** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
 export const RIBBON_REACH = 1.3;
@@ -154,7 +155,7 @@ export function labelSpot(
  */
 export function populations(energies: readonly number[], degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
-  const lowest = Math.min(...energies);
+  const lowest = least(energies);
   const w = energies.map((e, i) => (degeneracies?.length === energies.length ? degeneracies[i] : 1) * Math.exp(-(e - lowest) / RT_HARTREE));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);

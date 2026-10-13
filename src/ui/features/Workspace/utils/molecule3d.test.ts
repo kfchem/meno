@@ -558,6 +558,11 @@ describe("coveredLength", () => {
 });
 
 describe("populations", () => {
+  it("are found for more conformers or frames than a call takes as its arguments", () => {
+    const shares = populations(Array.from({ length: 150_000 }, (_, i) => (i === 7 ? -1 : 0)));
+    expect(shares[7]).toBeCloseTo(1, 6);
+  });
+
   const HARTREE = 627.509474;
   it("shares a conformer set by Boltzmann at room temperature, adding up to one", () => {
     expect(populations([0, 0])).toEqual([0.5, 0.5]);

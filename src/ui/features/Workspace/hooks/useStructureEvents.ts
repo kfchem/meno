@@ -30,6 +30,7 @@ import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 import { heldEach } from "../utils/heldEach";
+import { most } from "../../../../lib/extremes";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -104,7 +105,7 @@ export function useStructureEvents(
     const drawn = result.model?.atoms ?? [];
     const row = drawn.length
       ? rowAfter(
-          Math.max(...drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
+          most(drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
           drawn.reduce((y, a) => y + a.y, 0) / drawn.length + dy,
           room,
         )
