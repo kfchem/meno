@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
@@ -23,7 +23,14 @@ function widthAt(u: number): number {
   return 1 + (SETTLED - 1) * (1 - Math.pow(1 - k, 2));
 }
 
-type Band = { u: number; pulse: number; mesh: THREE.Mesh | null; drawnAt: string };
+type Band = {
+  u: number;
+  pulse: number;
+  mesh: THREE.Mesh | null;
+  drawnAt: string;
+  /** The layout its bond was last found in, and where: its atoms' places, and its own (-1 where it is not there). */
+  found: { in: unknown; i1: number; i2: number; k: number } | null;
+};
 
 /**
  * The band behind the bond under the pointer. Each band has its own way in:
@@ -39,25 +46,30 @@ export default function HoverOverlay2D() {
   const hovered = useEditor((s) => s.hovered);
   const hoverPulse = useEditor((s) => s.hoverPulse);
   const drawn = useDrawnLayout();
-  // (each bond, each drawn atom and each drawn bond by what finds it, made as they change - not looked for along
-  // every atom and bond at every frame a band moves)
-  const bondById = useMemo(() => new Map(model.bonds.map((b) => [b.id, b])), [model.bonds]);
-  const drawnAt = useMemo(() => new Map(drawn.atoms.map((a, i) => [a.id, i])), [drawn.atoms]);
-  const drawnBond = useMemo(() => {
-    const at = new Map<string, number>();
-    drawn.bonds.forEach((b, k) => {
-      const key = `${b.a1} ${b.a2}`;
-      if (!at.has(key)) at.set(key, k);
-    });
-    return at;
-  }, [drawn.bonds]);
+  // (where a band's bond is in the layout: looked for once each time the
+  // layout changes, for the one or two bands there are - no index of every
+  // atom and bond made at every frame of a drag)
+  const find = (band: Band, id: number) => {
+    if (band.found?.in === drawn) return band.found;
+    const bond = model.bonds.find((b) => b.id === id);
+    let i1 = -1;
+    let i2 = -1;
+    if (bond) {
+      for (let i = 0; i < drawn.atoms.length && (i1 < 0 || i2 < 0); i++) {
+        if (drawn.atoms[i].id === bond.a) i1 = i;
+        if (drawn.atoms[i].id === bond.b) i2 = i;
+      }
+    }
+    const k = i1 < 0 || i2 < 0 ? -1 : drawn.bonds.findIndex((b) => b.a1 === i1 && b.a2 === i2);
+    return (band.found = { in: drawn, i1, i2, k });
+  };
   const invalidate = useThree((s) => s.invalidate);
   const bands = useRef(new Map<number, Band>());
   const pulsed = useRef(hoverPulse.nonce);
   const [, setFrame] = useState(0);
 
   const hb = hovered.bondId;
-  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "" });
+  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "", found: null });
   // a pulse on the hovered bond runs from its start, the band where it is
   if (hoverPulse.nonce !== pulsed.current) {
     pulsed.current = hoverPulse.nonce;
@@ -96,9 +108,7 @@ export default function HoverOverlay2D() {
       // the bond where it is drawn, and how far its drawing reaches off its
       // line at each end: the band follows that, so neither a wedge's broad
       // end nor a double bond's second line stands out past it
-      const bond = bondById.get(id);
-      const i1 = bond ? (drawnAt.get(bond.a) ?? -1) : -1;
-      const i2 = bond ? (drawnAt.get(bond.b) ?? -1) : -1;
+      const { i1, i2, k } = find(band, id);
       if (i1 < 0 || i2 < 0) {
         mesh.visible = false;
         continue;
@@ -106,7 +116,6 @@ export default function HoverOverlay2D() {
       const a1 = drawn.atoms[i1];
       const a2 = drawn.atoms[i2];
       let reach: BondReach = { left1: lineHalf, right1: lineHalf, left2: lineHalf, right2: lineHalf };
-      const k = drawnBond.get(`${i1} ${i2}`) ?? -1;
       if (k >= 0 && drawn.layout.reach[k]) reach = drawn.layout.reach[k];
       // (a pulse: narrower and brighter, and back, over its run)
       const swing = Math.sin(Math.PI * band.pulse);
