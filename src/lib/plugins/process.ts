@@ -1,10 +1,12 @@
 /**
- * A plugin's worker, one process for the session (docs/PLUGINS.md, *When
+ * A plugin's worker, one process at a time (docs/PLUGINS.md, *When
  * plugins run*): started the first time anything asks it - a role it fills
  * (lib/roles/worker), a file it reads or writes, a step it fills
  * (lib/calc/workers) - and asked by all of them, each through a client of
- * its own whose questions' ids it shares; kept until the plugin is taken
- * away or Meno quits, and started again if it stops. The plugin must be set
+ * its own whose questions' ids it shares; kept while it is used - stopped
+ * once unused for 15 minutes with no job of its plugin waiting or running
+ * (./idle), as when the plugin is taken away or Meno quits - and started
+ * again when next asked, as if it stops of itself. The plugin must be set
  * up: setting it up - asking first for the network - is for whoever asks
  * to do. A worker has no business on the network; the app keeps it off it.
  * A worker held on a question past its time - the one it was on, none
@@ -23,6 +25,8 @@ import { ensurePyEnv, pluginFilesFolder, pyEnvReady } from "../pyEnv";
 import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
 import { workerQueue } from "./queue";
+import { idleWatch, watchAll } from "./idle";
+import { liveJobsOf } from "../jobs";
 import { ChemClient } from "../roles/client";
 
 /** A plugin's worker, running: its clients - for files and steps, and for the roles it fills - its process, and its version. */
@@ -83,7 +87,10 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
   const onLine = new Set<(line: string) => void>();
   const hear = (m: Line) => {
     if (id === null) early.push(m);
-    else if (m.id === id) onLine.forEach((f) => f(m.line));
+    else if (m.id === id) {
+      idle.heard();
+      onLine.forEach((f) => f(m.line));
+    }
   };
   const transport = {
     send: (line: string) => {
@@ -96,12 +103,16 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
   };
   const ids = counter();
   // (held on a question past its time: stopped, and started afresh when next asked)
-  const queue = workerQueue(() => void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`));
+  const held = workerQueue(() => void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`));
+  // (unused long enough: stopped, and started afresh when next asked)
+  const idle = idleWatch(() => stopIfUnused(p, id, idle));
+  const queue = watchAll(held, idle);
   const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
   const chem = new ChemClient(transport, undefined, p.name, ids, queue);
   const stopOut = await listen<string>("ext:stdout", (e) => hear(JSON.parse(e.payload)));
   const stopExit = await listen<string>("ext:exit", (e) => {
     if (JSON.parse(e.payload).id !== id) return;
+    idle.end();
     reader.close(`${p.name} stopped`);
     chem.close(`${p.name} stopped`);
     stopOut();
@@ -122,7 +133,26 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
     ]);
     return { reader, chem, id: worker, version };
   } catch (e) {
+    idle.end();
     void invoke("ext_kill", { id: worker }).catch(() => undefined);
     throw e;
   }
+}
+
+/**
+ * A worker gone unused (./idle) stopped - unless a job of its plugin waits
+ * or runs, or it is asked something meanwhile: kept. Nothing waits on it,
+ * so its stopping is no one's error; the next question starts it afresh,
+ * saying so as a first start does. True where it is stopped, or gone.
+ */
+async function stopIfUnused(p: PythonPlugin, id: string | null, idle: { busy(): boolean }): Promise<boolean> {
+  const now = running.get(p.id);
+  if (!now || id === null || (await now.catch(() => null))?.id !== id) return true;
+  // (jobs not known: kept, to be looked at again)
+  const live = await liveJobsOf(p.id).catch(() => null);
+  if (!live || live.length) return false;
+  if (running.get(p.id) !== now) return true;
+  if (idle.busy()) return false;
+  await stopWorker(p.id, `${p.name} was stopped, unused`);
+  return true;
 }
