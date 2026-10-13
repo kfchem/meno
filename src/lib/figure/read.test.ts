@@ -417,6 +417,22 @@ describe("a figure read as a structure", () => {
     expect(s.bonds.every((b) => b.order === 1)).toBe(true);
   });
 
+  it("gives a label's element its bond, not a methyl's end set close by its H", () => {
+    // (an HO on its bond's left, its bond coming to the O from the right; an isopropyl's methyl ending 1.5 points under and left of the H)
+    const ho: P = [100, 60];
+    const c = step([ho[0] + 6.8, ho[1]], 0, 0.9);
+    const methyl: P = [ho[0] - 4.9, ho[1] + 5.1];
+    const s = read(
+      figure(
+        [stroke([ho[0] + 11, ho[1]], c, step(c, -60)), stroke(methyl, step(methyl, 210), step(step(methyl, 210), -90))],
+        word("HO", ho),
+      ),
+    );
+    const o = s.atoms.findIndex((a) => a.el === "O");
+    expect(s.bonds.filter((b) => b.a === o || b.b === o)).toHaveLength(1);
+    expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(5);
+  });
+
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
     const c: P = [60, 60];
     const h = step(c, 90);

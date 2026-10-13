@@ -989,7 +989,8 @@ workspace holds.
   matched weakly is marked ("Its letters are drawn as shapes: read as
   "Cl".").
 - **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
-  word, the word is its atom's label, read as a label typed is read - an
+  word, the word is its atom's label (at its element: an end outside it,
+  much nearer its H than its element, is a carbon set close), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript

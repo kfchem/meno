@@ -508,6 +508,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     words.forEach((w, k) => {
       if (isNumber[k] || fromBox(other, w.box) === 0) return;
       const dd = fromBox(e.p, w.box);
+      // (not at its hydrogen: a bond comes to a label's element - the O of an HO - and an end outside it, much nearer its H, is
+      // another's - a methyl's set close)
+      const caps = w.letters.filter((l) => /[A-Z]/.test(l.c) && l.size >= 0.85 * w.size);
+      const toH = Math.min(...caps.filter((l) => l.c === "H").map((l) => dist(centre(l.box), e.p)));
+      const toEl = Math.min(...caps.filter((l) => l.c !== "H").map((l) => dist(centre(l.box), e.p)));
+      if (dd > 0 && Number.isFinite(toEl) && toH < 0.6 * toEl) return;
       // (where other bonds meet it, an end is a carbon - unless it lies on a capital of the word, its bonds drawn to its middle under it)
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
       if ((meeting.get(e)! === 0 || onCapital) && dd < bestD && reaches(e.p, out, w.box, bond)) {
