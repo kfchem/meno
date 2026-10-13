@@ -52,6 +52,11 @@ struct PyEnvInfo {
     /// What makes it: "uv" (or unsaid), or "pixi" - an environment that needs conda-forge.
     #[serde(default)]
     host: String,
+    /// The hosts setting it up may reach: those the consent to set it up
+    /// named (lib/plugins/setUpSources.ts; net.rs `begin`). Unsaid where
+    /// nothing is set up.
+    #[serde(default)]
+    hosts: Option<Vec<String>>,
 }
 
 /// Whether a lock file pins its packages by hash as well as by version.
@@ -406,13 +411,14 @@ async fn py_env_setup_uv(
 ) -> Result<(), String> {
     let env = validate_env_info(&payload)?;
     // uv downloads Python and the packages: a task of its own on the
-    // network, refused offline or unless its purpose has been allowed
+    // network, refused offline or unless its purpose has been allowed, and
+    // kept to the hosts its consent named
     let label = if payload.label.is_empty() {
         "Setting up Python".to_string()
     } else {
         payload.label.clone()
     };
-    let task = net.begin(&setup_purpose(&payload)?, &label)?;
+    let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
     let lock = resource_path(&app, &env.lock)?;
     let data = app_data_dir(&app)?;
     // (uv itself, the first time: under the same task, the same consent)
@@ -474,7 +480,8 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
         return Err("not a pixi environment".into());
     }
     let label = if payload.label.is_empty() { "Setting up Python".to_string() } else { payload.label.clone() };
-    let task = net.begin(&setup_purpose(&payload)?, &label)?;
+    // (kept to the hosts its consent named: pixi's releases, conda-forge, PyPI)
+    let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
     let data = app_data_dir(&app)?;
     let lock = resource_path(&app, &env.lock)?;
     let manifest_from = lock.with_file_name("pixi.toml");
@@ -1080,6 +1087,7 @@ mod tests {
             purpose: "python-env:console".into(),
             label: String::new(),
             host: String::new(),
+            hosts: None,
         }
     }
 
