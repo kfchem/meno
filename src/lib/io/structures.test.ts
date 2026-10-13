@@ -185,4 +185,14 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     // (none reading: said by its line all the same)
     expect(() => readStructures("pdb", "w.pdb", [het(1, "O", Number.NaN, 0, 0), het(2, "H", Number.NaN, 0, 0)].join("\n"))).toThrow(/2 of its atoms do not read, the first on line 1/);
   });
+
+  it("reads D and T, deuterium and tritium, as hydrogen, keeping their mass numbers", () => {
+    const heavy = [het(1, "O", 0, 0, 0), het(2, "D", 0.957, 0, 0), het(3, "T", -0.24, 0.927, 0), "END"].join("\n") + "\n";
+    const read = readStructures("pdb", "d2o.pdb", heavy);
+    const m = read.molecules3d![0];
+    expect(m.atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 3]]);
+    // (bonded to the oxygen as any hydrogen is)
+    expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
+    expect(checkedStructures(read, "d2o.pdb")).toBe(read);
+  });
 });

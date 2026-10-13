@@ -45,6 +45,8 @@ export type PdbAtom = {
   tempFactor?: number;
   /** Its element's symbol (77-78) - or, where those columns are blank, as its name's alignment says it (see `elementOf`). */
   element: string;
+  /** Its mass number, where its symbol is one of hydrogen's isotopes' own: 2 for D, 3 for T. */
+  isotope?: number;
   /** Its charge (79-80): 2+, 1-... */
   charge?: number;
 };
@@ -166,16 +168,37 @@ function symbol(s: string): string | undefined {
 }
 
 /**
+ * Hydrogen's isotopes by symbols of their own - D, deuterium, and T,
+ * tritium, as the IUPAC allows them - and their mass numbers. Meno's table
+ * holds elements, not isotopes: such an atom is a hydrogen, of that mass.
+ */
+const HYDROGENS: ReadonlyMap<string, number> = new Map([
+  ["D", 2],
+  ["T", 3],
+]);
+
+/** An atom's element, and its mass number where its symbol is an isotope's own (D, T). */
+export type ElementRead = { element: string; isotope?: number };
+/** An element's symbol read: the element, and the mass number of an isotope with a symbol of its own; undefined where it is none. */
+function elementRead(s: string): ElementRead | undefined {
+  const isotope = HYDROGENS.get(s.trim().toUpperCase());
+  if (isotope) return { element: "H", isotope };
+  const element = symbol(s);
+  return element ? { element } : undefined;
+}
+
+/**
  * An atom's element: its element symbol (77-78) - "always present", the
  * format says - or, where those columns are blank, as its name is aligned
  * (ATOM, *Details*): a one-letter element's name starts at column 14, a
- * two-letter one's at column 13. Undefined where neither says one.
+ * two-letter one's at column 13. D and T are hydrogen, of mass 2 and 3,
+ * either way. Undefined where neither says one.
  */
-export function elementOf(line: string): string | undefined {
+export function elementOf(line: string): ElementRead | undefined {
   const given = text(line, 77, 78);
-  if (given) return symbol(given);
+  if (given) return elementRead(given);
   const c13 = cols(line, 13, 13);
-  return /[A-Za-z]/.test(c13) ? symbol(cols(line, 13, 14)) : symbol(cols(line, 14, 14));
+  return /[A-Za-z]/.test(c13) ? elementRead(cols(line, 13, 14)) : elementRead(cols(line, 14, 14));
 }
 
 /** A charge as the format writes it (79-80): a digit and a sign, "2+", "1-"; undefined where blank. */
@@ -208,14 +231,15 @@ const atomRecord =
     const x = real(line, 31, 38);
     const y = real(line, 39, 46);
     const z = real(line, 47, 54);
-    const element = elementOf(line);
-    if (x === undefined || y === undefined || z === undefined || !element) {
+    const read = elementOf(line);
+    if (x === undefined || y === undefined || z === undefined || !read) {
       // (counted, and its line kept: an atom of the entry's that is in none of its models)
       r.unreadable++;
       const what = x === undefined || y === undefined || z === undefined ? "coordinates" : text(line, 77, 78) ? "element" : "name";
       r.unreadableAtoms.push({ line: r.at, what });
       return;
     }
+    const { element, isotope } = read;
     const occupancy = real(line, 55, 60);
     const tempFactor = real(line, 61, 66);
     const charge = chargeOf(line);
@@ -234,6 +258,7 @@ const atomRecord =
       ...(occupancy !== undefined ? { occupancy } : {}),
       ...(tempFactor !== undefined ? { tempFactor } : {}),
       element,
+      ...(isotope !== undefined ? { isotope } : {}),
       ...(charge !== undefined ? { charge } : {}),
     });
   };

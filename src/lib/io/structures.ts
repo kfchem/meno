@@ -240,7 +240,15 @@ function pdbBonds(atoms: readonly PdbAtom[], conect: readonly [number, number][]
   return [...given, ...near.filter((b) => !seen.has(`${b.a1} ${b.a2}`))].sort((x, y) => x.a1 - y.a1 || x.a2 - y.a2);
 }
 
-const parsedAtom = (a: PdbAtom): ParsedAtom => ({ el: a.element, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) });
+const parsedAtom = (a: PdbAtom): ParsedAtom => ({
+  el: a.element,
+  x: a.x,
+  y: a.y,
+  z: a.z,
+  ...(a.charge ? { charge: a.charge } : {}),
+  // (a deuterium's or a tritium's mass number, with it)
+  ...(a.isotope ? { isotope: a.isotope } : {}),
+});
 
 /**
  * A PDB file's molecules in 3D: its models one molecule's frames, where

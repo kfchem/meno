@@ -694,7 +694,10 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   - every ATOM and HETATM record, all its fields kept - name, residue,
     chain, occupancy and the rest - though Meno shows only the atoms;
   - an atom's element from its element columns, or - where they are
-    blank - from how its name is aligned, as the format says;
+    blank - from how its name is aligned, as the format says; D and T,
+    deuterium and tritium, are hydrogen of mass 2 and 3, the mass number
+    kept with the atom, as Meno's table holds elements, not isotopes
+    (since 2026-10-13: before, such atoms were left out unsaid);
   - a file in which an ATOM or HETATM record does not read - its
     coordinates no numbers, or its element none Meno knows - is not
     opened, the chemist told how many such records there are and the

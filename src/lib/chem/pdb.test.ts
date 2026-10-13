@@ -75,14 +75,30 @@ describe("a PDB file, read", () => {
 
   it("takes an atom's element from its element columns - or, where they are blank, from how its name is aligned", () => {
     const line = (name: string, element = "") => atomLine({ record: "HETATM", serial: 1, name, x: 0, y: 0, z: 0, element });
-    expect(elementOf(line(" CA", "C"))).toBe("C");
-    expect(elementOf(line("FE", "FE"))).toBe("Fe");
+    const el = (name: string, element = "") => elementOf(line(name, element))?.element;
+    expect(el(" CA", "C")).toBe("C");
+    expect(el("FE", "FE")).toBe("Fe");
     // (a one-letter element's name starts at column 14, a two-letter one's at 13)
-    expect(elementOf(line(" CA"))).toBe("C");
-    expect(elementOf(line("CA"))).toBe("Ca");
-    expect(elementOf(line("FE1"))).toBe("Fe");
-    expect(elementOf(line("1HG"))).toBe("H");
+    expect(el(" CA")).toBe("C");
+    expect(el("CA")).toBe("Ca");
+    expect(el("FE1")).toBe("Fe");
+    expect(el("1HG")).toBe("H");
     expect(elementOf(line(" XX", "QQ"))).toBeUndefined();
+  });
+
+  it("takes D and T, deuterium and tritium, for hydrogen of mass 2 and 3 - from the element columns or the name's alignment alike", () => {
+    const line = (name: string, element = "") => atomLine({ record: "HETATM", serial: 1, name, x: 0, y: 0, z: 0, element });
+    expect(elementOf(line(" D1", "D"))).toEqual({ element: "H", isotope: 2 });
+    expect(elementOf(line(" T1", "T"))).toEqual({ element: "H", isotope: 3 });
+    expect(elementOf(line(" H1", "H"))).toEqual({ element: "H" });
+    // (a one-letter name from column 14, the element columns blank)
+    expect(elementOf(line(" D1"))).toEqual({ element: "H", isotope: 2 });
+    // (from column 13, two letters: an element's, or none - never a deuterium's name read short)
+    expect(elementOf(line("DY"))).toEqual({ element: "Dy" });
+    expect(elementOf(line("TB1"))).toEqual({ element: "Tb" });
+    expect(elementOf(line("DA1"))).toBeUndefined();
+    const atoms = readPdb([line(" O", "O"), line(" D1", "D"), line(" D2", "D")].join("\n")).models[0].atoms;
+    expect(atoms.map((a) => [a.element, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
   });
 
   it("reads a charge as the format writes it, a digit and its sign", () => {
