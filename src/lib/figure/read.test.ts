@@ -11,6 +11,7 @@ import cortisol from "./fixtures/cortisol-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
+import sodiumAcetateAcs from "./fixtures/sodium-acetate-rdkitacs.json";
 import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import tempo from "./fixtures/tempo-rdkit.json";
@@ -822,6 +823,12 @@ describe("a figure drawn in colour by another program", () => {
   it("reads a charge the PDF gives no character for - a control code, drawn flat - as a minus", () => {
     // (sodium acetate as RDKit draws it by default, printed by WebKit: the O's "-" comes out of the PDF as \x02)
     const r = readFigure(sodiumAcetate as unknown as FigureDrawn);
+    expect(r.atoms.map((a) => a.label).sort()).toEqual(["Na+", "O", "O-", undefined, undefined].sort());
+  });
+
+  it("reads an element's ion set right by an atom's label as an ion still, not as that label's", () => {
+    // (sodium acetate as RDKit's ACS 1996 mode draws it: its Na+ set just over the C=O's O)
+    const r = readFigure(sodiumAcetateAcs as unknown as FigureDrawn);
     expect(r.atoms.map((a) => a.label).sort()).toEqual(["Na+", "O", "O-", undefined, undefined].sort());
   });
 

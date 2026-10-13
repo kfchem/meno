@@ -1067,7 +1067,8 @@ workspace holds.
   and marked so (a triplet is drawn the same). A lone H takes one
   bond: its wedge's, where it has one. A word with a charge - written,
   or drawn in a ring beside it - by the structure, at no bond's end and
-  not by another atom's label, is an ion (Na+, Br-), and several set in a
+  not an H by another atom's label (an element's ion set close by one is
+  still an ion), is an ion (Na+, Br-), and several set in a
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
