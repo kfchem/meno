@@ -554,9 +554,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
+    ...(Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? { framesLeftOut: m.framesLeftOut as number } : {}),
+    ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
+    ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
     ...(stereo ? { stereo } : {}),
     ...(calc ? { calc } : {}),
   };

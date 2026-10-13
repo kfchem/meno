@@ -96,7 +96,21 @@ def op_from_smiles(m):
     if mol is None:
         raise ValueError("This SMILES could not be read.")
     lay_out_2d(mol)
-    return {"molblock": Chem.MolToV3KMolBlock(mol)}
+    block = Chem.MolToV3KMolBlock(mol)
+    # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
+    # says (Z): where what is written does not read back as the SMILES,
+    # RDKit's own depictor lays it out instead (it keeps that one)
+    if not reads_as(block, mol):
+        rdDepictor.Compute2DCoords(mol, forceRDKit=True)
+        block = Chem.MolToV3KMolBlock(mol)
+    return {"molblock": block}
+
+
+def reads_as(molblock, mol):
+    """Whether a MOL block reads back as the molecule it was written from,
+    stereochemistry and all."""
+    back = Chem.MolFromMolBlock(molblock)
+    return back is not None and Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
 
 
 def too_many(atom):
@@ -641,7 +655,8 @@ def op_run(m):
     """A step done at once. *Duplicates*: within each compound - a conformer
     set's, or in a compound set the entries of the same structure - lowest
     energy first, each entry set aside that is within the RMSD of one kept,
-    over their heavy atoms, at its best over the molecule's symmetries."""
+    over their heavy atoms, at its best over the molecule's symmetries. Never
+    two of different charge or spin: they are different species."""
     if m.get("step") != "duplicates":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     alike = float((m.get("options") or {}).get("rmsd", ALIKE))
@@ -650,7 +665,11 @@ def op_run(m):
     groups = {}
     for i, entry in enumerate(entries):
         mol = mol_of(entry)
-        key = entry.get("compound") if m.get("holds") == "conformers" else Chem.MolToSmiles(Chem.RemoveHs(mol))
+        key = (
+            entry.get("compound") if m.get("holds") == "conformers" else Chem.MolToSmiles(Chem.RemoveHs(mol)),
+            entry.get("charge", 0),
+            entry.get("multiplicity", 1),
+        )
         heavy.append(Chem.RemoveHs(mol))
         groups.setdefault(key, []).append(i)
     kept = []

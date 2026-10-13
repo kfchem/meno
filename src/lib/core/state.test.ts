@@ -70,6 +70,14 @@ describe("tab reducer", () => {
     });
   });
 
+  it("is the same state where a tab's dirty marker does not change - told at every frame of a drag", () => {
+    let s = withTabs("a");
+    expect(reducer(s, { type: "SET_DIRTY", id: "a", dirty: false })).toBe(s);
+    s = reducer(s, { type: "SET_DIRTY", id: "a", dirty: true });
+    expect(reducer(s, { type: "SET_DIRTY", id: "a", dirty: true })).toBe(s);
+    expect(reducer(s, { type: "SET_DIRTY", id: "a", dirty: false }).tabsById.a.meta.dirty).toBe(false);
+  });
+
   it("ignores actions for unknown tabs", () => {
     const s = withTabs("a");
     expect(reducer(s, { type: "CLOSE_TAB", id: "x" })).toBe(s);
