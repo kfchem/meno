@@ -366,6 +366,20 @@ describe("a label, written", () => {
     expect(reversedLabel("NO2")).toBe("O2N");
   });
 
+  it("keeps a word it does not know whole: Nu on a bond's left is Nu, not uN", () => {
+    // (read letter by letter, a nucleophile was written uN, Hal laH, CH2Het tHeH2C)
+    expect(labelUnits("Nu")).toEqual(["Nu"]);
+    expect(reversedLabel("ONu")).toBe("NuO");
+    expect(reversedLabel("Hal")).toBe("Hal");
+    expect(reversedLabel("CH2Het")).toBe("HetH2C");
+    expect(reversedLabel("Xx")).toBe("Xx");
+    // (an element's two letters first, and no further than a group's name or a prefix)
+    expect(labelUnits("SnBu3")).toEqual(["Sn", "Bu3"]);
+    expect(labelUnits("Bpin")).toEqual(["B", "pin"]);
+    expect(labelUnits("OiPr")).toEqual(["O", "iPr"]);
+    expect(labelUnits("Ot-Bu")).toEqual(["O", "t-Bu"]);
+  });
+
   it("sets counts as subscripts and an ending charge as a superscript", () => {
     expect(labelRuns("CO2Me")).toEqual([{ text: "CO" }, { text: "2", sub: true }, { text: "Me" }]);
     expect(labelRuns("NMe3+")).toEqual([{ text: "NMe" }, { text: "3", sub: true }, { text: "+", sup: true }]);

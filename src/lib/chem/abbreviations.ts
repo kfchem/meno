@@ -610,9 +610,26 @@ export function labelUnitNames(): readonly string[] {
 }
 
 /**
+ * The unit a label's letters at `i` make, where no group's name begins: a
+ * capital and the small letters after it - an element, Cl, or a word that
+ * names nothing Meno knows, Nu, Hal, Het, read whole (letter by letter, Nu
+ * was written uN on a bond's left) - up to a group's name (Bpin is B and
+ * pin) or a prefix (Ot-Bu), past an element's own two letters; any other
+ * character on its own.
+ */
+function letters(text: string, i: number): string {
+  if (!/[A-Z]/.test(text[i])) return text[i];
+  // (an element's two letters first: SnBu3 is Sn and Bu3, not S and nBu3)
+  let j = ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? i + 2 : i + 1;
+  const prefix = (k: number) => text[k + 1] === "-" && /[A-Za-z(]/.test(text[k + 2] ?? "");
+  while (/[a-z]/.test(text[j] ?? "") && !prefix(j) && !UNITS.some((u) => text.startsWith(u, j))) j++;
+  return text.slice(i, j);
+}
+
+/**
  * A label's units, as a chemist reads it: each element or group with its
- * count - CO2Me is C, O2, Me - parentheses with what they hold, and any
- * other character on its own.
+ * count - CO2Me is C, O2, Me - parentheses with what they hold, a word
+ * Meno does not know whole, and any other character on its own.
  */
 export function labelUnits(text: string): string[] {
   const out: string[] = [];
@@ -629,9 +646,7 @@ export function labelUnits(text: string): string[] {
       }
       unit = text.slice(i, j + 1);
     } else {
-      unit =
-        UNITS.find((u) => text.startsWith(u, i)) ??
-        (ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? text.slice(i, i + 2) : text[i]);
+      unit = UNITS.find((u) => text.startsWith(u, i)) ?? letters(text, i);
     }
     i += unit.length;
     // its count - after a letter or a bracket, not a ring's position (2,6-)
