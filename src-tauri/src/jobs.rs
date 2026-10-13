@@ -1187,10 +1187,19 @@ pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
     (String::from_utf8_lossy(&buf[..end]).into_owned(), from + end as u64)
 }
 
+/// How large a file of a job's Meno reads at most (`read_work_file`): one
+/// larger it says it will not read, by its size.
+const WORK_FILE_MOST: u64 = 256 * 1024 * 1024;
+
 /// A file a job wrote in its work folder, as text: a file of its own, by a
 /// path of no link - a link its program left there, to a file of the
-/// chemist's anywhere, is not read through.
+/// chemist's anywhere, is not read through - and of no more than 256 MB.
 pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
+    read_work_file_within(dir, name, WORK_FILE_MOST)
+}
+
+/// `read_work_file`, of a file of no more than `most` bytes.
+fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, String> {
     if !inside_name(name) {
         return Err(format!("not a file of the job's: {name}"));
     }
@@ -1210,8 +1219,20 @@ pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
     if !inside {
         return Err(format!("not a file of the job's: {name}"));
     }
-    let bytes = fs::read(&at).map_err(|e| format!("{name}: {e}"))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    let too_large = |size: u64| format!("{name} is too large to read: {} MB, past {} MB", size.div_ceil(1 << 20), most >> 20);
+    let file = File::open(&at).map_err(|e| format!("{name}: {e}"))?;
+    let size = file.metadata().map_err(|e| format!("{name}: {e}"))?.len();
+    if size > most {
+        return Err(too_large(size));
+    }
+    // (read no further than allowed, should it have grown since)
+    let mut bytes = Vec::with_capacity(size as usize);
+    file.take(most + 1).read_to_end(&mut bytes).map_err(|e| format!("{name}: {e}"))?;
+    if bytes.len() as u64 > most {
+        return Err(too_large(bytes.len() as u64));
+    }
+    // (as it is where it is text, as it is: copied only where it is not)
+    Ok(String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
 }
 
 /// How deep in a job's work folder its files are looked for, and how many are listed at most.
@@ -2555,6 +2576,20 @@ mod tests {
         assert!(read_work_file(&dir, "up/outside.txt").is_err());
         assert!(read_work_file(&dir, "../outside.txt").is_err());
         assert!(read_work_file(&dir, "sub").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_no_file_of_a_job_s_past_its_size() {
+        let dir = std::env::temp_dir().join(format!("meno-read-{}", uuid::Uuid::new_v4()));
+        let work = dir.join(WORK);
+        fs::create_dir_all(&work).unwrap();
+        fs::write(work.join("small.txt"), "a".repeat(1 << 20)).unwrap();
+        fs::write(work.join("large.txt"), "a".repeat((1 << 20) + 1)).unwrap();
+        fs::write(work.join("odd.txt"), b"caf\xe9").unwrap();
+        assert_eq!(read_work_file_within(&dir, "small.txt", 1 << 20).unwrap().len(), 1 << 20);
+        assert_eq!(read_work_file_within(&dir, "large.txt", 1 << 20), Err("large.txt is too large to read: 2 MB, past 1 MB".into()));
+        assert_eq!(read_work_file(&dir, "odd.txt").unwrap(), "caf\u{fffd}");
         let _ = fs::remove_dir_all(&dir);
     }
 

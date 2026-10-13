@@ -1145,7 +1145,9 @@ path it is given:
   (`names_only_written`). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
-  a `job.json`; a file read from it must lie inside it. Its files are
+  a `job.json`; a file read from it must lie inside it, reached by no
+  link, and be no larger than 256 MB (one larger fails its step, saying
+  its size). Its files are
   listed without following links, 32 folders deep and 10,000 files at
   most. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be

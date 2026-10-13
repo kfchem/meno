@@ -599,10 +599,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         const log = await wholeLog(j.id);
         const files: Record<string, string> = {};
+        let unread: string | undefined;
         // (what it wrote, ended well or not: a program may say why it failed in its output - Gaussian does)
         if (record.state === "done" || record.state === "failed") {
           const there = new Set(await jobFiles(j.id).catch(() => []));
-          for (const name of j.reads) if (there.has(name)) files[name] = await readJobFile(j.id, name).catch(() => "");
+          for (const name of j.reads) {
+            if (!there.has(name)) continue;
+            try {
+              files[name] = await readJobFile(j.id, name);
+            } catch (e) {
+              unread ??= message(e);
+            }
+          }
+        }
+        // (one there that could not be read - past the size Meno reads, say - said so, not taken for one written empty)
+        if (unread) {
+          whys.push(unread);
+          continue;
         }
         let said;
         try {
