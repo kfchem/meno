@@ -80,6 +80,12 @@ describe("the settings file", () => {
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });
+    // (on a share on the network, as Windows names one - kept for the app to look at; a share without a name, or a path from nowhere, not)
+    const shared = { "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe", "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe", "xtb:xtb": "\\\\", "crest:crest": "apps\\crest.exe" };
+    expect(acceptAppSettings({ plugins: { programs: shared } }).plugins.programs).toEqual({
+      "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe",
+      "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe",
+    });
     // the procedures saved: each with an id, a name and steps - the rest read as they are used
     const procedures = [
       { id: "p-1", name: " Optimise ", saved: 5, flow: { steps: [{}], sets: "x" } },
