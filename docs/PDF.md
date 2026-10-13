@@ -954,7 +954,10 @@ workspace holds.
 - **Lines drawn again**: a short line lying on a longer one, along it and
   within it - a joint drawn as short pieces along the bonds meeting
   there, as RDKit draws one - is that line's, and left out before
-  anything is measured.
+  anything is measured. A line drawn in two colours - a bond black to
+  its middle and its atom's colour on, as RDKit draws one by default -
+  is one line: two lines of different colours, end to end along one
+  way, with nothing else ending where they meet.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.

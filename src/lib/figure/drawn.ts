@@ -261,6 +261,28 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
   // one - is that line's, not a line of its own)
   out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
+  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
+  // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < out.strokes.length && !merged; i++) {
+      for (let j = 0; j < out.strokes.length && !merged; j++) {
+        const [s, t] = [out.strokes[i], out.strokes[j]];
+        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline) continue;
+        const w = Math.max(s.w, t.w);
+        if (dist(s.b, t.a) > w) continue;
+        const ls = dist(s.a, s.b), lt = dist(t.a, t.b);
+        if (!ls || !lt) continue;
+        const cos = ((s.b.x - s.a.x) * (t.b.x - t.a.x) + (s.b.y - s.a.y) * (t.b.y - t.a.y)) / (ls * lt);
+        if (cos < Math.cos((3 * Math.PI) / 180)) continue;
+        const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w));
+        if (others.length) continue;
+        out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
+        out.strokes.splice(j, 1);
+        merged = true;
+      }
+    }
+  }
   return out;
 }
 

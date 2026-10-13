@@ -637,6 +637,18 @@ describe("a figure drawn by another program", () => {
   });
 });
 
+describe("a figure drawn in colour by another program", () => {
+  it("reads a bond drawn in two colours, black to its middle and its atom's colour on, as one bond", () => {
+    // (an ethanol as RDKit draws one by default: the C-O bond black, then red from its middle to the O)
+    const c: P = [60, 60];
+    const c2 = step(c, 30);
+    const o = step(c2, -30);
+    const red = (...pts: P[]): FigurePath => ({ ...stroke(...pts), stroke: "#ff0000ff" });
+    const s = read(figure([stroke(c, c2, along(c2, o, 0.5)), red(along(c2, o, 0.5), along(c2, o, 0.85))], word("O", o)));
+    expect(bondsOf(s)).toEqual(["C-C", "C-O"]);
+  });
+});
+
 describe("a figure's words", () => {
   it("joins letters side by side, a subscript with them, and writes them as a label is typed", () => {
     const ws = wordsOf([...word("CO_2Me", [20, 20]), ...word("OH", [80, 20])]);
