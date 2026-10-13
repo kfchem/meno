@@ -4,6 +4,7 @@ import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
 import { ELEMENTS } from "./elements";
+import { most } from "../extremes";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number };
@@ -137,7 +138,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   const bonds = model.bonds.map((b) => ({ ...b }));
   const sups: Sup[] = [];
   const aliases = new Map<number, string>();
-  let nextId = Math.max(0, ...model.atoms.map((a) => a.id)) + 1;
+  let nextId = Math.max(0, most(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
     // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)

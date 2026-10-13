@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
 import { centredAt, clipItems, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText, schemeAmong } from "./copyPaste";
 import { middleOf } from "./selection";
+import { writeMolfile } from "../../../../lib/chem/molWriter";
+import { nextFree } from "../chem/engineLayout";
 import { kindOf } from "../../../../lib/io/kinds";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
@@ -259,6 +261,11 @@ describe("a selection of very many atoms", () => {
     const among = schemeAmong(drawn, ids);
     expect(among.captions.map((c) => c.id)).toEqual([1]);
     expect(among.pluses).toHaveLength(1);
+  });
+
+  it("is written as a molfile, and Clean-up finds the next free id past it", () => {
+    expect(writeMolfile({ atoms, bonds: [] } as never)).toContain("V3000");
+    expect(nextFree({ atoms, bonds: [] } as never)).toBe(150_001);
   });
 
   it("has a middle", () => {

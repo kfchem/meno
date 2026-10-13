@@ -25,6 +25,7 @@ import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, orientFor } from "./drawing";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { most } from "../../../../lib/extremes";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -361,5 +362,5 @@ function stereoOf(m: Model) {
 
 /** The first id no atom or bond of `model` has. */
 export function nextFree(model: Model): number {
-  return Math.max(0, ...model.atoms.map((a) => a.id), ...model.bonds.map((b) => b.id)) + 1;
+  return Math.max(0, most(model.atoms.map((a) => a.id)), most(model.bonds.map((b) => b.id))) + 1;
 }
