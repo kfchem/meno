@@ -108,9 +108,11 @@ const v30Number = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
 /**
  * A string as a V3000 entry has it: in double quotes where it holds a
  * blank, a quote, a double quote, "=", "(" or ")", a double quote in it
- * doubled ("CTfile Formats", the general syntax of entries).
+ * doubled ("CTfile Formats", the general syntax of entries) - and where it
+ * ends in "-", which at the end of a line continues it on the next: Nu-,
+ * OTf-, +/- written bare at an entry's end read back as "NuEND" and the like.
  */
-const v30String = (t: string) => (/[\s'"=()]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t);
+const v30String = (t: string) => (/[\s'"=()]/.test(t) || t.endsWith("-") ? `"${t.replace(/"/g, '""')}"` : t);
 /** A V3000 molfile's fourth line: a counts line of no atoms, and the version. */
 const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 
@@ -238,6 +240,11 @@ function groupsOf(model: WriterModel, sups: Sup[]): Group[] {
   return out;
 }
 
+/** How many symbols a V2000 M  ALS line holds, how wide an M  SDT line's field name is, and how much data an SCD/SED run holds ("CTfile Formats", the properties block). */
+const ALS_MOST = 16;
+const SDT_NAME = 30;
+const SED_MOST = 200;
+
 /** The types whose brackets are drawn, and so written. */
 const BRACKETED = new Set(["SRU", "COP", "MON", "MER", "CRO", "MOD", "GRA", "COM", "MIX", "FOR", "ANY", "GEN"]);
 
@@ -309,7 +316,8 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
   );
   model.atoms.forEach((a, i) => {
     if (!a.list) return;
-    const symbols = a.list.symbols.slice(0, 16);
+    // (sixteen at most, the line's: past them, V3000 - `needsV3000`)
+    const symbols = a.list.symbols.slice(0, ALS_MOST);
     lines.push(`M  ALS ${i3(i + 1)}${i3(symbols.length)} ${a.list.not ? "T" : "F"} ${symbols.map((s) => s.padEnd(4)).join("")}`);
   });
   // a label that is no element nor any abbreviation: an alias, its text on the next line
@@ -361,7 +369,8 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
         }
       }
       if (g.type === "DAT" && g.field) {
-        lines.push(`M  SDT ${i3(n)} ${g.field.name.padEnd(30).slice(0, 30)}${(g.field.type ?? "T").slice(0, 1)}${(g.field.units ?? "").padEnd(20).slice(0, 20)}`);
+        // (a field name of 30 characters at most, its units 20: a longer name, V3000 - `needsV3000`)
+        lines.push(`M  SDT ${i3(n)} ${g.field.name.padEnd(SDT_NAME).slice(0, SDT_NAME)}${(g.field.type ?? "T").slice(0, 1)}${(g.field.units ?? "").padEnd(20).slice(0, 20)}`);
         for (const d of g.field.data) {
           // 69 characters a line: SCD for all but the last, SED for that
           for (let j = 0; j + 69 < d.length; j += 69) lines.push(`M  SCD ${i3(n)} ${d.slice(j, j + 69)}`);
@@ -569,9 +578,9 @@ export function writeMolfile(
     : writeV2000(model, title);
 }
 
-/** A title as a header's line: one line, of no more than 80 characters. */
+/** A title as a header's line: one line, of no more than 80 characters - cut between characters, never in one (an emoji's two halves). */
 function titleLine(title: string | undefined): string {
-  return (title ?? "").replace(/[\r\n]+/g, " ").slice(0, 80);
+  return Array.from((title ?? "").replace(/[\r\n]+/g, " ")).slice(0, 80).join("");
 }
 
 /**
@@ -579,20 +588,28 @@ function titleLine(title: string | undefined): string {
  * labels written out: what is wider than V2000's fixed fields - past 999
  * atoms, bonds or Sgroups, or mapping numbers (three columns each), or a
  * coordinate past xxxxx.xxxx ("CTfile Formats", automatic V3000 output:
- * long fields); a coordination or a hydrogen bond, and whether the one is
- * drawn as a plain line (V2000's bond types stop at 8); racemic and
- * relative stereo groups, a stereo bond's group and a haptic bond's
- * endpoints.
+ * long fields), an atom list past the sixteen symbols an M  ALS line
+ * holds, a data Sgroup's field name past its 30 columns or data past the
+ * 200 characters V2000's hold; a coordination or a hydrogen bond, and
+ * whether the one is drawn as a plain line (V2000's bond types stop at 8);
+ * racemic and relative stereo groups, a stereo bond's group and a haptic
+ * bond's endpoints.
  */
 export function needsV3000(given: WriterModel): boolean {
   // (as written: a label's atoms - a complex's coordination bonds - among them)
   const { model, sups } = prepared(given);
   const scale = MOL_BOND_LENGTH / NOMINAL_BOND_LENGTH;
+  const groups = groupsOf(model, sups);
   return (
     model.atoms.length > 999 ||
     model.bonds.length > 999 ||
     model.atoms.some((a) => (a.map ?? 0) > 999 || !fitsF10(a.x * scale) || !fitsF10(a.y * scale)) ||
-    groupsOf(model, sups).length > 999 ||
+    groups.length > 999 ||
+    model.atoms.some((a) => (a.list?.symbols.length ?? 0) > ALS_MOST) ||
+    // (a data Sgroup's long field name or data - but not where it has
+    // units, or a type but text, which Meno's V3000 writes no field for:
+    // cut in V2000, rather than lost)
+    groups.some((g) => g.field && !g.field.units && (g.field.type ?? "T") === "T" && (g.field.name.length > SDT_NAME || g.field.data.some((d) => d.length > SED_MOST))) ||
     model.bonds.some((b) => ((b.dative || b.coordination) && b.order === 1) || b.hydrogen || b.stereoGroup || b.endpoints?.length) ||
     // (V2000 has only the chiral flag: no racemic nor relative groups)
     model.atoms.some((a) => a.stereoGroup && a.stereoGroup.kind !== "abs")

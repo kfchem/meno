@@ -482,4 +482,50 @@ describe("past what V2000 holds", () => {
     expect(text).toContain(`LABEL="R'"`);
     expect(readMolfile(text)!.sgroups[0].label).toBe("R'");
   });
+
+  it("quotes a V3000 string ending in \"-\", which would continue its line, and reads it back as it was", () => {
+    // (written bare, a label Nu- at the end of its entry read back as "NuEND", the next line joined to it)
+    const on = (label: string): WriterModel => ({ atoms: [{ id: 1, el: label, x: 0, y: 0 }, { id: 2, el: "C", x: L, y: 0 }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    for (const label of ["Nu-", "OTf-", "BF4-", "X-"]) {
+      const text = writeMolfile(on(label), { version: "V3000" });
+      expect(text).toContain(`LABEL="${label}"`);
+      expect(reread(text).atoms.map((a) => a.el), label).toEqual([label, "C"]);
+    }
+    // (a counter-anion's label beside a complex, where Meno chooses V3000 itself for its coordination bond)
+    const complex = writeMolfile({
+      atoms: [{ id: 1, el: "Nu-", x: 0, y: 0 }, { id: 2, el: "Pd", x: L, y: 0 }, { id: 3, el: "N", x: 2 * L, y: 0 }],
+      bonds: [{ a: 1, b: 2, order: 1 }, { a: 3, b: 2, order: 1, dative: true }],
+    });
+    expect(complex).toContain(" V3000\n");
+    expect(reread(complex).atoms.map((a) => a.el)).toEqual(["Nu-", "Pd", "N"]);
+    // (a data Sgroup's field name and data)
+    const sign = writeMolfile({ atoms: [{ id: 1, el: "C", x: 0, y: 0, sgroups: [{ id: 9, type: "DAT", field: { name: "sign-", data: ["+/-"] } }] }], bonds: [] }, { version: "V3000" });
+    expect(readMolfile(sign)!.sgroups[0].field).toMatchObject({ name: "sign-", data: ["+/-"] });
+    // (an RXN file's molecule)
+    const rxn = writeRxnfile({ reactants: [{ atoms: [{ id: 1, el: "Nu-", x: 0, y: 0 }], bonds: [] }], products: [{ atoms: [{ id: 2, el: "C", x: 0, y: 0 }], bonds: [] }], reagents: [] }, { version: "V3000" });
+    expect(readRxnfile(rxn).reactants[0].sgroups[0].label).toBe("Nu-");
+  });
+
+  it("writes V3000 where V2000 would cut an atom list past sixteen symbols, a data field's name past 30 characters or its data past 200, and reads them back whole", () => {
+    const symbols = ["F", "Cl", "Br", "I", "O", "S", "Se", "Te", "N", "P", "As", "Sb", "B", "Si", "Ge", "Sn", "Pb"];
+    const listed = (n: number): WriterModel => ({ atoms: [{ id: 1, el: "L", x: 0, y: 0, list: { not: false, symbols: symbols.slice(0, n) } }, { id: 2, el: "C", x: L, y: 0 }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    expect(writeMolfile(listed(16))).toContain(" V2000\n");
+    expect(readMolfile(writeMolfile(listed(17)))!.atoms[0].list?.symbols).toEqual(symbols);
+    const dat = (field: { name: string; data: string[]; units?: string }): WriterModel => ({ atoms: [{ id: 1, el: "C", x: 0, y: 0, sgroups: [{ id: 9, type: "DAT", field }] }], bonds: [] });
+    const name = "a field name longer than thirty characters";
+    const data = "d".repeat(250);
+    expect(readMolfile(writeMolfile(dat({ name, data: ["1"] })))!.sgroups[0].field).toMatchObject({ name, data: ["1"] });
+    expect(readMolfile(writeMolfile(dat({ name: "note", data: [data] })))!.sgroups[0].field?.data).toEqual([data]);
+    expect(writeMolfile(dat({ name: "note", data: ["d".repeat(200)] }))).toContain(" V2000\n");
+    // (but with units, which Meno's V3000 writes no field for: V2000, its name cut, its units kept)
+    expect(readMolfile(writeMolfile(dat({ name, data: ["1"], units: "%" })))!.sgroups[0].field).toMatchObject({ name: name.slice(0, 30), units: "%" });
+  });
+
+  it("cuts a title at 80 characters, never within one", () => {
+    // (a character of two UTF-16 units: an emoji's, or a rare CJK ideograph's)
+    const two = "\u{1F9EA}";
+    const title = "a".repeat(79) + two + "b";
+    expect(writeMolfile(chain2d(2), { title }).split("\n")[0]).toBe("a".repeat(79) + two);
+    expect(writeRxnfile({ reactants: [chain2d(2)], products: [chain2d(2)], reagents: [] }, { title }).split("\n")[1]).toBe("a".repeat(79) + two);
+  });
 });

@@ -444,9 +444,14 @@ none, and is left out.
 MOL files are written V2000 where that can say everything, and V3000
 where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past
 999 or a coordinate past xxxxx.xxxx (V2000's fields are fixed in width:
-the format's *automatic V3000 output*, long fields); a coordination or
-hydrogen bond (V2000's types stop at 8), and whether a coordination bond
-is shown plainly (DISP=COORD). A query bond is written with its query
+the format's *automatic V3000 output*, long fields); an atom list past the
+16 symbols an M  ALS line holds; a data Sgroup's field name past the 30
+columns of its M  SDT line, or its data past the 200 characters V2000's
+SCD and SED lines hold - but not one with units, or a type but text,
+which Meno's V3000 writes no field for: that is cut, in V2000, rather than
+lost; a coordination or hydrogen bond (V2000's types stop at 8), and
+whether a coordination bond is shown plainly (DISP=COORD). A title is cut
+at 80 characters, never within one. A query bond is written with its query
 type, and a double bond of either configuration as V2000's stereo 3,
 V3000's CFG=2. What RDKit is asked about takes a query bond as the bond it
 is drawn as.
@@ -459,4 +464,7 @@ coordinate or a symbol wider than V2000's field, or a coordination or
 hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
 atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
 such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
-quote, a double quote, "=", "(" or ")" are written in double quotes.
+quote, a double quote, "=", "(" or ")" are written in double quotes, and
+so are those that end in "-", which at a line's end continues it: a
+counter-anion's label beside a complex, Nu- or OTf-, read back as "NuEND"
+when written bare.
