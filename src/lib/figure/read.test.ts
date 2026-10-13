@@ -3,6 +3,7 @@ import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./dra
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
+import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
@@ -720,6 +721,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const s = read(figure([stroke(step(c, 180), c, step(c, -90)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("OH", o)));
     expect(bondsOf(s)).toContain("C-O up");
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
+  });
+
+  it("reads a short wedge pointing into an H set close, cut back at it, as the H's bond", () => {
+    // (aflatoxin B1 as RDKit's ACS 1996 mode draws it: its two stereocentres' H's each a quarter of a bond off, their wedges
+    // shorter than that)
+    const r = readFigure(aflatoxin as unknown as FigureDrawn);
+    const hs = r.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.label === "H");
+    expect(hs).toHaveLength(2);
+    for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i).map((b) => b.stereo)).toEqual(["up"]);
   });
 
   it("gives an O alone no more than two bonds, a double bond's counted twice: a methyl's end set close is a carbon", () => {

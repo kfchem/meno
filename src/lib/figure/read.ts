@@ -554,7 +554,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     ...whole.filter((s) => !inMulti.has(s)).map((s): Drawn => ({ a: s.a, b: s.b, order: 1, ...(bold(s) ? { bold: true } : {}) })),
     ...multi,
     ...hashes,
-    ...shapes.wedges.filter((w) => dist(w.tip, w.base) > 0.3 * bond).map((w: Wedge): Drawn => ({ a: w.tip, b: w.base, order: 1, stereo: "up" })),
+    // (a short wedge too, where it points into a label - a stereocentre's H set close, the wedge cut back at it)
+    ...shapes.wedges
+      .filter((w) => dist(w.tip, w.base) > 0.3 * bond || (dist(w.tip, w.base) > 0.1 * bond && labelled(w.base, unit(w.tip, w.base))))
+      .map((w: Wedge): Drawn => ({ a: w.tip, b: w.base, order: 1, stereo: "up" })),
     ...shapes.curves.map((c) => wavy(c, bond)).filter((d): d is Drawn => !!d),
     ...dashes(bitsLeft(short, inHashes, [...lines, ...used]).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond),
   ];

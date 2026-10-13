@@ -983,7 +983,9 @@ workspace holds.
     ring's second line is drawn inside it, else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its
     narrow end a point, rounded, or cut flat a line's width across, and
-    its wide end cut slanting along the bond it meets however far;
+    its wide end cut slanting along the bond it meets however far; one
+    under three tenths of a bond long only where its wide end points
+    into a label (a stereocentre's H set close, the wedge cut back at it);
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
