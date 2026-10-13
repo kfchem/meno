@@ -47,6 +47,12 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
   };
   // and how each stereocentre and double bond is set, against its
   // neighbours' ranks (each a sign, or 0 where those ranks do not part)
+  const stereoAt: (typeof input.bonds)[number][][] = input.atoms.map(() => []);
+  for (const b of input.bonds) {
+    if (!b.stereo) continue;
+    stereoAt[b.a].push(b);
+    stereoAt[b.b].push(b);
+  }
   const stereoKeys = (r: number[]): string[] =>
     input.atoms.map((a, i) => {
       const parts: number[] = [];
@@ -54,15 +60,14 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
         const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
         parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
       }
-      for (const b of input.bonds) {
-        if (!b.stereo || (b.a !== i && b.b !== i)) continue;
-        const [p, q] = b.stereo.refs;
+      for (const b of stereoAt[i]) {
+        const [p, q] = b.stereo!.refs;
         // (each end's other neighbour too, the ref compared with it)
         const end = (at: number, ref: number) => {
           const others = adj[at].filter((e) => e.to !== (at === b.a ? b.b : b.a)).map((e) => e.to);
           return others.length < 2 ? 1 : Math.sign(r[ref] - r[others.find((o) => o !== ref)!]) || 0;
         };
-        parts.push((b.stereo.cis ? 1 : -1) * end(b.a, p) * end(b.b, q));
+        parts.push((b.stereo!.cis ? 1 : -1) * end(b.a, p) * end(b.b, q));
       }
       return parts.join(",");
     });
@@ -75,14 +80,16 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
     }
   };
   rank = withStereo(refine(rank));
-  // atoms still alike: the first of the lowest such rank taken first
-  while (classes(rank) < n) {
-    const counts = new Map<number, number>();
-    for (const v of rank) counts.set(v, (counts.get(v) ?? 0) + 1);
-    const tied = Math.min(...[...counts].filter(([, c]) => c > 1).map(([v]) => v));
-    const pick = rank.indexOf(tied);
-    rank = withStereo(refine(ranksOf(rank.map((v, i) => `${String(v).padStart(6, "0")}/${i === pick ? 0 : 1}`))));
-  }
+  // Atoms still alike: each of the lowest such class taken first in turn,
+  // the ranks refined again, and so on until every atom stands alone; of
+  // the orders that gives, the one that writes the molecule first (its
+  // atoms and bonds, by their places, the least). Ranks alone can leave
+  // atoms alike that are not - cuneane's, basketane's - and which of them
+  // went first decided the order. Two orders that write the molecule the
+  // same show a symmetry of it, and the atoms it takes onto each other are
+  // not tried again: a tert-butyl's three methyls, alike in every way, are
+  // tried once.
+  rank = settled(rank, n, withStereo, (r) => written(input, first, r));
   // the atoms in the order a walk through the molecule meets them, as a
   // SMILES string writes them - from an end atom, the lowest ranked, each
   // atom's neighbours in rank order - not grouped by rank: the layout's
@@ -102,14 +109,91 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
     }
   };
   for (;;) {
-    const left = rank.map((_, i) => i).filter((i) => !seen[i]);
-    if (!left.length) break;
-    const ends = left.filter((i) => adj[i].length === Math.min(...left.map((j) => adj[j].length)));
-    walk(ends.reduce((p, q) => (way & 1 ? (rank[q] > rank[p] ? q : p) : rank[q] < rank[p] ? q : p)));
+    let fewest = Infinity;
+    let start = -1;
+    for (let i = 0; i < n; i++) {
+      if (seen[i]) continue;
+      const d = adj[i].length;
+      const better = way & 1 ? rank[i] > rank[start] : rank[i] < rank[start];
+      if (d < fewest || (d === fewest && better)) [fewest, start] = [d, i];
+    }
+    if (start < 0) break;
+    walk(start);
   }
   const to = new Array<number>(n);
   order.forEach((a, k) => (to[a] = k));
   return to;
+}
+
+/** The most search steps `settled` takes for a molecule of `n` atoms; past them, the least order found so far. */
+const settleBudget = (n: number) => 200 + 20 * n;
+
+/**
+ * Ranks refined to one atom each by taking alike atoms first in turn (see
+ * `canonicalOrder`): the order that writes the molecule least.
+ */
+function settled(start: number[], n: number, refined: (r: number[]) => number[], writes: (r: number[]) => string): number[] {
+  let budget = settleBudget(n);
+  type Leaf = { text: string; r: number[]; symmetries: number[][] };
+  const search = (r: number[]): Leaf => {
+    if (classes(r) === n) return { text: writes(r), r, symmetries: [] };
+    const counts = new Map<number, number>();
+    for (const v of r) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const cell = Math.min(...[...counts].filter(([, c]) => c > 1).map(([v]) => v));
+    // (the atoms any symmetry found here takes onto each other, as one)
+    const root = r.map((_, i) => i);
+    const find = (a: number): number => (root[a] === a ? a : (root[a] = find(root[a])));
+    const join = (g: readonly number[]) => g.forEach((b, a) => (root[find(a)] = find(b)));
+    let best: Leaf | null = null;
+    const tried: number[] = [];
+    const symmetries: number[][] = [];
+    for (let m = 0; m < n; m++) {
+      if (r[m] !== cell || tried.some((t) => find(t) === find(m))) continue;
+      if (best && budget <= 0) break;
+      budget--;
+      const leaf = search(refined(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${i === m ? 0 : 1}`))));
+      tried.push(m);
+      for (const g of leaf.symmetries) {
+        symmetries.push(g);
+        join(g);
+      }
+      if (!best || leaf.text < best.text) best = leaf;
+      else if (leaf.text === best.text) {
+        // (each atom where the other order puts the atom in its place)
+        const at = new Array<number>(n);
+        leaf.r.forEach((p, a) => (at[p] = a));
+        const g = best.r.map((p) => at[p]);
+        symmetries.push(g);
+        join(g);
+      }
+    }
+    return { text: best!.text, r: best!.r, symmetries };
+  };
+  return search(start).r;
+}
+
+/**
+ * The molecule written by its atoms' places (`r`, each atom alone): each
+ * place's atom - what it is, how a stereocentre there is set - and the
+ * bonds between places, with a double bond's cis or trans; the same text
+ * for two orders only where they are the same molecule the same way.
+ */
+function written(input: LayoutInput, what: readonly string[], r: readonly number[]): string {
+  const at = new Array<number>(r.length);
+  r.forEach((p, a) => (at[p] = a));
+  const pad = (v: number) => String(v).padStart(6, "0");
+  const atoms = at.map((a) => {
+    const t = input.atoms[a].tetra;
+    return t ? `${what[a]}@${t.volume * parity(t.neighbours.map((m) => (m < 0 ? Infinity : r[m])))}` : what[a];
+  });
+  const bonds = input.bonds
+    .map((b) => {
+      const [p, q] = r[b.a] < r[b.b] ? [b.a, b.b] : [b.b, b.a];
+      const st = b.stereo ? `:${b.stereo.cis ? "c" : "t"}${pad(r[b.stereo.refs[p === b.a ? 0 : 1]])}${pad(r[b.stereo.refs[p === b.a ? 1 : 0]])}` : "";
+      return `${pad(r[p])}${pad(r[q])}:${b.order}${st}`;
+    })
+    .sort();
+  return `${atoms.join(";")}|${bonds.join(" ")}`;
 }
 
 /** The input with its atoms in the given order (old index to new), its bonds sorted by their atoms there. */
@@ -153,7 +237,8 @@ export function restored(out: Layout2D, to: readonly number[]): Layout2D {
     toward: out.toward.map(pair),
     dashed: out.dashed.map(pair),
     wedges: out.wedges.map((w) => ({ ...w, from: atom(w.from), to: atom(w.to) })),
-    hydrogens: out.hydrogens.map((h) => ({ ...h, on: atom(h.on) })),
+    // (each place its own: a drawing kept by layout2D is handed out again)
+    hydrogens: out.hydrogens.map((h) => ({ ...h, at: { ...h.at }, on: atom(h.on) })),
   };
 }
 
