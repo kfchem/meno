@@ -834,8 +834,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       await revealItemInDir(await jobFolder(job));
     },
     lookAtJobs,
-    /** A step deleted: its jobs stopped, and their files taken away once they have ended. */
-    forgetJobs: (step: { running?: { jobs: StepJob[] }; ran?: StepRan }) => {
+    /** A step deleted: its jobs stopped, and their files taken away once they have ended - and those waiting for its run let go, as when it is stopped. */
+    forgetJobs: (step: { id: number; running?: { jobs: StepJob[] }; ran?: StepRan }) => {
+      // (not left to the next look at the jobs: where it was the only step running, there is none)
+      const waiting = waiters.get(step.id) ?? [];
+      waiters.delete(step.id);
+      waiting.forEach((f) => f());
       const jobs = [...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? [])];
       for (const job of jobs) {
         void (async () => {

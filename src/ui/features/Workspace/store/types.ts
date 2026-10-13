@@ -1150,8 +1150,8 @@ export type EditorState = {
    */
   wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
-  forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran">) => void;
+  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran">) => void;
   /** A set round `frame`, as one step; its id. */
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */

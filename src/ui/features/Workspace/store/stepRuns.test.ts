@@ -478,6 +478,16 @@ describe("a step that runs a plugin's program", () => {
     expect(asked.stopped).toEqual([idOf(1)]);
   });
 
+  it("deleted while it runs - the only step running, its jobs looked at no more - ends its run: nothing waits on it for good", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().removeStep(step, true);
+    const ended = await Promise.race([ran.then(() => "ended"), new Promise((go) => setTimeout(() => go("waits"), 200))]);
+    expect(ended).toBe("ended");
+  });
+
   it("run again straight after it was stopped, runs anew once the stop has come through", async () => {
     const { st, step } = editor();
     const first = st().runStep(step);
