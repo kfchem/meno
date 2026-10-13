@@ -20,7 +20,7 @@ import {
 } from "../chem/marks";
 import { useEditor } from "../store";
 import type { Model } from "../store/types";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import StereoText from "./StereoText";
 import { MarkHold } from "./MarkHold2D";
@@ -62,7 +62,7 @@ export default function ChemMarks2D({
   /** What Meno was unsure of as it read parts from a figure, still as read: each with what it says (utils/figures `readMarks`). */
   read?: { atoms: Map<number, string>; bonds: Map<number, string> };
 }) {
-  const { atoms, layout, opts, zoom } = useDrawnLayout();
+  const { atoms, layout, opts } = useDrawnLayout();
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const hoveredBond = useEditor((s) => s.hovered.bondId);
@@ -82,6 +82,8 @@ export default function ChemMarks2D({
   // where there are any)
   const stereoWanted = !!marks && (marks.centres.size > 0 || marks.doubleBonds.size > 0);
   const wanted = stereoWanted || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
+  // (the view's zoom, where there is anything to mark: with nothing, a zoom draws nothing here again)
+  const zoom = useDrawnZoom((z) => (wanted ? z : 1));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame
