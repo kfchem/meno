@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import {
@@ -81,10 +81,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // what it reads of it changes: not in the layout's context, which every
   // layer reads - drawnLayoutContext `useDrawnZoom`)
   const [drawnZoom] = useState(() => drawnZoomOf(zoom));
-  const take = (z: number) => {
-    drawnZoom.set(z);
-    setZoom(z);
-  };
+  // (passed on once it is taken up - in the same commit as a layout laid out at it)
+  useLayoutEffect(() => drawnZoom.set(zoom), [drawnZoom, zoom]);
+  const take = setZoom;
   // The zoom it is laid out for (utils/largeZoom): the view's, taken up as
   // the view moves a hundredth from it (`nearZoom`) - the last of a wheel's
   // zoom, in steps too small to see, lays nothing out again; and, for a very

@@ -82,8 +82,10 @@ export default function ChemMarks2D({
   // where there are any)
   const stereoWanted = !!marks && (marks.centres.size > 0 || marks.doubleBonds.size > 0);
   const wanted = stereoWanted || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
-  // (the view's zoom, where there is anything to mark: with nothing, a zoom draws nothing here again)
-  const zoom = useDrawnZoom((z) => (wanted ? z : 1));
+  // (the view's zoom, where there is anything to mark: with nothing, a zoom
+  // draws nothing here again - and marks fading out keep the size they had)
+  const zoomWanted = useRef(1);
+  const zoom = useDrawnZoom((z) => (wanted ? (zoomWanted.current = z) : zoomWanted.current));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame

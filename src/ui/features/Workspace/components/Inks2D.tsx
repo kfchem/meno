@@ -28,7 +28,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
 const Z_PEN = 0.3;
@@ -108,8 +108,9 @@ function TalkStroke({ k, z, pointPx, ink }: { k: { look: InkLook; stroke: InkStr
 
 function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z: number; pointPx: number; ink: string; selected: boolean; hovered: boolean; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
-  const { camera, invalidate } = useThree();
-  const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  const { invalidate } = useThree();
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const px = 1 / useDrawnZoom();
   const width = inkWidth(k, pointPx);
   // the light round its strokes, under the pointer or selected, coming and going
   const [light, setLight] = useState(0);

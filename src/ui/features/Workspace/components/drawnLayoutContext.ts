@@ -74,5 +74,6 @@ export function useDrawnZoom(select: (zoom: number) => unknown = asIs): unknown 
   if (!zoom) {
     throw new Error("useDrawnZoom needs a DrawnLayoutProvider above it");
   }
-  return useSyncExternalStore(zoom.subscribe, () => select(zoom.get()));
+  const read = () => select(zoom.get());
+  return useSyncExternalStore(zoom.subscribe, read, read);
 }
