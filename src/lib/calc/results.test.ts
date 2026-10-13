@@ -201,6 +201,13 @@ describe("a number, wherever Meno writes one", () => {
     expect(valueText(-0.0000001, { quantity: "energy" })).toBe("0.000000 Eh");
   });
 
+  it("signs a spin population as it signs a charge", () => {
+    expect(valueText(0.52, { quantity: "spin" })).toBe("+0.520");
+    expect(valueText(-0.13, { quantity: "spin" })).toBe("\u22120.130");
+    expect(valueText(0.0001, { quantity: "spin" })).toBe("0.000");
+    expect(valueText(0.52, { quantity: "charge" })).toBe("+0.520");
+  });
+
   it("writes an energy above the lowest with its decimals chosen once it is rounded", () => {
     expect(aboveText(1.234)).toBe("1.23 kcal/mol");
     expect(aboveText(9.994)).toBe("9.99 kcal/mol");

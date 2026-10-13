@@ -15,8 +15,8 @@
  * its own (output.ts) and is no result.
  */
 
-/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
-export const QUANTITIES = ["energy", "charge", "wavenumber", "length", "angle", "dipole", "number"] as const;
+/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
+export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number"] as const;
 export type Quantity = (typeof QUANTITIES)[number];
 
 /** How a value is written: as a quantity Meno knows; or else with the unit given; and to how many decimals, where not as Meno would. */
@@ -312,6 +312,7 @@ export function bySource<R extends Result>(results: readonly R[], nameOf: (from:
 const UNITS: Record<Quantity, string> = {
   energy: "Eh",
   charge: "",
+  spin: "",
   wavenumber: "cm⁻¹",
   length: "Å",
   angle: "°",
@@ -321,6 +322,7 @@ const UNITS: Record<Quantity, string> = {
 const DIGITS: Record<Quantity, number> = {
   energy: 6,
   charge: 3,
+  spin: 3,
   wavenumber: 1,
   length: 3,
   angle: 1,
@@ -345,7 +347,7 @@ export function aboveText(kcal: number): string {
 
 /**
  * A value as it is written, with its unit: "−0.412", "+0.213" for a
- * charge, "1650.2 cm⁻¹" - an imaginary wavenumber "120.5i cm⁻¹" - "2.31 D",
+ * charge or a spin population, "1650.2 cm⁻¹" - an imaginary wavenumber "120.5i cm⁻¹" - "2.31 D",
  * "109.5°", "90.31 cal/(mol·K)"; a text as it is; none, a dash.
  */
 export function valueText(v: Cell, m: Measure): string {
@@ -356,7 +358,8 @@ export function valueText(v: Cell, m: Measure): string {
   if (q === "wavenumber" && v < 0) return `${numberText(-v, digits)}i ${UNITS.wavenumber}`;
   const t = numberText(v, digits);
   const unit = q ? UNITS[q] : m.unit;
-  if (q === "charge") return v > 0 && !/^0(\.0*)?$/.test(t) ? `+${t}` : t;
+  // (a charge, or a spin population, signed: +0.520, −0.130)
+  if (q === "charge" || q === "spin") return v > 0 && !/^0(\.0*)?$/.test(t) ? `+${t}` : t;
   if (q === "angle") return `${t}°`;
   return unit ? `${t} ${unit}` : t;
 }

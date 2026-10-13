@@ -398,7 +398,7 @@ once (*Several at once*).
 | Ready | none, grey words | *Ready* |
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
 | Running | turning, the accent | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
-| Done | a tick, the accent | *2:03 · −42.108710 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
+| Done | a tick, the accent | *2:03 · E −42.108710 Eh* (its electronic energy), or *81 of 81*, or *23 kept* - how long, and the number the step is for |
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it, changed since its run; its results stay as they are |

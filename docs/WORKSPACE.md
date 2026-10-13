@@ -528,7 +528,8 @@ Each result says what it belongs to, and Meno puts it there:
 | A list | vibrations, orbitals, NBO's interactions | from the molecule's menu, under the molecule |
 
 - **A value says what quantity it is,** in Meno's unit for it - an energy
-  in hartrees, a charge in e, a wavenumber in cm⁻¹ (an imaginary one
+  in hartrees, a charge in e, a spin population in e (signed, as a charge
+  is), a wavenumber in cm⁻¹ (an imaginary one
   negative), a length in ångströms, a dipole in debye, a number, a text -
   and Meno writes it, the same way whichever plugin gave it. Any other
   gives its unit, and is written with it.

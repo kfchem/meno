@@ -254,7 +254,8 @@ export default function CalcList3D({
           <div className="h-2 rounded-full border border-gh-line" style={{ background: `linear-gradient(to right, ${SCALE_CSS})` }} />
           <div className="mt-0.5 flex justify-between tabular-nums">
             <span>{scaleText(scale.from)}</span>
-            {scale.label && <span className="truncate px-2">{scale.label}</span>}
+            {/* (whole, its unit or scale factor with it: never cut short) */}
+            {scale.label && <span className="px-2 text-center">{scale.label}</span>}
             <span>{scaleText(scale.to)}</span>
           </div>
         </div>

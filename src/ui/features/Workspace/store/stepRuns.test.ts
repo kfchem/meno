@@ -219,7 +219,7 @@ describe("a step that runs a plugin's program", () => {
     await ran;
     // what it printed read by Meno's readers, as an output opened is - ORCA's kind - and kept, by that kind
     expect(readOutput).toHaveBeenCalledWith("water.out", "ORCA's output", expect.objectContaining({ id: "orca" }), expect.any(String));
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1:00 · −76.400000 Eh" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1:00 · E −76.400000 Eh" });
     const m = st().molecules3d[st().molecules3d.length - 1];
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
