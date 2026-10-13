@@ -8,7 +8,7 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
 import { BETWEEN, SET_TOP } from "./look";
 import { addSet, addStep, moveStep } from "./model";
-import { fitResultSets, placeResults, type RunWith } from "./run";
+import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
 
 /** A bent triatomic about the origin: water, or one of its kind. */
 const bent = (el = "O"): Omit<Molecule3D, "id" | "at"> => ({
@@ -175,5 +175,35 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
     doc.undo();
     expect(doc.getState().steps![0].x).toBe(0);
     expect(fitted(doc.getState(), look)).toEqual({ count: 4, inside: true, apart: true });
+  });
+});
+
+// (the conformance run, #324: "4 / 4 · 0.00 kcal/mol" under a water ran onto its neighbour's chip, and out past the set's frame)
+describe("a result set of molecules narrower than their frames chips", () => {
+  it("lays each chip clear of its neighbours', inside the frame", () => {
+    const optimised = (el: string, n: number): Omit<Molecule3D, "id" | "at"> => {
+      const b = bent(el);
+      const xyz = b.atoms.flatMap((a) => [a.x, a.y, a.z]);
+      return { ...b, frames: Array.from({ length: n - 1 }, () => xyz), energies: Array.from({ length: n }, (_, i) => -5 - i / 1000), path: true };
+    };
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    d = placeResults(d, d.steps![0], { molecules: [optimised("O", 4), optimised("S", 5), optimised("O", 12)], aside: [], holds: "molecules" }, { extentOf: reaching(0.4) });
+    const set = d.sets![0];
+    const chips = d.molecules3d!.map((m) => ({ x0: m.at.x - chipWide(m) / 2, x1: m.at.x + chipWide(m) / 2, y: m.at.y }));
+    expect(chips.every((c) => c.x1 - c.x0 > 0.8)).toBe(true);
+    // (one row: each chip ends before the next begins, all within the frame)
+    expect(new Set(chips.map((c) => c.y)).size).toBe(1);
+    for (let i = 1; i < chips.length; i++) expect(chips[i].x0).toBeGreaterThanOrEqual(chips[i - 1].x1);
+    expect(chips[0].x0).toBeGreaterThanOrEqual(set.x0);
+    expect(chips[chips.length - 1].x1).toBeLessThanOrEqual(set.x1);
+  });
+
+  it("gives a chip room as wide as what it says, and a single geometry's none", () => {
+    const one = bent();
+    expect(chipWide(one)).toBe(0);
+    const xyz = one.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const four = { ...one, frames: [xyz, xyz, xyz] };
+    expect(chipWide({ ...four, energies: [-1, -1, -1, -1] })).toBeGreaterThan(chipWide(four));
+    expect(chipWide({ ...four, energies: [-1, -1, -1, -1], shares: [0.25, 0.25, 0.25, 0.25] })).toBeGreaterThan(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
   });
 });

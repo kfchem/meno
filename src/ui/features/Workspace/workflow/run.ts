@@ -15,7 +15,7 @@ import { hasChip } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
-import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, GAP, PX } from "./look";
+import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { runMeno, type Outcome } from "./meno";
 import { addSet, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -240,10 +240,33 @@ export function placeResults(
   return markMade(addSet(doc, frame, madeBy), id, madeBy, aside);
 }
 
-/** The room a molecule in a result set takes about its middle: as far as it reaches (`e`), a quarter of a bond at least each way - and its frames chip's below it, where it has one. */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc">, e: Frame): Frame & { chip: number } {
+/**
+ * The room a molecule in a result set takes about its middle: as far as it
+ * reaches (`e`), a quarter of a bond at least each way - and its frames
+ * chip's below it, where it has one, as wide as the chip where that is
+ * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
+ * wider than a water).
+ */
+function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet">, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
-  return { x0: Math.min(e.x0, -least), x1: Math.max(e.x1, least), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
+  const half = chipWide(m) / 2;
+  return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
+}
+
+/**
+ * About how wide a molecule's frames chip is, shut, on the page - as
+ * Frames3D writes it: "#3 · 4 / 12 · 0.00 kcal/mol · 62%", its widest
+ * numbers - where it shows always, a molecule of several frames. A single
+ * geometry's shows only while it is pointed at, over what is beside it:
+ * none.
+ */
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet">): number {
+  const n = framesOf(m);
+  if (n < 2) return 0;
+  const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
+  const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
+  const shares = m.shares?.length === n || (m.conformerSet && m.energies?.length === n) ? " · 100%" : "";
+  return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
 }
 
 /**
