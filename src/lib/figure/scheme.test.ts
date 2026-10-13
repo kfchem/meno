@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { readScheme, type SchemeRead } from "./scheme";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
+import dielsAlder from "./fixtures/diels-alder-rdkitrxn.json";
 import grignard from "./fixtures/grignard-rdkitrxnacs.json";
 
 // Schemes drawn as a drawing program draws them, in points from the page's
@@ -465,6 +466,14 @@ describe("a reaction drawn by another program", () => {
     expect(s.arrows).toHaveLength(1);
     expect(s.arrows[0].point.x).toBeGreaterThan(s.arrows[0].tail.x + 40);
     expect(s.pluses).toHaveLength(1);
+  });
+
+  it("reads a plus sign set a little way past a molecule's line ends as a plus sign, its strokes no bonds", () => {
+    // (a Diels-Alder reaction as RDKit's reaction drawing draws it: the "+" between butadiene and methyl acrylate, a line's end
+    // of the diene an arm's length and a half from its middle)
+    const s = readScheme(dielsAlder as unknown as FigureDrawn);
+    expect(s.pluses).toHaveLength(1);
+    expect(s.figure.atoms.filter((a) => !a.label)).toHaveLength(4 + 4 + 8);
   });
 
   it("takes the bonds' length from a structure's lines meeting at joints, however small its letters beside them", () => {

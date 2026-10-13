@@ -1144,7 +1144,9 @@ being arrows.
     quarters of it, thick over 1.6 times), and its colour, where it is
     drawn in one rather than black or near it.
 - **"+" signs**: a "+" set alone, two strokes crossing at their middles,
-  square to each other and as long, touching nothing, or a filled cross.
+  square to each other and as long, touching nothing - no other line
+  ending at its arms' ends, though a molecule may stand a little past
+  them - or a filled cross.
 - **Words**: letters set in lines - a smaller letter set high or low with
   its line - and lines one close under another in blocks. A space goes
   where letters stand apart, measured by how they are set: each letter's

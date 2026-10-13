@@ -572,9 +572,10 @@ export function plusesOf(shapes: Shapes, bond: number, used: ReadonlySet<object>
       const pm = { x: (p.a.x + p.b.x) / 2, y: (p.a.y + p.b.y) / 2 };
       const qm = { x: (q.a.x + q.b.x) / 2, y: (q.a.y + q.b.y) / 2 };
       if (dist(pm, qm) > 0.15 * len(p)) continue;
-      // (nothing else ends by it)
+      // (nothing else ends by it - at its arms' ends, as bonds crossing at their middles have other bonds there; a molecule may stand
+      // a little past them, as RDKit's reaction drawing sets a "+")
       const own = [p.a, p.b, q.a, q.b];
-      const r = 0.6 * Math.max(len(p), len(q)) + 0.15 * bond;
+      const r = 0.65 * Math.max(len(p), len(q));
       if (ends.some((e) => !own.includes(e) && dist(e, pm) < r)) continue;
       taken.add(p);
       taken.add(q);
