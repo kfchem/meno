@@ -154,13 +154,18 @@ they hang from.
   above the front one, a bond's length from the back one; the rest is
   eased into place - its bonds toward one length, each atom held near
   where the solid seen from that side puts it - and eased again with
-  atoms not bonded to each other kept 0.7 of a bond apart, that taken
-  where it reads better, by the measure views are chosen by: where the
-  solid seen so puts one atom on another (scopolamine's tropane, a solid
-  now as cocaine's is), not where a near pair is the drawing's own
-  (adamantane's back CH2 by a front bridgehead). A stereocentre the
-  easing turns - a bridgehead whose three bonds lie nearly in the page
-  can tip through - goes back where the solid puts it. Adamantane is then a chair with its three axial bonds
+  atoms not bonded to each other kept 0.7 of a bond apart. That is taken
+  only where it leaves fewer pairs of atoms nearer than 0.6 of a bond and
+  reads better by the measure a flat drawing and a solid are weighed by
+  (`viewCost` at its defaults, with no depth): where the solid seen so
+  puts one atom on another (scopolamine's epoxide by its N), not where a
+  near pair is the drawing's own (adamantane's back CH2 by a front
+  bridgehead; bicyclo[2.2.2]octane's back bridge by its back bridgehead,
+  which eased apart only comes a little less near, its bonds uneven). A
+  stereocentre the easing turns - a bridgehead whose three bonds lie
+  nearly in the page can tip through - goes back where it was put (one
+  stood upright on the ring, upright still), and the others are looked at
+  again. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there. Bonds out of the ring follow it - an equatorial

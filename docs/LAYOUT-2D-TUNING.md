@@ -204,13 +204,21 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   one length with nothing keeping them off each other: seen from the
   template's side, scopolamine's epoxide landed by its N, and its solid
   lost to a flat drawing. The easing is run again with atoms not bonded
-  to each other kept 0.7 of a bond apart, and that taken where it reads
-  better by the view measure (atoms nearer than 0.6 counted). Kept apart
+  to each other kept 0.7 of a bond apart, and that taken where it leaves
+  fewer pairs of atoms nearer than 0.6 of a mean bond and has a lower
+  `viewCost` at its defaults (0.6 and 0.3, no depth: the measure flat and
+  solid are weighed by, not the one views are ranked by). Kept apart
   always, adamantane's bonds came out uneven - its back CH2 0.62 from a
   front bridgehead is how it is drawn - and tetrodotoxin's C4 mark moved
-  onto a ring bond. A centre the easing turns is put back where the solid
-  has it. Scopolamine (12.2 to 2.1), ibogaine (20.3 to 17.1) and gelsemine
-  (9.5 to 6.9) read better; nothing else changes.
+  onto a ring bond. Taken wherever `viewCost` alone fell (hunter B's
+  review), every bicyclo[2.2.2] view counted as crowded - its back bridge
+  0.52 from the back bridgehead, eased only to 0.54 with its bonds uneven -
+  and of 1230 bridged molecules 37 read worse by more than 0.5 (a
+  chlorobicyclo[2.2.2]octanol 4.3 to 8.4, a 3-aryl nortropane 2.4 to 7.5).
+  A centre the easing turns is put back where it was put, again while any
+  reads wrong. Scopolamine (12.2 to 2.1), gelsemine (9.5 to 6.9) and
+  tetrodotoxin (16.31 to 16.26) read better; nothing else on the two lists
+  changes. Ibogaine, 20.3 to 17.1 by `viewCost` alone, is left as it was.
 - **A double bond is stereo too.** The read-back guards read the
   stereocentres only, and huperzine A's bridge drew a ring's C=C trans
   unnoticed. They read every drawn double bond now (2026-10-13): one the
