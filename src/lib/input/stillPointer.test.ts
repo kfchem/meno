@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { movedUnderPress, stillPointer, viewMoved } from "./stillPointer";
+import { FIND_EVERY_MS, movedUnderPress, stillPointer, viewMoved } from "./stillPointer";
 
 const ev = (type: string, x: number, y: number, more: { buttons?: number; pointerType?: string } = {}) => ({
   type,
@@ -20,6 +20,24 @@ describe("what is under a pointer held still, found again", () => {
     p.moved();
     expect(p.findAgain()).toEqual({ clientX: 500, clientY: 313, pointerId: 1, buttons: 0 });
     expect(p.findAgain()).toBeNull();
+  });
+
+  it("is found at most every tenth of a second with no button held, the rest put off - not with one held", () => {
+    const p = stillPointer();
+    p.heard({ type: "pointermove", clientX: 500, clientY: 313, pointerId: 1, pointerType: "mouse", buttons: 0 });
+    p.moved();
+    expect(p.findAgain(1000)).not.toBeNull();
+    p.moved();
+    expect(p.findAgain(1040)).toBeNull();
+    expect(p.wait(1040)).toBe(FIND_EVERY_MS - 40);
+    expect(p.findAgain(1000 + FIND_EVERY_MS)).not.toBeNull();
+    expect(p.wait(1000 + FIND_EVERY_MS)).toBeNull();
+    // (a press held: every frame)
+    p.heard({ type: "pointerdown", clientX: 500, clientY: 313, pointerId: 1, pointerType: "mouse", buttons: 1 });
+    p.moved();
+    expect(p.findAgain(2000)).not.toBeNull();
+    p.moved();
+    expect(p.findAgain(2010)).not.toBeNull();
   });
 
   it("is found with the button held too: what the press drags follows the pointer as the view moves", () => {

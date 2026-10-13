@@ -6,9 +6,6 @@ import { rememberable, valuesOf, type Known, type OptionValues } from "../../../
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionsForm from "../../options/OptionsForm";
 
-/** A molecule in 3D on the page, as Export names it when it asks which to write. */
-export type Offered3D = { id: number; name: string };
-
 /**
  * Export, asked before the file's name (docs/FILE-IO.md, *Save and
  * Export*): the kind of file - those the canvas can be written as, Meno's
@@ -16,16 +13,16 @@ export type Offered3D = { id: number; name: string };
  * one chosen last time, where it is among them - and that kind's options, as
  * its writer declares them (lib/io/writers), the last chosen remembered.
  * A writer given one molecule is given the molecules in 3D selected - one
- * system, where several are - or the one there is; else the card asks
- * which. Options that start from what is written (lib/options `Known`) start
- * from that molecule. A card over the canvas, as Ask3D is, so that what is
- * written stays in view.
+ * system, where several are: Export is for the selection (the maintainer,
+ * 2026-10-10), and a plugin's writer is offered only where it holds some.
+ * Options that start from what is written (lib/options `Known`) start from
+ * those. A card over the canvas, as Ask3D is, so that what is written stays
+ * in view.
  */
 export default function ExportCard({
   writers,
   from,
   what,
-  molecules,
   selected,
   known,
   onExport,
@@ -37,8 +34,7 @@ export default function ExportCard({
   what: Holds;
   /** The kind of the file the canvas came from, where it can be written as it. */
   from?: string;
-  /** The molecules in 3D on the page, and those selected, by id. */
-  molecules: readonly Offered3D[];
+  /** The molecules in 3D selected, by id. */
   selected: readonly number[];
   /** What Meno knows of the molecules in 3D written, by their ids. */
   known: (ids: readonly number[]) => Partial<Record<Known, string | number>>;
@@ -50,10 +46,8 @@ export default function ExportCard({
   const last = remembered[EXPORT_ROLE]?.kind;
   const [kind, setKind] = useState<string>(from ?? writers.find((w) => w.id === last)?.id ?? writers[0].id);
   const writer = writers.find((w) => w.id === kind) ?? writers[0];
-  // (the molecules in 3D written by a writer given one: those selected, or the one there is, or the one chosen here)
-  const [picked, setPicked] = useState<number | null>(null);
-  const given = writer.takes !== "molecule" ? [] : selected.length ? [...selected] : molecules.length === 1 ? [molecules[0].id] : picked != null ? [picked] : [];
-  const asks = writer.takes === "molecule" && !selected.length && molecules.length > 1;
+  // (the molecules in 3D written by a writer given one: those selected)
+  const given = writer.takes !== "molecule" ? [] : [...selected];
   // (each kind's options as chosen in this card, or as they were last time - or as what is written says)
   const [chosen, setChosen] = useState<Partial<Record<string, OptionValues>>>({});
   const values = chosen[writer.id] ?? valuesOf(writer.options, remembered[writeRole(writer.id)], known(given));
@@ -71,18 +65,6 @@ export default function ExportCard({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
-
-  const pick = (id: number) => {
-    setPicked(id);
-    // (what starts from the molecule written starts afresh from the one picked)
-    setChosen((c) => {
-      const mine = c[writer.id];
-      if (!mine) return c;
-      const fresh = valuesOf(writer.options, {}, known([id]));
-      const kept = rememberable(writer.options, mine);
-      return { ...c, [writer.id]: { ...fresh, ...kept } };
-    });
-  };
 
   const go = () => {
     if (!ready) return;
@@ -122,19 +104,6 @@ export default function ExportCard({
           </button>
         ))}
       </div>
-      {asks && (
-        <motion.fieldset initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
-          <legend className="text-xs text-gh-gray mb-1">Molecule</legend>
-          <div className="space-y-1">
-            {molecules.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 text-sm text-gh-black">
-                <input type="radio" name="export-molecule" checked={picked === m.id} onChange={() => pick(m.id)} />
-                {m.name}
-              </label>
-            ))}
-          </div>
-        </motion.fieldset>
-      )}
       {shown.length > 0 && (
         <motion.div key={`${writer.id}:${given.join(",")}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
           <OptionsForm options={shown} values={values} onChange={(v) => setChosen((c) => ({ ...c, [writer.id]: v }))} />

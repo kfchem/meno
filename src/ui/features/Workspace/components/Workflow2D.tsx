@@ -9,8 +9,9 @@ import { COLORS } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
-import StepCard, { Port, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { countOf, type Frame } from "../workflow/entries";
+import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { wordsTooSmall } from "../utils/pageScale";
@@ -19,8 +20,9 @@ import { DURATION } from "../../../theme/motion";
 import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, PORT_DOWN, PX } from "../workflow/look";
+import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PX, shuttingCard } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -45,8 +47,6 @@ const WIRE_HIT_PX = 10;
 const DASH_PX = 6;
 const GAP_PX = 4;
 const DASH_SPEED = 12;
-/** How often the jobs of the steps that run any are looked at, in ms. */
-const LOOK_MS = 1000;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -210,12 +210,6 @@ function runRows(s: WorkflowStep): RunRow[] {
 }
 
 /**
- * Where on the page's layer of HTML a point of the page is: the layer's
- * origin is the page's, its pixels `PX` world units, downwards.
- */
-const onLayer = (x: number, y: number): React.CSSProperties => ({ position: "absolute", left: x / PX, top: -y / PX });
-
-/**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
  * selection's right edge that makes it an input, while it holds whole
@@ -235,6 +229,13 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  // (the card just shut kept over the others while it shrinks back)
+  const [shutting, setShutting] = useState<number | null>(null);
+  const toldOpen = useRef<((open: number | null) => void) | null>(null);
+  useEffect(() => {
+    toldOpen.current ??= shuttingCard(setShutting, DURATION.base * 1000);
+    toldOpen.current(openStep);
+  }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -259,14 +260,20 @@ export default function Workflow2D() {
   }, [programsRun]);
 
   // the jobs of the steps that run any, looked at while there are any - and
-  // at once, so that a workspace opened with jobs under way picks them up
+  // at once, so that a workspace opened with jobs under way picks them up;
+  // often while the newest run is young (workflow/lookEvery)
   const anyRunning = useEditor((s) => s.steps.some((x) => x.running));
+  const newest = useEditor((s) => s.steps.reduce((t, x) => Math.max(t, x.running?.at ?? 0), 0));
   useEffect(() => {
     if (!anyRunning) return;
-    void store.getState().lookAtJobs();
-    const t = setInterval(() => void store.getState().lookAtJobs(), LOOK_MS);
-    return () => clearInterval(t);
-  }, [anyRunning, store]);
+    let t: ReturnType<typeof setTimeout>;
+    const look = () => {
+      void store.getState().lookAtJobs();
+      t = setTimeout(look, lookEvery(Date.now() - newest));
+    };
+    look();
+    return () => clearTimeout(t);
+  }, [anyRunning, newest, store]);
 
   // the zoom: where it crosses what a card's words need to be read; what
   // a hair on the screen is on the page's layer of HTML (`--hair`); and, by
@@ -528,7 +535,11 @@ export default function Workflow2D() {
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
   };
-  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps]);
+  // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
+  const settingsOptions = useAppSettings((s) => s.options);
+  // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps, settingsOptions]);
   // how each running step's jobs are getting on, as last looked at
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
@@ -546,6 +557,7 @@ export default function Workflow2D() {
           ended: seen.filter((x) => x && finished(x.state)).length,
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
+          ...(shareOf(seen) != null ? { share: shareOf(seen) } : {}),
         },
       });
     }
@@ -646,8 +658,8 @@ export default function Workflow2D() {
       const how = howOf(takes, s.options, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       return (
-        // (its top at its place: the card grows downwards as it opens)
-        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y)}>
+        // (its top at its place: the card grows downwards as it opens - over the cards below it)
+        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id || shutting === s.id)}>
           <StepCard
             step={s}
             info={info}

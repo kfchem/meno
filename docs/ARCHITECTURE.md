@@ -309,8 +309,15 @@ What is left before the editor counts as finished, and in what order, is in
   bond's neighbours from its atoms' own bonds. A zoom does not lay the
   drawing out again while the layout made at the zoom it was laid out at
   is the same drawing at this one (`sameAtZooms`: world units, lines wider
-  than the least they are kept at, a wave's turns in as many steps). The
-  round caps are one instanced mesh; the hit areas of atoms and bonds are
+  than the least they are kept at, a wave's turns in as many steps). Nor
+  does a change lay out what it does not touch: the drawing is laid out a
+  structure at a time (`lib/chem/layoutStructures.ts`), each atom and bond
+  reaching the layout as the same object while it is unchanged, and what a
+  structure was laid out to is taken again while all of its atoms and bonds
+  are; structures are laid out together where a name's letters, a note on
+  a bond or a bond in perspective reaches from one to the other, and a
+  drawing with a bracket (an S-group) is laid out whole. A glide moves only
+  the structures that changed. The round caps are one instanced mesh; the hit areas of atoms and bonds are
   never drawn (picking does not ask whether a material is); the ring
   circles the canvas offers are found without a second layout
   (`ringCircles`), when the pointer looks for one; R, S, E and Z are placed
@@ -542,6 +549,14 @@ closes*).
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
   it was asked for).
+- **Looked at often while young** (2026-10-13). The runner looks for its
+  turn every 400 ms, and at its program every 200 ms - but every 50 ms
+  for the first 3 s of a program, and of a job at the head of the queue,
+  easing back to its old step by 6 s (`step_at`). The page looks at a
+  run's jobs every 100 ms for its newest run's first 3 s, easing back to
+  once a second by 6 s (`workflow/lookEvery`). A step whose program takes
+  0.2 s is seen done within a few tenths of a second, and what runs on, or
+  waits behind others, is watched no more often than before.
 - **Its program** runs in `work/`, its output and errors in `log.txt` -
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
@@ -713,6 +728,24 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   git ignores - no program's output is committed - and run by hand
   (`scripts/calc/test_reader_cclib.py`); the app's side is tested with the
   plain data written by hand.
+- It reads an output as the program left it (2026-10-13). Gaussian's,
+  ORCA's and xtb's say how the run went, in their own words. One that
+  stopped on an error is read as far as it went, with "Run: ended with an
+  error" first in the chip's line and the program's reason among the
+  results. One with no end written is read the same way, with "Run: did
+  not come to its end" - cut short, or still running. An SCF that did not
+  converge gives no energy ("SCF: not converged"), and where the run
+  stopped, the geometries after the last it worked out an energy for are
+  left out. Where cclib cannot read an output as it is, it is read again
+  with a number that overflowed its field (asterisks) taken as not known,
+  and then as far as it reads - its last lines left off, more each time;
+  where the run itself came to its end, the chip says "Read: only in
+  part".
+  Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
+  not atoms of the molecule and are left out; ORCA's point charges ("Q")
+  are taken out before cclib reads it. An answer never holds a number
+  that is not one (JSON has none). Tested, with cclib, by hand
+  (`scripts/calc/test_reader_cclib_runs.py`).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows; cclib
   from PyPI) is a plugin of its own, sharing no code with another
@@ -1130,6 +1163,13 @@ path it is given:
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.
+- A sidecar's stdin is written to with its own lock, the table of
+  sidecars let go first (`write_stdin`), and off the commands' threads.
+  A worker that stops reading holds up only what is written to it until
+  it is killed, which fails the write; every other sidecar is written
+  to, started and stopped meanwhile (2026-10-13: the table was held
+  through the write, and one stuck worker, sent a file bigger than its
+  pipe holds, held up every plugin's).
 
 Adding a new worker or interpreter flag means extending these rules
 (`PYTHON_FLAGS`, the workers directory) together with the unit tests in
