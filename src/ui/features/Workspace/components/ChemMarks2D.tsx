@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
   fontStack,
@@ -23,6 +23,8 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import StereoText from "./StereoText";
 import { MarkHold } from "./MarkHold2D";
+import { usePageHtmlLayer } from "./coverLayer";
+import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
 
 /** Marks sit over the drawing, and under the canvas's buttons and cards. */
 const Z_RANGE = [20, 10];
@@ -59,6 +61,14 @@ export default function ChemMarks2D({
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const hoveredBond = useEditor((s) => s.hovered.bondId);
+  // (what can be seen of the canvas, the column over its right side left out: where what a mark says is kept - markTip)
+  const gl = useThree((s) => s.gl);
+  const layer = usePageHtmlLayer();
+  const cover = useEditor((s) => s.cover);
+  const room = useCallback((): ScreenBox => {
+    const r = (layer?.current ?? gl.domElement).getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right - cover, bottom: r.bottom };
+  }, [layer, gl, cover]);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => invalidate(), [marks, invalidate]);
 
@@ -290,9 +300,7 @@ export default function ChemMarks2D({
             style={{ width: m.w, height: m.h, borderRadius: m.round ? "50%" : 3 }}
           >
             {(m.bond ? hoveredBond === m.id : hoveredAtom === m.id) && !leaving && (
-              <div className="meno-fade-in absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm">
-                {m.message}
-              </div>
+              <MarkTip text={m.message} room={room} />
             )}
           </div>
         </PageHtml>
@@ -322,6 +330,31 @@ export default function ChemMarks2D({
         </PageHtml>
       )}
     </group>
+  );
+}
+
+/** What a mark says, under it - moved along, or put over it, to lie where it can be seen (markTip). */
+function MarkTip({ text, room }: { text: string; room: () => ScreenBox }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ dx: number; above: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const mark = el?.parentElement?.getBoundingClientRect();
+    if (!el || !mark) return;
+    setPlace(tipPlace(tipUnder(mark, el.offsetWidth, el.offsetHeight), mark, room()));
+  }, [text, room]);
+  return (
+    <div
+      ref={ref}
+      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
+      style={{
+        [place?.above ? "marginBottom" : "marginTop"]: TIP_GAP_PX,
+        transform: `translateX(calc(-50% + ${place?.dx ?? 0}px))`,
+        visibility: place ? undefined : "hidden",
+      }}
+    >
+      {text}
+    </div>
   );
 }
 
