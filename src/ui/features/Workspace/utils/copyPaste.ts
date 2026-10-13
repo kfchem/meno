@@ -27,6 +27,7 @@ import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 
@@ -641,8 +642,8 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
   if (!points.length) return drawn;
   const xs = points.map((a) => a.x);
   const ys = points.map((a) => a.y);
-  const dx = p.x - (Math.min(...xs) + Math.max(...xs)) / 2;
-  const dy = p.y - (Math.min(...ys) + Math.max(...ys)) / 2;
+  const dx = p.x - (least(xs) + greatest(xs)) / 2;
+  const dy = p.y - (least(ys) + greatest(ys)) / 2;
   const moved = <T extends Pt>(t: T): T => ({ ...t, x: t.x + dx, y: t.y + dy });
   return {
     ...drawn,
