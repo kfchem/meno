@@ -10,6 +10,7 @@ import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
+import { readRxnfile } from "../chem/ctfile";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
@@ -97,6 +98,15 @@ function depthOf(m: Molecule): number {
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
 /**
+ * Why a file that ends before what it says it holds - its atoms and bonds,
+ * its reaction's molecules - is not read: what it holds is not what it says
+ * (CTfile's counts lines, an XYZ frame's count), and read anyway its missing
+ * atoms stood at the origin, or were left out, saying nothing.
+ */
+const cutShort = (name: string, what = "it") =>
+  new Error(`${name} could not be read: ${what} ends before the atoms and bonds it says it has. It may be cut short or damaged.`);
+
+/**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
  * with its arrow and "+" signs; an XYZ file's frames, one molecule's, in
  * 3D, each with its energy where the comment lines give one; a PDB file's
@@ -107,11 +117,13 @@ const noMolecules = (name: string) => new Error(`No molecules found in ${name}. 
 export function readStructures(kind: StructureKind, filename: string, content: string): StructureRead {
   const name = filename || "the file";
   if (kind === "pdb") {
-    const molecules3d = pdbMolecules(readPdb(content), filename);
+    // (its records by line, whatever ends them - an old Mac's CR too - and a byte-order mark no part of the first)
+    const molecules3d = pdbMolecules(readPdb(content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n")), filename);
     if (!molecules3d.length) throw noMolecules(name);
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
   }
   if (kind === "rxn") {
+    if (readRxnfile(content).cut) throw cutShort(name);
     // RXN format: uses pre-computed layout with arrow
     const rxnLayout = buildEditorModelFromRXN(content);
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
@@ -124,7 +136,13 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
 
   // MOL, SDF, XYZ formats: parse molecules and convert to editor model
-  const molecules = readMoleculesFromText(content, kind);
+  const read = readMoleculesFromText(content, kind);
+  const cut = read.findIndex((m) => m.ct?.cut);
+  if (cut >= 0) throw cutShort(name, read.length > 1 ? `its record ${cut + 1}` : "it");
+  // (an XYZ file's first frame cut short is refused; its last of several -
+  // a trajectory still being written - left out, the frames before it whole)
+  if (kind === "xyz" && read[0]?.cut) throw cutShort(name, "its first frame");
+  const molecules = kind === "xyz" ? read.filter((m) => !m.cut) : read;
 
   // 3D structures stand on the page as they are: an XYZ file's frames are
   // one molecule's, a MOL or SD file's records each a molecule of its own -
@@ -132,7 +150,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   if (kind === "xyz" && molecules.length && molecules[0].atoms.length) {
     const [first, ...rest] = molecules;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = rest.length ? energiesOf(xyzComments(content)) : undefined;
+    const energies = rest.length ? energiesOf(xyzComments(content))?.slice(0, molecules.length) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },

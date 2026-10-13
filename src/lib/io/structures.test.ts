@@ -174,3 +174,47 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(() => readStructures("pdb", "x.pdb", "REMARK   1\nEND\n")).toThrow(/No molecules found in x.pdb/);
   });
 });
+
+describe("a structure's file cut short or damaged, as Meno's own reader gives it", () => {
+  const cut = (text: string, share: number) => text.slice(0, Math.floor(text.length * share));
+  const lines = (text: string, share: number) => text.split("\n").slice(0, Math.floor(text.split("\n").length * share)).join("\n");
+
+  it("is refused, saying so, where it ends before the atoms and bonds its counts line gives - not read as atoms at the origin", () => {
+    // (read anyway, a MOL file cut after its first atom was 62 atoms, 61 of them carbons at the origin, and no bonds)
+    for (const share of [0.02, 0.3, 0.7]) expect(() => readStructures("sdf", "c.sdf", cut(sampleSdf, share)), `cut at ${share}`).toThrow(/c.sdf could not be read: it ends before the atoms and bonds it says it has/);
+    for (const share of [0.02, 0.3, 0.7]) expect(() => readStructures("rxn", "e.rxn", cut(sampleRxn, share)), `cut at ${share}`).toThrow(/e.rxn could not be read: it ends before/);
+    // (a reaction cut at its second molecule was read as its first, saying nothing)
+    expect(() => readStructures("rxn", "e.rxn", lines(sampleRxn, 0.5))).toThrow(/e.rxn could not be read/);
+    // a counts line giving more than the file holds, or an atom's line with no place
+    expect(() => readStructures("sdf", "c.sdf", sampleSdf.replace(/^(.*\n.*\n.*\n)\s*\d+\s+\d+/, "$1999 30"))).toThrow(/could not be read/);
+    expect(() => readStructures("sdf", "c.sdf", sampleSdf.replace(/-?\d+\.\d{4}/, "abc"))).toThrow(/could not be read/);
+    // (a whole file still reads, its SD data items cut or not)
+    expect(readStructures("sdf", "c.sdf", sampleSdf.replace(/\$\$\$\$\s*$/, "")).model.atoms.length).toBeGreaterThan(20);
+    expect(readStructures("sdf", "c.sdf", sampleSdf.replace(/\r?\n/g, "\r\n")).model.atoms.length).toBeGreaterThan(20);
+  });
+
+  it("names the record of an SD file that is cut short", () => {
+    const record = (title: string) =>
+      [title, "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+        "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+        "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+        "  1  2  1  0", "M  END", "$$$$"].join("\n");
+    const two = `${record("one")}\n${record("two")}`;
+    expect(() => readStructures("sdf", "two.sdf", two.slice(0, two.lastIndexOf("  1  2  1  0")))).toThrow(/two.sdf could not be read: its record 2 ends before/);
+  });
+
+  it("refuses an XYZ file whose first frame is cut short, and leaves out a trajectory's last frame, cut short as it is still written", () => {
+    expect(() => readStructures("xyz", "w.xyz", WATER.split("\n").slice(0, 4).join("\n"))).toThrow(/w.xyz could not be read: its first frame ends before/);
+    const frames = `${WATER}${WATER}${WATER.split("\n").slice(0, 3).join("\n")}`;
+    const m = readStructures("xyz", "w.xyz", frames).molecules3d![0];
+    expect(m.atoms).toHaveLength(3);
+    expect(m.frames).toHaveLength(1);
+  });
+
+  it("reads a PDB file with a byte-order mark, or lines ended by CR alone, as it reads the file", () => {
+    const n = readStructures("pdb", "c.pdb", samplePdb).molecules3d![0].atoms.length;
+    expect(readStructures("pdb", "c.pdb", "\uFEFF" + samplePdb).molecules3d![0].atoms).toHaveLength(n);
+    expect(readStructures("pdb", "c.pdb", samplePdb.replace(/\r?\n/g, "\r")).molecules3d![0].atoms).toHaveLength(n);
+  });
+});
+

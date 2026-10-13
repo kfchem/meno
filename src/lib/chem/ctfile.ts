@@ -162,6 +162,12 @@ export type CtMolecule = {
   chiral: boolean;
   /** Which version the block was written in. */
   version: "V2000" | "V3000";
+  /**
+   * Fewer atoms or bonds in its connection table than its counts line
+   * gives, or an atom with no place - a file cut short, or damaged: what it
+   * holds is not the molecule it says, and is not to be read as one.
+   */
+  cut?: true;
 };
 
 export type CtReaction = {
@@ -169,6 +175,8 @@ export type CtReaction = {
   reactants: CtMolecule[];
   products: CtMolecule[];
   reagents: CtMolecule[];
+  /** Fewer molecules than its counts line gives, or one of them cut short (`CtMolecule.cut`). */
+  cut?: true;
 };
 
 // --- shared ------------------------------------------------------------------
@@ -247,6 +255,14 @@ function findCounts(ls: string[], from: number): number {
     if (/V[23]000\s*$/i.test(ls[i]) || /^\s*\d+\s+\d+(\s+\d+){3,}/.test(ls[i])) return i;
   }
   return -1;
+}
+
+/** Whether a V2000 atom line places its atom: x and y, in their columns or apart. */
+function placedV2000(line: string | undefined): boolean {
+  if (line == null) return false;
+  if (Number.isFinite(float(line.slice(0, 10))) && Number.isFinite(float(line.slice(10, 20)))) return true;
+  const t = line.trim().split(/\s+/);
+  return Number.isFinite(float(t[0])) && Number.isFinite(float(t[1]));
 }
 
 function atomV2000(line: string): CtAtom {
@@ -355,10 +371,17 @@ function ctabV2000(ls: string[], at: number, name: string): { mol: CtMolecule; n
   const mol = emptyMolecule("V2000", name);
   mol.chiral = counts.chiral;
   let i = at + 1;
-  for (let k = 0; k < (counts.atoms || 0); k++, i++) mol.atoms.push(atomV2000(ls[i] ?? ""));
+  // (each line the counts line gives there: the file ending before one, an
+  // atom's line that places no atom - a bond's, an M  END - or a bond's
+  // line that joins none, cut short)
+  for (let k = 0; k < (counts.atoms || 0); k++, i++) {
+    if (!placedV2000(ls[i])) mol.cut = true;
+    mol.atoms.push(atomV2000(ls[i] ?? ""));
+  }
   for (let k = 0; k < (counts.bonds || 0); k++, i++) {
     const b = bondV2000(ls[i] ?? "");
     if (b) mol.bonds.push(b);
+    else mol.cut = true;
   }
   // the atom list block: "aaa kSSSSn 111 222 333 444 555", atomic numbers
   for (let k = 0; k < counts.lists; k++, i++) {
@@ -828,12 +851,16 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
   const atomsOf = (value: string | undefined) => list(value).map(atomOf).filter((a) => a >= 0);
   let block = "";
   let defaults: string[] = [];
+  // (what its counts line gives, and whether its END CTAB came: less, or none, cut short)
+  let counted: { atoms: number; bonds: number } | null = null;
+  let ended = false;
   let i = at + 1;
   for (; i < v.length; i++) {
     const text = v[i];
     const items = v30Items(text);
     const head = (items[0] ?? "").toUpperCase();
     if (head === "END" && (items[1] ?? "").toUpperCase() === "CTAB") {
+      ended = true;
       i++;
       break;
     }
@@ -847,6 +874,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
       continue;
     }
     if (head === "COUNTS") {
+      counted = { atoms: Number.parseInt(items[1] ?? "", 10), bonds: Number.parseInt(items[2] ?? "", 10) };
       mol.chiral = items[5] === "1";
       const kw = keywords(items);
       if (kw.get("NAME")) mol.name = kw.get("NAME")![0];
@@ -868,6 +896,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
     if (block === "ATOM") {
       const index = Number.parseInt(items[0], 10);
       const { symbol, list: atomList } = atomType(items[1] ?? "C");
+      if (!Number.isFinite(float(items[2])) || !Number.isFinite(float(items[3]))) mol.cut = true;
       const atom: CtAtom = {
         x: float(items[2]) || 0,
         y: float(items[3]) || 0,
@@ -1030,6 +1059,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
       i++;
     }
   }
+  if (!ended || (counted && (mol.atoms.length < counted.atoms || mol.bonds.length < counted.bonds))) mol.cut = true;
   return { mol, next: i };
 }
 
@@ -1108,6 +1138,8 @@ export function readRxnfile(text: string): CtReaction {
         i = next - 1;
       }
     }
+    const said = v30Items(out.find((t) => /^COUNTS\b/i.test(t.trim())) ?? "").slice(1, 3).map((n) => Number.parseInt(n, 10));
+    if ([...reaction.reactants, ...reaction.products, ...reaction.reagents].some((m) => m.cut) || reaction.reactants.length < (said[0] || 0) || reaction.products.length < (said[1] || 0)) reaction.cut = true;
     return reaction;
   }
   // V2000: the counts line "rrrpppggg" on the header's fifth line, then
@@ -1129,6 +1161,8 @@ export function readRxnfile(text: string): CtReaction {
     mols.push(m.mol);
     i = m.next - 1;
   }
+  // (fewer than counted, or one cut short: the file ends before its reaction does)
+  if (mols.length < r + p + g || mols.some((m) => m.cut)) reaction.cut = true;
   reaction.reactants = mols.slice(0, r);
   reaction.products = mols.slice(r, r + p);
   reaction.reagents = mols.slice(r + p, r + p + g);

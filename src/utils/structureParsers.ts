@@ -157,7 +157,8 @@ export function parseXYZ(xyz: string): Molecule[] {
       };
     });
 
-    frames.push({ atoms, bonds: bondsByDistance(atoms) });
+    // (the file ending before its atoms do: cut short)
+    frames.push({ atoms, bonds: bondsByDistance(atoms), ...(atomLines.length < atomCount ? { cut: true as const } : {}) });
     i += 2 + atomCount;
   }
 

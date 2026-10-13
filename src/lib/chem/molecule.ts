@@ -203,7 +203,13 @@ export type ParsedBond = { a1: number; a2: number; order: number; stereoCode?: n
  * A molecule as a file gives it. A CTfile's carries all the file said
  * besides (lib/chem/ctfile), its atoms and bonds in the same order.
  */
-export type Molecule = { atoms: ParsedAtom[]; bonds: ParsedBond[]; ct?: CtMolecule };
+export type Molecule = {
+  atoms: ParsedAtom[];
+  bonds: ParsedBond[];
+  ct?: CtMolecule;
+  /** Fewer atoms than its file says it has - an XYZ frame the file ends in the middle of. */
+  cut?: true;
+};
 
 /**
  * Valences used to work out how many hydrogens an atom carries, for the

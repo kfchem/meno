@@ -50,6 +50,13 @@ molecule as `Molecule.ct`):
 
 Not read: V3000 3D blocks and templates (SCSR), RDfiles and XDfiles.
 
+A connection table that ends before the atoms and bonds its counts line
+gives - an atom's line missing or with no place, a bond's line that joins
+no atoms, V3000's END CTAB missing - is cut short or damaged, and the file
+is not read but refused, saying so: read anyway, its missing atoms stood
+at the origin as carbons. So is an Rxnfile with fewer molecules than its
+counts line gives (`CtMolecule.cut`, `CtReaction.cut`).
+
 ## Drawing
 
 | What | How | Why |
