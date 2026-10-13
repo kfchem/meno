@@ -43,6 +43,21 @@ if (typeof window !== "undefined") {
   window.addEventListener("pointercancel", () => (held.buttons = 0), true);
 }
 
+/** Whether `atoms` are those of `ids`, in that order. */
+function sameIds(ids: readonly number[], atoms: readonly { id: number }[]): boolean {
+  if (ids.length !== atoms.length) return false;
+  for (let i = 0; i < ids.length; i++) if (ids[i] !== atoms[i].id) return false;
+  return true;
+}
+
+/** Whether two lists hold the same objects, in order. */
+function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** The id the atom a bond is being drawn out to goes by until it is made. */
 export const EXTENDING_ATOM_ID = -1;
 /** The new atom a stroke on empty space starts at, while it is drawn. */
@@ -121,7 +136,8 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // into its new shape (utils/glide) rather than jumping. An atom being
   // dragged, and what a stroke is laying down, are drawn where the gesture
   // has them.
-  const shown = useRef(new Map<number, Pt>());
+  // (each atom as it was drawn last)
+  const shown = useRef<LAtom[]>([]);
   const glide = useRef<{ plan: GlidePlan; from: Map<number, Pt>; start: number } | null>(null);
   const planned = useRef<LAtom[] | null>(null);
   // (the whole drawing as it was when last planned: a record of a stack of
@@ -130,23 +146,31 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const fullBefore = useRef(fullModel);
   const [step, setStep] = useState(0);
   const drawnAtoms: LAtom[] = useMemo(() => {
-    let was = shown.current;
     if (planned.current !== atoms) {
       // what changed: drawn there at once, or on its way
       planned.current = atoms;
+      // (where each atom was drawn: by its place, where the atoms are the
+      // ones there were - an atom moved, at every frame of a drag - else by
+      // its id; an atom the same object as before is where it was)
+      const last = shown.current;
+      const aligned = last.length === atoms.length && atoms.every((a, i) => last[i].id === a.id);
+      let byId: Map<number, Pt> | null = null;
+      const lastById = () => (byId ??= new Map(last.map((a) => [a.id, a])));
       const before = fullBefore.current;
       fullBefore.current = fullModel;
-      if (before !== fullModel && atoms.some((a) => !was.has(a.id) && a.id >= 0)) {
-        const stacked = new Map(before.atoms.filter((a) => a.stack && !was.has(a.id)).map((a) => [a.id, { x: a.x, y: a.y }]));
-        if (stacked.size) was = new Map([...stacked, ...was]);
+      if (!aligned && before !== fullModel && atoms.some((a) => !lastById().has(a.id) && a.id >= 0)) {
+        const stacked = new Map(before.atoms.filter((a) => a.stack && !lastById().has(a.id)).map((a) => [a.id, { x: a.x, y: a.y }]));
+        if (stacked.size) byId = new Map([...stacked, ...lastById()]);
       }
+      const was = (a: LAtom, i: number): Pt | undefined => (aligned ? last[i] : lastById().get(a.id));
       let far = 0;
       // (the one way every atom that moved went, where they all went alike)
       let shift: { dx: number; dy: number } | null | undefined;
       const moved = new Set<number>();
-      for (const a of atoms) {
-        const s = a.id === draggedId || a.id < 0 ? undefined : was.get(a.id);
-        if (!s) continue;
+      for (let i = 0; i < atoms.length; i++) {
+        const a = atoms[i];
+        const s = a.id === draggedId || a.id < 0 ? undefined : was(a, i);
+        if (!s || s === a) continue;
         const dx = a.x - s.x;
         const dy = a.y - s.y;
         const d = Math.hypot(dx, dy);
@@ -164,10 +188,11 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       } else {
         const from = new Map<number, Pt>();
         const to = new Map<number, Pt>();
-        for (const a of atoms) {
-          const s = was.get(a.id);
+        for (let i = 0; i < atoms.length; i++) {
+          const a = atoms[i];
+          const s = was(a, i);
           if (!s || a.id === draggedId || a.id < 0) continue;
-          from.set(a.id, s);
+          from.set(a.id, { x: s.x, y: s.y, ...(s.z != null ? { z: s.z } : {}) });
           to.set(a.id, { x: a.x, y: a.y, ...(a.z != null ? { z: a.z } : {}) });
         }
         // (the structures that moved: the rest stay as they are drawn, laid out as they were)
@@ -177,17 +202,13 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     }
     const g = glide.current;
     const on = g ? glideAt(g.plan, g.from, easeOut((performance.now() - g.start) / GLIDE_MS)) : null;
-    const next = new Map<number, Pt>();
-    const out = atoms.map((a) => {
-      const p = on?.get(a.id);
-      if (!p) {
-        next.set(a.id, { x: a.x, y: a.y, ...(a.z != null ? { z: a.z } : {}) });
-        return a;
-      }
-      next.set(a.id, p);
-      return { ...a, x: p.x, y: p.y, ...(a.z != null && p.z != null ? { z: p.z } : {}) };
-    });
-    shown.current = next;
+    const out = on
+      ? atoms.map((a) => {
+          const p = on.get(a.id);
+          return p ? { ...a, x: p.x, y: p.y, ...(a.z != null && p.z != null ? { z: p.z } : {}) } : a;
+        })
+      : atoms;
+    shown.current = out;
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- step: a frame of the way there; model: its structures, and fullModel, where what comes into sight stood, read as the way is planned
   }, [atoms, draggedId, step]);
@@ -202,20 +223,29 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (glide.current) invalidate();
   });
+  // (the model's bonds as the layout takes them, the same list while the
+  // bonds and the atoms' places are: a drag moves atoms and keeps both)
+  const modelBonds = useRef<{ ids: number[]; from: readonly Bond[]; out: LBond[]; index: Map<number, number> } | null>(null);
   const bonds: LBond[] = useMemo(() => {
-    const index = new Map<number, number>();
-    drawnAtoms.forEach((a, i) => index.set(a.id, i));
-    const kept = takenBonds.current;
-    const out: LBond[] = [];
-    for (const b of model.bonds) {
-      const a1 = index.get(b.a);
-      const a2 = index.get(b.b);
-      if (a1 == null || a2 == null) continue;
-      let l = kept.get(b);
-      if (!l || l.a1 !== a1 || l.a2 !== a2) kept.set(b, (l = layoutBond(b, a1, a2)));
-      out.push(l);
+    let laid = modelBonds.current;
+    if (!laid || !sameIds(laid.ids, drawnAtoms) || !sameList(laid.from, model.bonds)) {
+      const index = new Map<number, number>();
+      drawnAtoms.forEach((a, i) => index.set(a.id, i));
+      const kept = takenBonds.current;
+      const out: LBond[] = [];
+      for (const b of model.bonds) {
+        const a1 = index.get(b.a);
+        const a2 = index.get(b.b);
+        if (a1 == null || a2 == null) continue;
+        let l = kept.get(b);
+        if (!l || l.a1 !== a1 || l.a2 !== a2) kept.set(b, (l = layoutBond(b, a1, a2)));
+        out.push(l);
+      }
+      modelBonds.current = laid = { ids: drawnAtoms.map((a) => a.id), from: model.bonds, out, index };
     }
-    if (!stroke) return out;
+    if (!stroke) return laid.out;
+    const index = laid.index;
+    const out = [...laid.out];
     // where each node of the stroke is drawn: its own atom, or the one it
     // closed onto
     const baseIndex = index.get(stroke.baseId === NEW_ATOM ? STROKE_START_ID : stroke.baseId);
