@@ -8,6 +8,7 @@ import { useEditor, useEditorStore } from "../store";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
+import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 
@@ -320,6 +321,7 @@ export default function BondsPick2D() {
           store.getState().setPressHold({ atomId: b.a, start: performance.now() });
           const letGo = () => {
             window.clearTimeout(hold);
+            offChord();
             store.getState().setPressHold(null);
             window.removeEventListener("pointermove", onEarlyMove);
             window.removeEventListener("pointerup", letGo, true);
@@ -342,6 +344,12 @@ export default function BondsPick2D() {
               endPanHold(ev.pointerId ?? pid);
             });
           }, LONG_PRESS_MS);
+          // (another button pressed with it: no press at all, nor a click of the bond's - utils/press#onChord)
+          const offChord = onChord(1, () => {
+            letGo();
+            clickState.current.armed = false;
+            clickState.current.downBondId = null;
+          });
           window.addEventListener("pointermove", onEarlyMove);
           window.addEventListener("pointerup", letGo, true);
         }

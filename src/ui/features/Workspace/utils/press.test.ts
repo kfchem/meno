@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, movePress, startPress, swallowPress } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -94,6 +94,44 @@ describe("a press swallowed", () => {
       expect(click.defaultPrevented).toBe(false);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("a long press another button joins", () => {
+  it("is joined as a second button goes down with it - the move that says so - and not by the move of the button held alone", () => {
+    // (the primary button held; the right one pressed with it)
+    expect(joinedBy(1, 3)).toBe(true);
+    expect(joinedBy(1, 1 | 4)).toBe(true);
+    expect(joinedBy(1, 1)).toBe(false);
+    // (the held button let go is no chord)
+    expect(joinedBy(1, 0)).toBe(false);
+  });
+
+  it("calls off the press once, on the first move with another button, and listens no more", () => {
+    // (a window of its own, as the test runs with none)
+    const had = (globalThis as { window?: unknown }).window;
+    const win = new EventTarget();
+    (globalThis as { window?: unknown }).window = win;
+    try {
+      const fire = (type: string, buttons: number) => win.dispatchEvent(Object.assign(new Event(type), { buttons }));
+      let chords = 0;
+      const off = onChord(1, () => chords++);
+      fire("pointermove", 1);
+      expect(chords).toBe(0);
+      fire("pointermove", 3);
+      fire("mousedown", 3);
+      fire("contextmenu", 3);
+      expect(chords).toBe(1);
+      // (let go before any chord: nothing heard after)
+      let late = 0;
+      const offLate = onChord(1, () => late++);
+      offLate();
+      fire("pointermove", 3);
+      expect(late).toBe(0);
+      off();
+    } finally {
+      (globalThis as { window?: unknown }).window = had;
     }
   });
 });

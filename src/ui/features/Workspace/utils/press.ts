@@ -44,6 +44,39 @@ export function chordedPress(buttons: number, lastButtons: number): boolean {
   return both(buttons) || both(lastButtons);
 }
 
+/**
+ * Whether a button has joined a press held with `held` buttons, as a
+ * pointer event's `buttons` says: a chord.
+ */
+export function joinedBy(held: number, buttons: number): boolean {
+  return (buttons & ~held) !== 0;
+}
+
+/**
+ * Calls `chord` once should another button join the press begun with
+ * `held` buttons - a second button's press comes as a move of the pointer
+ * with more buttons, not as a press of its own - and returns the end of
+ * the listening. A long press so joined is no press at all: no structure
+ * selected, no click on release, no drag (the maintainer's command centre,
+ * 2026-10-14) - the chord does nothing, rather than half of one, as the
+ * menu opens none for it (`chordedPress`).
+ */
+export function onChord(held: number, chord: () => void): () => void {
+  const look = (e: MouseEvent) => {
+    if (!joinedBy(held, e.buttons)) return;
+    off();
+    chord();
+  };
+  const off = () => {
+    for (const type of CHORD_EVENTS) window.removeEventListener(type, look, { capture: true });
+  };
+  for (const type of CHORD_EVENTS) window.addEventListener(type, look, { capture: true });
+  return off;
+}
+
+/** What says a button has joined a press: the move with more buttons, and the second button's own mousedown and menu. */
+const CHORD_EVENTS = ["pointermove", "mousedown", "contextmenu"] as const;
+
 /** What comes of a press after its pointerdown: none of it is heard of a press swallowed. */
 const AFTER_PRESS = ["mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"] as const;
 

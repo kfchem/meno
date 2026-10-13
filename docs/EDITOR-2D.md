@@ -219,7 +219,12 @@ bonds, reaching the whole structure as it is selected; on empty space a
 ring opens where the box will begin (`HoldProgress2D`). Let go early, it
 goes again. Let go where it was held, the long press has selected and
 that is all: the click its release makes edits no label, being held off
-as it comes (`suppressDoubleClick`), not when the edit would begin. On a
+as it comes (`suppressDoubleClick`), not when the edit would begin.
+Another button pressed with it, on an atom or a bond, makes it no press
+at all - nothing selected, no label edited on release, no drag - as the
+menu opens none for such a chord (`onChord`, utils/press; the command
+centre, 2026-10-14: before, the long press went on and selected the
+structure the right-click had been meant for). On a
 trackpad that taps to click, a long press is a press of
 the pad held.
 
