@@ -93,7 +93,8 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   return {
     arrows,
     pluses: (drawn.pluses ?? []).filter(within),
-    captions: (drawn.captions ?? []).filter((c) => within(c) || (c.arrow != null && taken.has(c.arrow))),
+    // (words in a shape are the shape's: they go with it, not with the atoms beside them)
+    captions: (drawn.captions ?? []).filter((c) => c.shape == null && (within(c) || (c.arrow != null && taken.has(c.arrow)))),
   };
 }
 
