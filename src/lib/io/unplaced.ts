@@ -23,10 +23,35 @@ export function unplaced(atoms: readonly { x: number; y: number; z?: number }[])
   return atoms.every((b) => near(b.x, a.x) && near(b.y, a.y) && near(b.z ?? 0, a.z ?? 0));
 }
 
+/**
+ * Whether a molecule is whole enough to be laid out: every bond between two
+ * of its own atoms, none from an atom to itself, and not cut short - a
+ * record that ends before the atoms its counts line gives, whose missing
+ * atoms the reader makes up at the origin (CtMolecule's `cut`, where the
+ * reader marks it). Laid out, a damaged file's 999 made-up carbons took
+ * seconds, and a bond to an atom it lacks threw.
+ */
+function whole(m: Molecule): boolean {
+  if ((m.ct as { cut?: boolean } | undefined)?.cut) return false;
+  const n = m.atoms.length;
+  return m.bonds.every((b) => b.a1 >= 0 && b.a2 >= 0 && b.a1 < n && b.a2 < n && b.a1 !== b.a2);
+}
+
+/** Whether a molecule read is one Meno lays out as it reads it: whole, and given no coordinates. */
+export function laidOutAsRead(m: Molecule): boolean {
+  return unplaced(m.atoms) && whole(m);
+}
+
 /** The middle length of the molecules' bonds, as drawn - none, where they have none. */
 function middleBond(mols: readonly Molecule[]): number | null {
   const lengths = mols
-    .flatMap((m) => m.bonds.map((b) => Math.hypot(m.atoms[b.a1].x - m.atoms[b.a2].x, m.atoms[b.a1].y - m.atoms[b.a2].y)))
+    .flatMap((m) =>
+      m.bonds.flatMap((b) => {
+        const [p, q] = [m.atoms[b.a1], m.atoms[b.a2]];
+        // (a bond to an atom the molecule lacks says nothing of its length)
+        return p && q ? [Math.hypot(p.x - q.x, p.y - q.y)] : [];
+      }),
+    )
     .filter((d) => d > 1e-6)
     .sort((p, q) => p - q);
   return lengths.length ? lengths[lengths.length >> 1] : null;
@@ -41,8 +66,20 @@ function middleBond(mols: readonly Molecule[]): number | null {
  * coordinates draws, is none.
  */
 export function laidOutWhereUnplaced(mols: readonly Molecule[]): Molecule[] {
-  const length = middleBond(mols.filter((m) => !unplaced(m.atoms)));
-  return mols.map((m) => (unplaced(m.atoms) ? laidOut(m, length) : m));
+  const lay = mols.map(laidOutAsRead);
+  // (a file whose records all have their places - nearly every one - costs
+  // nothing more: a thousand records' bonds were measured for nothing)
+  if (!lay.some(Boolean)) return [...mols];
+  const length = middleBond(mols.filter((m, i) => !lay[i] && !unplaced(m.atoms)));
+  return mols.map((m, i) => {
+    if (!lay[i]) return m;
+    // (a layout that fails leaves the record as it was read: reading never stops for it)
+    try {
+      return laidOut(m, length);
+    } catch {
+      return m;
+    }
+  });
 }
 
 function laidOut(m: Molecule, length: number | null): Molecule {

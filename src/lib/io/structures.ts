@@ -11,7 +11,7 @@ import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
-import { laidOutWhereUnplaced, unplaced } from "./unplaced";
+import { laidOutAsRead, laidOutWhereUnplaced } from "./unplaced";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -128,7 +128,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   // MOL, SDF, XYZ formats: parse molecules and convert to editor model
   const read = readMoleculesFromText(content, kind);
   // (a MOL or SD record given no coordinates: laid out, and flat whatever its header says - ./unplaced)
-  const noPlaces = read.map((m) => kind !== "xyz" && unplaced(m.atoms));
+  const noPlaces = read.map((m) => kind !== "xyz" && laidOutAsRead(m));
   const molecules = kind === "xyz" ? read : laidOutWhereUnplaced(read);
 
   // 3D structures stand on the page as they are: an XYZ file's frames are

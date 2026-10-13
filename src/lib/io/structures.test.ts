@@ -174,3 +174,40 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(() => readStructures("pdb", "x.pdb", "REMARK   1\nEND\n")).toThrow(/No molecules found in x.pdb/);
   });
 });
+
+describe("a file with no coordinates, damaged (reader fuzzing, 2026-10-13)", () => {
+  const at = (x: number, y: number, el: string) => `${x.toFixed(4).padStart(10)}${y.toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`;
+  const bond = (a: number, b: number, t: number) => `${String(a).padStart(3)}${String(b).padStart(3)}${String(t).padStart(3)}  0  0  0  0`;
+  const counts = (a: number, b: number) => `${String(a).padStart(3)}${String(b).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`;
+  const mol = (a: number, b: number, body: string[]) => ["x", "  Meno", "", counts(a, b), ...body, "M  END"].join("\n") + "\n";
+
+  it("is read as it was before its records were laid out where a bond names an atom it lacks, or one to itself - never a TypeError", () => {
+    // every atom at the origin, a bond to atom 4 of 2 (and to atom 0)
+    for (const b of [bond(1, 4, 1), bond(0, 1, 1), bond(1, 1, 1)]) {
+      const read = () => readStructures("mol", "x.mol", mol(2, 1, [at(0, 0, "C"), at(0, 0, "O"), b]));
+      expect(read).not.toThrow(TypeError);
+    }
+    // a record drawn with such a bond beside one with no coordinates: the drawn one measured without it
+    const sd = mol(2, 1, [at(0, 0, "C"), at(1.5, 0, "O"), bond(1, 4, 1)]) + "$$$$\n" + mol(2, 1, [at(0, 0, "N"), at(0, 0, "S"), bond(1, 2, 1)]) + "$$$$\n";
+    expect(() => readStructures("sdf", "x.sdf", sd)).not.toThrow(TypeError);
+  });
+
+  it("is not laid out where the reader marks a record cut short - its atoms made up for lines it lacks", async () => {
+    const { laidOutWhereUnplaced } = await import("./unplaced");
+    // (999 atoms said, one given: 998 made-up carbons at the origin, laid out in seconds)
+    const cut = { atoms: Array.from({ length: 999 }, () => ({ el: "C", x: 0, y: 0, z: 0 })), bonds: [], ct: { cut: true } } as never;
+    const t = performance.now();
+    expect(laidOutWhereUnplaced([cut])[0]).toBe(cut);
+    expect(performance.now() - t).toBeLessThan(200);
+  });
+
+  it("costs a file whose records all have coordinates nothing: the records come back as they were read", async () => {
+    const { laidOutWhereUnplaced } = await import("./unplaced");
+    const mols = [
+      { atoms: [{ el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.5, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }] },
+      { atoms: [{ el: "N", x: 0, y: 0, z: 0 }], bonds: [] },
+    ] as never[];
+    const out = laidOutWhereUnplaced(mols);
+    out.forEach((m, i) => expect(m).toBe(mols[i]));
+  });
+});
