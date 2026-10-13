@@ -110,7 +110,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } from "./fileActions";
-import { setSaver } from "../../../lib/doc/savers";
+import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
@@ -306,6 +306,8 @@ function WorkspaceContent({
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
+  // (where its workspace is saved, read as a file is opened: the same file opened again brings this tab forward)
+  useEffect(() => (ownTab ? setSavedPathOf(tabId, () => store.getState().savedPath) : undefined), [ownTab, tabId, store]);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
