@@ -34,10 +34,8 @@ warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
 import cclib  # noqa: E402
-from cclib.parser.utils import PeriodicTable  # noqa: E402
+from cclib.parser.utils import PeriodicTable, convertor  # noqa: E402
 
-# cclib's energies are in electronvolts; Meno's, in hartrees
-EV_PER_HARTREE = 27.211386245988
 # calories per mole in a hartree, for an entropy
 CAL_PER_HARTREE = 627509.474
 
@@ -81,12 +79,20 @@ def frame_energies(data, frames):
         candidates.append([float(e) for e in data.scfenergies])
     for found in candidates:
         if len(found) == frames:
-            return [e / EV_PER_HARTREE for e in found]
+            return [hartrees(e) for e in found]
     if frames == 1:
         for found in candidates:
             if found:
-                return [found[-1] / EV_PER_HARTREE]
+                return [hartrees(found[-1])]
     return None
+
+
+def hartrees(ev):
+    """An energy cclib gives in electronvolts, in hartrees again - by cclib's
+    own factor, so that it is the output's value as printed: another factor
+    (CODATA's newer one differs in the eighth digit) moves an energy of a
+    hundred hartrees by some 10^-6."""
+    return convertor(ev, "eV", "hartree")
 
 
 def method_of(meta):
