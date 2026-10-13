@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { askToConnect, useNetwork } from "./network";
 
-const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [] });
+const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [], hosts: [] });
 const settle = () => new Promise((go) => setTimeout(go, 0));
 
 describe("asking to use the network", () => {
