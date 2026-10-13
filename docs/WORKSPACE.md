@@ -404,6 +404,13 @@ Taken on 2026-10-10 (menus and gestures):
   then MMFF94) and comes onto the page as a molecule in 3D, its frames the
   conformers, lowest first. Of two enantiomers, one is made as the other's
   mirror image, so the two have the same conformers and shares.
+- **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
+  for a molecule: an element with the H it carries - C is methane, O water,
+  N ammonia - or a label Meno knows, written out as the molecule it stands
+  for (THF, DMSO, MeOH, Et3N). A bare atom - Na+, Cl-, a lone metal, a label
+  of nothing known - is not: alone, Meno says that one atom alone has no 3D
+  structure; beside others made - a salt's counter-ions - it is left out,
+  and a notice names it (`standsForMolecule`, `bareWords`, chem/make3d).
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest

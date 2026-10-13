@@ -160,7 +160,8 @@ import Ask3D from "./Ask3D";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
-import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
+import { useNotices } from "../../notices";
+import { bareAtomsOf, bareWords, blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
@@ -443,11 +444,18 @@ function WorkspaceContent({
   const make3d = useCallback(
     async (around: Iterable<number>, replacing?: Molecule3D) => {
       // (made again: what the drawing leaves open, as the one before has it)
-      const blocks = blocksOf(store.getState().model, around).map((b) =>
+      const model = store.getState().model;
+      const blocks = blocksOf(model, around).map((b) =>
         replacing ? { ...b, like: likeOf(b, replacing) } : b,
       );
-      if (!blocks.length) return;
+      // (a bare atom - Na+, Cl- - left out, and the chemist told: alone, that it has none; beside others made, which)
+      const bare = bareAtomsOf(model, around);
+      if (!blocks.length) {
+        if (bare.length) setChemError(bareWords(bare, false));
+        return;
+      }
       setChemError(null);
+      if (bare.length) useNotices.getState().show({ id: "bare-3d", title: "3D structure", text: bareWords(bare, true) });
       try {
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(

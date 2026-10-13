@@ -11,7 +11,8 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
-import { chemMolblock, molIndex } from "../../../../lib/roles/molblock";
+import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
+import { abbreviationOf } from "../../../../lib/chem/abbreviations";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { editorModelOf, processFileContent } from "../utils/io";
 import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
@@ -19,6 +20,7 @@ import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { undrawnHydrogens } from "./drawing";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -34,11 +36,53 @@ const GAP = 1.5 * NOMINAL_BOND_LENGTH;
  */
 export type Block = { molblock: string; atoms: number[]; bonds: number[]; part: Model; like?: Like };
 
-/** The structures that hold these atoms, each as the plugin is asked about it; a lone atom's none. */
+/**
+ * Whether a structure stands for a molecule to make in 3D: any with a bond;
+ * and a lone atom that stands for more than itself (the maintainer,
+ * 2026-10-13) - an element with the H it carries (C is CH4, O H2O, N NH3),
+ * or a label Meno knows, written out as what it stands for (THF, DMSO,
+ * MeOH, Et3N). A bare atom - Na+, Cl-, a lone metal, a label of nothing
+ * known - is no molecule to make.
+ */
+export function standsForMolecule(part: Model): boolean {
+  if (part.bonds.length > 0) return true;
+  if (part.atoms.length !== 1) return false;
+  const [a] = part.atoms;
+  if (a.abbrev || !isElementSymbol(a.el)) return !!(a.abbrev || abbreviationOf(a.el));
+  return (undrawnHydrogens(part).get(a.id) ?? 0) > 0;
+}
+
+/** The bare atoms among the structures that hold these atoms: left out of a 3D structure, one atom alone having none. */
+export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+  return fragmentsHolding(model, atoms)
+    .map((ids) => partOf(model, ids))
+    .filter((part) => !standsForMolecule(part))
+    .map((part) => part.atoms[0]);
+}
+
+/** A bare atom as the chemist is told of it: its label and its charge - Na+, Cl−, Ca2+. */
+function nameOf(a: Model["atoms"][number]): string {
+  const q = a.charge ?? 0;
+  return a.el + (q ? `${Math.abs(q) > 1 ? Math.abs(q) : ""}${q > 0 ? "+" : "\u2212"}` : "");
+}
+
+/**
+ * What the chemist is told of the bare atoms left out of a 3D structure:
+ * that one atom alone has none - by itself, where it was all there was;
+ * else named, as counter-ions left out of a salt made in 3D.
+ */
+export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
+  if (!madeAny) return "One atom alone has no 3D structure.";
+  const names = bare.map(nameOf);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  return `${list} ${names.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+}
+
+/** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
 export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
   return fragmentsHolding(model, atoms)
     .map((ids) => partOf(model, ids))
-    .filter((part) => part.bonds.length > 0)
+    .filter(standsForMolecule)
     .map((part) => {
       const index = molIndex(part);
       return {

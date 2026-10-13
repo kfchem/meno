@@ -5,7 +5,7 @@ import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { blocksOf, formulaOf, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -39,6 +39,56 @@ const answer: Conformers = {
   chosen: { atoms: {}, bonds: {} },
   smiles: "CCO",
 };
+
+describe("a lone atom made in 3D", () => {
+  // (the maintainer, 2026-10-13: a lone atom that stands for a molecule is made in 3D - it was left
+  // out, and nothing said; a bare atom is not, and Meno says so in words)
+  const lone = (el: string, charge?: number): Model => ({ atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el, ...(charge ? { charge } : {}) }], bonds: [] });
+
+  it("stands for a molecule where it carries H, or is a label Meno knows: CH4, H2O, NH3, THF, Et3N", () => {
+    for (const el of ["C", "O", "N", "Cl", "THF", "DMSO", "MeOH", "Et3N"]) expect(standsForMolecule(lone(el)), el).toBe(true);
+    // (bare: an ion with no H, a lone metal, a label of nothing known)
+    expect(standsForMolecule(lone("Na", 1))).toBe(false);
+    expect(standsForMolecule(lone("Cl", -1))).toBe(false);
+    expect(standsForMolecule(lone("Fe"))).toBe(false);
+    expect(standsForMolecule(lone("R"))).toBe(false);
+    expect(standsForMolecule(ethanol)).toBe(true);
+  });
+
+  it("is a structure to ask the plugin about where it stands for a molecule, and none where it is bare", () => {
+    const [methane] = blocksOf(lone("C"), [1]);
+    expect(methane.atoms).toEqual([1]);
+    expect(methane.molblock).toContain("V3000");
+    expect(blocksOf(lone("Na", 1), [1])).toEqual([]);
+  });
+
+  it("is told of, where bare: by itself alone, and named beside others made", () => {
+    // (sodium acetate drawn as ions, and chloride beside it)
+    const salt: Model = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C" },
+        { id: 2, x: 1.5, y: 0, r: 0.9, el: "C" },
+        { id: 3, x: 2.3, y: 1.2, r: 0.9, el: "O" },
+        { id: 4, x: 2.3, y: -1.2, r: 0.9, el: "O", charge: -1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "Na", charge: 1 },
+        { id: 6, x: 7, y: 0, r: 0.9, el: "Cl", charge: -1 },
+        { id: 7, x: 9, y: 0, r: 0.9, el: "Ca", charge: 2 },
+      ],
+      bonds: [
+        { id: 11, a: 1, b: 2, order: 1 },
+        { id: 12, a: 2, b: 3, order: 2 },
+        { id: 13, a: 2, b: 4, order: 1 },
+      ],
+    };
+    const all = [1, 2, 3, 4, 5, 6, 7];
+    expect(blocksOf(salt, all)).toHaveLength(1);
+    const bare = bareAtomsOf(salt, all);
+    expect(bare.map((a) => a.id)).toEqual([5, 6, 7]);
+    expect(bareWords(bare, true)).toBe("Na+, Cl\u2212 and Ca2+ were left out: one atom alone has no 3D structure.");
+    expect(bareWords(bare.slice(0, 1), true)).toBe("Na+ was left out: one atom alone has no 3D structure.");
+    expect(bareWords(bare.slice(0, 1), false)).toBe("One atom alone has no 3D structure.");
+  });
+});
 
 describe("making a drawn structure in 3D", () => {
   it("asks RDKit about each structure the atoms are in, its atoms and bonds known by their ids", () => {
