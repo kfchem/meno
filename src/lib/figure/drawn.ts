@@ -216,8 +216,15 @@ function flatTipped(given: Point[]): Wedge | null {
     return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
   };
   const [tip, base] = [mid(narrow), mid(wide)];
-  if (length(narrow) >= 0.4 * length(wide) || dist(tip, base) < 2.5 * length(wide)) return null;
-  return { tip, base, w: length(wide), outline: given };
+  // (each end as wide as it is across the way from one to the other: a wide end cut slanting along a bond is longer than wide)
+  const l = dist(tip, base);
+  if (!l) return null;
+  const across = (i: number) => {
+    const [p, q] = edge(i);
+    return Math.abs(((q.x - p.x) * (base.y - tip.y) - (q.y - p.y) * (base.x - tip.x)) / l);
+  };
+  if (across(narrow) >= 0.4 * across(wide) || l < 2.5 * across(wide)) return null;
+  return { tip, base, w: across(wide), outline: given };
 }
 
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */

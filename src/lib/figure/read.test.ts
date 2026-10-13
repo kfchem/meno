@@ -231,6 +231,20 @@ describe("a figure read as a structure", () => {
     expect(s.bonds).toHaveLength(4);
   });
 
+  it("reads a wedge cut flat at its narrow end and slanting at its wide end, along the bond in front of it", () => {
+    // (codeine's C13 to C15 as the Nature style draws it: a line's width at C13, its wide end cut along the C15-C16 bond)
+    const s = read(
+      figure([
+        stroke([104.2, 97.3], [112.9, 102.5], [113.2, 112.9]),
+        filled([122.4, 103.6], [126.7, 101.1], [112.9, 102.2], [112.9, 102.8]),
+        stroke([132.7, 97.3], [123.7, 102.5]),
+        stroke([132.7, 97.3], [132.7, 87.1]),
+      ]),
+    );
+    expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    expect(s.atoms).toHaveLength(6);
+  });
+
   it("reads a wedge cut flat at its narrow end, a line's width across, as a wedge", () => {
     // (four corners: the narrow end 0.6 across at the stereocentre, the wide end 2.8 across - drawn from a ring's carbon to a CH2)
     const c: P = [100, 81.4];
