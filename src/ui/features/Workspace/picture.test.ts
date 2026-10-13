@@ -6,7 +6,7 @@ import { withText } from "../../../lib/binary/png";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996 } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
-import { pictureDpiFor, pictureItems, structureInPicture } from "./picture";
+import { pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
 import { ballSegmentsFor, tilesOf } from "./render3d";
 import type { Model } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
@@ -118,6 +118,29 @@ describe("the resolution a copied picture is made at", () => {
     expect(dpi).toBeLessThan(1200);
     expect(1920 * 960 * (dpi / 96) ** 2).toBeLessThanOrEqual(48_000_000);
     expect(1920 * 960 * ((dpi + 1) / 96) ** 2).toBeGreaterThan(48_000_000);
+  });
+
+  it("is drawn at the drawing's own scale: its pixels whole, the view widened to them, not the drawing squeezed", () => {
+    // (Wiley's size of a drawing 278.888 by 145.26 CSS pixels, as createSVG writes it)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.4 -2.2 17.4305 9.07875" width="278.888" height="145.26" fill="none"><line x1="0" y1="0" x2="1" y2="0" /></svg>`;
+    const frame = rasterFrame(svg, 600);
+    expect(frame).toMatchObject({ width: 1744, height: 908, dpi: 600 });
+    const head = /<svg[^>]*>/.exec(frame.svg)![0];
+    expect(head).toContain(' width="1744" height="908"');
+    const view = / viewBox="([^"]+)"/.exec(head)![1].split(" ").map(Number);
+    // (as many pixels to the unit as at 600 dpi, across and down alike, from the same corner)
+    const perUnit = (278.888 / 17.4305) * (600 / 96);
+    expect(view.slice(0, 2)).toEqual([-0.4, -2.2]);
+    expect(1744 / view[2]).toBeCloseTo(perUnit, 9);
+    expect(908 / view[3]).toBeCloseTo(perUnit, 9);
+    // (what is left over, less than a pixel)
+    expect((view[2] - 17.4305) * perUnit).toBeLessThan(1);
+    expect((view[3] - 9.07875) * perUnit).toBeLessThan(1);
+    expect(frame.svg.endsWith("<line x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\" /></svg>")).toBe(true);
+    // (one so large it is made at a lower resolution, to fit)
+    const big = rasterFrame(svg.replace('width="278.888" height="145.26"', 'width="1920" height="960"'), 1200);
+    expect(big.dpi).toBe(pictureDpiFor(1920, 960, 1200));
+    expect(big.width).toBe(Math.ceil(1920 * (big.dpi / 96)));
   });
 });
 
