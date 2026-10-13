@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { addMolecule3d, removeMolecules3d, type WorkspaceDocument } from "../document";
+import { removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -16,7 +16,7 @@ import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from 
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, GAP, PX } from "./look";
-import { runMeno, type Outcome } from "./meno";
+import { pushTo, runMeno, type Outcome } from "./meno";
 import { addSet, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
@@ -263,7 +263,10 @@ export function placeResults(
   const was = resultOf(doc, step.id);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
   const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
-  for (const [i, m] of made.entries()) doc = addMolecule3d(doc, { ...m, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } });
+  // (all put on the page at once: one at a time copied the page's molecules again for each)
+  const first = doc.nextMolecule3dId ?? 1;
+  const placed = made.map((m, i) => ({ ...m, id: first + i, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } }));
+  if (placed.length) doc = { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...placed], nextMolecule3dId: first + placed.length };
   const madeBy = { step: step.id, holds };
   if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside);
   const id = doc.nextWorkflowId ?? 1;
@@ -318,7 +321,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
     });
   }
   const groups = new Map<number, SetEntry[]>();
-  for (const e of outcome.kept) groups.set(e.compound, [...(groups.get(e.compound) ?? []), e]);
+  for (const e of outcome.kept) pushTo(groups, e.compound, e);
   return [...groups.values()].map((g) => {
     const first = g[0];
     const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;

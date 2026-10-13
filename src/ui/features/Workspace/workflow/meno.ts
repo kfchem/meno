@@ -52,13 +52,22 @@ export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds">): string {
   return `${atoms}|${bonds}`;
 }
 
+/**
+ * `value` added to the group of `key` in `groups`, in place, and the groups
+ * given back: grouping thousands of entries copied each group again for
+ * every entry put in it, and took seconds at 20,000.
+ */
+export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]> {
+  const group = groups.get(key);
+  if (group) group.push(value);
+  else groups.set(key, [value]);
+  return groups;
+}
+
 /** A compound set as a conformer set: entries of the same constitution as conformers of one compound, numbered in the order they came. */
 function asConformers(entries: readonly SetEntry[]): Outcome {
   const groups = new Map<string, SetEntry[]>();
-  for (const e of entries) {
-    const key = constitutionOf(e);
-    groups.set(key, [...(groups.get(key) ?? []), e]);
-  }
+  for (const e of entries) pushTo(groups, constitutionOf(e), e);
   const kept = [...groups.values()].flatMap((g, compound) => g.map((e, i) => ({ ...e, compound, number: i + 1 })));
   return { ok: true, holds: "conformers", kept, aside: [], said: `${plural(groups.size, "compound")} · ${kept.length}` };
 }
@@ -66,7 +75,7 @@ function asConformers(entries: readonly SetEntry[]): Outcome {
 /** The entries of each compound, in the order they came. */
 function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   const out = new Map<number, SetEntry[]>();
-  for (const e of entries) out.set(e.compound, [...(out.get(e.compound) ?? []), e]);
+  for (const e of entries) pushTo(out, e.compound, e);
   return [...out.values()];
 }
 
@@ -96,7 +105,7 @@ function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number):
   const groups =
     holds === "conformers"
       ? byCompound(entries)
-      : [...entries.reduce((m, e) => m.set(atomsOf(e), [...(m.get(atomsOf(e)) ?? []), e]), new Map<string, SetEntry[]>()).values()];
+      : [...entries.reduce((m, e) => pushTo(m, atomsOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
   const keptSet = new Set<SetEntry>();
   for (const g of groups) {

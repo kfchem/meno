@@ -6,7 +6,7 @@ import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type Wo
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { KCAL_PER_HARTREE, boltzmann, runMeno } from "./meno";
+import { KCAL_PER_HARTREE, boltzmann, pushTo, runMeno } from "./meno";
 import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
@@ -160,6 +160,18 @@ describe("wires", () => {
 });
 
 describe("Meno's own steps", () => {
+  it("group entries in place, so twenty thousand take no longer than a few", () => {
+    const groups = new Map<number, number[]>();
+    for (let i = 0; i < 6; i++) pushTo(groups, i % 2, i);
+    expect([...groups.entries()]).toEqual([[0, [0, 2, 4]], [1, [1, 3, 5]]]);
+    // (one compound's 20,000 conformers: each step once took seconds, copying its group for every entry)
+    const one = setEntries([{ ...bent({ x: 0, y: 0 }, 2, [-76, -76.001]), id: 1, conformerSet: true }], "conformers");
+    const many = Array.from({ length: 20_000 }, (_, k) => ({ ...one[k % 2], number: k + 1, energy: -76 + (k % 97) * 1e-4 }));
+    const started = performance.now();
+    for (const kind of ["populations", "choose", "energy-window"] as const) expect(runMeno(kind, many, "conformers", kind === "energy-window" ? { window: 3 } : undefined).ok).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   const entries = (m: Omit<Molecule3D, "id">, set: "molecules" | "conformers") => setEntries([{ ...m, id: 1 }], set);
 
   it("make a compound set a conformer set by constitution", () => {
