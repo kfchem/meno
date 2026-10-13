@@ -230,6 +230,16 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.find((a) => a.charge === 1)?.el).toBe("N");
   });
 
+  it("reads a charge set high by a capital as short as a serif's, little of it level with the letter", () => {
+    const c: P = [60, 60];
+    const n = step(c, 0);
+    // (the N's top 2.5 over its middle, not 3.6; the + from 6.5 over it to 2.3 - level with the N for 0.2 points)
+    const nLetter: FigureLetter = { c: "N", box: [n[0] - 3.4, n[1] - 2.5, n[0] + 3.4, n[1] + 3.6], at: [n[0] - 3.4, n[1] + 3.6], size: 10 };
+    const plus: FigureLetter = { c: "+", box: [n[0] + 3.6, n[1] - 6.5, n[0] + 7.6, n[1] - 2.3], at: [n[0] + 3.6, n[1] - 2.3], size: 7 };
+    const s = read(figure([stroke(c, along(c, n, 0.6))], [nLetter, plus]));
+    expect(s.atoms.find((a) => a.el === "N")?.charge).toBe(1);
+  });
+
   it("reads a group drawn on its bond's left from the bond out: TBSO as OTBS", () => {
     const c: P = [80, 60];
     const o = step(c, 180);

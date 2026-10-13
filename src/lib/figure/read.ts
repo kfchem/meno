@@ -241,7 +241,11 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
       const gap = l.box[0] - last.box[2];
       const big = Math.max(w.size, l.size);
       const overlap = Math.min(w.box[3], l.box[3]) - Math.max(w.box[1], l.box[1]);
-      return gap > -0.3 * big && gap < 0.3 * big && overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]);
+      // (a smaller letter set high or low - a charge, a count - its, however little of it lies level with the word: a serif's capitals are lower)
+      const small = l.size < 0.85 * w.size ? l.box : w.size < 0.85 * l.size ? w.box : null;
+      const other = small === l.box ? w.box : l.box;
+      const setOff = !!small && (small[1] < other[1] || small[3] > other[3]);
+      return gap > -0.3 * big && gap < 0.3 * big && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
     });
     if (w) {
       w.letters.push(l);
