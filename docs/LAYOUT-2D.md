@@ -86,7 +86,14 @@ they hang from.
   the ways of fitting the ring to its shape that put the heavy groups
   outside, the one that does so. A ring of up to fifteen, seven bonds a
   side at most, is as tall as it is wide whatever its shape, and lies as
-  that puts it.
+  that puts it. One that runs through a block of rings fused to each
+  other - rifampicin's ansa chain through its naphthofuranone - starts
+  from the block, drawn regular, and is a chain drawn round from it, as an
+  ansa bridge is: each of its double bonds cis or trans as given - those
+  at its two ends too, read by the block's atoms it is bonded to, and kept
+  so when the chain is eased to close - and round the side that shuts in
+  the smaller of the groups on the block (its OHs, not its hydrazone and
+  piperazine).
 - **Rings of rings**: a macrocycle that is rings strung together and
   nothing else - a porphyrin's pyrroles, a cyclodextrin's glucoses, each
   linked to the next by an atom or two - is set round a circle, each ring
@@ -109,7 +116,10 @@ they hang from.
   the flat rings show them: a solid found from how far apart the bonds put
   the atoms can have a ring fusion the wrong way, and morphine's 5-epimer
   had its bridge behind the ring while the wedge it starts with stood in
-  front. The centres on the bridge itself show theirs by their wedges: in
+  front. A double bond on the bridge is drawn cis, its neighbours along
+  the bridge on one side of it, as the ring it closes has it (huperzine
+  A's C=C, drawn as a zigzag, read trans). The centres on the bridge
+  itself show theirs by their wedges: in
   front or behind is a layer, not a place in space. A bridge as long
   as the path it spans is that path set off by a bond, the ring the two
   make the chair or boat it is (a morphinan's piperidine under its B
