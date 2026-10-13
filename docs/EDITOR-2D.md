@@ -138,9 +138,11 @@ A very large drawing - more than 20 000 atoms - is drawn as the view
 zooms in one of three ways, a trial to choose one by (the maintainer,
 2026-10-13; Settings, *General*, *Zooming a very large drawing*;
 `utils/largeZoom.ts`): laid out again at every step, as any drawing is
-(*Every step*); laid out once the view has stayed at one zoom for 150 ms,
-its lines and their round caps kept as wide on the screen as a layout at
-the zoom would have them meanwhile, on the graphics card (*Once it stops*);
+(*Every step*); laid out once the view has stayed within a hundredth of
+one zoom for 150 ms (the last of a wheel's zoom, in steps too small to
+see, waits for nothing), its lines and their round caps kept as wide on
+the screen as a layout at the zoom would have them meanwhile, on the
+graphics card (*Once it stops*);
 or held as a picture of the view and a quarter of it again round each side,
 scaled with the view on the graphics card, and drawn sharp once it stops,
 fading in over the picture, what the pointer lights and what is selected
