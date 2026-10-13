@@ -68,6 +68,64 @@ def is_molden(text):
     return re.match(r"\s*\[Molden Format\]", text, re.I) is not None
 
 
+def species_of(text, core=0):
+    """A Molden file's molecule's charge and spin multiplicity, from its own
+    sections - the format gives neither (its description: "[Atoms]" and
+    "[MO]"). Its charge: the nuclei's - each atom's atomic number, the third
+    field of its [Atoms] line - less its electrons: those its orbitals hold,
+    each orbital's "Occup=" in [MO], and `core`, those in no orbital (a
+    pseudopotential's core). Its multiplicity: one more than its unpaired
+    electrons - the alpha orbitals' occupations' excess over the beta's,
+    where "Spin=" says which an orbital is; else, its orbitals holding two
+    electrons each at most, each orbital's share left unpaired (one of
+    occupation 1, a whole one). None where it gives no atom or no
+    occupation."""
+    section = None
+    nuclear, atoms = 0, 0
+    occupied = {"alpha": [], "beta": []}
+    keys = {}
+    # (an orbital's keys stand together above its coefficients: kept as they come, put down where its coefficients begin)
+    def put():
+        if "occup" in keys:
+            occupied[keys.get("spin", "alpha")].append(keys["occup"])
+        keys.clear()
+    for raw in text.splitlines():
+        line = raw.strip()
+        head = re.match(r"\[([^\]]+)\]", line)
+        if head:
+            put()
+            section = head.group(1).strip().lower()
+            continue
+        if section == "atoms":
+            fields = line.split()
+            if len(fields) >= 6 and re.fullmatch(r"\d+", fields[2]):
+                nuclear += int(fields[2])
+                atoms += 1
+        elif section == "mo":
+            key = re.match(r"([A-Za-z]+)\s*=\s*(\S*)", line)
+            if key is None:
+                put()
+                continue
+            name, value = key.group(1).lower(), key.group(2)
+            if name in keys:
+                put()
+            if name == "spin":
+                keys["spin"] = "beta" if value.lower().startswith("beta") else "alpha"
+            elif name == "occup":
+                keys["occup"] = float(value.replace("D", "E").replace("d", "e"))
+            else:
+                keys[name] = value
+    put()
+    if not atoms or not (occupied["alpha"] or occupied["beta"]):
+        return None
+    electrons = sum(occupied["alpha"]) + sum(occupied["beta"])
+    if occupied["beta"]:
+        unpaired = abs(sum(occupied["alpha"]) - sum(occupied["beta"]))
+    else:
+        unpaired = sum(min(o, 2 - o) for o in occupied["alpha"])
+    return round(nuclear - core - electrons), round(unpaired) + 1
+
+
 def _load_molden_text(text):
     fd, path = tempfile.mkstemp(suffix=".molden")
     try:
@@ -256,19 +314,32 @@ def orbital_lists(orbitals, frame):
     return out
 
 
+def core_of(mol):
+    """The electrons a molecule's pseudopotentials hold in their cores, as PySCF read them: none, where it read none."""
+    try:
+        return int(sum(mol.atom_nelec_core(i) for i in range(mol.natm))) if mol.has_ecp() else 0
+    except Exception:
+        return 0
+
+
 def op_read(m):
     orbitals, result = load(m)
     if result is None:
-        # a Molden file: its molecule, as PySCF read it, and its orbitals
+        # a Molden file: its molecule, as PySCF read it, and its orbitals -
+        # its charge and multiplicity as the file's own atoms and occupations
+        # give them (`species_of`), the electrons of any pseudopotential's core
+        # as PySCF read it; PySCF's own, where the file gives no occupations
         mol = orbitals.mol
         atoms = [re.sub(r"[^A-Za-z]", "", mol.atom_pure_symbol(i)).capitalize() for i in range(mol.natm)]
         coords = mol.atom_coords(unit="Angstrom")
+        species = species_of(m["text"], core_of(mol))
+        charge, multiplicity = species if species else (int(mol.charge), int(mol.spin) + 1)
         result = {
             "schema": SCHEMA,
             "atoms": atoms,
             "frames": [[float(v) for xyz in coords for v in xyz]],
-            "charge": int(mol.charge),
-            "multiplicity": int(mol.spin) + 1,
+            "charge": charge,
+            "multiplicity": multiplicity,
             "results": [],
         }
     frame = max(0, len(result["frames"]) - 1)

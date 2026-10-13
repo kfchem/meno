@@ -711,7 +711,15 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   from PyPI) is a plugin of its own, sharing no code with another
   (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
   a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. Where an output
+  charges, vibrations and the like it leaves to other readers. A Molden
+  file gives no charge or multiplicity, so they are worked out from its
+  own sections (`species_of`, 2026-10-14): the charge is the nuclei's,
+  each atom's atomic number in [Atoms], less the electrons its [MO]
+  occupations hold and any pseudopotential core PySCF read; the
+  multiplicity is one more than the alpha occupations' excess over the
+  beta's, or, with no Spin= said, each orbital's share left unpaired.
+  It is tested alone (`scripts/calc/test_reader_pyscf_species.py`, in CI).
+  Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
   a Molden file (each p shell's functions put in x, y, z order, as ORCA's
   are not) for PySCF to read back, and the orbitals are checked
