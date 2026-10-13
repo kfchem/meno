@@ -90,7 +90,8 @@ async function ensureDir(rel: string, baseDir: BaseDirectory) {
     const has = await exists(cur, { baseDir }).catch(() => false);
     if (!has) {
       try {
-        await mkdir(cur, { baseDir });
+        // (with the folder it is in, where that is not there yet: the local data folder, the first time)
+        await mkdir(cur, { baseDir, recursive: true });
       } catch {
         /* Ignore EEXIST, etc. */
       }

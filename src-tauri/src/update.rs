@@ -224,7 +224,14 @@ pub fn update_restart_after_quit(app: AppHandle) -> Result<(), String> {
 /// quit, downloaded again after Meno next starts.
 pub fn install_on_exit(app: &AppHandle) {
     let updates = app.state::<Updates>();
-    if !updates_itself() || updates.ready.lock().unwrap().is_none() || held_now(app) > 0 {
+    if !updates_itself() || updates.ready.lock().unwrap().is_none() {
+        return;
+    }
+    if held_now(app) > 0 {
+        // (a job begun since the restart was asked for: Meno started again as it was)
+        if updates.restart.load(Ordering::SeqCst) {
+            app.restart();
+        }
         return;
     }
     let Some((update, bytes)) = updates.ready.lock().unwrap().take() else { return };
