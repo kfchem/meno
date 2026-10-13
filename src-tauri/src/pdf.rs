@@ -535,8 +535,26 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
 /// A PDF on the disk, held.
 #[tauri::command]
 pub async fn pdf_hold_path(app: tauri::AppHandle, path: String) -> Result<Held, String> {
-    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let bytes = read_at_most(Path::new(&path), MOST)?;
     hold(&app, &bytes).await
+}
+
+/// A file's bytes, if it is no larger than `most`: too large said from its
+/// size before anything is read, and never more than `most` and one byte
+/// read, should it grow as it is read.
+fn read_at_most(path: &Path, most: u64) -> Result<Vec<u8>, String> {
+    let too_large = || "it is too large".to_string();
+    if std::fs::metadata(path).map_err(|e| e.to_string())?.len() > most {
+        return Err(too_large());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(most + 1).read_to_end(&mut bytes))
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > most {
+        return Err(too_large());
+    }
+    Ok(bytes)
 }
 
 /// A PDF's bytes, sent as they are, held.
@@ -623,6 +641,18 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_too_large_is_refused_before_it_is_read() {
+        let dir = std::env::temp_dir().join(format!("meno-pdf-most-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.pdf");
+        std::fs::write(&file, b"%PDF-1.7\n0123456789").unwrap();
+        assert_eq!(read_at_most(&file, 64).unwrap(), b"%PDF-1.7\n0123456789");
+        assert_eq!(read_at_most(&file, 8).unwrap_err(), "it is too large");
+        assert!(read_at_most(&dir.join("none.pdf"), 64).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_pdf_is_known_by_its_start() {
