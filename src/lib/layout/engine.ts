@@ -28,7 +28,7 @@ import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./nam
 import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { canonicalOrder, reordered, restored } from "./canonical";
+import { canonicalRanks, reordered, restored, walkOrder } from "./canonical";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, templateViews, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
@@ -76,18 +76,27 @@ export function layout2D(input: LayoutInput): Layout2D {
   // (and kept by the molecule written in its own order: the same molecule
   // again - a label's group drawn out at every relayout, a drawing read
   // back - however its atoms come, laid out once)
-  const to0 = canonicalOrder(input, 0);
+  // (first by the input as given: the same input again needs no ranks)
+  const given = JSON.stringify(input);
+  const asGiven = laidOutAsGiven.get(given);
+  if (asGiven) {
+    laidOutAsGiven.delete(given);
+    laidOutAsGiven.set(given, asGiven);
+    return structuredClone(asGiven);
+  }
+  const ranks = canonicalRanks(input);
+  const to0 = walkOrder(input, ranks, 0);
   const key = JSON.stringify(reordered(input, to0));
   const kept = laidOutBefore.get(key);
   if (kept) {
     laidOutBefore.delete(key);
     laidOutBefore.set(key, kept);
-    return restored(kept.laid, kept.way ? canonicalOrder(input, kept.way) : to0);
+    return keptAsGiven(given, structuredClone(restored(kept.laid, kept.way ? walkOrder(input, ranks, kept.way) : to0)));
   }
   let best: { way: number; laid: Layout2D; to: number[] } | null = null;
   let bestScore = Infinity;
   for (let way = 0; way < OWN_ORDERS; way++) {
-    const to = way ? canonicalOrder(input, way) : to0;
+    const to = way ? walkOrder(input, ranks, way) : to0;
     const own = reordered(input, to);
     const laid = layoutInOrder(own);
     // (measured in that order too, the same whatever order the atoms came
@@ -98,7 +107,17 @@ export function layout2D(input: LayoutInput): Layout2D {
   }
   laidOutBefore.set(key, { way: best!.way, laid: best!.laid });
   if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
-  return restored(best!.laid, best!.to);
+  return keptAsGiven(given, structuredClone(restored(best!.laid, best!.to)));
+}
+
+/** The molecules laid out last, by the input as given: each drawing, handed out as a copy. */
+const laidOutAsGiven = new Map<string, Layout2D>();
+
+/** A drawing kept by the input it was laid out for, and handed out as a copy of its own. */
+function keptAsGiven(given: string, out: Layout2D): Layout2D {
+  laidOutAsGiven.set(given, structuredClone(out));
+  if (laidOutAsGiven.size > LAID_OUT_KEPT) laidOutAsGiven.delete(laidOutAsGiven.keys().next().value!);
+  return out;
 }
 
 /** The molecules laid out last, by the molecule written in its own order: the own order the drawing kept was laid out in, and that drawing in it. */

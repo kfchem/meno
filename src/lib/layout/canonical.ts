@@ -24,12 +24,26 @@ import type { Layout2D } from "./engine";
  * highest (2) - each the same whatever order the atoms came in.
  */
 export function canonicalOrder(input: LayoutInput, way = 0): number[] {
-  const n = input.atoms.length;
+  return walkOrder(input, canonicalRanks(input), way);
+}
+
+const adjacency = (input: LayoutInput) => {
   const adj: { to: number; order: number }[][] = input.atoms.map(() => []);
   for (const b of input.bonds) {
     adj[b.a].push({ to: b.b, order: b.order });
     adj[b.b].push({ to: b.a, order: b.order });
   }
+  return adj;
+};
+
+/**
+ * Each atom's rank in the molecule, every atom alone (see `canonicalOrder`):
+ * the same for the same molecule whatever order its atoms came in, and for
+ * every one of its own orders (`walkOrder`), so worked out once for all.
+ */
+export function canonicalRanks(input: LayoutInput): number[] {
+  const n = input.atoms.length;
+  const adj = adjacency(input);
   // what each atom is
   const first = input.atoms.map((a, i) =>
     [a.el, a.charge ?? 0, a.hs ?? -1, adj[i].length, adj[i].map((e) => e.order).sort((p, q) => p - q).join("."), a.pi?.length ?? 0].join("|"),
@@ -89,7 +103,13 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
   // same show a symmetry of it, and the atoms it takes onto each other are
   // not tried again: a tert-butyl's three methyls, alike in every way, are
   // tried once.
-  rank = settled(rank, n, withStereo, (r) => written(input, first, r));
+  return settled(rank, n, withStereo, (r) => written(input, first, r));
+}
+
+/** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */
+export function walkOrder(input: LayoutInput, rank: readonly number[], way = 0): number[] {
+  const n = input.atoms.length;
+  const adj = adjacency(input);
   // the atoms in the order a walk through the molecule meets them, as a
   // SMILES string writes them - from an end atom, the lowest ranked, each
   // atom's neighbours in rank order - not grouped by rank: the layout's
@@ -125,7 +145,13 @@ export function canonicalOrder(input: LayoutInput, way = 0): number[] {
   return to;
 }
 
-/** The most search steps `settled` takes for a molecule of `n` atoms; past them, the least order found so far. */
+/**
+ * The most search steps `settled` takes for a molecule of `n` atoms; past
+ * them, the least order found so far. (Members of a class are tried in the
+ * input's order, so a molecule that runs out of steps - very large and
+ * very symmetric, more than a dozen alike groups that are not alike in
+ * every way - can again come out by the order of its atoms.)
+ */
 const settleBudget = (n: number) => 200 + 20 * n;
 
 /**

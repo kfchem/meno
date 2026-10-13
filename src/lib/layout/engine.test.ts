@@ -63,6 +63,28 @@ describe("layout2D", () => {
     expect(m.tilt).toBeCloseTo(0, 6);
   });
 
+  it("hands out a drawing of its own each time, the same molecule laid out once", () => {
+    // (a drawing kept and handed out again: changing one handed out
+    // changes nothing in the next)
+    const g = fromSmiles("C[C@H](N)C(=O)O");
+    const first = layout2D(g);
+    const keep = JSON.stringify(first);
+    first.x[0] = 999;
+    first.wedges.length = 0;
+    first.hydrogens.forEach((h) => (h.at.x = 999));
+    first.bold.push([0, 1]);
+    expect(JSON.stringify(layout2D(g))).toBe(keep);
+    // and the same molecule with its atoms the other way round, too
+    const n = g.atoms.length;
+    const back: LayoutInput = {
+      atoms: [...g.atoms].reverse().map((a) => (a.tetra ? { ...a, tetra: { ...a.tetra, neighbours: a.tetra.neighbours.map((m) => (m < 0 ? m : n - 1 - m)) } } : a)),
+      bonds: g.bonds.map((b) => ({ ...b, a: n - 1 - b.a, b: n - 1 - b.b })),
+    };
+    const again = layout2D(back);
+    again.x.fill(0);
+    expect(JSON.stringify(layout2D(g))).toBe(keep);
+  });
+
   it("draws a double bond cis or trans as it is", () => {
     for (const cis of [true, false]) {
       const butene = carbons(4, [[0, 1], [1, 2, 2], [2, 3]], [

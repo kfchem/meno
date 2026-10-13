@@ -299,7 +299,10 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   twice what one did, a label's group drawn out again at each relayout
   among them: the last 64 molecules are kept by their own order's writing
   (aconitine 1.5 s the first time, 0.5 ms again, its atoms reversed).
-  Opening an SD file does not lay its records out.
+  Opening an SD file does not lay its records out. The ranks are worked
+  out once for both own orders, and an input seen before is found by
+  itself before any ranks (L8: fourteen tert-butyls took 0.6 s to rank,
+  twice). Every drawing is handed out as a copy of its own.
 - **A core's view chosen by the system alone** (2026-10-14). Ibogaine's
   isoquinuclidine was seen from the side its ring system alone read best
   from, which stood the indole on top of the cage, the drawing twice as
