@@ -235,10 +235,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   }, [style, aromaticEnabled, aromaticRings, ringFills]);
   // The typeface's own letters, and Japanese ones when a label has any, are
   // read when first needed; the layout is redone as they come in.
-  const fonts = useTypefaces(
-    style.fontFamily,
-    needsFallback(model.atoms.map((a) => a.el)),
-  );
+  // (whether any label needs them: worked out as the atoms change, not at every render - every frame of a drag over a large drawing)
+  const anyJapanese = useMemo(() => needsFallback(model.atoms.map((a) => a.el)), [model.atoms]);
+  const fonts = useTypefaces(style.fontFamily, anyJapanese);
   // (a label is read by the abbreviations Meno knows, the user's among them)
   const abbreviations = useAppSettings((s) => s.abbreviations);
   // The zoom it is laid out at: the view's - or, where the layout made at
