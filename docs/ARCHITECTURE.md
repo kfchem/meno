@@ -1158,9 +1158,11 @@ to be able to work with nothing going out at all.
   mode. Each task is begun with the hosts its consent named
   (`ConsentRequest.hosts`, made with the consent's lines from one list and
   sent with what begins the task), each exact or with a leading dot for any
-  host under one (`.hf.co`); a connection elsewhere is refused (403) and on
-  the record as blocked, "not a host its consent named". Only the user's
-  own code names none, and reaches any host. Each connection - host, bytes
+  host under one (`.hf.co`), at HTTPS's port, 443, unless one is named with
+  another (`host:port`); a connection elsewhere is refused (403) and on the
+  record as blocked, "not a host its consent named" or "not a port its
+  consent named". Only the user's own code names none, and reaches any
+  host - at HTTPS's port alone, as everything does. Each connection - host, bytes
   each way, times, outcome - goes to the window as it happens
   (`net:connection`, every half second while open) and to
   `network-log.jsonl` in the app's data folder when it ends. A child that may not use the network - another

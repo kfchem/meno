@@ -255,19 +255,47 @@ impl Net {
     }
 }
 
+/// The port HTTPS takes: the only one a connection goes to, unless a host is
+/// named with another (`host:port`).
+const HTTPS_PORT: u16 = 443;
+
 impl Task {
-    /// Whether it may reach `host`: one its consent named - or any, for
-    /// the user's own code.
-    fn reaches(&self, host: &str) -> bool {
-        self.hosts.as_deref().is_none_or(|named| host_named(named, host))
+    /// Why it may not reach `host` at `port`, if it may not: a host its
+    /// consent did not name - the user's own code reaches any - or a port
+    /// not named for it, only HTTPS's where none is.
+    fn refuses(&self, host: &str, port: u16) -> Option<&'static str> {
+        let Some(named) = self.hosts.as_deref() else {
+            return (port != HTTPS_PORT).then_some("not the port HTTPS takes");
+        };
+        if !host_named(named, host, None) {
+            Some("not a host its consent named")
+        } else if !host_named(named, host, Some(port)) {
+            Some("not a port its consent named")
+        } else {
+            None
+        }
+    }
+}
+
+/// A pattern's name and port: `host` alone is HTTPS's port; `host:port`
+/// that one - a number from 1 to 65535, written as such.
+fn pattern_parts(pattern: &str) -> Option<(&str, u16)> {
+    match pattern.rsplit_once(':') {
+        None => Some((pattern, HTTPS_PORT)),
+        Some((name, port)) => {
+            let n: u16 = port.parse().ok()?;
+            (n > 0 && port == n.to_string()).then_some((name, n))
+        }
     }
 }
 
 /// Whether a pattern names a host: its name - lower-case letters, digits
 /// and hyphens, in labels between dots - or, after a leading dot, the name
 /// any host under which is meant, of two labels at least (`.hf.co`; never a
-/// whole top-level domain, `.co`).
+/// whole top-level domain, `.co`); and, after a colon, a port other than
+/// HTTPS's where the host needs one.
 fn pattern_ok(pattern: &str) -> bool {
+    let Some((pattern, _)) = pattern_parts(pattern) else { return false };
     let (under, name) = match pattern.strip_prefix('.') {
         Some(name) => (true, name),
         None => (false, pattern),
@@ -281,21 +309,23 @@ fn pattern_ok(pattern: &str) -> bool {
     (1..=253).contains(&name.len()) && name.split('.').all(label_ok) && (!under || name.split('.').count() >= 2)
 }
 
-/// Whether `host` is one of those `named`: one named as it is, or one under
-/// a name given with a leading dot - `us.aws.cdn.hf.co` under `.hf.co`, but
-/// not `hf.co` itself, nor `evilhf.co`. Whatever its case, and with or
-/// without the dot that may end a name; a host that is not a name - one
-/// with any other character in it - is none of them.
-fn host_named(named: &[String], host: &str) -> bool {
+/// Whether `host` is one of those `named` - at `port`, where one is given:
+/// one named as it is, or one under a name given with a leading dot -
+/// `us.aws.cdn.hf.co` under `.hf.co`, but not `hf.co` itself, nor
+/// `evilhf.co`. Whatever its case, and with or without the dot that may
+/// end a name; a host that is not a name - one with any other character in
+/// it - is none of them.
+fn host_named(named: &[String], host: &str, port: Option<u16>) -> bool {
     let host = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
     if host.is_empty() || !host.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.') {
         return false;
     }
-    named.iter().any(|p| match p.strip_prefix('.') {
-        Some(_) => host
-            .strip_suffix(p.as_str())
-            .is_some_and(|sub| !sub.is_empty() && !sub.starts_with('.') && !sub.ends_with('.')),
-        None => host == *p,
+    named.iter().filter_map(|p| pattern_parts(p)).any(|(p, at)| {
+        port.is_none_or(|port| port == at)
+            && match p.strip_prefix('.') {
+                Some(_) => host.strip_suffix(p).is_some_and(|sub| !sub.is_empty() && !sub.starts_with('.') && !sub.ends_with('.')),
+                None => host == p,
+            }
     })
 }
 
@@ -531,10 +561,9 @@ impl Net {
             Some(("407 Proxy Authentication Required", "not from a task Meno began"))
         } else if !self.allowed(c.purpose.as_deref().unwrap_or("")) {
             Some(("403 Forbidden", "not allowed to use the network"))
-        } else if !task.as_ref().is_some_and(|t| t.reaches(&request.host)) {
-            Some(("403 Forbidden", "not a host its consent named"))
         } else {
-            None
+            // (a host or a port its consent did not name)
+            task.as_ref().and_then(|t| t.refuses(&request.host, request.port)).map(|why| ("403 Forbidden", why))
         };
         if let Some((status, reason)) = refusal {
             let _ = client
@@ -764,7 +793,7 @@ mod tests {
         assert!(net.begin("python-env:console", "Setting up", named(&[])).is_err());
         assert!(net.0.tasks.lock().unwrap().is_empty());
         // and only hosts: no pattern for a whole top-level domain, nor anything else
-        for bad in [".co", "*.hf.co", "PyPI.org", "pypi.org:443", "https://pypi.org", "a..b", "-a.org", ""] {
+        for bad in [".co", "*.hf.co", "PyPI.org", "pypi.org:0", "pypi.org:65536", "pypi.org:", "pypi.org:0443", "https://pypi.org", "a..b", "-a.org", ""] {
             assert!(net.begin("python-env:console", "Setting up", named(&["pypi.org", bad])).is_err(), "{bad}");
         }
         let task = net.begin("python-env:console", "Setting up", named(&["pypi.org", ".hf.co", "127.0.0.1"])).unwrap();
@@ -773,7 +802,9 @@ mod tests {
         task.finish(true);
         // the user's own code reaches any host
         let own = net.begin("python-code", "Python", None).unwrap();
-        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.reaches("example.com") && t.reaches("pypi.org")));
+        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.refuses("example.com", 443).is_none() && t.refuses("pypi.org", 443).is_none()));
+        // (over HTTPS alone, as everything else)
+        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.refuses("example.com", 80) == Some("not the port HTTPS takes")));
         own.finish(true);
     }
 
@@ -781,14 +812,31 @@ mod tests {
     fn knows_a_host_named_and_one_under_a_name_given_with_a_leading_dot() {
         let hosts = named(&["pypi.org", ".hf.co"]).unwrap();
         for host in ["pypi.org", "PyPI.org", "pypi.org.", "us.aws.cdn.hf.co", "cas-bridge.xethub.hf.co"] {
-            assert!(host_named(&hosts, host), "{host}");
+            assert!(host_named(&hosts, host, Some(443)), "{host}");
         }
         // a host under one named exactly is not named; nor is the name a leading dot is put before
         for host in ["files.pypi.org", "hf.co", "evilhf.co", "hf.co.example.com", ".hf.co", "x..hf.co", "us.aws.cdn.hf.co\0", "pypi.org/", "", "example.com"] {
-            assert!(!host_named(&hosts, host), "{host}");
+            assert!(!host_named(&hosts, host, None), "{host}");
         }
-        assert!(pattern_ok("pypi.org") && pattern_ok(".hf.co") && pattern_ok("127.0.0.1") && pattern_ok("localhost"));
+        assert!(pattern_ok("pypi.org") && pattern_ok(".hf.co") && pattern_ok("127.0.0.1") && pattern_ok("localhost") && pattern_ok("example.org:8443"));
         assert!(!pattern_ok(".co") && !pattern_ok(".") && !pattern_ok("hf.co.") && !pattern_ok("a_b.org"));
+    }
+
+    #[test]
+    fn holds_a_task_to_the_port_https_takes_unless_its_host_is_named_with_another() {
+        let hosts = named(&["pypi.org", ".hf.co", "example.org:8443"]).unwrap();
+        // HTTPS's port alone, where none is named
+        assert!(host_named(&hosts, "pypi.org", Some(443)) && host_named(&hosts, "us.aws.cdn.hf.co", Some(443)));
+        for port in [80, 22, 8080] {
+            assert!(!host_named(&hosts, "pypi.org", Some(port)), "{port}");
+        }
+        // another where it is named, and that one alone
+        assert!(host_named(&hosts, "example.org", Some(8443)));
+        assert!(!host_named(&hosts, "example.org", Some(443)) && !host_named(&hosts, "example.org", Some(80)));
+        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, hosts: Some(hosts) };
+        assert_eq!(task.refuses("pypi.org", 443), None);
+        assert_eq!(task.refuses("pypi.org", 80), Some("not a port its consent named"));
+        assert_eq!(task.refuses("example.com", 443), Some("not a host its consent named"));
     }
 
     fn encode_base64(bytes: &[u8]) -> String {
@@ -872,7 +920,8 @@ mod tests {
         runtime().block_on(async {
             let (net, port, to) = proxy_and_echo().await;
             net.0.granted.lock().unwrap().insert("python-env:test".into());
-            let task = net.begin("python-env:test", "Testing", named(&["127.0.0.1"])).unwrap();
+            // (the echo's port named: not HTTPS's)
+            let task = net.begin("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
 
             // the task's own: through, both ways, counted
             let (mut c, status) = ask(port, to, Some(&task.token)).await;
@@ -909,7 +958,7 @@ mod tests {
             net.0.granted.lock().unwrap().insert("python-env:test".into());
 
             // a host named: through
-            let task = net.begin("python-env:test", "Testing", named(&["pypi.org", "127.0.0.1"])).unwrap();
+            let task = net.begin("python-env:test", "Testing", Some(vec!["pypi.org".into(), format!("127.0.0.1:{to}")])).unwrap();
             let (mut c, status) = ask(port, to, Some(&task.token)).await;
             assert_eq!(status, "HTTP/1.1 200 Connection Established");
             hello(&mut c).await;
@@ -932,11 +981,18 @@ mod tests {
             }
             task.finish(true);
 
-            // the user's own code: any host
+            // a host named, at a port not named for it: refused
+            let task = net.begin("python-env:test", "Testing", named(&["127.0.0.1"])).unwrap();
+            let (_, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            task.finish(true);
+
+            // the user's own code: any host, over HTTPS alone - the echo's port is not HTTPS's
             let own = net.begin("python-code", "Python", None).unwrap();
-            let (mut c, status) = ask(port, to, Some(&own.token)).await;
-            assert_eq!(status, "HTTP/1.1 200 Connection Established");
-            hello(&mut c).await;
+            let (_, status) = ask(port, to, Some(&own.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            let why: Vec<Option<String>> = net.0.recent.lock().unwrap().iter().filter(|c| c.outcome == "blocked").map(|c| c.reason.clone()).collect();
+            assert_eq!(why[2..], [Some("not a port its consent named".to_string()), Some("not the port HTTPS takes".to_string())]);
         });
     }
 
