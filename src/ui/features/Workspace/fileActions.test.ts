@@ -17,6 +17,9 @@ import type { Model } from "./store/types";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { readStructures } from "../../../lib/io/structures";
 import type { OptionValues } from "../../../lib/options";
+import { readPdb } from "../../../lib/chem/pdb";
+import { writtenOf } from "./utils/written";
+import { WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -374,26 +377,59 @@ describe("an SD file of a canvas with molecules in 3D", () => {
         { el: "H", x: 0.96, y: 0, z: 0 },
       ],
       bonds: [{ a1: 0, a2: 1, order: 1 }],
-      at: { x: 0, y: 0 },
+      at: { x: 0, y: 0, z: 0 },
       frames: [[0, 0, 0, 0.97, 0, 0], [0, 0, 0, 0.98, 0, 0]],
       frame: 1,
       name: "oh.xyz",
     };
-    const na = { atoms: [{ el: "Na", x: 5, y: 0, z: 0, charge: 1 }], bonds: [], at: { x: 0, y: 0 } };
+    // (as they stand on the page: the sodium 5 Å to the right of the hydroxide's centre, level with it)
+    const na = { atoms: [{ el: "Na", x: 0, y: 0, z: 0, charge: 1 }], bonds: [], at: { x: 5 * WORLD_PER_ANGSTROM, y: 0, z: 0 } };
     // (the drawing beside them is not written: the format holds none)
     const shown = structureFileText({ ...model, molecules3d: [oh, na] }, "/tmp/ions.pdb");
     expect(shown).not.toMatch(/^MODEL/m);
     expect(shown.split("\n").filter((l) => l.startsWith("HETATM")).map((l) => l.substring(22, 26).trim())).toEqual(["1", "1", "2"]);
     const back = await processFileContent("ions.pdb", shown);
     expect(back.model.atoms).toHaveLength(0);
-    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.x, a.charge])).toEqual([["O", 0, -1], ["H", 0.97, undefined], ["Na", 5, 1]]);
+    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.x, a.charge])).toEqual([["O", -0.485, -1], ["H", 0.485, undefined], ["Na", 5, 1]]);
     expect(back.molecules3d![0].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
     // every frame: a model for each, the sodium where it stands in each
     const all = structureFileText({ atoms: [], bonds: [], molecules3d: [oh, na] }, "/tmp/ions.pdb", { frames: "all" });
     expect(all.match(/^MODEL/gm)).toHaveLength(3);
     const frames = await processFileContent("ions.pdb", all);
     expect(frames.molecules3d).toHaveLength(1);
-    expect(frames.molecules3d![0].frames).toEqual([[0, 0, 0, 0.97, 0, 0, 5, 0, 0], [0, 0, 0, 0.98, 0, 0, 5, 0, 0]]);
+    expect(frames.molecules3d![0].frames).toEqual([[-0.485, 0, 0, 0.485, 0, 0, 5, 0, 0], [-0.49, 0, 0, 0.49, 0, 0, 5, 0, 0]]);
     expect(() => structureFileText(model, "/tmp/none.pdb")).toThrow(/no molecules in 3D/);
+  });
+
+  it("writes several molecules in 3D to a PDB file as they stand on the page, each turned and placed as it is seen; one where its file had it", () => {
+    const k = WORLD_PER_ANGSTROM;
+    const water = (more: { at: { x: number; y: number; z: number }; turn?: [number, number, number, number] }) => ({
+      atoms: [
+        { el: "O", x: 1, y: 2, z: 3 },
+        { el: "H", x: 1.96, y: 2, z: 3 },
+        { el: "H", x: 1, y: 2.96, z: 3 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      name: "water.xyz",
+      ...more,
+    });
+    // (the same file's water twice, 6 Å apart on the page, the second turned a quarter about z)
+    const both = [water({ at: { x: 0, y: 0, z: 10 } }), water({ at: { x: 6 * k, y: 0, z: 10 }, turn: [0, 0, Math.SQRT1_2, Math.SQRT1_2] })];
+    const atoms = readPdb(structureFileText({ atoms: [], bonds: [], molecules3d: both }, "/tmp/waters.pdb")).models[0].atoms;
+    expect(new Set(atoms.map((a) => `${a.x} ${a.y} ${a.z}`)).size).toBe(6);
+    // (as a writer of another kind is given them)
+    writtenOf(both).atoms.forEach((a, i) => {
+      expect(atoms[i].x).toBeCloseTo(a.x, 2);
+      expect(atoms[i].y).toBeCloseTo(a.y, 2);
+      expect(atoms[i].z).toBeCloseTo(a.z, 2);
+    });
+    // (the second's O-H along x turned to along y)
+    expect(atoms[4].x - atoms[3].x).toBeCloseTo(0, 2);
+    expect(atoms[4].y - atoms[3].y).toBeCloseTo(0.96, 2);
+    const alone = readPdb(structureFileText({ atoms: [], bonds: [], molecules3d: [both[1]] }, "/tmp/water.pdb")).models[0].atoms;
+    expect(alone.map((a) => [a.x, a.y, a.z])).toEqual([[1, 2, 3], [1.96, 2, 3], [1, 2.96, 3]]);
   });
 });

@@ -31,7 +31,7 @@ import type { OptionValues } from "../../../lib/options";
 import { extensionOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
-import { writtenOf } from "./utils/written";
+import { writtenAtoms, writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 
@@ -172,17 +172,20 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
  * its own, in the frame it shows - or, every frame, a model for each frame
  * there is, each molecule in its frame of that number, or in the frame it
  * shows where it has none of that number - with the bonds that frame has.
- * The file's CONECT records serve every model: the first model's bonds.
- * Throws where there are none.
+ * One where its file had it; several, one system, as they stand on the
+ * page, each turned and placed as it is seen, as a writer is given them
+ * (utils/written `writtenAtoms`). The file's CONECT records serve every
+ * model: the first model's bonds. Throws where there are none.
  */
 export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}): string {
   if (!molecules.length) throw new Error("There are no molecules in 3D to write: a PDB file holds no drawing.");
   const framesOf = (m: Carried3D) => 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
   const count = options.frames === "all" ? Math.max(...molecules.map(framesOf)) : 1;
+  const placed = molecules.length > 1;
   const models = Array.from({ length: count }, (_, i) =>
     molecules.map((m) => {
       const frame = options.frames === "all" && i < framesOf(m) ? i : m.frame;
-      return { atoms: frameAtoms(m, frame), bonds: bondsAt(m, frame) };
+      return { atoms: writtenAtoms(m, frame, placed), bonds: bondsAt(m, frame) };
     }),
   );
   return writePdb(models);

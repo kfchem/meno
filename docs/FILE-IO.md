@@ -721,7 +721,11 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   the writer's options ask; every bond the frame written has in CONECT
   records - one set of them serves every model, so with a MODEL for each
   frame, the first frame's; END. No HEADER, CRYST1 or MASTER: a file of
-  coordinates, not an entry of the archive.
+  coordinates, not an entry of the archive. One molecule is written where
+  its file had it; several, one system, as they stand on the page - each
+  turned and placed as it is seen, its ångströms kept - as a plugin's
+  writer is given them (utils/written `writtenAtoms`; *Which molecule*,
+  below), not each where its file had it, on top of one another.
 
 As step 7's writer was built - decided with the maintainer on
 2026-10-06:
