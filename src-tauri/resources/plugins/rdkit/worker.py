@@ -641,7 +641,8 @@ def op_run(m):
     """A step done at once. *Duplicates*: within each compound - a conformer
     set's, or in a compound set the entries of the same structure - lowest
     energy first, each entry set aside that is within the RMSD of one kept,
-    over their heavy atoms, at its best over the molecule's symmetries."""
+    over their heavy atoms, at its best over the molecule's symmetries. Never
+    two of different charge or spin: they are different species."""
     if m.get("step") != "duplicates":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     alike = float((m.get("options") or {}).get("rmsd", ALIKE))
@@ -650,7 +651,11 @@ def op_run(m):
     groups = {}
     for i, entry in enumerate(entries):
         mol = mol_of(entry)
-        key = entry.get("compound") if m.get("holds") == "conformers" else Chem.MolToSmiles(Chem.RemoveHs(mol))
+        key = (
+            entry.get("compound") if m.get("holds") == "conformers" else Chem.MolToSmiles(Chem.RemoveHs(mol)),
+            entry.get("charge", 0),
+            entry.get("multiplicity", 1),
+        )
         heavy.append(Chem.RemoveHs(mol))
         groups.setdefault(key, []).append(i)
     kept = []

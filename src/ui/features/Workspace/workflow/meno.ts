@@ -55,11 +55,16 @@ export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds">): string {
     .map((b) => `${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}:${b.order}`)
     .sort()
     .join(" ");
+  return `${atoms}|${bonds}|${speciesOf(e)}`;
+}
+
+/** An entry's charge and spin multiplicity, as the programs are told them (lib/io/writers `knownOf`): entries that differ in them are different species. */
+function speciesOf(e: Pick<SetEntry, "atoms">): string {
   const { charge, multiplicity } = knownOf({
     atoms: e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
     bonds: [],
   });
-  return `${atoms}|${bonds}|${charge} ${multiplicity}`;
+  return `${charge} ${multiplicity}`;
 }
 
 /** A compound set as a conformer set: entries of the same constitution as conformers of one compound, numbered in the order they came. */
@@ -100,13 +105,12 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * lowest energy first where all have one, else in order. In a conformer
  * set they are compared within each compound; in a compound set, each
  * with those of the same atoms in the same order - a structure there
- * twice is the same structure, not two compounds.
+ * twice is the same structure, not two compounds. Never two of different
+ * charge or spin: they are different species, however alike in shape.
  */
 function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number): Outcome {
-  const groups =
-    holds === "conformers"
-      ? byCompound(entries)
-      : [...entries.reduce((m, e) => m.set(atomsOf(e), [...(m.get(atomsOf(e)) ?? []), e]), new Map<string, SetEntry[]>()).values()];
+  const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
+  const groups = [...entries.reduce((m, e) => m.set(keyOf(e), [...(m.get(keyOf(e)) ?? []), e]), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
   const keptSet = new Set<SetEntry>();
   for (const g of groups) {
