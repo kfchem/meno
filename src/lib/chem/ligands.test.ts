@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "./acs";
 import { abbreviationOf, abbreviationStructure, labelRuns, labelUnits, reversedLabel } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { complexStructure, LIGANDS, ligandPicture, ligandStructure, structureFormula, type GroupStructure } from "./ligands";
+import { LIGANDS, ligandPicture, ligandStructure, structureFormula, type GroupStructure } from "./ligands";
 import { writeMolfile } from "./molWriter";
 
 const formula = structureFormula;
@@ -125,22 +125,6 @@ describe("the ligands", () => {
 
 describe("complexes' formulas", () => {
   const of = (label: string) => abbreviationStructure(label)!;
-
-  it("are none without a metal's symbol, known before any group is asked for", () => {
-    // (read item by item, a long label asked for every group its letters could
-    // begin - 20 081 of them for (CH2)18C - ever more as it was typed in
-    // place, the keys falling behind: 2.6 s for its 56 letters)
-    let asked = 0;
-    const groupOf = () => {
-      asked++;
-      return null;
-    };
-    expect(complexStructure("CH2".repeat(18) + "C", groupOf)).toBeNull();
-    expect(complexStructure("OCH2CH2OTBS", groupOf)).toBeNull();
-    expect(asked).toBe(0);
-    // (a metal's symbol in it: read as before)
-    expect(complexStructure("Pd(PPh3)4", (l) => abbreviationStructure(l))).not.toBeNull();
-  });
 
   it("bind each ligand to the metal: a donor by a coordination bond, an anion by a covalent one", () => {
     const tetrakis = of("Pd(PPh3)4");

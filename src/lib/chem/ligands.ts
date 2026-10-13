@@ -414,7 +414,6 @@ export function structureFormula(s: GroupStructure): string {
 const METALS = new Set(
   "Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg La Ce Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split(" "),
 );
-const METAL_SYMBOLS = [...METALS];
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
 /**
@@ -563,10 +562,6 @@ export function complexStructure(
   groupOf: (label: string) => GroupStructure | null,
   local: Readonly<Record<string, Ligand>> = {},
 ): (GroupStructure & { name: string }) | null {
-  // (with no metal's symbol in it, none: known at once - read item by item,
-  // every group its letters could begin was asked for first, ever more of
-  // them as a long label was typed in place, the keys falling behind)
-  if (!METAL_SYMBOLS.some((m) => label.includes(m))) return null;
   const items = itemsOf(label, { groupOf, local });
   if (!items) return null;
   const atoms: SmilesAtom[] = [];
