@@ -160,46 +160,35 @@ describe("a stack of drawings", () => {
     expect(stacked[0].model.bonds.map((b) => b.id)).toEqual([100]);
   });
 
-  it("is taken apart record by record, a thousand of them in about ten times a hundred's time", () => {
-    // (two stacks of n/2 records of 28 atoms in a chain, the second stack's
+  it("is taken apart record by record, each atom and bond looked at a few times, not once for every record", () => {
+    // (two stacks of 50 records of 28 atoms in a chain, the second stack's
     // atoms first, and a loose chain of 28 after them)
-    const stacks = (n: number) => {
-      const atoms: (A & { stack?: AtomStack })[] = [];
-      const bonds: { id: number; a: number; b: number }[] = [];
-      const chain = (stack?: AtomStack) => {
-        const first = atoms.length + 1;
-        for (let i = 0; i < 28; i++) {
-          atoms.push({ id: first + i, x: i, y: 0, ...(stack ? { stack } : {}) });
-          if (i) bonds.push({ id: first + i, a: first + i - 1, b: first + i });
-        }
-      };
-      for (let r = 0; r < n / 2; r++) chain({ id: 2, record: r, ...(r === 0 ? { title: "second" } : {}) });
-      for (let r = 0; r < n / 2; r++) chain({ id: 1, record: r });
-      chain();
-      return { atoms, bonds };
+    const atoms: (A & { stack?: AtomStack })[] = [];
+    const bonds: { id: number; a: number; b: number }[] = [];
+    const chain = (stack?: AtomStack) => {
+      const first = atoms.length + 1;
+      for (let i = 0; i < 28; i++) {
+        atoms.push({ id: first + i, x: i, y: 0, ...(stack ? { stack } : {}) });
+        if (i) bonds.push({ id: first + i, a: first + i - 1, b: first + i });
+      }
     };
-    const timed = (n: number) => {
-      const d = stacks(n);
-      const started = performance.now();
-      const parts = recordDrawings(d);
-      return { d, parts, ms: performance.now() - started };
-    };
-    // (once first, so that the tenth is not timed starting cold)
-    timed(100);
-    const tenth = timed(100);
-    const { d, parts, ms } = timed(1000);
-    expect(idsOf(parts.loose.atoms)).toEqual(idsOf(d.atoms.slice(-28)));
+    for (let r = 0; r < 50; r++) chain({ id: 2, record: r, ...(r === 0 ? { title: "second" } : {}) });
+    for (let r = 0; r < 50; r++) chain({ id: 1, record: r });
+    chain();
+    const seenAtoms = counted(atoms);
+    const seenBonds = counted(bonds);
+    const parts = recordDrawings({ atoms: seenAtoms.list, bonds: seenBonds.list });
+    expect(idsOf(parts.loose.atoms)).toEqual(idsOf(atoms.slice(-28)));
     expect(parts.loose.bonds).toHaveLength(27);
     // (stack 1 first, its records in order; each a chain of its own)
-    expect(parts.stacked).toHaveLength(1000);
-    expect(parts.stacked[0].model.atoms[0].id).toBe(500 * 28 + 1);
-    expect(parts.stacked[500].model.atoms[0].id).toBe(1);
-    expect(parts.stacked[500].title).toBe("second");
+    expect(parts.stacked).toHaveLength(100);
+    expect(parts.stacked[0].model.atoms[0].id).toBe(50 * 28 + 1);
+    expect(parts.stacked[50].model.atoms[0].id).toBe(1);
+    expect(parts.stacked[50].title).toBe("second");
     expect(parts.stacked.every((r) => r.model.atoms.length === 28 && r.model.bonds.length === 27)).toBe(true);
-    // (where every atom and bond was looked through for every record, a
-    // hundred times: 1.5 s for a thousand records - timed against a tenth
-    // of them, so that a machine busy with other work slows both alike)
-    expect(ms).toBeLessThan(25 * tenth.ms + 100);
+    // (where every atom and bond was looked through for every record, half
+    // a million reads here - 1.5 s for a thousand records)
+    expect(seenAtoms.reads() + seenBonds.reads()).toBeLessThan(20 * (atoms.length + bonds.length));
   });
 
   it("brought into a drawing, is numbered after its own, none marked; one record of it alone is no stack", () => {
@@ -252,3 +241,15 @@ describe("a stack of drawings", () => {
     }
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}

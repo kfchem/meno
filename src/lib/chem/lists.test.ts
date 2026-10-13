@@ -18,9 +18,8 @@ describe("long lists", () => {
   });
 
   it("hold more than one call's arguments can be", () => {
-    // (a million: past what any thread's stack takes spread into one call)
+    // (a million: more than a call's arguments can be on a worker's stack)
     const many = Array.from({ length: 1_000_000 }, (_, i) => i);
-    expect(() => Math.max(...many)).toThrow(RangeError);
     expect(greatest(many)).toBe(999_999);
     expect(least(many)).toBe(0);
     expect(pushAll([], many)).toHaveLength(1_000_000);

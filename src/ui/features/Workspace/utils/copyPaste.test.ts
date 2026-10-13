@@ -28,38 +28,26 @@ describe("partToCopy", () => {
     expect(partToCopy(model, none, null)).toBeNull();
   });
 
-  it("takes a large selection, and cuts it, in about the time its size says", () => {
-    // (a page of n chains of 28 atoms, all of it selected)
-    const page = (n: number): Model => {
-      const atoms = [];
-      const bonds = [];
-      for (let i = 1; i <= 28 * n; i++) {
-        atoms.push(atom(i, i % 28, Math.floor(i / 28)));
-        if (i % 28) bonds.push({ id: 100_000 + i, a: i, b: i + 1, order: 1 as const });
-      }
-      return { atoms, bonds };
-    };
-    const timed = (n: number) => {
-      const m = page(n);
-      const all = { atoms: new Set(m.atoms.map((a) => a.id)), bonds: new Set<number>() };
-      const started = performance.now();
-      const part = partToCopy({ ...m, arrows: [{ id: 1, x: 5, y: 1, angle: 0, length: 2 }] }, all, null)!;
-      const cut = deleteParts({ ...emptyWorkspaceDocument(), model: m }, all.atoms, []);
-      return { part, cut, ms: performance.now() - started };
-    };
-    // (once first, so that the tenth is not timed starting cold)
-    timed(100);
-    const tenth = timed(100);
-    const { part, cut, ms } = timed(1000);
-    expect(part.atoms).toHaveLength(28_000);
-    expect(part.bonds).toHaveLength(27_000);
+  it("takes a large selection, and cuts it, looking at each atom a few times, not once for every other", () => {
+    // (a page of a hundred chains of 28 atoms, all of it selected)
+    const atoms = [];
+    const bonds = [];
+    for (let i = 1; i <= 2800; i++) {
+      atoms.push(atom(i, i % 28, Math.floor(i / 28)));
+      if (i % 28) bonds.push({ id: 100_000 + i, a: i, b: i + 1, order: 1 as const });
+    }
+    const seen = counted(atoms);
+    const m: Model = { atoms: seen.list, bonds };
+    const all = { atoms: new Set(atoms.map((a) => a.id)), bonds: new Set<number>() };
+    const part = partToCopy({ ...m, arrows: [{ id: 1, x: 5, y: 1, angle: 0, length: 2 }] }, all, null)!;
+    const cut = deleteParts({ ...emptyWorkspaceDocument(), model: m }, all.atoms, []);
+    expect(part.atoms).toHaveLength(2800);
+    expect(part.bonds).toHaveLength(2700);
     expect(part.arrows).toHaveLength(1);
     expect(cut.model.atoms).toHaveLength(0);
-    // (ten times the atoms in about ten times the time, where each looked up
-    // among them all took a hundred times - 2.7 s at 28 000 atoms: timed
-    // against a tenth of them, so that a machine busy with other work slows
-    // both alike)
-    expect(ms).toBeLessThan(25 * tenth.ms + 100);
+    // (where each atom selected was sought among them all - and each end of
+    // each bond cut - it was some four million reads: 1.3 s at 28 000 atoms)
+    expect(seen.reads()).toBeLessThan(20 * atoms.length);
   });
 });
 
@@ -276,3 +264,15 @@ describe("an arrow in a record", () => {
     expect(read.arrows![1]).toEqual({ id: 2, x: 3, y: 5, angle: 0, length: 4 });
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}

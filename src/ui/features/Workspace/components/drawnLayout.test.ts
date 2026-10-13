@@ -123,7 +123,7 @@ describe("a drawing laid out for the canvas", () => {
     expect(ringCircles(atoms, bonds, editorLayoutOptions(ACS_1996, { aromaticCircle: true })).circles).toHaveLength(2);
   });
 
-  it("gives a thousand rings' circles their rings' colours at little more than the drawing's own cost", () => {
+  it("gives a thousand rings' circles their rings' colours, each ring's bonds read, not every bond for each", () => {
     // (a thousand benzene rings, every other one's bonds coloured, and one
     // with a bond of another colour among them, whose circle has none)
     const atoms: LAtom[] = [];
@@ -135,26 +135,23 @@ describe("a drawing laid out for the canvas", () => {
         bonds.push({ a1: r * 6 + k, a2: r * 6 + ((k + 1) % 6), order: k % 2 ? 1 : 2, stereo: "none", ...(color ? { color } : {}) });
       }
     }
-    const timed = (aromaticCircle: boolean) => {
-      const opts = editorLayoutOptions(ACS_1996, { aromaticCircle });
-      // (once first, so that neither is timed starting cold)
-      layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
-      const started = performance.now();
-      const laid = layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
-      return { laid, ms: performance.now() - started };
+    // (how many times a bond is read, laying the page out with circles and without)
+    const laidWith = (aromaticCircle: boolean) => {
+      const seen = counted(bonds);
+      const laid = layoutMolecule(atoms, seen.list, editorLayoutOptions(ACS_1996, { aromaticCircle }), startingZoom(ACS_1996));
+      return { laid, reads: seen.reads() };
     };
-    const plain = timed(false);
-    const { laid, ms } = timed(true);
+    const plain = laidWith(false);
+    const { laid, reads } = laidWith(true);
     expect(laid.circles).toHaveLength(1000);
     expect(laid.circles!.filter((c) => c.color === "#d55e00")).toHaveLength(499);
     expect(laid.circles!.filter((c) => c.color)).toHaveLength(499);
-    // (where every bond was tried again for every circle, the circles took
-    // four times the drawing's own time: timed beside the same drawing
-    // without them, so that a machine busy with other work slows both alike)
-    expect(ms).toBeLessThan(2 * plain.ms + 50);
+    // (where every bond was tried again for every circle, six million reads
+    // more than without: a few times each bond now)
+    expect(reads - plain.reads).toBeLessThan(20 * bonds.length);
   });
 
-  it("fills two thousand rings at little more than the drawing's own cost", () => {
+  it("fills two thousand rings, each ring's bonds read, not every bond for each", () => {
     const atoms: LAtom[] = [];
     const bonds: LBond[] = [];
     const ringFills: Record<string, string> = {};
@@ -163,22 +160,30 @@ describe("a drawing laid out for the canvas", () => {
       for (let k = 0; k < 6; k++) bonds.push({ a1: r * 6 + k, a2: r * 6 + ((k + 1) % 6), order: k % 2 ? 1 : 2, stereo: "none" });
       ringFills[Array.from({ length: 6 }, (_, k) => r * 6 + k + 1).join("-")] = "#f0e442";
     }
-    const timed = (filled: boolean) => {
-      const opts = { ...editorLayoutOptions(ACS_1996), ...(filled ? { ringFills } : {}) };
-      // (once first, so that neither is timed starting cold)
-      layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
-      const started = performance.now();
-      const laid = layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
-      return { laid, ms: performance.now() - started };
+    const laidWith = (filled: boolean) => {
+      const seen = counted(bonds);
+      const laid = layoutMolecule(atoms, seen.list, { ...editorLayoutOptions(ACS_1996), ...(filled ? { ringFills } : {}) }, startingZoom(ACS_1996));
+      return { laid, reads: seen.reads() };
     };
-    const plain = timed(false);
-    const { laid, ms } = timed(true);
+    const plain = laidWith(false);
+    const { laid, reads } = laidWith(true);
     expect(laid.under).toHaveLength(2000);
     // (each ring's atoms in order round it)
     expect(laid.under![1].points).toEqual(atoms.slice(6, 12).map((a) => ({ x: a.x, y: a.y })));
-    // (where every bond was looked through for every ring filled, ten times
-    // the drawing's own time: timed beside the same drawing unfilled, so
-    // that a machine busy with other work slows both alike)
-    expect(ms).toBeLessThan(2 * plain.ms + 50);
+    // (where every bond was looked through for every ring filled, 24 million
+    // reads more than unfilled: a few times each bond now)
+    expect(reads - plain.reads).toBeLessThan(20 * bonds.length);
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}
