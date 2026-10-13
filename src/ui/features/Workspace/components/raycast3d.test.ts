@@ -223,24 +223,46 @@ describe("what the pointer is over on a molecule in 3D", () => {
     expect(nearest(moved)).toEqual(face);
   });
 
-  it("is found in a small share of the time three.js takes, for a protein of 28 000 atoms and 3 500 residues", () => {
-    const cpu = (f: () => void) => {
-      const c = process.cpuUsage();
-      for (let k = 0; k < 5; k++) f();
-      const d = process.cpuUsage(c);
-      return (d.user + d.system) / 5;
+  it("is found reading a small share of what three.js reads, for a protein of 28 000 atoms and 3 500 residues", () => {
+    // (the work counted, not the time: a triangle tried has its corners read
+    // through the position attribute, one getX each - a run's time on a
+    // shared machine measures the machine as much as the code)
+    const counting = (attribute: THREE.BufferAttribute) => {
+      let reads = 0;
+      const getX = attribute.getX.bind(attribute);
+      attribute.getX = (i: number) => (reads++, getX(i));
+      return (f: () => void) => {
+        reads = 0;
+        f();
+        return reads;
+      };
     };
+    const hits: THREE.Intersection[] = [];
     const { mesh, centres, rnd } = atoms(28000, 1.7);
     const rc = rayAt(mesh.localToWorld(centres[0].clone()), rnd);
-    const hits: THREE.Intersection[] = [];
-    const theirs = cpu(() => rc.intersectObject(mesh, false));
-    const ours = cpu(() => raycastSpheres(mesh, rc, (hits.length = 0, hits)));
-    expect(ours).toBeLessThan(theirs / 5);
+    // (each once first, as on the canvas: the bounding spheres three.js works out at the first ray)
+    rc.intersectObject(mesh, false);
+    raycastSpheres(mesh, rc, hits);
+    const readsOf = counting(mesh.geometry.getAttribute("position") as THREE.BufferAttribute);
+    const theirs = readsOf(() => rc.intersectObject(mesh, false));
+    const ours = readsOf(() => raycastSpheres(mesh, rc, (hits.length = 0, hits)));
+    // (three.js tries the triangles of every ball the ray passes; each ball here is met where its sphere is, no triangle read)
+    expect(theirs).toBeGreaterThan(1000);
+    expect(ours).toBe(0);
+    expect(hits.length).toBeGreaterThan(0);
     const rib = ribbon(3500);
-    const rr = rayAt(rib.mesh.localToWorld(new THREE.Vector3(0, 0, 0)), rnd);
+    // (aimed at a corner of a residue halfway along the chain: 8 rings a residue, 10 corners a ring)
+    const corner = new THREE.Vector3().fromBufferAttribute(rib.mesh.geometry.getAttribute("position") as THREE.BufferAttribute, 1750 * 8 * 10);
+    const rr = rayAt(rib.mesh.localToWorld(corner), rnd);
+    // (the residues grouped at the first ray, as the ribbon is filled; three.js's bounds worked out at its first)
+    rr.intersectObject(rib.mesh, false);
     raycastByResidue(rib.mesh, rr, [], rib.residues);
-    const theirsRibbon = cpu(() => rr.intersectObject(rib.mesh, false));
-    const oursRibbon = cpu(() => raycastByResidue(rib.mesh, rr, (hits.length = 0, hits), rib.residues));
-    expect(oursRibbon).toBeLessThan(theirsRibbon / 5);
-  }, 60_000);
+    const ribbonReadsOf = counting(rib.mesh.geometry.getAttribute("position") as THREE.BufferAttribute);
+    const theirsRibbon = ribbonReadsOf(() => rr.intersectObject(rib.mesh, false));
+    const oursRibbon = ribbonReadsOf(() => raycastByResidue(rib.mesh, rr, (hits.length = 0, hits), rib.residues));
+    // (three.js tries every triangle; only the residues whose sphere the ray passes are tried here)
+    expect(oursRibbon).toBeGreaterThan(0);
+    expect(oursRibbon).toBeLessThan(theirsRibbon / 50);
+    expect(hits.length).toBe(1);
+  });
 });
