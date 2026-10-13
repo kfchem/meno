@@ -96,7 +96,21 @@ def op_from_smiles(m):
     if mol is None:
         raise ValueError("This SMILES could not be read.")
     lay_out_2d(mol)
-    return {"molblock": Chem.MolToV3KMolBlock(mol)}
+    block = Chem.MolToV3KMolBlock(mol)
+    # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
+    # says (Z): where what is written does not read back as the SMILES,
+    # RDKit's own depictor lays it out instead (it keeps that one)
+    if not reads_as(block, mol):
+        rdDepictor.Compute2DCoords(mol, forceRDKit=True)
+        block = Chem.MolToV3KMolBlock(mol)
+    return {"molblock": block}
+
+
+def reads_as(molblock, mol):
+    """Whether a MOL block reads back as the molecule it was written from,
+    stereochemistry and all."""
+    back = Chem.MolFromMolBlock(molblock)
+    return back is not None and Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
 
 
 def too_many(atom):

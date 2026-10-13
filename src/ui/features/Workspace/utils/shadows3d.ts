@@ -28,8 +28,8 @@ const UNSEEN = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: fals
 export function casterOf(drawn: THREE.InstancedMesh, kind: "balls" | "sticks"): THREE.InstancedMesh {
   const c = new THREE.InstancedMesh(kind === "balls" ? COARSE_BALL : COARSE_STICK, UNSEEN, drawn.count);
   c.instanceMatrix = drawn.instanceMatrix;
-  // (how many of the drawn ones are shown - a look's ribbons stand for most
-  // of a protein's atoms - is the drawn mesh's to say: `userData.shown`)
+  // (how many atoms it counts for - not those a look leaves out, but those
+  // its ribbons stand for - is the drawn mesh's to say: `userData.counted`)
   c.userData.drawn = drawn;
   c.castShadow = true;
   c.frustumCulled = false;
@@ -86,8 +86,9 @@ export function lightBoxOf(spheres: readonly THREE.Sphere[]): LightBox | null {
 /**
  * The world spheres the casters on a canvas take up, of those drawn; a
  * number that changes whenever any of them moves, turns or changes; and
- * how many atoms are drawn - not those a look leaves out, nor those its
- * ribbons stand for.
+ * how many atoms they count for - those drawn and those a look's ribbons
+ * stand for, not those it leaves out otherwise (lib/chem/style3d
+ * `countedAtoms`).
  */
 export function castersNow(set: Iterable<THREE.InstancedMesh>): { spheres: THREE.Sphere[]; sign: number; atoms: number } {
   const spheres: THREE.Sphere[] = [];
@@ -105,7 +106,7 @@ export function castersNow(set: Iterable<THREE.InstancedMesh>): { spheres: THREE
     const s = c.boundingSphere!.clone().applyMatrix4(c.matrixWorld);
     if (!(s.radius > 0) || !Number.isFinite(s.radius)) continue;
     spheres.push(s);
-    if (c.geometry === COARSE_BALL) atoms += (c.userData.drawn as THREE.InstancedMesh | undefined)?.userData.shown ?? c.count;
+    if (c.geometry === COARSE_BALL) atoms += (c.userData.drawn as THREE.InstancedMesh | undefined)?.userData.counted ?? c.count;
     sign += (version + 1) * (k += 1.618);
     for (const e of c.matrixWorld.elements) sign += e * (k += 0.618);
   }

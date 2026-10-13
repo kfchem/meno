@@ -507,7 +507,8 @@ export default function PartMenu({
             : []),
           ...(words
             ? [
-                { name: "Superscript", keys: MAC ? "\u21e7\u2318=" : "Ctrl+Shift+=", run: words.onSup, divider: true },
+                // (named by what the keys give, + and =, not where they lie: Shift and = on most keyboards, Shift and ; and Shift and - on a Japanese one)
+                { name: "Superscript", keys: shortcut("+"), run: words.onSup, divider: true },
                 { name: "Subscript", keys: shortcut("="), run: words.onSub },
               ]
             : []),
