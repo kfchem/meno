@@ -30,13 +30,15 @@ H 3 1 0.000000 -0.757000 -0.469000
 """
 
 
-def molden(atoms, orbitals, lowest=-20.5):
+def molden(atoms, orbitals, lowest=-20.5, cores=1):
     """A Molden text of `atoms` ([Atoms] lines) and `orbitals`, each (spin, occupation) - or (None, occupation) for none said -
-    the first orbital's energy `lowest` (hartree: oxygen's 1s about -20.5), the rest from -1.0 up."""
+    the first `cores` orbitals of each spin at `lowest` (hartree: oxygen's 1s about -20.5), the rest from -1.0 up."""
     lines = ["[Molden Format]", atoms.rstrip("\n"), "[GTO]", "[MO]"]
+    seen = {}
     for k, (spin, occ) in enumerate(orbitals):
+        place = seen[spin] = seen.get(spin, -1) + 1
         lines.append(" Sym= A")
-        lines.append(f" Ene= {lowest if k == 0 else -1.0 + 0.1 * k:.4f}")
+        lines.append(f" Ene= {lowest if place < cores else -1.0 + 0.1 * k:.4f}")
         if spin:
             lines.append(f" Spin= {spin}")
         lines.append(f" Occup= {occ:.6f}")
@@ -64,17 +66,17 @@ class Species(unittest.TestCase):
         self.assertEqual(species_of(molden(oh, [("Alpha", 2.0)] * 5)), (-1, 1))
         # (O2's two unpaired electrons, unrestricted: nine alpha, seven beta)
         o2 = "[Atoms] Angs\nO 1 8 0.0 0.0 0.0\nO 2 8 0.0 0.0 1.21\n"
-        self.assertEqual(species_of(molden(o2, [("Alpha", 1.0)] * 9 + [("Beta", 1.0)] * 7)), (0, 3))
+        self.assertEqual(species_of(molden(o2, [("Alpha", 1.0)] * 9 + [("Beta", 1.0)] * 7, cores=2)), (0, 3))
 
     def test_two_singly_occupied_orbitals_restricted_leave_the_multiplicity_unsaid(self):
         # (O2 restricted: seven of 2, two of 1 - a triplet's orbitals, or a singlet diradical's natural orbitals at 1.0 and 1.0)
         o2 = "[Atoms] Angs\nO 1 8 0.0 0.0 0.0\nO 2 8 0.0 0.0 1.21\n"
-        self.assertEqual(species_of(molden(o2, [(None, 2.0)] * 7 + [(None, 1.0)] * 2)), (0, None))
+        self.assertEqual(species_of(molden(o2, [(None, 2.0)] * 7 + [(None, 1.0)] * 2, cores=2)), (0, None))
 
     def test_natural_orbitals_fractional_leave_the_multiplicity_unsaid(self):
         # (ethylene's natural orbitals: their occupations come to sixteen, but none says how many are unpaired)
         c2h4 = "[Atoms] Angs\nC 1 6 0.0 0.0 0.0\nC 2 6 0.0 0.0 1.33\nH 3 1 0.9 0.0 -0.6\nH 4 1 -0.9 0.0 -0.6\nH 5 1 0.9 0.0 1.9\nH 6 1 -0.9 0.0 1.9\n"
-        text = molden(c2h4, [(None, 2.0)] * 7 + [(None, 1.92), (None, 0.08)] + [(None, 0.0)] * 3)
+        text = molden(c2h4, [(None, 2.0)] * 7 + [(None, 1.92), (None, 0.08)] + [(None, 0.0)] * 3, lowest=-11.2, cores=2)
         self.assertEqual(species_of(text), (0, None))
 
     def test_a_pseudopotential_s_core_taken_from_its_pseudo_section(self):
@@ -108,6 +110,13 @@ class Species(unittest.TestCase):
         # (an iron with a ten-electron core: [Fe(CN)6]4- read as +6, were the core not seen to be missing)
         fe = "[Atoms] Angs\nFe 1 26 0.0 0.0 0.0\n" + "".join(f"C {2 + i} 6 {x} 0.0 0.0\nN {8 + i} 7 {x * 1.6} 0.0 0.0\n" for i, x in enumerate([1.9, -1.9, 1.9, -1.9, 1.9, -1.9]))
         self.assertEqual(species_of(molden(fe, [("Alpha", 2.0)] * 45, lowest=-11.0))[0], None)
+        # ([FeBr4]2- with its iron on a ten-electron core, its bromines all-electron: no [Pseudo], an atom past neon - unsaid)
+        febr = "[Atoms] Angs\nFe 1 26 0.0 0.0 0.0\n" + "".join(f"Br {2 + i} 35 {x} {y} 0.0\n" for i, (x, y) in enumerate([(2.3, 0), (-2.3, 0), (0, 2.3), (0, -2.3)]))
+        self.assertEqual(species_of(molden(febr, [("Alpha", 2.0)] * 78, lowest=-480.0, cores=4))[0], None)
+        # (carbon monoxide with its oxygen's core in no orbital: one 1s below -2 hartree for two such atoms - unsaid)
+        co = "[Atoms] Angs\nC 1 6 0.0 0.0 0.0\nO 2 8 0.0 0.0 1.13\n"
+        self.assertEqual(species_of(molden(co, [("Alpha", 2.0)] * 6, lowest=-11.3, cores=1))[0], None)
+        self.assertEqual(species_of(molden(co, [("Alpha", 2.0)] * 7, lowest=-20.6, cores=2))[0], 0)
 
     def test_a_centre_named_as_no_nucleus_adds_no_charge(self):
         ghost = WATER + "Bq 4 1 0.0 1.5 0.0\n"

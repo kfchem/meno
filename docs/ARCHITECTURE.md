@@ -739,9 +739,11 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   does not settle it. The charge is the nuclei's - each atom's atomic
   number in [Atoms], or the charge its pseudopotential leaves it where
   [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
-  its [MO] occupations hold; unsaid where no [Pseudo] is given and the
-  file does not show its cores among its orbitals (its lowest not below
-  -Z^2/8 hartree for its heaviest atom, from Z 3 on), past 8 either way,
+  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
+  neon is there (its inner orbitals cannot be told from another's 1s), or,
+  from lithium to neon, other than one occupied orbital below -2 hartree
+  for each such atom (its 1s; two where alpha and beta are listed apart);
+  unsaid past 8 either way,
   where the occupations come to no whole number, or where a restricted
   file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
   Gh) adds none. The multiplicity is one more than

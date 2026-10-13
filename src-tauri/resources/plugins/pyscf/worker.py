@@ -101,10 +101,12 @@ def species_of(text):
     X, Bq, Gh), or, where a [Pseudo] line gives the atom (name, number,
     charge), the charge its pseudopotential leaves it - less the electrons
     its orbitals hold (each orbital's "Occup=" in [MO]). Unknown where the
-    file does not show its cores among its orbitals - no [Pseudo], and its
-    lowest orbital not as low as its heaviest atom's 1s must be (below
-    -Z^2/8 hartree, from Z 3 on): a core in no orbital, nor said, would be
-    counted as charge; where the occupations do not come to a whole number;
+    file does not show its cores among its orbitals: with no [Pseudo], an
+    atom past neon there (its inner orbitals cannot be told from another's
+    1s), or, from lithium to neon, other than one orbital below -2 hartree
+    for each such atom (its 1s; two, alpha and beta, where they are listed
+    apart) - a core in no orbital, nor said, would be counted as charge;
+    where the occupations do not come to a whole number;
     where a restricted file has no orbital of 2 (each orbital's electron
     one, or two: it does not say); or where the charge comes to more than 8
     either way.
@@ -181,12 +183,20 @@ def species_of(text):
     nuclei = [(name, n, z) for name, n, z in atoms if not _GHOST.search(name)]
     nuclear = sum(cores.get(n, z) for _, n, z in nuclei)
     charge = round(nuclear - electrons) if whole(electrons) else None
-    # (no core said: its cores must be among the orbitals - its lowest as low as its heaviest atom's 1s)
-    heaviest = max((z for _, n, z in nuclei if n not in cores), default=0)
-    if charge is not None and not cores and heaviest >= 3:
-        lowest = min((o["ene"] for o in orbitals if o.get("ene") is not None and o["occup"] > 1e-3), default=None)
-        if lowest is None or lowest > -heaviest * heaviest / 8:
+    # (no core said: every core must be among the orbitals - one 1s for each
+    # atom from lithium to neon, deeper than any orbital of theirs besides
+    # (-2 hartree), twice where alpha and beta are listed apart; past neon,
+    # an atom's other inner orbitals fall there too, and which is which
+    # cannot be told: unsaid)
+    if charge is not None and not cores:
+        if any(z > 10 for _, _, z in nuclei):
             charge = None
+        else:
+            cored = sum(1 for _, _, z in nuclei if z >= 3) * (2 if beta else 1)
+            occupied = [o for o in orbitals if o["occup"] > 1e-3]
+            deep = sum(1 for o in occupied if o.get("ene") is not None and o["ene"] < -2.0)
+            if deep != cored or (cored and any(o.get("ene") is None for o in occupied)):
+                charge = None
     if charge is not None and not beta and not spun and not any(abs(o - 2) <= 1e-3 for o in alpha):
         charge = None
     if charge is not None and abs(charge) > 8:
