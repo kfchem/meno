@@ -441,4 +441,26 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const alone = readPdb(structureFileText({ atoms: [], bonds: [], molecules3d: [both[1]] }, "/tmp/water.pdb")).models[0].atoms;
     expect(alone.map((a) => [a.x, a.y, a.z])).toEqual([[1, 2, 3], [1.96, 2, 3], [1, 2.96, 3]]);
   });
+
+  it("writes heavy water to a PDB file as D2O and opens it again as hydrogens of mass 2", async () => {
+    const { processFileContent } = await import("./utils/io");
+    const d2o = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.957, y: 0, z: 0, isotope: 2 },
+        { el: "H", x: -0.24, y: 0.927, z: 0, isotope: 2 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      at: { x: 0, y: 0, z: 0 },
+      name: "d2o.pdb",
+    };
+    const text = structureFileText({ atoms: [], bonds: [], molecules3d: [d2o] }, "/tmp/d2o.pdb");
+    expect(text.split("\n").filter((l) => l.startsWith("HETATM")).map((l) => l.substring(76, 78).trim())).toEqual(["O", "D", "D"]);
+    const back = await processFileContent("d2o.pdb", text);
+    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
+    expect(back.molecules3d![0].bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
+  });
 });

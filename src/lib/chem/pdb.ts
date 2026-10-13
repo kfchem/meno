@@ -382,8 +382,8 @@ export function readPdb(content: string): PdbEntry {
   };
 }
 
-/** An atom to be written: its element, where it is in ångströms, and its charge. */
-export type PdbWriteAtom = { el: string; x: number; y: number; z: number; charge?: number };
+/** An atom to be written: its element, where it is in ångströms, its charge, and its mass number where it has one. */
+export type PdbWriteAtom = { el: string; x: number; y: number; z: number; charge?: number; isotope?: number };
 /** A molecule to be written: its atoms, and its bonds between them by index. */
 export type PdbWriteMolecule = { atoms: readonly PdbWriteAtom[]; bonds: readonly { a1: number; a2: number }[] };
 
@@ -448,7 +448,7 @@ export function writePdb(models: readonly (readonly PdbWriteMolecule[])[]): stri
       const seen = new Map<string, number>();
       for (const a of m.atoms) {
         serial++;
-        const sym = symbolFor(a.el);
+        const sym = symbolFor(a.el, a.isotope);
         const n = (seen.get(sym) ?? 0) + 1;
         seen.set(sym, n);
         out.push(
@@ -500,9 +500,16 @@ export function writePdb(models: readonly (readonly PdbWriteMolecule[])[]): stri
   return out.join("\n") + "\n";
 }
 
-/** An atom's element for its element columns (77-78): a label that is no element - an abbreviation, say - is refused. */
-function symbolFor(el: string): string {
+/**
+ * An atom's element for its element columns (77-78) and its name: a label
+ * that is no element - an abbreviation, say - is refused. A hydrogen of
+ * mass 2 or 3 is D or T, as neutron entries write deuterium (DOD's atoms
+ * D1, D2), and as `elementOf` reads them back; any other mass number goes
+ * unwritten - the format has no field for it.
+ */
+function symbolFor(el: string, isotope?: number): string {
   const sym = symbol(el);
   if (!sym) throw new Error(`"${el}" is no element: a PDB file holds atoms of elements only.`);
+  if (sym === "H") for (const [own, mass] of HYDROGENS) if (mass === isotope) return own;
   return sym;
 }

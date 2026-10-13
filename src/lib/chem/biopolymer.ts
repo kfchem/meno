@@ -128,7 +128,7 @@ function mdWater(atoms: readonly Pick<PdbAtom, "element">[]): boolean {
   let h = 0;
   for (const a of atoms) {
     if (a.element === "O") o++;
-    else if (a.element === "H" || a.element === "D") h++;
+    else if (a.element === "H") h++;
     else return false;
   }
   return o === 1 && h <= 2;

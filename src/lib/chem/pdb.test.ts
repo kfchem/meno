@@ -364,6 +364,24 @@ describe("a PDB file, written", () => {
     expect(entry.unreadable).toBe(0);
   });
 
+  it("writes deuterium and tritium as D and T, named by them, and reads them back as hydrogen of their mass", () => {
+    const heavy: PdbWriteMolecule = { ...water, atoms: water.atoms.map((a, i) => (i ? { ...a, isotope: 2 } : a)) };
+    const lines = writePdb([[heavy, { atoms: [{ el: "H", x: 3, y: 0, z: 0, isotope: 3 }, { el: "H", x: 4, y: 0, z: 0 }], bonds: [] }]]).split("\n");
+    expect(lines.slice(0, 5).map((l) => [cols(l, 13, 16), cols(l, 77, 78)])).toEqual([
+      [" O1 ", " O"],
+      [" D1 ", " D"],
+      [" D2 ", " D"],
+      [" T1 ", " T"],
+      [" H1 ", " H"],
+    ]);
+    const entry = readPdb(lines.join("\n"));
+    expect(entry.models[0].atoms.map((a) => [a.element, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2], ["H", 3], ["H", undefined]]);
+    expect(entry.conect).toEqual([[1, 2], [1, 3]]);
+    // (a mass number the format has no symbol for goes unwritten: a carbon-13 is a carbon)
+    const [c13] = writePdb([[{ atoms: [{ el: "C", x: 0, y: 0, z: 0, isotope: 13 }], bonds: [] }]]).split("\n");
+    expect([cols(c13, 13, 16), cols(c13, 77, 78)]).toEqual([" C1 ", " C"]);
+  });
+
   it("is how Meno's sample is written: cholesterol's atoms and bonds", () => {
     const entry = readPdb(sample);
     expect(entry.models[0].atoms).toHaveLength(74);
