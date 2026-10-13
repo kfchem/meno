@@ -21,6 +21,13 @@ describe("where a file opened onto a page goes", () => {
     expect(Math.abs(at.y)).toBe(6);
   });
 
+  it("goes below what is there, of places as near where right and left are taken", () => {
+    const one = { x0: -0.5, y0: -0.5, x1: 0.5, y1: 0.5 };
+    const there = [{ x0: -0.4, y0: -0.4, x1: 0.4, y1: 0.4 }, { x0: 0.6, y0: -0.4, x1: 1.4, y1: 0.4 }, { x0: -1.4, y0: -0.4, x1: -0.6, y1: 0.4 }];
+    // (above and below as near, and both clear: below - the y axis up)
+    expect(freePlace(there, one, { x: 0, y: 0 }, 1, 0)).toEqual({ x: 0, y: -1 });
+  });
+
   it("goes to the right of what is there, of places as near", () => {
     const at = freePlace([{ x0: -3, y0: -3, x1: 3, y1: 3 }], { x0: -1, y0: -1, x1: 1, y1: 1 }, { x: 0, y: 0 }, 1);
     expect(at).toEqual({ x: 5, y: 0 });

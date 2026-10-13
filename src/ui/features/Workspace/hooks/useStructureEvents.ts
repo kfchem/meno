@@ -29,8 +29,7 @@ import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
-import { freePlace, pageBoxes } from "../utils/freePlace";
-import type { Box } from "../utils/extent";
+import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 
@@ -475,30 +474,6 @@ export function useStructureEvents(
    * put at: its drawing (half a bond round each atom, for its labels), its
    * molecules in 3D in the row they stand in, and its arrow.
    */
-  const footOf = (result: ProcessedFileResult): Box => {
-    const pad = NOMINAL_BOND_LENGTH / 2;
-    const xs: number[] = [];
-    const ys: number[] = [];
-    for (const a of result.model.atoms) {
-      xs.push(a.x - result.centroid.x - pad, a.x - result.centroid.x + pad);
-      ys.push(a.y - result.centroid.y - pad, a.y - result.centroid.y + pad);
-    }
-    const scheme = importedScheme(result, -result.centroid.x, -result.centroid.y);
-    const style = currentStyle3D();
-    (result.molecules3d ?? []).forEach((m, i) => {
-      const at = scheme.molecules3d?.[i]?.at;
-      if (!at) return;
-      const r = solidOf({ ...m, id: 0, at }, style).reach[lookOf(m)];
-      xs.push(at.x - r, at.x + r);
-      ys.push(at.y - r, at.y + r);
-    });
-    for (const a of scheme.arrows ?? []) {
-      const h = a.length / 2;
-      xs.push(a.x - h * Math.abs(Math.cos(a.angle)) - pad, a.x + h * Math.abs(Math.cos(a.angle)) + pad);
-      ys.push(a.y - h * Math.abs(Math.sin(a.angle)) - pad, a.y + h * Math.abs(Math.sin(a.angle)) + pad);
-    }
-    return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : { x0: -pad, y0: -pad, x1: pad, y1: pad };
-  };
 
   /**
    * Files put on the page at `at`, dropped or pasted - copied in the Finder
@@ -570,9 +545,8 @@ export function useStructureEvents(
       const result = await processFileContent(f.name, text, kind, opened?.path);
       // (opened rather than dropped: in free space near the middle of the view)
       const st = store.getState();
-      const place = opened?.free
-        ? freePlace(pageBoxes(st, styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle)), footOf(result), at, NOMINAL_BOND_LENGTH)
-        : at;
+      const drawingStyle = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+      const place = opened?.free ? placeOpened(st, result, importedScheme(result, -result.centroid.x, -result.centroid.y), at, drawingStyle) : at;
       const dx = place.x - result.centroid.x;
       const dy = place.y - result.centroid.y;
 
