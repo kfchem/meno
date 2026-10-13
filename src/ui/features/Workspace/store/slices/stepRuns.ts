@@ -547,7 +547,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   }
 
-  /** The results of a step whose jobs have all ended, read back by its plugin and brought in - or what stopped them, or why they failed. */
+  /** The results of a step whose jobs have all ended, read back by its plugin and brought in - or what stopped them, or why they failed, or what went wrong bringing them in. */
   async function finishStep(id: number): Promise<void> {
     if (finishing.has(id)) return;
     finishing.add(id);
@@ -672,6 +672,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const said = ok ? found : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
       bringIn(id, worked, givesFor(kind, input?.holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
       close();
+    } catch (e) {
+      // (whatever went wrong bringing its results in: said as how it ended, and its run closed - its jobs looked at no more, those waiting for it let go)
+      const step = stepOf(doc.getState(), id);
+      const run = step?.running;
+      if (step && run) {
+        // (where its results came in before it went wrong, they stay)
+        if (step.ran?.at !== run.at) {
+          const said = `Its results could not be brought in: ${message(e)}`;
+          bringIn(id, [], "molecules", { at: run.at, ok: false, said, input: run.input, took: Date.now() - run.at, jobs: run.jobs.map((j) => j.id), kind: run.kind ?? step.kind, options: run.options });
+        }
+        doc.amend((x) => setRunning(x, id, undefined), { unsaved: true });
+      }
     } finally {
       finishing.delete(id);
     }

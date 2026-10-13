@@ -85,6 +85,7 @@ describe("what a plugin reads back of a job", () => {
     expect(readCollected({ outputs: [] }, 1)).toEqual({ why: "It read back nothing for it" });
     expect(readCollected({ outputs: [{ ...out, schema: 2 }] }, 1)).toEqual({ why: "It read it back in a form this Meno does not read" });
     expect(readCollected({ outputs: [{ ...out, frames: [[1, 2]] }] }, 1)).toEqual({ why: "It read back no geometry" });
+    expect(readCollected({ outputs: [{ ...out, frames: [null, WATER.xyz] }] }, 1)).toEqual({ why: "It read back a geometry Meno cannot read" });
   });
 
   it("or, for each entry, an output for Meno's readers: its kind, and a file it read back or what the program printed - by a name inside its folder", () => {

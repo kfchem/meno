@@ -100,6 +100,19 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
+/** Why the next outputs kept with the workspace fail to be, as the test has it: none, kept as Meno keeps them. */
+const keepFails: string[] = [];
+vi.mock("../../../../lib/calc/asks", async (actual) => {
+  const real = await actual<typeof import("../../../../lib/calc/asks")>();
+  return {
+    ...real,
+    rememberOutput: async (...args: Parameters<typeof real.rememberOutput>) => {
+      const why = keepFails.shift();
+      if (why) throw new Error(why);
+      return real.rememberOutput(...args);
+    },
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { useReaders } from "../../../../lib/calc/workers";
@@ -156,6 +169,7 @@ describe("a step that runs a plugin's program", () => {
     asked.started = [];
     asked.stopped = [];
     asked.removed = [];
+    keepFails.length = 0;
     worker.prepare.mockClear();
     worker.collect.mockClear();
     useReaders.setState({ state: { xtb: "added" }, problem: {} });
@@ -371,6 +385,46 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
+  });
+
+  it("fails where its plugin read back a geometry it could not read - and holds up no other step, nor itself", async () => {
+    const { st, step } = editor();
+    const other = st().addStep("energy", "xtb", 10, 20);
+    st().connect({ set: st().sets[0].id }, other);
+    const ran = st().runAll();
+    for (let i = 0; i < 5; i++) await settle();
+    const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;
+    const jobOf = (id: number) => jobs.get(stepOf(id).running!.jobs[0].id)!;
+    // both jobs ended well; the first one's output read back with a frame given as null
+    worker.collect.mockImplementationOnce(async () => ({ outputs: [{ schema: 1, atoms: ["O", "H", "H"], frames: [null, [0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]] }] }) as never);
+    Object.assign(jobOf(step), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobOf(other), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    // (looked at once a second, as Workflow2D does)
+    for (let i = 0; i < 3; i++) await st().lookAtJobs();
+    await ran;
+    expect(stepOf(step).running).toBeUndefined();
+    expect(stepOf(step).ran).toMatchObject({ ok: false, said: "It read back a geometry Meno cannot read" });
+    expect(stepOf(other).running).toBeUndefined();
+    expect(stepOf(other).ran).toMatchObject({ ok: true });
+    // (each job read back once, not once a second)
+    expect(worker.collect).toHaveBeenCalledTimes(2);
+  });
+
+  it("says what went wrong where its results cannot be brought in - and its run ends, its jobs looked at no more", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    keepFails.push("The disk is full");
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    const after = st().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: false, said: "Its results could not be brought in: The disk is full", jobs: [idOf(1)] });
+    expect(st().molecules3d).toHaveLength(1);
+    await st().lookAtJobs();
+    expect(worker.collect).toHaveBeenCalledTimes(1);
   });
 
   it("shows its log in the column, rising out of its step - its step its body, kept with the workspace", async () => {
