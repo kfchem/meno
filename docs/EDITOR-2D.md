@@ -239,7 +239,10 @@ ellipse, a line and a callout - each drawn from where the double-click
 was by a drag from its icon, or traced with the button up until a click
 (docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
-it. It opens as the second click's button comes up: a third click asks
+it. Going, it does nothing more as it fades - nor does the right-click
+menu: an icon double-clicked put its choice down once, not a second time
+on the first (theme/leaving.ts) - and a press elsewhere as it fades is
+the next thing done, not one to close it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
 Quick Add waited 0.28 s for a third click that would draw one, and the
 maintainer found it slow). *Chain* begins one where the double-click was,

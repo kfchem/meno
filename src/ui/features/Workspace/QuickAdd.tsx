@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
 import { guideNotice } from "../../../lib/plugins/guides";
@@ -181,9 +182,12 @@ export default function QuickAdd({
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
   const calcOpen = open === "calculations";
   const ref = useRef<HTMLDivElement>(null);
+  // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
+    if (leaving) return;
     // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
     const outside = (e: Event) => {
       if (ref.current?.contains(e.target as Node)) return;
@@ -204,7 +208,7 @@ export default function QuickAdd({
       window.removeEventListener("wheel", outside, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
   // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
   const offered = wired ? [] : procedures;
   const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
@@ -232,6 +236,7 @@ export default function QuickAdd({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="toolbar"
       aria-label="Add"
       data-guide="quick-add"
