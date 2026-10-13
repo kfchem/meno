@@ -41,7 +41,7 @@ import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
-import ExportCard, { type Offered3D } from "./ExportCard";
+import ExportCard from "./ExportCard";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
@@ -60,7 +60,7 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { knownOf, pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
-import { offeredNames, writtenOf } from "./utils/written";
+import { writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { menuTargetGone } from "./utils/menuTarget";
@@ -1301,7 +1301,7 @@ function WorkspaceContent({
     setRendering({ ids: ms.map((m) => m.id), motions, surfaces: ms.some((m) => !!shownRow(m.id)?.surface) });
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
-  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
 
   // Export: what is selected - its structures, arrows and words, its
   // molecules in 3D - as Meno writes it, or a plugin added that writes
@@ -1312,9 +1312,7 @@ function WorkspaceContent({
     const what = holdsOfDrawn(taken.part);
     const added = useReaders.getState().state;
     const theirs = what.solid ? pluginWriters(WRITER_PLUGINS.filter((p) => added[p.id] === "added")) : [];
-    const names = offeredNames(state.molecules3d);
-    const molecules = state.molecules3d.flatMap((m, i) => (taken.ids3d.includes(m.id) ? [{ id: m.id, name: names[i] }] : []));
-    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, molecules, selected: taken.ids3d, part: taken });
+    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, selected: taken.ids3d, part: taken });
   };
 
   // What the workspace does as a whole - opening, saving as, fitting, R and
@@ -1486,7 +1484,6 @@ function WorkspaceContent({
             writers={exporting.writers}
             from={exporting.from}
             what={exporting.what}
-            molecules={exporting.molecules}
             selected={exporting.selected}
             known={(ids) => {
               const state = store.getState();
