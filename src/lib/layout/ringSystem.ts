@@ -90,6 +90,9 @@ export function placeRingSystem(
 ): Map<number, Point> {
   const pos = new Map<number, Point>();
   const rings = sys.rings.map((i) => mol.rings[i]);
+  rings.forEach((r, i, all) => {
+    if (r.length >= MACROCYCLE) all[i] = alongOuterSides(r, all);
+  });
   const placedRing = new Set<number>();
 
   // first: the largest macrocycle; else a six-membered ring, or a four,
@@ -210,7 +213,23 @@ export function placeRingSystem(
  */
 function alongBarerSides(mol: Molecule, sys: RingSystem, macro: number[], rings: number[][]): number[] {
   const inSys = new Set(sys.atoms);
-  const groups = (atoms: readonly number[]) => atoms.reduce((s, a) => s + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0);
+  return alongLighterSides(macro, rings, (atoms) => atoms.reduce((s, a) => s + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0));
+}
+
+/**
+ * A macrocycle run along the outer side of each ring it passes where two
+ * sides are as long: the side whose atoms are in fewer of the system's other
+ * rings, not through a fusion - rifampicin's ansa chain along its
+ * naphthalene's free edge, not across the junction into the next ring,
+ * which the smallest set held in some orders of the atoms.
+ */
+function alongOuterSides(macro: number[], rings: number[][]): number[] {
+  return alongLighterSides(macro, rings, (atoms) => atoms.reduce((s, a) => s + rings.filter((q) => q !== macro && q.length < MACROCYCLE && q.includes(a)).length, 0));
+}
+
+/** A macrocycle run along the side of each ring it passes that `weigh` finds lighter, where two sides are as long; sides as heavy are left. */
+function alongLighterSides(macro: number[], rings: number[][], weigh: (atoms: readonly number[]) => number): number[] {
+  const groups = weigh;
   let m = macro;
   for (const r of rings) {
     if (r === macro || r.length > 8) continue;
