@@ -375,6 +375,8 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
+  const reading = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
@@ -386,12 +388,16 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
       onSubmit={(e) => {
         e.preventDefault();
         const smiles = text.trim();
-        if (!smiles || busy) return;
+        if (!smiles || busy || reading.current) return;
+        reading.current = true;
         setBusy(true);
         setError(null);
         onSmiles(smiles)
           .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            reading.current = false;
+            setBusy(false);
+          });
       }}
     >
       <input

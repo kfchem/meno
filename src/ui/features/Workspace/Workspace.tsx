@@ -163,6 +163,7 @@ import { readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { putDownSmiles } from "./utils/quickAddSmiles";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -1522,12 +1523,9 @@ function WorkspaceContent({
               shapeFrom(store, press, at, kind, clientToWorld);
             }}
             onSmiles={async (smiles) => {
-              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles);
-              const st = store.getState();
-              const { at } = quickAdd;
-              st.setQuickAdd(null);
-              st.pasteModel(centredAt(drawn, at));
+              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is;
+              // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
+              putDownSmiles(store, quickAdd, await structureFromSmiles(smiles));
             }}
             onChoose={(what) => {
               const st = store.getState();

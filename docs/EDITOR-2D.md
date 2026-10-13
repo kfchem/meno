@@ -255,7 +255,10 @@ led by a drag from the icon or traced with the button up. *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
-wrong is said under the field. A double-click on an atom still draws one
+wrong is said under the field. Drawn once however fast Enter is pressed
+again, and not at all should Quick Add be closed while it is read -
+Escape, a press elsewhere, another opened (`putDownSmiles`, before which
+it came anyway, and twice for a quick second Enter). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
