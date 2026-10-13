@@ -245,11 +245,9 @@ function unbreakable(para: string, at: number): { text: string; src: number[] }[
   for (const m of para.matchAll(/\S+/g)) {
     const word = m[0];
     const from = at + m.index!;
-    const src = [...word].flatMap((_, k, all) => {
-      // (a letter of two code units: both places)
-      const off = all.slice(0, k).join("").length;
-      return all[k].length === 2 ? [from + off, from + off + 1] : [from + off];
-    });
+    const src: number[] = [];
+    // (each code unit's place: a letter of two code units, both)
+    for (let k = 0; k < word.length; k++) src.push(from + k);
     const last = out[out.length - 1];
     if (last && NUMBER.test(last.text.split(" ").slice(-1)[0]) && UNIT.test(word)) {
       // (the space between them: the first of those typed there)
