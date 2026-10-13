@@ -5,6 +5,7 @@ import {
   BaseDirectory,
   mkdir,
 } from "@tauri-apps/plugin-fs";
+import { filesSources, pixiSources, uvSources } from "./plugins/setUpSources";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
@@ -56,7 +57,6 @@ export async function pluginFilesFolder(plugin: PythonPlugin): Promise<string | 
 
 /** A size, for people: gigabytes to a tenth, else megabytes. */
 export const sizeOf = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
-export const hostOf = (url: string) => new URL(url).host;
 
 /** What a plugin downloads besides its packages, as asking to set it up says it - each file, under its licence, and its size - and where from. */
 function besides(plugin: PythonPlugin | undefined): { need: string; sources: string[] } {
@@ -64,7 +64,7 @@ function besides(plugin: PythonPlugin | undefined): { need: string; sources: str
   if (!files.length) return { need: "", sources: [] };
   return {
     need: `; and it needs ${files.map((f) => `${f.name} (${f.licence} licence, ${sizeOf(f.bytes)})`).join(" and ")} beside them`,
-    sources: files.map((f) => `${f.name}, from ${hostOf(f.url)}`),
+    sources: filesSources(files),
   };
 }
 
@@ -264,12 +264,7 @@ export async function ensurePyEnv(
         (mb ? ` (about ${mb} MB)` : "") +
         `, in its data folder${extra.need}. ${downloads("pixi")}, ` +
         `every file checked against the fingerprint Meno carries for it:`,
-      sources: [
-        "pixi the first time, from its makers' releases (github.com)",
-        "the packages, from conda-forge (conda.anaconda.org)",
-        ...(download.pypi ? ["the rest, from the Python Package Index (pypi.org, files.pythonhosted.org)"] : []),
-        ...extra.sources,
-      ],
+      sources: pixiSources(download.pypi, setUpFiles(plugin)),
     });
     if (!allowed) {
       throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
@@ -302,11 +297,7 @@ export async function ensurePyEnv(
               "checked against the fingerprint Meno carries for it:"
             : "in its data folder, and needs nothing else. Astral's uv, fetched the first time it is needed, " +
               "downloads Python - once, and only where Meno has not fetched it before:"),
-      sources: [
-        "uv the first time, and Python itself, from Astral, who make uv (releases.astral.sh)",
-        ...(packages ? ["the packages, from the Python Package Index (pypi.org, files.pythonhosted.org)"] : []),
-        ...extra.sources,
-      ],
+      sources: uvSources(lockText, setUpFiles(plugin)),
     });
     if (!allowed) {
       throw new Error(

@@ -1066,7 +1066,19 @@ started in it (`ext_spawn_sidecar`, which takes an interpreter of
 `<data>/uv` or `<data>/pixi`) is given the variables, and the folders before
 its PATH. The consent says what the lock downloads on the computer - its
 packages, and their size (`lib/pixiLock.ts`) - and from where: pixi, the
-first time, from GitHub; conda-forge (conda.anaconda.org); PyPI. A reader
+first time, from GitHub; conda-forge (conda.anaconda.org); PyPI.
+
+Every consent to set a plugin up names every host the set-up contacts
+(`lib/plugins/setUpSources.ts`): the tool's own (releases.astral.sh for uv
+and the Pythons it installs; github.com for pixi), the index or channel
+its lock takes packages from, each package its lock fixes to a URL of its
+own, and each file besides that it downloads. Each host is named with
+where it hands a fetch on: a repository's archive on github.com goes on to
+codeload.github.com, a release's file to
+release-assets.githubusercontent.com, and a file on huggingface.co to
+Hugging Face's content delivery network (hosts under hf.co). A test reads
+every plugin's lock and downloads and checks that the consent names each
+host they fetch from. A reader
 plugin says it is made so by `env: "pixi"`; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
