@@ -3,7 +3,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
-import { chosenPath, lookOf, solidOf, bondsAt } from "../../utils/molecule3d";
+import { chosenPath, lookOf, solidOf, bondsAt, reachOverFrames } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
 import { currentStyle3D } from "../../style3d";
@@ -12,6 +12,7 @@ import { noteTurns } from "../turnJournal";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
+import { fitResultSets } from "../../workflow/run";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -239,7 +240,12 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       doc.edit("delete molecule", (d) => ops.removeMolecule3d(d, id));
     },
     setLook3d: (ids: number[], look: Look3D) => {
-      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) => ops.setLook3d(d, ids, look));
+      // (a result set they no longer fit in that look laid out again, its frame widened: the same step to undo)
+      const style = currentStyle3D();
+      const { turns3d } = get();
+      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) =>
+        fitResultSets(ops.setLook3d(d, ids, look), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
+      );
     },
     learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => {
       doc.amend((d) => ops.changeMolecule3d(d, id, change));

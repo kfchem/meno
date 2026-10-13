@@ -443,6 +443,18 @@ gliding to where they now are; earlier runs are kept in the step (*Runs*,
 under its options: when, with what options, how long, the number it
 gave), and one can be shown again.
 
+A result set is laid out for the 3D look its molecules are drawn in.
+When a bigger look is chosen - a molecule switched to its other look, or
+another look in Settings - and its molecules no longer fit (one reaching
+past the frame or onto the set's name, or two over one another), the
+frame widens and they are laid out again, as a run in that look lays
+them out (decided, 2026-10-13). The frame and the molecules glide there
+together, and nothing is left over another. A set never grows narrower
+or shorter for a smaller look; a chemist's own sets are left as they
+are. A molecule switched is one step to undo, with its set; a look
+chosen in Settings is not a step of the workspace, and lays out the
+states an undo goes back to as well.
+
 ### Several at once
 
 - By default **one job runs at a time** on this computer; others wait,

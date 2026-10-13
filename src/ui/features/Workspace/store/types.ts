@@ -1150,6 +1150,13 @@ export type EditorState = {
    */
   wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
+  /**
+   * The result sets whose molecules no longer fit them, as the 3D look in
+   * Settings draws them, laid out again (workflow/run `fitResultSets`):
+   * in every state the history holds, with no step of its own and the
+   * document as saved as it was - the look is Settings', not the document's.
+   */
+  fitResultSets: () => void;
   /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
   forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran">) => void;
   /** A set round `frame`, as one step; its id. */
