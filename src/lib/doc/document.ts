@@ -93,6 +93,12 @@ export interface DocumentStore<T> {
    */
   markSaved(state?: T): void;
   history(): HistoryInfo;
+  /**
+   * Whether the present state was gone back or forward to - an undo, a
+   * redo, a gesture dropped - rather than made by an edit: what was on the
+   * page may have moved without the pointer moving.
+   */
+  travelled(): boolean;
 }
 
 type Entry<T> = {
@@ -126,6 +132,7 @@ export function createDocument<T>(
   let present: Entry<T> = { state: initial, label: "open", at: now() };
   let future: Entry<T>[] = [];
   let savedState: T = initial;
+  let travelled = false;
 
   const listeners = new Set<() => void>();
   const notify = () => {
@@ -154,6 +161,7 @@ export function createDocument<T>(
         present.coalesceKey === meta.coalesceKey &&
         at - present.at <= window;
 
+      travelled = false;
       if (coalesce) {
         // Keep the step that is already on the stack and move its end point,
         // so undo jumps back to before the whole gesture.
@@ -173,6 +181,7 @@ export function createDocument<T>(
       if (!previous) return false;
       future.unshift(present);
       present = previous;
+      travelled = true;
       notify();
       return true;
     },
@@ -180,6 +189,7 @@ export function createDocument<T>(
     drop(coalesceKey) {
       if (present.coalesceKey !== coalesceKey || !past.length) return false;
       present = past.pop()!;
+      travelled = true;
       notify();
       return true;
     },
@@ -193,6 +203,7 @@ export function createDocument<T>(
       if (!next) return false;
       past.push(present);
       present = next;
+      travelled = true;
       notify();
       return true;
     },
@@ -202,6 +213,7 @@ export function createDocument<T>(
       future = [];
       present = { state, label, at: now() };
       savedState = state;
+      travelled = false;
       notify();
     },
 
@@ -222,13 +234,18 @@ export function createDocument<T>(
       present = map(present);
       // (the saved state amended too - but not with what is not saved yet)
       if (!meta.unsaved) savedState = next(savedState);
-      if (!Object.is(present.state, was)) notify();
+      if (!Object.is(present.state, was)) {
+        travelled = false;
+        notify();
+      }
     },
 
     markSaved(state) {
       savedState = state ?? present.state;
       notify();
     },
+
+    travelled: () => travelled,
 
     history() {
       return {

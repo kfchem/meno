@@ -130,21 +130,34 @@ function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: read
   return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
 }
 
-function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>) {
-  const kept = (id: number | null, there: readonly { id: number }[]) => (id != null && !there.some((x) => x.id === id) ? null : id);
+function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travelled: boolean) {
+  // (gone back or forward to - an undo, a redo - what was under the pointer
+  // may have moved from under it: the pointer has not, and a key - Delete,
+  // a letter - acted on an atom across the page. What has changed is let
+  // go, to be lit again as the pointer next moves.)
+  const changed = <T extends { id: number }>(id: number, before: readonly T[], there: readonly T[]) =>
+    travelled && before.find((x) => x.id === id) !== there.find((x) => x.id === id);
+  const kept = <T extends { id: number }>(id: number | null, there: readonly T[], before: readonly T[] = there) =>
+    id != null && (!there.some((x) => x.id === id) || changed(id, before, there)) ? null : id;
   const { atoms, bonds } = now.model;
-  const atom = prev.hovered.atomId != null && !atoms.some((a) => a.id === prev.hovered.atomId);
-  const bond = prev.hovered.bondId != null && !bonds.some((b) => b.id === prev.hovered.bondId);
+  const placeOf = (list: readonly { id: number; x: number; y: number }[], id: number) => list.find((a) => a.id === id);
+  const moved = (id: number) => {
+    const [p, q] = [placeOf(prev.model.atoms, id), placeOf(atoms, id)];
+    return travelled && (!p || !q || p.x !== q.x || p.y !== q.y);
+  };
+  const hb = prev.hovered.bondId != null ? bonds.find((b) => b.id === prev.hovered.bondId) : undefined;
+  const atom = prev.hovered.atomId != null && (!atoms.some((a) => a.id === prev.hovered.atomId) || moved(prev.hovered.atomId));
+  const bond = prev.hovered.bondId != null && (!hb || moved(hb.a) || moved(hb.b));
   const molecule = (id: number) => now.molecules3d.find((m) => m.id === id);
   const { hovered3d: m3d, hoveredAtom3d: a3d, hoveredMeasure3d: q3d, hoveredMark: mark } = prev;
   return {
     hovered: atom || bond ? { atomId: atom ? null : prev.hovered.atomId, bondId: bond ? null : prev.hovered.bondId } : prev.hovered,
-    hoveredPush: kept(prev.hoveredPush, now.pushes),
-    hoveredArrow: kept(prev.hoveredArrow, now.arrows),
-    hoveredPlus: kept(prev.hoveredPlus, now.pluses),
-    hoveredCaption: kept(prev.hoveredCaption, now.captions),
-    hoveredPdf: kept(prev.hoveredPdf, now.pdfs),
-    hoveredPicture: kept(prev.hoveredPicture, now.pictures),
+    hoveredPush: kept(prev.hoveredPush, now.pushes, prev.pushes),
+    hoveredArrow: kept(prev.hoveredArrow, now.arrows, prev.arrows),
+    hoveredPlus: kept(prev.hoveredPlus, now.pluses, prev.pluses),
+    hoveredCaption: kept(prev.hoveredCaption, now.captions, prev.captions),
+    hoveredPdf: kept(prev.hoveredPdf, now.pdfs, prev.pdfs),
+    hoveredPicture: kept(prev.hoveredPicture, now.pictures, prev.pictures),
     hoveredSet: kept(prev.hoveredSet, now.sets),
     hoveredStep: kept(prev.hoveredStep, now.steps),
     hoveredWire: kept(prev.hoveredWire, now.wires),
@@ -171,7 +184,7 @@ export function connectStoreToDocument(
         ...heldOf(prev, mirrored.molecules3d),
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
-        ...hoversHeld(prev, mirrored),
+        ...hoversHeld(prev, mirrored, doc.travelled()),
         // (a bond or a chain being drawn out of an atom, or an atom being dragged, that an undo
         // took away: let go - drawn on, it was a bond from nowhere, its new atom a lone CH4)
         extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,

@@ -168,6 +168,23 @@ describe("createDocument", () => {
     expect(doc.getState().atoms).toEqual(["C", "O"]);
   });
 
+  it("says whether the state was gone back or forward to, or made", () => {
+    const doc = createDocument<Doc>(initial);
+    expect(doc.travelled()).toBe(false);
+    doc.edit("add C", addAtom("C"));
+    expect(doc.travelled()).toBe(false);
+    doc.undo();
+    expect(doc.travelled()).toBe(true);
+    doc.redo();
+    expect(doc.travelled()).toBe(true);
+    doc.edit("add O", addAtom("O"), { coalesceKey: "drag" });
+    expect(doc.travelled()).toBe(false);
+    doc.drop("drag");
+    expect(doc.travelled()).toBe(true);
+    doc.amend((d) => ({ ...d, title: "learnt" }));
+    expect(doc.travelled()).toBe(false);
+  });
+
   it("tracks the saved state, including after an undo back to it", () => {
     const doc = createDocument(initial);
     doc.edit("add C", addAtom("C"));

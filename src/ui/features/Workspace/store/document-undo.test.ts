@@ -342,6 +342,36 @@ describe("editor store over a document", () => {
     expect(state().hovered.atomId).toBe(base);
   });
 
+  it("lets go of what an undo or a redo moves from under the pointer, and keeps what stayed", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtomBonded(a, 1.5, 0, "C");
+    const bond = state().model.bonds[0].id;
+    // dragged to (5, 0), the pointer resting on it there
+    state().moveAtoms([{ id: b, x: 5, y: 0 }], "drag-1");
+    state().setHoveredFromId(b);
+    doc.undo();
+    // back across the page: Delete, or a letter, acted on it from there
+    expect(state().hovered.atomId).toBeNull();
+    // and a redo, the same
+    state().setHoveredFromId(b);
+    doc.redo();
+    expect(state().hovered.atomId).toBeNull();
+    // a bond whose end moved
+    state().setHoveredFromId(bond);
+    doc.undo();
+    expect(state().hovered.bondId).toBeNull();
+    // what an undo did not move stays under the pointer
+    state().setHoveredFromId(a);
+    state().addAtom(9, 9, "N");
+    doc.undo();
+    expect(state().hovered.atomId).toBe(a);
+    // and an atom dragged stays lit as it goes, edit by edit
+    state().setHoveredFromId(b);
+    state().moveAtoms([{ id: b, x: 6, y: 0 }], "drag-2");
+    expect(state().hovered.atomId).toBe(b);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");

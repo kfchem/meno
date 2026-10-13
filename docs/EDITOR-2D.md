@@ -299,6 +299,10 @@ highlight's colour, under the drawing, and a small handle stands above it.
   once only, selected for itself or not (`utils/selectionScheme.ts`). A
   press on one carried by a selection with more takes all of it; else a
   drag moves it alone, as before.
+- What the pointer rests on is let go when an undo or a redo takes it away
+  or moves it from under the pointer (2026-10-13: an atom dragged, undone
+  back across the page, stayed lit, and Delete or a letter acted on it
+  there); it lights again as the pointer next moves.
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,
