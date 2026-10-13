@@ -1473,12 +1473,13 @@ function drawOn(
     apart !== plain && nearPairs(apart, bonds) < crowded && viewCost(apart, bonds) < viewCost(plain, bonds) - 1e-9 ? apart : plain;
   better.forEach((p, i) => (pts[i] = p));
   const toViewer = normalise(crossV([fit.x[0], fit.x[1], fit.x[2]], [fit.y[0], fit.y[1], fit.y[2]]));
+  // (each put back where it was put before the easing: one held upright, upright)
   putBackTurned(
     mol,
     atoms,
     pts,
     X.map((p) => dotV(p, toViewer)),
-    X.map(proj),
+    anchor,
     fixed,
   );
   return { pts, drawn, uprights };
@@ -1487,9 +1488,12 @@ function drawOn(
 /**
  * Each stereocentre the easing has turned - its bonds in the system read
  * the other way round, `depth` saying how near the viewer each atom is -
- * put back where the solid seen from that side puts it (`anchors`), a
- * centre at a time while any reads wrong: eased, a bridgehead whose three
- * bonds lie nearly in the page can tip through (aconitine's C13). Atoms
+ * put back where it was put before the easing (`anchors`: where the solid
+ * seen from that side puts it, or upright above the ring where it was held
+ * so), a centre at a time while any reads wrong: eased, a bridgehead whose
+ * three bonds lie nearly in the page can tip through (aconitine's C13).
+ * A centre already passed is looked at again once another is put back -
+ * that moves its neighbours - but each is put back once at most. Atoms
  * `fixed` by the template stay. How many were put back.
  */
 export function putBackTurned(
@@ -1503,16 +1507,20 @@ export function putBackTurned(
   const index = new Map(atoms.map((a, i) => [a, i]));
   const placed = () => new Map(atoms.map((a, i) => [a, pts[i]]));
   const near = new Map(atoms.map((a, i) => [a, depth[i]]));
-  let back = 0;
-  for (const c of atoms) {
-    const i = index.get(c)!;
-    if (!mol.tetra.has(c) || fixed.has(i)) continue;
-    if (!turnedConfigurations(mol, atoms, placed(), near)) break;
-    if (!turnedConfigurations(mol, [c, ...mol.neighbours[c].filter((b) => index.has(b))], placed(), near)) continue;
-    pts[i] = { ...anchors[i] };
-    back++;
+  const back = new Set<number>();
+  for (let again = true; again; ) {
+    again = false;
+    for (const c of atoms) {
+      const i = index.get(c)!;
+      if (!mol.tetra.has(c) || fixed.has(i) || back.has(i)) continue;
+      if (!turnedConfigurations(mol, atoms, placed(), near)) return back.size;
+      if (!turnedConfigurations(mol, [c, ...mol.neighbours[c].filter((b) => index.has(b))], placed(), near)) continue;
+      pts[i] = { ...anchors[i] };
+      back.add(i);
+      again = true;
+    }
   }
-  return back;
+  return back.size;
 }
 
 /**

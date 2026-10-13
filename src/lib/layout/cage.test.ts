@@ -256,6 +256,29 @@ describe("a solid's configurations", () => {
     expect(held[0]).toEqual({ x: 1, y: 1 });
   });
 
+  it("are looked at again once another is put back: a centre that read right before its neighbour moved", () => {
+    // two centres bonded, 0 and 1, each with two more neighbours, one of
+    // them nearer the viewer; 1 put back turns 0, which is put back in turn
+    const pair = perceive({
+      atoms: [
+        { el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: -1 } },
+        { el: "C", tetra: { neighbours: [0, 4, 5, -1], volume: 1 } },
+        ...[2, 3, 4, 5].map(() => ({ el: "C" })),
+      ],
+      bonds: [[0, 1], [0, 2], [0, 3], [1, 4], [1, 5]].map(([a, b]) => ({ a, b, order: 1 })),
+    });
+    const atoms = [0, 1, 2, 3, 4, 5];
+    const depth = [0, 0, 0, 1, 0, 1];
+    const pts = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: -1, y: 0 }, { x: -1, y: 1 }];
+    const anchors = [{ x: 2, y: 0 }, { x: 1, y: -1 }, ...pts.slice(2)];
+    const near = new Map(atoms.map((a, i) => [a, depth[i]]));
+    const reads = (p: typeof pts) => new Map(atoms.map((a, i) => [a, p[i]]));
+    expect(keepsConfigurations(pair, [0, 1, 2, 3], reads(pts), near)).toBe(true);
+    expect(keepsConfigurations(pair, [1, 0, 4, 5], reads(pts), near)).toBe(false);
+    expect(putBackTurned(pair, atoms, pts, depth, anchors)).toBe(2);
+    expect(pts.slice(0, 2)).toEqual(anchors.slice(0, 2));
+    expect(keepsConfigurations(pair, atoms, reads(pts), near)).toBe(true);
+  });
 });
 
 describe("a cage eased onto its template", () => {
