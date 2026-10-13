@@ -885,6 +885,16 @@ describe("a figure drawn in colour by another program", () => {
     expect(bondsOf(s)).toEqual(["C-C", "C-O"]);
   });
 
+  it("joins a line's two colours once: an sp carbon's single bond going straight on into its two-colour triple bond stays a bond of its own", () => {
+    // (a nitrile as RDKit draws one by default - ferricyanide's - its C-C black, drawn from the C out, its C#N's lines drawn from
+    // the N, blue to their middles and black on)
+    const [a, c, n]: P[] = [[40, 60], [40 + L, 60], [40 + 2 * L, 60]];
+    const blue = (...pts: P[]): FigurePath => ({ ...stroke(...pts), stroke: "#0000ffff" });
+    const tripleLine = (dy: number): FigurePath[] => [blue([n[0] - 4, n[1] + dy], [c[0] + L / 2, c[1] + dy]), stroke([c[0] + L / 2, c[1] + dy], [c[0], c[1] + dy])];
+    const s = read(figure([...tripleLine(0), ...tripleLine(-2.2), ...tripleLine(2.2), stroke(c, a)], word("N", n)));
+    expect(bondsOf(s)).toEqual(["C-C", "N#C"]);
+  });
+
   it("reads a double bond whose two lines change colour side by side, closer than two of their widths, as one double bond", () => {
     // (a C=O as RDKit draws one by default on a large molecule: each line black to its middle and red on, 1.5 thick, the lines
     // 2.6 apart - each line's colour changes by the other's)

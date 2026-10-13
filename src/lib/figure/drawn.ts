@@ -318,12 +318,15 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
   // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
   // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  // (once: a line so joined is a bond whole - an sp carbon's single bond going straight on into its triple bond's middle line is
+  // another)
+  const twoTone = new Set<Stroke>();
   for (let merged = true; merged; ) {
     merged = false;
     for (let i = 0; i < out.strokes.length && !merged; i++) {
       for (let j = 0; j < out.strokes.length && !merged; j++) {
         const [s, t] = [out.strokes[i], out.strokes[j]];
-        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline) continue;
+        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline || twoTone.has(s) || twoTone.has(t)) continue;
         const w = Math.max(s.w, t.w);
         if (dist(s.b, t.a) > w) continue;
         const ls = dist(s.a, s.b), lt = dist(t.a, t.b);
@@ -338,6 +341,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
         const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o));
         if (others.length) continue;
         out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
+        twoTone.add(out.strokes[i]);
         out.strokes.splice(j, 1);
         merged = true;
       }

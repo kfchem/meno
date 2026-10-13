@@ -977,7 +977,9 @@ workspace holds.
   its middle and its atom's colour on, as RDKit draws one by default -
   is one line: two lines of different colours, end to end along one
   way, with nothing else ending where they meet (a double bond's other
-  line, side by side, its colour changing there too, is nothing else). So is a wedge drawn in
+  line, side by side, its colour changing there too, is nothing else) -
+  once: a line so joined is a bond whole, and an sp carbon's single bond
+  going straight on into its triple bond's middle line is another. So is a wedge drawn in
   two colours: a filled four-cornered shape of another colour going on
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
