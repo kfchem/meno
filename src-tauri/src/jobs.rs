@@ -1164,12 +1164,30 @@ pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
     (String::from_utf8_lossy(&buf[..end]).into_owned(), from + end as u64)
 }
 
-/// A file a job wrote in its work folder, as text.
+/// A file a job wrote in its work folder, as text: a file of its own, by a
+/// path of no link - a link its program left there, to a file of the
+/// chemist's anywhere, is not read through.
 pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
     if !inside_name(name) {
         return Err(format!("not a file of the job's: {name}"));
     }
-    let bytes = fs::read(dir.join(WORK).join(name)).map_err(|e| format!("{name}: {e}"))?;
+    let work = dir.join(WORK);
+    let mut at = work.clone();
+    for part in Path::new(name).components() {
+        at.push(part);
+        let meta = fs::symlink_metadata(&at).map_err(|e| format!("{name}: {e}"))?;
+        if meta.file_type().is_symlink() {
+            return Err(format!("not a file of the job's: {name} is a link"));
+        }
+    }
+    let inside = match (at.canonicalize(), work.canonicalize()) {
+        (Ok(file), Ok(work)) => file.starts_with(work) && file.is_file(),
+        _ => false,
+    };
+    if !inside {
+        return Err(format!("not a file of the job's: {name}"));
+    }
+    let bytes = fs::read(&at).map_err(|e| format!("{name}: {e}"))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
@@ -2457,4 +2475,26 @@ mod tests {
         names.sort_by(|a, b| natural(a, b));
         assert_eq!(names, vec!["Blender 4.5", "Blender 5.2", "Blender 5.10", "Blender 10.0"]);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn reads_no_file_through_a_link_a_job_left() {
+        let dir = std::env::temp_dir().join(format!("meno-read-{}", uuid::Uuid::new_v4()));
+        let work = dir.join(WORK);
+        fs::create_dir_all(work.join("sub")).unwrap();
+        fs::write(work.join("out.txt"), "mine").unwrap();
+        fs::write(work.join("sub/deep.txt"), "deep").unwrap();
+        let outside = dir.join("outside.txt");
+        fs::write(&outside, "the chemist's").unwrap();
+        std::os::unix::fs::symlink(&outside, work.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&dir, work.join("up")).unwrap();
+        assert_eq!(read_work_file(&dir, "out.txt").unwrap(), "mine");
+        assert_eq!(read_work_file(&dir, "sub/deep.txt").unwrap(), "deep");
+        assert!(read_work_file(&dir, "link.txt").is_err());
+        assert!(read_work_file(&dir, "up/outside.txt").is_err());
+        assert!(read_work_file(&dir, "../outside.txt").is_err());
+        assert!(read_work_file(&dir, "sub").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
 }
