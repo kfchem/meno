@@ -64,7 +64,8 @@ import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
-import { unsureOf } from "./chem/drawing";
+import { unsureOf, type Unsure } from "./chem/drawing";
+import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -308,7 +309,8 @@ function WorkspaceContent({
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
-  const unsure = useMemo(() => unsureOf(model), [model]);
+  const unsureKept = useRef(structureValues<Unsure>());
+  const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
   const readUnsure = useMemo(() => readMarks(model), [model]);
   const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);

@@ -226,6 +226,12 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
   });
 
   const rings = allRings.filter((r) => r.length >= 5 && isFlat(atoms, r));
+  // (each atom's flat rings, for each conjugated part to find its own: not
+  // every ring of the molecule looked through for each part)
+  const ringsOf: number[][] = atoms.map(() => []);
+  rings.forEach((r, k) => {
+    for (const x of r) ringsOf[x].push(k);
+  });
   const extra = new Int8Array(bonds.length);
   let decided = true;
   // each conjugated part on its own: candidates joined through shared atoms
@@ -238,22 +244,20 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
   for (let s = 0; s < candidates.length; s++) {
     if (done[s]) continue;
     // (in the order a walk from it reaches them, so that each choice soon settles its neighbours')
-    const part: number[] = [];
-    const queue = [s];
+    const part = [s];
     done[s] = 1;
-    while (queue.length) {
-      const k = queue.shift()!;
-      part.push(k);
+    for (let q = 0; q < part.length; q++) {
+      const k = part[q];
       for (const x of [candidates[k].a, candidates[k].b]) {
         for (const j of byAtom[x]) {
           if (!done[j]) {
             done[j] = 1;
-            queue.push(j);
+            part.push(j);
           }
         }
       }
     }
-    const best = solve(part.map((k) => candidates[k]), range, rings, atoms, byAtom, candidates);
+    const best = solve(part.map((k) => candidates[k]), range, rings, ringsOf, atoms, byAtom, candidates);
     if (!best || best.unmet) {
       decided = false;
       if (!best) continue;
@@ -282,9 +286,15 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
     return 0;
   });
   // (an oxygen held singly by a charged nitrogen carries the charge back: a nitro group, an N-oxide)
+  // (each atom's first bond, found once: not every bond looked through for each oxygen)
+  const firstBond = new Int32Array(atoms.length).fill(-1);
+  bonds.forEach((b, k) => {
+    if (firstBond[b.a1] < 0) firstBond[b.a1] = k;
+    if (firstBond[b.a2] < 0) firstBond[b.a2] = k;
+  });
   atoms.forEach((a, i) => {
     if (a.el !== "O" || near[i].length !== 1 || hydrogens) return;
-    const k = bonds.findIndex((b) => b.a1 === i || b.a2 === i);
+    const k = firstBond[i];
     const other = near[i][0];
     if (orders[k] === 1 && charges[other] === 1 && atoms[other].el === "N") charges[i] = -1;
   });
@@ -302,7 +312,7 @@ type Candidate = { bond: number; a: number; b: number; costs: number[] };
  * is aromatic - counted as the last bond about it is chosen. Null where
  * the search ran too long, or no choice meets every valence.
  */
-function solve(part: Candidate[], range: Range[], rings: number[][], atoms: readonly GeoAtom[], byAtom: number[][], all: Candidate[]): { choice: number[]; unmet: boolean } | null {
+function solve(part: Candidate[], range: Range[], rings: number[][], ringsOf: number[][], atoms: readonly GeoAtom[], byAtom: number[][], all: Candidate[]): { choice: number[]; unmet: boolean } | null {
   const local = new Map(part.map((c, i) => [c, i]));
   const atomsIn = [...new Set(part.flatMap((c) => [c.a, c.b]))];
   const sum = new Map<number, number>(atomsIn.map((x) => [x, 0]));
@@ -316,8 +326,9 @@ function solve(part: Candidate[], range: Range[], rings: number[][], atoms: read
     }
   }
   // the part's rings, each settled as the last bond about its atoms is chosen
-  const inPart = new Set(atomsIn);
-  const ringsHere = rings.filter((r) => r.some((x) => inPart.has(x)));
+  const here = new Set<number>();
+  for (const x of atomsIn) for (const k of ringsOf[x]) here.add(k);
+  const ringsHere = [...here].sort((p, q) => p - q).map((k) => rings[k]);
   const settledAt: number[][] = part.map(() => []);
   ringsHere.forEach((r, k) => {
     const last = Math.max(...r.flatMap((x) => byAtom[x].map((j) => local.get(all[j]) ?? -1)));

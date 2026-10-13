@@ -35,6 +35,22 @@ describe("guides as what is selected is moved", () => {
     expect(state().guides).toBeNull();
   });
 
+  it("change nothing in the page's state at a step that lines up with nothing, as none was shown", () => {
+    const { store, state } = editor();
+    const a = state().addCaption("Alpha", 0, 0);
+    state().addCaption("Beta", 6, 5.03);
+    state().selectCaptions([a]);
+    const g = guideMove(store, toWorld, { x: 0, y: 0 });
+    let changes = 0;
+    const stop = store.subscribe(() => changes++);
+    // (well off the other's middle and sides, steps at every frame)
+    for (let i = 0; i < 10; i++) g.step(0.1 * i, -3, keys);
+    expect(changes).toBe(0);
+    g.end();
+    expect(changes).toBe(0);
+    stop();
+  });
+
   it("make words as wide as other words near them, but not their own width as it was", () => {
     const { store, state } = editor();
     const a = state().addCaption("Alpha beta gamma", 0, 0, undefined, undefined, 8);
