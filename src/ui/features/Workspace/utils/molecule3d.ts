@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { atomColour, atomRadius, bondRadiusOf, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
 import { NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown } from "./completeness";
@@ -176,6 +176,8 @@ export type Solid = {
   hidden: Record<Look, Uint8Array>;
   /** Whether each look leaves out hydrogens on carbon it would draw: the molecule says so (`HIDDEN_MARK`). */
   hidesH: Record<Look, boolean>;
+  /** How many atoms each look counts toward a very large drawing (utils/largeDrawing): lib/chem/style3d `countedAtoms`. */
+  counted: Record<Look, number>;
   /** Whether each look draws its chains as ribbons (Ribbon3D). */
   ribbons: Record<Look, boolean>;
   /**
@@ -245,7 +247,8 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
     return reach;
   };
   const hidesH = { primary: hidesCarbonHydrogens(m, style.primary), secondary: hidesCarbonHydrogens(m, style.secondary) };
-  const solid = { frames, radii, hidden, hidesH, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
+  const counted = { primary: countedAtoms(m, style.primary, hidden.primary), secondary: countedAtoms(m, style.secondary, hidden.secondary) };
+  const solid = { frames, radii, hidden, hidesH, counted, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
   byStyle.set(style, { frames: m.frames, solid });
   return solid;
 }

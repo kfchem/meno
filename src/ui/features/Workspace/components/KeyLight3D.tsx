@@ -28,10 +28,11 @@ const TEXELS_TO_PIXEL = 3;
  * until that would leave its texels coarser than the screen's pixels.
  *
  * It counts the atoms on the canvas too: past `LARGE_ATOMS` - tens of
- * thousands, a protein space-filling - where `large` says "lighter", the
- * canvas is drawn lighter (utils/largeDrawing): the shadows fade, casting
- * them again as such a drawing turns costing more than the turning can
- * spare, and hollows shaded on the screen (`screen`, where a style does)
+ * thousands, a protein space-filling or in ribbons (lib/chem/style3d
+ * `countedAtoms`) - where `large` says "lighter", the canvas is drawn
+ * lighter (utils/largeDrawing): the shadows fade, casting them again as
+ * such a drawing turns costing more than the turning can spare, and
+ * hollows shaded on the screen (`screen`, where a style does)
  * are shaded per atom; and it says so, once, with the way to keep them (a
  * picture made of it has them all the same).
  */

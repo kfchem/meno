@@ -33,6 +33,7 @@ import {
   type Turning3D,
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
+import { LARGE_ATOMS } from "./largeDrawing";
 
 /** Two carbons 1.5 Å apart along x, standing at `at`. */
 const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
@@ -408,6 +409,27 @@ describe("a biopolymer's molecule in 3D, its chains as ribbons", () => {
     expect(s.hidesH.primary).toBe(false);
     const pose = poseOf(m, s, "primary");
     expect(atomAt(pose, undefined, 0, 0)).toBe(1);
+  });
+
+  it("counts every atom its ribbons stand for toward a very large drawing - a protein of 22 000 atoms in ribbons is one", () => {
+    // (2 200 residues of ten atoms each, their alpha carbons 3.8 A apart in a line)
+    const atoms: Molecule3D["atoms"] = [];
+    const names: string[] = [];
+    const residueOf: number[] = [];
+    for (let r = 0; r < 2_200; r++) {
+      for (let k = 0; k < 10; k++) {
+        atoms.push({ el: k ? "H" : "C", x: 3.8 * r, y: k ? 1 : 0, z: 0 });
+        names.push(k ? `H${k}` : "CA");
+        residueOf.push(r);
+      }
+    }
+    const residues = Array.from({ length: 2_200 }, (_, r) => ({ name: "ALA", chain: "A", seq: r + 1, iCode: "", standard: true }));
+    const m: Molecule3D = { id: 1, atoms, bonds: [], at: { x: 0, y: 0 }, biopolymer: { names, residueOf, residues, structure: residues.map(() => null) } };
+    const s = solidOf(m, STYLE_3D);
+    expect(s.ribbons.primary).toBe(true);
+    expect(s.radii.primary.every((r) => r === 0)).toBe(true);
+    expect(s.counted.primary).toBe(22_000);
+    expect(s.counted.primary).toBeGreaterThan(LARGE_ATOMS);
   });
 
   it("is drawn in a picture as sticks along its ribbon, in the ribbon's colours", () => {

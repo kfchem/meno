@@ -794,6 +794,10 @@ slowing it - and in the pictures made of it.
   notice in the corner (*Many atoms on the canvas*) with *Keep them*,
   which sets *Very large drawings* (Settings, every style) to *As set*
   for good. A picture made of it has its shade and shadows all the same.
+  The atoms counted are those drawn and every atom of the residues
+  ribbons stand for (the maintainer's choice, 2026-10-13), so a large
+  protein in ribbons is drawn lighter as it would be as atoms; those a
+  look leaves out otherwise (hydrogens on carbon, water) are not.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the

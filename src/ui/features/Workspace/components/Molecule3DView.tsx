@@ -309,8 +309,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
-  // (how many atoms each look draws: a very large drawing is counted by them - utils/largeDrawing)
-  const drawnAtoms = useMemo(() => ({ primary: hidden.primary.filter((h) => !h).length, secondary: hidden.secondary.filter((h) => !h).length }), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const rings = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const sleeves = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -738,8 +736,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     level.current = nextLevel;
     selLevel.current = nextSel;
 
-    // (both looks' atoms while it goes over from one to the other)
-    atoms.current.userData.shown = fill.current === 0 ? drawnAtoms.primary : fill.current === 1 ? drawnAtoms.secondary : Math.max(drawnAtoms.primary, drawnAtoms.secondary);
+    // (the atoms a very large drawing is counted by - utils/largeDrawing - both looks' while it goes over from one to the other)
+    const { counted } = solid;
+    atoms.current.userData.counted = fill.current === 0 ? counted.primary : fill.current === 1 ? counted.secondary : Math.max(counted.primary, counted.secondary);
     const radius = (i: number) => {
       const r = solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
       return r * (swell.current.get(i)?.v ?? 1) * risen.current;
