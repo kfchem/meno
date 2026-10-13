@@ -122,11 +122,15 @@ catalogue - has a manifest alone.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
-  own.
+  own: one it names in `reads` that is neither - another plugin's - is
+  left out as the plugin is taken in (`lib/calc/catalog.ts`, `pluginOf`).
 - **Meno checks every manifest as data**, wherever it came from: its id,
   its lock and worker in its folder (the backend allows nothing else), its
-  marks as text of some length, and no mark that one of Meno's own sample
-  files holds.
+  marks as text of some length (`lib/plugins/manifest.ts`); and, as its
+  kinds are registered (`lib/io/kinds.ts`, `registered`), no mark that one
+  of Meno's own sample files holds - an SD, an XYZ, a PDB and an RXN file
+  Meno carries, and its workspace's and a structure's records. Such a mark
+  is not taken, and Settings, *Plugins*, says which.
 - **A grammar is data too** (`<name>.grammar`, in Lezer's form, named in
   the manifest with the tone each of its parts is drawn in): Meno makes it
   into tables - a tokenizer that reads each letter once, a parser that
@@ -151,8 +155,8 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; its licence (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
-| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own files and refused where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
-| `reads` | ids | The kinds it reads: its own, or Meno's. |
+| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
+| `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
@@ -457,7 +461,7 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {molblock}` and `to_smiles {smiles}` (SMILES); `analyse {molblock}`
+    {smiles}` and `to_smiles {molblock}` (SMILES); `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
