@@ -5,6 +5,7 @@ import { useThree, type ThreeEvent } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { dragSelection } from "../utils/dragSelection";
+import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
@@ -469,7 +470,7 @@ export function Atoms2D() {
         // a drag is not the first click of a double-click
         forgetPresses();
         const st = store.getState();
-        const withSelection = held || (st.sel.atoms.has(a.id) && st.sel.atoms.size > 1);
+        const withSelection = held || dragsSelection(st, a.id);
         if (withSelection) selectionMoveGesture(pid);
         else moveGesture(idx, ev, pid);
       };

@@ -34,6 +34,18 @@ export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "
       (st.selInks?.size ?? 0) > 0,
   };
 }
+
+/**
+ * Whether a drag of the atom `id` moves the selection: the atom is in it,
+ * with anything else - another atom, or a picture, a shape, words, a
+ * molecule in 3D. (Until 2026-10-13 only other atoms counted: an atom
+ * selected with a picture was dragged off alone.)
+ */
+export function dragsSelection(st: Parameters<typeof selectedOf>[0], id: number): boolean {
+  if (!st.sel.atoms.has(id)) return false;
+  if (st.sel.atoms.size > 1) return true;
+  return selectedOf({ ...st, sel: { atoms: new Set(), bonds: new Set() } }).any;
+}
 const noFlow = (): SelFlow => ({ sets: new Set(), steps: new Set() });
 
 /**

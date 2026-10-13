@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { selectedOf } from "./slices/selectionSlice";
+import { dragsSelection, selectedOf } from "./slices/selectionSlice";
 import { createWorkspaceDocument } from "../document";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
@@ -401,6 +401,25 @@ describe("editor store over a document", () => {
     state().addAtom(9, 9, "C");
     doc.undo();
     expect(state().openStep).toBe(step);
+  });
+
+  it("moves the whole selection by an atom of it selected with a picture, a shape or words, not the atom alone", () => {
+    const { state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtom(5, 0, "C");
+    // the atom alone, selected or not: its own drag
+    expect(dragsSelection(state(), a)).toBe(false);
+    state().setSel({ atoms: new Set([a]), bonds: new Set() }, a);
+    expect(dragsSelection(state(), a)).toBe(false);
+    // with another atom, or with words on the page: the selection's
+    state().setSel({ atoms: new Set([a, b]), bonds: new Set() }, a);
+    expect(dragsSelection(state(), a)).toBe(true);
+    state().setSel({ atoms: new Set([a]), bonds: new Set() }, a);
+    const words = state().addCaption("rt, 2 h", 9, 9);
+    state().selectCaptions([words], true);
+    expect(dragsSelection(state(), a)).toBe(true);
+    // and not an atom outside the selection
+    expect(dragsSelection(state(), b)).toBe(false);
   });
 
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {

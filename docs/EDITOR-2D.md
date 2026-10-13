@@ -265,7 +265,10 @@ selection; drawn without, it replaces it.
 highlight's colour, under the drawing, and a small handle stands above it.
 
 - Dragging any of its atoms moves the whole of it, off the grid, as one undo
-  step; an atom that is not selected moves on its own as before.
+  step - an atom selected alone with a picture, a shape, words or a
+  molecule in 3D too (until 2026-10-13 it went off alone:
+  `dragsSelection`); an atom that is not selected, or is selected alone,
+  moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
   freely after a pause - one undo step.
 - The keys that act on what is under the pointer act on the selection
