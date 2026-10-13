@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import {
-  layoutMolecule,
   sameAtZooms,
   type Atom as LAtom,
   type Bond as LBond,
 } from "../../../../lib/chem/layout2d";
-import { editorLayoutOptions, layoutAtomOf, layoutBonds } from "../layoutOptions";
+import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
+import { editorLayoutOptions, layoutAtomOf, layoutBond } from "../layoutOptions";
+import type { Atom, Bond } from "../store/types";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -88,8 +89,19 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // is leading, to a new atom or onto one already there.
   const stroke = extend.active ? extend.stroke : null;
   const preview = extend.active ? extend.preview : null;
+  // (each atom and bond as the layout takes it, the same object while it is
+  // the same: what the layout made of a structure none of whose atoms and
+  // bonds changed is taken again - lib/chem/layoutStructures)
+  const takenAtoms = useRef(new WeakMap<Atom, LAtom>());
+  const takenBonds = useRef(new WeakMap<Bond, LBond>());
   const atoms: LAtom[] = useMemo(() => {
-    const out: LAtom[] = model.atoms.map((a) => layoutAtomOf(a, a.id === draggedId && dragX != null && dragY != null ? { x: dragX, y: dragY } : undefined));
+    const kept = takenAtoms.current;
+    const out: LAtom[] = model.atoms.map((a) => {
+      if (a.id === draggedId && dragX != null && dragY != null) return layoutAtomOf(a, { x: dragX, y: dragY });
+      let l = kept.get(a);
+      if (!l) kept.set(a, (l = layoutAtomOf(a)));
+      return l;
+    });
     // (a stroke on empty space: its own new atom where it starts)
     if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
       out.push({ id: STROKE_START_ID, x: stroke.start.x, y: stroke.start.y, el: "C" });
@@ -131,6 +143,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       let far = 0;
       // (the one way every atom that moved went, where they all went alike)
       let shift: { dx: number; dy: number } | null | undefined;
+      const moved = new Set<number>();
       for (const a of atoms) {
         const s = a.id === draggedId || a.id < 0 ? undefined : was.get(a.id);
         if (!s) continue;
@@ -138,7 +151,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
         const dy = a.y - s.y;
         const d = Math.hypot(dx, dy);
         far = Math.max(far, d);
-        if (d <= ARRIVED || shift === null) continue;
+        if (d <= ARRIVED) continue;
+        moved.add(a.id);
+        if (shift === null) continue;
         if (shift === undefined) shift = { dx, dy };
         else if (Math.hypot(dx - shift.dx, dy - shift.dy) > ARRIVED) shift = null;
       }
@@ -155,7 +170,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
           from.set(a.id, s);
           to.set(a.id, { x: a.x, y: a.y, ...(a.z != null ? { z: a.z } : {}) });
         }
-        glide.current = { plan: planGlide(from, to, partsOf(model.atoms, model.bonds)), from, start: performance.now() };
+        // (the structures that moved: the rest stay as they are drawn, laid out as they were)
+        const parts = partsOf(model.atoms, model.bonds).filter((part) => part.some((id) => moved.has(id)));
+        glide.current = { plan: planGlide(from, to, parts), from, start: performance.now() };
       }
     }
     const g = glide.current;
@@ -188,7 +205,16 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const bonds: LBond[] = useMemo(() => {
     const index = new Map<number, number>();
     drawnAtoms.forEach((a, i) => index.set(a.id, i));
-    const out = layoutBonds(model.bonds, index);
+    const kept = takenBonds.current;
+    const out: LBond[] = [];
+    for (const b of model.bonds) {
+      const a1 = index.get(b.a);
+      const a2 = index.get(b.b);
+      if (a1 == null || a2 == null) continue;
+      let l = kept.get(b);
+      if (!l || l.a1 !== a1 || l.a2 !== a2) kept.set(b, (l = layoutBond(b, a1, a2)));
+      out.push(l);
+    }
     if (!stroke) return out;
     // where each node of the stroke is drawn: its own atom, or the one it
     // closed onto
@@ -249,9 +275,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const layoutZoom =
     laidAt.current != null && sameAtZooms(opts, bonds, laidAt.current, zoom) ? laidAt.current : zoom;
   laidAt.current = layoutZoom;
+  const laid = useRef(structureLayouts());
   const layout = useMemo(
-    () => layoutMolecule(drawnAtoms, bonds, opts, layoutZoom),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts, abbreviations: see above
+    () => layoutByStructure(drawnAtoms, bonds, opts, layoutZoom, laid.current, [fonts, abbreviations]),
     [drawnAtoms, bonds, opts, layoutZoom, fonts, abbreviations],
   );
   const value = useMemo(

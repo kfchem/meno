@@ -309,8 +309,15 @@ What is left before the editor counts as finished, and in what order, is in
   bond's neighbours from its atoms' own bonds. A zoom does not lay the
   drawing out again while the layout made at the zoom it was laid out at
   is the same drawing at this one (`sameAtZooms`: world units, lines wider
-  than the least they are kept at, a wave's turns in as many steps). The
-  round caps are one instanced mesh; the hit areas of atoms and bonds are
+  than the least they are kept at, a wave's turns in as many steps). Nor
+  does a change lay out what it does not touch: the drawing is laid out a
+  structure at a time (`lib/chem/layoutStructures.ts`), each atom and bond
+  reaching the layout as the same object while it is unchanged, and what a
+  structure was laid out to is taken again while all of its atoms and bonds
+  are; structures are laid out together where a name's letters, a note on
+  a bond or a bond in perspective reaches from one to the other, and a
+  drawing with a bracket (an S-group) is laid out whole. A glide moves only
+  the structures that changed. The round caps are one instanced mesh; the hit areas of atoms and bonds are
   never drawn (picking does not ask whether a material is); the ring
   circles the canvas offers are found without a second layout
   (`ringCircles`), when the pointer looks for one; R, S, E and Z are placed
