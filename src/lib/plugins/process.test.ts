@@ -92,6 +92,25 @@ describe("a plugin's worker gone unused", () => {
     unhear();
   });
 
+  it("is said to be stopped before it is killed, and a question on its old client goes to the worker started in its place", async () => {
+    const heard: string[][] = [];
+    const unhear = onWorkerStopped(() => heard.push([...backend.killed]));
+    const w = workerOf(plugin);
+    await vi.advanceTimersByTimeAsync(20);
+    const first = await w;
+    await vi.advanceTimersByTimeAsync(IDLE_MS);
+    // (heard while it was still to be killed: what keeps it let go of it first)
+    expect(heard).toEqual([[]]);
+    expect(backend.killed).toEqual(["w1"]);
+    // (asked of the client of the worker stopped unused: a worker started afresh answers)
+    const answered = first.reader.probe("out", "late.out", "head");
+    await vi.advanceTimersByTimeAsync(40);
+    expect(await answered).toBe(true);
+    expect(backend.spawned).toEqual(["w1", "w2"]);
+    expect(backend.sent[backend.sent.length - 1].id).toBe("w2");
+    unhear();
+  });
+
   it("is kept while a question waits for its answer, and counted afresh from that answer", async () => {
     const w = workerOf(plugin);
     await vi.advanceTimersByTimeAsync(20);

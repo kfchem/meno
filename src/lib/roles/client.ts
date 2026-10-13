@@ -143,6 +143,8 @@ export class ChemClient {
   private stop: () => void;
   /** Why it was closed, once it is: what it is asked from then on fails at once, saying so. */
   private closed: string | null = null;
+  /** Where what it is asked once closed goes instead, where its worker was stopped unused: the worker started in its place (lib/plugins/process). */
+  private retake?: () => Promise<ChemClient>;
   private notReady: (e: Error) => void = () => {};
   /** The plugin's version, once the worker has said it is ready. */
   version: string | null = null;
@@ -206,6 +208,8 @@ export class ChemClient {
     args: ChemRequests[Op]["args"],
     timeoutMs = this.timeoutMs,
   ): Promise<ChemRequests[Op]["result"]> {
+    // (its worker stopped unused: asked of the one started in its place)
+    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(op, args, timeoutMs));
     // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
     if (this.closed !== null) return Promise.reject(new ChemError(this.closed));
     const id = this.ids();
@@ -223,6 +227,11 @@ export class ChemClient {
       this.watch?.sent(id);
       this.transport.send(JSON.stringify({ id, op, ...args }));
     });
+  }
+
+  /** What it is asked once closed, handed to the client `retake` gives (its worker stopped unused). */
+  handOver(retake: () => Promise<ChemClient>): void {
+    this.retake = retake;
   }
 
   /** Stops listening; whatever is still waiting fails, as does whatever it is asked from then on. */

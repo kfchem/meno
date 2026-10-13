@@ -67,12 +67,13 @@ export async function stopWorker(plugin: string, reason = `${plugin} was taken a
   const worker = running.get(plugin);
   if (!worker) return;
   running.delete(plugin);
+  // (said at once, before anything is waited for: what keeps it - roles/worker's - lets it go now, not after the kill)
+  whenStopped.forEach((f) => f(plugin));
   const w = await worker.catch(() => null);
   if (!w) return;
   w.reader.close(reason);
   w.chem.close(reason);
   await invoke("ext_kill", { id: w.id }).catch(() => undefined);
-  whenStopped.forEach((f) => f(plugin));
 }
 
 type Line = { id: string; line: string };
@@ -112,7 +113,12 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     if (mine()) void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`);
   });
   // (unused long enough: stopped, and started afresh when next asked)
-  const idle = idleWatch(() => stopIfUnused(p, mine, idle));
+  // (stopped unused, its clients hand what they are asked after to the worker started in its place - once each)
+  const handOver = () => {
+    reader.handOver(async () => (await workerOf(p)).reader);
+    chem.handOver(async () => (await workerOf(p)).chem);
+  };
+  const idle = idleWatch(() => stopIfUnused(p, mine, idle, handOver));
   const queue = watchAll(held, idle);
   const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
   const chem = new ChemClient(transport, undefined, p.name, ids, queue);
@@ -176,12 +182,13 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
  * so its stopping is no one's error; the next question starts it afresh,
  * saying so as a first start does. True where it is stopped, or gone.
  */
-async function stopIfUnused(p: PythonPlugin, mine: () => boolean, idle: { busy(): boolean }): Promise<boolean> {
+async function stopIfUnused(p: PythonPlugin, mine: () => boolean, idle: { busy(): boolean }, handOver: () => void): Promise<boolean> {
   if (!mine()) return true;
   // (jobs not known: kept, to be looked at again)
   const live = await liveJobsOf(p.id).catch(() => null);
   if (!mine()) return true;
   if (!live || live.length || idle.busy()) return false;
+  handOver();
   await stopWorker(p.id, `${p.name} was stopped, unused`);
   return true;
 }
