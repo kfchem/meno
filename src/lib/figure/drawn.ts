@@ -191,7 +191,28 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: b(hi) - b(lo), outline: pts } };
   }
   if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short, outline: pts } };
-  return null;
+  // (a wedge cut flat at its narrow end, a line's width across - four corners: its narrowest box lies along a
+  // side, not down its middle, so it is told by its ends instead)
+  const cut = curved ? null : flatTipped(pts);
+  return cut ? { wedge: cut } : null;
+}
+
+/** A wedge drawn as four corners - its narrow end a short edge, its wide end the opposite one, far apart - or none. */
+function flatTipped(given: Point[]): Wedge | null {
+  const pts = given.filter((p, i) => dist(p, given[(i + 1) % given.length]) > 1e-3);
+  if (pts.length !== 4) return null;
+  const edge = (i: number) => [pts[i], pts[(i + 1) % 4]] as const;
+  const length = (i: number) => dist(...edge(i));
+  // (its ends: the two opposite edges shorter together)
+  const [e, f] = length(0) + length(2) <= length(1) + length(3) ? [0, 2] : [1, 3];
+  const [narrow, wide] = length(e) <= length(f) ? [e, f] : [f, e];
+  const mid = (i: number) => {
+    const [p, q] = edge(i);
+    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  };
+  const [tip, base] = [mid(narrow), mid(wide)];
+  if (length(narrow) >= 0.4 * length(wide) || dist(tip, base) < 2.5 * length(wide)) return null;
+  return { tip, base, w: length(wide), outline: given };
 }
 
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */

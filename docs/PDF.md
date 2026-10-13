@@ -963,7 +963,8 @@ workspace holds.
   - lines side by side, a fifth of a bond or so apart, are a double or a
     triple bond - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it, else the middle line's;
-  - a filled wedge is a bond in front, narrow at its stereocentre;
+  - a filled wedge is a bond in front, narrow at its stereocentre - its
+    narrow end a point, or cut flat a line's width across;
   - short strokes side by side across a line, evenly spaced, are a bond
     behind, narrow where they are shortest;
   - a curve that goes to and fro along a line is a wavy bond;

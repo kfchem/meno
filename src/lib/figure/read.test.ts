@@ -191,6 +191,23 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toEqual(["C#C", "C-C", "C-C"]);
   });
 
+  it("reads a wedge cut flat at its narrow end, a line's width across, as a wedge", () => {
+    // (four corners: the narrow end 0.6 across at the stereocentre, the wide end 2.8 across - drawn from a ring's carbon to a CH2)
+    const c: P = [100, 81.4];
+    const ch2: P = [90.2, 75.7];
+    const s = read(
+      figure(
+        [
+          stroke(step(c, -80), c, step(c, 20)),
+          filled([100.29, 81.12], [99.99, 81.64], [88.98, 76.38], [91.37, 75.0]),
+          stroke(ch2, step(ch2, 150)),
+        ],
+      ),
+    );
+    expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    expect(s.bonds).toHaveLength(4);
+  });
+
   it("reads a wedge from its narrow end, and hashes from their narrow end", () => {
     const c: P = [40, 40];
     const s = read(figure([stroke(step(c, 150), c, step(c, 30)), wedge(c, step(c, -90)), ...hashes(step(c, 30), step(step(c, 30), -60))]));
