@@ -84,11 +84,13 @@ type Drawn = { a: Point; b: Point; order: 1 | 2 | 3; stereo?: "up" | "down" | "w
  * where the strokes are shortest. Equal throughout, its narrow end is not
  * told by the strokes.
  */
-function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<Stroke> } {
+function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): { hashes: Drawn[]; used: Set<Stroke> } {
   const used = new Set<Stroke>();
   const hashes: Drawn[] = [];
-  // (a hash's first strokes, at its narrow end, may be dots: no way of their own)
-  const dot_ = (s: Stroke) => len(s) < 2 * s.w;
+  // (a hash's first strokes, at its narrow end, may be dots: no way of their own - a small filled
+  // shape not twice as long as wide; a line stroked has its path's way, however short, unless it is
+  // next to nothing long - a dot drawn as a line's round ends)
+  const dot_ = (s: Stroke) => len(s) < (filled.has(s) ? 2 : 0.5) * s.w;
   const near = (s: Stroke, t: Stroke) => {
     if (dot_(s) && dot_(t)) return false;
     const [line, other] = dot_(s) ? [t, s] : [s, t];
@@ -410,8 +412,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       blobOf.set(s, b);
       return s;
     });
-  const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && len(s) > 0.04 * bond), ...bits];
-  const { hashes, used: inHashes } = hashesOf(short, bond);
+  const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && (len(s) > 0.04 * bond || len(s) < s.w)), ...bits];
+  const { hashes, used: inHashes } = hashesOf(short, bond, new Set(bits));
   // letters drawn as shapes, where the figure has none written there: read from their shapes
   const inLetters = new Set<object>();
   const fromShapes = known.length

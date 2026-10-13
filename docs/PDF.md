@@ -962,7 +962,9 @@ workspace holds.
     ring's second line is drawn inside it, else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre;
   - short strokes side by side across a line, evenly spaced, are a bond
-    behind, narrow where they are shortest;
+    behind, narrow where they are shortest - the first there may be a
+    dot: a small filled shape, or a line next to nothing long whose round
+    ends make it one, as Meno's own style draws it;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a bridge's - is
     joined again;

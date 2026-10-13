@@ -55,6 +55,8 @@ const circle = ([cx, cy]: P, r: number): FigurePath => {
     ],
   };
 };
+/** A disc filled, as a drawing program writes one: four curves - a line's round end. */
+const disc = (c: P, r: number): FigurePath => ({ ...circle(c, r), fill: "#000000ff", stroke: null, width: 0 });
 /** Letters set from a point - the first's middle there - each about as wide as Helvetica's; `_2` a subscript, `^+` a superscript. */
 function word(text: string, [x, y]: P): FigureLetter[] {
   const out: FigureLetter[] = [];
@@ -200,6 +202,24 @@ describe("a figure read as a structure", () => {
     expect(degree(up.a)).toBe(3);
     expect(degree(down.a)).toBe(2);
     expect(degree(down.b)).toBe(1);
+  });
+
+  it("reads hashes drawn as lines with round ends, the first next to nothing long: a dot", () => {
+    // (as Meno's own style draws them: each line cut square, a filled disc on each end; the
+    // first, at the narrow end, 0.06 points long - 0.57 more each next one)
+    const c: P = [40, 40];
+    const to = step(c, -30);
+    const [ux, uy] = unit(c, to);
+    const lines = Array.from({ length: 5 }, (_, k) => {
+      const m = along(c, to, 0.196 * (k + 1));
+      const h = (0.06 + 0.57 * k) / 2;
+      return [[m[0] - uy * h, m[1] + ux * h], [m[0] + uy * h, m[1] - ux * h]] as [P, P];
+    });
+    const ends = [c, step(c, 150), step(c, 90), ...lines.flat()].map((p) => disc(p, 0.3));
+    const s = read(figure([stroke(step(c, 150), c), stroke(c, step(c, 90)), ...lines.map(([p, q]) => stroke(p, q)), ...ends]));
+    const down = s.bonds.find((b) => b.stereo === "down")!;
+    expect(s.atoms).toHaveLength(4);
+    expect(s.bonds.filter((b) => b.a === down.a || b.b === down.a)).toHaveLength(3);
   });
 
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
