@@ -160,9 +160,11 @@ they hang from.
   several sides (quinine's quinuclidine) is tried from its best few
   textbook views with what hangs from it, the best kept - another view
   only where it reads clearly better (by 3), so that camphor stays as it
-  is always drawn. Of template views alike, the one whose drawing lies
-  level is taken: a long system's axis left to right (tetrodotoxin, its
-  guanidine ring beside the cage, not under it). A six-membered ring the solid has as a chair or a
+  is always drawn. A template view also costs for how far its drawing
+  lies off level - a twentieth for each degree its long axis is tilted,
+  scaled by how much longer than broad it is, up to 4.5, so more than that
+  margin can turn on it - and a long system lies left to right
+  (tetrodotoxin, its guanidine ring beside the cage, not under it). A six-membered ring the solid has as a chair or a
   boat, with no double bond in it, fused on a bond to a ring drawn by the
   template - or to the rest of the cage, its other four atoms in no other
   ring - is drawn by the template too, as decalin's second chair beside
