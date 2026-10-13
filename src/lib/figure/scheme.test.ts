@@ -410,4 +410,19 @@ describe("a reaction scheme's signs and words", () => {
     // (a formula's counts set low are no marks: Meno sets them low itself)
     expect(s.words.find((w) => w.text.includes("K2CO3"))!.marks).toEqual([]);
   });
+
+  it("keeps the words on either side of an arrow apart, however close to its line they are set", () => {
+    // (over and under, each 2 points from the line: a line's height apart, read as one block across the arrow before)
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], [...word("NaH, THF", [70, 93]), ...word("rt, 2 h", [74, 104.2])]));
+    expect(s.words.map((w) => [w.text, w.arrow]).sort()).toEqual([
+      ["NaH, THF", 0],
+      ["rt, 2 h", 0],
+    ]);
+    // (beside an arrow standing upright, level with each other: read as one line across it before)
+    const up = read(scheme([stroke([[100, 60], [100, 134]]), head([100, 140], [0, 1])], [...word("rt, 3 d", [60, 104]), ...word("BuLi", [104, 104])]));
+    expect(up.words.map((w) => [w.text, w.arrow]).sort()).toEqual([
+      ["BuLi", 0],
+      ["rt, 3 d", 0],
+    ]);
+  });
 });

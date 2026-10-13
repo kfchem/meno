@@ -607,14 +607,37 @@ type Row = { letters: FigureLetter[]; size: number; base: number; box: Box };
 
 const baseOf = (l: FigureLetter) => l.at?.[1] ?? l.box[3];
 
-/** Letters set in lines - each with its smaller letters set high or low - and lines broken where a gap is wide. */
-function rowsOf(letters: readonly FigureLetter[]): Row[] {
+const boxMiddle = (b: Box): Point => ({ x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2 });
+
+/** Whether two stretches cross each other. */
+function stretchesCross(p: Point, q: Point, a: Point, b: Point): boolean {
+  const pq = sub(q, p);
+  const ab = sub(b, a);
+  return cross(pq, sub(a, p)) * cross(pq, sub(b, p)) < 0 && cross(ab, sub(p, a)) * cross(ab, sub(q, a)) < 0;
+}
+
+/** Whether an arrow's line passes between two points: words on either side of it are not one line, nor one block. */
+function arrowBetween(arrows: readonly SchemeArrow[], p: Point, q: Point): boolean {
+  return arrows.some((a) => {
+    const path = [a.tail, ...a.corners, a.point];
+    return path.slice(1).some((b, i) => stretchesCross(p, q, path[i], b));
+  });
+}
+
+/** Letters set in lines - each with its smaller letters set high or low - and lines broken where a gap is wide, or an arrow's line passes between. */
+function rowsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[] = []): Row[] {
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
   const usual = sizes[Math.floor(sizes.length / 2)] ?? 10;
   const main = letters.filter((l) => l.size >= 0.85 * usual || !letters.some((m) => m !== l && m.size > l.size * 1.15 && Math.abs(baseOf(m) - baseOf(l)) < m.size));
   const rows: Row[] = [];
   for (const l of [...main].sort((p, q) => p.box[0] - q.box[0])) {
-    const r = rows.find((r) => Math.abs(r.base - baseOf(l)) < 0.3 * Math.max(r.size, l.size) && l.box[0] - r.box[2] < 1.2 * Math.max(r.size, l.size) && l.box[0] - r.box[2] > -0.5 * r.size);
+    const r = rows.find(
+      (r) =>
+        Math.abs(r.base - baseOf(l)) < 0.3 * Math.max(r.size, l.size) &&
+        l.box[0] - r.box[2] < 1.2 * Math.max(r.size, l.size) &&
+        l.box[0] - r.box[2] > -0.5 * r.size &&
+        !arrowBetween(arrows, boxMiddle(r.letters[r.letters.length - 1].box), boxMiddle(l.box)),
+    );
     if (r) {
       r.letters.push(l);
       r.size = Math.max(r.size, l.size);
@@ -679,8 +702,8 @@ function rowText(r: Row): { text: string; styles: (WordsStyle | undefined)[] } {
   return { text: text.trimEnd(), styles: styles.slice(0, text.trimEnd().length) };
 }
 
-/** Lines stacked into blocks: one under another, close, overlapping across. */
-function blocksOf(rows: readonly Row[]): Row[][] {
+/** Lines stacked into blocks: one under another, close, overlapping across - no arrow's line between them. */
+function blocksOf(rows: readonly Row[], arrows: readonly SchemeArrow[] = []): Row[][] {
   const sorted = [...rows].sort((p, q) => p.box[1] - q.box[1]);
   const blocks: Row[][] = [];
   for (const r of sorted) {
@@ -688,7 +711,13 @@ function blocksOf(rows: readonly Row[]): Row[][] {
       const last = b[b.length - 1];
       const gap = r.box[1] - last.box[3];
       const over = Math.min(r.box[2], last.box[2]) - Math.max(r.box[0], last.box[0]);
-      return gap < 0.6 * Math.max(r.size, last.size) && gap > -0.3 * r.size && over > -0.5 * r.size && Math.abs(r.size - last.size) < 0.3 * r.size;
+      return (
+        gap < 0.6 * Math.max(r.size, last.size) &&
+        gap > -0.3 * r.size &&
+        over > -0.5 * r.size &&
+        Math.abs(r.size - last.size) < 0.3 * r.size &&
+        !arrowBetween(arrows, boxMiddle(last.box), boxMiddle(r.box))
+      );
     });
     if (b) b.push(r);
     else blocks.push([r]);
@@ -705,18 +734,19 @@ function wordsStretch(a: SchemeArrow): { a: Point; b: Point } {
 }
 
 /**
- * The words of a scheme: its letters left over, set in lines and blocks;
- * a "+" alone a sign; a block over or under an arrow - within its longest
- * stretch, not across it, near - that arrow's; each written as Meno
- * writes words typed (lib/text/smartWords `writtenAsMeant`).
+ * The words of a scheme: its letters left over, set in lines and blocks -
+ * none across an arrow's line; a "+" alone a sign; a block over or under
+ * an arrow - within its longest stretch, not across it, near - that
+ * arrow's; each written as Meno writes words typed (lib/text/smartWords
+ * `writtenAsMeant`).
  */
 export function wordsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[]): { words: SchemeWords[]; pluses: Point[] } {
-  const rows = rowsOf(letters);
+  const rows = rowsOf(letters, arrows);
   const words: SchemeWords[] = [];
   const pluses: Point[] = [];
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
   const usual = sizes[Math.floor(sizes.length / 2)] ?? 10;
-  for (const block of blocksOf(rows)) {
+  for (const block of blocksOf(rows, arrows)) {
     const lines = block.map(rowText);
     const text = lines.map((l) => l.text).join("\n");
     if (!text.trim()) continue;
