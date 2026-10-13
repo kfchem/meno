@@ -223,7 +223,10 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   atoms, about as well as the lists' own orders. Drawings the lists'
   orders happened to suit changed with it - quinine among them, approved
   before - and are fixed one at a time after (the maintainer,
-  2026-10-13).
+  2026-10-13). One lesson on the way: `untangle` takes the first move that
+  reads better, and in the new order that move turned bilobalide's C4 OH
+  into its ring - every bond of C4 in one half of the page, which RDKit
+  read the other way. It never leaves a stereocentre so now.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two

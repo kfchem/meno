@@ -173,6 +173,9 @@ function drawingFaults(input: LayoutInput, mol: Molecule, out: Layout2D): number
   return m.overlaps + m.crossings;
 }
 
+/** How far short of a half turn a stereocentre's widest gap between bonds may be and its bonds still count as in one half of the page (`untangle`, as metrics.ts counts them). */
+const HALF_PAGE_TURN = (12 * Math.PI) / 180;
+
 /** How much better another view of a cage must read than its best textbook view to be taken instead. */
 const CAGE_VIEW_MARGIN = 3;
 
@@ -1404,6 +1407,17 @@ export function untangle(
     return count;
   };
   const crossed = crossingsIn(pos);
+  // (nor any stereocentre left with its bonds in one half of the page,
+  // which no wedge makes read one way: bilobalide's C4, its OH turned into
+  // its ring to clear the OH beside it)
+  const centres = piece.filter((c) => mol.tetra.has(c) && mol.neighbours[c].length === 4);
+  const halfPage = (p: Grown) =>
+    centres.filter((c) => {
+      const at = p.get(c)!;
+      const t = mol.neighbours[c].map((b) => Math.atan2(p.get(b)!.y - at.y, p.get(b)!.x - at.x)).sort((u, v) => u - v);
+      return Math.max(...t.map((u, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - u)) >= Math.PI - HALF_PAGE_TURN;
+    }).length;
+  const halved = halfPage(pos);
   let safe = { pos, score: current };
   for (let round = 0; round < 6; round++) {
     const hit = clashing(mol, piece, pos);
@@ -1431,7 +1445,7 @@ export function untangle(
           const trial = new Map(pos);
           move(trial);
           const s = score(trial);
-          if (s < current - 1e-6) {
+          if (s < current - 1e-6 && halfPage(trial) <= halved) {
             pos = trial;
             current = s;
             better = true;
