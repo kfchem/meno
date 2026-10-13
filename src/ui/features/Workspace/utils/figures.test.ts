@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../../lib/figure/drawn";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { turnFigure, turnPoint } from "../../../../lib/figure/turn";
 import type { Model } from "../store/types";
 import { readDrawn } from "./copyPaste";
 import { atomAs, atomAtSpot, bondAs, figureFrom, placedBeside, readMarks, type FigureResult, type Unread } from "./figures";
@@ -52,6 +53,20 @@ describe("a figure read as a structure for the page", () => {
     const w = m.bonds.find((x) => x.stereo === "up")!;
     expect(m.bonds.filter((x) => x.a === w.a || x.b === w.a)).toHaveLength(3);
     expect(w.stereoOrient).toBeUndefined();
+  });
+
+  it("reads a figure on a page turned a quarter as it reads upright, each atom tied to where it lies on the page", () => {
+    const up = structureFrom(drawn(), SHA, 2) as Model;
+    const about = { x: 120, y: 190 };
+    const m = structureFrom(turnFigure(drawn(), 1, about), SHA, 2) as Model;
+    expect(m.atoms.map((a) => a.el).sort()).toEqual(up.atoms.map((a) => a.el).sort());
+    const [o, o0] = [m.atoms.find((a) => a.el === "O")!, up.atoms.find((a) => a.el === "O")!];
+    // (standing as it stands upright; tied to where its letter lies on the turned page)
+    expect(o.x).toBeCloseTo(o0.x, 3);
+    expect(o.y).toBeCloseTo(o0.y, 3);
+    const at = turnPoint({ x: o0.seen!.x, y: o0.seen!.y }, 1, about);
+    expect(o.seen!.x).toBeCloseTo(at.x, 3);
+    expect(o.seen!.y).toBeCloseTo(at.y, 3);
   });
 
   it("says why there is nothing to read: no lines, or a picture", () => {

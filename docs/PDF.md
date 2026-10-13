@@ -951,6 +951,11 @@ workspace holds.
   lines and curves - filled or stroked and how thick; each letter with
   its box, where its line starts and its size; through a form, a figure
   a journal placed whole, under the matrices that placed it.
+- **Which way up it is**: a figure whose words are turned - set on a page
+  turned a quarter for a wide scheme, or a half - is turned back upright
+  first, each letter telling how it is turned by the corner of its box
+  its line starts at; what is read stands as its words do (Cl a label,
+  not a C over a bar), each atom still tied to where it lies on the page.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
