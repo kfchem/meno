@@ -7,6 +7,7 @@ import {
   gridPlaces,
   hiddenInStacks,
   middleOf,
+  openedAsStack,
   placeInStack,
   placeOfRecord,
   recordDrawings,
@@ -58,6 +59,16 @@ describe("a stack of molecules in 3D", () => {
   it("is numbered after the document's own stacks", () => {
     expect(freshStackId(molecules)).toBe(3);
     expect(freshStackId([{ id: 1 }])).toBe(1);
+  });
+});
+
+describe("a file's molecules in 3D, opened", () => {
+  // (the maintainer, 2026-10-13: a file of several jobs opens as one molecule for each, side by side)
+  it("stand as a stack - an SD file's records - but side by side where they are an output's jobs", () => {
+    expect(openedAsStack([{}, {}])).toBe(true);
+    expect(openedAsStack([{}])).toBe(false);
+    const job = (number: number) => ({ calc: { readers: ["cclib"], job: { number, of: 2 } } });
+    expect(openedAsStack([job(1), job(2)])).toBe(false);
   });
 });
 

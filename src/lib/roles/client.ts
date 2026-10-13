@@ -141,8 +141,14 @@ const TIMEOUT_MS = 30_000;
 export class ChemClient {
   private pending = new Map<number, Pending>();
   private stop: () => void;
+  /** Why it was closed, once it is: what it is asked from then on fails at once, saying so. */
+  private closed: string | null = null;
+  /** Where what it is asked once closed goes instead, where its worker was stopped unused: the worker started in its place (lib/plugins/process). */
+  private retake?: () => Promise<ChemClient>;
+  private notReady: (e: Error) => void = () => {};
   /** The plugin's version, once the worker has said it is ready. */
   version: string | null = null;
+  /** Its version, once its worker says it is ready - or why it never will, closed first. */
   readonly ready: Promise<string>;
 
   constructor(
@@ -156,7 +162,12 @@ export class ChemClient {
     private watch?: Watch,
   ) {
     let markReady!: (v: string) => void;
-    this.ready = new Promise((resolve) => (markReady = resolve));
+    this.ready = new Promise((resolve, reject) => {
+      markReady = resolve;
+      this.notReady = reject;
+    });
+    // (a client closed before its worker was ready, that no one waited on: nothing to say)
+    this.ready.catch(() => {});
     this.stop = transport.listen((line) => this.receive(line, markReady));
   }
 
@@ -197,6 +208,10 @@ export class ChemClient {
     args: ChemRequests[Op]["args"],
     timeoutMs = this.timeoutMs,
   ): Promise<ChemRequests[Op]["result"]> {
+    // (its worker stopped unused: asked of the one started in its place)
+    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(op, args, timeoutMs));
+    // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
+    if (this.closed !== null) return Promise.reject(new ChemError(this.closed));
     const id = this.ids();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -214,8 +229,15 @@ export class ChemClient {
     });
   }
 
-  /** Stops listening; whatever is still waiting fails. */
+  /** What it is asked once closed, handed to the client `retake` gives (its worker stopped unused). */
+  handOver(retake: () => Promise<ChemClient>): void {
+    this.retake = retake;
+  }
+
+  /** Stops listening; whatever is still waiting fails, as does whatever it is asked from then on. */
   close(reason = "the chemistry worker stopped"): void {
+    this.closed ??= reason;
+    this.notReady(new ChemError(this.closed));
     this.stop();
     for (const [id, p] of this.pending) {
       clearTimeout(p.timer);

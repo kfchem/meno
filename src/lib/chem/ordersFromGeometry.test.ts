@@ -76,4 +76,41 @@ describe("bond orders estimated from where atoms stand", () => {
     expect(r.decided).toBe(false);
     expect(r.orders).toEqual([1, 1, 1]);
   });
+  it("estimates a large molecule in time in step with its size", () => {
+    // (copies of an amide, pyridine and nitromethane 10 A apart, no H: each
+    // part looked through every flat ring, and each oxygen held singly
+    // through every bond - 7 s for 88 000 atoms of a protein. Eight times the
+    // copies now take about eight times as long, not sixty-four)
+    const parts = [MOLECULES["N-methylacetamide"], MOLECULES.pyridine, nitromethane];
+    const many = (n: number) => {
+      const atoms: GeoAtom[] = [];
+      const bonds: { a1: number; a2: number }[] = [];
+      for (let k = 0; k < n; k++) {
+        const f = parts[k % parts.length];
+        const first = atoms.length;
+        for (const [el, x, y, z] of f.atoms) atoms.push({ el, x: x + 10 * (k % 40), y: y + 10 * Math.floor(k / 40), z });
+        for (const [a1, a2] of f.bonds) bonds.push({ a1: first + a1, a2: first + a2 });
+      }
+      return { atoms, bonds, nitro: Math.floor(n / parts.length) };
+    };
+    const run = (m: ReturnType<typeof many>) => {
+      const r = ordersFromGeometry(m.atoms, m.bonds);
+      // (each nitro group's nitrogen charged, and an oxygen of each, as on its own)
+      expect(r.charges.filter((c) => c === 1).length).toBe(m.nitro);
+      expect(r.charges.filter((c) => c === -1).length).toBe(m.nitro);
+    };
+    const cpu = (m: ReturnType<typeof many>) => {
+      const c = process.cpuUsage();
+      run(m);
+      const d = process.cpuUsage(c);
+      return d.user + d.system;
+    };
+    const small = many(240);
+    const large = many(1920);
+    run(small);
+    run(large);
+    let least = [Infinity, Infinity];
+    for (let k = 0; k < 3; k++) least = [Math.min(least[0], cpu(small)), Math.min(least[1], cpu(large))];
+    expect(least[1] / least[0]).toBeLessThan(24);
+  }, 60_000);
 });

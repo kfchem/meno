@@ -30,6 +30,10 @@ import { pressMovedUnder } from "./viewGoal";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
 const HANDLE_ABOVE = 0.75;
+
+/** Nothing selected, where it is drawn. */
+const NO_MODEL: Model = { atoms: [], bonds: [] };
+
 /** The handle's radius on the screen, in px, and how far off it a press still takes it. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
@@ -300,10 +304,19 @@ export default function Selection2D() {
   // (where the drawing is drawn: on its way somewhere, the handle and the
   // shading go with it)
   const drawn = useDrawnLayout();
+  // (what is selected, where it is drawn - and only that: the extent and the
+  // shading read nothing else, and a copy of the whole drawing at every
+  // frame of a drag over a large one is for nothing)
   const shownModel = useMemo(() => {
-    const at = new Map(drawn.atoms.map((a) => [a.id, a]));
-    return { ...model, atoms: model.atoms.map((a) => ({ ...a, x: at.get(a.id)?.x ?? a.x, y: at.get(a.id)?.y ?? a.y })) };
-  }, [model, drawn.atoms]);
+    if (!sel.atoms.size && !sel.bonds.size) return NO_MODEL;
+    const bonds = model.bonds.filter((b) => sel.bonds.has(b.id));
+    const wanted = new Set(sel.atoms);
+    for (const b of bonds) wanted.add(b.a).add(b.b);
+    const at = new Map<number, { x: number; y: number }>();
+    for (const a of drawn.atoms) if (wanted.has(a.id)) at.set(a.id, a);
+    const atoms = model.atoms.filter((a) => wanted.has(a.id)).map((a) => ({ ...a, x: at.get(a.id)?.x ?? a.x, y: at.get(a.id)?.y ?? a.y }));
+    return { atoms, bonds };
+  }, [model, drawn.atoms, sel.atoms, sel.bonds]);
   const extent = useMemo(
     () => held ?? selectionExtent(shownModel, sel.atoms, molecules3d, sel3d, turns3d, frames3d, style3d, eyeOf(camera)?.z, picked),
     [held, shownModel, sel.atoms, molecules3d, sel3d, turns3d, frames3d, style3d, camera, picked],

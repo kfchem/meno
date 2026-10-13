@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) | |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read left out, with its energy, and the molecule says how many; atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); none whole, the file refused, saying why of its first frame ("The XYZ file ends before its atoms do: it says 3, and gives 2.", "Line 4 of the XYZ file gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -189,7 +189,8 @@ Each point is resolved by the plan below (see *Every point resolved*).
   decided once the measurements were seen (see *Response*).
 - **RDKit is a plugin.** No plugin is kept running ahead of need: each
   starts when first needed and stays for the session, as RDKit does now
-  (PLUGINS.md).
+  (PLUGINS.md). Since 2026-10-13 a worker unused for 15 minutes is
+  stopped, and started again when next needed.
 
 ### The line
 
@@ -217,7 +218,16 @@ PLUGINS.md's contract, with three requests for files:
     bonds as for an XYZ file;
   - **a drawing**, in the record's form, read by Meno's own record reader
     with its checks;
-  - **results** in the general form, any of them a promise.
+  - **results** in the general form, any of them a promise;
+  - of a file of several jobs one after another - Gaussian's Link1,
+    ORCA's `$new_job` - **one output for each job**, in order (`jobs`),
+    each saying which job it is and what it did (`job: {number, of,
+    kind}`): each opens as a molecule of its own, side by side, its
+    geometries, energies and populations its own, and its job said in
+    the line of what the calculation was ("job 1 of 2, optimisation").
+    The answer's own fields are its last job's. A route run in steps -
+    Gaussian's Opt Freq - is one job (the maintainer, 2026-10-13;
+    PLUGINS.md, *The contract*).
 - **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.
@@ -784,7 +794,12 @@ As step 3 was built:
   - `probe` is in place, and tested with made-up plugins.
 - **One exception stays in Meno:** the energies on an XYZ file's comment
   lines (`utils/xyzEnergies.ts`), as agreed on 2026-10-05 - part of
-  reading XYZ, which Meno does itself.
+  reading XYZ, which Meno does itself. A place is read only where it is
+  a number (2026-10-13): "1.19D-01" is not taken for 1.19, nor "nan" for
+  a place, and the file is refused, saying which line. A frame the file
+  ends in the middle of - a trajectory still being written, or cut
+  short - is left out, with its comment line's energy; a trajectory of
+  10,000 frames reads in about a tenth of a second.
 - **The cube reader became Meno's own reading.** It is the reader `meno`,
   under the same contract.
 - **A reader's late findings join every molecule read from the output,**

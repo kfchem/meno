@@ -15,6 +15,15 @@ type Stacked = Pick<Molecule3D, "id" | "stack">;
 /** How long a stack takes to go over from one of its molecules to the next, in milliseconds (components/Molecule3DView). */
 export const STACK_SWAP_MS = 420;
 
+/**
+ * Whether a file's molecules in 3D, opened, stand as a stack - an SD file's
+ * records, one shown at a time - or side by side: an output's jobs (lib/calc/
+ * output `jobs`), each what its job was, are not one thing's several states.
+ */
+export function openedAsStack(molecules: readonly Pick<Molecule3D, "calc">[]): boolean {
+  return molecules.length > 1 && !molecules.some((m) => m.calc?.job);
+}
+
 /** The molecules of stack `stack`, in the order its file gave them. */
 export function stackMembers<T extends Stacked>(molecules: readonly T[], stack: number): T[] {
   return molecules.filter((m) => m.stack?.id === stack);

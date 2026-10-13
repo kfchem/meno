@@ -7,7 +7,7 @@
  */
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf } from "../../utils/xyzEnergies";
-import { atomsTogether, bondsByDistance, xyzFrames } from "../../utils/structureParsers";
+import { atomsTogether, bondsByDistance, wholeXyzFrames } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
@@ -131,19 +131,18 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   // one molecule's, a MOL or SD file's records each a molecule of its own -
   // where the file says it is 3D, or its atoms spread in depth.
   if (kind === "xyz") {
-    const frames = xyzFrames(content.replace(/\r\n?/g, "\n"));
+    const text = content.replace(/\r\n?/g, "\n");
     // (a frame cut short, or with an atom whose place does not read, is left
     // out - and its energy with it - so that each frame kept is the one
     // shown, measured and written: every atom of the first whole one, each
-    // somewhere; and never without a word: the molecule says how many)
-    const firstWhole = frames.find((atoms) => atoms.length > 0 && atoms.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)));
-    const n = firstWhole?.length ?? 0;
-    const whole = (atoms: (typeof frames)[number]) => atoms.length === n && atoms.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z));
-    const kept = new Set(frames.flatMap((atoms, i) => (n && whole(atoms) ? [i] : [])));
+    // somewhere; and never without a word: the molecule says how many. None
+    // whole, the file is refused, saying why of its first frame)
+    const whole = wholeXyzFrames(text);
+    const kept = new Set(whole.kept);
     if (!kept.size) throw noMolecules(name);
-    const [first, ...rest] = frames.filter((_, i) => kept.has(i));
+    const [first, ...rest] = whole.frames;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = frames.length > 1 ? energiesOf(xyzComments(content))?.filter((_, i) => kept.has(i)) : undefined;
+    const energies = whole.total > 1 ? energiesOf(xyzComments(content))?.filter((_, i) => kept.has(i)) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },
@@ -157,7 +156,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
           ...(rest.length && energies?.length === kept.size ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
-          ...(kept.size < frames.length ? { framesLeftOut: frames.length - kept.size } : {}),
+          ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),
           ...togetherIn(first),
         },
       ],
