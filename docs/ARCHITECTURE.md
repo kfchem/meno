@@ -10,7 +10,7 @@ a workspace holding 2D and 3D together - see [`WORKSPACE.md`](./WORKSPACE.md).
 
 | Layer | Location | Owns |
 | --- | --- | --- |
-| Tauri shell (Rust) | `src-tauri/src/lib.rs` | Window, plugins (`fs`, `os`, `opener`), and the only code that spawns OS processes: the bundled `uv` binary and the Python sidecar. No chemistry logic lives here. |
+| Tauri shell (Rust) | `src-tauri/src/` | Window, Tauri's plugins (`fs`, `os`, `opener`, `dialog`, `updater`, `single-instance`), and the only code that starts other processes: uv and pixi - fetched, not bundled, the first time an environment needs one (`tools.rs`) - making plugins' environments (`lib.rs`, `pixienv.rs`); plugins' workers (`lib.rs`); job runners and their programs (`jobs.rs`); the PDF reader, Meno itself (`pdf.rs`); and unpacking a plugin's downloads (`plugfiles.rs`). No chemistry logic lives here. |
 | App shell (React) | `src/App.tsx`, `src/lib/core/`, `src/ui/layouts/`, `src/ui/views/` | Tab model (open/close/reorder/rename), mapping a tab's `kind` to a view component. |
 | Features (React) | `src/ui/features/*` | One folder per view: the workspace (2D drawing, molecules in 3D, texts, PDFs, workflows) and settings, with the text and style editors they share. |
 | Chemistry helpers (TS) | `src/lib/chem/`, `src/utils/` | File parsing (MOL/SDF/RXN/XYZ/PDB), editor model conversion, 2D depiction layout (bond lines, wedges, labels) and ACS-style sizing. Pure functions — no React, no Tauri. |
@@ -107,8 +107,9 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   render order so reordering tabs never remounts a WebGL canvas.
 - `Deck` renders **all** open tabs and hides the inactive ones; views receive an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
-  `frameloop` to `"never"`) while inactive. Workflow tabs pass the same flag to
-  the canvases embedded in their nodes through `NodeActiveContext`.
+  `frameloop` to `"never"`) while inactive. (Workflow tabs, whose nodes held
+  canvases of their own, are gone: a workflow is drawn on the workspace's
+  page.)
 - Because every live canvas holds a WebGL context and browsers keep only about
   16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
   past the limit is refused with a notice rather than silently blanking the
@@ -318,12 +319,15 @@ What is left before the editor counts as finished, and in what order, is in
   style (`lib/chem/style.ts`): each length in points or as a fraction of the
   bond length, layered from a default up, with ACS 1996 as the preset.
   `lib/chem/acs.ts` turns that preset into layout options at
-  `NOMINAL_BOND_LENGTH` world units. Labels are set in Arial, as ACS 1996
-  has them: `lib/chem/arial.ts` holds its advance widths and the outline of
-  each letter, so `placeLabel` places every run and bonds stop the label
-  margin clear of the letters without measuring anything at run time. The
-  canvas draws the runs where `placeLabel` puts them, in the system's own
-  Arial (`label_font`); the SVG names Arial.
+  `NOMINAL_BOND_LENGTH` world units. Labels are set in IBM Plex Sans by
+  default (`lib/chem/labelFonts` `DEFAULT_LABEL_FAMILY`), or in the style's
+  own typeface: `lib/chem/labelFonts.ts` holds each typeface's advance
+  widths and the outline of each letter (Arimo's for Arial), so
+  `placeLabel` places every run and bonds stop the label margin clear of
+  the letters without measuring anything at run time. The canvas draws the
+  runs where `placeLabel` puts them, in that typeface's own font file - the
+  one the layout measures - and draws nothing until it is in
+  (`Labels2D`, `useLabelFontUrl`); the SVG names the typeface.
 - **Hover, then act**: `hovered.atomId` / `hovered.bondId` is the subject
   of a key (Delete, the clean-up key) and of the menu a right-click opens at
   the pointer (`PartMenu.tsx`), which offers the same actions to the mouse
@@ -419,11 +423,13 @@ What is left before the editor counts as finished, and in what order, is in
     whatever frame is shown. Its frames are a chip under it that opens to
     a slider, with each frame's energy as a bar.
   - See [`WORKSPACE.md`](./WORKSPACE.md).
-- **The workspace file** (`utils/workspace.ts`, `.meno`): everything on the
-  canvas as JSON (`meno-workspace`), the molecules in 3D turned and shown
-  as they are, and the document's own style. With molecules in 3D on the
-  canvas, Save offers only it or an SD file, which holds each as a 3D
-  record.
+- **The workspace file** (`.meno`; `lib/doc/menoFile.ts`, FILE-IO.md, *The
+  workspace file*): a zip, its `mimetype` first. Inside, `workspace.json`
+  holds everything on the canvas (`utils/workspace.ts`: the molecules in 3D
+  turned and shown as they are, the document's own style) and `files/`
+  each file it keeps by its SHA-256 - calculations' outputs opened, PDFs,
+  pictures - listed in `files.json`. Save writes `.meno` alone; every other
+  format is Export's.
 
 ## Workflows
 
@@ -550,10 +556,15 @@ closes*).
   manifest declares in `installed`: its name, its file on each system, the
   folders put first where programs are looked for, and the variables it is
   given, each a place in its installation (`{folder}`, where its file is;
-  `{parent}`, the folder above). `installed_program` takes it where the
-  chemist located it, where that is still a program of that file's name,
-  or else where PATH finds it (`installed_where`), and gives it its folders
-  and variables (`installed_env`) - never one that loads code into it, nor
+  `{parent}`, the folder above). `installed_found` lists every copy there
+  is: where the chemist located it, where that is still a program of that
+  file's name (that alone, for one just picked); each where PATH finds it;
+  then the folders it is usually installed in, newest first.
+  `installed_choice` asks each its version where the manifest says how,
+  and takes the one located where it is new enough, else the newest that
+  is, else the first with why it will not do ("Meno needs ... 5.0 or
+  later"). `installed_program` gives the one chosen its folders and
+  variables (`installed_env`) - never one that loads code into it, nor
   PATH itself, nor what Meno sets. `program_where` answers the page's
   question of where it is (`lib/plugins/installed.ts`, which keeps the
   answers for the step cards and Settings, Plugins, and what was located
