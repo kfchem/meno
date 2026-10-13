@@ -25,7 +25,7 @@ import { useShading3d } from "./shading3d";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
-import { ribbonMesh } from "../utils/ribbon";
+import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -269,7 +269,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useEffect(() => () => ribbonGeo.dispose(), [ribbonGeo]);
   const hullMat = useMemo(() => grownMaterial(), []);
   useEffect(() => () => hullMat.dispose(), [hullMat]);
-  const ribbonResidues = useRef<Int32Array>(new Int32Array(0));
+  // (its residues as spheres, which the pointer is found over: utils/ribbon)
+  const ribbonHits = useRef<RibbonSpheres>({ residues: new Int32Array(0), centres: new Float32Array(0), radii: new Float32Array(0) });
   // (going over to a look without ribbons, the residue pointed at is let go)
   const ribbonsNow = solid.ribbons[look];
   useEffect(() => {
@@ -785,7 +786,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (runs.length && m.biopolymer && (reshaped || dirty.current || ribbonMade.current !== ribbonScale)) {
       const made = ribbonMesh(p, runs, m.biopolymer, style.ribbonColours, ribbonScale, WORLD_PER_ANGSTROM);
       fillGeometry(ribbonGeo, made);
-      ribbonResidues.current = made.residues;
+      ribbonHits.current = ribbonSpheres(made);
       ribbonMade.current = ribbonScale;
     }
     const ribbonsShown = runs.length > 0 && ribbonScale > 1e-3;
@@ -1159,15 +1160,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               geometry={ribbonGeo}
               renderOrder={OVER_PAGE}
               frustumCulled={false}
-              // (found under the pointer only while it is there to be seen)
+              // (found under the pointer only while it is there to be seen - a
+              // residue at a time, by the spheres round them, not by every
+              // one of its triangles: utils/ribbon `residueOnRay`)
               raycast={function (this: THREE.Mesh, rc, hits) {
-                if (this.visible) THREE.Mesh.prototype.raycast.call(this, rc, hits);
+                if (!this.visible) return;
+                const local = rc.ray.clone().applyMatrix4(toLocal.copy(this.matrixWorld).invert());
+                const hit = residueOnRay(ribbonHits.current, local);
+                if (!hit) return;
+                const point = hit.point.applyMatrix4(this.matrixWorld);
+                const distance = rc.ray.origin.distanceTo(point);
+                if (distance < rc.near || distance > rc.far) return;
+                hits.push({ distance, point, object: this, residue: hit.residue } as THREE.Intersection & { residue: number });
               }}
               onPointerMove={(e) => {
                 e.stopPropagation();
-                const index = ribbonGeo.getIndex();
-                const v = e.faceIndex != null && index ? index.getX(3 * e.faceIndex) : -1;
-                const r = v >= 0 ? ribbonResidues.current[v] : undefined;
+                const r = (e as unknown as { residue?: number }).residue;
                 if (r != null && r !== hoverResidue) setHoverResidue(r);
               }}
               onPointerOut={() => setHoverResidue(null)}
@@ -1472,6 +1480,7 @@ function fillGeometry(g: THREE.BufferGeometry, m: { positions: Float32Array; nor
 }
 
 const mtx = new THREE.Matrix4();
+const toLocal = new THREE.Matrix4();
 const colour = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion();
