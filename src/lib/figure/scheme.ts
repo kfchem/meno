@@ -227,20 +227,26 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const middle = rows.filter((r) => Math.abs(r.t) < long / 4);
   if (middle.length < 4) return null;
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-  const lo = median(middle.map((r) => r.c[0]));
-  const hi = median(middle.map((r) => r.c[1]));
-  const width = hi - lo;
+  const width = median(middle.map((r) => r.c[1] - r.c[0]));
   if (width > 0.25 * bond) return null;
+  // (the line's middle along it, fitted: the box round the outline may lean a little off the line)
+  const n0 = middle.length;
+  const mt = middle.reduce((a, r) => a + r.t, 0) / n0;
+  const mc = middle.reduce((a, r) => a + (r.c[0] + r.c[1]) / 2, 0) / n0;
+  const slope = middle.reduce((a, r) => a + (r.t - mt) * ((r.c[0] + r.c[1]) / 2 - mc), 0) / Math.max(1e-9, middle.reduce((a, r) => a + (r.t - mt) ** 2, 0));
+  const centreAt = (t: number) => mc + slope * (t - mt);
+  const hiAt = (t: number) => centreAt(t) + width / 2;
+  const loAt = (t: number) => centreAt(t) - width / 2;
   const reach = Math.max(width, 0.06 * bond);
   // (a head at an end: wider there than the line, on one side or both)
   const headOf = (sign: 1 | -1): { side: 0 | 1 | -1; tip: Point; length: number } | null => {
     const end = rows.filter((r) => sign * r.t > long / 2 - 0.35 * long);
-    const up = Math.max(...end.map((r) => r.c[1] - hi));
-    const down = Math.max(...end.map((r) => lo - r.c[0]));
+    const up = Math.max(...end.map((r) => r.c[1] - hiAt(r.t)));
+    const down = Math.max(...end.map((r) => loAt(r.t) - r.c[0]));
     if (up < reach && down < reach) return null;
     const ts = pts.map((p) => sign * dot(sub(p, mid), u));
     const tip = pts[ts.indexOf(Math.max(...ts))];
-    const wide = end.filter((r) => r.c[1] - hi > 0.5 * reach || lo - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
+    const wide = end.filter((r) => r.c[1] - hiAt(r.t) > 0.5 * reach || loAt(r.t) - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
     // (as the page has it, the side its point's way: 1 its left)
     const left = sign === 1 ? up : down;
     const right = sign === 1 ? down : up;
@@ -251,8 +257,7 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   if (!ahead && !behind) return null;
   const [front, back, sign] = ahead ? [ahead, behind, 1] : [behind!, null, -1];
   const way = sign === 1 ? u : { x: -u.x, y: -u.y };
-  const centre = (lo + hi) / 2;
-  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centre);
+  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centreAt(-sign * long / 2));
   const line: Line = { a: tail, b: front.tip, w: width, ...(b.ink ? { ink: b.ink } : {}), dash: false, of: [b] };
   const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [] });
   return { lines: [line], path: [tail, front.tip], head: head(front), tailHead: back ? head(back) : null };

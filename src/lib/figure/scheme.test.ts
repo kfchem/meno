@@ -166,6 +166,15 @@ describe("a reaction scheme's arrows", () => {
     expect(s.arrows.find((a) => a.color)).toMatchObject({ form: { weight: "thick" }, color: "#c44848" });
   });
 
+  it("reads an arrow drawn as one outline as one head, though the box round it leans", () => {
+    // (as PDFium gives one back: its points a hair off level, so the narrowest box round it leans a degree or two)
+    const s = read(scheme([filled([[115, 138.70001], [179, 138.70001], [179, 136.5], [185, 139], [179, 141.5], [179, 139.29999], [115, 139.29999], [115, 138.70001]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({});
+    expect(near(s.arrows[0].point, [185, 139])).toBe(true);
+    expect(near(s.arrows[0].tail, [115, 139])).toBe(true);
+  });
+
   it("reads no arrow in a structure alone: a wedge is no head", () => {
     // (a chain with a wedge at its end, along it)
     const s = read({
