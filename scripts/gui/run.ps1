@@ -193,20 +193,29 @@ function Invoke-MenoQuickAdd {
       with -CalcRows rows of steps (and procedures) at most -CalcMost icons
       long - Meno's own, alone, by default - and a warning says so. SMILES
       opens the field below the row, which then takes the keys; Shapes, the
-      shapes; Calculations, the calculations.
+      shapes; Calculations, the calculations. A build whose row has Pen,
+      after Slide, is told by the box's width (ten icons, not nine); where the
+      box is not found - or always, where -Pen says it has one. -PassThru returns where the box
+      stands, in shot pixels (Left, Top): a shape is drawn by a press on its
+      icon in the row below (Get-MenoShapeIcon) and a drag.
     #>
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes", "Calculations")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
-        [int] $CalcMost = 4
+        [int] $CalcMost = 4,
+        [switch] $Pen,
+        [switch] $PassThru
     )
     # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
     $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y
+    # (a row of ten, with the pen: the rule before Calculations comes first, some 389 CSS px in - nine's right edge is at 379)
+    if ($Pen -or ($box -and $box.Width -gt 768)) { $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes") }
+    if ($Item -eq "Pen" -and $row -notcontains "Pen") { throw "this Meno's Quick Add has no Pen" }
     if ($box) {
         $left = $box.Left / 2; $top = $box.Top / 2 - 40
     } else {
@@ -227,6 +236,20 @@ function Invoke-MenoQuickAdd {
     $iy = $top + 1 + 4 + 18
     Invoke-MenoClick -X ([int](2 * $ix)) -Y ([int](2 * ($iy + 40)))
     Start-Sleep -Milliseconds 300
+    if ($PassThru) { [pscustomobject]@{ Left = [int](2 * $left); Top = [int](2 * ($top + 40)) } }
+}
+
+function Get-MenoShapeIcon {
+    <#
+      .SYNOPSIS
+      Where a shape's icon stands in the row Shapes opens below Quick Add's
+      (src/ui/features/Workspace/QuickAdd.tsx, SHAPE_KINDS), in shot pixels,
+      for Quick Add's box as Invoke-MenoQuickAdd returned it: its row 4 + 1
+      + 4 CSS px below the first.
+    #>
+    param([Parameter(Mandatory)] $Box, [Parameter(Mandatory)] [ValidateSet("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")] [string] $Shape)
+    $kinds = @("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")
+    [pscustomobject]@{ X = $Box.Left + 2 * (1 + 4 + $kinds.IndexOf($Shape) * 38 + 18); Y = $Box.Top + 2 * (1 + 4 + 36 + 4 + 1 + 4 + 18) }
 }
 
 function Find-MenoQuickAdd {
@@ -261,7 +284,7 @@ function Find-MenoQuickAdd {
                 # (as wide as its row as it opens - nine icons and Calculations, with their gaps, some 397 CSS px - or not
                 # its left edge: the rule before Calculations, say, walked on past)
                 for ($r = $x + 720; $r -le [Math]::Min($x + 860, $px.Width - 1); $r++) {
-                    if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top } }
+                    if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top; Width = $r - $x } }
                 }
             }
         }
