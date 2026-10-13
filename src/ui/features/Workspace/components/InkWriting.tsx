@@ -22,7 +22,7 @@ import { useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { InkLook } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { INK_WIDTHS_PT, inkWidth, OneEuro, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { INK_WIDTHS_PT, inkWidth, OneEuro, pressureFelt, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
 import { shownSheet } from "../../../../lib/pdf/layout";
 import { pageAt } from "../utils/page";
 import { pageUnder, pointsOnPage, toPagePoint } from "../utils/pdfInk";
@@ -110,7 +110,7 @@ export default function InkWriting() {
       let frame: number | null = null;
       const show = () => {
         frame = null;
-        store.getState().setInkDraft({ look, stroke: { points: points.slice(), ...(pen ? { pressure: true as const } : {}) } });
+        store.getState().setInkDraft({ look, stroke: { points: points.slice(), ...(pen && pressureFelt(points) ? { pressure: true as const } : {}) } });
         invalidate();
       };
       show();
@@ -129,7 +129,8 @@ export default function InkWriting() {
         st.setInkDraft(null);
         st.suppressDoubleClick(DOUBLE_CLICK_MS);
         const thin = thinned(points, LEAST_PX * pixel());
-        const stroke: InkStroke = { points: on ? pointsOnPage(on.sheet, on.pt, thin) : thin, ...(pen ? { pressure: true as const } : {}) };
+        // (a pen that tells no pressure written as a mouse writes: even, its ends tapered)
+        const stroke: InkStroke = { points: on ? pointsOnPage(on.sheet, on.pt, thin) : thin, ...(pen && pressureFelt(points) ? { pressure: true as const } : {}) };
         if (talk) {
           st.writeTalkStroke(look, stroke);
           invalidate();

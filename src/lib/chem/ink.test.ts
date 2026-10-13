@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inkColour, markerColour, OneEuro, placesOf, strokeHit, strokeMoved, strokeOutline, strokeTriangles, strokesBounds, thinned, type InkStroke } from "./ink";
+import { inkColour, type InkStroke, markerColour, OneEuro, placesOf, pressureFelt, strokeHit, strokeMoved, strokeOutline, strokesBounds, strokeTriangles, thinned } from "./ink";
 import { MENO_SET, OKABE_ITO_SET } from "./palette";
 
 const line: InkStroke = { points: [0, 0, 0.5, 5, 0, 0.5, 10, 0, 0.5] };
@@ -68,5 +68,13 @@ describe("the colour a piece is written in", () => {
     expect(inkColour({ pen: "marker" }, "#000000", marker)).toBe(marker);
     expect(inkColour({ pen: "pen" }, "#000000", marker)).toBe("#000000");
     expect(inkColour({ pen: "marker", color: "#cd4560" }, "#000000", marker)).toBe("#cd4560");
+  });
+});
+
+describe("a pen's pressure", () => {
+  it("is felt where it changes along a stroke - not where a pen that tells none gives the same throughout", () => {
+    expect(pressureFelt([0, 0, 0.5, 1, 1, 0.5, 2, 0, 0.5])).toBe(false);
+    expect(pressureFelt([0, 0, 0.3, 1, 1, 0.6, 2, 0, 0.4])).toBe(true);
+    expect(pressureFelt([0, 0, 0.5])).toBe(false);
   });
 });

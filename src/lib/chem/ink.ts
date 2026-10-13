@@ -248,3 +248,14 @@ export function inkWidth(k: { pen: InkPen; width: 0 | 1 | 2 }, pointPx: number):
 export function inkColour(k: { pen: InkPen; color?: string }, ink: string, marker: string): string {
   return k.color ?? (k.pen === "marker" ? marker : ink);
 }
+
+/**
+ * Whether a stroke's points - x, y and pressure each - tell a pressure:
+ * not so where every one is the same, as a pen that tells none gives (0.5
+ * throughout), which is then written as a mouse writes - even, its ends
+ * tapered - not as a pen pressed evenly from end to end.
+ */
+export function pressureFelt(points: readonly number[]): boolean {
+  for (let i = 5; i < points.length; i += 3) if (points[i] !== points[2]) return true;
+  return false;
+}

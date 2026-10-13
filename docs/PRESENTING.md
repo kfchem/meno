@@ -174,7 +174,8 @@ words, a width they break into lines at, and how their lines lie.
 
 - **As things are moved**: the edges and middles of what is moved line up
   with those of what is near - and with a slide's edges and middle lines -
-  within 6 pixels, a thin line in Meno's accent showing each that does,
+  within 6 pixels, a thin line in Meno's accent (#cd4560 - the colour the
+  code calls attention, `COLORS.attention`) showing each that does,
   from end to end of what lines up. Spaces between things in a row or a
   column come to the same as others there, each marked. Made larger or
   smaller, a thing takes another's width or height.
@@ -196,12 +197,19 @@ words, a width they break into lines at, and how their lines lie.
   it; a right drag and the wheel still move and zoom the view.
 - **Smoothed as it is written**, so that nothing jumps when the pen is
   lifted; as thick as the pen is pressed where the system says, else even,
-  its ends tapered.
+  its ends tapered - a pen that tells no pressure (the same throughout)
+  written as the mouse writes.
 - **On a PDF's page**: a stroke begun on a page is that page's, kept in its
   points, and goes wherever the page goes - stacked, spread, turned, made
-  an icon, read in the column (where one can be written on too).
+  an icon, read in the column, where it is shown; a page is written on on
+  the canvas alone - writing in the column itself is not built yet (see
+  *Not yet*).
+- **Only on the canvas**: a pen writes on the page and on PDFs' pages,
+  not on what lies over the canvas in the page's own layer - texts'
+  sheets, cards, menus - nor in the column.
 - **Strokes written one after another**, within a second and a half and
-  near each other, are one piece of writing: selected, moved, coloured and
+  near each other, in the same pen, width and colour, are one piece of
+  writing: selected, moved, coloured and
   deleted together. The eraser takes a stroke at a time. A marker is see-
   through, in the first colour of the set in use unless given another, and
   lies under the words.
@@ -340,7 +348,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   angles.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
   move across or up and down, the way it has gone most.
-- `components/Guides2D.tsx`: the lines and marks in Meno's accent, one
+- `components/Guides2D.tsx`: the lines and marks in Meno's accent
+  (`COLORS.attention`, #cd4560), one
   pixel on the screen at any zoom, coming and going in a short ease.
 
 ### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
@@ -367,7 +376,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   mouse's button while the card is open - is the writing's alone; a pen's
   eraser end or its button, or the card's eraser, rubs out the strokes it
   passes over, one step for a rub. A stroke joins the piece before it when
-  it comes within 1.5 seconds, in the same pen, and its box within six
+  it comes within 1.5 seconds, in the same pen, width and colour, and its box within six
   widths and an em of that piece's. `components/Inks2D.tsx`: the pieces -
   a pen's at 0.3, over the drawing, a marker's at -0.12, under it - the
   stroke being written, the light round a piece, and a press, a hold and a
