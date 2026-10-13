@@ -62,6 +62,16 @@ describe("layout2D", () => {
     expect(m.tilt).toBeCloseTo(0, 6);
   });
 
+  it("lays a macrocycle with nothing on it wide, in the shape that lies best", () => {
+    // (cyclotetracosane's shapes read alike on the measure, and the one the
+    // rounding of a sum favoured was a triangle, as tall as wide)
+    const n = 24;
+    const { x, y } = layout2D(carbons(n, ring(0, n)));
+    const w = Math.max(...x) - Math.min(...x);
+    const h = Math.max(...y) - Math.min(...y);
+    expect(h / w).toBeLessThan(0.6);
+  });
+
   it("draws a double bond cis or trans as it is", () => {
     for (const cis of [true, false]) {
       const butene = carbons(4, [[0, 1], [1, 2, 2], [2, 3]], [

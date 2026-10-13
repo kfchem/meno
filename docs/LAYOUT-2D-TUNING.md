@@ -122,6 +122,13 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
 
 ## What has gone wrong before
 
+- **A tie decided by rounding** (2026-10-14). Cyclotetracosane, nothing
+  on it, came out a triangle of zigzags, as tall as wide (hunter B): its
+  five shapes all read 0 on the measure, but the sums differed in the
+  fourteenth place, and the smallest was the fifth shape, the triangle.
+  Shapes alike on the measure now keep the order they are offered in, the
+  one that lies best first; a shape is taken over an earlier one only
+  where it reads better by more than rounding.
 - **The search is greedy and follows a path.** A new kind of move, or a
   new term, can send it to a worse drawing elsewhere (vancomycin and
   azithromycin both did). Compare the whole sheet.
