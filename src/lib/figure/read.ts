@@ -665,7 +665,17 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     // (not the word its bond comes out of - its other end in it - however near this end lies to its corner)
     const other = e.side === 0 ? d.b : d.a;
     words.forEach((w, k) => {
-      if (isNumber[k] || fromBox(other, w.box) === 0) return;
+      if (isNumber[k]) return;
+      // (both ends in it - a bond so short it lies within its label's box - the end nearer its element takes it)
+      if (fromBox(other, w.box) === 0) {
+        const els = w.letters.filter((l) => /[A-Z]/.test(l.c) && l.c !== "H");
+        if (!els.length || fromBox(e.p, w.box) > 0) return;
+        const to = (p: Point) => Math.min(...els.map((l) => dist(centre(l.box), p)));
+        if (to(e.p) >= to(other)) return;
+        // (and its other end comes to another label: a metal's)
+        const back = unit(e.p, other);
+        if (!words.some((v, j) => j !== k && reaches(other, back, v.box, bond))) return;
+      }
       const dd = fromBox(e.p, w.box);
       // (not at its hydrogen: a bond comes to a label's element - the O of an HO - and an end outside it, much nearer its H, is
       // another's - a methyl's set close)

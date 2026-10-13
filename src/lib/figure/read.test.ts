@@ -6,6 +6,7 @@ import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import cisplatin from "./fixtures/cisplatin-rdkit.json";
+import cisplatinAcscg from "./fixtures/cisplatin-rdkitacscg.json";
 import cocaine from "./fixtures/cocaine-rdkitacs.json";
 import cortisol from "./fixtures/cortisol-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
@@ -863,6 +864,15 @@ describe("a figure drawn in colour by another program", () => {
     // (cisplatin as RDKit draws it by default: its Pt's bonds to NH2 and Cl above it end a fifth of a bond apart, short of
     // the Pt - where two bonds' ends meet, a carbon, but for both pointing into the Pt)
     const r = readFigure(cisplatin as unknown as FigureDrawn);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
+    const pt = r.atoms.findIndex((a) => a.label === "Pt");
+    expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
+  });
+
+  it("gives a bond so short it lies within its label's box to that label, at the end nearer its element", () => {
+    // (cisplatin as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: its Pt-N a quarter of a bond, both ends in the H2N's
+    // box)
+    const r = readFigure(cisplatinAcscg as unknown as FigureDrawn);
     expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
     const pt = r.atoms.findIndex((a) => a.label === "Pt");
     expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
