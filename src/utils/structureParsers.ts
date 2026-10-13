@@ -117,11 +117,13 @@ export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>): n
   const n = radii.length;
   const out: number[] = [];
   const bonded = (m: number, k: number) => {
-    const threshold = (radii[m] + radii[k]) * 1.1;
+    const threshold = bondingDistance(radii[m], radii[k]);
     const dx = xyz[3 * m] - xyz[3 * k];
     const dy = xyz[3 * m + 1] - xyz[3 * k + 1];
     const dz = xyz[3 * m + 2] - xyz[3 * k + 2];
-    return dx * dx + dy * dy + dz * dz < threshold * threshold;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    // (two atoms in one place are no bond - and many of them, a pair each, would be millions)
+    return d2 < threshold * threshold && d2 >= ONE_PLACE * ONE_PLACE;
   };
   if (n <= GRID_FROM) {
     for (let m = 0; m < n; m++) for (let k = m + 1; k < n; k++) if (bonded(m, k)) out.push(m, k);
@@ -134,7 +136,7 @@ export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>): n
   // (the widest radius by a loop: spread over tens of thousands of atoms, Math.max overruns a web worker's stack)
   let most = 0;
   for (let i = 0; i < n; i++) most = Math.max(most, radii[i]);
-  const side = 2 * most * 1.1;
+  const side = bondingDistance(most, most);
   // each atom's cube, counted from the lowest, a cube to spare all round;
   // an atom that stands nowhere (NaN) is in none, and bonded to nothing
   const cube = new Float64Array(3 * n);
@@ -187,6 +189,51 @@ export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>): n
 
 /** How many atoms a structure has before its bonds are found cube by cube rather than pair by pair. */
 const GRID_FROM = 400;
+
+/** Nearer than this, in ångströms, two atoms are in one place: no bond (the shortest, H2's, is 0.74). */
+export const ONE_PLACE = 0.1;
+/** How much further than their radii together two atoms may stand and be bonded, in ångströms, at least: H2 (0.741) is beyond its radii's tenth over (0.704). */
+const REACH_FLOOR = 0.15;
+
+/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a tenth over - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
+export function bondingDistance(r1: number, r2: number): number {
+  return Math.max((r1 + r2) * 1.1, r1 + r2 + REACH_FLOOR);
+}
+
+/**
+ * How many atoms stand in one place with another (`ONE_PLACE`), from where
+ * they stand (x, y, z in turn): what a molecule says over it, such a file
+ * being damaged or not a molecule's (completeness `TOGETHER_MARK`). Cube by
+ * cube, so a hundred thousand are counted at once.
+ */
+export function atomsTogether(xyz: ArrayLike<number>): number {
+  const n = Math.floor(xyz.length / 3);
+  const cells = new Map<string, number[]>();
+  const key = (i: number, j: number, k: number) => `${i} ${j} ${k}`;
+  const cell = (v: number) => Math.floor(v / ONE_PLACE);
+  let together = 0;
+  for (let a = 0; a < n; a++) {
+    const [x, y, z] = [xyz[3 * a], xyz[3 * a + 1], xyz[3 * a + 2]];
+    if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) continue;
+    const [i, j, k] = [cell(x), cell(y), cell(z)];
+    let near = false;
+    for (let di = -1; di <= 1 && !near; di++)
+      for (let dj = -1; dj <= 1 && !near; dj++)
+        for (let dk = -1; dk <= 1 && !near; dk++)
+          for (const b of cells.get(key(i + di, j + dj, k + dk)) ?? []) {
+            const d = Math.hypot(xyz[3 * b] - x, xyz[3 * b + 1] - y, xyz[3 * b + 2] - z);
+            if (d < ONE_PLACE) {
+              near = true;
+              break;
+            }
+          }
+    if (near) together++;
+    const c = cells.get(key(i, j, k));
+    if (c) c.push(a);
+    else cells.set(key(i, j, k), [a]);
+  }
+  return together;
+}
 
 const BY_NUMBER: ReadonlyMap<number, string> = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
 

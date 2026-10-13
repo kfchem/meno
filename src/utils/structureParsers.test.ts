@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bondsByDistance, parseSDF, parseXYZ } from "./structureParsers";
+import { atomsTogether, bondsByDistance, bondRadii, parseSDF, parseXYZ } from "./structureParsers";
+import samplePdbText from "../samples/cholesterol.pdb?raw";
+import { readStructures } from "../lib/io/structures";
 import sampleXyz from "../samples/cholesterol.xyz?raw";
 
 describe("parseXYZ", () => {
@@ -186,5 +188,34 @@ describe("parseSDF", () => {
       ["N", 1, undefined, undefined],
       ["O", -1, undefined, undefined],
     ]);
+  });
+});
+
+describe("bonds by distance, at their edges", () => {
+  it("bonds H2 (0.741 A, beyond its radii's tenth over), and no bond of cholesterol's that its radii's tenth over does not", () => {
+    expect(bondsByDistance([{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.741, y: 0, z: 0 }])).toEqual([{ a1: 0, a2: 1, order: 1 }]);
+    // (cholesterol from its XYZ and its PDB: the same bonds as the radii's tenth over gives, worked out pair by pair here)
+    for (const kind of ["xyz", "pdb"] as const) {
+      const atoms = readStructures(kind, `c.${kind}`, kind === "xyz" ? sampleXyz : samplePdbText).molecules3d![0].atoms;
+      const r = bondRadii(atoms.map((a) => a.el));
+      const tenth: string[] = [];
+      for (let m = 0; m < atoms.length; m++)
+        for (let n = m + 1; n < atoms.length; n++) {
+          const d = Math.hypot(atoms[m].x - atoms[n].x, atoms[m].y - atoms[n].y, atoms[m].z - atoms[n].z);
+          if (d < (r[m] + r[n]) * 1.1) tenth.push(`${m} ${n}`);
+        }
+      expect(bondsByDistance(atoms).map((b) => `${b.a1} ${b.a2}`)).toEqual(tenth);
+    }
+  });
+
+  it("finds no bond between atoms in one place - two thousand of them in a damaged file, at once - and counts them", () => {
+    const together = Array.from({ length: 2000 }, () => ({ el: "C", x: 0, y: 0, z: 0 }));
+    const t0 = performance.now();
+    expect(bondsByDistance(together)).toEqual([]);
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(atomsTogether(together.flatMap((a) => [a.x, a.y, a.z]))).toBe(1999);
+    // (none in one place in a molecule; two 0.05 A apart are)
+    expect(atomsTogether([0, 0, 0, 1.54, 0, 0, 3, 0, 0])).toBe(0);
+    expect(atomsTogether([0, 0, 0, 0.05, 0, 0, 3, 0, 0])).toBe(1);
   });
 });

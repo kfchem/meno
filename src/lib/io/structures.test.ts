@@ -29,8 +29,26 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     ]);
     expect(m.frames).toEqual([[0, 0, 0, 0.77, 0.59, 0, -0.76, 0.59, 0]]);
     expect(m.energies).toEqual([-76.1, -76.3]);
+    // (and says so: never without a word)
+    expect(m.framesLeftOut).toBe(2);
     // (none whole: none read)
     expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow(/No molecules found in t.xyz/);
+  });
+
+  it("leaves out a first frame with a place that does not read, says so, and is the first whole one", () => {
+    const read = readStructures("xyz", "h.xyz", "2\nfirst\nH 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.8 0 0\n");
+    const m = read.molecules3d![0];
+    expect(m.atoms.map((a) => a.x)).toEqual([0, 0.8]);
+    expect(m.frames).toBeUndefined();
+    expect(m.framesLeftOut).toBe(1);
+    expect(checkedStructures(read, "h.xyz")).toBe(read);
+  });
+
+  it("says where atoms of it stand in one place - a damaged file - and finds them no bond", () => {
+    const m = readStructures("xyz", "c.xyz", "3\n\nC 0 0 0\nC 0 0 0\nC 1.5 0 0\n").molecules3d![0];
+    expect(m.together).toBe(1);
+    expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 2], [1, 2]]);
+    expect(readStructures("xyz", "w.xyz", WATER).molecules3d![0].together).toBeUndefined();
   });
 
   it("is checked as the page takes it, as any reader's answer is", () => {

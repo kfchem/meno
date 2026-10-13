@@ -249,6 +249,8 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
     path: _path,
     made: _made,
     bondsFrom: _bondsFrom,
+    framesLeftOut: _left,
+    together: _together,
     stereo: _stereo,
     ...rest
   } = m;

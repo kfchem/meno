@@ -18,6 +18,10 @@ import type { Molecule3D } from "../store/types";
 /** What a molecule says of what its file leaves out, on the canvas and in a picture of it. */
 export const NO_H_MARK = "No H in file";
 export const ORDERS_MARK = "Bond orders unknown";
+/** What a molecule says of the frames its file gave that were left out as it was read (lib/io/structures): "1 frame left out", "3 frames left out". */
+export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? "" : "s"} left out`;
+/** What a molecule says where atoms of it stood in one place as it was read: a damaged file, or none of a molecule's. */
+export const TOGETHER_MARK = "Atoms in one place";
 
 /** The most atoms a molecule's bond orders are sought for from its shape, at once: more, and they are left unknown. */
 export const MOST_PERCEIVED = 400;

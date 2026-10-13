@@ -1018,7 +1018,12 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   known, leaves room for some; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
-  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  side chains round a ligand, in a look with ribbons, among them); *3
+  frames left out* where frames of its file were left out as it was read
+  (cut short, or with a place that does not read: never without a word);
+  *Atoms in one place* where atoms of it stood within 0.1 Å of another as
+  it was read - a damaged file, or none of a molecule's - which are given
+  no bond. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,

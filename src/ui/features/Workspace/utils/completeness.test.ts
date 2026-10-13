@@ -177,3 +177,13 @@ describe("what a molecule's file leaves out", () => {
     expect(withComponents(acetic(), new Map())).toBeNull();
   });
 });
+
+describe("what a molecule says of its file", () => {
+  it("says how many frames were left out as it was read, and that atoms stood in one place", async () => {
+    const { notesOf, solidOf } = await import("./molecule3d");
+    const { STYLE_3D } = await import("../../../../lib/chem/style3d");
+    const m = { id: 1, at: { x: 0, y: 0 }, atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0.96, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], framesLeftOut: 1, together: 1 };
+    expect(notesOf(m, solidOf(m, STYLE_3D), "primary")).toEqual(["1 frame left out", "Atoms in one place"]);
+    expect(notesOf({ ...m, framesLeftOut: 3, together: undefined }, solidOf(m, STYLE_3D), "primary")).toEqual(["3 frames left out"]);
+  });
+});
