@@ -8,7 +8,7 @@ import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
-import { bondsByDistance } from "../../../../utils/structureParsers";
+import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 
 /** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
 export const RIBBON_REACH = 1.3;
@@ -285,23 +285,29 @@ export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | 
   if (known && known.frames === m.frames && known.bonds === m.bonds) return known.v;
   const n = m.atoms.length;
   const xyzs = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...m.frames.filter((f) => f.length === 3 * n)];
-  const index = new Map<string, number>();
+  // (each pair by one number, the lower atom first: a trajectory of hundreds
+  // of frames of hundreds of atoms has its bonds found as it is opened)
+  const keyOf = (a1: number, a2: number) => (a1 < a2 ? a1 * n + a2 : a2 * n + a1);
+  const index = new Map<number, number>();
   const bonds: ParsedBond[] = [];
   // (a bond its first frame has keeps the order found for it: utils/completeness)
-  const ordered = new Map(m.bonds.map((b) => [b.a1 < b.a2 ? `${b.a1} ${b.a2}` : `${b.a2} ${b.a1}`, b.order]));
-  const each = xyzs.map((xyz) =>
-    bondsByDistance(m.atoms.map((a, i) => ({ el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }))).map((b) => {
-      const key = `${b.a1} ${b.a2}`;
+  const ordered = new Map(m.bonds.map((b) => [keyOf(b.a1, b.a2), b.order]));
+  const radii = bondRadii(m.atoms.map((a) => a.el));
+  const each = xyzs.map((xyz) => {
+    const pairs = bondedPairs(xyz, radii);
+    const ks: number[] = [];
+    for (let j = 0; j < pairs.length; j += 2) {
+      const key = keyOf(pairs[j], pairs[j + 1]);
       let k = index.get(key);
       if (k === undefined) {
         k = bonds.length;
         index.set(key, k);
-        const order = ordered.get(b.a1 < b.a2 ? key : `${b.a2} ${b.a1}`);
-        bonds.push(order && order !== b.order ? { ...b, order } : b);
+        bonds.push({ a1: pairs[j], a2: pairs[j + 1], order: ordered.get(key) || 1 });
       }
-      return k;
-    }),
-  );
+      ks.push(k);
+    }
+    return ks;
+  });
   const present = each.map((ks) => {
     const there = new Uint8Array(bonds.length);
     for (const k of ks) there[k] = 1;

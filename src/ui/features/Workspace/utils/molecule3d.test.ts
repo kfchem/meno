@@ -34,6 +34,7 @@ import {
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
+import { bondsByDistance } from "../../../../utils/structureParsers";
 
 /** Two carbons 1.5 Å apart along x, standing at `at`. */
 const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
@@ -588,6 +589,32 @@ describe("a molecule's bonds frame by frame", () => {
     expect(fb.present.map((p) => [...p])).toEqual([[1], [0], [1]]);
     expect(bondsAt({ ...h2, bondsFrom: "distance" }, 1)).toEqual([]);
     expect(bondsAt({ ...h2, bondsFrom: "distance" }, 2)).toEqual([{ a1: 0, a2: 1, order: 1 }]);
+  });
+
+  it("are in every frame those its atoms' distances give there - a trajectory of 600 atoms, found cube by cube, its first frame's orders kept", () => {
+    // (200 waters on a grid, shaken more in each frame, so that bonds break and form)
+    let seed = 11;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
+    const base: { el: string; x: number; y: number; z: number }[] = [];
+    for (let u = 0; u < 200; u++) {
+      const [x, y, z] = [(u % 6) * 3.1, (Math.floor(u / 6) % 6) * 3.1, Math.floor(u / 36) * 3.1];
+      base.push({ el: "O", x, y, z }, { el: "H", x: x + 0.96, y, z }, { el: "H", x: x - 0.24, y: y + 0.93, z });
+    }
+    const frames = Array.from({ length: 8 }, (_, f) => base.flatMap((a) => [a.x + rand() * 0.3 * f, a.y + rand() * 0.3 * f, a.z + rand() * 0.3 * f]));
+    const bonds = bondsByDistance(base).map((b, i) => (i === 0 ? { ...b, order: 2 } : b));
+    const m = { atoms: base, bonds, frames, bondsFrom: "distance" as const };
+    const fb = frameBondsOf(m)!;
+    const xyzs = [base.flatMap((a) => [a.x, a.y, a.z]), ...frames];
+    xyzs.forEach((xyz, f) => {
+      const expected = bondsByDistance(base.map((a, i) => ({ el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })));
+      // (as a set: a bond first met in a later frame comes after those met before)
+      const pairs = (bs: { a1: number; a2: number }[]) => bs.map((b) => b.a1 * 600 + b.a2).sort((p, q) => p - q);
+      expect(pairs(bondsAt(m, f))).toEqual(pairs(expected));
+    });
+    // (some came and went)
+    expect(fb.bonds.length).toBeGreaterThan(bonds.length);
+    expect(fb.present.some((p) => p.includes(0))).toBe(true);
+    expect(bondsAt(m, 0)[0].order).toBe(2);
   });
 
   it("are its bonds, in every frame, where its file gave them", () => {
