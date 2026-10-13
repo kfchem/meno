@@ -23,7 +23,14 @@ function widthAt(u: number): number {
   return 1 + (SETTLED - 1) * (1 - Math.pow(1 - k, 2));
 }
 
-type Band = { u: number; pulse: number; mesh: THREE.Mesh | null; drawnAt: string };
+type Band = {
+  u: number;
+  pulse: number;
+  mesh: THREE.Mesh | null;
+  drawnAt: string;
+  /** The layout its bond was last found in, and where: its atoms' places, and its own (-1 where it is not there). */
+  found: { in: unknown; i1: number; i2: number; k: number } | null;
+};
 
 /**
  * The band behind the bond under the pointer. Each band has its own way in:
@@ -34,15 +41,35 @@ type Band = { u: number; pulse: number; mesh: THREE.Mesh | null; drawnAt: string
  * again for it until something changes.
  */
 export default function HoverOverlay2D() {
-  const { model, hovered, hoverPulse } = useEditor();
+  // (what it reads, and only that: the whole state renders it again at every change of anything)
+  const model = useEditor((s) => s.model);
+  const hovered = useEditor((s) => s.hovered);
+  const hoverPulse = useEditor((s) => s.hoverPulse);
   const drawn = useDrawnLayout();
+  // (where a band's bond is in the layout: looked for once each time the
+  // layout changes, for the one or two bands there are - no index of every
+  // atom and bond made at every frame of a drag)
+  const find = (band: Band, id: number) => {
+    if (band.found?.in === drawn) return band.found;
+    const bond = model.bonds.find((b) => b.id === id);
+    let i1 = -1;
+    let i2 = -1;
+    if (bond) {
+      for (let i = 0; i < drawn.atoms.length && (i1 < 0 || i2 < 0); i++) {
+        if (drawn.atoms[i].id === bond.a) i1 = i;
+        if (drawn.atoms[i].id === bond.b) i2 = i;
+      }
+    }
+    const k = i1 < 0 || i2 < 0 ? -1 : drawn.bonds.findIndex((b) => b.a1 === i1 && b.a2 === i2);
+    return (band.found = { in: drawn, i1, i2, k });
+  };
   const invalidate = useThree((s) => s.invalidate);
   const bands = useRef(new Map<number, Band>());
   const pulsed = useRef(hoverPulse.nonce);
   const [, setFrame] = useState(0);
 
   const hb = hovered.bondId;
-  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "" });
+  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "", found: null });
   // a pulse on the hovered bond runs from its start, the band where it is
   if (hoverPulse.nonce !== pulsed.current) {
     pulsed.current = hoverPulse.nonce;
@@ -81,9 +108,7 @@ export default function HoverOverlay2D() {
       // the bond where it is drawn, and how far its drawing reaches off its
       // line at each end: the band follows that, so neither a wedge's broad
       // end nor a double bond's second line stands out past it
-      const bond = model.bonds.find((x) => x.id === id);
-      const i1 = bond ? drawn.atoms.findIndex((a) => a.id === bond.a) : -1;
-      const i2 = bond ? drawn.atoms.findIndex((a) => a.id === bond.b) : -1;
+      const { i1, i2, k } = find(band, id);
       if (i1 < 0 || i2 < 0) {
         mesh.visible = false;
         continue;
@@ -91,7 +116,6 @@ export default function HoverOverlay2D() {
       const a1 = drawn.atoms[i1];
       const a2 = drawn.atoms[i2];
       let reach: BondReach = { left1: lineHalf, right1: lineHalf, left2: lineHalf, right2: lineHalf };
-      const k = drawn.bonds.findIndex((b) => b.a1 === i1 && b.a2 === i2);
       if (k >= 0 && drawn.layout.reach[k]) reach = drawn.layout.reach[k];
       // (a pulse: narrower and brighter, and back, over its run)
       const swing = Math.sin(Math.PI * band.pulse);

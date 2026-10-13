@@ -9,7 +9,7 @@
  * on the page: beside what it was read from, clear of what lies there.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
+import { uprightOf, type Box, type FigureDrawn } from "../../../../lib/figure/drawn";
 import type { FigureRead } from "../../../../lib/figure/read";
 import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
 import { cornerAt } from "../../../../lib/chem/reactionArrow";
@@ -22,17 +22,34 @@ import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
 import { picturePng } from "./pictures";
 
-/** A label as drawn read as one typed is: an element with its charge, or a group's name - or nothing. */
+/** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
+/**
+ * Whether a label written alone is a whole molecule: a reagent or a complex
+ * Meno reads it as (H2O, HCl, NaCl, MeOH), or an element whose hydrogens and
+ * charge leave it nothing to bond (I-, Na+, OH-, NH3).
+ */
+export function wholeLabel(label: string): boolean {
+  const r = labelReading(label);
+  if (!r) return false;
+  if (r.whole) return true;
+  const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?([+-]*\d*[+-]*)$/.exec(label);
+  if (!r.element || !m || m[2] !== r.element) return false;
+  const read = readLabel(label, isElementSymbol);
+  const hs = (s: string | undefined) => (s == null ? 0 : s === "" ? 1 : Number.parseInt(s));
+  return read.kind === "element" && implicitHydrogens(read.el, 0, read.charge ?? 0) === hs(m[1]) + hs(m[3]);
+}
+
 export const figureLabels: LabelReader = (label) => {
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
-  if (r.kind === "element") return { el: r.el, charge: r.charge };
+  if (r.kind === "element") return { el: r.el, charge: r.charge, ...(r.isotope ? { isotope: r.isotope } : {}) };
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
 };
@@ -123,10 +140,12 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
  * figure has it (the maintainer, 2026-10-11: the scheme keeps the figure's
  * layout).
  */
-export function figureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
+export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
+  // (a figure set sideways - its words reading down the page, or up it - read turned upright, each atom tied back to where it lies on the page)
+  const { drawn, back } = uprightOf(given);
   // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
   const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
-  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
+  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []), wholeLabel);
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
@@ -134,7 +153,7 @@ export function figureFrom(drawn: FigureDrawn, sha256: string, page: number, kno
   // (one middle and one scale for all of it)
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
-  const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, x, y, bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...back({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
   const scheme = schemeOf(read, about);
   return { model, ...(scheme ? { scheme } : {}) };
 }
@@ -185,6 +204,8 @@ function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, a
     r: 0.9,
     el: a.el,
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     seen: spot(read.atoms[i].x, read.atoms[i].y),
   }));
   const bonds: Bond[] = s.bonds.map((b, i) => ({

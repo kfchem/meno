@@ -145,6 +145,21 @@ describe("where results are said", () => {
     expect(chipLine(["", "−1.000000 Eh"], undefined)).toBe("−1.000000 Eh");
   });
 
+  it("in the chip's line, how the run went - ranked 0 - however long the line", () => {
+    const run = readResults(
+      [
+        { id: "run", on: "molecule", group: "Calculation", label: "Run", value: "did not come to its end", rank: 0 },
+        { id: "d", on: "molecule", group: "Properties", label: "Dipole moment", value: 2.37, quantity: "dipole", rank: 2 },
+      ],
+      3,
+      13,
+      "cclib 1.9rc1",
+    );
+    const first = ["Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet", "−229.293084 Eh"];
+    expect(chipLine(first, run)).toBe("Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end");
+    expect(chipLine(first, run, 200)).toBe("Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end · Dipole moment 2.37 D");
+  });
+
   it("by their groups, in the order the groups first come", () => {
     expect(grouped(resultsOn(results, "molecule")).map((g) => [g.group, g.results.map((r) => r.id)])).toEqual([
       ["Thermochemistry", ["g", "h", "s"]],

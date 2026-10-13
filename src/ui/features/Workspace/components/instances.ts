@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { InstancedMesh } from "three";
+import { boundInstances } from "../utils/instanceSphere";
 
 /**
  * Tell three.js that an instanced mesh's instances have moved.
@@ -14,10 +15,8 @@ import type { InstancedMesh } from "three";
  */
 export function commitInstanceMatrices(mesh: InstancedMesh): void {
   mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  boundInstances(mesh);
 }
-
-const tint = new THREE.Color();
 
 /**
  * Each of an instanced mesh's first `colors.length` instances in its own
@@ -29,7 +28,37 @@ const tint = new THREE.Color();
 export function colorInstances(mesh: InstancedMesh, colors: readonly (string | undefined)[], base: string): void {
   if (!colors.length) return;
   const had = mesh.instanceColor != null;
-  colors.forEach((c, i) => mesh.setColorAt(i, tint.set(c ?? base)));
+  // (each colour read from its CSS once, not once for each of the drawing's bonds at every frame of a drag)
+  const read = new Map<string, THREE.Color>();
+  colors.forEach((c, i) => {
+    const css = c ?? base;
+    let color = read.get(css);
+    if (!color) read.set(css, (color = new THREE.Color(css)));
+    mesh.setColorAt(i, color);
+  });
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   if (!had) for (const m of [mesh.material].flat()) m.needsUpdate = true;
+}
+
+/**
+ * A plain material for instances drawn across a line - a bond's plane, `y`
+ * - or round, a cap's disc, `xy`, whose width is made wider or narrower
+ * than laid out on the graphics card: `width.value` times, for nothing on
+ * the main thread. A drawing laid out at another zoom than the view's - a
+ * very large one waiting for a zoom to stop - keeps its lines as wide as a
+ * layout at the view's would have them so (utils/largeZoom `lineWidening`).
+ */
+export function widenedMaterial(
+  across: "y" | "xy",
+  params: THREE.MeshBasicMaterialParameters,
+): { material: THREE.MeshBasicMaterial; width: { value: number } } {
+  const width = { value: 1 };
+  const material = new THREE.MeshBasicMaterial(params);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWidth = width;
+    shader.vertexShader =
+      "uniform float uWidth;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\n  transformed.${across} *= uWidth;`);
+  };
+  material.customProgramCacheKey = () => `widened-${across}`;
+  return { material, width };
 }
