@@ -148,9 +148,10 @@ in 3D, arrows, text - and is made of three things:
 
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
-Their words, and the chips on the page, go below 75 % (*How it looks*):
-a card then shows its icon and its state's icon alone, a set its frame
-and what it holds.
+Fit (Ctrl/Cmd+1) takes them in: each set's frame and each step's card,
+closed. Their words, and the chips on the page, go below 75 % (*How it
+looks*): a card then shows its icon and its state's icon alone, a set
+its frame and what it holds.
 
 ### How it looks
 
