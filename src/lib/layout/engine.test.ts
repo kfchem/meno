@@ -774,6 +774,30 @@ describe("a ring system drawn as a solid", () => {
 });
 
 describe("a macrocycle through a block of fused rings", () => {
+  it("keeps a double bond at either end of the chain drawn round the block as given", () => {
+    // (the chain's first and last double bonds, read with the atoms placed
+    // at its ends: an E one was drawn cis)
+    for (const smiles of ["C2CCCCCC/C=C/c1ccc2c3ccccc31", "C2CCCCC/C=C1/CCC2C3CCCCC31", "C1(CCCCC/C=C/2)CCC2C3CCCCC31"]) {
+      const s = readSmiles(smiles);
+      const orders = kekuleOrders(s.atoms, s.bonds);
+      const sum = s.atoms.map(() => 0);
+      s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+      const g: LayoutInput = {
+        atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]) })),
+        bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
+      };
+      const { x, y } = layout2D(g);
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      for (const b of g.bonds.filter((q) => q.stereo)) {
+        const [r0, r1] = b.stereo!.refs;
+        // (each ref by the end it is on)
+        const nearA = g.bonds.some((q) => (q.a === b.a && q.b === r0) || (q.b === b.a && q.a === r0));
+        const [ra, rb] = nearA ? [r0, r1] : [r1, r0];
+        expect(side(ra, b.a, b.b) === side(rb, b.a, b.b), smiles).toBe(b.stereo!.cis);
+      }
+    }
+  });
+
   it("draws rifampicin's naphthalene regular, its ansa chain round it, the hydrazone outside", () => {
     // started from the macrocycle, the naphthalene was squashed to fit it;
     // started from the naphthofuranone, the ansa chain drawn round it, the

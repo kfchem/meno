@@ -89,9 +89,11 @@ they hang from.
   that puts it. One that runs through a block of rings fused to each
   other - rifampicin's ansa chain through its naphthofuranone - starts
   from the block, drawn regular, and is a chain drawn round from it, as an
-  ansa bridge is: each of its double bonds cis or trans as given, and round
-  the side that shuts in the smaller of the groups on the block (its OHs,
-  not its hydrazone and piperazine).
+  ansa bridge is: each of its double bonds cis or trans as given - those
+  at its two ends too, read by the block's atoms it is bonded to, and kept
+  so when the chain is eased to close - and round the side that shuts in
+  the smaller of the groups on the block (its OHs, not its hydrazone and
+  piperazine).
 - **Rings of rings**: a macrocycle that is rings strung together and
   nothing else - a porphyrin's pyrroles, a cyclodextrin's glucoses, each
   linked to the next by an atom or two - is set round a circle, each ring

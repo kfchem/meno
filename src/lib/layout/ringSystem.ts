@@ -509,11 +509,12 @@ type ChainCis = (x: number, u: number, v: number, y: number) => boolean | null;
 
 /**
  * What a macrocycle's chain, drawn round from what is placed, keeps to: its
- * double bonds' cis or trans (`cis`); and the groups hanging from the
+ * double bonds' cis or trans (`cis`), each atom's neighbours to read them
+ * by at the chain's ends (`neighbours`); and the groups hanging from the
  * placed atoms, by how big each is, to leave outside the ring it closes
  * rather than shut in it (`loads`, read when the chain is drawn).
  */
-type ChainRules = { cis: ChainCis; loads: (pos: Map<number, Point>) => { at: Point; weight: number }[] };
+type ChainRules = { cis: ChainCis; neighbours: readonly (readonly number[])[]; loads: (pos: Map<number, Point>) => { at: Point; weight: number }[] };
 
 function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
   const inSys = new Set(sys.atoms);
@@ -538,7 +539,7 @@ function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
       }
       return weight ? [{ at: pos.get(a)!, weight }] : [];
     });
-  return { cis: chainCis(mol), loads };
+  return { cis: chainCis(mol), neighbours: mol.neighbours, loads };
 }
 
 function chainCis(mol: Molecule): ChainCis {
@@ -929,6 +930,27 @@ function placeChainRun(
     beam = next.slice(0, WIDTH);
     if (!beam.length) break;
   }
+  // the double bonds along a whole line from a to b drawn the other way
+  // round than given, each read by where its neighbours lie - at the ends,
+  // those already placed there
+  const ids = [from, ...run, to];
+  const side = (p: Point, u: Point, v: Point) => Math.sign(cross(sub(v, u), sub(p, u)));
+  const wrongAlong = (line: Point[]) => {
+    if (!cis) return 0;
+    let wrong = 0;
+    for (let i = 0; i + 1 < ids.length; i++) {
+      const [u, v] = [ids[i], ids[i + 1]];
+      const x = i > 0 ? ids[i - 1] : rules!.neighbours[u].find((w) => w !== v && pos.has(w));
+      const y = i + 2 < ids.length ? ids[i + 2] : rules!.neighbours[v].find((w) => w !== u && pos.has(w));
+      if (x == null || y == null) continue;
+      const want = cis(x, u, v, y);
+      if (want == null) continue;
+      const px = i > 0 ? line[i - 1] : pos.get(x)!;
+      const py = i + 2 < ids.length ? line[i + 2] : pos.get(y)!;
+      if ((side(px, line[i], line[i + 1]) === side(py, line[i], line[i + 1])) !== want) wrong++;
+    }
+    return wrong;
+  };
   let best: Point[] | null = null;
   let bestCost = Infinity;
   const angle = (u: Point, v: Point, w: Point) => {
@@ -967,7 +989,12 @@ function placeChainRun(
       // (the groups on what is placed left outside the ring it closes, the
       // bigger the more: rifampicin's hydrazone and piperazine, not its OHs)
       const loop = [a, ...at, b];
-      for (const { at: q, weight } of loads) if (insidePolygon(q, loop)) cost += 0.5 * weight;
+      // (a load on an end is on the loop, neither in it nor out)
+      for (const { at: q, weight } of loads) if (q !== a && q !== b && insidePolygon(q, loop)) cost += 0.5 * weight;
+      // and the double bonds the turns did not see, as given: at the run's
+      // two ends - read with the neighbours placed there - and the last
+      // two, whose far neighbours are only now set
+      cost += 1000 * wrongAlong([a, ...at, b]);
       if (cost < bestCost) {
         bestCost = cost;
         best = at;
@@ -982,7 +1009,6 @@ function placeChainRun(
   // chain atom's neighbours a 120-degree angle apart, clear of what is
   // placed - the rings the run passes through left as they are
   const line = [a, ...best.map((p) => ({ ...p })), b];
-  const ids = [from, ...run, to];
   const free = ids.map((v, i) => i > 0 && i < ids.length - 1 && !rings.some((r) => r.length < MACROCYCLE && r.includes(v)));
   const pull = (i: number, j: number, target: number, k: number) => {
     if (!free[i] && !free[j]) return;
@@ -1005,7 +1031,11 @@ function placeChainRun(
       }
     }
   }
-  run.forEach((atom, i) => pos.set(atom, line[i + 1]));
+  // (kept as found where easing it turns a double bond the other way: the
+  // last chain atom eased off a ring atom across that atom's bond)
+  const found = [a, ...best, b];
+  const kept = wrongAlong(line) > wrongAlong(found) ? found : line;
+  run.forEach((atom, i) => pos.set(atom, kept[i + 1]));
 }
 
 /** Whether a point lies inside a polygon, its corners in order. */

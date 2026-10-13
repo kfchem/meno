@@ -204,7 +204,13 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   unnoticed. They read every drawn double bond now (2026-10-13): one the
   molecule gives cis or trans as given, one in a ring of seven atoms or
   fewer cis. Meno's SMILES reader keeps a double bond's cis or trans from
-  its / and \ marks for that.
+  its / and \ marks for that. A chain drawn round a block of rings had
+  its double bonds' cis or trans checked only as its turns were chosen,
+  which leaves out those at its two ends and the last two (hunter B,
+  2026-10-13: an E bond beside a naphthalene drawn cis), and easing it to
+  close moved the last chain atom across a ring atom's bond. Every one is
+  checked on the whole chain now, and the chain kept as found where easing
+  would turn one.
 - **A solid found once.** A cage's solid was found once for each
   molecule object, but a drawing read back is perceived anew, and every
   read-back found it again: half of tetrodotoxin's Clean-up. It is kept by
