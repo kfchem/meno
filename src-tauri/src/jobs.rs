@@ -410,6 +410,8 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         Some(name) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a file in its folder: {name}"))),
     };
     let mut cmd = Command::new(program);
+    // (a Python run reads and writes UTF-8, whatever the system's code page - where its spec says nothing else)
+    crate::python_in_utf8(&mut cmd);
     cmd.args(args)
         .envs(env)
         .current_dir(dir.join(WORK))
@@ -665,10 +667,12 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
     let mut child = cmd.spawn().ok()?;
     let mut out = child.stdout.take()?;
     // (what it prints read apart, so that a full pipe never holds it)
+    // (and read as near as it can be where it is not UTF-8: a banner in the
+    // system's code page lost the version with it)
     let reader = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = out.read_to_string(&mut text);
-        text
+        let mut bytes = Vec::new();
+        let _ = out.read_to_end(&mut bytes);
+        String::from_utf8_lossy(&bytes).into_owned()
     });
     let start = std::time::Instant::now();
     let ended = loop {
