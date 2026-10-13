@@ -88,7 +88,9 @@ export function movingAtoms(m: Bonded, path: readonly number[]): number[] | null
 /** The atoms setting one of a molecule's measurements moves, in a frame of it (`movingAtoms`): null where it cannot be set. */
 export function movingFor(m: Molecule3D, measure: number, frame: number): number[] | null {
   const x = m.measures?.find((k) => k.id === measure);
-  return x ? movingAtoms({ atoms: m.atoms, bonds: bondsAt(m, frame) }, x.atoms) : null;
+  // (nor one with no value to set - a torsion across three atoms in a line: measure3d)
+  if (!x || !Number.isFinite(valueOf(placesOf(m, frame), x.atoms))) return null;
+  return movingAtoms({ atoms: m.atoms, bonds: bondsAt(m, frame) }, x.atoms);
 }
 
 /** How far a value can be set: a distance in ångströms, an angle in degrees (a torsion angle goes round). */
@@ -126,6 +128,8 @@ export function withValue(xyz: readonly number[], path: readonly number[], value
   const out = [...xyz];
   const kind = kindOf([...path]);
   const target = settable(kind, value);
+  // (none to set from, or to: none is taken - measure3d `measureValue`)
+  if (!Number.isFinite(target) || !Number.isFinite(valueOf(xyz, path))) return out;
   const move = (f: (v: THREE.Vector3) => THREE.Vector3) => {
     for (const i of moving) f(vec(xyz, i)).toArray(out, 3 * i);
   };

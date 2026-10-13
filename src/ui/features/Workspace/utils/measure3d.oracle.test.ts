@@ -85,6 +85,22 @@ describe("a measurement in 3D", () => {
     });
   }
 
+  it("gives none where there is none to give - an angle with two atoms in one place, a torsion with three in a line - and writes a dash", () => {
+    const w = (xs: number[]) => Float64Array.from(xs.map((v) => v * WORLD_PER_ANGSTROM));
+    // (an alkyne: C-C≡C-C, its middle three in a line)
+    const alkyne = w([0, 1, 0, 0, 0, 0, 1.2, 0, 0, 2.4, 0, 0, 3.4, 1, 0]);
+    expect(measureValue(alkyne, [0, 1, 2, 3])).toBeNaN();
+    expect(measureText("torsion", measureValue(alkyne, [0, 1, 2, 3]))).toBe("–");
+    // (but a bent one, and a torsion of 180°, are measured)
+    expect(measureValue(w([0, 1, 0, 0, 0, 0, 1.5, 0.1, 0, 2.9, 0.2, 0]), [0, 1, 2, 3])).not.toBeNaN();
+    expect(Math.abs(measureValue(w([0, 1, 0, 0, 0, 0, 1.5, 0, 0, 1.5, -1, 0]), [0, 1, 2, 3]))).toBeCloseTo(180, 9);
+    const together = w([1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(measureValue(together, [0, 1, 2])).toBeNaN();
+    expect(measureText("angle", NaN)).toBe("–");
+    // (a distance is always one: two atoms in one place are 0.00 Å apart)
+    expect(measureText("distance", measureValue(together, [1, 2]))).toBe("0.00 Å");
+  });
+
   it("gives a torsion IUPAC's sign, and writes a true minus and no −0.0", () => {
     // (looking down the y axis from B to C, x to the right and z up: A to the right, D up - a quarter turn anticlockwise, as seen: -90)
     const places = Float64Array.from([1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1].map((v) => v * WORLD_PER_ANGSTROM));
