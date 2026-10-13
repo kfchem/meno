@@ -212,3 +212,18 @@ describe("openIntent, isFitKey and shortcutLabel", () => {
     expect(shortcutLabel("1", false, false)).toBe("Ctrl+1");
   });
 });
+
+describe("+ and = for letters raised and lowered", () => {
+  it("are read by what the key gives, wherever a keyboard has it", async () => {
+    const { plusOrEquals } = await import("./shortcuts");
+    // (a US keyboard: Shift and = for +, = alone)
+    expect(plusOrEquals({ key: "+", code: "Equal", shiftKey: true })).toBe("+");
+    expect(plusOrEquals({ key: "=", code: "Equal" })).toBe("=");
+    // (a Japanese one: Shift and ; for +, Shift and - for =)
+    expect(plusOrEquals({ key: "+", code: "Semicolon", shiftKey: true })).toBe("+");
+    expect(plusOrEquals({ key: "=", code: "Minus", shiftKey: true })).toBe("=");
+    // (the number pad's +)
+    expect(plusOrEquals({ key: "+", code: "NumpadAdd" })).toBe("+");
+    expect(plusOrEquals({ key: "-", code: "Minus" })).toBeNull();
+  });
+});

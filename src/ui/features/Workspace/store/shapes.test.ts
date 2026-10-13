@@ -5,7 +5,7 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { centredAt, clipItems, readRecord, recordText } from "../utils/copyPaste";
 import { drawingSvg, drawnOf } from "../fileActions";
 import { ACS_1996 } from "../../../../lib/chem/style";
-import { layoutEmf } from "../../../../lib/chem/emf";
+import { emfRecords, layoutEmf } from "../../../../lib/chem/emf";
 import { drawingLayout } from "../fileActions";
 
 function editor() {
@@ -168,5 +168,19 @@ describe("shapes on the page", () => {
     expect(layout.bounds.max.y).toBeGreaterThan(20);
     expect(layoutEmf(layout, opts).emf.length).toBeGreaterThan(0);
     expect(drawnOf({ model: { atoms: [], bonds: [] }, arrows: [], pluses: [], captions: [], shapes }).shapes).toEqual(shapes);
+  });
+
+  it("draw an ellipse in pictures as the curve it is - its line and its fill - smooth however far enlarged", () => {
+    const ellipse = { id: 1, kind: "ellipse" as const, x0: 0, y0: 0, x1: 20, y1: 10, fill: "#b2d9e4" };
+    const part = { atoms: [], bonds: [], shapes: [ellipse] };
+    const svg = drawingSvg(part, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    // (its fill and its line, each a path of four cubic curves, closed)
+    const curved = svg.match(/<path d="M[^"]*(C[^"]*){4}Z"/g) ?? [];
+    expect(curved).toHaveLength(2);
+    const { layout, opts } = drawingLayout(part, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    // (in EMF, the line as a PolyBezier - and the dashed one's as before, in pieces)
+    expect(emfRecords(layoutEmf(layout, opts).emf)!.filter((r) => r.type === 2)).toHaveLength(1);
+    const dashed = drawingLayout({ ...part, shapes: [{ ...ellipse, dash: true as const }] }, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    expect(emfRecords(layoutEmf(dashed.layout, dashed.opts).emf)!.filter((r) => r.type === 2)).toHaveLength(0);
   });
 });
