@@ -427,8 +427,8 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
     let log = OpenOptions::new().create(true).append(true).open(dir.join(log))?;
     let input = match stdin {
         None => Stdio::null(),
-        Some(name) if inside_name(name) => Stdio::from(File::open(dir.join(WORK).join(name))?),
-        Some(name) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a file in its folder: {name}"))),
+        // (as a file of the job's is read: by a path of no link, inside its work folder)
+        Some(name) => Stdio::from(File::open(work_file(dir, name).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?)?),
     };
     let mut cmd = Command::new(program);
     cmd.args(args)
@@ -1191,15 +1191,10 @@ pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
 /// larger it says it will not read, by its size.
 const WORK_FILE_MOST: u64 = 256 * 1024 * 1024;
 
-/// A file a job wrote in its work folder, as text: a file of its own, by a
-/// path of no link - a link its program left there, to a file of the
-/// chemist's anywhere, is not read through - and of no more than 256 MB.
-pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
-    read_work_file_within(dir, name, WORK_FILE_MOST)
-}
-
-/// `read_work_file`, of a file of no more than `most` bytes.
-fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, String> {
+/// A job's file `name` in its work folder, where it is one of its own: by
+/// a path of no link - a link its program left there, to a file of the
+/// chemist's anywhere, is not followed - a file inside that folder.
+fn work_file(dir: &Path, name: &str) -> Result<PathBuf, String> {
     if !inside_name(name) {
         return Err(format!("not a file of the job's: {name}"));
     }
@@ -1219,6 +1214,18 @@ fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, St
     if !inside {
         return Err(format!("not a file of the job's: {name}"));
     }
+    Ok(at)
+}
+
+/// A file a job wrote in its work folder, as text: a file of its own
+/// (`work_file`), of no more than 256 MB.
+pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
+    read_work_file_within(dir, name, WORK_FILE_MOST)
+}
+
+/// `read_work_file`, of a file of no more than `most` bytes.
+fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, String> {
+    let at = work_file(dir, name)?;
     let too_large = |size: u64| format!("{name} is too large to read: {} MB, past {} MB", size.div_ceil(1 << 20), most >> 20);
     let file = File::open(&at).map_err(|e| format!("{name}: {e}"))?;
     let size = file.metadata().map_err(|e| format!("{name}: {e}"))?.len();
@@ -1235,7 +1242,7 @@ fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, St
     Ok(String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
 }
 
-/// How deep in a job's work folder its files are looked for, and how many are listed at most.
+/// How deep in a job's work folder its files are looked for, and how many files and folders are looked at most.
 const WORK_DEEPEST: usize = 32;
 const WORK_MOST: usize = 10_000;
 
@@ -1246,20 +1253,22 @@ pub fn work_files(dir: &Path) -> Vec<String> {
 
 /// The files in `base`, by their paths inside it: no link followed, nor
 /// listed - a link to a folder above it would never end - at most `deepest`
-/// folders down, and `most` of them.
+/// folders down, and no more than `most` files and folders looked at - a
+/// program making folders by the thousand is not walked for good.
 fn files_within(base: &Path, deepest: usize, most: usize) -> Vec<String> {
-    fn walk(base: &Path, at: &Path, left: usize, most: usize, out: &mut Vec<String>) {
+    fn walk(base: &Path, at: &Path, left: usize, most: usize, seen: &mut usize, out: &mut Vec<String>) {
         let Ok(entries) = fs::read_dir(at) else { return };
         for e in entries.flatten() {
-            if out.len() >= most {
+            if *seen >= most {
                 return;
             }
+            *seen += 1;
             // (what it is itself, as `symlink_metadata` says: a link is neither)
             let Ok(kind) = e.file_type() else { continue };
             let p = e.path();
             if kind.is_dir() {
                 if left > 0 {
-                    walk(base, &p, left - 1, most, out);
+                    walk(base, &p, left - 1, most, seen, out);
                 }
             } else if kind.is_file() {
                 if let Ok(rel) = p.strip_prefix(base) {
@@ -1269,7 +1278,7 @@ fn files_within(base: &Path, deepest: usize, most: usize) -> Vec<String> {
         }
     }
     let mut out = Vec::new();
-    walk(base, base, deepest, most, &mut out);
+    walk(base, base, deepest, most, &mut 0, &mut out);
     out.sort();
     out
 }
@@ -1391,8 +1400,25 @@ pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
     if real.parent() != Some(root.as_path()) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
         return Err(refused());
     }
-    // (as Meno names it: on Windows a canonical path is one programs may not take as their folder)
-    Ok(jobs.join(id))
+    // (the folder checked, and no other found again by its name: on Windows,
+    // as Meno names it - a canonical path, `\\?\C:\...`, is one programs may not take as their folder)
+    Ok(plain(real))
+}
+
+/// A canonical path as programs take it: on Windows, a drive's (`\\?\C:\x`)
+/// without its `\\?\` where that leads to the same place; any other as it is.
+fn plain(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        if let Some(rest) = text.strip_prefix(r"\\?\").filter(|r| r.as_bytes().get(1) == Some(&b':')) {
+            let short = PathBuf::from(rest);
+            if short.canonicalize().is_ok_and(|c| c == path) {
+                return short;
+            }
+        }
+    }
+    path
 }
 
 /// Meno's identifier (tauri.conf.json), which names its data folder.
@@ -1842,7 +1868,23 @@ mod tests {
         run_job(&away);
         let r = current_record(&away).unwrap();
         assert_eq!(r.state, JobState::Failed);
-        assert!(r.why.unwrap().contains("not a file in its folder"));
+        assert!(r.why.unwrap().contains("not a file of the job's"));
+
+        // (nor one through a link in its folder, to a file of the chemist's anywhere)
+        #[cfg(unix)]
+        {
+            let linked = shell(&root, READS, 1);
+            let outside = root.join("outside.txt");
+            fs::write(&outside, "the chemist's").unwrap();
+            std::os::unix::fs::symlink(&outside, linked.join(WORK).join("link.txt")).unwrap();
+            let spec = JobSpec { stdin: Some("link.txt".into()), ..read_spec(&linked).unwrap() };
+            fs::write(linked.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+            run_job(&linked);
+            let r = current_record(&linked).unwrap();
+            assert_eq!(r.state, JobState::Failed);
+            assert!(r.why.unwrap().contains("is a link"));
+            assert!(!read_log(&linked, 0, LOG_MOST).0.contains("the chemist's"));
+        }
         let _ = fs::remove_dir_all(root);
     }
 
@@ -2009,7 +2051,12 @@ mod tests {
         assert_eq!(files_within(&base, WORK_DEEPEST, WORK_MOST), ["a/b/c/f3", "a/b/f2", "a/f1", "f0"]);
         assert_eq!(files_within(&base, 1, WORK_MOST), ["a/f1", "f0"]);
         assert_eq!(files_within(&base, 0, WORK_MOST), ["f0"]);
-        assert_eq!(files_within(&base, WORK_DEEPEST, 2).len(), 2);
+        assert!(files_within(&base, WORK_DEEPEST, 2).len() <= 1);
+        // (folders counted too: many folders, empty, looked at no further than allowed)
+        for i in 0..50 {
+            fs::create_dir_all(base.join("many").join(i.to_string())).unwrap();
+        }
+        assert!(files_within(&base, WORK_DEEPEST, 10).len() <= 1);
         let _ = fs::remove_dir_all(base);
     }
 
@@ -2089,8 +2136,12 @@ mod tests {
         let elsewhere = shell(&base.join("elsewhere"), ECHO, 1);
         assert!(runner_folder(&data, &elsewhere).is_err());
         let (id, dir) = make_job(&jobs, &read_spec(&elsewhere).unwrap(), &[]).unwrap();
-        assert_eq!(runner_folder(&data, &dir), Ok(jobs.join(&id)));
-        assert_eq!(runner_folder(&data, &dir.join(WORK).join("..")), Ok(jobs.join(&id)));
+        // (the folder checked, canonical: on Windows, as programs take it)
+        let checked = plain(jobs.canonicalize().unwrap().join(&id));
+        assert_eq!(runner_folder(&data, &dir), Ok(checked.clone()));
+        assert_eq!(runner_folder(&data, &dir.join(WORK).join("..")), Ok(checked.clone()));
+        #[cfg(windows)]
+        assert!(!checked.to_string_lossy().starts_with(r"\\?\"));
         // outside it, by its path or by `..`; inside one; not by an id Meno gives; holding nothing to run
         let up = jobs.join(&id).join("..").join("..").join("..").join("elsewhere").join(elsewhere.file_name().unwrap());
         let inside = make_job(&dir.join(WORK), &read_spec(&dir).unwrap(), &[]).unwrap().1;

@@ -1147,12 +1147,13 @@ path it is given:
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it, reached by no
   link, and be no larger than 256 MB (one larger fails its step, saying
-  its size). Its files are
-  listed without following links, 32 folders deep and 10,000 files at
-  most. The runner (`Meno --job <folder>`) checks it all again before it
+  its size); the file its program reads as its input (Gaussian's) is
+  opened by the same rules. Its files are listed without following links,
+  32 folders deep, and no more than 10,000 files and folders are looked
+  at. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be
-  `<app data>/jobs/<id>`, links resolved (`runner_folder`), and what it is
-  to run - the program, the programs after it, their arguments against
+  `<app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
+  job in the folder it checked), and what it is to run - the program, the programs after it, their arguments against
   the files in its work folder, their environment - what `job_start`
   would give (`spec_allowed`). Otherwise it writes a Failed record into
   the folder, saying why, and runs nothing.
