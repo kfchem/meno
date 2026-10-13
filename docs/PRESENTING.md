@@ -273,7 +273,15 @@ Shift+Enter, since Enter keeps the words, as it did before.
   shapes: *Line* (*None*, no line), *Fill* and *Light fill* (each colour a
   quarter of the way from white).
 - Pictures of the page (`Layout.shapes`): SVG paths and EMF polygons and
-  pens, under everything else, from the back.
+  pens, under everything else, from the back. An ellipse, and a rounded
+  rectangle's or a callout's corners, go as the curves they are
+  (`outlineCurve`: cubic Bezier segments, begun at a smooth point so that a
+  line drawn round meets itself with no seam) - SVG curves, EMF+
+  DrawBeziers and GDI PolyBezier for a whole line, and the fill's edge
+  likewise in SVG and in fine steps in EMF - so that they stay smooth
+  however far a picture is enlarged in Word or PowerPoint (before
+  0.1.12, an ellipse went as about 74 points, its corners seen enlarged);
+  a dashed line goes in its dashes, as before.
 - **An arrow is not a shape** (2026-10-12, once arrows were one): `Shape`
   lost its `arrow` kind and its heads, and the shapes' row its arrow.
   Quick Add has one arrow, *Arrow* (the maintainer: one entry, in the
