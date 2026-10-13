@@ -452,6 +452,22 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(5);
   });
 
+  it("gives an NH2 no more bonds than its hydrogens leave it: a methyl's end pointing at it is a carbon", () => {
+    // (a guanidine's NH2, its bond from the left; under it a methyl standing up off a chain, its end 2 points short of the N)
+    const n: P = [100, 60];
+    const c = step(n, 180, 0.95);
+    const methyl: P = [n[0], n[1] + 6.2];
+    const s = read(
+      figure(
+        [stroke(along(c, n, 0.6), c, step(c, 120)), stroke(methyl, step(methyl, -90), step(step(methyl, -90), -30))],
+        word("NH_2", n),
+      ),
+    );
+    const at = s.atoms.findIndex((a) => a.el === "N");
+    expect(s.bonds.filter((b) => b.a === at || b.b === at)).toHaveLength(1);
+    expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(5);
+  });
+
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
     const c: P = [60, 60];
     const h = step(c, 90);

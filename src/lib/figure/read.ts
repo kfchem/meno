@@ -426,6 +426,9 @@ function boxGap(a: Box, b: Box): number {
   return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
 }
 
+/** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
+const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
+
 /** How large a radical's dot is drawn, in bonds: at least, and at most. */
 const DOT = [0.05, 0.16] as const;
 
@@ -565,6 +568,20 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       wordOf.set(e, piece === 0 ? k : words.length - made.length + piece);
     }
   }
+  // (a label with its hydrogens written - NH2, OH, SH - takes no more bonds than they leave it: the ends that come
+  // nearest its element, a stray one - a methyl's set close - a carbon of its own)
+  words.forEach((w, k) => {
+    const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w));
+    if (!m || (m[1] == null && m[3] == null) || !(m[2] in BONDS_LEFT)) return;
+    const hs = (m[1] == null ? 0 : m[1] === "" ? 1 : Number.parseInt(m[1])) + (m[3] == null ? 0 : m[3] === "" ? 1 : Number.parseInt(m[3]));
+    const room = BONDS_LEFT[m[2]] - hs;
+    const at = ends.filter((e) => wordOf.get(e) === k);
+    if (room < 1 || at.length <= room) return;
+    const el = w.letters.find((l) => l.c === m[2][0]);
+    const to = (e: End) => (el ? dist(centre(el.box), e.p) : fromBox(e.p, w.box));
+    const keep = new Set([...at].sort((p, q) => to(p) - to(q)).slice(0, room));
+    for (const e of at) if (!keep.has(e)) wordOf.delete(e);
+  });
   // (a lone H takes one bond: a wedge's or a hash's first, else the nearest)
   words.forEach((w, k) => {
     if (labelText(w) !== "H") return;

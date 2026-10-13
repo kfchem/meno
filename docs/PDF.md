@@ -991,7 +991,9 @@ workspace holds.
   "Cl".").
 - **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
   word, the word is its atom's label (at its element: an end outside it,
-  much nearer its H than its element, is a carbon set close), read as a label typed is read - an
+  much nearer its H than its element, is a carbon set close; and a label
+  with its hydrogens written - NH2, OH - takes no more bonds than they
+  leave it, the ends nearest its element), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
