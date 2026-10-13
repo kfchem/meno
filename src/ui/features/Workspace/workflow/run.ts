@@ -249,11 +249,11 @@ function roomOf(m: Pick<Molecule3D, "frames" | "calc">, e: Frame): Frame & { chi
 /**
  * How a result set's molecules lie in it, each taking the room `rooms` says:
  * under its name, in rows, left to right, a row going no wider than
- * `ROW_MOST`, and the whole in the middle of the set where the set is wider
+ * `most` (`ROW_MOST`), and the whole in the middle of the set where the set is wider
  * - its inside at least `least` wide, so that its name reads whole. Each
  * molecule's place from the set's top left, and the set's width and height.
  */
-export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W): { at: { x: number; y: number }[]; width: number; height: number } {
+export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = ROW_MOST): { at: { x: number; y: number }[]; width: number; height: number } {
   const places: { x: number; y: number }[] = [];
   let x = 0;
   let y = 0;
@@ -261,7 +261,7 @@ export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LE
   let wide = 0;
   rooms.forEach((size) => {
     const d = size.x1 - size.x0;
-    if (x > 0 && x + d > ROW_MOST) {
+    if (x > 0 && x + d > most) {
       y -= rowH + BETWEEN;
       x = 0;
       rowH = 0;
@@ -288,7 +288,9 @@ export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LE
  * (`extentOf`, in its look and turned as `turnOf` says) - a bigger 3D look
  * chosen, say. The frame widens as far as they need, its top left where it
  * was, never narrower or shorter than it was; they lie in it as a run lays
- * them, in the order the run gave them. A set they fit, a chemist's set and a set
+ * them, in the order the run gave them - or, where the set would then
+ * reach over something beside it (the next step's card), in rows no wider
+ * than it was, the set growing downwards. A set they fit, a chemist's set and a set
  * of pictures are left as they are - and, where `only` says, a set holding
  * none of those molecules.
  */
@@ -312,9 +314,12 @@ export function fitResultSets(
     const within = boxes.every((b) => b.x0 >= set.x0 - EPS && b.x1 <= set.x1 + EPS && b.y0 >= set.y0 - EPS && b.y1 <= set.y1 - SET_TOP + EPS);
     const apart = boxes.every((a, i) => boxes.every((b, j) => j <= i || !(a.x0 < b.x1 - EPS && b.x0 < a.x1 - EPS && a.y0 < b.y1 - EPS && b.y0 < a.y1 - EPS)));
     if (within && apart) continue;
-    const lay = laidOut(rooms, Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD));
+    const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
+    const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
+    let lay = laidOut(rooms, least);
+    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
     doc = moveMolecules3d(doc, ms.map((m, i) => ({ id: m.id, at: { x: set.x0 + lay.at[i].x, y: set.y1 + lay.at[i].y } })));
-    doc = resizeSet(doc, set.id, frameAt(set.x0, set.y1, lay.width, Math.max(lay.height, set.y1 - set.y0)));
+    doc = resizeSet(doc, set.id, frameOf(lay));
   }
   return doc;
 }
@@ -325,20 +330,29 @@ export function fitResultSets(
  * keep clear of the page's sets, steps, structures and molecules.
  */
 export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: number, height: number): Frame {
-  const taken: Frame[] = [
-    ...(doc.sets ?? []),
-    ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
-  ];
-  const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).map((m) => m.at)];
-  const clear = (f: Frame) =>
-    !taken.some((t) => t.x0 < f.x1 + BETWEEN && t.x1 > f.x0 - BETWEEN && t.y0 < f.y1 + BETWEEN && t.y1 > f.y0 - BETWEEN) &&
-    !points.some((p) => inside({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN }, p));
   const x = step.x + CARD_W + GAP;
   for (let k = 0; k < 40; k++) {
     const f = frameAt(x, step.y - k * (CARD_H / 2), width, height);
-    if (clear(f)) return f;
+    if (clearOf(doc, f)) return f;
   }
   return frameAt(x, step.y, width, height);
+}
+
+/**
+ * Whether a frame keeps `BETWEEN` clear of what is on the page - its sets,
+ * its steps' cards, its structures and its molecules in 3D - but for the
+ * set `self` and the molecules it holds.
+ */
+function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number> }): boolean {
+  const taken: Frame[] = [
+    ...(doc.sets ?? []).filter((b) => b.id !== self?.set),
+    ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
+  ];
+  const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules.has(m.id)).map((m) => m.at)];
+  return (
+    !taken.some((t) => t.x0 < f.x1 + BETWEEN && t.x1 > f.x0 - BETWEEN && t.y0 < f.y1 + BETWEEN && t.y1 > f.y0 - BETWEEN) &&
+    !points.some((p) => inside({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN }, p))
+  );
 }
 
 /**

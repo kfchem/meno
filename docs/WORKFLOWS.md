@@ -448,8 +448,10 @@ When a bigger look is chosen - a molecule switched to its other look, or
 another look in Settings - and its molecules no longer fit (one reaching
 past the frame or onto the set's name, or two over one another), the
 frame widens and they are laid out again, as a run in that look lays
-them out (decided, 2026-10-13). The frame and the molecules glide there
-together, and nothing is left over another. A set never grows narrower
+them out (decided, 2026-10-13) - or, where widening would reach over
+what stands beside the set (the next step's card), in rows as wide as
+the set was, the set growing downwards. The frame and the molecules
+glide there together, and nothing is left over another. A set never grows narrower
 or shorter for a smaller look; a chemist's own sets are left as they
 are. A molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the

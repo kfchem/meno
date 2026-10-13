@@ -6,7 +6,7 @@ import type { Molecule3D } from "../store/types";
 import { currentStyle3D } from "../style3d";
 import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
-import { SET_TOP } from "./look";
+import { BETWEEN, SET_TOP } from "./look";
 import { addSet, addStep, moveStep } from "./model";
 import { fitResultSets, placeResults, type RunWith } from "./run";
 
@@ -94,6 +94,21 @@ describe("a result set its molecules no longer fit", () => {
     let fresh = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
     fresh = placeResults(fresh, fresh.steps![0], results, { extentOf: sizes(3.5) });
     expect(big.molecules3d!.map((m) => [m.atoms[0].el, m.at])).toEqual(fresh.molecules3d!.map((m) => [m.atoms[0].el, m.at]));
+  });
+
+  it("grows downwards, its rows as wide as the set was, where widening would reach the next step's card", () => {
+    let d = resultSet(1);
+    const set = d.sets![0];
+    // (the next step, just right of the set)
+    d = addStep(d, "energy", set.x1 + 2 * BETWEEN, set.y1, {}, "xtb");
+    const card = d.steps![1];
+    const big = fitResultSets(d, reaching(2.5));
+    const grown = big.sets![0];
+    expect(fitted(big, reaching(2.5))).toEqual({ count: 4, inside: true, apart: true });
+    expect(grown.x1 + BETWEEN).toBeLessThanOrEqual(card.x);
+    expect(grown.y1 - grown.y0).toBeGreaterThan(set.y1 - set.y0);
+    // (with nothing beside it, it widens as a run would lay it out)
+    expect(fitResultSets(resultSet(1), reaching(2.5)).sets![0].x1).toBeGreaterThan(card.x);
   });
 
   it("leaves a chemist's set, a set holding none of the molecules named, and a set of pictures as they are", () => {
