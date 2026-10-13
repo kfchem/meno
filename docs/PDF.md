@@ -976,7 +976,8 @@ workspace holds.
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is
-    a bond between them, two side by side a double one.
+    a bond between them, two side by side a double one, three a triple
+    one (N≡N+) - never a hash, however evenly they are set.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's

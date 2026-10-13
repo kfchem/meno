@@ -89,9 +89,10 @@ type Drawn = { a: Point; b: Point; order: 1 | 2 | 3; stereo?: "up" | "down" | "w
  * where the strokes are shortest. Equal throughout, its narrow end is not
  * told by the strokes.
  */
-function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<Stroke> } {
+function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<Stroke>; groups: Stroke[][] } {
   const used = new Set<Stroke>();
   const hashes: Drawn[] = [];
+  const groups: Stroke[][] = [];
   // (a hash's first strokes, at its narrow end, may be dots: no way of their own)
   const dot_ = (s: Stroke) => len(s) < 2 * s.w;
   const near = (s: Stroke, t: Stroke) => {
@@ -146,8 +147,9 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
     const either = l1 <= l0 * 1.25 && l0 <= l1 * 1.25;
     for (const o of order) used.add(o.g);
     hashes.push({ a, b, order: 1, stereo: "down", ...(either ? { either: true } : {}) });
+    groups.push(order.map((o) => o.g));
   }
-  return { hashes, used };
+  return { hashes, used, groups };
 }
 
 /**
@@ -459,7 +461,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return s;
     });
   const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && len(s) > 0.04 * bond), ...bits];
-  const { hashes, used: inHashes } = hashesOf(short, bond);
+  const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesOf(short, bond);
   // letters drawn as shapes, where the figure has none written there: read from their shapes
   const inLetters = new Set<object>();
   const fromShapes = known.length
@@ -471,6 +473,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const words = wordsOf([...drawn.letters, ...fromShapes]);
   const labelled = (p: Point, out: Point) => words.some((w) => reaches(p, out, w.box, bond));
   const between = (s: Stroke) => labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b));
+  // (short lines side by side, each from one label to another - N≡N+ - are a bond between them, double or triple, not a hash)
+  const betweenLabels = hashGroups.map((g) => g.every((s) => between(s)));
+  hashGroups.forEach((g, i) => {
+    if (betweenLabels[i]) for (const s of g) inHashes.delete(s);
+  });
+  const hashes = hashed.filter((_, i) => !betweenLabels[i]);
   const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s))));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);

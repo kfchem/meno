@@ -350,6 +350,25 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toContain("O=S");
   });
 
+  it("reads three short lines side by side between two labels as a triple bond, not a hash: N≡N", () => {
+    // (a diazonium's N≡N as drawn: the terminal N, three lines 3 long and 2.6 apart to the other N, and that N's bond on to a chain)
+    const n1: P = [77.8, 111.8];
+    const n2: P = [90.2, 104.5];
+    const s = read(
+      figure(
+        [
+          stroke([81.2, 106.4], [83.8, 104.9]),
+          stroke([82.5, 108.6], [85.1, 107.1]),
+          stroke([83.8, 110.9], [86.3, 109.4]),
+          stroke([95, 101.4], [102.7, 96.9], [102.7, 82.5], [115.2, 75.3]),
+        ],
+        [...word("N", n1), ...word("N", n2)],
+      ),
+    );
+    expect(bondsOf(s)).toContain("N#N");
+    expect(s.bonds.some((b) => b.stereo)).toBe(false);
+  });
+
   it("keeps an ion by the structure as an atom alone", () => {
     const a: P = [40, 60];
     const s = read(figure([stroke(a, step(a, 30), step(step(a, 30), -30))], word("I^-", [a[0], a[1] - 18])));
