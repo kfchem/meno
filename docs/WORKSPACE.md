@@ -356,6 +356,24 @@ Taken on 2026-10-04:
 - **The system's menu bar stays as the system has it.** On a Mac, Meno's
   commands do not go into it. A Mac's window is to get its own controls
   (the close button and its neighbours) at some stage.
+- **The system's right-click menu only where it edits words** (2026-10-13).
+  In a text box - a field in Settings or Quick Add - it gives Cut, Copy and
+  Paste; anywhere else - Settings, the tab bar, a tab, Quick Add's row, a
+  dialog, the column's text, which Meno draws itself - all it gave was the
+  webview's Reload, which starts the whole window afresh, unsaved work and
+  all, so it is kept shut there (`keepSystemMenuShut`, lib/doc/shortcuts).
+  Meno's own menus - the canvas's, a PDF's, a colour set's - open as they
+  do.
+- **Meno's own menu on words written or read in place** (the maintainer,
+  2026-10-13). A right-click on the column's text, on words being written
+  on the page or on an atom's label being written opens a small menu of
+  Meno's, as the canvas's look: Cut, Copy, Paste and Select All, with their
+  keys, each that does not apply now shown but not to be pressed - Cut and
+  Copy with nothing selected, Paste with no text on the clipboard, Cut and
+  Paste on a Markdown text read (`textMenu`, TextEditor). Where nothing is
+  selected, the caret goes where the right-click was first. The words keep
+  the keys while it is open: Escape closes it alone, and a press elsewhere
+  only closes it.
 - **Closing the last tab quits Meno.**
 
 Taken on 2026-10-07:

@@ -93,6 +93,26 @@ export function keepClipboard(
   event.preventDefault();
 }
 
+/** The kinds of `<input>` words are typed in. */
+const TYPED_INPUTS = new Set(["", "text", "search", "email", "url", "tel", "password", "number"]);
+
+/**
+ * A right-click shows the system's own menu only on what the system itself
+ * edits - a text box, a field in Settings or Quick Add - where its Cut,
+ * Copy and Paste work. Anywhere else the menu it would show is not Meno's:
+ * the webview's Reload, which starts the whole window afresh, unsaved work
+ * and all - on Settings, the tab bar, Quick Add's row, a dialog, and the
+ * column's text, which Meno draws itself. Meno's own menus - the canvas's,
+ * a PDF's, a colour set's - open as before: this only keeps the system's
+ * shut, and stops nothing else hearing of the right-click.
+ */
+export function keepSystemMenuShut(event: { target?: unknown; preventDefault(): void }): void {
+  const el = event.target as { tagName?: string; type?: string; isContentEditable?: boolean } | null | undefined;
+  const tag = (el?.tagName ?? "").toUpperCase();
+  const typedIn = !!el?.isContentEditable || tag === "TEXTAREA" || (tag === "INPUT" && TYPED_INPUTS.has((el?.type ?? "").toLowerCase()));
+  if (!typedIn) event.preventDefault();
+}
+
 /** Escape lets the selection go - but not while a text field has the keys. */
 export function isDeselectKey(event: KeyLike): boolean {
   return event.key === "Escape" && !isTextTarget(event.target);
