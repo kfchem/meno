@@ -258,6 +258,9 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       }
     }
   }
+  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
+  // one - is that line's, not a line of its own)
+  out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
   return out;
 }
 
@@ -270,4 +273,19 @@ export function boxOf(pts: readonly Point[]): Box {
     y1 = Math.max(y1, p.y);
   }
   return [x0, y0, x1, y1];
+}
+
+/** Whether line `s` lies on a longer line `t`, along it and within it, as one drawn again over it. */
+function drawnOver(s: Stroke, t: Stroke): boolean {
+  const lt = dist(t.a, t.b);
+  if (lt <= 1.5 * dist(s.a, s.b)) return false;
+  const u = { x: (t.b.x - t.a.x) / lt, y: (t.b.y - t.a.y) / lt };
+  const ls = dist(s.a, s.b) || 1;
+  if (Math.abs(u.x * (s.b.y - s.a.y) / ls - u.y * (s.b.x - s.a.x) / ls) > Math.sin((3 * Math.PI) / 180)) return false;
+  const w = Math.max(s.w, t.w);
+  const on = (p: Point) => {
+    const along = (p.x - t.a.x) * u.x + (p.y - t.a.y) * u.y;
+    return along >= -w && along <= lt + w && Math.abs((p.y - t.a.y) * u.x - (p.x - t.a.x) * u.y) <= w;
+  };
+  return on(s.a) && on(s.b);
 }

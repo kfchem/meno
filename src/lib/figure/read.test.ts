@@ -624,6 +624,19 @@ describe("a figure read as a structure", () => {
   });
 });
 
+describe("a figure drawn by another program", () => {
+  it("reads joints drawn again as short pieces along the bonds meeting there as those bonds' own, however many", () => {
+    // (a ring as RDKit draws one: at each corner a short piece along each of its two bonds, drawn over them - twelve pieces,
+    // more than the ring has bonds)
+    const c: P = [80, 60];
+    const ring = [0, 60, 120, 180, 240, 300].map((deg): P => [c[0] + L * Math.cos((deg * Math.PI) / 180), c[1] - L * Math.sin((deg * Math.PI) / 180)]);
+    const pieces = ring.flatMap((p, k) => [stroke(p, along(p, ring[(k + 1) % 6], 0.05)), stroke(p, along(p, ring[(k + 5) % 6], 0.05))]);
+    const s = read(figure([stroke(...ring, ring[0]), ...pieces]));
+    expect(s.atoms).toHaveLength(6);
+    expect(s.bonds).toHaveLength(6);
+  });
+});
+
 describe("a figure's words", () => {
   it("joins letters side by side, a subscript with them, and writes them as a label is typed", () => {
     const ws = wordsOf([...word("CO_2Me", [20, 20]), ...word("OH", [80, 20])]);

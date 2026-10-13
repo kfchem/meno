@@ -951,6 +951,10 @@ workspace holds.
   lines and curves - filled or stroked and how thick; each letter with
   its box, where its line starts and its size; through a form, a figure
   a journal placed whole, under the matrices that placed it.
+- **Lines drawn again**: a short line lying on a longer one, along it and
+  within it - a joint drawn as short pieces along the bonds meeting
+  there, as RDKit draws one - is that line's, and left out before
+  anything is measured.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
