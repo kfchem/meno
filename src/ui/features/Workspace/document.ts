@@ -157,8 +157,30 @@ export function stepCost(state: WorkspaceDocument, before: WorkspaceDocument | u
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  const model = settledRecords(doc.model, before?.model);
+  const model = endpointsHeld(settledRecords(doc.model, before?.model));
   return model === doc.model ? doc : { ...doc, model };
+}
+
+/**
+ * A model's haptic bonds kept to the ring they bind: where an atom of that
+ * ring has gone - deleted, merged onto another - or a bond's endpoints are
+ * not all atoms of the drawing, the bond binds no ring and keeps none (a
+ * plain bond to its star). Left as they were, endpoints named atoms gone,
+ * drawn from nowhere, and a set round the complex took a frame of NaN,
+ * which a save then dropped with the set (the command centre's document
+ * fuzzer, 2026-10-13).
+ */
+export function endpointsHeld(model: Model): Model {
+  if (!model.bonds.some((b) => b.endpoints?.length)) return model;
+  const there = new Set(model.atoms.map((a) => a.id));
+  let changed = false;
+  const bonds = model.bonds.map((b) => {
+    if (!b.endpoints?.length || b.endpoints.every((e) => there.has(e))) return b;
+    changed = true;
+    const { endpoints: _gone, attach: _attach, ...rest } = b;
+    return rest as Bond;
+  });
+  return changed ? { ...model, bonds } : model;
 }
 
 /** PDFs held, as they go on the page: the first's top page in the middle of `at`, the others to its right, a little apart. */
@@ -817,12 +839,15 @@ export function appendModel(
   const bonds = next.bonds.map((b) => {
     const id = cursor++;
     bondMap.set(b.id, id);
+    // (a haptic bond pasted without its ring binds none: its endpoints named the ring copied from)
+    const { endpoints, attach, ...rest } = b;
+    const whole = !!endpoints?.length && endpoints.every((e) => idMap.has(e));
     return {
-      ...b,
+      ...rest,
       id,
       a: idMap.get(b.a) ?? b.a,
       b: idMap.get(b.b) ?? b.b,
-      ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
+      ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
     };
   });
   // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)

@@ -684,3 +684,49 @@ describe("a workspace's history, held to about 100 MB (the maintainer, 2026-10-1
     expect(DEFAULT_HISTORY_BUDGET).toBe(25_000_000);
   });
 });
+
+describe("a haptic bond's endpoints, held to the ring it binds (the command centre's document fuzzer, 2026-10-13)", () => {
+  /** FeCp2 written out on a carbon: its metal, its stars and their haptic bonds to the Cp rings. */
+  const ferrocene = () => {
+    const ed = editor();
+    const a = ed.state().addAtom(0, 0, "C");
+    const fe = ed.state().addAtomBonded(a, 1.5, 0, "C");
+    ed.state().beginLabelEdit(fe, "FeCp2");
+    ed.state().commitLabelEdit();
+    ed.state().expandAbbreviation(fe);
+    const hap = ed.doc.getState().model.bonds.find((b) => b.endpoints?.length)!;
+    return { ...ed, hap };
+  };
+  const bond = (doc: ReturnType<typeof ferrocene>["doc"], id: number) => doc.getState().model.bonds.find((b) => b.id === id);
+
+  it("binds no ring once an atom of it is deleted, or merged onto another - endpoints never name an atom gone", () => {
+    const deleted = ferrocene();
+    deleted.state().deleteAtom(deleted.hap.endpoints![0]);
+    expect(bond(deleted.doc, deleted.hap.id)?.endpoints).toBeUndefined();
+    const merged = ferrocene();
+    merged.state().replaceDraggedAtomWith(merged.hap.endpoints![0], merged.hap.endpoints![2]);
+    const ids = new Set(merged.doc.getState().model.atoms.map((x) => x.id));
+    for (const b of merged.doc.getState().model.bonds) for (const e of b.endpoints ?? []) expect(ids.has(e)).toBe(true);
+    // and undone, the ring and its bond as they were
+    deleted.doc.undo();
+    expect(bond(deleted.doc, deleted.hap.id)?.endpoints).toEqual(deleted.hap.endpoints);
+  });
+
+  it("pasted without its ring - the metal and the star alone - binds none, not the ring it was copied from", () => {
+    const { state, doc, hap } = ferrocene();
+    const m = doc.getState().model;
+    const part = { atoms: m.atoms.filter((x) => x.id === hap.a || x.id === hap.b), bonds: [hap] };
+    const before = new Set(m.bonds.map((b) => b.id));
+    state().pasteModel({ atoms: part.atoms.map((x) => ({ ...x, x: x.x + 20 })), bonds: part.bonds });
+    const pasted = doc.getState().model.bonds.filter((b) => !before.has(b.id));
+    expect(pasted).toHaveLength(1);
+    expect(pasted[0].endpoints).toBeUndefined();
+  });
+
+  it("is left out of a part that does not hold the whole ring", async () => {
+    const { partOf } = await import("../chem/cleanUp");
+    const { doc, hap } = ferrocene();
+    const part = partOf(doc.getState().model, new Set([hap.a, hap.b, hap.endpoints![0]]));
+    expect(part.bonds.find((b) => b.id === hap.id)?.endpoints).toBeUndefined();
+  });
+});

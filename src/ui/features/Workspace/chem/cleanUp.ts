@@ -7,7 +7,7 @@
 import { contractGraph, contractionTrials, hiddenIn } from "../../../../lib/chem/contract";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { Layout2D } from "../../../../lib/layout/engine";
-import { emptyWorkspaceDocument, relayout, writtenAsLabels, type WrittenAsLabel } from "../document";
+import { emptyWorkspaceDocument, endpointsHeld, relayout, writtenAsLabels, type WrittenAsLabel } from "../document";
 import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
@@ -44,10 +44,11 @@ export function fragmentOf(model: Model, atomId: number): Set<number> {
 
 /** Some of a structure: these atoms, and the bonds between them. */
 export function partOf(model: Model, ids: Set<number>): Model {
-  return {
+  // (a haptic bond whose ring is not all in the part binds none in it)
+  return endpointsHeld({
     atoms: model.atoms.filter((a) => ids.has(a.id)),
     bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)),
-  };
+  });
 }
 
 /** The structures on the canvas, each the atoms bonded together, a lone atom not among them. */

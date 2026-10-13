@@ -412,6 +412,11 @@ Taken on 2026-10-10 (menus and gestures):
   takes it away - none is added, and Meno says so (`blocksStill`; until
   2026-10-13 a molecule of the structure undone came, tied to atoms gone,
   and the undone step could not be redone); edits elsewhere do not count.
+- **A haptic bond binds its ring whole** (2026-10-13): where an atom of
+  the ring it binds is deleted or merged onto another, or it is pasted or
+  taken as part of a structure without its ring, it binds none - a plain
+  bond to its star - rather than name atoms gone, or the ring it was
+  copied from (`endpointsHeld`, on every edit).
 - **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
   for a molecule: an element with the H it carries - C is methane, O water,
   N ammonia - or a label Meno knows, written out as the molecule it stands
