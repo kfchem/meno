@@ -54,6 +54,25 @@ const LEAST_PX = 12;
 /** The grey a picture shows until it is decoded. */
 const UNREAD = "#eef0f2";
 
+/**
+ * The shapes every picture draws with, made once and shared: a geometry each
+ * was 9,000 pictures' 45,000 - 162,000 with them all selected - all of them
+ * made and thrown away as the pictures came and went.
+ */
+const PLANE = new THREE.PlaneGeometry(1, 1);
+const SPOT_RING = new THREE.RingGeometry(0.82, 1, 48);
+const HANDLE_HIT_DISC = new THREE.CircleGeometry(HANDLE_HIT, 20);
+const HANDLE_DISC = new THREE.CircleGeometry(1, 20);
+const HANDLE_RING = new THREE.RingGeometry(0.68, 1, 20);
+const EDGE = new THREE.BufferGeometry().setFromPoints(
+  [
+    [-0.5, -0.5],
+    [0.5, -0.5],
+    [0.5, 0.5],
+    [-0.5, 0.5],
+  ].map(([x, y]) => new THREE.Vector3(x, y, 0)),
+);
+
 type Pt = { x: number; y: number };
 
 /** A picture's texture: none until it is decoded - `came` called then - or where its bytes are held nowhere. A film's draws a frame of the page for each of its own (`invalidate`). */
@@ -183,6 +202,7 @@ function Picture({
   const px = 1 / zoom;
   // the light round it while the pointer is on it, coming and going
   const lightMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
+  const lightRound = useRef<THREE.Group>(null);
   useEffect(() => () => lightMaterial.dispose(), [lightMaterial]);
   // an atom lit in the drawing from a place in it: unlit as the pointer leaves it - or as it goes, under the pointer
   const lit = useRef(false);
@@ -195,6 +215,8 @@ function Picture({
   useFrame((_, dt) => {
     const m = lightMaterial;
     const to = hovered ? LIT : 0;
+    // (not drawn at all while there is no light: four draws a picture, for nothing)
+    if (lightRound.current) lightRound.current.visible = m.opacity > 1e-3 || to > 0;
     if (Math.abs(m.opacity - to) < 1e-3) {
       m.opacity = to;
       return;
@@ -288,16 +310,14 @@ function Picture({
   return (
     <group position={[p.x, p.y, z]} rotation={[0, 0, p.turn ?? 0]} visible={!hidden}>
       {/* (round it, not under it: a light under a picture shows through it at so near a depth) */}
-      <group position={[0, 0, -Z_STEP / 2]}>
+      <group ref={lightRound} position={[0, 0, -Z_STEP / 2]}>
         {[
           [0, (p.h + pad) / 2, p.w + 2 * pad, pad],
           [0, -(p.h + pad) / 2, p.w + 2 * pad, pad],
           [(p.w + pad) / 2, 0, pad, p.h],
           [-(p.w + pad) / 2, 0, pad, p.h],
         ].map(([x, y, w, h], k) => (
-          <mesh key={k} position={[x, y, 0]} scale={[w, h, 1]} material={lightMaterial}>
-            <planeGeometry args={[1, 1]} />
-          </mesh>
+          <mesh key={k} position={[x, y, 0]} scale={[w, h, 1]} geometry={PLANE} material={lightMaterial} />
         ))}
       </group>
       <mesh
@@ -321,8 +341,8 @@ function Picture({
           lit.current = atom != null;
         }}
         onPointerDown={onDown}
+        geometry={PLANE}
       >
-        <planeGeometry args={[1, 1]} />
         {/* (a material of its own once decoded: one made without a picture is drawn without one) */}
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
@@ -363,8 +383,7 @@ function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
     if (spotMoving(now)) invalidate();
   });
   return (
-    <mesh ref={mesh} visible={false}>
-      <ringGeometry args={[0.82, 1, 48]} />
+    <mesh ref={mesh} visible={false} geometry={SPOT_RING}>
       <meshBasicMaterial color={COLORS.highlight} transparent opacity={0} depthWrite={false} toneMapped={false} />
     </mesh>
   );
@@ -380,18 +399,7 @@ function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
 function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
   const { gl } = useThree();
-  const edge = useMemo(() => {
-    const g = new THREE.BufferGeometry().setFromPoints(
-      [
-        [-0.5, -0.5],
-        [0.5, -0.5],
-        [0.5, 0.5],
-        [-0.5, 0.5],
-      ].map(([x, y]) => new THREE.Vector3(x, y, 0)),
-    );
-    return g;
-  }, []);
-  useEffect(() => () => edge.dispose(), [edge]);
+  const edge = EDGE;
   const corners = cornersOf(p);
   // (each handle by the corner it is at - lower left, lower right, upper right, upper left - and the one across from it)
   const handles = [
@@ -469,16 +477,14 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
             startScale(k, e.nativeEvent);
           }}
         >
-          <mesh>
-            <circleGeometry args={[HANDLE_HIT, 20]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          {/* (what a press takes - never drawn: a pointer finds it all the same) */}
+          <mesh geometry={HANDLE_HIT_DISC}>
+            <meshBasicMaterial visible={false} transparent opacity={0} depthWrite={false} />
           </mesh>
-          <mesh renderOrder={41}>
-            <circleGeometry args={[1, 20]} />
+          <mesh renderOrder={41} geometry={HANDLE_DISC}>
             <meshBasicMaterial color="#ffffff" depthTest={false} toneMapped={false} />
           </mesh>
-          <mesh renderOrder={42}>
-            <ringGeometry args={[0.68, 1, 20]} />
+          <mesh renderOrder={42} geometry={HANDLE_RING}>
             <meshBasicMaterial color={COLORS.highlight} depthTest={false} toneMapped={false} />
           </mesh>
         </group>
