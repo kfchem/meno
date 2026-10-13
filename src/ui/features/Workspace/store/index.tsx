@@ -77,9 +77,14 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
  */
 function drawingHeld(sel: Sel, model: Pick<Model, "atoms" | "bonds">): Sel {
   if (!sel.atoms.size && !sel.bonds.size) return sel;
+  // (counted, not gathered: this runs at every frame of a move of what is selected)
+  let heldAtoms = 0;
+  let heldBonds = 0;
+  for (const a of model.atoms) if (sel.atoms.has(a.id)) heldAtoms++;
+  for (const b of model.bonds) if (sel.bonds.has(b.id)) heldBonds++;
+  if (heldAtoms === sel.atoms.size && heldBonds === sel.bonds.size) return sel;
   const atoms = new Set(model.atoms.map((a) => a.id));
   const bonds = new Set(model.bonds.map((b) => b.id));
-  if ([...sel.atoms].every((id) => atoms.has(id)) && [...sel.bonds].every((id) => bonds.has(id))) return sel;
   return { atoms: new Set([...sel.atoms].filter((id) => atoms.has(id))), bonds: new Set([...sel.bonds].filter((id) => bonds.has(id))) };
 }
 

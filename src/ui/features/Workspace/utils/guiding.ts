@@ -2,7 +2,7 @@ import type { EditorStore } from "../store";
 import { IS_MAC } from "../../../../lib/doc/shortcuts";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { GUIDE_PX, guided, nearOf, sidesLike, sizedLike, widthLike, type Box } from "../presenting/guides";
+import { GUIDE_PX, guided, nearOf, sidesLike, sizedLike, widthLike, type Box, type GuideMarks } from "../presenting/guides";
 import { besidesBoxes, selectedBox } from "./extent";
 
 type Pt = { x: number; y: number };
@@ -28,6 +28,11 @@ function pixelOn(toWorld: (cx: number, cy: number) => Pt, at: Pt): number {
 /** Whether the keys held keep the guides off: Ctrl, or ⌘ on a Mac. */
 const off = (k: Held) => (IS_MAC ? k.metaKey : k.ctrlKey);
 
+/** The guides shown, or none: none again is no change (the move's steps come at every frame). */
+function showGuides(store: EditorStore, guides: GuideMarks | null): void {
+  if (guides || store.getState().guides) store.getState().setGuides(guides);
+}
+
 /**
  * A move of what is selected, guided by what is near (presenting/guides,
  * docs/PRESENTING.md, *Guides*): begun as the move begins - `from`, the
@@ -47,14 +52,14 @@ export function guideMove(store: EditorStore, toWorld: (cx: number, cy: number) 
     const kx = axis === "y" ? 0 : dx;
     const ky = axis === "x" ? 0 : dy;
     if (!moving || !others.length || off(keys)) {
-      if (store.getState().guides) store.getState().setGuides(null);
+      showGuides(store, null);
       return { x: kx, y: ky };
     }
     const g = guided(moving, kx, ky, others, GUIDE_PX * px, axis);
-    store.getState().setGuides(g.lines.length || g.marks.length ? { lines: g.lines, marks: g.marks } : null);
+    showGuides(store, g.lines.length || g.marks.length ? { lines: g.lines, marks: g.marks } : null);
     return { x: g.dx, y: g.dy };
   };
-  return { step, end: () => store.getState().setGuides(null) };
+  return { step, end: () => showGuides(store, null) };
 }
 
 /**
@@ -69,14 +74,14 @@ export function guideScale(store: EditorStore, toWorld: (cx: number, cy: number)
   const others = besidesBoxes(store.getState(), style);
   const step = (f: number, keys: Held, keep: (f: number) => Box): number => {
     if (off(keys)) {
-      if (store.getState().guides) store.getState().setGuides(null);
+      showGuides(store, null);
       return f;
     }
     const s = sizedLike(was, f, nearOf(keep(f), others, NEAR_SIDES * Math.max(was.x1 - was.x0, was.y1 - was.y0) * f + NEAR_PX * px), GUIDE_PX * px, keep);
-    store.getState().setGuides(s.marks.length ? { lines: s.lines, marks: s.marks } : null);
+    showGuides(store, s.marks.length ? { lines: s.lines, marks: s.marks } : null);
     return s.f;
   };
-  return { step, end: () => store.getState().setGuides(null) };
+  return { step, end: () => showGuides(store, null) };
 }
 
 /** Words (`caption`) made wider or narrower, guided by what is near: at each step, the width they come to - another's, near it - and what shows it. */
@@ -86,14 +91,14 @@ export function guideWidth(store: EditorStore, toWorld: (cx: number, cy: number)
   const others = besidesBoxes(store.getState(), style, undefined, { caption });
   const step = (now: Box, keys: Held): number | null => {
     if (off(keys)) {
-      if (store.getState().guides) store.getState().setGuides(null);
+      showGuides(store, null);
       return null;
     }
     const w = widthLike(now, nearOf(now, others, NEAR_SIDES * (now.x1 - now.x0) + NEAR_PX * px), GUIDE_PX * px);
-    store.getState().setGuides(w.marks.length ? { lines: [], marks: w.marks } : null);
+    showGuides(store, w.marks.length ? { lines: [], marks: w.marks } : null);
     return w.size;
   };
-  return { step, end: () => store.getState().setGuides(null) };
+  return { step, end: () => showGuides(store, null) };
 }
 
 /**
@@ -108,12 +113,12 @@ export function guideSides(store: EditorStore, toWorld: (cx: number, cy: number)
   const others = besidesBoxes(store.getState(), style);
   const step = (now: Box, moving: { x?: "x0" | "x1"; y?: "y0" | "y1" }, keys: Held): Box => {
     if (off(keys)) {
-      if (store.getState().guides) store.getState().setGuides(null);
+      showGuides(store, null);
       return now;
     }
     const s = sidesLike(now, moving, nearOf(now, others, NEAR_SIDES * Math.max(now.x1 - now.x0, now.y1 - now.y0) + NEAR_PX * px), GUIDE_PX * px);
-    store.getState().setGuides(s.marks.length ? { lines: [], marks: s.marks } : null);
+    showGuides(store, s.marks.length ? { lines: [], marks: s.marks } : null);
     return s.box;
   };
-  return { step, end: () => store.getState().setGuides(null) };
+  return { step, end: () => showGuides(store, null) };
 }

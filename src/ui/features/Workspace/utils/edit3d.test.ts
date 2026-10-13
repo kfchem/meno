@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
-import { editedFrom, isResult, movingAtoms, placesOf, settable, stereoAfter, valueOf, withValue } from "./edit3d";
+import { editedFrom, isResult, movingAtoms, movingFor, placesOf, settable, stereoAfter, valueOf, withValue } from "./edit3d";
 
 /** Butane, C1-C2-C3-C4, anti, with a hydrogen on C1 (4) and one on C4 (5); and a bonded list for ring tests. */
 const butane = (): Molecule3D => ({
@@ -86,6 +86,25 @@ describe("a measurement set to a value", () => {
     const len = (p: number[], a: number, b: number) => Math.hypot(p[3 * a] - p[3 * b], p[3 * a + 1] - p[3 * b + 1], p[3 * a + 2] - p[3 * b + 2]);
     expect(len(next, 2, 3)).toBeCloseTo(len(xyz, 2, 3), 9);
     expect(len(next, 3, 5)).toBeCloseTo(len(xyz, 3, 5), 9);
+  });
+
+  it("is not set where it has no value - a torsion across three atoms in a line: nothing moves, and none is offered", () => {
+    // (C-C≡C-C: the middle three in a line)
+    const line = [0, 1, 0, 0, 0, 0, 1.2, 0, 0, 2.4, 0, 0, 3.4, 1, 0];
+    expect(valueOf(line, [0, 1, 2, 3])).toBeNaN();
+    expect(withValue(line, [0, 1, 2, 3], 60, [3])).toEqual(line);
+    const alkyne = {
+      id: 1,
+      atoms: [0, 1, 2, 3].map((i) => ({ el: "C", x: line[3 * i], y: line[3 * i + 1], z: line[3 * i + 2] })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 3 },
+        { a1: 2, a2: 3, order: 1 },
+      ],
+      at: { x: 0, y: 0 },
+      measures: [{ id: 1, atoms: [0, 1, 2, 3] }],
+    } as Molecule3D;
+    expect(movingFor(alkyne, 1, 0)).toBeNull();
   });
 
   it("is kept within what can be set, a torsion angle brought round", () => {

@@ -5,8 +5,9 @@
 //!
 //! It goes on the network only as Meno's network lets it (net.rs): as a
 //! task with the "ccd" purpose - refused when Meno is offline, or until the
-//! user has allowed it - whose requests go through Meno's proxy. Only the
-//! components' names leave Meno, in the files' paths.
+//! user has allowed it - whose requests go through Meno's proxy, to the
+//! hosts its consent named alone. Only the components' names leave Meno,
+//! in the files' paths.
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -84,9 +85,10 @@ pub fn is_component(id: &str, text: &str) -> bool {
 }
 
 /// The components named: those kept; and, with `fetch`, the rest fetched
-/// from the wwPDB and kept - else listed as `missing`.
+/// from the wwPDB - from the hosts the consent named (`hosts`,
+/// lib/net/components.ts) alone - and kept; else listed as `missing`.
 #[tauri::command]
-pub async fn ccd_components(app: AppHandle, ids: Vec<String>, fetch: bool) -> Result<Components, String> {
+pub async fn ccd_components(app: AppHandle, ids: Vec<String>, fetch: bool, hosts: Option<Vec<String>>) -> Result<Components, String> {
     let mut ids: Vec<String> = ids.into_iter().filter(|id| valid_id(id)).collect();
     ids.sort();
     ids.dedup();
@@ -96,7 +98,7 @@ pub async fn ccd_components(app: AppHandle, ids: Vec<String>, fetch: bool) -> Re
         return Ok(Components { found, absent: Vec::new(), missing });
     }
     // (refused here when Meno is offline, or the lookup is not allowed)
-    let task = app.state::<Net>().begin(PURPOSE, LABEL)?;
+    let task = app.state::<Net>().begin(PURPOSE, LABEL, hosts)?;
     let proxy = task.proxy_url().ok_or("Meno's network is not up")?;
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();

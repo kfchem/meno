@@ -27,7 +27,7 @@ import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
 import { askOf } from "../../render/renderOptions";
-import { SCENE } from "../../render/renders";
+import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
 import { currentStyle3D } from "../../style3d";
 import { holdPicture } from "../../../../../lib/picture/held";
@@ -53,13 +53,21 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * own (`running`, amended in): undo does not take a run back, and the
  * workspace saved keeps it, so that one opened again picks its jobs up.
  */
+/** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
+export function notMade(places: readonly number[], of: number): string {
+  const which = places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
+  return `${which} of ${of} could not be made in 3D`;
+}
+
 export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState, w: Pick<RunWith, "extentOf">) {
   /** Those waiting for a step's jobs to end: kept once it has none. */
   const waiters = new Map<number, (() => void)[]>();
   /** Steps whose results are being read back. */
   const finishing = new Set<number>();
   /** What has been read of each job's log: how far, and its last line. */
-  const logs = new Map<string, { from: number; line: string }>();
+  const logs = new Map<string, { from: number; line: string; tail?: string; progress?: { done: number; total: number } }>();
+  // (the jobs whose folders were taken away with their step, deleted: no log or files of theirs to show, should it come back)
+  const forgotten = new Set<string>();
   /** The texts that show a job's log, by the job. */
   const shown = new Map<string, number>();
   let looking = false;
@@ -264,13 +272,28 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const options = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const worked: Worked[] = [];
     let compounds = 0;
+    // (those that could not be made, by their places among the structures: the others made all the same)
+    const failed: number[] = [];
     try {
-      const chem = await pluginWorker(plugin);
-      for (const atoms of input.structures) {
+      let chem = await pluginWorker(plugin);
+      for (const [place, atoms] of input.structures.entries()) {
         const block = blocksOf(d.model, atoms)[0];
         if (!block) continue;
-        const made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
-        if (!made) continue;
+        let made;
+        try {
+          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
+        } catch {
+          // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
+          failed.push(place + 1);
+          // (its worker may have gone with it - held past its time, or stopped: the next is asked of the one running now, started afresh where need be)
+          chem = await pluginWorker(plugin);
+          continue;
+        }
+        // (none made of it, said so too)
+        if (!made) {
+          failed.push(place + 1);
+          continue;
+        }
         const m = moleculeOf(made, block);
         // (what worked out their energies, for the steps that rank them: the plugin, and its force field)
         const calc = { readers: [], program: plugin.name, ...(made.field ? { method: made.field } : {}) };
@@ -292,10 +315,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
     const took = Date.now() - at;
+    const left = failed.length ? ` \u00b7 ${notMade(failed, input.structures.length)}` : "";
     bringIn(id, worked, "conformers", {
       at,
       ok: true,
-      said: `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${compounds > 1 ? ` of ${compounds} compounds` : ""}`,
+      said: `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${compounds > 1 ? ` of ${compounds} compounds` : ""}${left}`,
       input: key,
       took,
       kind: step.kind,
@@ -518,18 +542,26 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   }
 
   /** What a running job's log says last. */
-  async function lastLine(job: string): Promise<string | undefined> {
+  async function lastLine(job: string): Promise<{ line?: string; progress?: { done: number; total: number } }> {
     const was = logs.get(job) ?? { from: 0, line: "" };
-    let { from, line } = was;
+    let { from, line, progress, tail = "" } = was;
     for (let k = 0; k < 40; k++) {
       const read = await readJobLog(job, from).catch(() => null);
       if (!read || read.next === from) break;
-      const lines = read.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      // (how far it is, where its program says so - "progress 12/240" - kept apart from what it says besides;
+      // read from whole lines only, a line read in part kept for the next: "1/240" is no "1/24")
+      const text = tail + read.text;
+      const cut = text.lastIndexOf("\n") + 1;
+      const whole = text.slice(0, cut);
+      // (a program that never ends its line keeps no more than a line's worth waiting)
+      tail = text.slice(Math.max(cut, text.length - 256));
+      progress = progressOf(whole) ?? progress;
+      const lines = whole.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^progress \d+\/\d+$/.test(l));
       if (lines.length) line = lines[lines.length - 1];
       from = read.next;
     }
-    logs.set(job, { from, line });
-    return line || undefined;
+    logs.set(job, { from, line, tail, ...(progress ? { progress } : {}) });
+    return { ...(line ? { line } : {}), ...(progress ? { progress } : {}) };
   }
 
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
@@ -758,7 +790,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             continue;
           }
           const place = job.state === "waiting" ? waiting.findIndex((x) => x.id === j.id) + 1 : 0;
-          const line = job.state === "running" ? await lastLine(j.id) : undefined;
+          const { line, progress } = job.state === "running" ? await lastLine(j.id) : {};
           seen[j.id] = {
             state: job.state,
             created: job.created,
@@ -766,6 +798,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             ...(job.ended != null ? { ended: job.ended } : {}),
             ...(place > 0 ? { place } : {}),
             ...(line ? { line } : {}),
+            ...(progress ? { progress } : {}),
           };
         }
       }
@@ -835,10 +868,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       await revealItemInDir(await jobFolder(job));
     },
     lookAtJobs,
-    /** A step deleted: its jobs stopped, and their files taken away once they have ended. */
-    forgetJobs: (step: { running?: { jobs: StepJob[] }; ran?: StepRan }) => {
-      const jobs = [...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? [])];
+    /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
+    jobsKept: (step: { ran?: StepRan }) => (step.ran?.jobs ?? []).some((j) => !forgotten.has(j)),
+    /** A step deleted: its jobs stopped, and their files taken away once they have ended - those of every run it keeps, not its last alone. */
+    forgetJobs: (step: { running?: { jobs: StepJob[] }; ran?: StepRan; runs?: readonly StepRan[] }) => {
+      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])];
       for (const job of jobs) {
+        forgotten.add(job);
         void (async () => {
           await stopJob(job).catch(() => {});
           const until = Date.now() + STOP_WAIT_MS;

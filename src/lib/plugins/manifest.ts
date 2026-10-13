@@ -113,7 +113,8 @@ export type RoleDecl = { role: RoleId; programs: string[]; options: Option[] };
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; takes?: SetKind[]; files?: string[] };
+/** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: SetKind[]; files?: string[] };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -309,8 +310,16 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
-  const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roles.find((r) => r.role === kind)?.options ?? []));
-  return kinds.map((kind) => ({ kind, programs, options: optionsFor(kind), ...(takes.length ? { takes: [...takes] } : {}), ...(files.length ? { files: [...files] } : {}) }));
+  const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
+  const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
+  return kinds.map((kind) => ({
+    kind,
+    programs,
+    options: optionsFor(kind),
+    ...(roleOf(kind) ? { roleOptions: true as const } : {}),
+    ...(takes.length ? { takes: [...takes] } : {}),
+    ...(files.length ? { files: [...files] } : {}),
+  }));
 }
 
 /** A program's file, as a system has it: a name, not a path. */

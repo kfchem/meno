@@ -69,6 +69,22 @@ THERMO = """
 """
 
 
+# (after the property printout xtb ends with: the dipole's heading, its "q only" and "full" rows - x, y, z in atomic units, then the total in debye)
+PRINTOUT = """
+molecular dipole:
+                 x           y           z       tot (Debye)
+ q only:        0.000      -0.000      -0.607
+   full:       -0.000      -0.000      -0.872       2.216
+molecular quadrupole (traceless):
+"""
+# (GFN1-xTB's: x, y, z in atomic units and the total in debye on one row)
+PRINTOUT_GFN1 = """
+ dipole moment from electron density (au)
+     X       Y       Z
+  -0.0000   0.0000  -1.0893  total (Debye):    2.769
+"""
+
+
 def ask(op, **m):
     said = worker.answer(json.dumps({"id": 1, "op": op, **m}))
     if not said["ok"]:
@@ -173,6 +189,22 @@ class Collect(unittest.TestCase):
         self.assertAlmostEqual(thermo["thermo.temperature"], 298.15)
         self.assertAlmostEqual(thermo["thermo.h-correction"], 0.0583013)
         self.assertAlmostEqual(thermo["thermo.ts"], 0.0316937)
+
+    def test_the_dipole_is_the_one_printed_for_the_geometry_it_ended_on(self):
+        # (after an optimisation the dump's dipole is the starting geometry's; the printout's, the last geometry's)
+        dump = json.dumps({"total energy": -5.07, "dipole / a.u.": [0.0, 0.0, -0.8935147]})
+        out = ask("collect", step="optimise", entries=[ETHYNE], options=defaults("optimise"),
+                  files={"xtbopt.log": PATH, "xtbout.json": dump, ".xtboptok": ""}, log=PRINTOUT, ended="done")["outputs"][0]
+        dipole = next(r for r in out["results"] if r["id"] == "dipole")
+        self.assertAlmostEqual(dipole["value"], 2.216)
+        self.assertEqual((dipole["quantity"], dipole["rank"]), ("dipole", 2))
+        gfn1 = ask("collect", step="optimise", entries=[ETHYNE], options={**defaults("optimise"), "method": "gfn1"},
+                   files={"xtbopt.log": PATH, "xtbout.json": dump, ".xtboptok": ""}, log=PRINTOUT_GFN1, ended="done")["outputs"][0]
+        self.assertAlmostEqual(next(r for r in gfn1["results"] if r["id"] == "dipole")["value"], 2.769)
+        # (where it printed none, the dump's, in debye)
+        bare = ask("collect", step="energy", entries=[ETHYNE], options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
+        dipole = next(r for r in bare["results"] if r["id"] == "dipole")
+        self.assertAlmostEqual(dipole["value"], 0.8935147 * 2.541746473)
 
     def test_says_why_a_job_failed(self):
         log = "\n########\n[ERROR] Program stopped due to fatal error\n-2- Some atoms in the start geometry are *very* close\n-1- Found *very* short distance of  0.000E+00 for O1-H2\n########\n"

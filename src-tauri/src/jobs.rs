@@ -57,6 +57,29 @@ const QUEUE_LOCK: &str = ".queue.lock";
 /// How often a waiting job looks for its turn, and a running one at its program and for a stop.
 const WAIT_STEP: Duration = Duration::from_millis(400);
 const RUN_STEP: Duration = Duration::from_millis(200);
+/// How often they look while what they look for is new - a program just
+/// started, a job just at the head of the queue: a quick one seen to end, or
+/// its turn seen to come, as soon as it does - for how long, and by when
+/// they are back at their steps.
+const QUICK_STEP: Duration = Duration::from_millis(50);
+const QUICK_FOR: Duration = Duration::from_secs(3);
+const EASED_BY: Duration = Duration::from_secs(6);
+
+/// How long to wait before looking again, `young` into what is looked for:
+/// `QUICK_STEP` for its first `QUICK_FOR`, then more each time, linearly,
+/// until `settled` - the step a look took before - by `EASED_BY`, and from
+/// then on. What runs on costs to look at no more than it did.
+fn step_at(young: Duration, settled: Duration) -> Duration {
+    let quick = QUICK_STEP.min(settled);
+    if young <= QUICK_FOR {
+        return quick;
+    }
+    if young >= EASED_BY {
+        return settled;
+    }
+    let f = (young - QUICK_FOR).as_secs_f64() / (EASED_BY - QUICK_FOR).as_secs_f64();
+    quick + (settled - quick).mul_f64(f)
+}
 /// How long a program asked to stop has before it is made to (macOS, Linux).
 const STOP_GRACE: Duration = Duration::from_secs(3);
 /// How long a job may stand without a record before it is taken for gone: its runner starting.
@@ -265,15 +288,19 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         return 1;
     }
 
-    // its turn: as many running as were allowed, those asked for first first
+    // its turn: as many running as were allowed, those asked for first first -
+    // looked for often from when it is at the head of the queue, and at the
+    // old step behind it, so that a queue of many costs what it did
+    let mut at_head: Option<Instant> = None;
     loop {
         if stop_asked(dir) {
             end(JobState::Stopped, None, None, None);
             return 0;
         }
         match take_turn(dir, &spec, &base) {
-            Ok(true) => break,
-            Ok(false) => std::thread::sleep(WAIT_STEP),
+            Ok(Turn::Taken) => break,
+            Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            Ok(Turn::Behind) => std::thread::sleep(WAIT_STEP),
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
                 return 1;
@@ -325,6 +352,7 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
 /// to - and what it started that is still there stopped with it: how it
 /// ended, and whether it was stopped.
 fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::ExitStatus>, bool) {
+    let begun = Instant::now();
     let mut stopping: Option<Instant> = None;
     let status = loop {
         match program.child.try_wait() {
@@ -339,16 +367,26 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
         if stopping.is_some_and(|t| t.elapsed() > STOP_GRACE) {
             program.stop(true);
         }
-        std::thread::sleep(RUN_STEP);
+        // (often while it is young: a quick program seen to end as soon as it does)
+        std::thread::sleep(step_at(begun.elapsed(), RUN_STEP));
     };
     program.stop(true);
     (status, stopping.is_some())
 }
 
+/// A waiting job's turn, as it looks: taken; next - the first waiting, its
+/// turn to come as one running ends; or behind others waiting.
+#[derive(Debug, PartialEq)]
+enum Turn {
+    Taken,
+    Next,
+    Behind,
+}
+
 /// Whether it is this job's turn - the first waiting, with fewer running
 /// than it allows - and, where it is, the job recorded running. Asked by one
 /// runner at a time.
-fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bool> {
+fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
     queue.lock()?;
@@ -372,11 +410,14 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bo
         }
     }
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
-    let taken = mine && running < spec.slots.max(1);
-    if taken {
-        write_record(dir, &JobRecord { state: JobState::Running, started: Some(now_ms()), ..base.clone() })?;
+    if !mine {
+        return Ok(Turn::Behind);
     }
-    Ok(taken)
+    if running >= spec.slots.max(1) {
+        return Ok(Turn::Next);
+    }
+    write_record(dir, &JobRecord { state: JobState::Running, started: Some(now_ms()), ..base.clone() })?;
+    Ok(Turn::Taken)
 }
 
 /// A running program, and the group - or job object - it and what it starts are in.
@@ -1696,6 +1737,25 @@ pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
 mod tests {
     use super::*;
 
+    // (a quick step shows done as quickly as it ran; what runs on costs no more to watch)
+    #[test]
+    fn looks_often_while_young_then_eases_back_to_its_old_step() {
+        let ms = Duration::from_millis;
+        assert_eq!(step_at(ms(0), RUN_STEP), QUICK_STEP);
+        assert_eq!(step_at(QUICK_FOR, WAIT_STEP), QUICK_STEP);
+        // (half way through the easing, half way between)
+        let half = step_at(ms(4_500), RUN_STEP);
+        assert!((half.as_secs_f64() - 0.125).abs() < 1e-6, "{half:?}");
+        assert_eq!(step_at(EASED_BY, RUN_STEP), RUN_STEP);
+        assert_eq!(step_at(Duration::from_secs(600), WAIT_STEP), WAIT_STEP);
+        // (never longer than the old step, nor ever shorter than the quick one; a step already quicker kept)
+        for t in (0..8000).step_by(250) {
+            let s = step_at(ms(t), WAIT_STEP);
+            assert!(s >= QUICK_STEP && s <= WAIT_STEP);
+        }
+        assert_eq!(step_at(ms(0), ms(20)), ms(20));
+    }
+
     fn temp() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("meno-jobs-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
@@ -1725,6 +1785,39 @@ mod tests {
     /// A job run as its runner runs one, what it is to run taken as it is.
     fn run_job(dir: &Path) -> i32 {
         super::run_job(dir, &|_| Ok(()))
+    }
+
+    #[test]
+    fn a_waiting_job_is_next_at_the_head_of_the_queue_and_behind_after_it() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        let (running, head, after) = (mk(), mk(), mk());
+        // (each with its runner there, holding its lock)
+        let held: Vec<_> = [&running, &head, &after]
+            .iter()
+            .map(|dir| {
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        write_record(&running, &JobRecord { state: JobState::Running, ..base(&running) }).unwrap();
+        write_record(&head, &base(&head)).unwrap();
+        write_record(&after, &base(&after)).unwrap();
+        // (the one slot taken: the head of the queue next, the other behind it)
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind);
+        // (the slot free: the head's turn taken, and it recorded running)
+        write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
+        assert_eq!(current_record(&head).unwrap().state, JobState::Running);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
+        drop(held);
+        let _ = fs::remove_dir_all(&root);
     }
 
     fn wait_for(what: impl Fn() -> bool) {

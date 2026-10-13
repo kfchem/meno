@@ -28,10 +28,15 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
 - an optimisation's path in `xtbopt.log`, Xmol frames whose comment line
   holds the total energy and the gradient norm; `.xtboptok` where it
   converged, `NOT_CONVERGED` where it did not;
-- the total energy, the HOMO-LUMO gap, the dipole and the partial charges,
-  and a frequency job's frequencies, reduced masses and IR intensities,
-  from `xtbout.json`; the thermochemistry from the THERMODYNAMIC summary
-  and the H(T), T*S and G(T) table it prints.
+- the total energy, the HOMO-LUMO gap and the partial charges, and a
+  frequency job's frequencies, reduced masses and IR intensities, from
+  `xtbout.json`; the dipole moment from the property printout xtb ends
+  with (GFN2-xTB's "molecular dipole:", its "full" row; GFN1-xTB's "dipole
+  moment from electron density": the total in debye), which is of the
+  geometry it ended on - after an optimisation the dump's dipole is the
+  starting geometry's - and from the dump where it printed none; the
+  thermochemistry from the THERMODYNAMIC summary and the H(T), T*S and
+  G(T) table it prints.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -74,6 +79,19 @@ DEBYE_PER_AU = 2.541746473
 # a frequency smaller than this, either way, is a translation or a rotation projected out (cm-1)
 FREQUENCY_LEAST = 1.0
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
+# the dipole as the property printout has it - x, y and z in atomic units,
+# then the total in debye: GFN2-xTB's under "molecular dipole:" and its
+# heading, the "q only" row, then the "full" row; GFN1-xTB's under "dipole
+# moment from electron density (au)" and its heading, x, y, z and "total
+# (Debye):" on one row
+PRINTED_DIPOLES = (
+    re.compile(
+        r"molecular dipole:[^\n]*\n[^\n]*\n[^\n]*q only:[^\n]*\n\s*full:\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")"
+    ),
+    re.compile(
+        r"dipole moment from electron density \(au\)[^\n]*\n[^\n]*\n\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+total \(Debye\):\s+(" + FLOAT + r")"
+    ),
+)
 
 
 class Refused(Exception):
@@ -246,17 +264,28 @@ def floats(v, n=None):
     return [float(x) for x in v]
 
 
-def results_of(dump, n):
-    """The dump's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
+def dipole_of(dump, log):
+    """The dipole moment, in debye: the total xtb printed last - of the
+    geometry it ended on - or, where it printed none, the dump's; none,
+    where neither says one."""
+    printed = [m for p in PRINTED_DIPOLES for m in p.finditer(log or "")]
+    if printed:
+        return number(max(printed, key=lambda m: m.start()).group(4))
+    dipole = floats(dump.get("dipole / a.u."), 3)
+    return math.sqrt(sum(v * v for v in dipole)) * DEBYE_PER_AU if dipole is not None else None
+
+
+def results_of(dump, n, log=""):
+    """The job's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
     out = []
     gap = dump.get("HOMO-LUMO gap / eV")
     if isinstance(gap, (int, float)) and math.isfinite(gap):
         out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": float(gap), "unit": "eV", "digits": 2})
-    dipole = floats(dump.get("dipole / a.u."), 3)
+    dipole = dipole_of(dump, log)
     if dipole is not None:
         out.append({
             "id": "dipole", "on": "molecule", "group": "Properties", "label": "Dipole moment",
-            "value": math.sqrt(sum(v * v for v in dipole)) * DEBYE_PER_AU, "quantity": "dipole", "rank": 2,
+            "value": dipole, "quantity": "dipole", "rank": 2,
         })
     charges = floats(dump.get("partial charges"), n)
     if charges is not None:
@@ -359,7 +388,7 @@ def output_of(step, entry, options, files, log):
         raise Refused("xtb wrote no energy")
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
     version = str(dump.get("xtb version") or VERSION).split()[0]
-    results = results_of(dump, n)
+    results = results_of(dump, n, log)
     if step == "frequencies":
         results += thermo_of(log)
     solvent = options.get("solvent", "none")
