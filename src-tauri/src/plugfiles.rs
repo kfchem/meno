@@ -251,7 +251,16 @@ pub fn provided(data: &Path, manifest: &Value, id: &str, name: &str) -> Result<O
 
 /// A command run to its end, saying why where it did not end well.
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
-    let out = std::process::Command::new(program).args(args).output().map_err(|e| format!("{program}: {e}"))?;
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    // (no console shown for it: Windows' tar is a console program)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output().map_err(|e| format!("{program}: {e}"))?;
     if out.status.success() {
         return Ok(());
     }
@@ -269,37 +278,48 @@ fn tar() -> String {
     }
 }
 
-/// Where an archive is unpacked first: beside the folder it goes to, its
-/// name with `.part` after it - the whole name, dots and all, never cut at
-/// its last dot as a file's extension would be ("blender-5.2.2-macos-arm64").
-fn staging(folder: &Path) -> PathBuf {
-    let mut name = folder.file_name().unwrap_or_default().to_os_string();
-    name.push(".part");
-    folder.with_file_name(name)
+/// A folder taken away whole - or not there at all. Where something holds a
+/// file in it for a moment - on Windows, a virus checker looking into what
+/// was just unpacked - tried again, a little later each time, for some
+/// seconds in all.
+fn removed(folder: &Path) -> std::io::Result<()> {
+    let mut wait = std::time::Duration::from_millis(100);
+    loop {
+        match std::fs::remove_dir_all(folder) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) if wait > std::time::Duration::from_secs(2) => return Err(e),
+            Err(_) => {
+                std::thread::sleep(wait);
+                wait *= 2;
+            }
+        }
+    }
 }
 
 /// An archive fetched (`archive`, its hash checked) unpacked as its download
-/// says, into the folder it goes to: first beside it - then put in place
-/// whole, and stamped. The program in it, where it is there; why not.
+/// says, into the folder it goes to - what was there taken away first - and
+/// stamped last: an unpacking cut short leaves no stamp, so it is no copy
+/// Meno takes, and is unpacked again. (Not unpacked beside it and moved in:
+/// on Windows a virus checker looking into what was just unpacked held the
+/// move up.) The program in it, where it is there; why not.
 pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, String> {
     let how = d.unpack.ok_or("not an archive")?;
     let program = d.program.as_deref().ok_or("no program said")?;
     let folder = unpacked(dir, d);
-    let part = staging(&folder);
-    let _ = std::fs::remove_dir_all(&part);
-    std::fs::create_dir_all(&part).map_err(|e| format!("{}: {e}", part.display()))?;
+    removed(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+    std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let done = match how {
-        Unpack::Zip => run(&tar(), &["-xf".as_ref(), archive.as_os_str(), "-C".as_ref(), part.as_os_str()]),
-        Unpack::TarXz => run(&tar(), &["-xJf".as_ref(), archive.as_os_str(), "-C".as_ref(), part.as_os_str()]),
-        Unpack::Dmg => unpack_dmg(archive, program, &part, dir),
+        Unpack::Zip => run(&tar(), &["-xf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
+        Unpack::TarXz => run(&tar(), &["-xJf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
+        Unpack::Dmg => unpack_dmg(archive, program, &folder, dir),
     };
     if let Err(e) = done {
-        let _ = std::fs::remove_dir_all(&part);
+        let _ = removed(&folder);
         return Err(format!("{} could not be unpacked: {e}", d.file));
     }
-    let _ = std::fs::remove_dir_all(&folder);
-    std::fs::rename(&part, &folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let Some(found) = program_in(&folder, program) else {
+        let _ = removed(&folder);
         return Err(format!("{} holds no {program}", d.file));
     };
     std::fs::write(folder.join(STAMP), &d.sha256).map_err(|e| format!("{}: {e}", folder.display()))?;
@@ -657,13 +677,20 @@ mod tests {
         assert_eq!(copy_of(dir.path(), &d), None);
         let program = unpack(&zip, &d, dir.path()).unwrap();
         assert_eq!(program, dir.path().join("blender-5.2.2-windows-x64").join("blender-5.2.2-windows-x64").join("blender.exe"));
-        assert_eq!(copy_of(dir.path(), &d), Some(program));
+        assert_eq!(copy_of(dir.path(), &d), Some(program.clone()));
         // (a stamp that is not this archive's: not a copy Meno takes)
         std::fs::write(unpacked(dir.path(), &d).join(STAMP), "0".repeat(64)).unwrap();
         assert_eq!(copy_of(dir.path(), &d), None);
+        // (unpacked again over one cut short - no stamp - and stamped)
+        std::fs::remove_file(unpacked(dir.path(), &d).join(STAMP)).unwrap();
+        std::fs::write(unpacked(dir.path(), &d).join("left.txt"), "cut short").unwrap();
+        assert_eq!(unpack(&zip, &d, dir.path()).unwrap(), program);
+        assert!(!unpacked(dir.path(), &d).join("left.txt").exists());
+        assert_eq!(copy_of(dir.path(), &d), Some(program));
         // (one without the program said: refused, nothing left of it)
         let bad = Download { program: Some("*/nothing.exe".into()), ..d };
         assert!(unpack(&zip, &bad, dir.path()).unwrap_err().contains("holds no */nothing.exe"));
+        assert!(!unpacked(dir.path(), &bad).exists());
     }
 
     #[cfg(unix)]
@@ -715,12 +742,28 @@ mod tests {
         assert!(String::from_utf8_lossy(&said.stdout).starts_with("Blender 5.2.2"));
     }
 
+    #[cfg(unix)]
     #[test]
-    fn unpacks_first_beside_where_it_goes_its_whole_name_kept() {
-        let dir = Path::new("/data/files");
-        assert_eq!(staging(&dir.join("blender-5.2.2-macos-arm64")), dir.join("blender-5.2.2-macos-arm64.part"));
-        // (two archives of one version, for two processors: never the same place)
-        assert_ne!(staging(&dir.join("blender-5.2.2-windows-x64")), staging(&dir.join("blender-5.2.2-windows-arm64")));
+    fn takes_a_folder_away_once_what_held_it_lets_go() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = Scratch::new();
+        let folder = dir.path().join("blender-5.2.2-macos-arm64");
+        tree(&folder, "Blender.app", "Contents/MacOS/Blender");
+        // (held for a moment: nothing in it can be taken away - as a virus checker holds a file on Windows)
+        let held = folder.join("Blender.app");
+        std::fs::set_permissions(&held, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let letting_go = {
+            let held = held.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                std::fs::set_permissions(&held, std::fs::Permissions::from_mode(0o755)).unwrap();
+            })
+        };
+        removed(&folder).unwrap();
+        letting_go.join().unwrap();
+        assert!(!folder.exists());
+        // (and one not there at all: nothing to do)
+        removed(&folder).unwrap();
     }
 
     #[test]
