@@ -8,6 +8,9 @@ import { DURATION } from "./motion";
  */
 export function usePresence<T>(items: readonly T[], keyOf: (item: T) => string, ms = DURATION.quick * 1000) {
   const seen = useRef(new Map<string, { item: T; leaving: boolean }>());
+  // (each gone one's own time to go - not the render's: a render before it
+  // was up cleared it, and what had gone was kept, unseen, for good)
+  const timers = useRef(new Map<string, number>());
   const [, wake] = useReducer((n: number) => n + 1, 0);
   const now = new Set<string>();
   for (const item of items) {
@@ -15,21 +18,35 @@ export function usePresence<T>(items: readonly T[], keyOf: (item: T) => string, 
     now.add(key);
     seen.current.set(key, { item, leaving: false });
   }
-  const gone: string[] = [];
   for (const [key, e] of seen.current) {
-    if (!now.has(key) && !e.leaving) {
-      e.leaving = true;
-      gone.push(key);
-    }
+    if (!now.has(key) && !e.leaving) e.leaving = true;
   }
   useEffect(() => {
-    if (!gone.length) return;
-    const t = window.setTimeout(() => {
-      for (const key of gone) if (seen.current.get(key)?.leaving) seen.current.delete(key);
-      wake();
-    }, ms);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- what went this render
-  }, [gone.join("\u0000")]);
+    for (const [key, t] of timers.current) {
+      if (seen.current.get(key)?.leaving) continue;
+      // (back before its time was up)
+      window.clearTimeout(t);
+      timers.current.delete(key);
+    }
+    for (const [key, e] of seen.current) {
+      if (!e.leaving || timers.current.has(key)) continue;
+      timers.current.set(
+        key,
+        window.setTimeout(() => {
+          timers.current.delete(key);
+          if (!seen.current.get(key)?.leaving) return;
+          seen.current.delete(key);
+          wake();
+        }, ms),
+      );
+    }
+  });
+  useEffect(() => {
+    const all = timers.current;
+    return () => {
+      for (const t of all.values()) window.clearTimeout(t);
+      all.clear();
+    };
+  }, []);
   return [...seen.current.entries()].map(([key, e]) => ({ key, item: e.item, leaving: e.leaving }));
 }

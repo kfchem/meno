@@ -566,7 +566,10 @@ All hover-based, as above.
   place, then goes in a moment, the label coming through: never a frame
   with no label, nor with the old one. The drawing's labels are drawn each
   by its atom (`Labels2D` `keyOf`): a label added or taken away sets no
-  other label's letters again.
+  other label's letters again. A label taken away - undone, redone away,
+  deleted with its atom, its atom drawn plain again - fades out in
+  DURATION.quick, gently at first, kept by its atom's key as it goes
+  (`usePresence`, `fadingOut`); before, it went in one frame.
 - **Labels read as they are meant** (the maintainer, 2026-10-10: nh2 is
   NH2, obz OBz, hnfmoc NHFmoc; `lib/chem/smartLabel.ts`). No list of what
   is typed: of the labels Meno reads (docs/CTFILE.md, *Atoms that are not

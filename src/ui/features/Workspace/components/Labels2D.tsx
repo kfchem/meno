@@ -2,13 +2,14 @@ import { Text } from "@react-three/drei";
 import * as THREE from "three";
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { TAU, follow } from "../../../theme/motion";
+import { DURATION, TAU, follow } from "../../../theme/motion";
+import { usePresence } from "../../../theme/presence";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
-import { fadeLetters } from "./labelFade";
+import { fadeLetters, fadedOpacity, fadingOut } from "./labelFade";
 
 /**
  * How far an italic run leans: about the slant of a sans-serif's italic.
@@ -40,7 +41,19 @@ export default function Labels2D() {
     const id = index != null ? atoms[index]?.id : undefined;
     return id != null ? `${t.beside ? "mark" : "atom"}-${id}` : `txt-${i}`;
   };
-  return <Texts2D texts={layout.texts} keyOf={keyOf} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
+  // (a label gone - its atom undone or deleted, its label taken back - kept a moment, by what it was drawn by, as it fades out)
+  const at = new Map(layout.texts.map((t, i) => [t, i]));
+  // (kept a little past the fade, so that it ends at naught, not cut short by a slow frame)
+  const shown = usePresence(layout.texts, (t) => keyOf(t, at.get(t) ?? -1), DURATION.quick * 1000 + 50);
+  const leavingKeys = shown.filter((e) => e.leaving).map((e) => e.key);
+  const signature = leavingKeys.join("\u0000");
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- as the texts are, and which are going
+  const texts = useMemo(() => shown.map((e) => e.item), [layout.texts, signature]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
+  const keys = useMemo(() => shown.map((e) => e.key), [layout.texts, signature]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
+  const leaving = useMemo(() => new Set(leavingKeys), [signature]);
+  return <Texts2D texts={texts} keyOf={(_, i) => keys[i]} leaving={leaving} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
 }
 
 /** troika's text, as far as Meno looks into it: whether its letters are still to be set, or being set. */
@@ -66,6 +79,7 @@ export function Texts2D({
   fade = true,
   onDrawn,
   keyOf,
+  leaving,
 }: {
   texts: readonly TextItem[];
   moved?: boolean;
@@ -75,6 +89,8 @@ export function Texts2D({
   onDrawn?: (texts: readonly TextItem[]) => void;
   /** What each text is drawn by, from one set to the next: by default its place in the set. */
   keyOf?: (t: TextItem, i: number) => string;
+  /** The texts, by `keyOf`, gone from the drawing and fading out (Labels2D). */
+  leaving?: ReadonlySet<string>;
 }) {
   const { opts, zoom } = useDrawnLayout();
 
@@ -124,6 +140,27 @@ export function Texts2D({
     group.current?.traverse((o) => fadeLetters(o, s.level));
     invalidate();
   });
+  // the texts gone, faded out - each to naught in DURATION.quick, then let go
+  // by what holds them; one back before then (a redo) seen whole again
+  const out = useRef(new Map<string, number>());
+  useFrame((_, dt) => {
+    const g = group.current;
+    if (!g) return;
+    let going = false;
+    for (const child of g.children) {
+      const k = child.name;
+      if (leaving?.has(k)) {
+        const level = fadingOut(out.current.get(k) ?? 1, Math.min(dt, 1 / 20), DURATION.quick);
+        out.current.set(k, level);
+        child.traverse((o) => fadeLetters(o, Math.min(seen.current.level, fadedOpacity(level))));
+        if (level > 0) going = true;
+      } else if (out.current.has(k)) {
+        out.current.delete(k);
+        child.traverse((o) => fadeLetters(o, seen.current.level));
+      }
+    }
+    if (going) invalidate();
+  });
   // (labels sized in the drawing's own units are the same at any zoom: the
   // view zooming leaves them as they are)
   const labelZoom = opts.units === "px" ? zoom : null;
@@ -135,8 +172,9 @@ export function Texts2D({
     const fill = shadow || moved ? 0 : seen.current.level;
     return items.map((t, i) => {
       const fontWorld = labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx;
+      const key = keyOf ? keyOf(t, i) : `txt-${i}`;
       return (
-        <group key={keyOf ? keyOf(t, i) : `txt-${i}`}>
+        <group key={key} name={key}>
           {/* (a mark - a charge's circle, a radical's dot - is drawn with the lines) */}
           {placeLabel(t, fontWorld, set).map((run, k) => run.mark ? null : (
             // (an italic run - the t of t-Bu - slanted about its baseline)
