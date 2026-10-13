@@ -134,6 +134,16 @@ moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
 80 ms.
+A drawing is laid out again as the view zooms only once the zoom has
+moved a hundredth from the one it was laid out at: the last of a wheel's
+zoom, in steps too small to see for most of a second, lays nothing out
+again (`utils/largeZoom.ts`). A very large drawing - more than 20 000
+atoms - is laid out once the view has stayed within a hundredth of one
+zoom for 150 ms, not at every step (the maintainer, 2026-10-13, chosen
+from a trial of two ways, #295): meanwhile its lines and their round caps
+are kept as wide on the screen as a layout at the zoom would have them,
+on the graphics card, and its wedges, the mitres where lines meet and its
+labels scale with the view.
 A step within a thousandth of a pixel of whole counts as whole: Windows'
 display scaling leaves notches that close (ten notches at once came as
 999.99993 px at 175 %), and read as fingers they moved the view a thousand

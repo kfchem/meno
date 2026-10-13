@@ -1,7 +1,9 @@
 import * as THREE from "three";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { colorInstances } from "./instances";
+import { colorInstances, widenedMaterial } from "./instances";
+import { lineWidening } from "../utils/largeZoom";
 
 /**
  * The round caps where bonds meet and where they end, from the shared layout.
@@ -16,6 +18,15 @@ import { colorInstances } from "./instances";
 export default function JoinCaps2D() {
   const { layout, opts } = useDrawnLayout();
   const inst = useRef<THREE.InstancedMesh>(null!);
+  // (as wide as the lines they cap: utils/largeZoom)
+  const drawn = useMemo(
+    () => widenedMaterial("xy", { color: "#ffffff", toneMapped: false, transparent: true, opacity: 1, depthTest: false, depthWrite: false }),
+    [],
+  );
+  useEffect(() => () => drawn.material.dispose(), [drawn]);
+  useFrame(({ camera }) => {
+    drawn.width.value = lineWidening(opts, layout.zoom, (camera as THREE.OrthographicCamera).zoom || 1);
+  });
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
   // Room for as many caps as the drawing has, grown as it does - never
   // shrunk, so that an edit does not make the mesh again - and made in the
@@ -50,14 +61,7 @@ export default function JoinCaps2D() {
       renderOrder={9}
     >
       <circleGeometry args={[1, 24]} />
-      <meshBasicMaterial
-        color="#ffffff"
-        toneMapped={false}
-        transparent
-        opacity={1}
-        depthTest={false}
-        depthWrite={false}
-      />
+      <primitive object={drawn.material} attach="material" dispose={null} />
     </instancedMesh>
   );
 }
