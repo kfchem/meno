@@ -75,6 +75,9 @@ describe("a PDF page's figures", () => {
     // (a chain drawn flat is long and thin, but its bonds slant: no arrow's straight line)
     const chain = [0, 1, 2, 3, 4].map((i) => path([100 + i * 12, 300 + (i % 2) * 7, 112 + i * 12, 307 + (i % 2) * 7]));
     expect(figuresOf([...chain, ...structureAt(185, 300)])).toHaveLength(2);
+    // (a compound's label at its end, beside its neighbour 12 points on: the compound's, not the neighbour's - the two apart)
+    const label = text([173, 303, 203, 311]);
+    expect(figuresOf([...structureAt(100, 300).slice(0, 6), label, ...structureAt(215, 300).slice(0, 6)])).toHaveLength(2);
   });
 
   it("take no column's line of words beside a scheme across two columns, however close", () => {
