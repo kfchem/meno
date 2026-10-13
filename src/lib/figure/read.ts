@@ -161,7 +161,7 @@ function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<S
     const ta = dot(u, { x: t.a.x - s.a.x, y: t.a.y - s.a.y });
     const tb = dot(u, { x: t.b.x - s.a.x, y: t.b.y - s.a.y });
     const overlap = Math.min(len(s), Math.max(ta, tb)) - Math.max(0, Math.min(ta, tb));
-    return overlap > 0.5 * Math.min(len(s), len(t));
+    return overlap > 0.7 * Math.min(len(s), len(t));
   };
   const left = new Set(lines);
   for (const s of lines) {
@@ -462,7 +462,11 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const labelled = (p: Point, out: Point) => words.some((w) => reaches(p, out, w.box, bond));
   const between = (s: Stroke) => labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b));
   const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s))));
-  const whole = joinedAcross(lines, bond);
+  // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
+  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
+  const joined = joinedAcross([...lines, ...loose], bond);
+  const whole = joined.filter((s) => !loose.includes(s));
+  const used = loose.filter((s) => !joined.includes(s));
   const { bonds: multi, used: inMulti } = multiples(whole, bond);
   // (a line much thicker than most - a Haworth ring's front - is bold)
   const widths = whole.map((s) => s.w).sort((a, b) => a - b);
@@ -474,7 +478,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     ...hashes,
     ...shapes.wedges.filter((w) => dist(w.tip, w.base) > 0.3 * bond).map((w: Wedge): Drawn => ({ a: w.tip, b: w.base, order: 1, stereo: "up" })),
     ...shapes.curves.map((c) => wavy(c, bond)).filter((d): d is Drawn => !!d),
-    ...dashes(bitsLeft(short, inHashes, lines).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond),
+    ...dashes(bitsLeft(short, inHashes, [...lines, ...used]).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond),
   ];
 
   // bonds' ends where they meet; an end alone, its bond pointing into a word, the word's

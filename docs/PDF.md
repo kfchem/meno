@@ -960,7 +960,9 @@ workspace holds.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;
-  - lines side by side, a fifth of a bond or so apart, are a double or a
+  - lines side by side, a fifth of a bond or so apart and alongside each
+    other for most of the shorter (seven tenths: a cube's parallel edges,
+    drawn in perspective half past each other, are none), are a double or a
     triple bond - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it, else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its
@@ -968,8 +970,8 @@ workspace holds.
   - short strokes side by side across a line, evenly spaced, are a bond
     behind, narrow where they are shortest;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's - is
-    joined again;
+  - a bond broken where another passes in front of it - a bridge's, a
+    cage's back edge - is joined again, however short one of its pieces;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is

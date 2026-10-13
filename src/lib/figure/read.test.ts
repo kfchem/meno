@@ -362,6 +362,26 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.filter((a) => a.el === "xq")).toHaveLength(1);
   });
 
+  it("reads a cube drawn in perspective: back edges broken where front ones pass, one piece short, and parallel edges no double bonds", () => {
+    // (cubane as exported: two back edges broken round the front edges crossing them - one piece of each under a third of a bond)
+    const s = read(
+      figure([
+        stroke([83.6, 79.5], [93.8, 82.3]),
+        stroke([96.6, 83], [99.4, 83.8]),
+        stroke([99.4, 83.8], [96.2, 89.3]),
+        stroke([94.7, 91.9], [91.3, 97.9]),
+        stroke([91.3, 97.9], [75.5, 93.7], [91.3, 89.5], [99.4, 75.3], [115.2, 79.5], [107.1, 93.7]),
+        stroke([75.5, 93.7], [83.6, 79.5], [99.4, 75.3]),
+        stroke([115.2, 79.5], [99.4, 83.8]),
+        stroke([107.1, 93.7], [91.3, 97.9]),
+        stroke([107.1, 93.7], [91.3, 89.5]),
+      ]),
+    );
+    expect(s.atoms).toHaveLength(8);
+    expect(s.bonds).toHaveLength(12);
+    expect(s.bonds.every((b) => b.order === 1)).toBe(true);
+  });
+
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
     const c: P = [60, 60];
     const h = step(c, 90);
