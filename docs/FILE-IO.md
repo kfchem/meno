@@ -391,7 +391,11 @@ As this part of step 5 was built (#155, from main beside step 3):
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`).
-  - **SVG** takes no options yet.
+  - **SVG** takes no options yet. Whatever a document gives it as text -
+    labels, words, a typeface's name, a colour - is escaped, in elements
+    and in attributes alike, and what XML cannot hold at all (the controls
+    but tab and the line breaks, a surrogate without its pair, U+FFFE and
+    U+FFFF) is left out, so the file is well-formed whatever was pasted.
 - **What a writer takes** is said by it (step 7): Meno's own take the
   page, as before; a plugin's, one molecule - the molecules in 3D
   selected (several, one system), else the one there is, else the one
