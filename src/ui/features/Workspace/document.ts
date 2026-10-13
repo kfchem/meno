@@ -731,6 +731,11 @@ export function updateBond(
       if (!(key in patch)) delete merged[key];
     }
     if (merged.order !== 2 && merged.stereo === "either") merged.stereo = "none";
+    // (a wedge, hashes or a wavy line say something of a single bond's end
+    // alone: a double or triple bond made one, or given one, carries none -
+    // the API put them there, and a file or Clean-up then read a wedge on
+    // a multiple bond)
+    if (merged.order !== 1 && (merged.stereo === "up" || merged.stereo === "down" || merged.stereo === "wavy")) merged.stereo = "none";
   }
   const next = bonds.slice();
   next[index] = merged;

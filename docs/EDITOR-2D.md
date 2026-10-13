@@ -438,7 +438,10 @@ Both go together, because both touch every layer.
   wider gaps (PR #33).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
   wavy: a plain bold bond, a bold dashed bond, a thin dashed bond, and a
-  dative (coordinate) bond.
+  dative (coordinate) bond. A wedge, hashes or a wavy line belong to a
+  single bond alone: a bond made double or triple loses its, and one is
+  not given to a double or triple bond (2026-10-13; a double bond's
+  either-configuration is its own).
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.

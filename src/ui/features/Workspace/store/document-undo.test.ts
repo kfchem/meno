@@ -801,3 +801,26 @@ describe("a charge's mark dragged far from its atom (the command centre's docume
     expect(doc.getState().model.atoms.find((a) => a.id === n)!.chargeAt).toEqual({ x: 1.5, y: -0.5 });
   });
 });
+
+describe("a bond's stereo and its order (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("lets a double or triple bond carry no wedge, hashes or wavy line, made so or given one", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    state().addAtomBonded(a, 1.5, 0, "C");
+    const id = doc.getState().model.bonds[0].id;
+    const bond = () => doc.getState().model.bonds.find((b) => b.id === id)!;
+    state().setBondStereo(id, "up");
+    expect(bond().stereo).toBe("up");
+    state().setBondOrder(id, 2);
+    expect(bond().stereo).toBe("none");
+    state().setBondStereo(id, "wavy");
+    expect(bond().stereo).toBe("none");
+    state().setBondOrder(id, 3);
+    state().setBondStereo(id, "down");
+    expect(bond().stereo).toBe("none");
+    // a single bond takes them as ever
+    state().setBondOrder(id, 1);
+    state().setBondStereo(id, "down");
+    expect(bond().stereo).toBe("down");
+  });
+});
