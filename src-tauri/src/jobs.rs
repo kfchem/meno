@@ -1990,7 +1990,7 @@ mod tests {
         let _ = fs::remove_file(taken.join(RECORD));
         assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
         let spec = read_spec(&mine).unwrap();
-        assert!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap());
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 
