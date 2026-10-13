@@ -14,6 +14,7 @@ import { guideMove, guideWidth } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { useStyleOptions } from "../useDrawingStyle";
 import { arrowsBeside } from "./drawnArrows";
 import { heldShows, type Held } from "./held";
 import { HeldLight } from "./HeldLight";
@@ -61,7 +62,9 @@ export default function Captions2D() {
   // (words carried out of a PDF, settling where they were let go: these, once they have)
   const landing = useEditor((s) => s.pdfWords?.landing ?? null);
   const selCaptions = useEditor((s) => s.selCaptions);
-  const { opts } = useDrawnLayout();
+  // (the style's options, not the drawing's layout: a zoom draws none of the words again - their type is the page's, at
+  // any zoom; only a lit caption's edges, sized on the screen, are drawn again as the view zooms - CaptionEdge)
+  const opts = useStyleOptions();
   const set = useMemo(() => labelSetOf(opts), [opts]);
   return (
     <group>
@@ -77,7 +80,7 @@ export default function Captions2D() {
 /** One caption: its words - each set drawn whole, about its middle - and where it is taken hold of. */
 function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selected: boolean }) {
   const store = useEditorStore();
-  const { opts } = useDrawnLayout();
+  const opts = useStyleOptions();
   // (at its own size, or the labels'; its letters as they were marked)
   const fs = wordsFontPx(c, opts);
   const laid = useMemo<Laid>(() => ({ c, fs, ...wordsSet(c, opts, set, { x: 0, y: 0 }) }), [c, fs, opts, set]);
@@ -96,7 +99,7 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
   const { c, halfW, halfH, fs } = laid;
   const store = useEditorStore();
   const hovered = useEditor((s) => s.hoveredCaption === c.id);
-  const { opts } = useDrawnLayout();
+  const opts = useStyleOptions();
   const { camera, gl, invalidate } = useThree();
   const margin = MARGIN * fs;
   const light = useRef<THREE.MeshBasicMaterial>(null);
