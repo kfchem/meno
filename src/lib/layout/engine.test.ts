@@ -172,6 +172,31 @@ describe("layout2D", () => {
     // alone, a few times that on a machine busy with the rest of the tests)
   }, 30_000);
 
+  it("draws tetrodotoxin level, its guanidine ring beside the cage, not under it", () => {
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const given: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+    const ttx = layout2D(given);
+    const mol = perceive(given);
+    const sys = mol.systems.find((x) => x.atoms.length === 14)!;
+    // (the guanidine ring: the one with its two ring N's)
+    const guanidine = mol.rings.find((r) => r.filter((a) => given.atoms[a].el === "N").length === 2)!;
+    const cage = sys.atoms.filter((a) => !guanidine.includes(a));
+    const mid = (atoms: readonly number[]) => ({
+      x: atoms.reduce((t, a) => t + ttx.x[a], 0) / atoms.length,
+      y: atoms.reduce((t, a) => t + ttx.y[a], 0) / atoms.length,
+    });
+    const [g, c] = [mid(guanidine), mid(cage)];
+    expect(Math.abs(g.x - c.x)).toBeGreaterThan(Math.abs(g.y - c.y));
+    // (the whole engine on tetrodotoxin's cage: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
+
   it("draws bilobalide's C4 with its bonds spread round it, its wedges read one way only", () => {
     // three five-membered rings round one carbon leave 36 degrees between
     // C4 and C9: their groups, pointed into that gap at each other, sent
