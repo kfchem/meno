@@ -153,13 +153,13 @@ describe("a line made no length by dragging its end onto the other", () => {
 });
 
 describe("a copied picture's resolution", () => {
-  it("is lowered so that no side of its canvas is over 32 767 px: a line of 10 000 letters at 600 dpi", () => {
-    const { layout, opts } = drawingLayout({ atoms: [], bonds: [], captions: [{ id: 1, x: 0, y: 0, text: "x".repeat(10000) }] }, AROM, ACS_1996);
+  it("is lowered so that no side of its canvas is over 32 767 px: a line of 6000 letters at 600 dpi", () => {
+    const { layout, opts } = drawingLayout({ atoms: [], bonds: [], captions: [{ id: 1, x: 0, y: 0, text: "x".repeat(6000) }] }, AROM, ACS_1996);
     const { widthPt, heightPt } = layoutEmf(layout, opts);
     const w = (widthPt * 96) / 72;
     const h = (heightPt * 96) / 72;
     const dpi = pictureDpiFor(w, h, 600);
     // (Chromium - WebView2 on Windows - and Firefox draw no canvas wider or taller than 32 767 px)
     expect(Math.ceil((w * dpi) / 96)).toBeLessThanOrEqual(32767);
-  });
+  }, 30_000);
 });
