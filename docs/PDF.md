@@ -1066,7 +1066,9 @@ workspace holds.
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
   word (one so short both its ends lie in the word's box, its other end
-  coming to another label - a metal's - at the end nearer its element)
+  coming to another label - a metal's - at the end nearer its element;
+  of two it comes by, the nearer, unless it points away from that one and
+  into the other - an H set under the NH it goes to)
   - its letters side by side on one line (their ink near, or their
   rooms as the PDF sets them: a 1's ink stands well inside its room, and
   small letters may be set apart; but two letters as large set over each

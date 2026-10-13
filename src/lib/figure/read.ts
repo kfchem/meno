@@ -687,6 +687,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
     let best = -1;
     let bestD = Infinity;
+    // (a word it points away from, by it - its way only clipping the corner of the room round a label set close, an H under
+    // the N it goes to - only where no other takes it)
+    let away = -1;
+    let awayD = Infinity;
     // (not the word its bond comes out of - its other end in it - however near this end lies to its corner)
     const other = e.side === 0 ? d.b : d.a;
     words.forEach((w, k) => {
@@ -714,12 +718,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
       // (a bond drawn short - under half a bond, cut back at a label stacked tall, an NH with its H over it - may stop farther off)
       const within = len({ a: d.a, b: d.b }) < 0.5 * bond ? 0.6 : 0.35;
-      if ((meeting.get(e)! === 0 || onCapital) && dd < bestD && reaches(e.p, out, w.box, bond, within)) {
-        best = k;
-        bestD = dd;
+      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, bond, within)) {
+        const q = { x: Math.min(Math.max(e.p.x, w.box[0]), w.box[2]), y: Math.min(Math.max(e.p.y, w.box[1]), w.box[3]) };
+        if (dd > 0 && dot(out, unit(e.p, q)) < 0) {
+          if (dd < awayD) [away, awayD] = [k, dd];
+        } else if (dd < bestD) [best, bestD] = [k, dd];
       }
     });
-    if (best >= 0) wordOf.set(e, best);
+    if (best >= 0 || away >= 0) wordOf.set(e, best >= 0 ? best : away);
   }
   // (two labels set side by side, read as one word that reads as nothing - H H - are each
   // their own, where their bonds come to different capitals of it, cut where both read)

@@ -22,6 +22,7 @@ import tempo from "./fixtures/tempo-rdkit.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fdg from "./fixtures/fdg-rdkitacscg.json";
 import fructose from "./fixtures/fructose-nature.json";
+import ibogaine from "./fixtures/ibogaine-menoserif.json";
 import glucose from "./fixtures/glucose-rdkit.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
 import tetrodotoxinNature from "./fixtures/tetrodotoxin-nature.json";
@@ -243,6 +244,15 @@ describe("a figure read as a structure", () => {
     expect(toH).toHaveLength(1);
     expect(toH[0].stereo).toBe("down");
     expect(r.atoms[toH[0].a].label).toBeUndefined();
+  });
+
+  it("gives a bond's end to the label it points at, not to a nearer one by it it points away from", () => {
+    // (ibogaine in Meno's style printed in Times: the indole's C-N bond cut back under its NH, its end by the corner of the
+    // room round the H set under the NH - a stereocentre's - nearer than the NH but pointing away from it)
+    const r = readFigure(ibogaine as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const nh = r.atoms.findIndex((a) => a.label === "NH");
+    expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
+    expect(r.atoms).toHaveLength(24);
   });
 
   it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {
