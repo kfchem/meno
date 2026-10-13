@@ -386,9 +386,9 @@ and the held-out list takes new ones. What it showed, by kind:
   stern the ends and the bridges above, as norbornane is drawn, is the
   reference's view, but an orthographic projection of it crowds C1, O9
   and O10 together. The reference draws the back of the boat about twice
-  as wide as its front, which no projection gives: a template for a boat
-  seen from its side, with the rest built on it as on the chair's, is the
-  likely way.
+  as wide as its front, which no projection gives. A template for a boat
+  seen from its side, built that way, is not wanted (the maintainer,
+  2026-10-13): paeoniflorin stays as it is drawn now.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.
