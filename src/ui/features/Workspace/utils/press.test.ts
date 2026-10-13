@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress, traceEndedBy } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress, togglesOn, traceEndedBy } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -149,5 +149,14 @@ describe("a press on a chain traced with the button up", () => {
     expect(traceEndedBy(0, 800, false, 500)).toBe("end");
     // (the other button lets it go, whenever)
     expect(traceEndedBy(2, 120, false, 500)).toBe("let go");
+  });
+});
+
+describe("a click on a panel's toggle", () => {
+  it("toggles on the first click of a double-click only - double-clicked, the panel opens and stays - and from the keyboard", () => {
+    expect(togglesOn(1)).toBe(true);
+    expect(togglesOn(2)).toBe(false);
+    expect(togglesOn(3)).toBe(false);
+    expect(togglesOn(0)).toBe(true);
   });
 });

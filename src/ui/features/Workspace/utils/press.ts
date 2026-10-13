@@ -91,6 +91,17 @@ export function traceEndedBy(button: number, since: number, moved: boolean, doub
   return !moved && since < doubleClickMs ? "second click" : "end";
 }
 
+/**
+ * Whether a click (its `detail`, the count the system gives) opens or shuts
+ * a panel that a click toggles - Quick Add's SMILES, Shapes, Calculations:
+ * the first click of a double-click does, the second not. Double-clicked,
+ * a panel opened and shut again at once, and was never seen open. A click
+ * from the keyboard, its count naught, toggles as one.
+ */
+export function togglesOn(detail: number): boolean {
+  return detail < 2;
+}
+
 /** What comes of a press after its pointerdown: none of it is heard of a press swallowed. */
 const AFTER_PRESS = ["mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"] as const;
 

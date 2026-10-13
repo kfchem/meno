@@ -8,7 +8,7 @@ import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress } from "./utils/press";
+import { swallowPress, togglesOn } from "./utils/press";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
@@ -256,7 +256,7 @@ export default function QuickAdd({
                 c.id === "chain" || (c.id === "arrow" && onArrow)
                   ? undefined
                   : c.id === "smiles" || c.id === "shapes"
-                    ? () => setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
+                    ? (e) => togglesOn(e.detail) && setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
                     : () => onChoose(c.id as QuickAddChoice)
               }
               className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${(c.id === "smiles" || c.id === "shapes") && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
@@ -272,7 +272,7 @@ export default function QuickAdd({
             aria-label="Calculations"
             aria-expanded={calcOpen}
             title="Calculations"
-            onClick={() => setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
+            onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
             className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
           >
