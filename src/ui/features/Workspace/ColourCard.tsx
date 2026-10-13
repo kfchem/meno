@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
@@ -46,12 +47,15 @@ export default function ColourCard({
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   // what it is for undone away, or deleted: the card goes with it
   const gone = useEditor((s) => colourTargetGone(target, s));
   useEffect(() => {
     if (gone) onClose();
   }, [gone, onClose]);
   useEffect(() => {
+    if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -67,7 +71,7 @@ export default function ColourCard({
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("wheel", onClose, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
 
   const parts = target.atoms.length + target.bonds.length > 0;
   const arrows = target.pushes ?? [];
@@ -137,6 +141,7 @@ export default function ColourCard({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="dialog"
       aria-label="Colour"
       tabIndex={-1}

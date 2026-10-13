@@ -233,7 +233,11 @@ function askNow(request: ConsentRequest): Promise<boolean> {
   if (s.offline) return Promise.resolve(false);
   if (s.granted.includes(request.purpose) && !request.again) return Promise.resolve(true);
   return new Promise((resolve) => {
+    // (answered once: a second click on the question as it goes is no second answer)
+    let answered = false;
     const answer = (yes: boolean) => {
+      if (answered) return;
+      answered = true;
       useNetwork.setState({ asking: null });
       if (yes) void grant(request.purpose);
       resolve(yes);
