@@ -375,9 +375,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       m.shares?.length === solid.frames.length
         ? m.shares
         : m.conformerSet && m.energies?.length === solid.frames.length
-          ? populations(m.energies)
+          ? populations(m.energies, m.degeneracies)
           : undefined,
-    [m.shares, m.conformerSet, m.energies, solid.frames.length],
+    [m.shares, m.conformerSet, m.energies, m.degeneracies, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
