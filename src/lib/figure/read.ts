@@ -708,6 +708,30 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (const b of ring ?? []) b.aromatic = true;
   }
 
+  // (a lone H at no bond's end, a short hash to it - a line or two across the way from an atom by it, the rest hidden by
+  // the joint at the atom and the H itself: its bond, behind)
+  const spare = bitsLeft(short, inHashes, [...lines, ...used]);
+  words.forEach((w, k) => {
+    if (atomOfWord.has(k) || labelText(w) !== "H") return;
+    const h = centre(w.box);
+    let best: { i: number; across: Stroke[] } | null = null;
+    atoms.forEach((a, i) => {
+      if (a.label || dist(a, h) > 1.3 * bond) return;
+      const u = unit(a, h);
+      const span = dist(a, h);
+      const across = spare.filter((s) => {
+        const m = { x: (s.a.x + s.b.x) / 2 - a.x, y: (s.a.y + s.b.y) / 2 - a.y };
+        const t = dot(m, u);
+        return t > 0.2 * span && t < span && Math.abs(cross(u, m)) < 0.15 * bond && Math.abs(dot(unit(s.a, s.b), u)) < 0.5 && len(s) < 0.4 * bond;
+      });
+      if (across.length && (!best || across.length > best.across.length || (across.length === best.across.length && dist(a, h) < dist(atoms[best.i], h)))) best = { i, across };
+    });
+    if (!best) return;
+    const found: { i: number; across: Stroke[] } = best;
+    atomOfWord.set(k, atoms.length);
+    atoms.push({ x: h.x, y: h.y, ...labelOf(w), box: w.box });
+    bonds.push({ a: found.i, b: atoms.length - 1, order: 1, stereo: "down" });
+  });
   // words at no bond's end but by the structure, with a charge - written, or drawn in a ring beside them: ions,
   // standing alone; several set in a row (K+ K+ K+) each by the one before
   const placed = atoms.length ? boxOf(atoms) : null;

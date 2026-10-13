@@ -596,6 +596,25 @@ describe("a figure read as a structure", () => {
     expect(r.bonds.some((b) => b.order === 2 && ((near(b.a, 146.3, 124.1) && near(b.b, 135.6, 114.5)) || (near(b.b, 146.3, 124.1) && near(b.a, 135.6, 114.5))))).toBe(true);
   });
 
+  it("reads a lone H with a short hash to it - one line across the way from its carbon - as bonded behind", () => {
+    // (a stereocentre's H as the ACS 1996 style draws it close: of its hash only one line shows, the rest hidden by the joint
+    // at the carbon and by the H)
+    const c: P = [60, 60];
+    const h = step(c, 60, 0.67);
+    const m = along(c, h, 0.45);
+    const [ux, uy] = unit(c, h);
+    const s = read(
+      figure(
+        [stroke(step(c, 180), c, step(c, -60)), stroke(c, step(c, 240)), stroke([m[0] - uy * 1.5, m[1] + ux * 1.5], [m[0] + uy * 1.5, m[1] - ux * 1.5])],
+        word("H", h),
+      ),
+    );
+    const hAtom = s.atoms.findIndex((a) => a.el === "H");
+    const b = s.bonds.find((x) => x.a === hAtom || x.b === hAtom);
+    expect(b?.stereo).toBe("down");
+    expect(s.atoms[b!.a === hAtom ? b!.b : b!.a].el).toBe("C");
+  });
+
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
     const c: P = [60, 60];
     const h = step(c, 90);

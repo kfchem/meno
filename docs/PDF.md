@@ -1011,7 +1011,10 @@ workspace holds.
   H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
-  of its ring off; never a bond, nor a scheme's "+". A small round dot
+  of its ring off; never a bond, nor a scheme's "+". A lone H at no
+  bond's end, a short line or two across the way to it from an atom by
+  it, is that atom's H behind, its hash the rest hidden by the joint at
+  the atom and by the H. A small round dot
   by an atom, twice a line's width or more and at no line's end, is a
   radical's unpaired electron; two side by side a pair, read as a singlet
   and marked so (a triplet is drawn the same). A lone H takes one
