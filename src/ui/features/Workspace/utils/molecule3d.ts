@@ -152,7 +152,8 @@ export function labelSpot(
  */
 export function populations(energies: readonly number[]): number[] {
   if (!energies.length) return [];
-  const lowest = Math.min(...energies);
+  // (by a loop: spread over a long run of frames, Math.min overruns the stack)
+  const lowest = energies.reduce((a, b) => Math.min(a, b), Infinity);
   const w = energies.map((e) => Math.exp(-(e - lowest) / RT_HARTREE));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);

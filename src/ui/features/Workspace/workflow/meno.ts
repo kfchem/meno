@@ -78,7 +78,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
-    const lowest = Math.min(...g.map((e) => e.energy!));
+    const lowest = g.reduce((a, e) => Math.min(a, e.energy!), Infinity);
     for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept` };
@@ -119,6 +119,8 @@ const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
+  if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     const w = boltzmann(g.map((e) => e.energy!), kelvin);
@@ -162,7 +164,8 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
 /** Boltzmann's shares of energies in hartrees at `kelvin`, adding up to one. */
 export function boltzmann(energies: readonly number[], kelvin: number): number[] {
   if (!energies.length) return [];
-  const lowest = Math.min(...energies);
+  // (by a loop: spread over a long run of frames, Math.min overruns the stack)
+  const lowest = energies.reduce((a, b) => Math.min(a, b), Infinity);
   const w = energies.map((e) => Math.exp(-(e - lowest) / (R_HARTREE * kelvin)));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);

@@ -544,6 +544,11 @@ describe("populations", () => {
     expect(low + high).toBeCloseTo(1, 12);
     expect(populations([])).toEqual([]);
   });
+
+  it("of a long run of frames - three hundred thousand energies - without overrunning the stack", () => {
+    const shares = populations(Array.from({ length: 300_000 }, (_, i) => (i % 5) / HARTREE));
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
+  });
 });
 
 describe("a molecule's bonds frame by frame", () => {

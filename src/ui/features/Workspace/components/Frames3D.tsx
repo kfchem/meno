@@ -106,9 +106,10 @@ export default function Frames3D({
   const read = { onPointerEnter: () => setReading(true), onPointerLeave: () => setReading(false) };
   const [pointed, setPointed] = useState<number | null>(null);
   const full = open || hovered;
-  const lowest = energies ? Math.min(...energies) : 0;
+  // (by loops: spread over a long run of frames, Math.min and Math.max overrun the stack)
+  const lowest = energies ? energies.reduce((a, b) => Math.min(a, b), Infinity) : 0;
   const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
-  const highest = above ? Math.max(...above, 1e-9) : 1;
+  const highest = above ? above.reduce((a, b) => Math.max(a, b), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)
   const width = count > MANY ? WIDE : WIDTH;
