@@ -1,19 +1,13 @@
 /**
- * A very large drawing as the view zooms - a trial of two ways (the
- * maintainer, 2026-10-13), chosen in Settings (`pointer.largeZoom`), to be
- * chosen between by their numbers:
- *
- * - "settle": the drawing laid out once the zoom stops, not at every step
- *   of it - its lines and their round caps kept as wide on the screen as a
- *   layout at the zoom would have them meanwhile (`lineWidening`, drawn so
- *   by Bonds2D and JoinCaps2D), the rest scaled with the view;
- * - "picture": the drawing held as a picture of it - the view and a margin
- *   round it - scaled with the view, and drawn sharp, laid out at the zoom,
- *   once it stops, fading in over it (components/LargeZoom2D); what the
- *   pointer lights and what is selected drawn live over it.
- *
- * Either only for a very large drawing (`zoomedLarge`); any other is laid
- * out at every step, as ever ("exact").
+ * A drawing as the view zooms (the maintainer, 2026-10-13, chosen from a
+ * trial of two ways, #295): laid out again as the view moves a hundredth
+ * from the zoom it was laid out at (`nearZoom`) - the last of a wheel's zoom,
+ * in steps too small to see, lays nothing out again - and a very large one
+ * (`zoomedLarge`) only once the view has stayed within a hundredth of one
+ * zoom for `SETTLE_MS`, not at every step: its lines and their round caps
+ * kept as wide on the screen meanwhile as a layout at the zoom would have
+ * them (`lineWidening`, drawn so by Bonds2D and JoinCaps2D), the rest scaled
+ * with the view (components/DrawnLayout).
  */
 import { lineHalfOf, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
@@ -31,12 +25,6 @@ export const SETTLE_NEAR = 0.01;
 
 /** Whether two zooms are near enough to count as one (`SETTLE_NEAR`). */
 export const nearZoom = (a: number, b: number): boolean => Math.abs(Math.log(a / b)) < SETTLE_NEAR;
-
-/** How far round the view a picture of the drawing reaches, on each side, as a share of the view's width and height. */
-export const PICTURE_MARGIN = 0.25;
-
-/** Most pixels a picture of the drawing is drawn in, the margin with it: larger, it is drawn coarser. */
-export const PICTURE_MOST_PIXELS = 12e6;
 
 /** Whether a drawing of so many atoms is zoomed as a very large one: past the mark a very large drawing in 3D is drawn lighter at. */
 export const zoomedLarge = (atoms: number): boolean => atoms > LARGE_ATOMS;

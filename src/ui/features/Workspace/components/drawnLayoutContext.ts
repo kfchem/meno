@@ -12,10 +12,7 @@ export type DrawnLayout = {
   bonds: LBond[];
   opts: LayoutOptions;
   layout: Layout;
-  /** The zoom it is laid out for: the view's - or, a very large drawing waiting for a zoom to stop, the one it was at (`waits`). */
   zoom: number;
-  /** How a very large drawing waits for the view's zoom to stop before it is laid out at it (utils/largeZoom); null, laid out at every step. */
-  waits: "settle" | "picture" | null;
 };
 
 export const DrawnLayoutContext = createContext<DrawnLayout | null>(null);

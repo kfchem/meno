@@ -122,7 +122,7 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
     const drawn = part.atoms.map((a) => layoutAtomOf(a));
     const index = new Map(drawn.map((a, i) => [a.id, i]));
     const laid = layoutBonds(part.bonds, index);
-    return { atoms: drawn, bonds: laid, opts, layout: layoutMolecule(drawn, laid, opts, zoom), zoom, waits: null };
+    return { atoms: drawn, bonds: laid, opts, layout: layoutMolecule(drawn, laid, opts, zoom), zoom };
   }, [part, opts, zoom]);
   const middle = useMemo(() => {
     const xs = value.atoms.map((a) => a.x);

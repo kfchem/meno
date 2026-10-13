@@ -125,7 +125,6 @@ import Molecules3D from "./components/Molecules3D";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import QuickAdd from "./QuickAdd";
 import Captions2D from "./components/Captions2D";
-import { Held2D, LargeZoomPicture2D } from "./components/LargeZoom2D";
 import Pdfs2D from "./components/Pdfs2D";
 import Pictures2D from "./components/Pictures2D";
 import { filmPlaying, playFilm } from "./components/pictureTextures";
@@ -1990,29 +1989,22 @@ function WorkspaceContent({
           {/* Writing by hand: a marker's under the drawing, a pen's over it (docs/PRESENTING.md, *Handwriting*) */}
           <Inks2D />
           <InkWriting />
-          {/* Rings filled and parts highlighted with a colour, behind the drawing
-              (each part of the drawing held as a picture as a very large one is zoomed: LargeZoom2D) */}
-          <Held2D>
-            <Fills2D />
-          </Held2D>
+          {/* Rings filled and parts highlighted with a colour, behind the drawing */}
+          <Fills2D />
           {/* where renders under way will put what they make (docs/RENDER.md) */}
           <Renders2D />
           {/* Bonds */}
-          <Held2D>
-            <Bonds2D />
-          </Held2D>
+          <Bonds2D />
           <Atoms2D />
           {/* Bond picking */}
           <BondsPick2D />
           {/* Join caps */}
-          <Held2D>
-            <JoinCaps2D />
-            {/* Shapes and labels */}
-            <AromaticCircles2D />
-            <Wedges2D />
-            {/* Electron-pushing arrows, and one being drawn */}
-            <PushArrows2D />
-          </Held2D>
+          <JoinCaps2D />
+          {/* Shapes and labels */}
+          <AromaticCircles2D />
+          <Wedges2D />
+          {/* Electron-pushing arrows, and one being drawn */}
+          <PushArrows2D />
           <PushDraw2D />
           {/* Atom hover rings */}
           <AtomsHoverRings2D />
@@ -2024,13 +2016,11 @@ function WorkspaceContent({
           <ChainGuide2D />
           {/* A label's font is read before it is drawn: the rest of the
               drawing does not wait for it, nor go if it cannot be read. */}
-          <Held2D>
-            <Suspense fallback={null}>
-              <Labels2D />
-            </Suspense>
-            {/* the plugin's marks: valence problems, R/S and E/Z */}
-            <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
-          </Held2D>
+          <Suspense fallback={null}>
+            <Labels2D />
+          </Suspense>
+          {/* the plugin's marks: valence problems, R/S and E/Z */}
+          <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
           <ChargeHolds2D />
           {/* the atom a molecule in 3D under the pointer was made from */}
@@ -2048,17 +2038,13 @@ function WorkspaceContent({
           {/* Move preview */}
           <MovePreview2D />
           <HoverOverlay2D />
-          <Held2D>
-            {/* A reaction scheme's arrows and "+" signs */}
-            <Arrows2D />
-            <Pluses2D />
-            {/* Words on the page: a reaction's reagents and conditions, or anything else */}
-            <Suspense fallback={null}>
-              <Captions2D />
-            </Suspense>
-          </Held2D>
-          {/* the held parts as a picture, as a very large drawing is zoomed */}
-          <LargeZoomPicture2D />
+          {/* A reaction scheme's arrows and "+" signs */}
+          <Arrows2D />
+          <Pluses2D />
+          {/* Words on the page: a reaction's reagents and conditions, or anything else */}
+          <Suspense fallback={null}>
+            <Captions2D />
+          </Suspense>
           {/* A workflow on the page: its sets, steps and wires (within the drawing's layout: an input set is made round its labels) */}
           <Workflow2D />
           {/* Slides: frames round what a talk shows, over everything on the page (docs/PRESENTING.md) */}

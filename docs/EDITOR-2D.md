@@ -134,19 +134,16 @@ moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
 80 ms.
-A very large drawing - more than 20 000 atoms - is drawn as the view
-zooms in one of three ways, a trial to choose one by (the maintainer,
-2026-10-13; Settings, *General*, *Zooming a very large drawing*;
-`utils/largeZoom.ts`): laid out again at every step, as any drawing is
-(*Every step*); laid out once the view has stayed within a hundredth of
-one zoom for 150 ms (the last of a wheel's zoom, in steps too small to
-see, waits for nothing), its lines and their round caps kept as wide on
-the screen as a layout at the zoom would have them meanwhile, on the
-graphics card (*Once it stops*);
-or held as a picture of the view and a quarter of it again round each side,
-scaled with the view on the graphics card, and drawn sharp once it stops,
-fading in over the picture, what the pointer lights and what is selected
-drawn live over it (*Quick, then sharp*, `components/LargeZoom2D.tsx`).
+A drawing is laid out again as the view zooms only once the zoom has
+moved a hundredth from the one it was laid out at: the last of a wheel's
+zoom, in steps too small to see for most of a second, lays nothing out
+again (`utils/largeZoom.ts`). A very large drawing - more than 20 000
+atoms - is laid out once the view has stayed within a hundredth of one
+zoom for 150 ms, not at every step (the maintainer, 2026-10-13, chosen
+from a trial of two ways, #295): meanwhile its lines and their round caps
+are kept as wide on the screen as a layout at the zoom would have them,
+on the graphics card, and its wedges, the mitres where lines meet and its
+labels scale with the view.
 A step within a thousandth of a pixel of whole counts as whole: Windows'
 display scaling leaves notches that close (ten notches at once came as
 999.99993 px at 175 %), and read as fingers they moved the view a thousand

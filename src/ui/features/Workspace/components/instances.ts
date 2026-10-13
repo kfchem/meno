@@ -38,9 +38,9 @@ export function colorInstances(mesh: InstancedMesh, colors: readonly (string | u
  * A plain material for instances drawn across a line - a bond's plane, `y`
  * - or round, a cap's disc, `xy`, whose width is made wider or narrower
  * than laid out on the graphics card: `width.value` times, for nothing on
- * the main thread. A very large drawing waiting for a zoom to stop keeps its
- * lines as wide as a layout at the zoom would have them so
- * (utils/largeZoom `lineWidening`).
+ * the main thread. A drawing laid out at another zoom than the view's - a
+ * very large one waiting for a zoom to stop - keeps its lines as wide as a
+ * layout at the view's would have them so (utils/largeZoom `lineWidening`).
  */
 export function widenedMaterial(
   across: "y" | "xy",
