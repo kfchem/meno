@@ -471,17 +471,42 @@ fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// How long a request to the PDF reader may take: a heavy page drawn large, a figure read, at most.
+const REPLY_MOST: std::time::Duration = std::time::Duration::from_secs(90);
+
 async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
-    let rx = {
-        let state = app.state::<PdfState>();
-        let mut guard = state.0.lock().unwrap();
+    // (started, and asked, off the commands' threads: a start waits for the
+    // reader's first word, and a write for room in its pipe - held, they
+    // held a command thread each, and every other PDF request with them)
+    let held = app.clone();
+    let rx = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+        let state = held.state::<PdfState>();
+        let mut guard = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         // (started the first time, and again where it has gone)
         if guard.as_mut().map(|r| matches!(r.child.try_wait(), Ok(Some(_)))).unwrap_or(true) {
-            *guard = Some(Reader::start(&cache_dir(app)?)?);
+            *guard = Some(Reader::start(&cache_dir(&held)?)?);
         }
-        guard.as_mut().unwrap().ask(req)?
+        guard.as_mut().unwrap().ask(req)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let (head, bytes) = match tokio::time::timeout(REPLY_MOST, rx).await {
+        Ok(reply) => reply.map_err(|_| "the PDF reader stopped".to_string())?,
+        Err(_) => {
+            // (held on it past its time: stopped, so that the next request starts it afresh - what else waits is told it stopped)
+            let held = app.clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let state = held.state::<PdfState>();
+                let taken = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+                if let Some(mut reader) = taken {
+                    let _ = reader.child.kill();
+                    let _ = reader.child.wait();
+                }
+            })
+            .await;
+            return Err("the PDF reader did not answer in time, and was started again".to_string());
+        }
     };
-    let (head, bytes) = rx.await.map_err(|_| "the PDF reader stopped".to_string())?;
     if head["ok"] != json!(true) {
         return Err(head["why"].as_str().unwrap_or("the PDF reader failed").to_string());
     }
