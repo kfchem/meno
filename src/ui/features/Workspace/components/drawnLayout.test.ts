@@ -40,22 +40,19 @@ function sameDrawing(a: Layout, b: Layout) {
 }
 
 describe("a drawing laid out for the canvas", () => {
-  it("lays out a thousand overlapping records in well under the seconds it once took, each as it is alone", () => {
-    const one = layoutMolecule(cholesterol.atoms, cholesterol.bonds, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
-    const timed = (n: number) => {
-      const page = drawn(record.repeat(n));
-      const started = performance.now();
-      const laid = layoutMolecule(page.atoms, page.bonds, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
-      return { page, laid, ms: performance.now() - started };
-    };
-    const tenth = timed(100);
-    const { page, laid: all, ms } = timed(1000);
+  it("lays out a thousand overlapping records each as it is alone, reading each record no more than it reads alone", () => {
+    const alone = { atoms: counted(cholesterol.atoms), bonds: counted(cholesterol.bonds) };
+    const one = layoutMolecule(alone.atoms.list, alone.bonds.list, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
+    const page = drawn(record.repeat(1000));
     expect(page.atoms).toHaveLength(28_000);
-    // (ten times the records in about ten times the time, where each record
-    // reaching into the others' drawing took a hundred times - 19 s once:
-    // timed against a tenth of the page, so that a machine busy with other
-    // work slows both alike, as it would a time set in seconds)
-    expect(ms).toBeLessThan(25 * tenth.ms + 100);
+    const seen = { atoms: counted(page.atoms), bonds: counted(page.bonds) };
+    const all = layoutMolecule(seen.atoms.list, seen.bonds.list, editorLayoutOptions(ACS_1996), startingZoom(ACS_1996));
+    // (how many times its atoms and bonds are read: a thousand records about
+    // a thousand times one alone, where a pass over every bond for a bond's
+    // neighbours read each record once for every other - and a page of them
+    // took seconds)
+    const reads = (s: typeof seen) => s.atoms.reads() + s.bonds.reads();
+    expect(reads(seen)).toBeLessThan(1100 * reads(alone));
     // (records do not reach into each other's drawing: the page is the
     // first record's drawing a thousand times over, bond by bond and label
     // by label, and as much as the record makes alone)
