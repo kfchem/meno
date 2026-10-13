@@ -50,7 +50,20 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
   if (!input) return fail("Nothing comes into it");
   const outcome = runMeno(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds, step.options, energiesBy(input.molecules));
-  if (!outcome.ok) return fail(outcome.said);
+  return ranAs(doc, id, outcome, key, w);
+}
+
+/**
+ * `doc` with Meno's step `id` run, its outcome worked out already - in
+ * turns, while the page went on (store `runMenoInTurns`) - on what came in
+ * as `key` says: its results put in, or why not said. As it was where the
+ * step has gone meanwhile; changed since, where what comes in has.
+ */
+export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key: string, w: RunWith): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  if (!step) return doc;
+  const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
+  if (!outcome.ok) return setRan(keepRun(doc, step), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
   return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
 }
 

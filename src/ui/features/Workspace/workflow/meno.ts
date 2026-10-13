@@ -32,13 +32,54 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
     case "energy-window":
       return energyWindow(entries, Number(options.window));
     case "duplicates":
-      return duplicates(entries, holds, Number(options.rmsd));
+      return drain(duplicates(entries, holds, Number(options.rmsd), Infinity));
     case "populations":
       return populations(entries, Number(options.temperature));
     case "choose":
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
     default:
       return { ok: false, said: "Meno does not do this itself" };
+  }
+}
+
+/**
+ * `runMeno`, Duplicates done in turns that let the page go on between them
+ * (`pause`) - thousands of conformers alike take seconds - saying after
+ * each how many entries it has been through (`onDone`). The other steps
+ * take no time to speak of, and are done at once.
+ */
+export async function runMenoInTurns(
+  kind: StepKind,
+  entries: readonly SetEntry[],
+  holds: SetKind,
+  own?: OptionValues,
+  energiesBy?: string,
+  onDone?: (done: number) => void,
+  pause: () => Promise<void> = nextTurn,
+  budget = TURN_WORK,
+): Promise<Outcome> {
+  if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
+  const options = optionsOf(kindInfo(kind).options ?? [], own);
+  const turns = duplicates(entries, holds, Number(options.rmsd), budget);
+  for (;;) {
+    const turn = turns.next();
+    if (turn.done) return turn.value;
+    onDone?.(turn.value);
+    await pause();
+  }
+}
+
+/** How much Duplicates does in a turn before it lets the page go on: an entry, and a bound worked out, a unit each; a fit, twenty. */
+export const TURN_WORK = 20_000;
+
+/** The next turn of the page's: what waits to be drawn, or pointed at, done first. */
+const nextTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/** What work done in turns comes to, done all at once. */
+function drain<T>(turns: Generator<number, T>): T {
+  for (;;) {
+    const turn = turns.next();
+    if (turn.done) return turn.value;
   }
 }
 
@@ -101,14 +142,26 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * with those of the same atoms in the same order - a structure there
  * twice is the same structure, not two compounds.
  */
-function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number): Outcome {
+function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, budget: number): Generator<number, Outcome> {
   const groups =
     holds === "conformers"
       ? byCompound(entries)
       : [...entries.reduce((m, e) => pushTo(m, atomsOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
   const keptSet = new Set<SetEntry>();
-  for (const g of groups) for (const e of keptApart(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most)) keptSet.add(e);
+  let before = 0;
+  for (const g of groups) {
+    const turns = keptApartInTurns(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most, rmsd, budget);
+    for (;;) {
+      const turn = turns.next();
+      if (turn.done) {
+        for (const e of turn.value) keptSet.add(e);
+        break;
+      }
+      yield before + turn.value;
+    }
+    before += g.length;
+  }
   // (in the order they came)
   const kept = entries.filter((e) => keptSet.has(e));
   const aside = entries.filter((e) => !keptSet.has(e));
@@ -128,6 +181,11 @@ const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
  * conformers took minutes. `measure` is the RMSD (counted, in a test).
  */
 export function keptApart(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number = rmsd): SetEntry[] {
+  return drain(keptApartInTurns(order, most, measure, Infinity));
+}
+
+/** `keptApart`, in turns of `budget` work (`TURN_WORK`): after each, how many of `order` it has been through. */
+function* keptApartInTurns(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number, budget: number): Generator<number, SetEntry[]> {
   // (bounds worked out in floating point, given a hair's room: one alike by a hair is never passed over)
   const reach = most + 1e-9;
   const kept: { e: SetEntry; radii: Float64Array; rg: number }[] = [];
@@ -143,12 +201,21 @@ export function keptApart(order: readonly SetEntry[], most: number, measure: (p:
     }
     return lo;
   };
-  for (const e of order) {
+  let work = 0;
+  for (const [done, e] of order.entries()) {
+    if (work >= budget) {
+      yield done;
+      work = 0;
+    }
+    work++;
     const shape = shapeOf(e.xyz);
     let alike = false;
     for (let j = from(shape.rg - reach); j < kept.length && kept[j].rg <= shape.rg + reach && !alike; j++) {
       const k = kept[j];
-      alike = apartAtLeast(k.radii, shape.radii) <= reach && measure(k.e.xyz, e.xyz) <= most;
+      work++;
+      if (apartAtLeast(k.radii, shape.radii) > reach) continue;
+      work += 20;
+      alike = measure(k.e.xyz, e.xyz) <= most;
     }
     if (alike) continue;
     kept.splice(from(shape.rg), 0, { e, ...shape });

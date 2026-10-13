@@ -433,6 +433,15 @@ of the step, wired from it (decided):
 They are calculation results as Meno knows them: the frames chip,
 pointing at atoms, the lists. The set's port feeds the next step.
 
+Meno's own steps take no time to speak of and are done at once, all but
+Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
+so it works in turns that let the page go on. Its card says it is
+running, and how many of its entries it has been through, and its results
+go in at the end as one edit. It lays a conformer only over those kept
+that could be alike: their radii of gyration, and each atom's distance
+from the middle, within the RMSD asked. Those are bounds the RMSD never
+falls below, so it keeps what laying each over every one would.
+
 Run again, a step replaces its result set's entries with the new run's,
 gliding to where they now are; earlier runs are kept in the step (*Runs*,
 under its options: when, with what options, how long, the number it

@@ -241,6 +241,7 @@ export default function Workflow2D() {
   const turns3d = useEditor((s) => s.turns3d);
   const frames3d = useEditor((s) => s.frames3d);
   const jobsSeen = useEditor((s) => s.jobsSeen);
+  const menoWorking = useEditor((s) => s.menoWorking);
   const selFlow = useEditor((s) => s.selFlow);
   const style3d = useStyle3D();
   const { camera, gl, invalidate } = useThree();
@@ -528,7 +529,8 @@ export default function Workflow2D() {
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
   };
-  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps]);
+  // (Meno's Duplicates working in turns: running, as a step with jobs is)
+  const states = useMemo(() => new Map(steps.map((s) => [s.id, menoWorking[s.id] ? ("running" as const) : stateOf(flow, s, byOf(s))])), [flow, steps, menoWorking]);
   // how each running step's jobs are getting on, as last looked at
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
@@ -549,8 +551,10 @@ export default function Workflow2D() {
         },
       });
     }
+    // (and Meno's working in turns: how many of its entries it has been through)
+    for (const [id, m] of Object.entries(menoWorking)) out.set(Number(id), { waiting: false, view: { since: m.since, ended: m.done, total: m.total } });
     return out;
-  }, [steps, jobsSeen]);
+  }, [steps, jobsSeen, menoWorking]);
   // each set's name and count: what it holds, worked out as the page changes, not as the pointer moves
   const setInfo = useMemo(
     () =>

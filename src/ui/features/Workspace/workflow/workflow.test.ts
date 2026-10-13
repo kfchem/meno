@@ -6,7 +6,7 @@ import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type Wo
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno } from "./meno";
+import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
@@ -197,6 +197,25 @@ describe("Meno's own steps", () => {
     for (const e of order) if (!plainly.some((k) => rmsd(k.xyz, e.xyz) <= 0.125)) plainly.push(e);
     expect(keptApart(order, 0.125)).toEqual(plainly);
     expect(plainly).toHaveLength(200);
+  });
+
+  it("do Duplicates in turns that let the page go on, saying how far they are - and keep what doing it at once keeps", async () => {
+    // (three thousand conformers, each there again a hair away)
+    const some = shaken(1_500, 0.6);
+    const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
+    const done: number[] = [];
+    let pauses = 0;
+    const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, (n) => done.push(n), async () => void pauses++, 2_000);
+    expect(pauses).toBeGreaterThan(1);
+    expect(done).toHaveLength(pauses);
+    // (further each turn, and never all of it before the last)
+    expect(done.every((n, i) => n > (done[i - 1] ?? 0) && n < order.length)).toBe(true);
+    expect(out).toEqual(runMeno("duplicates", order, "conformers"));
+    expect(out.ok && out.kept).toHaveLength(1_500);
+    // (the other steps, done at once)
+    pauses = 0;
+    await runMenoInTurns("populations", order, "conformers", undefined, undefined, undefined, async () => void pauses++, 1);
+    expect(pauses).toBe(0);
   });
 
   it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {
