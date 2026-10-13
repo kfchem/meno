@@ -215,6 +215,16 @@ impl Drawn {
 }
 
 /// A request answered: its JSON, and its bytes.
+/// Why PDFium could not open a PDF, in words: one locked with a password
+/// said so plainly, as Meno asks for none, and one locked another way.
+fn unreadable(e: PdfiumError) -> String {
+    match e {
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => "it is locked with a password".into(),
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::SecurityError) => "it is locked in a way Meno cannot open".into(),
+        e => format!("it could not be read ({e})"),
+    }
+}
+
 fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
     let t = Instant::now();
     let sha = ask["sha"].as_str().unwrap_or("").to_string();
@@ -222,7 +232,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
         return Err("no such PDF".into());
     }
     if !docs.contains_key(&sha) {
-        let doc = pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), None).map_err(|e| format!("it could not be read ({e})"))?;
+        let doc = pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), None).map_err(unreadable)?;
         docs.insert(sha.clone(), doc);
     }
     let doc = &docs[&sha];
@@ -521,13 +531,23 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
     }
     let sha = format!("{:x}", Sha256::digest(bytes));
     let path = cache_dir(app)?.join(format!("{sha}.pdf"));
-    if std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64) {
+    let fresh = std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64);
+    if fresh {
         // (written whole, then put in place: never read half written)
         let part = path.with_extension("part");
         std::fs::write(&part, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
     }
-    let (head, _) = ask(app, json!({"op": "pages", "sha": sha})).await?;
+    // (one PDFium cannot open is not kept: taken in just now, it goes again)
+    let (head, _) = match ask(app, json!({"op": "pages", "sha": sha})).await {
+        Ok(answer) => answer,
+        Err(e) => {
+            if fresh {
+                let _ = std::fs::remove_file(&path);
+            }
+            return Err(e);
+        }
+    };
     let pages: Vec<[f32; 2]> = serde_json::from_value(head["pages"].clone()).unwrap_or_default();
     Ok(Held { sha256: sha, size: bytes.len() as u64, pages })
 }
@@ -641,6 +661,14 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pdf_locked_with_a_password_is_said_to_be() {
+        let locked = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError));
+        assert_eq!(locked, "it is locked with a password");
+        let broken = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError));
+        assert!(broken.starts_with("it could not be read ("), "{broken}");
+    }
 
     #[test]
     fn a_file_too_large_is_refused_before_it_is_read() {
