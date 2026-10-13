@@ -111,7 +111,7 @@ describe("what a set holds", () => {
     expect(frame()).toEqual({ x0: 0, y0: -0.5, x1: 1.5, y1: 1 });
   });
 
-  it("on a page of a thousand structures, is what it is on a page of one - and is found at once, each edit", () => {
+  it("on a page of a thousand structures, is what it is on a page of one - its structures found once for the page, whichever set asks", () => {
     // (chains of seven atoms, forty to a row - their ids the other way round from the order they lie)
     const chains: number[][] = [];
     const drawn: WorkspaceDocument["model"] = { atoms: [], bonds: [] };
@@ -131,15 +131,15 @@ describe("what a set holds", () => {
     // the last chain's end drawn on past the frame's right edge: it grows as it would for that chain alone
     const moved = (model: WorkspaceDocument["model"]) => ({ ...model, atoms: model.atoms.map((a) => (a.id === 1 ? { ...a, x: a.x + 5 } : a)) });
     const before = addSet(page, all);
-    const started = performance.now();
     const grown = fitSets({ ...before, model: moved(before.model) }, before);
-    const took = performance.now() - started;
     const last = new Set(chains[999]);
     const alone = addSet({ ...page, model: { atoms: drawn.atoms.filter((a) => last.has(a.id)), bonds: drawn.bonds.filter((b) => last.has(b.a)) } }, all);
     const grownAlone = fitSets({ ...alone, model: moved(alone.model) }, alone);
     expect(grown.sets![0].x1).toBeGreaterThan(all.x1);
     expect(grown.sets).toEqual(grownAlone.sets);
-    expect(took).toBeLessThan(1000);
+    // (the very same structures for every set asking of the page: found once, not again for each set)
+    const everything = setMembers(page, all).structures;
+    expect(setMembers(page, left).structures.every((ids) => everything.includes(ids))).toBe(true);
   });
 
   it("finds a drawing's structures once for every set asking, and again only once it is drawn on", () => {

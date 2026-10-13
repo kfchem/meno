@@ -282,13 +282,14 @@ pub fn run_job(dir: &Path) -> i32 {
     }
 
     // its turn: as many running as were allowed, those asked for first first
+    let mut unsure = 0;
     loop {
         if stop_asked(dir) {
             end(JobState::Stopped, None, None, None);
             return 0;
         }
         // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
-        if !dir.join(SPEC).is_file() || read_record(dir).is_none_or(|r| r.state != JobState::Waiting) {
+        if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
             return 1;
         }
         match take_turn(dir, &spec, &base) {
@@ -365,13 +366,34 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
     (status, stopping.is_some())
 }
 
+/// Whether a waiting runner is to wait no more, its job's spec `there` or
+/// not and its record as read (`record`): where its record says it is no
+/// longer waiting - ended by another - at once; where its folder or its
+/// record cannot be found or read, only the second time running (`unsure`,
+/// counted here), since another program may hold a file a moment - an
+/// antivirus on Windows - and a waiting job is not given up on for that.
+fn waits_no_more(unsure: &mut u32, there: bool, record: Option<&JobRecord>) -> bool {
+    match (there, record) {
+        (true, Some(r)) => {
+            *unsure = 0;
+            r.state != JobState::Waiting
+        }
+        _ => {
+            *unsure += 1;
+            *unsure >= 2
+        }
+    }
+}
+
 /// Whether it is this job's turn - the first waiting, with fewer running
 /// than it allows - and, where it is, the job recorded running. Asked by one
 /// runner at a time.
 fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bool> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    // (a wait cut short by a signal - the runner asked to go - waited again)
+    // (a runner asked to go takes its wait up again of itself - its signals
+    // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
+    // Interrupted here; one given, on a system that does, is waited again)
     while let Err(e) = queue.lock() {
         if e.kind() != std::io::ErrorKind::Interrupted {
             return Err(e);
@@ -1703,6 +1725,24 @@ mod tests {
         assert_eq!((f.state, s.state), (JobState::Done, JobState::Done));
         assert!(s.started.unwrap() >= f.ended.unwrap());
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_waiting_runner_gives_up_on_a_record_it_cannot_read_only_the_second_time_running() {
+        let waiting = JobRecord::new(JobState::Waiting, 1);
+        let ended = JobRecord::new(JobState::Gone, 1);
+        let mut unsure = 0;
+        // (held a moment - an antivirus reading it on Windows: waited on)
+        assert!(!waits_no_more(&mut unsure, true, None));
+        assert!(!waits_no_more(&mut unsure, true, Some(&waiting)));
+        assert!(!waits_no_more(&mut unsure, false, Some(&waiting)));
+        assert!(!waits_no_more(&mut unsure, true, Some(&waiting)));
+        // (twice running: gone)
+        assert!(!waits_no_more(&mut unsure, true, None));
+        assert!(waits_no_more(&mut unsure, false, None));
+        // (said ended: at once)
+        let mut fresh = 0;
+        assert!(waits_no_more(&mut fresh, true, Some(&ended)));
     }
 
     #[test]
