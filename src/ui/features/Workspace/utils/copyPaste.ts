@@ -5,7 +5,7 @@
  */
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
-import { pushAtoms } from "../document";
+import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
@@ -97,8 +97,6 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   };
 }
 
-/** How far from what it is of a mark put by hand is read, in ems of the labels: farther, it is put back. */
-const MARK_REACH = 50;
 
 /** Meno's own record of a structure on the clipboard, and its version. */
 const RECORD = "meno-structure";

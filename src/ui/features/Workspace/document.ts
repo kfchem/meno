@@ -1553,7 +1553,14 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
 export type MarkOf = { atom: number; kind: "charge" | "stereo" } | { bond: number };
 
 /** `doc` with a mark put where a hand put it - `at`, from what it is of - or (null) back where the drawing puts it. */
-export function putMark(doc: WorkspaceDocument, of: MarkOf, at: MarkAt | null): WorkspaceDocument {
+/** How far from what it is of a mark put by hand is read, in ems of the labels: farther, it is put back (utils/copyPaste); put, it goes no farther. */
+export const MARK_REACH = 50;
+
+export function putMark(doc: WorkspaceDocument, of: MarkOf, given: MarkAt | null): WorkspaceDocument {
+  // (no farther than a mark is read back from a file or a copy - dragged
+  // farther, it was put back on reopening, or on pasting)
+  const far = given ? Math.hypot(given.x, given.y) : 0;
+  const at = given && far >= MARK_REACH ? { x: (given.x * (MARK_REACH - 0.01)) / far, y: (given.y * (MARK_REACH - 0.01)) / far } : given;
   const same = (p?: MarkAt) => (p && at ? p.x === at.x && p.y === at.y : !p && !at);
   if ("bond" in of) {
     const b = doc.model.bonds.find((x) => x.id === of.bond);

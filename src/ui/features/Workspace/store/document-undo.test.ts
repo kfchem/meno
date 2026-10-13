@@ -764,7 +764,7 @@ describe("electron-pushing arrows over a merge (the command centre's document fu
     const a = state().addAtom(0, 0, "C");
     const b = state().addAtom(1.5, 0, "O");
     const c = state().addAtom(3, 0, "C");
-    const ab = state().connectAtoms(a, b, 1);
+    const ab = state().connectAtoms(a, b, 1)!;
     state().connectAtoms(b, c, 1);
     state().addPush({ bond: ab }, { atom: b }, false);
     state().addPush({ atom: a }, { atom: c }, false);
@@ -782,5 +782,22 @@ describe("electron-pushing arrows over a merge (the command centre's document fu
     expect((d.pushes ?? []).some((p) => "atom" in p.from && p.from.atom === b && "atom" in p.to && p.to.atom === c)).toBe(true);
     // and the one on the collapsed bond is gone
     expect((d.pushes ?? []).some((p) => "bond" in p.from && p.from.bond === ab)).toBe(false);
+  });
+});
+
+describe("a charge's mark dragged far from its atom (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("goes no farther than a mark is read back from a file or a copy, so it is not put back on reopening", async () => {
+    const { MARK_REACH } = await import("../document");
+    const { doc, state } = editor();
+    const n = state().addAtom(0, 0, "N");
+    state().stepCharge(n, 1);
+    state().putMark({ atom: n, kind: "charge" }, { x: 300, y: 400 }, "far");
+    const at = doc.getState().model.atoms.find((a) => a.id === n)!.chargeAt!;
+    expect(Math.hypot(at.x, at.y)).toBeLessThan(MARK_REACH);
+    // in the same direction
+    expect(at.y / at.x).toBeCloseTo(400 / 300, 6);
+    // one near is put as it is
+    state().putMark({ atom: n, kind: "charge" }, { x: 1.5, y: -0.5 }, "near");
+    expect(doc.getState().model.atoms.find((a) => a.id === n)!.chargeAt).toEqual({ x: 1.5, y: -0.5 });
   });
 });
