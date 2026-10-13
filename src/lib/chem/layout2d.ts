@@ -4371,13 +4371,15 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The CSS font stack for a typeface: itself, its nearest stand-in, then
- * IBM Plex Sans JP for what it lacks - as the canvas draws it.
+ * The CSS font stack for a typeface: itself, its nearest stand-ins, then
+ * IBM Plex Sans JP for what it lacks - as the canvas draws it. IBM Plex
+ * Sans, which Meno carries but a picture's reader seldom has, stands in as
+ * Arial or Helvetica there, the nearest most have.
  */
 export function fontStack(family: string): string {
   const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name);
   const standIn =
-    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : [];
+    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : family === "IBM Plex Sans" ? ["Arial", "Helvetica"] : [];
   return [family, ...standIn, "IBM Plex Sans JP", "sans-serif"]
     .map((name, i, all) => (i === all.length - 1 ? name : quote(name)))
     .join(", ");
