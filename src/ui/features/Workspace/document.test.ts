@@ -518,6 +518,19 @@ describe("what readers reading an output as well found", () => {
     ]);
   });
 
+  it("of a file of several jobs, joins each job's molecule what the reader read of that job - or, read as one, the last's", () => {
+    const job = (number: number) => ({ ...water3d, calc: { ...water3d.calc, job: { number, of: 2 } } });
+    const two = () => ops.addMolecule3d(ops.addMolecule3d(emptyWorkspaceDocument(), job(1)), job(2));
+    const second = { ...charges, values: [-0.8, 0.4, 0.4] };
+    const byJob = { ...found, output: { ...found.output, jobs: [{ ...found.output, job: { number: 1, of: 2 } }, { ...found.output, results: [second], job: { number: 2, of: 2 } }] } };
+    const d = ops.withReadings(two(), { [sha]: [byJob] });
+    expect(d.molecules3d!.map((m) => m.calc!.results!.map((r) => (r as { values: number[] }).values[0]))).toEqual([[-0.9], [-0.8]]);
+    // (read as one: its end, the last job's)
+    const asOne = ops.withReadings(two(), { [sha]: [found] });
+    expect(asOne.molecules3d!.map((m) => m.calc!.readers)).toEqual([["cclib 1.9rc1"], ["cclib 1.9rc1", "nbo 7"]]);
+    expect(ops.readingOfJob(found, undefined)).toBe(found);
+  });
+
   it("leaves a molecule of another output, and a document with nothing to join, as they are", () => {
     const d = withWater();
     expect(ops.withReadings(d, { ["b".repeat(64)]: [found] })).toBe(d);

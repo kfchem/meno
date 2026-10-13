@@ -25,6 +25,7 @@ import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
+import type { CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets } from "./workflow/model";
 
@@ -922,16 +923,33 @@ export function addMolecule3d(doc: WorkspaceDocument, m: Omit<Molecule3D, "id">)
  * belongs to frames only where it read as many; and a reader that could not
  * read it, said. The document as it was where there is nothing to join.
  */
+/**
+ * What a reader read of one job of a file that holds several: the job of
+ * that number, where it read the file job by job; where it read the file as
+ * one, that - its end - for the last job, and nothing for the others.
+ * Where the molecule is no job of several, what it read.
+ */
+export function readingOfJob(found: Found, job: CalcInfo["job"]): Found | null {
+  if (!job) return found;
+  const jobs = Array.isArray(found.output.jobs) && found.output.jobs.length > 1 ? found.output.jobs : null;
+  if (!jobs) return job.number === job.of ? found : null;
+  const own = jobs.find((j) => j.job?.number === job.number);
+  return own ? { ...found, output: own } : null;
+}
+
 export function withReadings(doc: WorkspaceDocument, bySource: Readonly<Record<string, readonly (Found | Unread)[]>>): WorkspaceDocument {
   let changed = false;
   const molecules3d = (doc.molecules3d ?? []).map((m) => {
     const readings = m.calc?.source ? bySource[m.calc.source.sha256] : undefined;
     if (!m.calc || !readings?.length) return m;
     let calc = m.calc;
-    for (const r of readings) {
+    for (const found of readings) {
       // (a reader as a molecule keeps it: its id, then its version)
-      const has = calc.readers.some((x) => x === r.from || x.startsWith(`${r.from} `)) || calc.unread?.some((u) => u.from === r.from);
+      const has = calc.readers.some((x) => x === found.from || x.startsWith(`${found.from} `)) || calc.unread?.some((u) => u.from === found.from);
       if (has) continue;
+      // (of a file of several jobs, what the reader read of this molecule's job)
+      const r = "why" in found ? found : readingOfJob(found, m.calc.job);
+      if (!r) continue;
       const atoms = m.atoms.map((a) => a.el);
       if ("why" in r || !sameAtoms(r.output.atoms, atoms)) {
         const why = "why" in r ? r.why : "it read other atoms";

@@ -110,6 +110,9 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
       results,
+      // (of a file of several jobs, its jobs as its reader read them: each opens as a molecule of its own)
+      ...(base.output.job ? { job: base.output.job } : {}),
+      ...(Array.isArray(base.output.jobs) && base.output.jobs.length > 1 ? { jobs: base.output.jobs } : {}),
     },
     readers: taken.map(readerLine),
   };

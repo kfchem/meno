@@ -217,7 +217,16 @@ PLUGINS.md's contract, with three requests for files:
     bonds as for an XYZ file;
   - **a drawing**, in the record's form, read by Meno's own record reader
     with its checks;
-  - **results** in the general form, any of them a promise.
+  - **results** in the general form, any of them a promise;
+  - of a file of several jobs one after another - Gaussian's Link1,
+    ORCA's `$new_job` - **one output for each job**, in order (`jobs`),
+    each saying which job it is and what it did (`job: {number, of,
+    kind}`): each opens as a molecule of its own, side by side, its
+    geometries, energies and populations its own, and its job said in
+    the line of what the calculation was ("job 1 of 2, optimisation").
+    The answer's own fields are its last job's. A route run in steps -
+    Gaussian's Opt Freq - is one job (the maintainer, 2026-10-13;
+    PLUGINS.md, *The contract*).
 - **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.

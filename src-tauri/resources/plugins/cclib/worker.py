@@ -26,6 +26,7 @@ as a library; none of its code is Meno's.
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import warnings
@@ -281,7 +282,82 @@ def op_read(m):
     return result
 
 
-OPS = {"read": op_read}
+# --- a file holding several jobs, one after another ----------------------------
+
+
+def job_texts(text):
+    """The jobs a file holds one after another, each a text cclib reads as a file of its own; the file itself,
+    where it holds one. Gaussian's, each begun by its own "Initial command:" - a Link1 job; an Opt Freq's
+    frequencies are a second step of its one job, and stay with it - each after the file's first line, which
+    says it is Gaussian's. ORCA's, each begun by its "JOB NUMBER" ($new_job), each after what the output
+    says before the first - its input as the output echoes it cut down to that job's own."""
+    lines = text.split("\n")
+    if any("Entering Gaussian System" in line for line in lines[:40]):
+        starts = [k for k, line in enumerate(lines) if line.startswith(" Initial command:")]
+        if len(starts) < 2:
+            return [text]
+        ends = starts[2:] + [len(lines)]
+        return ["\n".join(lines[: starts[1]])] + ["\n".join([lines[0]] + lines[a:b]) for a, b in zip(starts[1:], ends)]
+    if "O   R   C   A" in text[:20000]:
+        marks = [k for k, line in enumerate(lines) if re.search(r"\$+\s+JOB NUMBER\s+\d+\s+\$+", line)]
+        if len(marks) < 2:
+            return [text]
+        head = lines[: marks[0]]
+        echo = [k for k, line in enumerate(head) if re.match(r"\|\s*\d+>", line)]
+        news = [k for k in echo if re.match(r"\|\s*\d+>\s*\$new_job\b", head[k], re.I)]
+        # (what ORCA says of each job before the input, its basis set the first: one such part for each job)
+        parts = [k for k, line in enumerate(head) if line.startswith("----- Orbital basis set information")]
+        title = next((k for k, line in enumerate(head) if line.strip() == "INPUT FILE"), len(head))
+        title -= 1 if title and head[title - 1].startswith("=") else 0
+        partOf = {}
+        if len(parts) == len(marks):
+            for i, (p, q) in enumerate(zip(parts, parts[1:] + [title])):
+                partOf.update({k: i for k in range(p, q)})
+        echoed = set(echo)
+        jobs = []
+        for j, (a, b) in enumerate(zip(marks, marks[1:] + [len(lines)])):
+            # (the echoed input of job j - between the $new_job lines either side of it - and its own part)
+            mine = [
+                line for k, line in enumerate(head)
+                if partOf.get(k, j) == j and (k not in echoed or (sum(n <= k for n in news) == j and k not in news))
+            ]
+            jobs.append("\n".join(mine + lines[a:b]))
+        return jobs
+    return [text]
+
+
+def job_kind(out):
+    """What a job did, in words, by what was read of it: an optimisation (and frequencies), frequencies, or a
+    single point."""
+    vibrations = any(r.get("id") == "vibrations" for r in out.get("results") or [])
+    if out.get("optimised") is not None:
+        return "Optimisation and frequencies" if vibrations else "Optimisation"
+    return "Frequencies" if vibrations else "Single point"
+
+
+def op_read_jobs(m):
+    """What a file holds: as `op_read` reads it - or, where it holds several jobs, each job read as a file of
+    its own, said by its place among them and what it did (`job`), all of them in order (`jobs`), and the
+    answer's own fields its last job's. A job nothing is read of is left out; its place is kept."""
+    name = os.path.basename(str(m.get("name") or "output"))
+    text = m.get("text")
+    texts = job_texts(text) if isinstance(text, str) and text else [text]
+    if len(texts) < 2:
+        return op_read(m)
+    jobs = []
+    for k, t in enumerate(texts):
+        try:
+            out = op_read({**m, "text": t})
+        except Exception:  # noqa: BLE001 - a job left out, the others read
+            continue
+        out["job"] = {"number": k + 1, "of": len(texts), "kind": job_kind(out)}
+        jobs.append(out)
+    if not jobs:
+        raise ValueError(f"No molecule was found in {name}.")
+    return {**jobs[-1], "jobs": jobs}
+
+
+OPS = {"read": op_read_jobs}
 
 
 def answer(line):
