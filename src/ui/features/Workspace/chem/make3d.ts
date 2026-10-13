@@ -78,6 +78,8 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
     atoms: c.atoms.map((a, i) => ({
       el: a.el,
       ...(a.charge ? { charge: a.charge } : {}),
+      // (a radical as drawn: the plugin's answer says none, and a triplet is no singlet)
+      ...(i < block.part.atoms.length && block.part.atoms[i].radical ? { radical: block.part.atoms[i].radical } : {}),
       x: first[3 * i] ?? 0,
       y: first[3 * i + 1] ?? 0,
       z: first[3 * i + 2] ?? 0,

@@ -939,7 +939,9 @@ function textbook(
               const hints = exits(mol, atoms, X, index, bonds, pts, pageUp, fit, drawn, axialRings, uprights);
               // the rest of the cage above the ring, where it is looked for,
               // and room for what hangs from it - from the front of the ring
-              // rather than the back, where it would pass behind the cage
+              // rather than the back, where it would pass behind the cage;
+              // and, of views alike, the one that lies level (tetrodotoxin
+              // long, its guanidine ring beside the cage, not under it)
               const behind = [order[5], order[0], order[1]].reduce(
                 (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
                 0,
@@ -949,7 +951,8 @@ function textbook(
                 cost0 +
                 (restUp ? 0 : 0.5) +
                 exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
-                0.25 * behind;
+                0.25 * behind +
+                LEVEL_AXIS * axisTiltOf(pts);
               best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
             }
           }
@@ -1231,6 +1234,29 @@ function exits(
     hints.set(a, m);
   });
   return hints;
+}
+
+/** What a degree of a template view's long axis off level costs it (`textbook`, `axisTiltOf`). */
+const LEVEL_AXIS = 0.05;
+
+/** How far a drawing's long axis is from level, in degrees, scaled by how much longer than broad it is (as `layoutMetrics` measures it). */
+function axisTiltOf(pts: readonly Point[]): number {
+  const n = pts.length;
+  const cx = pts.reduce((s, p) => s + p.x, 0) / n;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    sxx += (p.x - cx) ** 2;
+    syy += (p.y - cy) ** 2;
+    sxy += (p.x - cx) * (p.y - cy);
+  }
+  const half = (sxx + syy) / 2;
+  const spread = Math.sqrt(Math.max(0, half * half - (sxx * syy - sxy * sxy)));
+  const long = half + spread;
+  const broad = Math.max(0, half - spread);
+  return long > 0 ? Math.abs((0.5 * Math.atan2(2 * sxy, sxx - syy) * 180) / Math.PI) * (1 - Math.sqrt(broad / long)) : 0;
 }
 
 /** How much a cage's bonds out run into it: an end on an atom or a bond, or crossing one. */

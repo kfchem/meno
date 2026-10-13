@@ -373,9 +373,13 @@ and the held-out list takes new ones. What it showed, by kind:
   only where chairs show every centre, 2026-10-12). Still open: its
   guanidine ring, with its C=N, is to be drawn flat, but laid flat onto
   the cage on either side of the bond it shares it shows one of the two
-  ring-junction carbons the other way round, from every view tried; it
-  stands a quarter turn from the usual drawing; and the OH in the middle
-  of the cage reads O|H.
+  ring-junction carbons the other way round, from every view tried; and
+  the OH in the middle of the cage reads O|H: a label's H goes on the
+  side away from its own bond, and a cage bond passes there; nudging the
+  OH round its bond finds no better place, and placing the H by the bonds
+  around it is the drawing's rule, not the engine's. Its orientation is
+  done (2026-10-13): of the template views alike, the level one, its
+  guanidine ring beside the cage as in the usual drawing.
 - **The solids' rules still open** (the maintainer, 2026-10-12): quinine's
   OH on C9, which is no ring atom, drawn straight down (asked in #269).
   Fused chairs are drawn decalin style inside a solid, but no
@@ -403,3 +407,25 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
+- **Ginkgolide B** (2026-10-13). No two of its rings share three atoms,
+  so it is no cage; three share the bond C7-C12, a propellane, which no
+  flat drawing can lay out without a crossing. The whole is drawn as a
+  solid seen down an axis, and loses to the flat drawing (61 against 32):
+  its four O's, tert-butyl, methyl and seven centre H's crowd any view of
+  so compact a solid. Lean-away does not apply: it opens narrow gaps
+  between groups, and here the rings themselves cannot lie flat. The
+  usual drawing lays its lactone and first cyclopentane flat, draws the
+  ether O27 as a one-atom bridge from C7 to C26, and the rest in
+  perspective. Tried and not taken: the propellane treated as a bridged
+  system (a lactone becomes the bridge, its C=O inside a flat ring); the
+  ether O as the bridge, its bonds drawn longer (the flat rings crowd it);
+  the spiro lactone turned to bring C26 within reach (no placement fits).
+  Choosing the flat rings and two bridges as the usual drawing does is
+  the likely way.
+- **Aconitine** (2026-10-13): two cages fused - the bicyclo[3.2.1] C/D
+  rings onto the core of rings A, B, E and F - drawn as one solid by a
+  projection, since no template view of the whole reads (18.1 against the
+  threshold 8). Laying the second cage flat onto the first misreads a
+  junction, and the whole drawn by the chair template crowds its esters.
+  The usual drawing shows both cages in perspective, ring A a chair in
+  front.

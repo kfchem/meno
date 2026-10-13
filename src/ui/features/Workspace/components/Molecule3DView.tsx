@@ -29,6 +29,7 @@ import { ribbonMesh } from "../utils/ribbon";
 import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastByResidue, raycastCylinders, raycastSpheres } from "./raycast3d";
+import { commitInstanceMatrices } from "./instances";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -948,8 +949,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         b.set(p[3 * bond.a2], p[3 * bond.a2 + 1], p[3 * bond.a2 + 2]);
         placePiece(sleeveMesh, i, a, b, v > 0.001 ? bondReach(bond.order, bondR) + CHOSEN_PX * px * v : 0);
       });
-      sleeveMesh.instanceMatrix.needsUpdate = true;
-      sleeveMesh.computeBoundingSphere();
+      commitInstanceMatrices(sleeveMesh);
       sleeveMesh.visible = sleeves.current.size > 0 && bondsShown;
     }
     // the measurements: drawn afresh as the atoms move, fading in and out
@@ -1534,15 +1534,14 @@ function placeAtoms(mesh: THREE.InstancedMesh, places: Float32Array, radius: (i:
     mtx.makeScale(r, r, r).setPosition(places[3 * i], places[3 * i + 1], places[3 * i + 2]);
     mesh.setMatrixAt(i, mtx);
   }
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  // (its sphere read off the matrices, not each ball's taken into it: a protein's tens of thousands at every frame it moves)
+  commitInstanceMatrices(mesh);
 }
 
 /** Each bond's lines, cylinders from end to end, `extra` thicker all round (by line, if it is a function). */
 function placeBonds(mesh: THREE.InstancedMesh, lines: BondLine[], extra: number | ((k: number) => number)) {
   lines.forEach((line, k) => placePiece(mesh, k, line.a, line.b, line.r + (line.r > 0 ? (typeof extra === "number" ? extra : extra(k)) : 0)));
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  commitInstanceMatrices(mesh);
 }
 
 /** A cylinder of radius `r` from `a` to `b`, as instance `k`. */

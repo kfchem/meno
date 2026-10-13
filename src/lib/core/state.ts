@@ -91,7 +91,9 @@ export function reducer(state: State, action: Action): State {
     case "SET_DIRTY": {
       if (!state.tabsById[action.id]) return state;
       const t = state.tabsById[action.id];
-      if (!t) return state;
+      // (unchanged, the same state: a document tells its tab at every change - every frame of a drag - and a new
+      // state each time drew the app, its tabs and every canvas again)
+      if (!t || !!t.meta.dirty === action.dirty) return state;
       return {
         ...state,
         tabsById: {
