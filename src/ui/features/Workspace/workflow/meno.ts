@@ -5,6 +5,7 @@
  * published methods. Each takes the entries that came in and says which
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
+import { knownOf } from "../../../../lib/io/writers";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
@@ -42,14 +43,23 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
   }
 }
 
-/** Whether two entries are of the same constitution: the same atoms, in the same order, bonded the same way. */
+/**
+ * Whether two entries are of the same constitution: the same atoms, in the
+ * same order, bonded the same way - and of the same charge and spin, as the
+ * programs are told them (lib/io/writers `knownOf`), so that a triplet is
+ * never a conformer of its singlet.
+ */
 export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds">): string {
   const atoms = e.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}`).join(" ");
   const bonds = e.bonds
     .map((b) => `${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}:${b.order}`)
     .sort()
     .join(" ");
-  return `${atoms}|${bonds}`;
+  const { charge, multiplicity } = knownOf({
+    atoms: e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
+    bonds: [],
+  });
+  return `${atoms}|${bonds}|${charge} ${multiplicity}`;
 }
 
 /** A compound set as a conformer set: entries of the same constitution as conformers of one compound, numbered in the order they came. */

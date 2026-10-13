@@ -240,7 +240,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound |
-| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way - as conformers of one compound |
+| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
 
 The first five run a program; the last five work on a set's entries
