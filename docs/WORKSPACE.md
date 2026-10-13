@@ -412,6 +412,8 @@ Taken on 2026-10-10 (menus and gestures):
   takes it away - none is added, and Meno says so (`blocksStill`; until
   2026-10-13 a molecule of the structure undone came, tied to atoms gone,
   and the undone step could not be redone); edits elsewhere do not count.
+  Meno's question about stereo not drawn goes with the structure it is
+  about, shut by an undo that takes it away.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain

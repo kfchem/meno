@@ -356,6 +356,11 @@ function WorkspaceContent({
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
+  // (the question goes with its structure: an undo taking it away shuts it,
+  // as a colour card or a panel goes with what it is for)
+  useEffect(() => {
+    if (ask3d && !blocksStill(ask3d.blocks, model)) setAsk3d(null);
+  }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
   // a molecule's bond orders sought from its shape as it comes in, where they
