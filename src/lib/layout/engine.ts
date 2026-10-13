@@ -73,20 +73,39 @@ export function layout2D(input: LayoutInput): Layout2D {
   // In more than one of its own orders, the drawing that reads best kept:
   // the layout's choices between equals were made on such orders, and one
   // order alone draws some molecules worse than another does)
-  let best: Layout2D | null = null;
+  // (and kept by the molecule written in its own order: the same molecule
+  // again - a label's group drawn out at every relayout, a drawing read
+  // back - however its atoms come, laid out once)
+  const to0 = canonicalOrder(input, 0);
+  const key = JSON.stringify(reordered(input, to0));
+  const kept = laidOutBefore.get(key);
+  if (kept) {
+    laidOutBefore.delete(key);
+    laidOutBefore.set(key, kept);
+    return restored(kept.laid, kept.way ? canonicalOrder(input, kept.way) : to0);
+  }
+  let best: { way: number; laid: Layout2D; to: number[] } | null = null;
   let bestScore = Infinity;
   for (let way = 0; way < OWN_ORDERS; way++) {
-    const to = canonicalOrder(input, way);
+    const to = way ? canonicalOrder(input, way) : to0;
     const own = reordered(input, to);
     const laid = layoutInOrder(own);
     // (measured in that order too, the same whatever order the atoms came
     // in: the measure reads some things by atom order - which of rings as
     // long the smallest set holds)
     const score = OWN_ORDERS > 1 ? drawingScore(own, perceive(own), laid) : 0;
-    if (score < bestScore - 1e-9) [best, bestScore] = [restored(laid, to), score];
+    if (score < bestScore - 1e-9) [best, bestScore] = [{ way, laid, to }, score];
   }
-  return best!;
+  laidOutBefore.set(key, { way: best!.way, laid: best!.laid });
+  if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
+  return restored(best!.laid, best!.to);
 }
+
+/** The molecules laid out last, by the molecule written in its own order: the own order the drawing kept was laid out in, and that drawing in it. */
+const laidOutBefore = new Map<string, { way: number; laid: Layout2D }>();
+
+/** How many molecules `layout2D` keeps laid out, the least recently asked for going first. */
+const LAID_OUT_KEPT = 64;
 
 /** How many of the molecule's own orders it is laid out in, the best drawing kept (`layout2D`, `canonicalOrder`): 1, 2 or 4. */
 const OWN_ORDERS = 2;

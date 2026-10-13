@@ -269,6 +269,19 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     out, the first being bonded to it). Through two benzene rings off a
     hub, a benzene came down on the hub's atom the run ends at. The run is
     now kept off both ends and looked for from each, the better kept.
+- **Atoms alike to the ranks, not alike** (2026-10-14, L8's review).
+  Atoms the ranks leave alike were told apart by taking the first of them
+  in the input's order. That is the same molecule whichever is taken only
+  where they are alike in every way; ranks refined by neighbours never
+  part some cages of three-bonded CH that are not - cuneane, basketane,
+  snoutene - and two orders of cuneane's atoms wrote its bonds in two
+  orders. Each alike atom is now taken first in turn, the least writing
+  kept, the symmetries found on the way pruning the rest; no drawing on
+  either list changes. Laid out from two own orders, every layout cost
+  twice what one did, a label's group drawn out again at each relayout
+  among them: the last 64 molecules are kept by their own order's writing
+  (aconitine 1.5 s the first time, 0.5 ms again, its atoms reversed).
+  Opening an SD file does not lay its records out.
 - **A core's view chosen by the system alone** (2026-10-14). Ibogaine's
   isoquinuclidine was seen from the side its ring system alone read best
   from, which stood the indole on top of the cage, the drawing twice as

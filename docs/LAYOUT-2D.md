@@ -16,13 +16,21 @@ in another order, read from another file (2026-10-13). The engine puts
 the atoms in an order of the molecule's own first (`canonical.ts`): each
 ranked by its element, charge, H's and bonds, the ranks refined by its
 neighbours' and then by each stereocentre's and double bond's
-configuration against them, until only atoms alike in every way are left
-alike; then taken in the order a walk from the lowest-ranked end atom
-meets them, as a SMILES string writes them. It lays that out, and hands
-the drawing back in the order it was given - from two such walks, one
-from the lowest-ranked end atom and one from the highest, the drawing
-that reads better kept: one order alone draws some molecules worse than
-another does, as any input order did. The benchmark's measure reads a
+configuration against them. Atoms the ranks still leave alike are taken
+first in turn, the ranks refined again each time, until every atom
+stands alone, and of the orders that gives, the one that writes the
+molecule least (its atoms and bonds by their places) is kept: ranks can
+leave atoms alike that are not - cuneane's, basketane's - and two orders
+that write the molecule the same show a symmetry, whose matched atoms are
+not tried again. The atoms are then taken in the order a walk from the
+lowest-ranked end atom meets them, as a SMILES string writes them. It
+lays that out, and hands the drawing back in the order it was given -
+from two such walks, one from the lowest-ranked end atom and one from the
+highest, the drawing that reads better kept: one order alone draws some
+molecules worse than another does, as any input order did. The last 64
+molecules laid out are kept by the molecule written in its own order: the
+same molecule again - a label's group drawn out at each relayout, a
+drawing read back - is handed back at once, whatever order it comes in. The benchmark's measure reads a
 drawing the same way however its atoms are listed: in a bridged system
 it reads every ring as small as one of its smallest set, not the set
 alone - quinuclidine has three six-membered cycles, and which two make
