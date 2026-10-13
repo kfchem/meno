@@ -62,6 +62,24 @@ describe("a PDF page's figures", () => {
     expect(figures[0][2]).toBeGreaterThanOrEqual(208);
   });
 
+  it("take a counter-ion with its charge drawn by it, and a row of them, but no short word as far off without one", () => {
+    // (a charge as Meno draws one: a ring of small pieces, its sign in it)
+    const ring = (cx: number, cy: number): PageObject[] => [
+      ...Array.from({ length: 24 }, (_, k): PageObject => {
+        const [x, y] = [cx + 2.5 * Math.cos((k * Math.PI) / 12), cy + 2.5 * Math.sin((k * Math.PI) / 12)];
+        return path([x - 0.3, y - 0.3, x + 0.3, y + 0.3]);
+      }),
+      path([cx - 1.5, cy - 0.2, cx + 1.5, cy + 0.2]),
+    ];
+    // (a structure ending at 180; K+ K+ 22 points apart, each its ring at its upper right; a number as far off, alone)
+    const ions = [200, 230].flatMap((x) => [text([x, 305, x + 6, 313]), ...ring(x + 9, 304)]);
+    const figures = figuresOf([...structureAt(100, 300), ...ions]);
+    expect(figures).toHaveLength(1);
+    expect(figures[0][2]).toBeGreaterThanOrEqual(241);
+    const number = figuresOf([...structureAt(100, 300), text([200, 305, 206, 313])]);
+    expect(number).toEqual([[91, 300, 180, 328]]);
+  });
+
   it("are none on a page scanned in strips, as on a page scanned whole; a picture beside its words still one", () => {
     // (a page scanned as eight strips, one under another, its words read over them)
     const strips: PageObject[] = Array.from({ length: 8 }, (_, i) => ({ kind: "image", box: [0, i * 105.25, 595, (i + 1) * 105.25] }));

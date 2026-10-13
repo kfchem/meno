@@ -90,6 +90,14 @@ const PLUS_PT = 14;
 const CONDITIONS_PT = 24;
 const SHORT_WORD_PT = 40;
 const NUMBER_PT = 14;
+/**
+ * A charge drawn by a word - a ring with its sign, or a sign set high - is
+ * this large at most, and this near the word; a counter-ion so marked is
+ * its structure's this far off at most, in points.
+ */
+const CHARGE_PT = 8;
+const CHARGE_BY_PT = 3;
+const ION_PT = 30;
 /** A line of words wider than this share of the page - and than this, a page holding little else - is a column's, never a figure's label. */
 const COLUMN_LINE = 0.3;
 const COLUMN_LINE_PT = 150;
@@ -160,16 +168,19 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   // (a structure's parts either side of a label - an acetyl past an NH, a group past an O - one, joined
   // through the word between them, before the small are left out)
   const labels = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] <= SHORT_WORD_PT).map((o) => o.box);
-  const parts = throughLabels(
+  const pieces = throughLabels(
     joined(
       drawn.map((o) => o.box),
       JOIN_PT,
     ),
     labels,
-  ).filter((g) => {
+  );
+  const parts = pieces.filter((g) => {
     const [w, h] = [g[2] - g[0], g[3] - g[1]];
     return (Math.max(w, h) >= LEAST_PT && Math.min(w, h) >= LEAST_THICK_PT) || pictures.some((p) => meet(p, g));
   });
+  // (charges drawn apart from any part - a ring with its sign, or a sign set high - too small to be parts themselves)
+  const charges = [...pieces.filter((g) => !parts.includes(g)), ...objects.filter((o) => o.kind === "plus").map((o) => o.box)].filter((g) => Math.max(g[2] - g[0], g[3] - g[1]) <= CHARGE_PT);
   const pageW = Math.max(1, page[2] - page[0]);
   const words = objects.filter((o) => (o.kind === "text" || o.kind === "plus") && o.box[2] - o.box[0] <= Math.max(COLUMN_LINE * pageW, COLUMN_LINE_PT)).map((o) => o.box);
   const pluses = objects.filter((o) => o.kind === "plus").map((o) => o.box);
@@ -198,7 +209,39 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     for (let pass = 0; pass < 2; pass++) b = words.reduce((acc, w) => (labelOf(g, acc, w) ? union(acc, w) : acc), b);
     return b;
   });
-  return joined(labelled, 0);
+  return joined(withIons(labelled, labels, charges), 0);
+}
+
+/**
+ * Figures with their counter-ions: a short word with a charge drawn by it
+ * (Na with a "+" in a ring, Br with a "-"), set apart from a structure,
+ * as a structure's ions are - its, within `ION_PT` of it, or of the ion
+ * before it in a row of them (three K+). A short word with no charge by
+ * it, a compound's number beside it, is not taken so far off.
+ */
+function withIons(figures: Box[], words: readonly Box[], charges: readonly Box[]): Box[] {
+  const ions = words.flatMap((w) => {
+    const by = charges.filter((c) => meet(grow(w, CHARGE_BY_PT), c));
+    return by.length ? [by.reduce(union, w)] : [];
+  });
+  const out = figures.slice();
+  const left = ions.filter((ion) => !out.some((f) => within(ion, grow(f, 0.5))));
+  for (let more = true; more; ) {
+    more = false;
+    for (let i = left.length - 1; i >= 0; i--) {
+      const near = out.map((f, k) => ({ k, gap: gapOf(f, left[i]) })).filter((n) => n.gap <= ION_PT).sort((a, b) => a.gap - b.gap)[0];
+      if (!near) continue;
+      out[near.k] = union(out[near.k], left[i]);
+      left.splice(i, 1);
+      more = true;
+    }
+  }
+  return out;
+}
+
+/** How far apart two boxes lie: nothing where they meet. */
+function gapOf(a: Box, b: Box): number {
+  return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
 }
 
 /** Whether a figure's part is an arrow's: long and thin, level or upright. */
