@@ -1033,7 +1033,7 @@ workspace holds.
     bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
-  - a short dash between two labels, as between S and O in a sulfonyl, is
+  - a short dash between two labels - two words, not one word's ends - as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
     one (N≡N+) - never a hash, however evenly they are set; and so is a
     short line from a joint of bonds to a label stacked tall - an NH with

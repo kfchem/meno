@@ -18,6 +18,7 @@ import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import tempo from "./fixtures/tempo-rdkit.json";
 import junction from "./fixtures/monensin-nature-junction.json";
+import fdg from "./fixtures/fdg-rdkitacscg.json";
 import fructose from "./fixtures/fructose-nature.json";
 import glucose from "./fixtures/glucose-rdkit.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
@@ -876,6 +877,14 @@ describe("a figure drawn in colour by another program", () => {
     expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
     const pt = r.atoms.findIndex((a) => a.label === "Pt");
     expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
+  });
+
+  it("reads no bond between labels from a line whose ends both come to one word", () => {
+    // (FDG as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: its 18F set beside its carbon, the C-F bond under it)
+    const r = readFigure(fdg as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const f = r.atoms.findIndex((a) => a.label === "18F");
+    expect(r.bonds.filter((b) => b.a === f || b.b === f)).toHaveLength(1);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(6);
   });
 
   it("gives a bond so short it lies within its label's box to that label, at the end nearer its element", () => {
