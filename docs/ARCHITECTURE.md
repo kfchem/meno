@@ -1168,6 +1168,10 @@ to be able to work with nothing going out at all.
   update is checked against the updater's public key (`tauri.conf.json`)
   before it is installed, which is as Meno quits; a development build, and
   a Meno Windows started for Office, neither look nor install. On Windows
+  it waits while jobs wait or run (`held`, `INSTALL_STOPS_JOBS`): the
+  installer ends every process of Meno's executable, the jobs' runners
+  among them, so it is installed neither as Meno quits nor by *Restart
+  now* until none do (docs/WORKFLOWS.md, *When Meno closes*). On Windows
   the installer is left in a folder of the temporary directory
   (`Meno-<version>-updater-…`), which Meno takes away as it starts once it
   is some minutes old (`tidy_after_updates`). Releases:

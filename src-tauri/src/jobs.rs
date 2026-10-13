@@ -1334,6 +1334,18 @@ pub async fn job_state(app: AppHandle, id: String) -> Result<JobListed, String> 
     listed(&id, &dir).ok_or_else(|| format!("no job {id}"))
 }
 
+/// How many of the jobs in `root` wait or run: those whose runners are
+/// there, or are starting.
+pub fn under_way(root: &Path) -> u32 {
+    let Ok(entries) = fs::read_dir(root) else { return 0 };
+    entries.flatten().filter(|e| current_record(&e.path()).is_some_and(|r| !r.state.finished())).count() as u32
+}
+
+/// How many of Meno's jobs wait or run - every workspace's, open or not.
+pub fn under_way_now(app: &AppHandle) -> u32 {
+    jobs_root(app).map(|root| under_way(&root)).unwrap_or(0)
+}
+
 /// Every job in Meno's data folder, those asked for first first.
 #[tauri::command]
 pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
@@ -1705,6 +1717,31 @@ mod tests {
         // (let go: gone - once a program another test starts, forked while the
         // lock was held and holding it with it until it runs, has let go too)
         wait_for(|| current_record(&other).unwrap().state == JobState::Gone);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn counts_the_jobs_that_wait_or_run() {
+        let root = temp();
+        assert_eq!(under_way(&root), 0);
+        assert_eq!(under_way(&root.join("not there")), 0);
+        // (its runner starting: waiting)
+        shell(&root, ECHO, 1);
+        // (running, its runner there)
+        let running = shell(&root, ECHO, 1);
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(running.join(RUNNER_LOCK)).unwrap();
+        lock.lock().unwrap();
+        write_record(&running, &JobRecord::new(JobState::Running, 1)).unwrap();
+        // (done; and recorded running by a runner that is gone)
+        let done = shell(&root, ECHO, 1);
+        write_record(&done, &JobRecord { ended: Some(3), code: Some(0), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        let gone = shell(&root, ECHO, 1);
+        write_record(&gone, &JobRecord::new(JobState::Running, 1)).unwrap();
+        // (and what is not a job's folder)
+        fs::create_dir_all(root.join("not a job")).unwrap();
+        fs::write(root.join(QUEUE_LOCK), b"").unwrap();
+        assert_eq!(under_way(&root), 2);
+        drop(lock);
         let _ = fs::remove_dir_all(root);
     }
 

@@ -2,7 +2,9 @@
  * Meno keeping itself up to date (src-tauri/src/update.rs): it looks on the
  * project's GitHub Releases for a newer Meno as it starts and every few
  * hours, downloads one in the background, and installs it as Meno quits -
- * or at once, when the user restarts into it.
+ * or at once, when the user restarts into it. On Windows, not while jobs
+ * wait or run: installing would stop them (docs/WORKFLOWS.md, *When Meno
+ * closes*).
  *
  * It uses the network as everything in Meno does (lib/net/network): under
  * its own purpose, which the user allows once (Meno asks, once, of its own
@@ -40,6 +42,8 @@ export type UpdateState = {
   /** When GitHub was last asked, ms since the epoch. */
   checked: number | null;
   error: string | null;
+  /** How many jobs wait or run that installing the update would stop: it waits for them (Windows). */
+  held: number;
 };
 
 /** Where the updater is; null until the app has said. */
@@ -50,6 +54,8 @@ const ASK_AFTER_MS = 3_000;
 /** How soon after Meno starts it first looks, and how often after that. */
 const FIRST_LOOK_MS = 20_000;
 const EVERY_MS = 6 * 60 * 60 * 1000;
+/** How often, with an update ready, Meno looks again at the jobs it waits for. */
+const HELD_EVERY_MS = 10_000;
 
 const CONSENT: ConsentRequest = {
   purpose: UPDATE_PURPOSE,
@@ -80,12 +86,27 @@ export function keepUpToDate(): Promise<boolean> {
   return askToConnect(CONSENT);
 }
 
+/** When an update ready goes in, in words: as Meno quits - once no job waits or runs, where it waits for some. */
+export function readySaid(u: Pick<UpdateState, "version" | "held">): string {
+  const ready = `Meno ${u.version ?? ""} is ready`;
+  if (!u.held) return `${ready}. It goes in when you quit Meno.`;
+  const jobs = u.held === 1 ? "the job waiting or running" : `the ${u.held} jobs waiting or running`;
+  return `${ready}. It goes in when you quit Meno with no jobs waiting or running: installing it now would stop ${jobs}.`;
+}
+
 /**
  * Restarts into the update downloaded: by quitting - so that unsaved work
  * is asked about first - after which it is installed and Meno started again.
+ * Not while jobs wait or run that installing would stop: then Meno stays,
+ * and what the update waits for is said.
  */
 export async function restartIntoUpdate(): Promise<void> {
-  await invoke("update_restart_after_quit");
+  try {
+    await invoke("update_restart_after_quit");
+  } catch {
+    useUpdate.setState(await invoke<UpdateState>("update_state"), true);
+    return;
+  }
   await getCurrentWindow().close();
 }
 
@@ -123,6 +144,10 @@ export function startUpdates(): () => void {
     }, ASK_AFTER_MS);
     const first = setTimeout(() => void checkForUpdate(), FIRST_LOOK_MS);
     const every = setInterval(() => void checkForUpdate(), EVERY_MS);
+    // (an update ready: the jobs it waits for, as they start and end)
+    const held = setInterval(() => {
+      if (useUpdate.getState()?.phase === "ready") void invoke<UpdateState>("update_state").then((s) => useUpdate.setState(s, true));
+    }, HELD_EVERY_MS);
     const unwatch = useNetwork.subscribe((s, prev) => {
       const now = !s.offline && s.granted.includes(UPDATE_PURPOSE);
       const before = !prev.offline && prev.granted.includes(UPDATE_PURPOSE);
@@ -134,6 +159,7 @@ export function startUpdates(): () => void {
       clearTimeout(ask);
       clearTimeout(first);
       clearInterval(every);
+      clearInterval(held);
       unwatch();
     });
     if (stopped) stops.forEach((s) => s());

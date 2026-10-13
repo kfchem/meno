@@ -458,6 +458,14 @@ gave), and one can be shown again.
 - **Jobs go on** (decided). Closing with jobs waiting or running says how
   many will go on, and asks nothing else; those waiting start in turn,
   without Meno.
+- **An update waits for them** (Windows). Installing a newer Meno ends
+  every process of Meno's executable, the jobs' runners among them, and
+  with each the program it runs. So while any job - of any workspace -
+  waits or runs, an update downloaded is installed neither as Meno quits
+  nor by *Restart now*: the notice and Settings say it waits, and for how
+  many jobs. It goes in at a quit with none, downloaded again after Meno
+  next starts. On a Mac a runner goes on from the Meno it was started
+  from, and an update goes in as Meno quits.
 - **Opened again**, a workspace looks at its jobs: done - their results
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was
