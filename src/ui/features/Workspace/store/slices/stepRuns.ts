@@ -53,6 +53,12 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * own (`running`, amended in): undo does not take a run back, and the
  * workspace saved keeps it, so that one opened again picks its jobs up.
  */
+/** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
+export function notMade(places: readonly number[], of: number): string {
+  const which = places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
+  return `${which} of ${of} could not be made in 3D`;
+}
+
 export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState, w: Pick<RunWith, "extentOf">) {
   /** Those waiting for a step's jobs to end: kept once it has none. */
   const waiters = new Map<number, (() => void)[]>();
@@ -264,12 +270,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const options = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const worked: Worked[] = [];
     let compounds = 0;
+    // (those that could not be made, by their places among the structures: the others made all the same)
+    const failed: number[] = [];
     try {
       const chem = await pluginWorker(plugin);
-      for (const atoms of input.structures) {
+      for (const [place, atoms] of input.structures.entries()) {
         const block = blocksOf(d.model, atoms)[0];
         if (!block) continue;
-        const made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
+        let made;
+        try {
+          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
+        } catch {
+          // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
+          failed.push(place + 1);
+          continue;
+        }
         if (!made) continue;
         const m = moleculeOf(made, block);
         // (what worked out their energies, for the steps that rank them: the plugin, and its force field)
@@ -292,10 +307,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
     const took = Date.now() - at;
+    const left = failed.length ? ` \u00b7 ${notMade(failed, input.structures.length)}` : "";
     bringIn(id, worked, "conformers", {
       at,
       ok: true,
-      said: `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${compounds > 1 ? ` of ${compounds} compounds` : ""}`,
+      said: `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${compounds > 1 ? ` of ${compounds} compounds` : ""}${left}`,
       input: key,
       took,
       kind: step.kind,

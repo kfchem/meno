@@ -8,7 +8,9 @@
  */
 import { pluginById, PLUGINS } from "../../../../lib/calc/catalog";
 import { useReaders } from "../../../../lib/calc/workers";
-import type { Option } from "../../../../lib/options";
+import { valuesOf, type Option } from "../../../../lib/options";
+import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
@@ -84,8 +86,14 @@ export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefine
  */
 export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   if (by === MENO.id) return kindInfo(kind).options ?? [];
+  const plugin = pluginById(by);
+  const own = plugin?.steps.find((d) => d.kind === kind)?.options ?? [];
+  // (a step that says no options of its own takes its role's - lib/plugins/manifest - and starts, as that
+  // role does wherever it is asked, from those chosen in Settings: a conformer search as 3D structures makes one)
+  const role = isRole(kind) && plugin?.roleOptions[kind] === own ? kind : undefined;
+  const chosen: Record<string, unknown> = role ? valuesOf(own, useAppSettings.getState().options[roleOptionsRole(role)]) : {};
   // (Meno's own choices for the kind, whoever does it - Render's - then the plugin's)
-  return [...(kindInfo(kind).own ?? []), ...(pluginById(by)?.steps.find((d) => d.kind === kind)?.options ?? [])];
+  return [...(kindInfo(kind).own ?? []), ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
 
 /** The options a step takes, as who does it declares them. */
