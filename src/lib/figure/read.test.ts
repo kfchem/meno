@@ -254,6 +254,19 @@ describe("a figure read as a structure", () => {
     expect(s.atoms.some((a) => a.unsure?.some((u) => /not read/.test(u)))).toBe(false);
   });
 
+  it("reads a short bond between two labels to both, its end by the far label's corner", () => {
+    // (as a methanol's O-D is drawn small: a carbon's three bonds and its bond to the O; from the O a bond 3.7 long up to a
+    // label set high beside it - its end 1 point off the O, 0.9 off the far label's corner)
+    const o: FigureLetter = { c: "O", box: [109.3, 100.8, 117.5, 109.7], at: [109.3, 109.7], size: 12 };
+    const cl: FigureLetter[] = [
+      { c: "C", box: [119, 89.5, 126.4, 101], at: [119, 101], size: 12 },
+      { c: "l", box: [127.2, 89.5, 128.6, 101], at: [127, 101], size: 12 },
+    ];
+    const c: P = [98.6, 96.2];
+    const s = read(figure([stroke([93.5, 105.2], c, [103.2, 88.3]), stroke([90.2, 91.4], c, [108.2, 101.8]), stroke([118.5, 101.8], [121.7, 99.9])], [o, ...cl]));
+    expect(bondsOf(s)).toContain("O-Cl");
+  });
+
   it("reads a group drawn on its bond's left from the bond out: TBSO as OTBS", () => {
     const c: P = [80, 60];
     const o = step(c, 180);

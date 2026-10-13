@@ -494,8 +494,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
     let best = -1;
     let bestD = Infinity;
+    // (not the word its bond comes out of - its other end in it - however near this end lies to its corner)
+    const other = e.side === 0 ? d.b : d.a;
     words.forEach((w, k) => {
-      if (isNumber[k]) return;
+      if (isNumber[k] || fromBox(other, w.box) === 0) return;
       const dd = fromBox(e.p, w.box);
       // (where other bonds meet it, an end is a carbon - unless it lies on a capital of the word, its bonds drawn to its middle under it)
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
