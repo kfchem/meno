@@ -416,6 +416,19 @@ const METALS = new Set(
 );
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
+/** Whether a metal's symbol is written anywhere in `text`: what any complex's formula has. */
+function hasMetal(text: string): boolean {
+  for (const m of METALS) if (text.includes(m)) return true;
+  return false;
+}
+
+/**
+ * The longest a part of a formula outside brackets is tried as one ligand,
+ * group or counter-anion - longer than any of them is written: past it, a
+ * label of a metal and a long run of letters was tried at every length.
+ */
+const LONGEST_PART = 32;
+
 /**
  * A complex's counter-anions, written after its brackets, that no rule
  * reads: BArF names its aryl groups by no formula. BF4, PF6, SbF6, ClO4
@@ -499,7 +512,7 @@ function itemsOf(text: string, names: Names): Item[] | null {
       // the longest token from here, up to the next bracket
       const stop = text.slice(i).search(/[[(]/);
       const rest = stop < 0 ? text.slice(i) : text.slice(i, i + stop);
-      for (let len = rest.length; len > 0 && !item; len--) {
+      for (let len = Math.min(rest.length, LONGEST_PART); len > 0 && !item; len--) {
         const t = token(rest.slice(0, len), names);
         if (t) {
           item = t;
@@ -562,6 +575,10 @@ export function complexStructure(
   groupOf: (label: string) => GroupStructure | null,
   local: Readonly<Record<string, Ligand>> = {},
 ): (GroupStructure & { name: string }) | null {
+  // (no metal's symbol in it, no complex: a long label - OTBS forty times,
+  // a long chain written out - was read at every length of every part of it,
+  // for seconds, before it was found to be none)
+  if (!hasMetal(label)) return null;
   const items = itemsOf(label, { groupOf, local });
   if (!items) return null;
   const atoms: SmilesAtom[] = [];
