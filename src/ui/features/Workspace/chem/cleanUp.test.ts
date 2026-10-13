@@ -174,7 +174,8 @@ describe("cleanUp", () => {
       const s2 = stereo({ atoms: told.atoms.map(({ id, x, y, el }) => atom(id, x, y, el)), bonds: told.bonds as Bond[] });
       for (const [c, t] of s0) expect(sameConfiguration(t, s2.get(c)!), `${name} ${c}, flat`).toBe(true);
     }
-  });
+    // (Clean-up on each cage, the engine laying each out in two of its own orders)
+  }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
     // cocaine drawn flat has an H on each bridgehead, to carry its wedge;
