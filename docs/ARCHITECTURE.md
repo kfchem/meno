@@ -1078,7 +1078,12 @@ codeload.github.com, a release's file to
 release-assets.githubusercontent.com, and a file on huggingface.co to
 Hugging Face's content delivery network (hosts under hf.co). A test reads
 every plugin's lock and downloads and checks that the consent names each
-host they fetch from. A reader
+host they fetch from. Each line is made together with the hosts it names
+(`SetUpReach`), and those go with the set-up (`py_env_setup_uv`,
+`py_env_setup_pixi`) and with the fetch of its files (`plugin_files`): the
+proxy lets each reach those alone (net.rs). Another test reads the hosts
+back from every consent's words and checks they are the ones its task is
+kept to, both ways. A reader
 plugin says it is made so by `env: "pixi"`; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
@@ -1148,11 +1153,17 @@ to be able to work with nothing going out at all.
   *purpose* (`python-env:console`, `python-code`) and pointed at the proxy
   with the task's token in its proxy credentials. The proxy carries a
   connection only for a task under way, only for a purpose the user has
-  allowed (`python-code`, the user's own code, needs no asking), only over
-  HTTPS, and never in offline mode. Each connection - host, bytes each way,
-  times, outcome - goes to the window as it happens (`net:connection`, every
-  half second while open) and to `network-log.jsonl` in the app's data
-  folder when it ends. A child that may not use the network - another
+  allowed (`python-code`, the user's own code, needs no asking), only to a
+  host the task's consent named, only over HTTPS, and never in offline
+  mode. Each task is begun with the hosts its consent named
+  (`ConsentRequest.hosts`, made with the consent's lines from one list and
+  sent with what begins the task), each exact or with a leading dot for any
+  host under one (`.hf.co`); a connection elsewhere is refused (403) and on
+  the record as blocked, "not a host its consent named". Only the user's
+  own code names none, and reaches any host. Each connection - host, bytes
+  each way, times, outcome - goes to the window as it happens
+  (`net:connection`, every half second while open) and to
+  `network-log.jsonl` in the app's data folder when it ends. A child that may not use the network - another
   worker, or the console while Meno is offline - is pointed at the proxy
   with no task, so whatever it reaches for is refused and on the record.
   The proxy is bound, and offline mode and the purposes allowed are read
