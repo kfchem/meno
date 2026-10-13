@@ -910,8 +910,14 @@ export function withImportedScheme(
 // --- molecules in 3D ---------------------------------------------------------
 
 export function addMolecule3d(doc: WorkspaceDocument, m: Omit<Molecule3D, "id">): WorkspaceDocument {
-  const id = doc.nextMolecule3dId ?? 1;
-  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), { ...m, id }], nextMolecule3dId: id + 1 };
+  return addMolecules3d(doc, [m]);
+}
+
+/** Molecules in 3D added at once, each given the next id in turn: the page's molecules copied once, however many. */
+export function addMolecules3d(doc: WorkspaceDocument, ms: readonly Omit<Molecule3D, "id">[]): WorkspaceDocument {
+  if (!ms.length) return doc;
+  const first = doc.nextMolecule3dId ?? 1;
+  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...ms.map((m, i) => ({ ...m, id: first + i }))], nextMolecule3dId: first + ms.length };
 }
 
 /**

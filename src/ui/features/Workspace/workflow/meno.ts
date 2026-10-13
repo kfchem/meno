@@ -108,15 +108,7 @@ function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number):
       : [...entries.reduce((m, e) => pushTo(m, atomsOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
   const keptSet = new Set<SetEntry>();
-  for (const g of groups) {
-    const order = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
-    const kept: SetEntry[] = [];
-    for (const e of order) {
-      if (kept.some((k) => rmsd(k.xyz, e.xyz) <= most)) continue;
-      kept.push(e);
-      keptSet.add(e);
-    }
-  }
+  for (const g of groups) for (const e of keptApart(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most)) keptSet.add(e);
   // (in the order they came)
   const kept = entries.filter((e) => keptSet.has(e));
   const aside = entries.filter((e) => !keptSet.has(e));
@@ -124,6 +116,77 @@ function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number):
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
+
+/**
+ * Of `order` - entries of the same atoms in the same order - those kept,
+ * each unlike every one kept before it: its RMSD after the best fit to
+ * each above `most`. Each is laid over only those kept that could be
+ * within `most` of it, by two bounds the RMSD is never below (its atoms
+ * taken in their own order, rmsd.ts): the difference of their radii of
+ * gyration, and, atom by atom, of their distances from their middles - so
+ * none alike is missed. Laid over every one kept, thousands of distinct
+ * conformers took minutes. `measure` is the RMSD (counted, in a test).
+ */
+export function keptApart(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number = rmsd): SetEntry[] {
+  // (bounds worked out in floating point, given a hair's room: one alike by a hair is never passed over)
+  const reach = most + 1e-9;
+  const kept: { e: SetEntry; radii: Float64Array; rg: number }[] = [];
+  const out: SetEntry[] = [];
+  // (the first kept whose radius of gyration is at least `rg`: those kept are in that order)
+  const from = (rg: number) => {
+    let lo = 0;
+    let hi = kept.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (kept[mid].rg < rg) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  for (const e of order) {
+    const shape = shapeOf(e.xyz);
+    let alike = false;
+    for (let j = from(shape.rg - reach); j < kept.length && kept[j].rg <= shape.rg + reach && !alike; j++) {
+      const k = kept[j];
+      alike = apartAtLeast(k.radii, shape.radii) <= reach && measure(k.e.xyz, e.xyz) <= most;
+    }
+    if (alike) continue;
+    kept.splice(from(shape.rg), 0, { e, ...shape });
+    out.push(e);
+  }
+  return out;
+}
+
+/** A geometry's atoms' distances from its middle, in their order, and its radius of gyration. */
+function shapeOf(xyz: readonly number[]): { radii: Float64Array; rg: number } {
+  const n = xyz.length / 3;
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  for (let i = 0; i < n; i++) {
+    cx += xyz[3 * i];
+    cy += xyz[3 * i + 1];
+    cz += xyz[3 * i + 2];
+  }
+  cx /= n;
+  cy /= n;
+  cz /= n;
+  const radii = new Float64Array(n);
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    const r = Math.hypot(xyz[3 * i] - cx, xyz[3 * i + 1] - cy, xyz[3 * i + 2] - cz);
+    radii[i] = r;
+    sum += r * r;
+  }
+  return { radii, rg: n ? Math.sqrt(sum / n) : 0 };
+}
+
+/** The least RMSD two geometries could have after any fit, from their atoms' distances from their middles: each atom at least as far from its fellow as their distances differ. */
+function apartAtLeast(p: Float64Array, q: Float64Array): number {
+  let sum = 0;
+  for (let i = 0; i < p.length; i++) sum += (p[i] - q[i]) ** 2;
+  return p.length ? Math.sqrt(sum / p.length) : 0;
+}
 
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome {

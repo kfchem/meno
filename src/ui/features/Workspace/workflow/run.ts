@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { removeMolecules3d, type WorkspaceDocument } from "../document";
+import { addMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -264,9 +264,7 @@ export function placeResults(
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
   const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
   // (all put on the page at once: one at a time copied the page's molecules again for each)
-  const first = doc.nextMolecule3dId ?? 1;
-  const placed = made.map((m, i) => ({ ...m, id: first + i, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } }));
-  if (placed.length) doc = { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...placed], nextMolecule3dId: first + placed.length };
+  doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } })));
   const madeBy = { step: step.id, holds };
   if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside);
   const id = doc.nextWorkflowId ?? 1;
