@@ -27,6 +27,7 @@ import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } 
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonMesh } from "../utils/ribbon";
 import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { typedValue } from "../utils/typedValue";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -1593,7 +1594,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
     field.current?.focus();
     field.current?.select();
   }, []);
-  const read = () => Number(value.trim().replace("\u2212", "-").replace(",", "."));
+  const read = () => typedValue(value);
   return (
     <span className="inline-flex items-baseline">
       <input
