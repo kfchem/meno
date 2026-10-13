@@ -14,7 +14,7 @@ a workspace holding 2D and 3D together - see [`WORKSPACE.md`](./WORKSPACE.md).
 | App shell (React) | `src/App.tsx`, `src/lib/core/`, `src/ui/layouts/`, `src/ui/views/` | Tab model (open/close/reorder/rename), mapping a tab's `kind` to a view component. |
 | Features (React) | `src/ui/features/*` | One folder per view: the workspace (2D drawing, molecules in 3D, texts, PDFs, workflows) and settings, with the text and style editors they share. |
 | Chemistry helpers (TS) | `src/lib/chem/`, `src/utils/` | File parsing (MOL/SDF/RXN/XYZ/PDB), editor model conversion, 2D depiction layout (bond lines, wedges, labels) and ACS-style sizing. Pure functions — no React, no Tauri. |
-| Python workers | `src-tauri/resources/plugins/<id>/worker.py` | Each plugin's worker: JSON lines over stdio, run in the plugin's own environment, made by uv or pixi. (The Python Console, a REPL in a tab of its own, was removed from the UI on 2026-10-10.) |
+| Python workers | `src-tauri/resources/plugins/<id>/worker.py` | Each plugin's worker: JSON lines over stdio, run in the plugin's own environment, made by uv or pixi. (The Python Console, a REPL in a tab of its own, was removed from the UI on 2026-10-10, and its worker with it on 2026-10-13.) |
 
 Rule of thumb: parsing and geometry are pure TypeScript (testable with Vitest),
 rendering is React + react-three-fiber, and anything touching processes goes
@@ -86,13 +86,11 @@ src-tauri/
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
   capabilities/           permission sets for the main window
-  resources/py/           the lock files of Meno's own Python profiles;
-                          uv and pixi are not bundled but fetched the first time an environment
-                          needs one, pinned by version and SHA-256 (src/tools.rs)
-  resources/workers/      Meno's own Python worker scripts
   resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
-                          Meno names none of them (docs/PLUGINS.md)
+                          Meno names none of them (docs/PLUGINS.md). uv and pixi are not
+                          bundled but fetched the first time an environment needs one,
+                          pinned by version and SHA-256 (src/tools.rs)
 site/                     the website, kfchem.github.io/meno: plain HTML, CSS and JS, no build. The
                           Pages workflow (.github/workflows/pages.yml) writes the latest release
                           into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
@@ -1101,20 +1099,22 @@ The webview is not trusted with process execution, so `lib.rs` validates every
 path it is given:
 
 - `py_env_*`: the webview names no tool - uv is the one `tools.rs` pins;
-  `lockPath` must be a `.lock` file under `resources/py/`, or in a plugin's
-  folder, `resources/plugins/<id>/` - for pixi, that folder's `pixi.lock`,
-  made in `<app data>/pixi/plugin-<id>`; `venvHome` must be under `uv/` in the
-  app data dir; relative paths may not contain `..`, `.` or absolute/drive
+  `lockPath` must be a plugin's own lock in its folder,
+  `resources/plugins/<id>/`: uv's `requirements.lock`, made in exactly
+  `<app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
+  `<app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
+  (2026-10-13: the console's and the workflows' locks are gone); relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
-  absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
-  script unchanged.
+  absolute `.py` script that is a plugin's `worker.py` in `resources/plugins/<id>/`, in that
+  plugin's own environment (`SIDECAR_SCRIPTS`); later arguments go to the script unchanged.
 - A worker is pointed at the proxy with no task, so what it reaches for is
-  refused and on the record. (The Python Console, whose worker ran the
-  user's own code as a `python-code` task, was removed from the UI on
-  2026-10-10.)
+  refused and on the record. Every purpose waits on the user's yes: the
+  Python Console, whose worker ran the user's own code as a `python-code`
+  task that needed no asking, was removed from the UI on 2026-10-10, and its
+  worker and that purpose on 2026-10-13.
 - `job_start`: the webview names a plugin and a program, not a path. The
   program must be one the plugin's manifest names (`steps[].programs`),
   never a shell or an interpreter that takes code in its arguments, found
@@ -1124,13 +1124,20 @@ path it is given:
   folder. Its input files must lie inside its folder; it is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
-  a `job.json`; a file read from it must lie inside it.
+  a `job.json`; a file read from it must lie inside it. Its files are
+  listed without following links, 32 folders deep and 10,000 files at
+  most. The runner (`Meno --job <folder>`) checks it all again before it
+  runs anything, whoever started it: its folder must be
+  `<app data>/jobs/<id>`, links resolved (`runner_folder`), and what it is
+  to run - the program, the programs after it, their environment - what
+  `job_start` would give (`spec_allowed`). Otherwise it writes a Failed
+  record into the folder, saying why, and runs nothing.
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.
 
 Adding a new worker or interpreter flag means extending these rules
-(`PYTHON_FLAGS`, the workers directory) together with the unit tests in
+(`PYTHON_FLAGS`, `SIDECAR_SCRIPTS`) together with the unit tests in
 `lib.rs`.
 
 Files the chemist's own: the webview's file scope (`capabilities/main.json`)
@@ -1166,6 +1173,9 @@ to be able to work with nothing going out at all.
   folder when it ends. A child that may not use the network - a plugin's
   worker, a job - is pointed at the proxy with no task, so whatever it
   reaches for is refused and on the record.
+  What comes back is read up to a bound: a tool's archive 256 MiB, a
+  chemical component's file 4 MiB (`tools.rs` `body_within`); a plugin's
+  downloads, the `bytes` its manifest gives.
   The proxy is bound, and offline mode and the purposes allowed are read
   from the saved settings, as the app starts: before the window has loaded,
   nothing can be started that would go out on its own.
