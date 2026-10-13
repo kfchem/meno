@@ -169,6 +169,13 @@ class Steps(unittest.TestCase):
         # (the wavefunction's file, "read from the input stream, on a separate line": after the molecule, ended by a blank line)
         self.assertEqual(text.split("\n\n")[3:], ["wavefunction.wfx", ""])
 
+    def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
+        # (Gaussian, given Opt for one atom, stops in its optimiser)
+        sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+        lines = ask("prepare", step="optimise", entries=[sodium], options=step_defaults("optimise"))["jobs"][0]["files"][0]["text"].splitlines()
+        route = next(line for line in lines if line.startswith("#"))
+        self.assertEqual(route, "# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ SP Output=WFX")
+
     def test_keeps_the_wavefunction_only_where_asked(self):
         job = ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "wavefunction": False})["jobs"][0]
         self.assertNotIn("Output=WFX", job["files"][0]["text"])

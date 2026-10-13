@@ -77,6 +77,16 @@ class Prepare(unittest.TestCase):
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
 
+    def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
+        # (ORCA, given OPT for one atom, warns and stops with no energy)
+        sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+        lines = ask("prepare", step="optimise", entries=[sodium], options=defaults("optimise"))["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! B3LYP def2-SVP D3BJ SP")
+        self.assertEqual(lines[1], "* xyz 1 1")
+        # (frequencies are asked of it as of any molecule)
+        freq = ask("prepare", step="frequencies", entries=[sodium], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        self.assertIn(" FREQ", freq.splitlines()[0])
+
     def test_keeps_the_wavefunction_only_where_asked(self):
         job = ask("prepare", step="energy", entries=[WATER], options={**defaults("energy"), "wavefunction": False})["jobs"][0]
         self.assertNotIn("then", job)

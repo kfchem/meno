@@ -56,6 +56,11 @@ and from nothing else:
   section, and the name of the file it writes, which Gaussian "read[s]
   from the input stream, on a separate line" (gaussian.com, "Output"),
   after the molecule specification, ended by a blank line.
+
+A lone atom - an ion of a salt, say - asked to be optimised by a step is
+run as SP: it has no geometry to optimise, and Gaussian, given Opt for
+one atom, stops in its optimiser (l103). It comes back where it was, with
+its energy.
 """
 
 import json
@@ -217,6 +222,9 @@ def step_input(step, entry, options, cores):
     job = STEP_JOBS.get(step)
     if job is None:
         raise Refused(f"this plugin does no {step!r}")
+    # (a lone atom: its energy where it is)
+    if step == "optimise" and len(entry.get("atoms") or []) == 1:
+        job = STEP_JOBS["energy"]
     solvation = options.get("solvation", "none")
     if solvation not in SOLVATIONS:
         raise Refused(f"no solvation is called {solvation!r}")
