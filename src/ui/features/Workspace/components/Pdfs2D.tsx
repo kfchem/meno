@@ -69,6 +69,7 @@ import type { WordPlace } from "../store/types";
 import { spotMoving } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
 import { inkOnPage } from "../utils/pdfInk";
+import { hoverKeeper } from "./keptHover";
 
 /** Eased in and out, cubic: what is lifted rises and settles. */
 export const ease = (u: number) => {
@@ -144,6 +145,11 @@ export default function Pdfs2D() {
   useEffect(() => () => void (settleTimer.current != null && window.clearTimeout(settleTimer.current)), []);
   // each PDF's motion: a page turned (the one that went), its pages spread or gathered, and its light
   const motion = useRef(new Map<number, Motion>());
+  // (a PDF pressed is hovered, under the pointer, whatever the canvas makes of the press: keptHover)
+  const keeper = useMemo(
+    () => hoverKeeper<number>({ get: () => store.getState().hoveredPdf, set: (id) => store.getState().setHoveredPdf(id) }, window, gl.domElement),
+    [store, gl],
+  );
   const was = useRef(new Map<number, PdfItem>());
   // (the PDF being dragged, and its page dragged, if a page alone: it follows the pointer, gliding nowhere)
   const dragged = useRef<{ id: number; page: number | null } | null>(null);
@@ -425,6 +431,7 @@ export default function Pdfs2D() {
     // (what is drawn over it is pressed, not it)
     if (st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d || st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null) return;
     e.stopPropagation();
+    keeper.keep(p.id);
     // (Ctrl/Cmd and a click: into the selection, or out of it, as a picture is)
     if (addsToSelection(ev as { ctrlKey?: boolean; metaKey?: boolean })) {
       st.togglePdfSel(p.id);
@@ -616,7 +623,10 @@ export default function Pdfs2D() {
           previewOf={(page) => pics.preview(p, page)}
           tilesOf={(page) => pics.tilesOf(p.sha256, page, view.current.level.get(p.id * 100000 + page) ?? 0)}
           marksOf={(page) => marksOn(p, page, pdfSel, found, foundNow, redraw, pdfFlash, pdfBox)}
-          onOver={() => store.getState().setHoveredPdf(p.id)}
+          onOver={() => {
+            keeper.over(p.id);
+            store.getState().setHoveredPdf(p.id);
+          }}
           onOut={() => {
             hoverAt(null);
             if (store.getState().hoveredPdf === p.id) store.getState().setHoveredPdf(null);
