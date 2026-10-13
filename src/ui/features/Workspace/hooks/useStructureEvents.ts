@@ -10,8 +10,8 @@ import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { calculateNewBondPosition } from "../utils/geometry";
 import { clickClock, clickEditHeldOff, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
-import { editorModelOf, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
-import { schemeOf, type ImportedScheme } from "../document";
+import { editorModelOf, openedPlace, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
+import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
 import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
 import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
@@ -178,22 +178,17 @@ export function useStructureEvents(
           kind,
           initialPath,
         );
+        const st = store.getState();
+        const { add, dx, dy } = openedPlace(isBlankDocument(st as unknown as WorkspaceDocument), st.model.atoms, result);
         const shifted = {
-          atoms: result.model.atoms.map((a) => ({
-            ...a,
-            x: a.x - result.centroid.x,
-            y: a.y - result.centroid.y,
-          })),
+          atoms: result.model.atoms.map((a) => ({ ...a, x: a.x + dx, y: a.y + dy })),
           bonds: result.model.bonds,
         };
         // The file the tab was opened with is where its document starts:
-        // nothing to undo, nothing unsaved.
-        store
-          .getState()
-          .openModel(
-            toModel(shifted),
-            importedScheme(result, -result.centroid.x, -result.centroid.y),
-          );
+        // nothing to undo, nothing unsaved - unless the canvas was drawn on
+        // as it was read: then it is added beside that, one step to undo.
+        if (add) st.appendModel(toModel(shifted), importedScheme(result, dx, dy));
+        else st.openModel(toModel(shifted), importedScheme(result, dx, dy));
         if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);
         setImportError(null);
       } catch (e) {

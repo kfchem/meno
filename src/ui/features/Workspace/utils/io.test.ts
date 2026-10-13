@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcResult, editorModelOf, opensAsText, processFileContent, xyzComments } from "./io";
+import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, xyzComments } from "./io";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
@@ -174,3 +174,18 @@ describe("a calculation's output, as a reader read it", () => {
     expect(m.energies).toEqual([-76.32]);
   });
 });
+
+describe("a file a tab was opened with, once read", () => {
+  const read = { centroid: { x: 5, y: 3 }, model: { atoms: [{ x: 4, y: 3 }, { x: 6, y: 3 }] } };
+  it("takes the document's place on a canvas nothing is drawn on, its middle at the origin", () => {
+    expect(openedPlace(true, [], read)).toEqual({ add: false, dx: -5, dy: -3 });
+  });
+  it("is added to the right of what was drawn as it was read, level with it - not put in its place, taking it away", () => {
+    // (a paste made while a 25 MB SD file was read, from 0 to 2 across, at y 1)
+    const { add, dx, dy } = openedPlace(false, [{ x: 0, y: 0 }, { x: 2, y: 2 }], read);
+    expect(add).toBe(true);
+    expect(4 + dx).toBeGreaterThan(2);
+    expect(3 + dy).toBeCloseTo(1, 9);
+  });
+});
+
