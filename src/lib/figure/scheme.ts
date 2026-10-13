@@ -334,11 +334,29 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const [tip, pf, , qf] = hit;
       const angle = Math.acos(Math.max(-1, Math.min(1, dot(unit(tip, pf), unit(tip, qf)))));
       if (angle < (20 * Math.PI) / 180 || angle > (120 * Math.PI) / 180) continue;
+      // (not two bonds of an atom other bonds end at too: only its own line may, coming to its point from between its strokes)
+      const back = unit({ x: (pf.x + qf.x) / 2, y: (pf.y + qf.y) / 2 }, tip);
+      const atAtom = lines.some((m) => {
+        if (m === p || m === q) return false;
+        const [at, far] = dist(m.a, tip) < dist(m.b, tip) ? [m.a, m.b] : [m.b, m.a];
+        return dist(at, tip) < tol && dot(unit(far, at), back) < Math.cos((20 * Math.PI) / 180);
+      });
+      if (atAtom) continue;
       chevrons.push({ pts: [tip, pf, qf], open: true, of: [...p.of, ...q.of] });
     }
   }
   const heads = [...filled, ...chevrons];
-  const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o));
+  // (a barb ends in the open: a short stroke both of whose ends meet others - or go on across a gap, as a bond broken where another passes
+  // in front of it does - is a bond's)
+  const goesOn = (p: Point, s: Stroke, t: Stroke) => {
+    const out = unit(dist(s.a, p) < dist(s.b, p) ? s.b : s.a, p);
+    if (Math.abs(cross(out, unit(t.a, t.b))) > Math.sin((6 * Math.PI) / 180)) return false;
+    const q = dist(t.a, p) < dist(t.b, p) ? t.a : t.b;
+    const ahead = dot(sub(q, p), out);
+    return ahead > 0 && ahead < 0.4 * bond && Math.abs(cross(out, sub(q, p))) < near;
+  };
+  const meets = (p: Point, s: Stroke) => shapes.strokes.some((t) => t !== s && (dist(t.a, p) < near || dist(t.b, p) < near || goesOn(p, s, t)));
+  const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o)).filter((s) => !(meets(s.a, s) && meets(s.b, s)));
   const taken = (l: Line) => l.of.some((o) => used.has(o));
   // (an open head that another line beside this one ends within too, the other side of its point, this line's end off its middle: a retrosynthesis's, read below)
   const sharedOpenHead = (l: Line, e: Point, u: Point, head: Head) => {
@@ -374,6 +392,9 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const free = heads.filter((h) => !h.of.some((o) => used.has(o) || l.of.includes(o)));
       const head = headAt(e, u, l.w, free, barbs.filter((b) => !used.has(b) && !l.of.includes(b)), bond);
       if (!head || sharedOpenHead(l, e, u, head)) continue;
+      // (nothing but its head where its line ends there - another line ending by it there too: an atom, its bonds a structure's)
+      const own = (m: Line) => head.of.some((o) => m.of.includes(o)) || (!!head.outline && onOutline(m.a, head.outline) && onOutline(m.b, head.outline));
+      if (lines.some((m) => m !== l && !taken(m) && !own(m) && (dist(m.a, e) < near || dist(m.b, e) < near))) continue;
       // (back along it: through a corner where one line, and only one, goes on from its end)
       const chain: Line[] = [l];
       const path: Point[] = [e, from];

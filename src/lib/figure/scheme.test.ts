@@ -268,6 +268,104 @@ describe("a reaction scheme's arrows", () => {
     expect(near(s.arrows[0].point, [143.74, 94.01])).toBe(true);
   });
 
+  // Structures alone as Meno exports them in a journal's style and prints them (the round-trip audit's figures, cut down to the
+  // lines by the arrow once read in them): no arrow in any.
+  it("reads no arrow in a cage drawn in perspective: a piece of a back bond, broken where a front one passes, is no barb", () => {
+    // (cubane, RSC: its bonds meet at 30 degrees; the piece from a corner to the gap was read as a half head on the bond ending there)
+    const s = read({
+      paths: [
+        stroke([[82.27, 78.82], [90.98, 81.15]], 0.45),
+        stroke([[93.16, 81.74], [95.66, 82.41]], 0.45),
+        stroke([[95.66, 82.41], [92.88, 87.22]], 0.45),
+        stroke([[91.75, 89.17], [88.73, 94.41]], 0.45),
+        stroke([[88.73, 94.41], [75.34, 90.82]], 0.45),
+        stroke([[75.34, 90.82], [88.73, 87.23]], 0.45),
+        stroke([[88.73, 87.23], [95.66, 75.23]], 0.45),
+        stroke([[95.66, 75.23], [109.04, 78.82]], 0.45),
+        stroke([[109.04, 78.82], [102.11, 90.82]], 0.45),
+        stroke([[75.34, 90.82], [82.27, 78.82]], 0.45),
+        stroke([[95.66, 75.23], [82.27, 78.82]], 0.45),
+        stroke([[109.04, 78.82], [95.66, 82.41]], 0.45),
+        stroke([[102.11, 90.82], [88.73, 94.41]], 0.45),
+        stroke([[102.11, 90.82], [88.73, 87.23]], 0.45),
+      ],
+      letters: [],
+      pictures: [],
+    });
+    expect(s.arrows).toEqual([]);
+  });
+
+  it("reads no arrow where a bond cut short of a label meets another at an atom: an arrow's point touches nothing but its head", () => {
+    // (quinine, ACS 1996: the bond to N, cut short, read as a barb on the bond to the atom it starts at - the vertical bond ending there too)
+    const s = read({
+      paths: [
+        stroke([[119.83, 131.49], [119.83, 116.82]]),
+        stroke([[119.83, 116.82], [127.17, 104.11]]),
+        stroke([[141.34, 100.32], [135.45, 101.89]]),
+        stroke([[132.56, 102.67], [127.17, 104.11]]),
+        stroke([[134, 108.54], [134, 98.35]]),
+        stroke([[128.86, 114.4], [119.83, 116.82]]),
+      ],
+      letters: [{ c: "N", box: [131.15, 109.86, 136.79, 117.02], at: [130.39, 117.02], size: 10, font: "ArialMT" }],
+      pictures: [],
+    });
+    expect(s.arrows).toEqual([]);
+  });
+
+  it("reads no arrow where a piece of a bond broken behind an atom lies across a double bond's end: a barb ends in the open", () => {
+    // (picrotoxinin, Wiley: the piece's ends meet an atom and the gap the bond is broken at, and it lay across the end of the C=O's line)
+    const s = read({
+      paths: [
+        stroke([[158.01, 106.17], [142.01, 96.93]], 0.74),
+        stroke([[142.01, 96.93], [126.01, 106.17]], 0.74),
+        stroke([[126.01, 106.17], [126.01, 124.65]], 0.74),
+        stroke([[126.01, 124.65], [142.01, 133.89]], 0.74),
+        stroke([[142.01, 133.89], [158.01, 124.65]], 0.74),
+        stroke([[158.01, 124.65], [148.77, 108.65]], 0.74),
+        stroke([[149.54, 109.98], [138.16, 115.46]], 0.74),
+        stroke([[150.97, 105.89], [136.83, 112.7]], 0.74),
+        stroke([[148.77, 108.65], [151.88, 104.74]], 0.74),
+        stroke([[154.18, 101.86], [156, 99.56]], 0.74),
+        stroke([[158.01, 124.65], [158.01, 106.17]], 0.74),
+        stroke([[142.01, 96.93], [154.15, 95.11]], 0.74),
+      ],
+      letters: [
+        { c: "O", box: [128.03, 112.72, 136.25, 121.6], at: [127.46, 121.47], size: 12, font: "ArialMT" },
+        { c: "O", box: [156.19, 90.24, 164.41, 99.12], at: [155.61, 98.99], size: 12, font: "ArialMT" },
+        { c: "H", box: [122.63, 83.9, 129.38, 92.49], at: [121.67, 92.49], size: 12, font: "ArialMT" },
+        { c: "H", box: [172.48, 125.64, 179.23, 134.23], at: [171.52, 134.23], size: 12, font: "ArialMT" },
+      ],
+      pictures: [],
+    });
+    expect(s.arrows).toEqual([]);
+  });
+
+  it("reads no open head made of two bonds of an atom other bonds end at", () => {
+    // (aconitine, ACS 1996: two bonds of a ring atom with four read as an open head at the end of a hash's stroke)
+    const o = (x: number, y: number): FigureLetter => ({ c: "O", box: [x, y, x + 6.85, y + 7.4], at: [x - 0.48, y + 7.29], size: 10, font: "ArialMT" });
+    const s = read({
+      paths: [
+        filled([[171.64, 129.54], [171.53, 128.95], [172.83, 128.85], [172.81, 129.46]]),
+        filled([[171.18, 127.06], [171.07, 126.46], [172.94, 126.33], [172.91, 126.93]]),
+        filled([[170.73, 124.57], [170.62, 123.98], [173.04, 123.81], [173.02, 124.41]]),
+        filled([[170.27, 122.09], [170.16, 121.5], [173.15, 121.29], [173.12, 121.89]]),
+        stroke([[157.34, 141.65], [149.52, 128.68]]),
+        stroke([[149.52, 128.68], [162.2, 118.68]]),
+        stroke([[162.2, 118.68], [176.82, 127.38]]),
+        stroke([[176.82, 127.38], [172.58, 134.49]]),
+        stroke([[169.33, 111.42], [165.34, 102.48]]),
+        stroke([[176.82, 127.38], [180.26, 138.97]]),
+        stroke([[180.26, 138.97], [189.77, 139.49]]),
+        stroke([[176.82, 127.38], [184.25, 122.29]]),
+        stroke([[149.77, 114.52], [154.35, 105.88]]),
+        stroke([[172.58, 134.49], [157.34, 141.65]]),
+      ],
+      letters: [o(167.84, 112.42), o(191.32, 136.47), o(185.37, 115.91), o(144.15, 115.4)],
+      pictures: [],
+    });
+    expect(s.arrows).toEqual([]);
+  });
+
   it("reads a short arrow drawn as one outline, its head wide for its length", () => {
     // (26 points long, its head 7 wide: under four head widths long)
     const s = read(scheme([filled([[60, 94.7], [79, 94.7], [79, 91.5], [86, 95], [79, 98.5], [79, 95.3], [60, 95.3]])]));
