@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LayoutOptions } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
-import { lineWidening, zoomedLarge } from "./largeZoom";
+import { lineWidening, nearZoom, SETTLE_NEAR, zoomedLarge } from "./largeZoom";
 
 // (lines 0.05 wide in the drawing's units, never under a pixel on the screen)
 const opts = { units: "world", lineWidthPx: 0.05, minLinePx: 1 } as LayoutOptions;
@@ -10,6 +10,13 @@ describe("a very large drawing as the view zooms", () => {
   it("is one past the mark a very large drawing in 3D is drawn lighter at", () => {
     expect(zoomedLarge(LARGE_ATOMS)).toBe(false);
     expect(zoomedLarge(LARGE_ATOMS + 1)).toBe(true);
+  });
+
+  it("does not wait for the last of a zoom, too little to see: under a hundredth either way", () => {
+    expect(SETTLE_NEAR).toBe(0.01);
+    expect(nearZoom(2, 2 * 1.009)).toBe(true);
+    expect(nearZoom(2, 2 / 1.009)).toBe(true);
+    expect(nearZoom(2, 2 * 1.011)).toBe(false);
   });
 
   it("keeps its lines as wide as a layout at the view's zoom would have them, laid out at another", () => {

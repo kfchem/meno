@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { PICTURE_MARGIN, PICTURE_MOST_PIXELS } from "../utils/largeZoom";
+import { nearZoom, PICTURE_MARGIN, PICTURE_MOST_PIXELS } from "../utils/largeZoom";
 import { TAU, follow } from "../../../theme/motion";
 
 /**
@@ -130,7 +130,7 @@ export function LargeZoomPicture2D() {
     const s = state.current;
     const groups = heldOn(gl);
     // (waiting: the view at another zoom than the drawing is laid out for)
-    const waiting = on && ((camera as THREE.OrthographicCamera).zoom || 1) !== laid;
+    const waiting = on && !nearZoom((camera as THREE.OrthographicCamera).zoom || 1, laid);
     // (taken again where the drawing changes while it is held - an edit, a typeface come in)
     if (waiting && (!s.held || s.of !== layout)) {
       take(groups);

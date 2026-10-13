@@ -21,6 +21,17 @@ import { LARGE_ATOMS } from "./largeDrawing";
 /** How long the view stays at one zoom before a very large drawing is laid out at it, in ms: past the gap between a wheel's notches. */
 export const SETTLE_MS = 150;
 
+/**
+ * How near, as a share, a zoom is to another to count as the same: a wheel's
+ * zoom eases to its end, the last of it in steps too small to see for most
+ * of a second (lib/input/wheel `zoomTaken`), and the drawing does not wait
+ * for those.
+ */
+export const SETTLE_NEAR = 0.01;
+
+/** Whether two zooms are near enough to count as one (`SETTLE_NEAR`). */
+export const nearZoom = (a: number, b: number): boolean => Math.abs(Math.log(a / b)) < SETTLE_NEAR;
+
 /** How far round the view a picture of the drawing reaches, on each side, as a share of the view's width and height. */
 export const PICTURE_MARGIN = 0.25;
 

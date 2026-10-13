@@ -17,7 +17,7 @@ import { NEW_ATOM } from "../utils/stroke";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
-import { SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
+import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 
 /**
  * How far an atom may move in one change, while a button is held, and still
@@ -66,22 +66,26 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // for is taken up once the view has stayed at one for `SETTLE_MS`.
   const waits = useRef<"settle" | "picture" | null>(null);
   const settle = useRef<number | null>(null);
-  const seenZoom = useRef(zoom);
+  // (the zoom the wait was last begun at: the view moving on from it by
+  // less than `SETTLE_NEAR` - the last of a wheel's zoom, a label fading in,
+  // the pointer lighting an atom - waits for nothing)
+  const from = useRef(zoom);
   useEffect(() => () => void (settle.current != null && window.clearTimeout(settle.current)), []);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    const moved = z !== seenZoom.current;
-    seenZoom.current = z;
     if (!waits.current) {
+      from.current = z;
       if (z !== zoom) setZoom(z);
       return;
     }
-    // (from the last frame the zoom changed at: others - a label fading in, the pointer lighting an atom - wait for nothing)
-    if (z === zoom || (!moved && settle.current != null)) return;
+    if (nearZoom(z, from.current)) return;
+    from.current = z;
     if (settle.current != null) window.clearTimeout(settle.current);
     settle.current = window.setTimeout(() => {
       settle.current = null;
-      setZoom((camera as THREE.OrthographicCamera).zoom || 1);
+      const now = (camera as THREE.OrthographicCamera).zoom || 1;
+      from.current = now;
+      setZoom(now);
     }, SETTLE_MS);
   });
   const shownModel = useEditor((s) => s.model);
