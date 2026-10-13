@@ -29,7 +29,7 @@ import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingS
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { canonicalOrder, reordered, restored } from "./canonical";
-import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, templateViews, type CageView } from "./cage";
+import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, templateViews, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
@@ -335,7 +335,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         // camphor as it is always drawn, not the other way round - and a
         // system's views by the template over its projection likewise)
         const views = cageViews.get(i);
-        const margin = views && (views.some((w) => w.projection) ? views[v].projection : v > 0) ? CAGE_VIEW_MARGIN : 0;
+        const margin = views && !views[v].tied && (views.some((w) => w.projection) ? views[v].projection : v > 0) ? CAGE_VIEW_MARGIN : 0;
         const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + margin;
         if (s < bestScore) {
           bestScore = s;
@@ -890,9 +890,18 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   let perspChairs = false;
   let seen: CageView = view;
   let rankedBy = Infinity;
-  for (let rank = 0; rank < 4; rank++) {
-    const v = rank ? projectCage(mol, core, rank) : view;
-    if (!v) break;
+  const tried: { v: CageView; p: NonNullable<ReturnType<typeof onto>>; chairs: boolean; by: number }[] = [];
+  const keyOf = (v: Omit<CageView, "other">) => core.atoms.map((a) => `${Math.round(v.pos.get(a)!.x * 20)},${Math.round(v.pos.get(a)!.y * 20)}`).join(";");
+  const looked = new Set<string>();
+  const ranked = [view, ...[1, 2, 3].flatMap((rank) => projectCage(mol, core, rank) ?? [])];
+  // (and, where it has views as good as its best from its other side too -
+  // adamantane - those, to choose among by what hangs from them)
+  const alike = tiedViews(mol, core);
+  for (const v of [...ranked, ...alike]) {
+    const key = keyOf(v);
+    if (looked.has(key)) continue;
+    looked.add(key);
+    const rank = ranked.indexOf(v);
     let flatShows = false;
     for (const chairs of [false, true]) {
       const p = chairs ? ontoChairs(v) : onto(v);
@@ -904,6 +913,8 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
       if (chairs && !flatShows) continue;
       const f = shows(p) ? flatCost(mol, sys, p.pos, p.depth, true) : Infinity;
       const by = f - (chairs ? 1 : 0);
+      if (f < Infinity) tried.push({ v, p, chairs, by });
+      if (rank < 0) continue;
       if (by < rankedBy - 1e-9) [seen, persp, perspFaults, perspChairs, rankedBy] = [v, p, f, chairs, by];
     }
   }
@@ -925,7 +936,19 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // seen from its other side, for a mirrored frame, only so too)
   // (seen from its other side the same way, its fused rings chairs where they were)
   const other = seen.other && ((perspChairs && ontoChairs(seen.other)) || onto(seen.other));
-  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}) };
+  // (and each other view as good by the system's own measure, to choose
+  // among by what hangs from it: adamantane alike from its sides, a ring
+  // fused on it leaves the gem-dimethyl room from some of them only)
+  const otherOf = (t: (typeof tried)[number]) => {
+    const o = t.v.other && ((t.chairs && ontoChairs(t.v.other)) || onto(t.v.other));
+    return o && shows(o) ? { other: o } : {};
+  };
+  const ties = tried.filter((t) => t.v !== seen && Math.abs(t.by - rankedBy) < 1e-6);
+  const views: CageView[] = [
+    { ...persp, ...(other && shows(other) ? { other } : {}) },
+    ...ties.map((t) => ({ ...t.p, ...otherOf(t), tied: true as const })),
+  ];
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}) };
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */

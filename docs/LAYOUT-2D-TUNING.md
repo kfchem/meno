@@ -247,6 +247,22 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   to C9 straight out of the ring, where the approved drawing had the ring
   30 degrees off the lattice and that bond bent - and its cage seen from
   the other side than the approved drawing's (see *Open*).
+- **Ties the order of the atoms broke** (2026-10-13). Laid out in two of
+  its own orders, the engine still failed three rule tests: its two walks,
+  from either end, draw a symmetric molecule the same, so a tie the order
+  breaks badly is broken badly in both. Another pair of walks passed those
+  and failed others (a bicyclo[3.3.1] cage drawn as its mirror image, the
+  BINAP propeller); the ties were found and settled instead.
+  - Adamantane's textbook views are alike, four from each hand, and only
+    one hand's were tried with the ring fused to it: which hand went by the
+    order of the atoms, and from both of that hand's views ways 0 and 1
+    drew the gem-dimethyl's equatorial methyl across the fused chair, so
+    the flat drawing won. Every view as good as the best, of either hand,
+    is now tried with what hangs from it, none favoured (`tiedViews`).
+  - A propeller was tried against the drawing before it, but a ring in
+    perspective has its bonds left out of the bonds' lengths, and the rest
+    alone spread wider: turned, Pd(PPh3)4 measured a point worse for that
+    alone. The two are measured on the same bonds now.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -424,26 +440,19 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
-- **Three rule tests skipped** (2026-10-13). Laid out in two of its own
-  orders (`OWN_ORDERS`), the engine fails three of its rule tests. Two pass
-  at four:
-  - adamantane with a gem-dimethyl cyclohexane fused to it
-    (`cage.test.ts`, the axial methyl): adamantane's views, alike in
-    themselves, leave the fused chair alike too, and both orders take one
-    where the equatorial methyl crosses the chair; the flat drawing wins.
-    Tried and not taken: the equatorial bond drawn as the template draws
-    one (the two methyls swapped roles), and the tied views tried with
-    what hangs from them (tetrodotoxin broke).
-  - macrocycles strung through benzene rings (`engine.test.ts`): main drew
-    this one wrong in three of eight input orders too.
-
-  The third fails at four as well: Pd(PPh3)4's phenyls turned as a
-  propeller (`hapto.test.ts`). The order that turns them measures 56.8; the
-  one kept, 48.3, turns none, and two of its phenyls lie across Pd-P bonds.
-  The whole drawing's measure (`measureDrawing`) counts a ring turned on its
-  bond, or face-on to its metal, as drawn flat, where the benchmark counts
-  it in perspective; measured as the benchmark does, the turned order still
-  comes out worse (56.5).
+- **The macrocycle rule test skipped at two orders** (2026-10-13).
+  Laid out in two of its own orders (`OWN_ORDERS`), the engine draws the
+  macrocycles strung through benzene rings (`engine.test.ts`) tangled: of
+  the two sides of a para-substituted benzene, the smallest set of rings
+  has a macrocycle run along one by the order of the atoms, and along the
+  inner side the benzene lands on the hub. It passes at four orders; main
+  drew it wrong in three of eight input orders too.
+- **A phenyl of Pd(PPh3)4 across a Pd-P bond** (`hapto.test.ts`, skipped;
+  main too). Its phenyls are turned as a propeller where that reads better,
+  but the one across the bond is on a P whose rings turning does not help.
+  The whole drawing's measure (`measureDrawing`) also counts a ring turned
+  on its bond, or face-on to its metal, as drawn flat, where the benchmark
+  counts it in perspective; it decides nothing here.
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
 - **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out

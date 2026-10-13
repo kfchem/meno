@@ -263,6 +263,8 @@ export type CageView = {
   other?: Omit<CageView, "other">;
   /** Seen from the side that reads best, not drawn by the textbook's template. */
   projection?: true;
+  /** As good as the best view by the system's own measure: chosen among with no margin, by what hangs from it. */
+  tied?: true;
 };
 
 /**
@@ -688,6 +690,27 @@ export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView 
  * by the template's own measure (`textbook`): for a system drawn as a
  * projection, to try with what hangs from it.
  */
+/**
+ * Every textbook view of a cage as good as its best, from either side
+ * (`projectCage`'s ranks are one hand's): a cage alike from several sides
+ * offers them all, to choose among by what is fused to it and hangs from
+ * it. Empty where the cage is not drawn by the template.
+ */
+export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const bonds: [number, number][] = [];
+  for (const [k] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
+  }
+  const X = embed(mol, atoms, index);
+  if (twinChairs(mol, sys, X, index, bonds)) return [];
+  const tied: CageView[] = [];
+  const best = textbook(mol, sys, X, index, bonds, 0, tied);
+  return best && best.cost < 8 ? tied : [];
+}
+
 export function templateViews(mol: Molecule, sys: RingSystem, count = 3): CageView[] {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
@@ -879,6 +902,7 @@ function textbook(
   index: Map<number, number>,
   bonds: [number, number][],
   rank = 0,
+  tied?: CageView[],
 ): CageView | null {
   const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
@@ -1015,6 +1039,14 @@ function textbook(
     });
     return { pos, depth, hints: f.hints, cost: f.cost };
   };
+  // (and every view of either hand as good as the best, each with the
+  // other hand's best for its other side: two hands alike - an achiral
+  // cage, adamantane - and which came first went by the order of the atoms)
+  if (tied)
+    hands.forEach((fs, h) => {
+      const back = hands[1 - h]?.[0];
+      for (const f of fs) if (f.cost < hands[0][0].cost + 1e-6) tied.push({ ...view(f), other: back ? view(back) : undefined });
+    });
   return { ...view(found[0]), other: found[1] ? view(found[1]) : undefined };
 }
 

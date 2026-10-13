@@ -150,11 +150,7 @@ describe("a six-membered ring fused on a bond to a cage", () => {
     expect(drawnAsChairOrBoat(ring.map((a) => ({ x: x[a], y: y[a] })))).toBe(true);
   });
 
-  // (known to fail with the molecule laid out in two of its own orders, and
-  // to pass in four: of adamantane's views, alike in themselves, both orders
-  // take one where the equatorial methyl crosses the fused chair, and the
-  // flat drawing wins - docs/LAYOUT-2D-TUNING.md, Open)
-  it.skip("has a group axial to that chair drawn along the chair's upright", () => {
+  it("has a group axial to that chair drawn along the chair's upright", () => {
     // (one methyl of a gem pair on the fused ring is axial; drawn as the
     // template has it - its upright 75 or 105 degrees from each level
     // bond, 30 or 150 from each steep one - the ring turned as its bond to
@@ -168,13 +164,19 @@ describe("a six-membered ring fused on a bond to a cage", () => {
     expect(axial.length).toBeGreaterThan(0);
     const angle = (ax: number, ay: number, bx: number, by: number) =>
       (Math.acos(Math.abs(ax * bx + ay * by) / Math.hypot(ax, ay) / Math.hypot(bx, by)) * 180) / Math.PI;
-    for (const { from, to } of axial) {
-      const [ux, uy] = [x[to] - x[from], y[to] - y[from]];
-      ring.forEach((a, k) => {
-        const b = ring[(k + 1) % 6];
-        const t = angle(ux, uy, x[b] - x[a], y[b] - y[a]);
-        expect(Math.min(Math.abs(t - 30), Math.abs(t - 75)), `${a}-${b}`).toBeLessThan(4);
+    // (either methyl of the pair: the two are alike, and which of them the
+    // solid has axial goes by the order the atoms are laid out in)
+    for (const { from } of axial) {
+      const upright = mol.neighbours[from].filter((to) => {
+        if (ring.includes(to)) return false;
+        const [ux, uy] = [x[to] - x[from], y[to] - y[from]];
+        return ring.every((a, k) => {
+          const b = ring[(k + 1) % 6];
+          const t = angle(ux, uy, x[b] - x[a], y[b] - y[a]);
+          return Math.min(Math.abs(t - 30), Math.abs(t - 75)) < 4;
+        });
       });
+      expect(upright).toHaveLength(1);
     }
   });
 });

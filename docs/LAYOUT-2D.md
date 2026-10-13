@@ -223,7 +223,12 @@ they hang from.
   its guanidine ring fused to it - the cage is drawn so and the rings
   fused to it flat onto it, the cage's atoms bonded to them showing their
   configuration by a wedge; the cage seen from each of its best few sides,
-  the one that leaves the rest room taken (ibogaine). Of these and the flat
+  the one that leaves the rest room taken (ibogaine). Where several of its
+  sides are as good by the system alone - adamantane is alike from all of
+  them, seen from either hand - each of those is tried with what hangs from
+  it too, none favoured: which came first went by the order of the atoms,
+  and a gem-dimethyl on a ring fused to adamantane had room from some of
+  them only. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -
@@ -608,7 +613,10 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   round (a propeller), and so seen in perspective: foreshortened across
   the bond, its near edges bold and the bonds toward them wedges. Done
   only where it reads better by the benchmark's measures, at 45, 60 or 70
-  degrees, whichever reads best - and only to rings that hang from the
+  degrees, whichever reads best - the drawing before measured on the same
+  bonds as after (a ring in perspective has its bonds left out of the
+  bonds' lengths, and the rest alone spread wider), the rings turned
+  already in perspective as the next are tried - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
   P, is the rest of the molecule).
 - **Clean-up draws a complex as writing out its label does**: the same
