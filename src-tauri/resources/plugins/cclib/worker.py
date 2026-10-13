@@ -25,7 +25,9 @@ as a library; none of its code is Meno's.
 
 import json
 import logging
+import math
 import os
+import re
 import sys
 import tempfile
 import warnings
@@ -235,20 +237,239 @@ def vibrations(data, n):
     return [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": columns, "rows": rows}]
 
 
+# --- an output as the program left it: cut short, stopped by an error, with ghost atoms ---
+
+
+def parsed(text, suffix):
+    """What cclib reads of `text`, from a file of its own named with `suffix`, then let go."""
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        return cclib.io.ccread(path)
+    finally:
+        os.remove(path)
+
+
+def is_number(token):
+    try:
+        float(token)
+        return True
+    except ValueError:
+        return False
+
+
+def overflow_unknown(text):
+    """`text` with each number too wide for its field - Fortran writes asterisks in its place - as not known: on
+    lines where other numbers stand beside it, so that a banner of asterisks is left alone."""
+    out = []
+    for line in text.split("\n"):
+        tokens = line.split()
+        if any(re.fullmatch(r"\*{3,}", t) for t in tokens) and any(is_number(t) for t in tokens):
+            line = re.sub(r"(?<!\S)\*{3,}(?!\S)", "nan", line)
+        out.append(line)
+    return "\n".join(out)
+
+
+def readable(text, suffix):
+    """What cclib reads of an output, and whether it read the whole of it. Where it cannot read it as it is: with
+    a number that overflowed its field taken as not known; and then, an output cut short in the middle of what
+    it was writing, as far as it reads - its last lines left off, more each time, down to an eighth of it."""
+    try:
+        return parsed(text, suffix), True
+    except Exception as first:  # noqa: BLE001 - tried again, below
+        failed = first
+    text = overflow_unknown(text)
+    try:
+        return parsed(text, suffix), True
+    except Exception:  # noqa: BLE001
+        pass
+    lines = text.split("\n")
+    drop = 40
+    while drop < len(lines) * 7 // 8:
+        try:
+            data = parsed("\n".join(lines[: len(lines) - drop]) + "\n", suffix)
+            if data is not None and has(data, "atomnos"):
+                return data, False
+        except Exception:  # noqa: BLE001
+            pass
+        drop *= 2
+    raise ValueError(f"cclib could not read it ({str(failed) or type(failed).__name__})")
+
+
+def program_of(text):
+    """Which of the programs whose outputs are read here for how a run went - Gaussian, ORCA, xtb - wrote it, by
+    the banner each begins with; none for another."""
+    head = text[:20000]
+    if "Entering Gaussian System" in head:
+        return "gaussian"
+    if "O   R   C   A" in head:
+        return "orca"
+    if re.search(r"^\s*\|\s+x\s+T\s+B\s+\|", head, re.M):
+        return "xtb"
+    return None
+
+
+# ORCA's input, as its output echoes it: a line of the coordinate block - its element or Q, and the rest
+ORCA_ECHO = re.compile(r"^(\|\s*\d+>\s+)(\S+)(.*)$")
+
+
+def orca_for_cclib(text):
+    """ORCA's output with what cclib does not take out of it, and the ghost atoms by their place: the point
+    charges ORCA's manual has written as Q in the coordinates ("Q charge x y z") - charges, not atoms - and the
+    colon after a ghost atom's element ("Ghost atoms": "H : x y z")."""
+    out, ghosts = [], []
+    in_coords = False
+    block, started = None, False
+    atom = 0
+    for line in text.split("\n"):
+        m = ORCA_ECHO.match(line)
+        if m:
+            body = m.group(2) + m.group(3)
+            if re.match(r"\*\s*xyz\s", body, re.I):
+                in_coords, atom = True, 0
+            elif in_coords and body.strip().startswith("*"):
+                in_coords = False
+            elif in_coords and body.split():
+                el = m.group(2)
+                rest = m.group(3).split()
+                if el.upper() == "Q":
+                    continue
+                if el.endswith(":") or (rest and rest[0] == ":"):
+                    ghosts.append(atom)
+                    el = el.rstrip(":")
+                    line = m.group(1) + el + " " + " ".join(rest[1:] if rest and rest[0] == ":" else rest)
+                atom += 1
+            out.append(line)
+            continue
+        # (a block of coordinates: its title, a rule, its lines, and a blank line after them)
+        if line.startswith("CARTESIAN COORDINATES (ANGSTROEM)"):
+            block, started = "angstrom", False
+        elif line.startswith("CARTESIAN COORDINATES (A.U.)"):
+            block, started = "au", False
+        elif block and not line.strip():
+            block = None if started else block
+        elif block and not line.startswith("-"):
+            started = True
+        if block == "angstrom" and re.match(r"^\s+Q\s+[-+\d.]", line):
+            continue
+        if block == "au" and re.match(r"^\s+\d+\s+Q\s", line):
+            continue
+        out.append(line)
+    return "\n".join(out), ghosts
+
+
+def gaussian_ghosts(text):
+    """The ghost atoms of a Gaussian job, by their place: those its input names with "-Bq" after the element (the
+    manual's "Molecule Specification"), as the output echoes the input under "Symbolic Z-matrix"."""
+    k = text.find("Symbolic Z-matrix:")
+    if k < 0:
+        return []
+    ghosts, atom = [], 0
+    for line in text[k:].split("\n")[2:]:
+        tokens = line.split()
+        if not tokens:
+            break
+        name = tokens[0]
+        if re.fullmatch(r"[A-Za-z]{1,2}(\(.*\))?-[Bb][Qq](\(.*\))?", name):
+            ghosts.append(atom)
+        atom += 1
+    return ghosts
+
+
+def run_of(text, program):
+    """How the run went, as the program says in its output: "normal" where it came to its end, "error" where it
+    stopped on one - and why, in its words - or "cut" where it says neither, cut short or still running; and
+    whether each SCF it ran converged, in order. All unknown for a program not read here."""
+    if program == "gaussian":
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        why = None
+        for k, line in enumerate(lines):
+            if line.startswith("Error termination"):
+                why = lines[k - 1] if k and not lines[k - 1].startswith("Error termination") else line
+                break
+        ended = "error" if why else "normal" if any(line.startswith("Normal termination of Gaussian") for line in lines[-12:]) else "cut"
+        scf, unmet = [], False
+        for line in lines:
+            if line.startswith(">>>>>>>>>> Convergence criterion not met"):
+                unmet = True
+            elif line.startswith("SCF Done:"):
+                scf.append(not unmet)
+                unmet = False
+        return ended, why, scf
+    if program == "orca":
+        why = None
+        m = re.search(r"Error \([^)]*\):\s*(.+)", text)
+        if "ORCA finished by error termination" in text:
+            why = m.group(1).strip() if m else re.search(r"ORCA finished by error termination[^\n]*", text).group(0).strip()
+        ended = "error" if why else "normal" if "ORCA TERMINATED NORMALLY" in text else "cut"
+        scf = [not m.group(1) for m in re.finditer(r"SCF (NOT )?CONVERGED AFTER", text)]
+        return ended, why, scf
+    if program == "xtb":
+        said = [m.group(1).strip() for m in re.finditer(r"^\s*-\d+-\s+(.*\S)\s*$", text, re.M)]
+        if "abnormal termination of xtb" in text:
+            return "error", (said[0] if said else None), None
+        return ("normal" if "normal termination of xtb" in text else "cut"), None, None
+    return None, None, None
+
+
+class Kept:
+    """Data as cclib read it, but for the energies and gradients past those kept: `energies` the first so many
+    SCF energies (and those of methods after them), `grads` the first so many gradients."""
+
+    def __init__(self, data, energies, grads):
+        self._data, self._energies, self._grads = data, energies, grads
+
+    def __getattr__(self, name):
+        value = getattr(self._data, name)
+        if value is not None and name in ("scfenergies", "ccenergies", "mpenergies"):
+            return value[: self._energies]
+        if value is not None and name == "grads":
+            return value[: self._grads]
+        return value
+
+
+def without(result, gone):
+    """What was read, the atoms at the places `gone` left out - ghost atoms - from the atoms, the geometries, what
+    is given for each atom, and each vibration's motion."""
+    if not gone:
+        return result
+    n = len(result["atoms"])
+    keep = [i for i in range(n) if i not in set(gone)]
+    result["atoms"] = [result["atoms"][i] for i in keep]
+    result["frames"] = [[f[3 * i + k] for i in keep for k in range(3)] for f in result["frames"]]
+    for r in result.get("results") or []:
+        if r.get("on") == "atoms" and len(r.get("values") or []) == n:
+            r["values"] = [r["values"][i] for i in keep]
+        for row in r.get("rows") or []:
+            if len(row.get("move") or []) == 3 * n:
+                row["move"] = [row["move"][3 * i + k] for i in keep for k in range(3)]
+    return result
+
+
+def finite(value):
+    """`value` with each number that is not one - not a number, or infinite - as not known: JSON has neither."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: finite(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [finite(v) for v in value]
+    return value
+
+
 def op_read(m):
     name = os.path.basename(str(m.get("name") or "output"))
     text = m.get("text")
     if not isinstance(text, str) or not text:
         raise ValueError("nothing to read")
-    # (read from a file of its own, named as the file was, then let go)
-    suffix = os.path.splitext(name)[1] or ".out"
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(text)
-        data = cclib.io.ccread(path)
-    finally:
-        os.remove(path)
+    program = program_of(text)
+    ghosts = []
+    if program == "orca":
+        text, ghosts = orca_for_cclib(text)
+    elif program == "gaussian":
+        ghosts = gaussian_ghosts(text)
+    data, whole = readable(text, os.path.splitext(name)[1] or ".out")
     if data is None or not has(data, "atomnos"):
         raise ValueError(f"No molecule was found in {name}.")
     meta = getattr(data, "metadata", {}) or {}
@@ -258,6 +479,19 @@ def op_read(m):
         for step in data.atomcoords:
             if len(step) == len(atoms):
                 frames.append([float(v) for xyz in step for v in xyz])
+    # how the run went: the energies of SCFs that did not converge not given - and, where it stopped before its
+    # end, the geometries after the last it worked out an energy for left out
+    ended, why, scf = run_of(text, program)
+    if not whole and ended == "normal":
+        ended = "cut"
+    found = len(getattr(data, "scfenergies", None) if has(data, "scfenergies") else [])
+    good = found
+    if scf is not None and False in scf:
+        first = scf.index(False)
+        good = first if len(scf) == found and all(not ok for ok in scf[first:]) else 0
+    if ended in ("error", "cut") and 0 < good < len(frames):
+        frames = frames[:good]
+    data = Kept(data, good, len(frames))
     result = {
         "schema": SCHEMA,
         "program": meta.get("package"),
@@ -272,13 +506,31 @@ def op_read(m):
         "optimised": bool(data.optdone) if has(data, "optdone") else None,
     }
     result["results"] = (
-        molecule_wide(data)
+        run_results(ended, why, scf)
+        + molecule_wide(data)
         + per_frame(data, len(frames))
         + per_atom(data, len(atoms))
         + vibrations(data, len(atoms))
         + orbitals(data)
     )
-    return result
+    return without(result, ghosts)
+
+
+def run_results(ended, why, scf):
+    """How the run went, where it did not go well: in a few words, first in the chip's line - and, where it
+    stopped on an error, why, in the program's words (its runs of spaces closed up), among its results."""
+    if ended == "error":
+        label, said = "Run", "ended with an error"
+    elif ended == "cut":
+        label, said = "Run", "did not come to its end"
+    elif scf and False in scf:
+        label, said = "SCF", "not converged"
+    else:
+        return []
+    out = [{"id": "run", "on": "molecule", "group": "Calculation", "label": label, "value": said, "rank": 0}]
+    if ended == "error" and why:
+        out.append({"id": "run.why", "on": "molecule", "group": "Calculation", "label": "Error", "value": " ".join(why.split())})
+    return out
 
 
 OPS = {"read": op_read}
@@ -294,7 +546,8 @@ def answer(line):
     if op is None:
         return {"id": rid, "ok": False, "error": f"no such request: {m.get('op')}"}
     try:
-        return {"id": rid, "ok": True, "result": op(m)}
+        # (a number that is not one - JSON has none - as not known: an answer Meno can read)
+        return {"id": rid, "ok": True, "result": finite(op(m))}
     except Exception as e:  # an answer, never a crash
         return {"id": rid, "ok": False, "error": str(e) or type(e).__name__}
 
