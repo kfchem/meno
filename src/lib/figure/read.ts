@@ -529,17 +529,17 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // bonds' ends where they meet; an end alone, its bond pointing into a word, the word's
   type End = { bond: number; side: 0 | 1; p: Point };
   // (a hash's narrow end set off from its atom - its first lines a joint's dots, taken by another - and a double or triple
-  // bond's ends, its lines set off from the ring it leaves: each carried on to the bond end it points at, a third of a bond on
-  // at most)
+  // bond's ends, its lines set off from the ring it leaves: each carried on to the bond end it comes to)
   const carry = (d: Drawn, end: "a" | "b") => {
     const [p, from] = end === "a" ? [d.a, d.b] : [d.b, d.a];
     const others = drawnBonds.filter((o) => o !== d).flatMap((o) => [o.a, o.b]);
     if (others.some((q) => dist(q, p) < 0.2 * bond)) return;
     const way = unit(from, p);
-    // (a hash's on along its way; a double bond's, its middle line's end a little off its atom - its lines run past it, or
-    // stop short - within a quarter of a bond)
+    // (a hash's on along its way, a little under half a bond at most - a figure's bonds short to its labels make a bond
+    // short; a double bond's, its middle line's end a little off its atom - its lines run past it, or stop short - within a
+    // quarter of a bond)
     const ahead = d.stereo
-      ? others.filter((q) => dist(q, p) < 0.35 * bond && dot(way, unit(p, q)) > Math.cos(Math.PI / 6))
+      ? others.filter((q) => dist(q, p) < 0.45 * bond && dot(way, unit(p, q)) > Math.cos(Math.PI / 6))
       : others.filter((q) => dist(q, p) < 0.25 * bond);
     if (ahead.length) d[end] = ahead.reduce((r, q) => (dist(q, p) < dist(r, p) ? q : r));
   };

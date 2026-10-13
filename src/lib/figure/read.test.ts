@@ -5,6 +5,7 @@ import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import junction from "./fixtures/monensin-nature-junction.json";
+import fructose from "./fixtures/fructose-nature.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
@@ -321,6 +322,15 @@ describe("a figure read as a structure", () => {
     const c = r.atoms.findIndex((a) => Math.hypot(a.x - 140.3, a.y - 120.6) < 2);
     const h = r.atoms.findIndex((a) => a.label === "H" && Math.hypot(a.x - 143, a.y - 110.5) < 3);
     expect(r.bonds.find((b) => (b.a === c && b.b === h) || (b.a === h && b.b === c))?.stereo).toBe("down");
+  });
+
+  it("carries a hash's narrow end on to its atom where it stops short, the figure's bonds short to its labels", () => {
+    // (D-fructose as the Nature style prints it: the hash from the anomeric carbon to its CH2OH stops 2.9 points short of the
+    // carbon, four tenths of a bond as its many bonds to OH labels make a bond)
+    const r = readFigure(fructose as unknown as FigureDrawn);
+    const at = (x: number, y: number) => r.atoms.findIndex((a) => Math.hypot(a.x - x, a.y - y) < 1.5);
+    const [c2, c1] = [at(116.8, 86), at(127.1, 90.2)];
+    expect(r.bonds.find((b) => (b.a === c2 && b.b === c1) || (b.a === c1 && b.b === c2))?.stereo).toBe("down");
   });
 
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
