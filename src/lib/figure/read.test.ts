@@ -116,6 +116,15 @@ const read = (f: FigureDrawn) => structureOf(readFigure(f, (l) => readDrawnLabel
 const bondsOf = (s: ReturnType<typeof read>) => s.bonds.map((b) => `${s.atoms[b.a].el}${"-=#"[b.order - 1]}${s.atoms[b.b].el}${b.stereo ? ` ${b.stereo}` : ""}`).sort();
 
 describe("a figure's shapes", () => {
+  it("reads a filled triangle wider than it is long, two sides from its tip as long, as a wedge narrow at that tip", () => {
+    // (a wedge cut back to an H set close, as RDKit's ACS 1996 mode draws one: 1.4 long, 1.85 wide)
+    const s = shapesOf(figure([filled([103.2, 93.9], [101.7, 93.22], [103.28, 92.25])]));
+    expect(s.wedges).toHaveLength(1);
+    expect(s.wedges[0].tip).toEqual({ x: 103.2, y: 93.9 });
+    expect(s.wedges[0].base.x).toBeCloseTo(102.49, 2);
+    expect(s.wedges[0].base.y).toBeCloseTo(92.735, 2);
+  });
+
   it("reads a thin filled box as a line, and a filled triangle as a wedge narrow at its tip", () => {
     const s = shapesOf(figure([filled([0, -0.3], [14, -0.3], [14, 0.3], [0, 0.3]), wedge([0, 20], [14, 20])]));
     expect(s.strokes).toHaveLength(1);
@@ -743,6 +752,18 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const hs = r.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.label === "H");
     expect(hs).toHaveLength(3);
     for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i).map((b) => !!b.stereo)).toEqual([true]);
+  });
+
+  it("reads a wedge to an H set close, cut back so far it is wider than long, as the H's bond from its stereocentre", () => {
+    const c: P = [60, 60];
+    const h = step(c, 120, 0.55);
+    const [ux, uy] = [(h[0] - c[0]) / Math.hypot(h[0] - c[0], h[1] - c[1]), (h[1] - c[1]) / Math.hypot(h[0] - c[0], h[1] - c[1])];
+    // (1.6 long, 2.4 wide: its tip's two sides 2 long)
+    const base = along(c, h, 0.2);
+    const s = read(
+      figure([stroke(step(c, 0), c, step(c, 240)), stroke(c, step(c, -60)), filled(c, [base[0] - uy * 1.2, base[1] + ux * 1.2], [base[0] + uy * 1.2, base[1] - ux * 1.2])], word("H", h)),
+    );
+    expect(bondsOf(s)).toContain("C-H up");
   });
 
   it("reads a short wedge pointing into an H set close, cut back at it, as the H's bond", () => {

@@ -985,7 +985,9 @@ workspace holds.
     narrow end a point, rounded, or cut flat a line's width across, and
     its wide end cut slanting along the bond it meets however far; one
     under three tenths of a bond long only where its wide end points
-    into a label (a stereocentre's H set close, the wedge cut back at it);
+    into a label (a stereocentre's H set close, the wedge cut back at it),
+    and one cut back so far it is wider than long - three corners, two
+    sides from its tip as long, its wide end longer - narrow at that tip;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond

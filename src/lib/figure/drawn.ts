@@ -157,6 +157,18 @@ export function narrowestBox(pts: readonly Point[]): { u: Point; mid: Point; lon
  */
 function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedge: Wedge } | null {
   if (pts.length < 3) return null;
+  // (a wedge cut back to an H set close, wider than it is long: three corners, two sides from its tip as long as each other and the
+  // third, its wide end, longer - its narrowest box lies along that end, not down the wedge)
+  const corners = pts.filter((p, i) => !pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+  if (!curved && corners.length === 3) {
+    for (let i = 0; i < 3; i++) {
+      const [tip, p, q] = [corners[i], corners[(i + 1) % 3], corners[(i + 2) % 3]];
+      const [sp, sq, end] = [dist(tip, p), dist(tip, q), dist(p, q)];
+      if (Math.abs(sp - sq) < 0.1 * Math.max(sp, sq) && end > 1.05 * Math.max(sp, sq)) {
+        return { wedge: { tip, base: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, w: end, outline: pts } };
+      }
+    }
+  }
   const { u, mid, long, short } = narrowestBox(pts);
   // (a wedge cut short at a label may be little longer than wide; a bar is long)
   if (long <= 0 || long < 1.2 * short) return null;
