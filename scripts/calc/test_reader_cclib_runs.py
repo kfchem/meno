@@ -65,6 +65,9 @@ class HowTheRunWent(unittest.TestCase):
         self.assertNotIn("rank", why)
         self.assertEqual(worker.run_results("cut", None, None), [{"id": "run", "on": "molecule", "group": "Calculation", "label": "Run", "value": "did not come to its end", "rank": 0}])
         self.assertEqual([(r["label"], r["value"]) for r in worker.run_results("normal", None, [False])], [("SCF", "not converged")])
+        # (a run that came to its end, read only as far as cclib could: said so - not that the run did not end)
+        self.assertEqual([(r["label"], r["value"]) for r in worker.run_results("normal", None, [True], whole=False)], [("Read", "only in part")])
+        self.assertEqual(worker.run_results("cut", None, None, whole=False)[0]["value"], "did not come to its end")
 
 
 class Kept(unittest.TestCase):

@@ -716,7 +716,9 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   stopped, the geometries after the last it worked out an energy for are
   left out. Where cclib cannot read an output as it is, it is read again
   with a number that overflowed its field (asterisks) taken as not known,
-  and then as far as it reads - its last lines left off, more each time.
+  and then as far as it reads - its last lines left off, more each time;
+  where the run itself came to its end, the chip says "Read: only in
+  part".
   Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
   not atoms of the molecule and are left out; ORCA's point charges ("Q")
   are taken out before cclib reads it. An answer never holds a number

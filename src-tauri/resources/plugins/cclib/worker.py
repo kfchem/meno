@@ -482,8 +482,6 @@ def op_read(m):
     # how the run went: the energies of SCFs that did not converge not given - and, where it stopped before its
     # end, the geometries after the last it worked out an energy for left out
     ended, why, scf = run_of(text, program)
-    if not whole and ended == "normal":
-        ended = "cut"
     found = len(getattr(data, "scfenergies", None) if has(data, "scfenergies") else [])
     good = found
     if scf is not None and False in scf:
@@ -506,7 +504,7 @@ def op_read(m):
         "optimised": bool(data.optdone) if has(data, "optdone") else None,
     }
     result["results"] = (
-        run_results(ended, why, scf)
+        run_results(ended, why, scf, whole)
         + molecule_wide(data)
         + per_frame(data, len(frames))
         + per_atom(data, len(atoms))
@@ -516,9 +514,12 @@ def op_read(m):
     return without(result, ghosts)
 
 
-def run_results(ended, why, scf):
+def run_results(ended, why, scf, whole=True):
     """How the run went, where it did not go well: in a few words, first in the chip's line - and, where it
-    stopped on an error, why, in the program's words (its runs of spaces closed up), among its results."""
+    stopped on an error, why, in the program's words (its runs of spaces closed up), among its results. An
+    output read only as far as cclib could read it, where the run itself came to its end, says so instead."""
+    if ended in (None, "normal") and not whole:
+        return [{"id": "run", "on": "molecule", "group": "Calculation", "label": "Read", "value": "only in part", "rank": 0}]
     if ended == "error":
         label, said = "Run", "ended with an error"
     elif ended == "cut":
