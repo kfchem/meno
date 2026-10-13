@@ -35,6 +35,14 @@ describe("what a plugin is given of an entry", () => {
     // (11 electrons with the charge, one of them unpaired, on the radical)
     expect([e.charge, e.multiplicity, e.name]).toEqual([-1, 2, "water"]);
   });
+
+  it("gives an isotope its mass (NIST), where one is measured - none, where none is", () => {
+    const heavy = pluginEntry({ ...WATER, atoms: WATER.atoms.map((a, i) => (i === 1 ? { ...a, isotope: 2 } : i === 2 ? { ...a, isotope: 99 } : a)) });
+    expect(heavy.atoms[1]).toEqual({ el: "H", x: 0, y: 0.76, z: 0.59, isotope: 2, mass: 2.01410177812 });
+    expect(heavy.atoms[2].isotope).toBe(99);
+    expect(heavy.atoms[2].mass).toBeUndefined();
+    expect(heavy.atoms[0].mass).toBeUndefined();
+  });
 });
 
 describe("the jobs a plugin prepares", () => {

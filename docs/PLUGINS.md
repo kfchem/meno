@@ -544,7 +544,14 @@ The same for every plugin and for Meno's own parts:
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,
   isotope and radical, the bonds by index with their orders, a name
-  (FILE-IO.md, *As step 7's writer was built*); a reader gives back
+  (FILE-IO.md, *As step 7's writer was built*). A step's entry gives an
+  isotope's mass too (`mass`, in daltons; 2026-10-13), where one is
+  measured: NIST's relative atomic mass ("Atomic Weights and Isotopic
+  Compositions for All Elements", physics.nist.gov, Compositions;
+  `lib/chem/isotopes.ts`, written by `scripts/chem/isotopes.py`). A
+  plugin writes it where its program's input takes a mass, and otherwise
+  refuses what the mass would change, naming the isotope - never giving
+  it as the natural element. A reader gives back
   Meno's own plain data, checked by Meno on the way in.
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.

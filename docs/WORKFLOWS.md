@@ -519,7 +519,14 @@ gave), and one can be shown again.
 - **xTB**: a plugin whose environment is made by pixi from conda-forge -
   xtb 6.7.1, LGPL-3.0-or-later, for macOS (Apple silicon and Intel),
   Windows and Linux. It fills *Optimise*, *Energy* and *Frequencies*, and
-  reads its own outputs back.
+  reads its own outputs back. *Frequencies* of an entry with an isotope is
+  refused, naming it (2026-10-13): xtb 6.7.1 says it takes an atom's mass
+  (xcontrol(7), `$hess`) and that it changed it, but its frequencies and
+  thermochemistry came out as the natural element's - D2O's as H2O's, run
+  here. Geometries and energies do not depend on the masses, so
+  *Optimise* and *Energy* run as before. ORCA writes each isotope's mass
+  ("M =" after the atom's coordinates, as its manual has it), and
+  Gaussian its mass number ("(Iso=n)").
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
   with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
   only. On Windows it cannot be added, and *Conformers* is filled by RDKit
@@ -879,7 +886,9 @@ Decided while building it, for the maintainer to confirm:
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the
   search is (full, or CREST's three quicker ones), and the energy window
   (6 kcal/mol by default). The charge and spin multiplicity are those
-  Export reads, as for xTB.
+  Export reads, as for xTB. Its search samples with the natural masses:
+  CREST is given none (its help lists no way to), which changes how it
+  explores, not the conformers or energies it gives.
 - **CREST 2.12, not 3.0.2.** conda-forge's CREST 3.0.2 for macOS keeps
   only the lowest conformer, whatever energy window it is given: its
   CREGEN sorting takes the window as 0 (github.com/crest-lab/crest/issues/431,

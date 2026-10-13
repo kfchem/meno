@@ -110,6 +110,16 @@ class Prepare(unittest.TestCase):
         self.assertNotIn("--alpb", energy)
         self.assertEqual(energy[energy.index("--gfn") + 1], "1")
 
+    def test_frequencies_of_an_isotope_refused_naming_it_other_runs_as_before(self):
+        # (xtb 6.7.1 says it changed the mass, but its frequencies are the natural element's: refused, said in words)
+        labelled = {**ETHYNE, "atoms": ETHYNE["atoms"][:3] + [{**ETHYNE["atoms"][3], "isotope": 2, "mass": 2.01410177812}]}
+        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "frequencies", "entries": [labelled], "options": defaults("frequencies")}))
+        self.assertFalse(said["ok"])
+        self.assertIn("2H would be given as H", said["error"])
+        # (a geometry or an energy does not depend on the masses: run as before)
+        for step in ("optimise", "energy"):
+            self.assertEqual(len(ask("prepare", step=step, entries=[labelled], options=defaults(step))["jobs"]), 1)
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"method": "dft"}, {"solvent": "lava"}, {"level": "perfect"}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "optimise", "entries": [ETHYNE], "options": options}))
