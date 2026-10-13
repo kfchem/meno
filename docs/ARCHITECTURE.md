@@ -535,6 +535,14 @@ closes*).
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
   it was asked for).
+- **Looked at often while young** (2026-10-13). The runner looks for its
+  turn every 400 ms, and at its program every 200 ms - but every 50 ms
+  for the first 3 s of a program, and of a job at the head of the queue,
+  easing back to its old step by 6 s (`step_at`). The page looks at a
+  run's jobs every 100 ms for its newest run's first 3 s, easing back to
+  once a second by 6 s (`workflow/lookEvery`). A step whose program takes
+  0.2 s is seen done within a few tenths of a second, and what runs on, or
+  waits behind others, is watched no more often than before.
 - **Its program** runs in `work/`, its output and errors in `log.txt` -
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
