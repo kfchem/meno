@@ -13,7 +13,10 @@ npm run roundtrip -- read                                  # 4. each PDF read ba
 `scripts/layout`: the app's own environment for it, under its data folder at
 `uv/plugin-rdkit/venv`, will do. `corpus.py --only=Name,Name` and
 `ONLY=Name,Name` for steps 3 and 4 take just those; `MENO` names another
-build's executable for step 4.
+build's executable for step 4, `RT_READ` a folder under `.roundtrip` for
+its reads (`compare.py --read=` that folder), and `RT_BOX=page` reads each
+page in a box round all that is on it rather than round the figures found
+there - the figure reader measured apart from finding figures.
 
 ## What it is for
 

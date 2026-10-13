@@ -10,7 +10,8 @@
  *
  * MENO names the app's executable, where it is not the bundle built here;
  * RT_READ a folder under .roundtrip for what is read, to keep another build's
- * reads beside these.
+ * reads beside these; RT_BOX=page a box round all that is on the page, not
+ * the figures found - the figure reader measured apart from finding figures.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -109,7 +110,7 @@ it("reads every PDF back", async () => {
       const round = (bs: Box[]): Box | null =>
         bs.length ? [Math.min(...bs.map((f) => f[0])) - PAD_PT, Math.min(...bs.map((f) => f[1])) - PAD_PT, Math.max(...bs.map((f) => f[2])) + PAD_PT, Math.max(...bs.map((f) => f[3])) + PAD_PT] : null;
       const page = objects2.map((o) => o.box).filter((b) => b[2] - b[0] < 400 && b[3] - b[1] < 600);
-      const box = round(figures) ?? round(page);
+      const box = (process.env.RT_BOX !== "page" && round(figures)) || round(page);
       if (!box) {
         entry.none = "no figure found on the page";
       } else {
