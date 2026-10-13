@@ -1306,6 +1306,8 @@ export type EditorState = {
    */
   /** An atom's charge one up (+1) or one down (-1), as one undo step. */
   stepCharge: (id: number, step: 1 | -1) => void;
+  /** Each atom's charge stepped by one, as one undo step: the selection's, by + or -. */
+  stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
   deleteAtom: (id: number) => void;

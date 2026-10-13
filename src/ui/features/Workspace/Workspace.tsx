@@ -774,6 +774,10 @@ function WorkspaceContent({
           const next = pdf.page + (e.key === "ArrowRight" || e.key === "PageDown" ? 1 : -1);
           if (next >= 0 && next < pdf.pages.length) st.turnPdf(pdf.id, next);
         }
+      } else if (chargeStep(e) && sel.atoms.size > 0 && !busy) {
+        // (on the selection's atoms, once there is one, as the other keys act on it: one step)
+        e.preventDefault();
+        st.stepCharges(sel.atoms, chargeStep(e) as 1 | -1);
       } else if (chargeStep(e) && kind === "atom" && id != null) {
         e.preventDefault();
         chargeAtom(id, chargeStep(e) as 1 | -1);

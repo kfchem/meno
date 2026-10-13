@@ -272,8 +272,10 @@ highlight's colour, under the drawing, and a small handle stands above it.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
   freely after a pause - one undo step.
 - The keys that act on what is under the pointer act on the selection
-  instead, once there is one: Delete or Backspace deletes it, and
-  Ctrl/⌘+Shift+K cleans up every structure it is in.
+  instead, once there is one: Delete or Backspace deletes it,
+  Ctrl/⌘+Shift+K cleans up every structure it is in, and + or - steps the
+  charge of each of its atoms, as one step (until 2026-10-13 they changed
+  the atom under the pointer: `stepCharges`).
 - A right-click on something selected, or on empty space, opens the
   selection's menu (above): among its items *Delete selection*, *Turn
   over left to right*, *Turn over top to bottom*, *Clean up these

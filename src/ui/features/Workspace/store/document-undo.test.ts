@@ -422,6 +422,20 @@ describe("editor store over a document", () => {
     expect(dragsSelection(state(), b)).toBe(false);
   });
 
+  it("steps the charge of each atom selected, by + or -, as one undo step", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "N");
+    const b = state().addAtom(5, 0, "O");
+    const c = state().addAtom(9, 0, "C");
+    const depth = doc.history().undoDepth;
+    state().stepCharges([a, b], 1);
+    const charge = (id: number) => state().model.atoms.find((x) => x.id === id)!.charge ?? 0;
+    expect([charge(a), charge(b), charge(c)]).toEqual([1, 1, 0]);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect([charge(a), charge(b)]).toEqual([0, 0]);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");

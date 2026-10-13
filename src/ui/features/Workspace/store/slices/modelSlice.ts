@@ -245,6 +245,13 @@ export const createModelSlice = (
     doc.edit("change charge", (d) => ops.setAtomChemistry(d, id, { ...atom, charge }));
   },
 
+  stepCharges: (ids: Iterable<number>, step: 1 | -1) => {
+    const want = new Set(ids);
+    doc.edit("change charge", (d) =>
+      d.model.atoms.filter((a) => want.has(a.id)).reduce((x, atom) => ops.setAtomChemistry(x, atom.id, { ...atom, charge: (atom.charge ?? 0) + step }), d),
+    );
+  },
+
   toggleRadical: (id: number) => {
     const atom = doc.getState().model.atoms.find((a) => a.id === id);
     if (!atom) return;
