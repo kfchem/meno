@@ -22,6 +22,9 @@ import {
   type Vec2,
   wedgeNarrowAtom,
   cumulatedShown,
+  runsPlaces,
+  runsWidth,
+  type TextRun,
 } from "./layout2d";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "./acs";
 import { advanceEm, inkHullEm } from "./arial";
@@ -2373,5 +2376,25 @@ describe("bonds a file can hold besides plain ones", () => {
     expect(label.runs).toEqual([{ text: "S/D", sup: true }]);
     expect(label.x).toBeCloseTo(L / 2, 6);
     expect(Math.abs(label.y)).toBeGreaterThan(0);
+  });
+});
+
+describe("runsPlaces", () => {
+  it("lies each place where runsWidth measures the runs cut there, to the last bit", () => {
+    const runs: TextRun[] = [{ text: "CH" }, { text: "3", sub: true }, { text: "" }, { text: "+", mark: "charge" }, { text: "a😀b", italic: true }, { text: "··", mark: "radical" }];
+    const cut = (n: number) => {
+      const out: TextRun[] = [];
+      let left = n;
+      for (const r of runs) {
+        if (left <= 0) break;
+        out.push(r.text.length <= left ? r : { ...r, text: r.text.slice(0, left) });
+        left -= r.text.length;
+      }
+      return out;
+    };
+    const length = runs.reduce((n, r) => n + r.text.length, 0);
+    const places = runsPlaces(runs, 1.7);
+    expect(places).toHaveLength(length + 1);
+    places.forEach((x, n) => expect(x).toBe(runsWidth(cut(n), 1.7)));
   });
 });

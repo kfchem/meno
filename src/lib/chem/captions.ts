@@ -8,7 +8,7 @@
  * under it, clear of it, to go where it goes.
  */
 import { italicUnits, labelUnits, unitRuns } from "./abbreviations";
-import { ACS_LABEL_SET, labelBox, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
+import { ACS_LABEL_SET, labelBox, runsPlaces, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
 import { wordsLine, type SchemeArrow } from "./reactionScheme";
 import { letterStarts } from "../text/editing";
 import type { ArrowCorner } from "./reactionArrow";
@@ -458,8 +458,8 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
     } else starts = words.map((m) => lineStart + (m.index ? wide(l, 0, m.index) : 0));
     const xs: (number | undefined)[] = new Array(l.text.length + 1);
     words.forEach((m, k) => {
-      const runs = runsOf(l, m.index!, m.index! + m[0].length);
-      for (let j = 0; j <= m[0].length; j++) xs[m.index! + j] = starts[k] + runsWidth(cutRuns(runs, j), fontSize, set);
+      const places = runsPlaces(runsOf(l, m.index!, m.index! + m[0].length), fontSize, set);
+      for (let j = 0; j <= m[0].length; j++) xs[m.index! + j] = starts[k] + (places[j] ?? places[places.length - 1]);
     });
     // (what lies between them, where the setting keeps it: on from the word before - an empty line, where it begins)
     for (let c = 0; c < xs.length; c++) xs[c] ??= c === 0 ? lineStart : xs[c - 1];
@@ -534,19 +534,6 @@ export type Words = { text: string; x: number; y: number; width?: number; align?
 export function wordsSet(c: Words, sizes: { fontPx: number; pointPx?: number }, set: LabelSet = ACS_LABEL_SET, at?: { x: number; y: number }): CaptionSet {
   const s = captionSet(c.text, at?.x ?? c.x, at?.y ?? c.y, wordsFontPx(c, sizes), set, c.width, c.align, c.marks);
   return c.size ? { ...s, items: s.items.map((t) => ({ ...t, ownSize: true })) } : s;
-}
-
-/** The first `n` letters of runs, cut as they are set. */
-function cutRuns(runs: readonly TextRun[], n: number): TextRun[] {
-  const out: TextRun[] = [];
-  let left = n;
-  for (const r of runs) {
-    if (left <= 0) break;
-    if (r.text.length <= left) out.push(r);
-    else out.push({ ...r, text: r.text.slice(0, left) });
-    left -= r.text.length;
-  }
-  return out;
 }
 
 /**
