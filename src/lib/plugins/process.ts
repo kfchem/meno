@@ -51,7 +51,9 @@ export const workerRunning = (plugin: string): boolean => running.has(plugin);
 export function workerOf(p: PythonPlugin): Promise<PluginWorker> {
   let worker = running.get(p.id);
   if (!worker) {
-    worker = start(p);
+    // (whether this worker is the plugin's still: not once stopped, nor once another is started in its place)
+    const mine = () => running.get(p.id) === worker;
+    worker = start(p, mine);
     running.set(p.id, worker);
     worker.catch(() => {
       if (running.get(p.id) === worker) running.delete(p.id);
@@ -75,7 +77,10 @@ export async function stopWorker(plugin: string, reason = `${plugin} was taken a
 
 type Line = { id: string; line: string };
 
-async function start(p: PythonPlugin): Promise<PluginWorker> {
+/** How many of the last lines a worker wrote to its standard error are kept: the last says why one that stopped as it started did. */
+const ERR_LINES = 5;
+
+async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker> {
   if (!(await pyEnvReady(p.profile))) throw new Error(`${p.name} is not added: add it in Settings, Plugins.`);
   const python = await ensurePyEnv(p.profile);
   const script = await resolveResource(p.worker);
@@ -102,35 +107,61 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
     },
   };
   const ids = counter();
-  // (held on a question past its time: stopped, and started afresh when next asked)
-  const held = workerQueue(() => void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`));
+  // (held on a question past its time: stopped, and started afresh when next asked - this one only, not one started since)
+  const held = workerQueue(() => {
+    if (mine()) void stopWorker(p.id, `${p.name} was started again: it did not finish what it was asked before in time`);
+  });
   // (unused long enough: stopped, and started afresh when next asked)
-  const idle = idleWatch(() => stopIfUnused(p, id, idle));
+  const idle = idleWatch(() => stopIfUnused(p, mine, idle));
   const queue = watchAll(held, idle);
   const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
   const chem = new ChemClient(transport, undefined, p.name, ids, queue);
+  const errs: Line[] = [];
+  const stopErr = await listen<string>("ext:stderr", (e) => {
+    const m: Line = JSON.parse(e.payload);
+    if (id === null || m.id === id) errs.push(m);
+    if (errs.length > ERR_LINES * 4) errs.splice(0, errs.length - ERR_LINES * 4);
+  });
   const stopOut = await listen<string>("ext:stdout", (e) => hear(JSON.parse(e.payload)));
+  const unhear = () => {
+    stopOut();
+    stopExit();
+    stopErr();
+  };
+  let wasReady = false;
   const stopExit = await listen<string>("ext:exit", (e) => {
     if (JSON.parse(e.payload).id !== id) return;
     idle.end();
-    reader.close(`${p.name} stopped`);
-    chem.close(`${p.name} stopped`);
-    stopOut();
-    stopExit();
-    // (gone of itself: started again when next asked)
-    if (running.has(p.id)) {
+    // (gone as it started: why, as it said - a module it could not import, say)
+    const told = errs.filter((m) => m.id === id && m.line.trim());
+    const why = told.length ? told[told.length - 1].line.trim() : null;
+    const said = wasReady ? `${p.name} stopped` : `${p.name} stopped as it started${why ? `: ${why}` : ""}`;
+    reader.close(said);
+    chem.close(said);
+    unhear();
+    // (gone of itself: started again when next asked - unless stopped already, or another is started in its place)
+    if (mine()) {
       running.delete(p.id);
       whenStopped.forEach((f) => f(p.id));
     }
   });
-  id = await invoke<string>("ext_spawn_sidecar", { payload: { entry: python, args: ["-u", script, ...(files ? [files] : [])] } });
+  try {
+    id = await invoke<string>("ext_spawn_sidecar", { payload: { entry: python, args: ["-u", script, ...(files ? [files] : [])] } });
+  } catch (e) {
+    // (not started: nothing left listening)
+    idle.end();
+    unhear();
+    throw e;
+  }
   const worker = id;
   for (const m of early.splice(0)) if (m.id === worker) onLine.forEach((f) => f(m.line));
   try {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const version = await Promise.race([
       reader.ready,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${p.name} did not start in time`)), READY_MS)),
-    ]);
+      new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`${p.name} did not start in time`)), READY_MS))),
+    ]).finally(() => clearTimeout(timer));
+    wasReady = true;
     return { reader, chem, id: worker, version };
   } catch (e) {
     idle.end();
@@ -145,14 +176,12 @@ async function start(p: PythonPlugin): Promise<PluginWorker> {
  * so its stopping is no one's error; the next question starts it afresh,
  * saying so as a first start does. True where it is stopped, or gone.
  */
-async function stopIfUnused(p: PythonPlugin, id: string | null, idle: { busy(): boolean }): Promise<boolean> {
-  const now = running.get(p.id);
-  if (!now || id === null || (await now.catch(() => null))?.id !== id) return true;
+async function stopIfUnused(p: PythonPlugin, mine: () => boolean, idle: { busy(): boolean }): Promise<boolean> {
+  if (!mine()) return true;
   // (jobs not known: kept, to be looked at again)
   const live = await liveJobsOf(p.id).catch(() => null);
-  if (!live || live.length) return false;
-  if (running.get(p.id) !== now) return true;
-  if (idle.busy()) return false;
+  if (!mine()) return true;
+  if (!live || live.length || idle.busy()) return false;
   await stopWorker(p.id, `${p.name} was stopped, unused`);
   return true;
 }
