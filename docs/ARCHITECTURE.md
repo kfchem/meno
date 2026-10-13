@@ -1016,6 +1016,8 @@ closing quits Meno once they have been asked to stop.
 | --- | --- | --- |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
+| `py_env_setup_pixi` | `lib/pyEnv.ts` | Make a plugin's environment with pixi from its `pixi.toml` and `pixi.lock` - pixi itself first, where it is not here - and keep what activation sets (`pixienv.rs`). |
+| `py_env_remove` | `lib/pyEnv.ts` | A plugin's environment and its record of being set up taken away as it is removed in Settings, *Plugins* - and, with the last pixi made, pixi's cache and home. |
 | `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
 | `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
@@ -1029,21 +1031,37 @@ closing quits Meno once they have been asked to stop.
 | `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
 | `font_families` | `ui/fonts/typefaces.ts` | Every typeface installed (fontdb), for the label typeface picker. |
 | `font_file` | `ui/fonts/typefaces.ts` | One family's regular face as a font file of its own - out of its collection, its character map made plain (`fonts.rs`). |
+| `clipboard_write`, `clipboard_read`, `clipboard_takes` | `lib/clipboard.ts` | The system clipboard, for structures: what a copy puts on it, in place of what was there; the first of the kinds asked for that it holds; the kinds a copy may put on it on this platform (`clipboard.rs`). |
+| `clipboard_file_names`, `clipboard_file` | `lib/clipboard.ts` | The files copied in the Finder or Explorer: their names, in order, and one's bytes by its place - the page names no path. |
+| `drag_read` | `lib/clipboard.ts` | The first of the kinds asked for in what was just dropped - a picture or an object dragged out of Word or PowerPoint - read as the clipboard is: on a Mac the drag pasteboard, on Windows what Meno's window over the page read (`drop.rs`). |
+| `drop_catch`, `drop_release`, `drop_takes` | `lib/drop.ts` | Windows: a drag from another program, not of files, over a part of the page that takes such drags, taken from the webview by a window of Meno's laid over it (`native-drag` tells the page where it is); that window taken away once the page can read the drag; whether the page takes it where it now is. `drop_catch` says whether this platform does so - a Mac's page reads drags as they are. |
+| `ole_started_for_office`, `ole_in_use` | `lib/ole.ts` | Windows: whether Windows started this Meno for Office, and whether Office still holds any of its structures (`ole.rs`); elsewhere, no. |
+| `ole_take_pending`, `ole_update`, `ole_close` | `lib/ole.ts` | Windows: the structures Office has asked to have opened since the page last looked; one drawn afresh, given back to its document; one done with, its tab closed. |
 | `net_state` | `lib/net/network.ts` | Offline or not, what is allowed, tasks under way, recent connections. |
 | `net_set_offline`, `net_grant`, `net_revoke` | `lib/net/network.ts` | Offline mode; a purpose's leave to use the network, given or withdrawn. |
 | `net_note_blocked` | `lib/net/network.ts` | Records a connection the window was kept from making. |
+| `ccd_components` | `lib/net/components.ts` | Chemical components by id: those kept, and - asked to - the rest fetched from the wwPDB under the purpose `ccd` and kept, else listed as missing (`ccd.rs`). |
+| `present_window` | `ui/presenting.ts` | The window made to cover its screen for a talk, or back; whether that changed it (`present.rs`). |
+| `opened_files` | `lib/openedFiles.ts` | The workspace files opened from outside Meno that the page has not taken yet, taken (`opened.rs`; `opened-files` as one comes). |
 | `update_state`, `update_check`, `update_restart_after_quit` | `lib/update.ts` | Where keeping Meno up to date is; a look (and download) through the proxy; a restart into the update downloaded. |
 | `job_start` | `lib/jobs.ts` | A job's folder made, its input written, its runner started; returns its id. |
+| `program_where` | `lib/plugins/installed.ts` | Where a plugin's program installed separately is, as a job would take it - where the chemist located it (that alone, `exact`, for one just picked), where the system finds programs, or where it is usually installed - with its version and, where it is too old for Meno, why; none, where it is found nowhere. |
 | `job_state`, `jobs_list` | `lib/jobs.ts` | A job's record, or every job's - *gone* where its runner went without saying how it ended. |
 | `job_log`, `job_files`, `job_read`, `job_folder` | `lib/jobs.ts` | A job's log from a byte on; the files in its folder, one read; where they are. |
 | `job_stop`, `job_remove`, `jobs_clear_finished` | `lib/jobs.ts` | A job asked to stop; a finished job's folder taken away, or every finished one's. |
-| `greet` | — | Template leftover, unused. |
 
 Events: `uv:log`, `uv:err` (plain strings); `ext:stdout`, `ext:stderr`,
 `ext:exit` (JSON strings `{ id, line? }`). `ext:exit` is emitted exactly once
 per sidecar, whether it exits by itself or through `ext_kill`. `net:task` and
 `net:connection` carry the network's record (see below); `update:state`, where
-keeping Meno up to date is.
+keeping Meno up to date is; `plugin-files:progress` (`{ plugin, done, total }`,
+in bytes), how far a plugin's files have come as they download; `opened-files`
+(no payload), that a workspace file was opened from outside Meno - the page
+takes it with `opened_files`. On Windows only: `native-drag` (`{ phase, x, y }`,
+to the main window: `enter`, `over`, `leave`, `drop` or `gone`, and where the
+drag is, in the page's coordinates); `ole-open` and `ole-close` (a structure's
+id), as Office opens one of Meno's structures or closes it; `ole-idle` (no
+payload), once Office has let go of the last of them in a Meno it started.
 
 The tools that make the environments - uv, and pixi for those that need
 conda-forge - are not bundled (docs/WORKSPACE.md, stage 3d): `tools.rs`
