@@ -258,8 +258,9 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
   if (!frames.length) return "It found no conformer";
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
-  // (the program's own populations, where it gives one for each)
+  // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
+  const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
   const calc = calcOf(out, readers, source);
   return frames.map((f, k) => ({
     ...entry,
@@ -267,6 +268,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),
     ...(shares ? { share: shares[k] } : {}),
+    ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
     ...(k === 0 ? { calc } : {}),
   }));
 }

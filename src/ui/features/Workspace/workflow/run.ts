@@ -329,6 +329,8 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
     const first = g[0];
     const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
     const shares = g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
+    // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
+    const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
     // (what the calculation was, where a program worked them out: each conformer's results its own, not the compound's)
     const calc = (first as Worked).calc;
     return {
@@ -338,6 +340,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(energies ? { energies } : {}),
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
+      ...(degeneracies ? { degeneracies } : {}),
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : {}),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
