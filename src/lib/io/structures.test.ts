@@ -23,6 +23,11 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     broken(null, /no drawing came back/);
     broken({ ...mol, model: { ...mol.model, atoms: [{ ...mol.model.atoms[0], x: NaN }, ...mol.model.atoms.slice(1)] } }, /atom of its drawing is not placed/);
     broken({ ...mol, model: { ...mol.model, bonds: [{ ...mol.model.bonds[0], b: -9 }] } }, /bond of its drawing joins no atoms/);
+    // (a bond from an atom to itself, or a second between two atoms, as a file may give: drawn, neither showed, and its
+    // structure could then not be cleaned up or made in 3D - "This structure could not be read")
+    const [b0] = mol.model.bonds;
+    broken({ ...mol, model: { ...mol.model, bonds: [...mol.model.bonds, { ...b0, id: 9999, b: b0.a }] } }, /bond of its drawing joins an atom to itself/);
+    broken({ ...mol, model: { ...mol.model, bonds: [...mol.model.bonds, { ...b0, id: 9999, a: b0.b, b: b0.a, order: 2 }] } }, /two bonds of its drawing join the same atoms/);
     const m = read.molecules3d![0];
     broken({ ...read, molecules3d: [{ ...m, bonds: [{ a1: 0, a2: 7, order: 1 }] }] }, /bond of a molecule in 3D joins no atoms/);
     broken({ ...read, molecules3d: [{ ...m, frames: [[0, 0, 0]] }] }, /frame of a molecule in 3D is not whole/);
