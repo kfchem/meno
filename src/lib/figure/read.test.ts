@@ -908,6 +908,13 @@ describe("a figure's words", () => {
     expect(ws.map(labelText).sort()).toEqual(["CO2Me", "OH"]);
   });
 
+  it("reads two letters as large set over each other, their rooms well into each other, as two words", () => {
+    // (two H's of stereocentres side by side as RDKit's ACS 1996 mode draws estradiol: on one line, a fifth of a letter over each other)
+    const at = (c: string, box: Box, loose: Box): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size: 7.5 });
+    const ws = wordsOf([at("H", [109.87, 74.87, 114.14, 80.25], [109.28, 74.47, 114.69, 81.97]), at("H", [113.92, 75.17, 118.18, 80.55], [113.33, 74.77, 118.74, 82.27])]);
+    expect(ws.map(labelText)).toEqual(["H", "H"]);
+  });
+
   it("joins letters set side by side as the PDF sets them, however far apart their ink: a 1's ink well inside its room", () => {
     // (18F as RDKit's ACS 1996 mode writes it: the 1 and the 8 small, their ink 1.4 apart, their rooms 0.35)
     const at = (c: string, box: Box, loose: Box, size: number): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size });

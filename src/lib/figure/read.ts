@@ -284,6 +284,9 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
       if (!small && capital(l) && capital(last) && Math.abs(l.box[3] - last.box[3]) > 0.25 * big) return false;
       // (or as the PDF sets them, each letter's room: a 1's ink stands well inside its room, and small letters may be set apart)
       const looseGap = last.loose && l.loose ? l.loose[0] - last.loose[2] : Infinity;
+      // (two letters as large set over each other, their rooms well into each other - two labels drawn on top of each other, two H's of
+      // atoms side by side - are two; a smaller letter set high or low may stand in its letter's room)
+      if (!small && looseGap < -0.15 * big) return false;
       const near = (gap > -0.3 * big && gap < 0.3 * big) || (looseGap > -0.3 * big && looseGap < 0.15 * big);
       return near && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
     });
