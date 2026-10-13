@@ -1292,7 +1292,14 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         return Err(format!("a job reads only a file written for it: {name}"));
     }
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&payload.plugin))?;
-    let found = match installed_program(&plugin_dir, &payload.plugin, &payload.program, payload.path.as_deref())? {
+    // (looked for off the commands' threads: a program installed separately is asked its version, which may take seconds)
+    let installed = {
+        let (dir, plugin, program, path) = (plugin_dir.clone(), payload.plugin.clone(), payload.program.clone(), payload.path.clone());
+        tauri::async_runtime::spawn_blocking(move || installed_program(&dir, &plugin, &program, path.as_deref()))
+            .await
+            .map_err(|e| e.to_string())??
+    };
+    let found = match installed {
         Some(found) => found,
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };

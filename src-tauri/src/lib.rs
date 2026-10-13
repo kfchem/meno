@@ -428,7 +428,7 @@ async fn py_env_setup_uv(
     let mut child1 = cmd1.spawn().map_err(|e| format!("spawn uv venv: {}", e))?;
     pipe_logs(&app, child1.stdout.take().unwrap(), "uv:log");
     pipe_logs(&app, child1.stderr.take().unwrap(), "uv:err");
-    let st1 = child1.wait().map_err(|e| e.to_string())?;
+    let st1 = waited(child1).await?;
     if !st1.success() {
         return Err("uv venv failed".into());
     }
@@ -456,7 +456,7 @@ async fn py_env_setup_uv(
     let mut child2 = cmd2.spawn().map_err(|e| format!("spawn uv pip: {}", e))?;
     pipe_logs(&app, child2.stdout.take().unwrap(), "uv:log");
     pipe_logs(&app, child2.stderr.take().unwrap(), "uv:err");
-    let st2 = child2.wait().map_err(|e| e.to_string())?;
+    let st2 = waited(child2).await?;
     if !st2.success() {
         return Err("uv pip install failed".into());
     }
@@ -493,14 +493,17 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     let mut child = install.spawn().map_err(|e| format!("spawn pixi install: {e}"))?;
     pipe_logs(&app, child.stdout.take().unwrap(), "uv:log");
     pipe_logs(&app, child.stderr.take().unwrap(), "uv:err");
-    if !child.wait().map_err(|e| e.to_string())?.success() {
+    if !waited(child).await?.success() {
         return Err("pixi install failed".into());
     }
 
     let mut hook = pixienv::activation_command(&pixi, &data, &manifest);
     no_window(&mut hook);
     task.route(&mut hook);
-    let out = hook.output().map_err(|e| format!("spawn pixi shell-hook: {e}"))?;
+    let out = tauri::async_runtime::spawn_blocking(move || hook.output())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("spawn pixi shell-hook: {e}"))?;
     if !out.status.success() {
         for line in String::from_utf8_lossy(&out.stderr).lines() {
             let _ = app.emit("uv:err", line.to_string());
@@ -512,6 +515,16 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     std::fs::write(pixienv::activation_path(&dir), text).map_err(|e| format!("keeping the activation: {e}"))?;
     task.finish(true);
     Ok(())
+}
+
+/// A child waited for off the commands' threads, which are few - a set-up's
+/// install takes minutes, and a command thread held that long holds up the
+/// others queued behind it.
+async fn waited(mut child: std::process::Child) -> Result<std::process::ExitStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || child.wait())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
 }
 
 // Pipe stdout/stderr from child processes to Tauri events. Reading is
