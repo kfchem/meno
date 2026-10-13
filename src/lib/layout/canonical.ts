@@ -17,8 +17,13 @@
 import type { LayoutInput } from "./perceive";
 import type { Layout2D } from "./engine";
 
-/** Each atom's place in the molecule's own order (old index to new). */
-export function canonicalOrder(input: LayoutInput): number[] {
+/**
+ * Each atom's place in the molecule's own order (old index to new). `way`
+ * picks among the molecule's own orders: the walk from the lowest-ranked
+ * end atom or the highest (1), each atom's neighbours taken lowest first or
+ * highest (2) - each the same whatever order the atoms came in.
+ */
+export function canonicalOrder(input: LayoutInput, way = 0): number[] {
   const n = input.atoms.length;
   const adj: { to: number; order: number }[][] = input.atoms.map(() => []);
   for (const b of input.bonds) {
@@ -92,7 +97,7 @@ export function canonicalOrder(input: LayoutInput): number[] {
       if (seen[a]) continue;
       seen[a] = true;
       order.push(a);
-      const next = adj[a].map((e) => e.to).filter((b) => !seen[b]).sort((p, q) => rank[q] - rank[p]);
+      const next = adj[a].map((e) => e.to).filter((b) => !seen[b]).sort((p, q) => (way & 2 ? rank[p] - rank[q] : rank[q] - rank[p]));
       stack.push(...next);
     }
   };
@@ -100,7 +105,7 @@ export function canonicalOrder(input: LayoutInput): number[] {
     const left = rank.map((_, i) => i).filter((i) => !seen[i]);
     if (!left.length) break;
     const ends = left.filter((i) => adj[i].length === Math.min(...left.map((j) => adj[j].length)));
-    walk(ends.reduce((p, q) => (rank[q] < rank[p] ? q : p)));
+    walk(ends.reduce((p, q) => (way & 1 ? (rank[q] > rank[p] ? q : p) : rank[q] < rank[p] ? q : p)));
   }
   const to = new Array<number>(n);
   order.forEach((a, k) => (to[a] = k));

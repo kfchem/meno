@@ -68,10 +68,23 @@ export type Layout2D = {
 export function layout2D(input: LayoutInput): Layout2D {
   // (laid out in the molecule's own order, and handed back in the order
   // given: the same molecule drawn with its atoms in any order comes out
-  // the same - aconitine's ring A a chair or a boat by that order, once)
-  const to = canonicalOrder(input);
-  return restored(layoutInOrder(reordered(input, to)), to);
+  // the same - aconitine's ring A a chair or a boat by that order, once.
+  // In more than one of its own orders, the drawing that reads best kept:
+  // the layout's choices between equals were made on such orders, and one
+  // order alone draws some molecules worse than another does)
+  let best: Layout2D | null = null;
+  let bestScore = Infinity;
+  for (let way = 0; way < OWN_ORDERS; way++) {
+    const to = canonicalOrder(input, way);
+    const out = restored(layoutInOrder(reordered(input, to)), to);
+    const score = OWN_ORDERS > 1 ? drawingScore(input, perceive(input), out) : 0;
+    if (score < bestScore - 1e-9) [best, bestScore] = [out, score];
+  }
+  return best!;
 }
+
+/** How many of the molecule's own orders it is laid out in, the best drawing kept (`layout2D`, `canonicalOrder`): 1, 2 or 4. */
+const OWN_ORDERS = 2;
 
 function layoutInOrder(input: LayoutInput): Layout2D {
   // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system

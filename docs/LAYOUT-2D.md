@@ -19,7 +19,10 @@ neighbours' and then by each stereocentre's and double bond's
 configuration against them, until only atoms alike in every way are left
 alike; then taken in the order a walk from the lowest-ranked end atom
 meets them, as a SMILES string writes them. It lays that out, and hands
-the drawing back in the order it was given.
+the drawing back in the order it was given - from two such walks, one
+from the lowest-ranked end atom and one from the highest, the drawing
+that reads better kept: one order alone draws some molecules worse than
+another does, as any input order did.
 
 ## What a good drawing is
 
