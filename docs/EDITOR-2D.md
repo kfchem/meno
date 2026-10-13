@@ -451,6 +451,11 @@ Both go together, because both touch every layer.
   all - is set in IBM Plex Sans JP, which comes with Meno; a typeface that
   cannot be had or read is set in IBM Plex Sans. The baseline follows the
   typeface, so a capital sits on its atom as ACS 1996 sets Arial's. (PR #48)
+  A typeface's name is letters of any script, digits, spaces and
+  `- _ . ' & +` (`isTypefaceName`, `lib/chem/styleFields.ts`): a style
+  from a file or the settings naming one with anything else - a quote, an
+  angle bracket - keeps its preset's typeface, and the computer's own are
+  offered only where their names are such.
 
 **One way of drawing:**
 

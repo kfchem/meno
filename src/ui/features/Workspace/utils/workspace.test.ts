@@ -92,6 +92,14 @@ describe("a workspace file", () => {
     expect(doc.history().undoDepth).toBe(0);
   });
 
+  it("takes from a file's own style a typeface's name, never markup in its place", () => {
+    const { st } = canvas();
+    const json = JSON.parse(workspaceText(st()));
+    // (a file made elsewhere, its typeface closing the attribute a picture writes it into)
+    json.style = { preset: "meno", changes: { bondColor: "#204080", fontFamily: `x"><meta http-equiv="refresh" content="0">` } };
+    expect(readWorkspace(JSON.stringify(json))!.style).toEqual({ preset: "meno", changes: { bondColor: "#204080" } });
+  });
+
   it("opened over a canvas is one step, undone as one", () => {
     const { st } = canvas();
     const text = workspaceText(st());

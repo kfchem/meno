@@ -570,6 +570,17 @@ export function withSetting<K extends keyof DrawingStyle>(
   return { preset: choice.preset, changes };
 }
 
+/**
+ * Whether `name` can be a typeface's: letters of any script, with their
+ * marks, digits, spaces, and the - _ . ' & + fonts' names have - at most
+ * 120 of them. A name is written into pictures' markup and canvases' fonts,
+ * and a quote, an angle bracket or a control is part of no font's name: a
+ * name with anything else, from a file or the settings, is not taken.
+ */
+export function isTypefaceName(name: string): boolean {
+  return name.length > 0 && name.length <= 120 && /^[\p{L}\p{M}\p{Nd}\p{Zs}\-_.'&+]+$/u.test(name);
+}
+
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
@@ -610,9 +621,7 @@ export function acceptValue(
     case "typeface": {
       if (typeof value !== "string") return undefined;
       const name = value.trim();
-      // a font's name, not anything else a file might hold
-      const printable = [...name].every((c) => c.charCodeAt(0) >= 0x20);
-      return name.length > 0 && name.length <= 120 && printable ? name : undefined;
+      return isTypefaceName(name) ? name : undefined;
     }
     case "choice":
       return typeof value === "string" &&
