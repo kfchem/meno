@@ -125,6 +125,25 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 3], [1, 2]]);
   });
 
+  it("takes no CONECT record's bond to a serial number two atoms carry, as a file past the format's 99,999 atoms numbers them over again; their bonds are by distance", () => {
+    const text = [
+      // (three carbons numbered 1 to 3: by distance, the first bonded to the second, the second to the third)
+      het(1, "C", 0, 0, 0),
+      het(2, "C", 1.5, 0, 0),
+      het(3, "C", 1.5, 1.5, 0),
+      // (a ligand numbered 1 to 3 over again, its third atom between its first and second, as CONECT says)
+      het(1, "C", 10, 0, 0, { resSeq: 2 }),
+      het(2, "C", 10, 3, 0, { resSeq: 2 }),
+      het(3, "C", 10, 1.5, 0, { resSeq: 2 }),
+      conect(1, 3),
+      conect(2, 3),
+      conect(3, 1, 2),
+    ].join("\n");
+    const m = readStructures("pdb", "x.pdb", text).molecules3d![0];
+    // (not the first carbon to the third, 2.1 A apart, nor the first's bond to the second left out)
+    expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [1, 2], [3, 5], [4, 5]]);
+  });
+
   it("keeps a protein's chains - its atoms' names and residues, and its helices from HELIX records - with the molecule", () => {
     const atomLine = (serial: number, name: string, el: string, resSeq: number, x: number) => {
       const line = Array(80).fill(" ");

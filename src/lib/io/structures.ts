@@ -223,15 +223,28 @@ function inOnePlace(atoms: readonly PdbAtom[]): PdbAtom[] {
  * between groups (Connectivity Section); a standard residue's own bonds
  * are in the Chemical Component Dictionary, not in the file, and Meno does
  * not carry the dictionary.
+ *
+ * A serial number two atoms carry names neither. The format numbers a
+ * model's atoms in five columns (ATOM, serial: 7-11), and so a model holds
+ * at most 99,999 (MODEL, *Details*); a file of more - a molecular dynamics
+ * frame in its water - numbers them over again from 0 or 1, or past
+ * 99,999 in hexadecimal or hybrid-36, which can read as an earlier atom's
+ * number, or fills the columns with stars. A CONECT record that names such
+ * a number is not taken, and its atoms are not spoken for by it: their
+ * bonds are those their distances give.
  */
 function pdbBonds(atoms: readonly PdbAtom[], conect: readonly [number, number][]): ParsedBond[] {
   const index = new Map<number, number>();
+  const shared = new Set<number>();
   atoms.forEach((a, i) => {
-    if (Number.isFinite(a.serial) && !index.has(a.serial)) index.set(a.serial, i);
+    if (!Number.isFinite(a.serial)) return;
+    if (index.has(a.serial)) shared.add(a.serial);
+    else index.set(a.serial, i);
   });
   const given: ParsedBond[] = [];
   const spoken = new Set<number>();
   for (const [p, q] of conect) {
+    if (shared.has(p) || shared.has(q)) continue;
     const a1 = index.get(p);
     const a2 = index.get(q);
     if (a1 === undefined || a2 === undefined) continue;

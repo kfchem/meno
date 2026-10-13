@@ -720,7 +720,12 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   - bonds from CONECT records, and - for pairs CONECT does not speak for
     both atoms of - from distances, as an XYZ file's: a standard
     residue's own bonds are in the Chemical Component Dictionary, not in
-    the file;
+    the file. A serial number two atoms carry names neither, and a CONECT
+    record that names one is not taken: the format numbers a model's atoms
+    in five columns (ATOM, serial: 7-11) and so holds at most 99,999 of
+    them (MODEL, *Details*), and a file of more - a molecular dynamics
+    frame in its water - numbers them over again, or past the columns in
+    a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
   - HELIX and SHEET records (Secondary Structure Section, since lane L5,
     2026-10-10), every field kept, and with them each atom's name and
