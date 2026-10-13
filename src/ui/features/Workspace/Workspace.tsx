@@ -2236,6 +2236,8 @@ export default function Workspace({
                 <ArrowStylePanel arrowId={panel.arrow} onClose={() => setPanel(null)} />
               ) : (
                 <SaveAbbreviationPanel
+                  // (opened anew for another group: a panel of its own, with its own group to keep to)
+                  key={panel.abbreviation.ids.join(",")}
                   ids={panel.abbreviation.ids}
                   smiles={panel.abbreviation.smiles}
                   onClose={() => setPanel(null)}
