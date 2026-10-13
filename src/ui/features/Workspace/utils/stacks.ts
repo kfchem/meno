@@ -9,7 +9,7 @@
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { AtomStack, Molecule3D } from "../store/types";
-import { middleOfPoints } from "../../../../lib/extremes";
+import { least, middleOfPoints, most } from "../../../../lib/extremes";
 
 type Stacked = Pick<Molecule3D, "id" | "stack">;
 
@@ -70,7 +70,7 @@ export function gridPlaces(at: { x: number; y: number }, reaches: readonly numbe
   if (!n) return [];
   const cols = Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / cols);
-  const cell = 2 * Math.max(...reaches) + NOMINAL_BOND_LENGTH;
+  const cell = 2 * most(reaches) + NOMINAL_BOND_LENGTH;
   const x0 = at.x - ((cols - 1) * cell) / 2;
   const y0 = at.y + ((rows - 1) * cell) / 2;
   return reaches.map((_, k) => ({ x: x0 + (k % cols) * cell, y: y0 - Math.floor(k / cols) * cell }));
@@ -151,7 +151,7 @@ function showing(atoms: readonly StackedAtom[], shown: (stack: number) => number
   const out = new Map<number, number>();
   for (const [stack, r] of records) {
     const said = shown(stack);
-    out.set(stack, said != null && r.has(said) ? said : Math.min(...r));
+    out.set(stack, said != null && r.has(said) ? said : least(r));
   }
   return out;
 }
@@ -448,8 +448,8 @@ export function recordsGrid(model: Pick<Drawing, "atoms">, stack: number): Map<n
   const n = records.length;
   const cols = Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / cols);
-  const w = Math.max(...boxes.map((b) => b.x1 - b.x0)) + 2 * NOMINAL_BOND_LENGTH;
-  const h = Math.max(...boxes.map((b) => b.y1 - b.y0)) + 2 * NOMINAL_BOND_LENGTH;
+  const w = most(boxes.map((b) => b.x1 - b.x0)) + 2 * NOMINAL_BOND_LENGTH;
+  const h = most(boxes.map((b) => b.y1 - b.y0)) + 2 * NOMINAL_BOND_LENGTH;
   const mid = middleOf(boxes.map(boxMiddle));
   const x0 = mid.x - ((cols - 1) * w) / 2;
   const y0 = mid.y + ((rows - 1) * h) / 2;
