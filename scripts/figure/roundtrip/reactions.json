@@ -28,7 +28,7 @@
     { "name": "Sonogashira coupling", "smiles": "Ic1ccccc1.C#CC>>CC#Cc1ccccc1.I" },
     { "name": "Alcohol dehydration", "smiles": "CC(O)C>>C=CC.O" },
     { "name": "Alkene hydrogenation", "smiles": "C=Cc1ccccc1>[Pd]>CCc1ccccc1" },
-    { "name": "Imine formation", "smiles": "O=Cc1ccccc1.CN>>CN=Cc1ccccc1.O" },
+    { "name": "Imine formation", "smiles": "O=Cc1ccccc1.CN>>C/N=C/c1ccccc1.O" },
     { "name": "Williamson ether synthesis", "smiles": "[O-]c1ccccc1.CI>>COc1ccccc1.[I-]" },
     { "name": "Esterification at a stereocentre", "smiles": "C[C@H](O)C(=O)O.CO>>COC(=O)[C@H](C)O.O" },
     { "name": "Bromination of an alkene", "smiles": "C=CC.BrBr>>CC(Br)CBr" },
