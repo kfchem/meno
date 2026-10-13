@@ -378,11 +378,11 @@ Conformers go through a workflow as any set does (decided):
 
 | From | What |
 | --- | --- |
-| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run or has changed |
+| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run or has changed, however far back, and every step from that one on |
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
-| The menu on empty space | *Run all* - every step on the page that has not run or has changed, in order |
+| The menu on empty space | *Run all* - every step on the page that has not run or has changed, and every step after one, in order |
 | | *Stop all* - while any runs |
 
 No key starts a run (decided: menus, at first). Steps run in the order

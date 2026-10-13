@@ -125,8 +125,8 @@ import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
-import { canWire } from "../workflow/flow";
-import { optionsFor } from "../workflow/doers";
+import { canWire, stateOf } from "../workflow/flow";
+import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { setMembers } from "../workflow/entries";
 
@@ -582,6 +582,39 @@ describe("running a workflow's steps", () => {
     await st().runAll();
     expect(st().steps.find((s) => s.id === c)!.ran?.ok).toBe(true);
     expect(st().steps.find((s) => s.id === a)!.ran!.at).toBe(before);
+  });
+
+  /** The chain with Duplicates between Energy window and Populations, all run; and what each step's card says, in the chain's order. */
+  async function longer() {
+    const { doc, st, a, b, c } = chain();
+    const d = st().addStep("duplicates", "meno", 40, 0);
+    st().connect({ step: b }, d);
+    st().connect({ step: d }, c);
+    await st().runFrom(a);
+    const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;
+    const states = () => [a, b, d, c].map((id) => stateOf(doc.getState(), stepOf(id), byOf(stepOf(id))));
+    const reruns = () => [a, b, d, c].map((id) => stepOf(id).runs?.length ?? 0);
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    return { st, a, b, c, states, reruns };
+  }
+
+  it("runs a step changed two links back, and every step between, before the step it runs - in order", async () => {
+    const { st, b, c, states, reruns } = await longer();
+    // Energy window's options changed: it reads as changed, the steps after it as done
+    st().updateStep(b, { options: { window: 0.5 } });
+    expect(states()).toEqual(["done", "changed", "done", "done"]);
+    await st().runStep(c);
+    // each run again on what the one before it gave anew; As conformers, before it, left as it was
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    expect(reruns()).toEqual([0, 1, 1, 1]);
+  });
+
+  it("runs all: a step changed, and every step after it - those before it left as they are", async () => {
+    const { st, b, states, reruns } = await longer();
+    st().updateStep(b, { options: { window: 0.5 } });
+    await st().runAll();
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    expect(reruns()).toEqual([0, 1, 1, 1]);
   });
 
   it("runs steps that do not wait on one another at once", async () => {

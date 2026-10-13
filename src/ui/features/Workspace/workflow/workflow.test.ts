@@ -268,6 +268,19 @@ describe("running", () => {
     expect(resultOf(doc, 3)!.aside).toBeUndefined();
   });
 
+  it("runs first a step changed however far back, and every step from it on - each on what the one before it gave anew", () => {
+    // (… → Energy window (3) → Duplicates → Populations)
+    let doc = addStep(addStep(chain(), "duplicates", 35, 0), "populations", 50, 0);
+    const [duplicates, populations] = doc.steps!.slice(2).map((s) => s.id);
+    doc = connect(connect(doc, { step: 3 }, duplicates), { step: duplicates }, populations);
+    doc = runStep(doc, populations, W);
+    doc = updateStep(doc, 3, { options: { window: 5 } });
+    expect(doc.steps!.map((s) => stateOf(doc, s, "meno"))).toEqual(["done", "changed", "done", "done"]);
+    doc = runStep(doc, populations, { ...W, now: 2000 });
+    expect(doc.steps!.map((s) => stateOf(doc, s, "meno"))).toEqual(["done", "done", "done", "done"]);
+    expect(doc.steps!.map((s) => s.ran!.at)).toEqual([1000, 2000, 2000, 2000]);
+  });
+
   it("fails, saying why, where it cannot run", () => {
     let doc = addStep(page(), "energy-window", 5, 0);
     doc = runStep(doc, 2, W);

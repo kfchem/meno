@@ -474,10 +474,12 @@ not taken from either.
   starts with them, its own changes never written back. Quick Add offers
   the plugins added, each with its kinds (`workflow/offered.ts`).
 - **Running** (`store/slices/stepRuns.ts`): the steps to run - those
-  asked for, and before each those that have not run or have changed -
-  each started once the step before it has ended well, those that do not
-  wait on one another at once (`runSteps`; *Run from here* adds the steps
-  after, *Run all* every step not done); each run - Meno's at once, as
+  asked for, and before each the furthest back that has not run or has
+  changed, and every step from it on (`chainTo`: a step done takes anew
+  what one changed before it gives) - each started once the step before
+  it has ended well, those that do not wait on one another at once
+  (`runSteps`; *Run from here* adds the steps after, *Run all* every step
+  not done and every step after one); each run - Meno's at once, as
   one edit; a plugin's conformer search on structures drawn in its worker
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`

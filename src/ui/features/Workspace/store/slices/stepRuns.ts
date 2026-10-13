@@ -18,7 +18,7 @@ import type { WorkspaceDocument } from "../../document";
 import { blocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from "../../workflow/flow";
+import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
@@ -84,14 +84,20 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
-  /** The steps to run to run `id`, in order: those before it that have not run, or have changed, or are running - and it. */
+  /**
+   * The steps to run to run `id`, in order: the furthest back before it
+   * that has not run, or has changed, or is running - however many done
+   * lie between - and every step from it to `id`, which take anew what it
+   * gives.
+   */
   const chainTo = (d: WorkspaceDocument, id: number): number[] => {
-    const out = [id];
-    for (let prior = before(d, id); prior && out.length < 200; prior = before(d, prior.id)) {
-      if (!prior.running && stateOf(d, prior, byOf(prior)) === "done") break;
-      out.unshift(prior.id);
-    }
-    return out;
+    const back = stepsBefore(d, id).slice(0, 200);
+    let far = -1;
+    back.forEach((sid, k) => {
+      const s = stepOf(d, sid);
+      if (s && (s.running || stateOf(d, s, byOf(s)) !== "done")) far = k;
+    });
+    return [...back.slice(0, far + 1).reverse(), id];
   };
 
   /** A step that could not run, said so - with what it was to run as. */
@@ -783,8 +789,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     runFrom: (id: number) => runSteps([id, ...after(doc.getState(), id)]),
     runAll: () => {
       const d = doc.getState();
-      // (every step that has not run or has changed - one with nothing coming in left as it is)
-      return runSteps((d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id));
+      // (every step that has not run or has changed - one with nothing coming in left as it is - and every step after one, which takes anew what it gives)
+      const stale = (d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id);
+      return runSteps([...new Set(stale.flatMap((id) => [id, ...after(d, id)]))]);
     },
     stopStep: (id: number) => {
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});

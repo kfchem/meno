@@ -12,7 +12,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
 import { hasChip } from "./selectionSet";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from "./flow";
+import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, GAP, PX } from "./look";
@@ -34,11 +34,17 @@ const SET_NAMES: Record<SetKind, string> = { structures: "structures drawn", mol
 export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 0): WorkspaceDocument {
   const step = stepOf(doc, id);
   if (!step || depth > 200) return doc;
-  // what comes in, made first where it has not been, or is out of date
+  // what comes in, made first where it has not been, or is out of date -
+  // or where any step before it, however far back, is: what that gives
+  // anew comes down to it
   const from = wireInto(doc, id)?.from;
   const before = from ? ("step" in from ? from.step : findSet(doc, from.set)?.made?.step) : undefined;
   const prior = before != null ? stepOf(doc, before) : undefined;
-  if (prior && stateOf(doc, prior, w.byOf(prior)) !== "done") doc = runStep(doc, prior.id, w, depth + 1);
+  const stale = (sid: number) => {
+    const s = stepOf(doc, sid);
+    return !!s && stateOf(doc, s, w.byOf(s)) !== "done";
+  };
+  if (prior && [prior.id, ...stepsBefore(doc, prior.id)].some(stale)) doc = runStep(doc, prior.id, w, depth + 1);
 
   const by = w.byOf(step);
   const input = inputOf(doc, id);
