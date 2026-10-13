@@ -5,6 +5,7 @@ import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
+import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
@@ -715,6 +716,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const o = r.atoms.findIndex((a) => a.label === "O");
     expect(r.bonds.filter((b) => b.a === o || b.b === o).map((b) => b.order)).toEqual([2]);
     expect(r.atoms).toHaveLength(11);
+  });
+
+  it("reads two H's drawn over each other, not on one line, as two labels: each its own atom's", () => {
+    // (sparteine as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: two stereocentres side by side, each with its
+    // H hashed, the two H's half over each other)
+    const r = readFigure(sparteine as unknown as FigureDrawn);
+    const hs = r.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.label === "H");
+    expect(hs).toHaveLength(4);
+    for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i)).toHaveLength(1);
   });
 });
 

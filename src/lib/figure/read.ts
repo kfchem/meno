@@ -277,6 +277,9 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
       const small = l.size < 0.85 * w.size ? l.box : w.size < 0.85 * l.size ? w.box : null;
       const other = small === l.box ? w.box : l.box;
       const setOff = !!small && (small[1] < other[1] || small[3] > other[3]);
+      // (two capitals as large, not on one line - two labels drawn over each other, two H's of atoms side by side - are two)
+      const capital = (x: FigureLetter) => /^[A-IK-PR-Z]$/.test(x.c);
+      if (!small && capital(l) && capital(last) && Math.abs(l.box[3] - last.box[3]) > 0.25 * big) return false;
       return gap > -0.3 * big && gap < 0.3 * big && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
     });
     if (w) {
