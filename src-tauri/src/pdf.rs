@@ -354,7 +354,9 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                     continue;
                 }
                 let o = c.origin().ok().map(|(x, y)| at(x.value, y.value));
-                letters.push(json!({"c": ch.to_string(), "box": bx, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name()}));
+                // (and its loose box: from where it starts to where the next would, as tall as its typeface - how far apart letters are set, which their ink alone does not tell)
+                let loose = c.loose_bounds().ok().map(|r| drawn_box(&at, &r));
+                letters.push(json!({"c": ch.to_string(), "box": bx, "loose": loose, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name()}));
             }
             Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "ms": ms(t)}), vec![]))
         }
@@ -790,6 +792,10 @@ mod tests {
         assert_eq!(letters[0]["c"], json!("O"));
         assert!(near(&letters[0]["size"], 5.0), "{:?}", letters[0]);
         assert!(near(&letters[0]["at"][0], 105.0) && near(&letters[0]["at"][1], 432.0), "{:?}", letters[0]);
+        // (its loose box from where it starts, holding its ink: how far apart letters are set)
+        let (ink, loose) = (&letters[0]["box"], &letters[0]["loose"]);
+        let f = |v: &Value, i: usize| v[i].as_f64().unwrap();
+        assert!((f(loose, 0) - 105.0).abs() < 0.2 && f(loose, 0) <= f(ink, 0) + 0.01 && f(loose, 2) >= f(ink, 2) - 0.01, "{:?}", letters[0]);
         // within a box round the wedge alone, the wedge alone
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
         assert_eq!(head["paths"].as_array().unwrap().len(), 1);

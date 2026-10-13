@@ -38,8 +38,8 @@ export default function StackChips2D() {
 
 /**
  * A stack of drawings' chip, just below the record it shows: which of how
- * many, and the record's title (*3 / 60  aspirin*) - and, the record
- * hovered or selected, a slider through them, as a stack of molecules'
+ * many, and the record's title (*3 / 60  aspirin*) - and, clicked, a
+ * slider through them (Frames3D), as a stack of molecules'
  * chip has. The stack's own, not its records': it stays as they go over
  * one to the next, a drag along its slider going on through them.
  */

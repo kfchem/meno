@@ -898,8 +898,11 @@ All hover-based, as above.
       size, as the drawing style says.
     - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
       mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
-      what is selected bold or in italics, Ctrl/Cmd+Shift+= (+) raises it
-      and Ctrl/Cmd+= lowers it - or, nothing selected, what is typed next
+      what is selected bold or in italics, Ctrl/Cmd with + raises it and
+      Ctrl/Cmd with = lowers it - the keys that give + and =, wherever a
+      keyboard has them: Shift and = for + on most, Shift and ; for + and
+      Shift and - for = on a Japanese keyboard; the menu names them Ctrl++
+      and Ctrl+= (⌘+ and ⌘=) - or, nothing selected, what is typed next
       - and set it back where all of it is already so; a letter typed is
       set as the one before it. From their menu, *Bold* and *Italic*
       (ticked where all their letters are), *Superscript* and *Subscript*

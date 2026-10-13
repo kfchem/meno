@@ -32,12 +32,12 @@ nothing else:
   frames, in angstroms, each one's comment line its energy in hartrees,
   lowest first;
 - each conformer's population - its Boltzmann weight at 298.15 K, the
-  rotamers that are degenerate forms of it counted in - from the table
-  CREGEN prints ("Metadynamics-based Conformational Sampling": the
-  columns Erel/kcal, Etot, weight/tot, conformer, set, degen, origin; the
-  row that begins each conformer's set of rotamers gives the set's weight,
-  its number and its degeneracy), the sets in the order of
-  `crest_conformers.xyz`;
+  rotamers that are degenerate forms of it counted in - and that
+  degeneracy, from the table CREGEN prints ("Metadynamics-based
+  Conformational Sampling": the columns Erel/kcal, Etot, weight/tot,
+  conformer, set, degen, origin; the row that begins each conformer's set
+  of rotamers gives the set's weight, its number and its degeneracy), the
+  sets in the order of `crest_conformers.xyz`;
 - an ensemble optimised with `--mdopt <file>` ("Ensemble Optimization"):
   each structure of the ensemble file given, optimised, written to
   `crest_ensemble.xyz` in the same order, each comment line its energy.
@@ -255,14 +255,14 @@ def why_of(log):
     return said[-1] if said else lines[-1] if lines else "CREST said nothing"
 
 
-def populations_in(log):
-    """Each conformer's population, as CREGEN's last table gives it: the weight of each set of rotamers, in the
-    order of the sets - which is crest_conformers.xyz's. None, where there is no such table."""
+def sets_in(log):
+    """Each set of rotamers, as CREGEN's last table gives it: its weight and its degeneracy, in the order of the
+    sets - which is crest_conformers.xyz's. None, where there is no such table."""
     lines = log.splitlines()
     heads = [i for i, line in enumerate(lines) if "Erel/kcal" in line and "weight/tot" in line and "degen" in line]
     if not heads:
         return None
-    weights = {}
+    sets = {}
     for line in lines[heads[-1] + 1:]:
         parts = line.split()
         if not parts or not parts[0].isdigit():
@@ -270,12 +270,24 @@ def populations_in(log):
         # (the row that begins a set: rank, Erel, Etot, its own weight, the set's weight, the set, its degeneracy)
         if len(parts) >= 7 and parts[5].isdigit() and parts[6].isdigit():
             try:
-                weights[int(parts[5])] = number(parts[4])
+                sets[int(parts[5])] = (number(parts[4]), int(parts[6]))
             except ValueError:
                 return None
-    if not weights or sorted(weights) != list(range(1, len(weights) + 1)):
+    if not sets or sorted(sets) != list(range(1, len(sets) + 1)) or any(d < 1 for _, d in sets.values()):
         return None
-    return [weights[k] for k in range(1, len(weights) + 1)]
+    return [sets[k] for k in range(1, len(sets) + 1)]
+
+
+def populations_in(log):
+    """Each conformer's population, as CREGEN's last table gives it: the weight of each set of rotamers. None, where there is no such table."""
+    sets = sets_in(log)
+    return [w for w, _ in sets] if sets else None
+
+
+def degeneracies_in(log):
+    """Each conformer's degeneracy - how many rotamers of it CREST found alike - as CREGEN's last table gives it. None, where there is no such table."""
+    sets = sets_in(log)
+    return [d for _, d in sets] if sets else None
 
 
 def optimised_of(entries, options, files, log):
@@ -320,6 +332,7 @@ def output_of(entry, options, files, log):
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
     solvent = options.get("solvent", "none")
     populations = populations_in(log)
+    degeneracies = degeneracies_in(log)
     return {
         "schema": SCHEMA,
         "program": "CREST",
@@ -331,6 +344,7 @@ def output_of(entry, options, files, log):
         "frames": [xyz for _, xyz, _ in found],
         "energies": None if any(e is None for e in energies) else energies,
         "populations": populations if populations and len(populations) == len(found) else None,
+        "degeneracies": degeneracies if degeneracies and len(degeneracies) == len(found) else None,
         "results": [],
     }
 

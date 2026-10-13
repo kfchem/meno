@@ -435,18 +435,38 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
  * through the plane of its three neighbours (`rightCentres`), and eased.
  */
 function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
-  // (found once for a molecule's ring system: it is asked for again and again)
-  const key = atoms.join(",");
-  const cached = solids.get(mol)?.get(key);
+  // (found once for a ring system: it is asked for again and again - and
+  // by what it is found from, not by the molecule object, since a drawing
+  // read back is perceived anew, its cage the same: tetrodotoxin's solid
+  // found anew for each of its read-backs was half its Clean-up)
+  const key = `${contentOf(mol)}|${atoms.join(",")}`;
+  const cached = solids.get(key);
   if (cached) return cached;
   const found = embedAnew(mol, atoms, index);
-  if (!solids.has(mol)) solids.set(mol, new Map());
-  solids.get(mol)!.set(key, found);
+  solids.set(key, found);
+  if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
   return found;
 }
 
-/** Each molecule's solids found so far, by their atoms. */
-const solids = new WeakMap<Molecule, Map<string, Vec3[]>>();
+/** The solids found so far, by what each is found from (`contentOf`) and its system's atoms; the oldest let go first. */
+const solids = new Map<string, Vec3[]>();
+
+/** How many solids are kept (`solids`). */
+const KEPT_SOLIDS = 64;
+
+/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration. */
+function contentOf(mol: Molecule): string {
+  let content = contents.get(mol);
+  if (content == null) {
+    const bond = (b: Molecule["bonds"][number]) => `${b.a}-${b.b}:${b.order}${b.stereo ? `:${b.stereo.refs.join(".")}${b.stereo.cis ? "c" : "t"}` : ""}`;
+    const centre = ([a, t]: [number, { neighbours: readonly number[]; volume: number }]) => `${a}:${t.neighbours.join(".")}:${t.volume}`;
+    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(",")].join("|");
+    contents.set(mol, content);
+  }
+  return content;
+}
+
+const contents = new WeakMap<Molecule, string>();
 
 function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
   const hop = hops(mol, atoms);
