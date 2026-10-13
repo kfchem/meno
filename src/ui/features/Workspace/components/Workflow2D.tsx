@@ -19,6 +19,7 @@ import { DURATION } from "../../../theme/motion";
 import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { CARD_W, HTML_DISTANCE, PORT_DOWN, PX } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
@@ -528,7 +529,11 @@ export default function Workflow2D() {
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
   };
-  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps]);
+  // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
+  const settingsOptions = useAppSettings((s) => s.options);
+  // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps, settingsOptions]);
   // how each running step's jobs are getting on, as last looked at
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();

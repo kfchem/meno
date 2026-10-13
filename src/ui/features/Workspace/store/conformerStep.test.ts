@@ -10,33 +10,45 @@ import { readMolfile } from "../../../../lib/chem/ctfile";
 
 /** What RDKit's worker was asked: each structure's molblock, and the options it was given. */
 const asked: { molblock: string; options: Record<string, unknown> }[] = [];
+/** How many times RDKit's worker was taken; and whether it makes none of methanol, saying nothing of why. */
+const worker = { taken: 0, noneOfMethanol: false };
 
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
-  pluginWorker: async () => ({
-    request: async (op: string, payload: { molblock: string; options: Record<string, unknown> }) => {
-      if (op !== "conformers") throw new Error(`no ${op} here`);
-      asked.push(payload);
-      const mol = readMolfile(payload.molblock)!;
-      // (one RDKit cannot make: it says so in its own words)
-      if (mol.atoms.length === 2 && mol.atoms.every((a) => a.symbol === "C")) throw new Error("Invariant Violation\n\texpected match not found");
-      const xyz = mol.atoms.flatMap((a) => [a.x, a.y, 0.1]);
-      return {
-        isomers: [
-          {
-            atoms: mol.atoms.map((a) => ({ el: a.symbol, charge: a.charge ?? 0 })),
-            bonds: mol.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.type })),
-            frames: [xyz],
-            energies: [-0.01],
-            field: "MMFF94",
-            cip: { atoms: {}, bonds: {} },
-            chosen: { atoms: {}, bonds: {} },
-            smiles: "",
-          },
-        ],
-      };
-    },
-  }),
+  pluginWorker: async () => {
+    worker.taken++;
+    // (the worker goes with the one it cannot make - held past its time, it is stopped: what is asked of it after is refused)
+    let gone = false;
+    return {
+      request: async (op: string, payload: { molblock: string; options: Record<string, unknown> }) => {
+        if (gone) throw new Error("The worker was stopped");
+        if (op !== "conformers") throw new Error(`no ${op} here`);
+        asked.push(payload);
+        const mol = readMolfile(payload.molblock)!;
+        // (one RDKit cannot make: it says so in its own words)
+        if (mol.atoms.length === 2 && mol.atoms.every((a) => a.symbol === "C")) {
+          gone = true;
+          throw new Error("Invariant Violation\n\texpected match not found");
+        }
+        if (worker.noneOfMethanol && mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C")) return { isomers: [] };
+        const xyz = mol.atoms.flatMap((a) => [a.x, a.y, 0.1]);
+        return {
+          isomers: [
+            {
+              atoms: mol.atoms.map((a) => ({ el: a.symbol, charge: a.charge ?? 0 })),
+              bonds: mol.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.type })),
+              frames: [xyz],
+              energies: [-0.01],
+              field: "MMFF94",
+              cip: { atoms: {}, bonds: {} },
+              chosen: { atoms: {}, bonds: {} },
+              smiles: "",
+            },
+          ],
+        };
+      },
+    };
+  },
 }));
 
 import { connectStoreToDocument, createEditorStore } from ".";
@@ -90,14 +102,25 @@ async function searched() {
 }
 
 describe("RDKit's conformer search as a step, on structures drawn", () => {
-  beforeEach(() => void (asked.length = 0));
+  beforeEach(() => {
+    asked.length = 0;
+    Object.assign(worker, { taken: 0, noneOfMethanol: false });
+  });
 
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
     const step = await searched();
     expect(asked).toHaveLength(3);
+    // (the one after it asked of a worker taken again: the one asked before went with it)
+    expect(worker.taken).toBe(2);
     expect(step.ran?.ok).toBe(true);
     expect(step.ran?.said).toMatch(/2 conformers of 2 compounds · structure 2 of 3 could not be made in 3D$/);
     expect(step.ran?.said).not.toMatch(/Invariant|expected match/);
+  });
+
+  it("says one of which none was made as one not made", async () => {
+    worker.noneOfMethanol = true;
+    const step = await searched();
+    expect(step.ran?.said).toMatch(/ · 1 conformer · structures 2 and 3 of 3 could not be made in 3D$/);
   });
 
   it("is given the options chosen in Settings, Molecules in 3D, as 3D structures on the canvas is", async () => {

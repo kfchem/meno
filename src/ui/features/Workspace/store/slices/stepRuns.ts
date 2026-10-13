@@ -65,7 +65,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** Steps whose results are being read back. */
   const finishing = new Set<number>();
   /** What has been read of each job's log: how far, and its last line. */
-  const logs = new Map<string, { from: number; line: string; progress?: { done: number; total: number } }>();
+  const logs = new Map<string, { from: number; line: string; tail?: string; progress?: { done: number; total: number } }>();
   // (the jobs whose folders were taken away with their step, deleted: no log or files of theirs to show, should it come back)
   const forgotten = new Set<string>();
   /** The texts that show a job's log, by the job. */
@@ -275,7 +275,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (those that could not be made, by their places among the structures: the others made all the same)
     const failed: number[] = [];
     try {
-      const chem = await pluginWorker(plugin);
+      let chem = await pluginWorker(plugin);
       for (const [place, atoms] of input.structures.entries()) {
         const block = blocksOf(d.model, atoms)[0];
         if (!block) continue;
@@ -285,9 +285,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         } catch {
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
           failed.push(place + 1);
+          // (its worker may have gone with it - held past its time, or stopped: the next is asked of the one running now, started afresh where need be)
+          chem = await pluginWorker(plugin);
           continue;
         }
-        if (!made) continue;
+        // (none made of it, said so too)
+        if (!made) {
+          failed.push(place + 1);
+          continue;
+        }
         const m = moleculeOf(made, block);
         // (what worked out their energies, for the steps that rank them: the plugin, and its force field)
         const calc = { readers: [], program: plugin.name, ...(made.field ? { method: made.field } : {}) };
@@ -538,17 +544,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** What a running job's log says last. */
   async function lastLine(job: string): Promise<{ line?: string; progress?: { done: number; total: number } }> {
     const was = logs.get(job) ?? { from: 0, line: "" };
-    let { from, line, progress } = was;
+    let { from, line, progress, tail = "" } = was;
     for (let k = 0; k < 40; k++) {
       const read = await readJobLog(job, from).catch(() => null);
       if (!read || read.next === from) break;
-      // (how far it is, where its program says so - "progress 12/240" - kept apart from what it says besides)
-      progress = progressOf(read.text) ?? progress;
-      const lines = read.text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^progress \d+\/\d+$/.test(l));
+      // (how far it is, where its program says so - "progress 12/240" - kept apart from what it says besides;
+      // read from whole lines only, a line read in part kept for the next: "1/240" is no "1/24")
+      const text = tail + read.text;
+      const cut = text.lastIndexOf("\n") + 1;
+      const whole = text.slice(0, cut);
+      // (a program that never ends its line keeps no more than a line's worth waiting)
+      tail = text.slice(Math.max(cut, text.length - 256));
+      progress = progressOf(whole) ?? progress;
+      const lines = whole.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^progress \d+\/\d+$/.test(l));
       if (lines.length) line = lines[lines.length - 1];
       from = read.next;
     }
-    logs.set(job, { from, line, ...(progress ? { progress } : {}) });
+    logs.set(job, { from, line, tail, ...(progress ? { progress } : {}) });
     return { ...(line ? { line } : {}), ...(progress ? { progress } : {}) };
   }
 
