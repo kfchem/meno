@@ -68,20 +68,31 @@ def is_molden(text):
     return re.match(r"\s*\[Molden Format\]", text, re.I) is not None
 
 
-def species_of(text, core=0):
+def species_of(text):
     """A Molden file's molecule's charge and spin multiplicity, from its own
-    sections - the format gives neither (its description: "[Atoms]" and
-    "[MO]"). Its charge: the nuclei's - each atom's atomic number, the third
-    field of its [Atoms] line - less its electrons: those its orbitals hold,
-    each orbital's "Occup=" in [MO], and `core`, those in no orbital (a
-    pseudopotential's core). Its multiplicity: one more than its unpaired
-    electrons - the alpha orbitals' occupations' excess over the beta's,
-    where "Spin=" says which an orbital is; else, its orbitals holding two
-    electrons each at most, each orbital's share left unpaired (one of
-    occupation 1, a whole one). None where it gives no atom or no
-    occupation."""
+    sections - the format gives neither ("[Atoms]" and "[MO]", as the
+    format describes them; "[Pseudo]", as ORCA's orca_2mkl writes it): each
+    unknown (None) where the file does not settle it.
+
+    Its charge: the nuclei's - each atom's atomic number, the third field
+    of its [Atoms] line, or, where a [Pseudo] line gives the atom (name,
+    number, charge), the charge its pseudopotential leaves it - less the
+    electrons its orbitals hold (each orbital's "Occup=" in [MO]). Unknown
+    where the occupations do not come to a whole number, or the charge
+    comes to more than 8 either way (a core given nowhere, say).
+
+    Its multiplicity: one more than its unpaired electrons - the alpha
+    orbitals' occupations' excess over the beta's, where "Spin=" says which
+    an orbital is; else, every occupation 0, 1 or 2 (within 0.001), a
+    singlet with none of 1 and a doublet with one. Unknown where they are
+    fractional (natural orbitals), where two or more are 1 (a triplet's,
+    or a singlet diradical's natural orbitals - the same occupations), or
+    where it does not agree with the number of electrons.
+
+    None where it gives no atom or no occupation."""
     section = None
-    nuclear, atoms = 0, 0
+    charges = {}
+    cores = {}
     occupied = {"alpha": [], "beta": []}
     keys = {}
     # (an orbital's keys stand together above its coefficients: kept as they come, put down where its coefficients begin)
@@ -96,11 +107,13 @@ def species_of(text, core=0):
             put()
             section = head.group(1).strip().lower()
             continue
+        fields = line.split()
         if section == "atoms":
-            fields = line.split()
-            if len(fields) >= 6 and re.fullmatch(r"\d+", fields[2]):
-                nuclear += int(fields[2])
-                atoms += 1
+            if len(fields) >= 6 and re.fullmatch(r"\d+", fields[1]) and re.fullmatch(r"\d+", fields[2]):
+                charges[int(fields[1])] = int(fields[2])
+        elif section == "pseudo":
+            if len(fields) >= 3 and re.fullmatch(r"\d+", fields[1]) and re.fullmatch(r"\d+", fields[2]):
+                cores[int(fields[1])] = int(fields[2])
         elif section == "mo":
             key = re.match(r"([A-Za-z]+)\s*=\s*(\S*)", line)
             if key is None:
@@ -116,14 +129,26 @@ def species_of(text, core=0):
             else:
                 keys[name] = value
     put()
-    if not atoms or not (occupied["alpha"] or occupied["beta"]):
+    if not charges or not (occupied["alpha"] or occupied["beta"]):
         return None
+    whole = lambda x: abs(x - round(x)) <= 1e-3  # noqa: E731
     electrons = sum(occupied["alpha"]) + sum(occupied["beta"])
+    nuclear = sum(cores.get(n, z) for n, z in charges.items())
+    charge = round(nuclear - electrons) if whole(electrons) else None
+    if charge is not None and abs(charge) > 8:
+        charge = None
     if occupied["beta"]:
-        unpaired = abs(sum(occupied["alpha"]) - sum(occupied["beta"]))
+        excess = sum(occupied["alpha"]) - sum(occupied["beta"])
+        multiplicity = round(abs(excess)) + 1 if whole(excess) else None
+    elif all(any(abs(o - k) <= 1e-3 for k in (0, 1, 2)) for o in occupied["alpha"]):
+        singles = sum(1 for o in occupied["alpha"] if abs(o - 1) <= 1e-3)
+        multiplicity = singles + 1 if singles <= 1 else None
     else:
-        unpaired = sum(min(o, 2 - o) for o in occupied["alpha"])
-    return round(nuclear - core - electrons), round(unpaired) + 1
+        multiplicity = None
+    # (as many unpaired as the electrons allow: an odd number of electrons, an even multiplicity)
+    if multiplicity is not None and whole(electrons) and (round(electrons) - (multiplicity - 1)) % 2:
+        charge, multiplicity = None, None
+    return charge, multiplicity
 
 
 def _load_molden_text(text):
@@ -314,26 +339,16 @@ def orbital_lists(orbitals, frame):
     return out
 
 
-def core_of(mol):
-    """The electrons a molecule's pseudopotentials hold in their cores, as PySCF read them: none, where it read none."""
-    try:
-        return int(sum(mol.atom_nelec_core(i) for i in range(mol.natm))) if mol.has_ecp() else 0
-    except Exception:
-        return 0
-
-
 def op_read(m):
     orbitals, result = load(m)
     if result is None:
         # a Molden file: its molecule, as PySCF read it, and its orbitals -
-        # its charge and multiplicity as the file's own atoms and occupations
-        # give them (`species_of`), the electrons of any pseudopotential's core
-        # as PySCF read it; PySCF's own, where the file gives no occupations
+        # its charge and multiplicity as the file's own sections give them
+        # (`species_of`), each left unsaid where the file does not settle it
         mol = orbitals.mol
         atoms = [re.sub(r"[^A-Za-z]", "", mol.atom_pure_symbol(i)).capitalize() for i in range(mol.natm)]
         coords = mol.atom_coords(unit="Angstrom")
-        species = species_of(m["text"], core_of(mol))
-        charge, multiplicity = species if species else (int(mol.charge), int(mol.spin) + 1)
+        charge, multiplicity = species_of(m["text"]) or (None, None)
         result = {
             "schema": SCHEMA,
             "atoms": atoms,

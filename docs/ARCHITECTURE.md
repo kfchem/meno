@@ -713,12 +713,17 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   a library, or a Molden file with PySCF - and its orbitals and densities;
   charges, vibrations and the like it leaves to other readers. A Molden
   file gives no charge or multiplicity, so they are worked out from its
-  own sections (`species_of`, 2026-10-14): the charge is the nuclei's,
-  each atom's atomic number in [Atoms], less the electrons its [MO]
-  occupations hold and any pseudopotential core PySCF read; the
-  multiplicity is one more than the alpha occupations' excess over the
-  beta's, or, with no Spin= said, each orbital's share left unpaired.
-  It is tested alone (`scripts/calc/test_reader_pyscf_species.py`, in CI).
+  own sections (`species_of`, 2026-10-14), each left unsaid where the file
+  does not settle it. The charge is the nuclei's - each atom's atomic
+  number in [Atoms], or the charge its pseudopotential leaves it where
+  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
+  its [MO] occupations hold; unsaid past 8 either way, or where the
+  occupations come to no whole number. The multiplicity is one more than
+  the alpha occupations' excess over the beta's; with no Spin= said, a
+  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
+  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
+  and a singlet diradical share). It is tested alone
+  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
   Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
   a Molden file (each p shell's functions put in x, y, z order, as ORCA's
