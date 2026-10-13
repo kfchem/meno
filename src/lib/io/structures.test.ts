@@ -270,12 +270,17 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
     expect(readStructures("mol", "c.mol", heavy("C")).model.atoms[1]).toMatchObject({ el: "C", isotope: 13 });
   });
 
-  it("refuses an XYZ file whose first frame is cut short, and leaves out a trajectory's last frame, cut short as it is still written", () => {
+  it("refuses an XYZ file whose first frame is cut short, and leaves out a trajectory's last frame, cut short as it is still written - saying how many it left out", () => {
     expect(() => readStructures("xyz", "w.xyz", WATER.split("\n").slice(0, 4).join("\n"))).toThrow(/w.xyz could not be read: its first frame ends before/);
     const frames = `${WATER}${WATER}${WATER.split("\n").slice(0, 3).join("\n")}`;
-    const m = readStructures("xyz", "w.xyz", frames).molecules3d![0];
+    const read = readStructures("xyz", "w.xyz", frames);
+    const m = read.molecules3d![0];
     expect(m.atoms).toHaveLength(3);
     expect(m.frames).toHaveLength(1);
+    // (never silently: how many frames were left out is said)
+    expect(read.leftOut).toBe("w.xyz ends before the atoms of its last frame do: 1 of its 3 frames is left out, and the 2 before opened. The file may be cut short, or still being written.");
+    expect(checkedStructures(read, "w.xyz")).toBe(read);
+    expect(readStructures("xyz", "w.xyz", `${WATER}${WATER}`).leftOut).toBeUndefined();
   });
 
   it("reads a PDB file with a byte-order mark, or lines ended by CR alone, as it reads the file", () => {

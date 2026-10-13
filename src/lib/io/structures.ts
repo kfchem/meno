@@ -52,6 +52,12 @@ export type StructureRead = {
   molecules3d?: FileMolecule3D[];
   /** A file's several records drawn flat - an SD file's: each one's atoms in the drawing, by id, and its title where it gives one. */
   records?: { atoms: number[]; title?: string }[];
+  /**
+   * What of the file was left out as it was read, as the chemist is told -
+   * an XYZ trajectory's last frame, cut short: said, never left out
+   * silently (the page says it in a notice, the rest opened).
+   */
+  leftOut?: string;
 };
 
 /**
@@ -114,6 +120,10 @@ const cutShort = (name: string, what = "it") =>
  */
 const damaged = (name: string, why: string, what = "it") => new Error(`${name} could not be read: ${what} has ${why}. It may be damaged.`);
 
+/** What is said of an XYZ trajectory whose last frame is cut short: how many of its frames were left out, of how many. */
+const framesLeftOut = (name: string, left: number, of: number) =>
+  `${name} ends before the atoms of its last frame do: ${left} of its ${of} frames ${left === 1 ? "is" : "are"} left out, and the ${of - left} before opened. The file may be cut short, or still being written.`;
+
 /** Why a file that says what Meno cannot read is not read without it (`CtMolecule.unread`, `why`). */
 const unread = (name: string, why: string, what = "it") => new Error(`${name} could not be read: ${what} ${why}.`);
 
@@ -164,6 +174,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   // a trajectory still being written - left out, the frames before it whole)
   if (kind === "xyz" && read[0]?.cut) throw cutShort(name, "its first frame");
   const molecules = kind === "xyz" ? read.filter((m) => !m.cut) : read;
+  const left = read.length - molecules.length;
 
   // 3D structures stand on the page as they are: an XYZ file's frames are
   // one molecule's, a MOL or SD file's records each a molecule of its own -
@@ -186,6 +197,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           ...(filename ? { name: filename } : {}),
         },
       ],
+      ...(left ? { leftOut: framesLeftOut(name, left, read.length) } : {}),
     };
   }
   // (in a MOL or SD file, each record is a drawing or a molecule in 3D)
@@ -314,6 +326,7 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
   if (!bonds.every((b) => finite(b.id) && ids.has(b.a) && ids.has(b.b))) throw bad("a bond of its drawing joins no atoms");
   if (s!.arrow != null && ![s!.arrow.x1, s!.arrow.y1, s!.arrow.x2, s!.arrow.y2].every(finite)) throw bad("its arrow is not placed");
   if (s!.pluses != null && !(Array.isArray(s!.pluses) && s!.pluses.every(isPoint))) throw bad("a \"+\" sign is not placed");
+  if (s!.leftOut != null && typeof s!.leftOut !== "string") throw bad("what it says was left out is not words");
   if (s!.records != null && !(Array.isArray(s!.records) && s!.records.every((r) => Array.isArray(r?.atoms) && r.atoms.every((id) => ids.has(id)) && (r.title == null || typeof r.title === "string")))) {
     throw bad("a record of its drawing holds atoms it does not have");
   }

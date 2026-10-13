@@ -11,6 +11,7 @@ import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
+import { useNotices } from "../../../notices";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -35,6 +36,8 @@ export type ProcessedFileResult = {
   /** Molecules in 3D, as a file of 3D structures has them: not yet placed on the page. */
   /** Its molecules in 3D, each showing its first frame, or the one `frame` says. */
   molecules3d?: (Omit<Molecule3D, "id" | "at"> & { frame?: number })[];
+  /** What of the file was left out as it was read, as the chemist is told (lib/io/structures). */
+  leftOut?: string;
 };
 
 /**
@@ -78,8 +81,11 @@ export async function processFileContent(
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
   // a structure's file: what it holds, as its reader gives it, checked -
-  // its several records drawn flat a stack of drawings
-  return stackedRead(await readStructureFile(filename, content, kind));
+  // its several records drawn flat a stack of drawings - and what was left
+  // out of it, a trajectory's last frame cut short, said in the corner
+  const read = stackedRead(await readStructureFile(filename, content, kind));
+  if (read.leftOut) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: read.leftOut });
+  return read;
 }
 
 /**
