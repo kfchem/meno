@@ -968,7 +968,8 @@ workspace holds.
   - a filled wedge is a bond in front, narrow at its stereocentre - its
     narrow end a point, or cut flat a line's width across;
   - short strokes side by side across a line, evenly spaced, are a bond
-    behind, narrow where they are shortest;
+    behind, narrow where its lines are shortest (its lines, not the joints
+    of the bonds at its ends, drawn as dots or thinner pieces);
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a bridge's, a
     cage's back edge - is joined again, however short one of its pieces;

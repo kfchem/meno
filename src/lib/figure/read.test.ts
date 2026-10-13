@@ -220,6 +220,41 @@ describe("a figure read as a structure", () => {
     expect(degree(down.b)).toBe(1);
   });
 
+  it("tells a hash's narrow end by its lines, not by the joints drawn as dots at both its ends", () => {
+    // (griseofulvin's spiro centre as the RSC style exports it, cut out: the hash from the spiro carbon at 136.8,106 to the enol
+    // ether's carbon at 143,116.7, and at each end the joints of the bonds there - small pieces, one at the wide end as thin as nothing)
+    const paths: FigurePath[] = [
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",142.98,95.34],["L",143.17,95.45],["L",143.11,95.57],["L",142.98,95.57],["L",142.98,95.34],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",142.98,95.34],["L",142.98,95.12],["L",142.85,95.12],["L",142.78,95.23],["L",142.98,95.34],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",142.98,116.66],["L",143.17,116.78],["L",143.11,116.89],["L",142.98,116.89],["L",142.98,116.66],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",142.98,116.66],["L",142.98,116.44],["L",142.85,116.44],["L",142.78,116.55],["L",142.98,116.66],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",136.82,106.0],["L",137.0,106.13],["L",137.01,106.12],["L",137.02,106.11],["L",136.82,106.0],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",136.82,106.0],["L",136.63,105.89],["L",136.8,105.59],["L",137.0,105.87],["L",136.82,106.0],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",136.82,106.0],["L",136.64,106.13],["L",136.54,106.0],["L",136.64,105.87],["L",136.82,106.0],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",129.59,96.04],["L",129.66,96.26],["L",129.5,96.31],["L",129.4,96.17],["L",129.59,96.04],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",129.59,96.04],["L",129.77,95.91],["L",129.67,95.78],["L",129.52,95.83],["L",129.59,96.04],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",137.89,107.41],["L",138.15,107.77],["L",137.69,108.04],["L",137.5,107.63],["L",137.89,107.41],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",139.06,109.06],["L",139.33,109.43],["L",138.54,109.89],["L",138.35,109.47],["L",139.06,109.06],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",140.24,110.72],["L",140.5,111.09],["L",139.39,111.73],["L",139.2,111.32],["L",140.24,110.72],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",141.41,112.38],["L",141.67,112.75],["L",140.24,113.57],["L",140.05,113.16],["L",141.41,112.38],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",142.58,114.04],["L",142.84,114.41],["L",141.09,115.42],["L",140.9,115.01],["L",142.58,114.04],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",143.76,115.7],["L",144.02,116.06],["L",141.94,117.26],["L",141.75,116.85],["L",143.76,115.7],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",128.15,96.51],["L",128.22,96.72],["L",128.22,96.72],["L",128.15,96.51],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",128.15,96.51],["L",128.08,96.29],["L",128.5,96.16],["L",128.37,96.58],["L",128.15,96.51],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",130.47,97.26],["L",130.65,97.13],["L",130.72,97.22],["L",130.69,97.33],["L",130.47,97.26],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",130.47,97.26],["L",130.26,97.19],["L",130.39,96.77],["L",130.65,97.13],["L",130.47,97.26],["Z"]] },
+      { fill: "#000000ff", stroke: null, width: 1, d: [["M",130.47,97.26],["L",130.29,97.39],["L",130.29,97.39],["L",130.47,97.26],["Z"]] },
+      { fill: null, stroke: "#000000ff", width: 0.45, d: [["M",136.82,106.0],["L",129.59,96.04]] },
+      { fill: null, stroke: "#000000ff", width: 0.45, d: [["M",136.82,106.0],["L",142.98,95.34]] },
+      { fill: null, stroke: "#000000ff", width: 0.45, d: [["M",136.82,106.0],["L",131.61,113.18]] },
+    ];
+    // (with the furanone's O beside it, as on the page: its letters set how short a line can be a bond)
+    const r = readFigure(figure(paths, word("O", [129, 117])));
+    const hash = r.bonds.find((b) => b.stereo === "down")!;
+    const narrow = r.atoms[hash.a];
+    expect(Math.hypot(narrow.x - 136.8, narrow.y - 106)).toBeLessThan(1.5);
+  });
+
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
     const c: P = [40, 40];
     const branch = [stroke(step(c, 150), c, step(c, 30)), stroke(c, step(c, 90))];

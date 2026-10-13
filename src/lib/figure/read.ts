@@ -132,8 +132,13 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
     const last = order[order.length - 1];
     const step = (last.t - first.t) / (order.length - 1);
     const at = (t: number): Point => ({ x: c.x + axis.x * t, y: c.y + axis.y * t });
-    const l0 = len(first.g);
-    const l1 = len(last.g);
+    // (which end is narrow, by its lines as thick as the rest - not its dots, nor a thinner piece: a joint of the bonds
+    // at either end, its wide end's too, may be drawn as one)
+    const thickest = Math.max(0, ...order.filter((o) => !dot_(o.g)).map((o) => o.g.w));
+    const lines = order.filter((o) => !dot_(o.g) && o.g.w >= 0.5 * thickest);
+    const [r0, r1] = lines.length >= 2 ? [lines[0], lines[lines.length - 1]] : [first, last];
+    const l0 = len(r0.g);
+    const l1 = len(r1.g);
     let [a, b] = [at(first.t - step / 2), at(last.t + step / 2)];
     if (l0 > l1 * 1.25) [a, b] = [b, a];
     const either = l1 <= l0 * 1.25 && l0 <= l1 * 1.25;
