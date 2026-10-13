@@ -119,6 +119,17 @@ function joined(boxes: Box[], d: number): Box[] {
   return out;
 }
 
+/** Boxes joined where a label lies within `LABEL_PT` of each: the parts of one structure either side of it. */
+function throughLabels(boxes: Box[], labels: readonly Box[]): Box[] {
+  let out = boxes.slice();
+  for (const l of labels) {
+    const by = out.filter((b) => meet(grow(b, LABEL_PT), l));
+    if (by.length < 2) continue;
+    out = [...out.filter((b) => !by.includes(b)), by.reduce(union)];
+  }
+  return out;
+}
+
 /**
  * The figures on a page, from what it is made of: its pictures and paths,
  * joined where they lie within `JOIN_PT` of one another - not a rule nor
@@ -146,9 +157,15 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     return w * h < MOST_OF_PAGE * pageArea;
   });
   const pictures = drawn.filter((o) => o.kind === "image").map((o) => o.box);
-  const parts = joined(
-    drawn.map((o) => o.box),
-    JOIN_PT,
+  // (a structure's parts either side of a label - an acetyl past an NH, a group past an O - one, joined
+  // through the word between them, before the small are left out)
+  const labels = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] <= SHORT_WORD_PT).map((o) => o.box);
+  const parts = throughLabels(
+    joined(
+      drawn.map((o) => o.box),
+      JOIN_PT,
+    ),
+    labels,
   ).filter((g) => {
     const [w, h] = [g[2] - g[0], g[3] - g[1]];
     return (Math.max(w, h) >= LEAST_PT && Math.min(w, h) >= LEAST_THICK_PT) || pictures.some((p) => meet(p, g));

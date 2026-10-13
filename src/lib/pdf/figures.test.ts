@@ -52,6 +52,16 @@ describe("a PDF page's figures", () => {
     expect(figuresOf([rule, frame])).toEqual([]);
   });
 
+  it("take a structure's part beyond a label as its, however small: an acetyl past an NH", () => {
+    // (a ring, an NH beside it, and past the NH a C=O and a methyl - 20 points across, smaller than a figure alone)
+    const ring = structureAt(100, 300);
+    const nh = text([174, 306, 186, 316]);
+    const acetyl = [path([188, 304, 200, 311]), path([200, 304, 208, 311]), path([199, 294, 201, 304])];
+    const figures = figuresOf([...ring, nh, ...acetyl]);
+    expect(figures).toHaveLength(1);
+    expect(figures[0][2]).toBeGreaterThanOrEqual(208);
+  });
+
   it("are none on a page scanned in strips, as on a page scanned whole; a picture beside its words still one", () => {
     // (a page scanned as eight strips, one under another, its words read over them)
     const strips: PageObject[] = Array.from({ length: 8 }, (_, i) => ({ kind: "image", box: [0, i * 105.25, 595, (i + 1) * 105.25] }));
