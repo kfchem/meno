@@ -12,7 +12,7 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 // (where a label's H goes is the names' business too: there for all that ask here)
 export { hydrogenSpot } from "./names";
 import { isMetal, METAL_BOND } from "./perceive";
-import { smallestRings, type Edge } from "./rings";
+import { ringsAlike, smallestRings, type Edge } from "./rings";
 
 export type Geometry = {
   x: readonly number[];
@@ -356,6 +356,13 @@ function pointToSegment(
   const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / len2)) : 0;
   return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
 }
+
+/**
+ * The rings alike in size to a bridged system's smallest set (`ringsAlike`),
+ * by the bonds they were found among: the same molecule is measured over
+ * and over while it is laid out.
+ */
+const alikeRings = new WeakMap<readonly Edge[], number[][]>();
 
 export function layoutMetrics(g: Geometry): LayoutMetrics {
   const { x, y, edges } = g;
@@ -748,6 +755,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // (the ring systems with a bridge in them: two rings sharing three atoms
   // or more anywhere among rings fused to each other)
   const bridgedAt = new Set<number>();
+  let alike: number[][] = [];
   {
     const system = rings.map((_, i) => i);
     const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
@@ -764,6 +772,16 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     rings.forEach((r, i) => {
       if (bridgedSystems.has(root(i))) r.forEach((v) => bridgedAt.add(v));
     });
+    // (and in such a system every ring as small as one of its smallest set,
+    // where the room left for a bond out is read: which of quinuclidine's
+    // three six-membered cycles the smallest set holds goes by the order its
+    // atoms come in, and quinine's vinyl, read against the one ring through
+    // its atom, counted 225 degrees off one way and 88 the other)
+    if (bridgedSystems.size) {
+      const known = alikeRings.get(edges);
+      alike = known ?? [...bridgedSystems].flatMap((s) => ringsAlike(rings.filter((r, i) => root(i) === s && r.length < 9), neighbours));
+      if (!known) alikeRings.set(edges, alike);
+    }
   }
   let subSum = 0;
   let subCount = 0;
@@ -790,7 +808,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     const ringDirs = inside.map(dir).sort((p, q) => p - q);
     // the widest gap no ring lies in: at a fusion of three rings every gap
     // is 120 degrees, and only one is outside
-    const centres = rings
+    const centres = (bridgedAt.has(a) ? alike : rings)
       .filter((r) => r.includes(a) && r.length < 9)
       .map((r) => {
         const rx = r.reduce((sum, v) => sum + x[v], 0) / r.length;

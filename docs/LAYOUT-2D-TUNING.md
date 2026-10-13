@@ -227,6 +227,24 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   reads better, and in the new order that move turned bilobalide's C4 OH
   into its ring - every bond of C4 in one half of the page, which RDKit
   read the other way. It never leaves a stereocentre so now.
+- **A measure that read the order of the atoms** (2026-10-13). The room
+  left for a bond out of a ring atom was read against the rings of the
+  smallest set through it, but a cage can have more than one set as
+  small - any two of quinuclidine's three six-membered cycles - and which
+  one `smallestRings` keeps goes by the order the atoms come in. Quinine's
+  C3, in one ring of the set its SMILES gives, had that ring's centre,
+  seen in perspective, just outside the 32 degrees between its two ring
+  bonds, and its vinyl counted 225 degrees off: the sheet scored the
+  drawing made in Meno's own order 16.2, the engine, reading the set that
+  order gives, 5.4. Laid out in the SMILES order it had drawn another
+  (10.7 on the sheet, approved), which the measure made right reads 7.8.
+  In a bridged system the room is now read against every ring as small as
+  one of its smallest set (`ringsAlike`), so a drawing reads the same in
+  any order. No drawing on either list changes; quinine (5.4) keeps its
+  quinoline as its reference has it, the N at the lower left and the bond
+  to C9 straight out of the ring, where the approved drawing had the ring
+  30 degrees off the lattice and that bond bent - and its cage seen from
+  the other side than the approved drawing's (see *Open*).
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -391,6 +409,13 @@ and the held-out list takes new ones. What it showed, by kind:
   molecule on either list has a solid with such a pair: strychnine and
   artemisinin are drawn flat as decided, sparteine and aconitine read
   better flat.
+- **Quinine's quinuclidine** is seen from the other side than its
+  reference and the drawing approved before Meno's own atom order
+  (2026-10-13): the back of the cage set off toward the quinoline, not
+  away from it. Both are the textbook view, as good by the template; the
+  measure reads this side better (C8's bonds spread more evenly round it),
+  and no rule yet says which side a cage is seen from when only what hangs
+  from it tells them apart.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

@@ -22,7 +22,11 @@ meets them, as a SMILES string writes them. It lays that out, and hands
 the drawing back in the order it was given - from two such walks, one
 from the lowest-ranked end atom and one from the highest, the drawing
 that reads better kept: one order alone draws some molecules worse than
-another does, as any input order did.
+another does, as any input order did. The benchmark's measure reads a
+drawing the same way however its atoms are listed: in a bridged system
+it reads every ring as small as one of its smallest set, not the set
+alone - quinuclidine has three six-membered cycles, and which two make
+the set goes by the order of the atoms.
 
 ## What a good drawing is
 
