@@ -481,6 +481,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const at = ends.filter((e) => wordOf.get(e) === k);
     if (at.length < 2 || reads(labelText(w)) || (labelOf(w).alts ?? []).some(reads)) continue;
     const caps = w.letters.map((l, i) => ({ l, i })).filter(({ l }) => /[A-Z]/.test(l.c) && l.size >= 0.85 * w.size);
+    // (no capital to cut it at - its letters read as small ones, as a turned page's may be: one word)
+    if (!caps.length) continue;
     const nearest = (e: End) => caps.reduce((p, c) => (dist(centre(c.l.box), e.p) < dist(centre(p.l.box), e.p) ? c : p)).i;
     const starts = [...new Set(at.map(nearest))].sort((a, b) => a - b);
     if (starts.length < 2) continue;

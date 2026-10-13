@@ -301,6 +301,13 @@ describe("a figure read as a structure", () => {
     expect(s.atoms).toHaveLength(6);
   });
 
+  it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
+    // (as a turned page's letters may be read: lower case, or smaller than the word)
+    const w: P = [80, 60];
+    const s = read(figure([stroke(step(w, 180, 1.4), step(w, 180, 0.6)), stroke(step(w, 0, 0.75), step(w, 0, 1.55))], word("xq", [w[0] - 3.4, w[1]])));
+    expect(s.atoms.filter((a) => a.el === "xq")).toHaveLength(1);
+  });
+
   it("lets a lone H take one bond: its wedge's, not a bond passing near it", () => {
     const c: P = [60, 60];
     const h = step(c, 90);
