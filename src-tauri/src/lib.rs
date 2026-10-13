@@ -1021,63 +1021,6 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn reads_every_line_a_program_says_utf_8_or_not() {
-        // (a line in another code page between two in UTF-8, and Windows' line ends)
-        let said: &[u8] = b"first \xe5\x8c\x96\r\nsecond \xe9t\xe9\r\nthird\nno end";
-        let mut lines = Vec::new();
-        each_line(said, |l| lines.push(l));
-        assert_eq!(lines, ["first \u{5316}", "second \u{fffd}t\u{fffd}", "third", "no end"]);
-    }
-
-    /// A Python here to run a worker with: `python3`, or `python` (Windows).
-    fn a_python() -> Option<&'static str> {
-        ["python3", "python"]
-            .into_iter()
-            .find(|p| Command::new(p).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()))
-    }
-
-    #[test]
-    fn a_worker_reads_and_answers_a_file_s_name_in_japanese_whatever_the_code_page() {
-        let Some(python) = a_python() else {
-            eprintln!("no Python here: not run");
-            return;
-        };
-        let dir = std::env::temp_dir().join(format!("meno-utf8-worker-{}", Uuid::new_v4()));
-        fs::create_dir_all(&dir).unwrap();
-        // (a worker as Meno's are: a request a line, read as text, and an answer a line)
-        let worker = dir.join("worker.py");
-        fs::write(
-            &worker,
-            "import json, sys\nfor line in sys.stdin:\n    asked = json.loads(line)\n    print(json.dumps({\"name\": asked[\"name\"], \"letters\": len(asked[\"name\"])}, ensure_ascii=False), flush=True)\n",
-        )
-        .unwrap();
-        let name = "\u{5316}\u{5408}\u{7269}1.log";
-        let run = |utf8: bool| {
-            let mut cmd = Command::new(python);
-            cmd.arg(&worker).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
-            // (the code page an English Windows reads and writes in - as it is there, forced here)
-            cmd.env("PYTHONIOENCODING", "cp1252").env("PYTHONUTF8", "0");
-            if utf8 {
-                python_in_utf8(&mut cmd);
-            }
-            let mut child = cmd.spawn().unwrap();
-            let mut stdin = child.stdin.take().unwrap();
-            stdin.write_all(format!("{}\n", serde_json::json!({ "name": name })).as_bytes()).unwrap();
-            drop(stdin);
-            let mut answers = Vec::new();
-            each_line(child.stdout.take().unwrap(), |l| answers.push(l));
-            let _ = child.wait();
-            answers
-        };
-        // (in cp1252 the request cannot be read: the worker stops, saying nothing)
-        assert!(run(false).is_empty());
-        let answers = run(true);
-        let answer: serde_json::Value = serde_json::from_str(&answers[0]).unwrap();
-        assert_eq!(answer, serde_json::json!({ "name": name, "letters": 8 }));
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn tells_a_hashed_lock_and_which_worker_a_sidecar_runs() {
         assert!(lock_is_hashed("rdkit==2026.3.6 \\\n    --hash=sha256:abc\n"));
         assert!(!lock_is_hashed("numpy==2.3.2\n    # via accel\n"));
@@ -1402,5 +1345,62 @@ mod tests {
         assert!(state.reap("a"));
         assert!(!state.reap("a"));
         assert!(state.lock().is_empty());
+    }
+
+    #[test]
+    fn reads_every_line_a_program_says_utf_8_or_not() {
+        // (a line in another code page between two in UTF-8, and Windows' line ends)
+        let said: &[u8] = b"first \xe5\x8c\x96\r\nsecond \xe9t\xe9\r\nthird\nno end";
+        let mut lines = Vec::new();
+        each_line(said, |l| lines.push(l));
+        assert_eq!(lines, ["first \u{5316}", "second \u{fffd}t\u{fffd}", "third", "no end"]);
+    }
+
+    /// A Python here to run a worker with: `python3`, or `python` (Windows).
+    fn a_python() -> Option<&'static str> {
+        ["python3", "python"]
+            .into_iter()
+            .find(|p| Command::new(p).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()))
+    }
+
+    #[test]
+    fn a_worker_reads_and_answers_a_file_s_name_in_japanese_whatever_the_code_page() {
+        let Some(python) = a_python() else {
+            eprintln!("no Python here: not run");
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("meno-utf8-worker-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        // (a worker as Meno's are: a request a line, read as text, and an answer a line)
+        let worker = dir.join("worker.py");
+        fs::write(
+            &worker,
+            "import json, sys\nfor line in sys.stdin:\n    asked = json.loads(line)\n    print(json.dumps({\"name\": asked[\"name\"], \"letters\": len(asked[\"name\"])}, ensure_ascii=False), flush=True)\n",
+        )
+        .unwrap();
+        let name = "\u{5316}\u{5408}\u{7269}1.log";
+        let run = |utf8: bool| {
+            let mut cmd = Command::new(python);
+            cmd.arg(&worker).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+            // (the code page an English Windows reads and writes in - as it is there, forced here)
+            cmd.env("PYTHONIOENCODING", "cp1252").env("PYTHONUTF8", "0");
+            if utf8 {
+                python_in_utf8(&mut cmd);
+            }
+            let mut child = cmd.spawn().unwrap();
+            let mut stdin = child.stdin.take().unwrap();
+            stdin.write_all(format!("{}\n", serde_json::json!({ "name": name })).as_bytes()).unwrap();
+            drop(stdin);
+            let mut answers = Vec::new();
+            each_line(child.stdout.take().unwrap(), |l| answers.push(l));
+            let _ = child.wait();
+            answers
+        };
+        // (in cp1252 the request cannot be read: the worker stops, saying nothing)
+        assert!(run(false).is_empty());
+        let answers = run(true);
+        let answer: serde_json::Value = serde_json::from_str(&answers[0]).unwrap();
+        assert_eq!(answer, serde_json::json!({ "name": name, "letters": 8 }));
+        let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -1092,16 +1092,16 @@ path it is given:
   app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
-- `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
-  inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
-  absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
-  script unchanged.
 - Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
   (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
   system's code page: on Windows that is the ANSI one otherwise, in which a request
   naming a file in Japanese stopped a worker (English Windows) or came back garbled
   (Japanese Windows). What a sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
+- `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
+  inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
+  absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
+  script unchanged.
 - A sidecar running the console's worker is a `python-code` task on the
   network; any other worker is pointed at the proxy with no task, so what it
   reaches for is refused and on the record.
