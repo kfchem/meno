@@ -93,8 +93,9 @@ function selectionExtent(
  *
  * - what is selected, shaded under the drawing;
  * - a box or a lasso being drawn to select what it holds - from empty
- *   space with Ctrl (⌘ on a Mac) held, or by a double-click there that
- *   drags; with Alt (Option) held, a lasso rather than a box;
+ *   space with Ctrl (⌘ on a Mac) held, or by a long press there and a
+ *   drag (a double-click there opens Quick Add); with Alt (Option) held,
+ *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D selected alone
  *   it turns as one body, in 3D - as a drag on a molecule turns it - about

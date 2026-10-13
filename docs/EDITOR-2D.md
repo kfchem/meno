@@ -163,7 +163,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron, expand an abbreviation, as typed (a label read as something else), select its structure |
 | A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure |
 | An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, a slide around it, a box around it, use as input, save as abbreviation |
@@ -262,7 +262,9 @@ A box or a lasso drawn with Ctrl (⌘) held adds what it takes to the
 selection; drawn without, it replaces it.
 
 **What is done to a selection** (2D, PR #66). It is shaded in the hover
-highlight's colour, under the drawing, and a small handle stands above it.
+highlight's colour, under the drawing, and a small handle stands above it
+where there is something to turn about its middle: two atoms or more, a
+molecule in 3D or a picture.
 
 - Dragging any of its atoms moves the whole of it, off the grid, as one undo
   step - an atom selected alone with a picture, a shape, words or a
@@ -332,13 +334,18 @@ V, as everywhere, and the same from the menus.
   otherwise have the webview write an empty item over it).
 - A paste goes where the pointer is (where the menu was opened, from the
   menu; the middle of the view, if the pointer is off the drawing), comes
-  in selected so it can be dragged straight on, and is one undo step. What
+  in selected so it can be dragged straight on, and is one undo step.
+  Pasted again where the last one was asked for - the pointer not moved,
+  the view as it was - it lands a step down and to the right of the last,
+  so that a copy pasted twice is seen (the maintainer, 2026-10-12:
+  `pastePlace`). What
   is dropped onto the drawing - a structure's file, or a structure dragged
   out of Word or PowerPoint - comes in the same way where it is dropped, as
   does a SMILES added beside what is drawn.
 - The clipboard holds Meno's own record of the structure, which loses
   nothing, and a MOL file for other chemistry programs (MDLCT on Windows,
-  which they exchange there) - and no plain text: PowerPoint pastes plain
+  which they exchange there), and for a reaction - an arrow with its
+  molecules - an RXN file too; and no plain text: PowerPoint pastes plain
   text as a text box in preference to anything offered with it. *Copy as
   SMILES*, in the selection's menu, puts the SMILES alone there as text.
 - With them go pictures of the structure, drawn in the canvas's style at
@@ -361,12 +368,16 @@ V, as everywhere, and the same from the menus.
   other programs.
 - Files copied in the Finder or Explorer are pasted as they would be
   dropped where the paste goes: PDFs, pictures, texts and structures' files.
-- A paste reads Meno's own record first, then a picture that carries one
-  (Office's clip format, as Word and PowerPoint hand it back, or a PNG),
-  then a MOL file, then plain text that is a MOL file or a SMILES (drawn by
-  the engine, as a SMILES typed in Quick Add is).
+- A paste reads, in order: files copied in the Finder or Explorer (above);
+  Meno's own record, or an Office object that holds it; a picture that
+  carries one (an Office object as a Mac hands it back, Office's clip
+  format as Word and PowerPoint hand it back, a PNG); an RXN file; a MOL
+  file; then plain text that is a MOL file or a SMILES (drawn by the
+  engine, as a SMILES typed in Quick Add is). A picture with none of these
+  - a screenshot - goes on the page as a picture.
 - On empty space with nothing selected, a right-click opens *Paste* and
-  *Select all*; the selection's menu has *Cut*, *Copy* and *Copy as
+  *Select all*, with the canvas's own items under them (the table of
+  menus above); the selection's menu has *Cut*, *Copy* and *Copy as
   SMILES*, and *Paste* when it was opened on empty space.
 
 ## Who does what
@@ -502,8 +513,11 @@ All hover-based, as above.
   under the pointer, by Delete or Backspace or from the menu a right-click
   opens there, one undo step each; a carbon left with no bonds goes too.
   PR #66: the selection, by the same keys or its menu, in one step.)
-- Selection: by click, by adding to it, by box or lasso, a whole fragment;
-  move, rotate and flip what is selected. (PR #66, as above.)
+- Selection: Ctrl/⌘ and a click on an atom or a bond adds it or takes it
+  out, Shift and a click everything along the bonds to it, a long press a
+  whole structure, a box or a lasso what it holds (a click alone edits a
+  label, not the selection); move, rotate and flip what is selected.
+  (PR #66, as above.)
 - Elements without typing; charges, radicals and isotopes, drawn as
   superscripts and carried through the model, the files and the hydrogen
   count. (PR #65: charges, radicals and isotopes read from files and
@@ -572,7 +586,8 @@ All hover-based, as above.
   keeps every label exactly as typed.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
-  clicks on an atom or two on empty space, the honeycomb's ring where a
+  clicks on an atom, or Quick Add's *Chain* from empty space - two clicks
+  there open Quick Add since 2026-10-08 - the honeycomb's ring where a
   loop comes round to the chain - see *Drawing is dragging bonds out of atoms*. Benzene
   and other ring templates are still to come.)
 - Every bond type from the pointer: wavy, bold, dashed, and the rest of what
@@ -843,8 +858,10 @@ All hover-based, as above.
        digit is typed after it: -78 is −78, (-20 °C) (−20 °C). Hyphens
        within words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6.
     3. **Ranges.** A number, one hyphen and a number, a word of its own,
-       have an en dash (U+2013) once the word has ended - a space, a
-       bracket, a stop or a comma after it, or the words kept: 1-2 h is
+       have an en dash (U+2013) once the word has ended - a space or a
+       bracket after it, or the words kept; a stop or a comma only once
+       what follows shows it was no decimal point (1-2.5 may yet come), by
+       design: 1-2 h is
        1–2 h, 0-25dc 0–25 °C, compounds 3-5 3–5. Not before, as 7647-0 may
        yet be a CAS number. Numbers joined by more hyphens are no range -
        a CAS number (7647-01-0), a date (2026-10-10) - and stay; so does a
