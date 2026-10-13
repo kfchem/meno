@@ -558,11 +558,13 @@ All hover-based, as above.
      not terbium's; tmscl TMSCl and tmsotf TMSOTf, not thulium's; tipscl
      TIPSCl; lah LAH, not LaH; cdi CDI; tbme TBME. Nor holmium's from ho
      before a group, as rule 3 reads ho: hoac is HOAc, hotf HOTf, homs
-     HOMs, hocl HOCl. Of reagents' names and formulas, a name Meno knows
-     comes first: cpme is CPME, not CpMe. Where no name is spelt, a metal's
-     formula is read as ever: h2zn is H2Zn, pdcl2 PdCl2, cocl2 CoCl2,
-     zni2 ZnI2, cp2zrhcl Cp2ZrHCl; and one typed as it is written is that
-     - HoCl3, TbMe. A group's name of one letter, Z (Cbz), is read from z
+     HOMs, hocl HOCl. Nor two elements' symbols of a letter each from a
+     group's name of two letters typed small: phi is PhI, phio PhIO,
+     phi(oac)2 PhI(OAc)2 - not P and H. Of reagents' names and formulas, a
+     name Meno knows comes first: cpme is CPME, not CpMe. Where no name is
+     spelt, a metal's formula is read as ever: h2zn is H2Zn, pdcl2
+     PdCl2, cocl2 CoCl2, zni2 ZnI2, cp2zrhcl Cp2ZrHCl; and one typed as it
+     is written is that - HoCl3, TbMe. A group's name of one letter, Z (Cbz), is read from z
      only as part of a structure - co2z is CO2Z, nhz NHZ - never into a
      metal's formula: nbz stays nbz.
 

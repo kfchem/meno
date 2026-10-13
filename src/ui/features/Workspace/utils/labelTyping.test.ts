@@ -196,6 +196,8 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       ["hocl", "HOCl"],
       // (a reagent's name before a formula)
       ["cpme", "CPME"],
+      // (nor a group's name of two letters read as two elements' symbols: Ph is no P and H)
+      ["phi", "PhI"], ["phio", "PhIO"], ["phi(oac)2", "PhI(OAc)2"], ["phi(ococf3)2", "PhI(OCOCF3)2"], ["phboc", "PhBoc"], ["phts", "PhTs"],
     ]) {
       expect(kept(typed), typed).toBe(label);
       expect(live(typed), typed).toBe(label);

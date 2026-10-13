@@ -33,8 +33,9 @@
  *    metal's symbol from letters typed small across a group's, a reagent's
  *    or a ligand's name the letters spell (tbscl is TBSCl, lah LAH, cdi
  *    CDI), nor holmium's from ho before a group, as rule 3 reads ho (hoac
- *    is HOAc, hotf HOTf); then a reagent's name before a formula (cpme is
- *    CPME). Where no name is spelt, formulas are read as ever: h2zn is
+ *    is HOAc, hotf HOTf), nor two elements' symbols from a group's name of
+ *    two letters (phi is PhI, not PHI); then a reagent's name before a
+ *    formula (cpme is CPME). Where no name is spelt, formulas are read as ever: h2zn is
  *    H2Zn, pdcl2 PdCl2, zni2 ZnI2; one typed as it is written is that
  *    (HoCl3). A group's name of one letter, Z, only as part of a structure.
  *
@@ -366,7 +367,8 @@ const UNITS_SEEN = new Map<string, { of: readonly string[]; units: { unit: strin
  * across a group's, a reagent's or a ligand's name the letters typed make
  * too - Tb of tbscl, its TBS; La of lah, its LAH - or of an H and a
  * heteroatom - Ho of hotf, its H and O (ho is HO, not holmium: the
- * maintainer, 2026-10-12).
+ * maintainer, 2026-10-12); and how many groups' names of two letters it
+ * reads as two elements' symbols (P and H of PHI, across Ph).
  */
 function unitsMade(typed: string, text: string, spans: readonly Span[]): { letters: number; across: number; heavy: number } {
   const { metals, letters, units } = vocabulary();
@@ -375,7 +377,13 @@ function unitsMade(typed: string, text: string, spans: readonly Span[]): { lette
   let heavy = 0;
   // (a name this writing writes where the letters typed make it)
   const written = (from: number, to: number) => spans.some((n) => n.from === from && n.to === to && text.slice(from, to) === n.name);
-  for (const { unit, at } of unitsAt(text)) {
+  const read = unitsAt(text);
+  // (a group's name of two letters typed small, read as two elements' symbols
+  // of a letter each: Ph as P and H - phi is PhI, iodobenzene, not PHI)
+  const lone = new Set(read.filter(({ unit }) => /^[A-Z]\d*$/.test(unit) && SYMBOLS.has(unit[0])).map(({ at }) => at));
+  const split = (n: Span) => n.to - n.from === 2 && lone.has(n.from) && lone.has(n.from + 1) && small(typed[n.from]) && small(typed[n.from + 1]) && !written(n.from, n.to);
+  for (const n of spans) if (split(n)) across++;
+  for (const { unit, at } of read) {
     const symbol = unit.replace(/\d+$/, "");
     if (letters.has(symbol)) ones++;
     // (an element after uranium from letters typed small - rule 2 - not a
