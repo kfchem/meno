@@ -7,7 +7,7 @@ import { layout2D } from "../engine";
 import { perceive, type LayoutInput } from "../perceive";
 
 /** A molecule as its SMILES gives it: its bonds Kekulé, each atom's H, each centre's configuration. */
-function fromSmiles(smiles: string): LayoutInput {
+export function fromSmiles(smiles: string): LayoutInput {
   const s = readSmiles(smiles);
   const orders = kekuleOrders(s.atoms, s.bonds);
   const sum = s.atoms.map(() => 0);

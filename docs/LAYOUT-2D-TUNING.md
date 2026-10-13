@@ -211,6 +211,19 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   onto a ring bond. A centre the easing turns is put back where the solid
   has it. Scopolamine (12.2 to 2.1), ibogaine (20.3 to 17.1) and gelsemine
   (9.5 to 6.9) read better; nothing else changes.
+- **The same molecule, any order** (2026-10-13). Aconitine's ring A came
+  out a chair or a boat by the order its atoms were listed in - the
+  distances its solid is found from fit both as well - and with it the
+  whole drawing; shuffled, nearly every drawing on both lists changed,
+  adamantane's and camphor's among them: the layout's choices between
+  equals went by atom order. It lays out an order of the molecule's own
+  now (`canonical.ts`), and every molecule on both lists comes out the same
+  in four shuffled orders (`inAnyOrder.*.test.ts`). Ranks alone as the
+  order read worse (held-out 8.4); a walk in rank order, as SMILES writes
+  atoms, about as well as the lists' own orders. Drawings the lists'
+  orders happened to suit changed with it - quinine among them, approved
+  before - and are fixed one at a time after (the maintainer,
+  2026-10-13).
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two

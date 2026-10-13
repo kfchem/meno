@@ -27,6 +27,7 @@ import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./nam
 import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
+import { canonicalOrder, reordered, restored } from "./canonical";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
@@ -65,6 +66,14 @@ export type Layout2D = {
 } & Stereo;
 
 export function layout2D(input: LayoutInput): Layout2D {
+  // (laid out in the molecule's own order, and handed back in the order
+  // given: the same molecule drawn with its atoms in any order comes out
+  // the same - aconitine's ring A a chair or a boat by that order, once)
+  const to = canonicalOrder(input);
+  return restored(layoutInOrder(reordered(input, to)), to);
+}
+
+function layoutInOrder(input: LayoutInput): Layout2D {
   // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system
   // drawn as a solid whose stereocentres do not read as given - a bond out
   // of it drawn nearer the other of the two ways the solid leaves free than
