@@ -119,8 +119,8 @@ words, a width they break into lines at, and how their lines lie.
   *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
   down. Unset, the drawing's labels' size, as reaction conditions are now.
 - **Letters marked**: bold, italic, a colour, superscript and subscript
-  (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd+Shift+= and
-  Ctrl/Cmd+=. The words stay plain text; the marks are kept beside them as
+  (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd with + and
+  with = (the keys that give + and =, wherever a keyboard has them). The words stay plain text; the marks are kept beside them as
   ranges, so that copying, smart words and searching are as they were.
 - **Lists**: a line starting "• " is a list's item, its lines after the
   first hanging under its words; "- " typed at a line's start becomes "• ",
