@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { commitInstanceMatrices } from "./instances";
+import { colorInstances, commitInstanceMatrices } from "./instances";
 
 // A unit disc per instance, the way the atom pick mesh is built, and a ray
 // straight down the view axis, the way a click on the 2D canvas arrives.
@@ -52,5 +52,22 @@ describe("commitInstanceMatrices", () => {
 
     expect(picked(mesh, -10, 5)).toEqual([0]);
     expect(picked(mesh, 10, 0)).toEqual([]);
+  });
+});
+
+describe("colorInstances", () => {
+  it("gives each instance its colour, or the base, reading each colour once however many instances have it", () => {
+    const mesh = discs(3000);
+    const colors = Array.from({ length: 3000 }, (_, i) => (i % 3 === 0 ? "#ff0000" : i % 3 === 1 ? "#0000ff" : undefined));
+    const read = vi.spyOn(THREE.Color.prototype, "setStyle");
+    colorInstances(mesh, colors, "black");
+    expect(read.mock.calls.length).toBeLessThanOrEqual(3);
+    read.mockRestore();
+    const at = (i: number) => {
+      const c = new THREE.Color();
+      mesh.getColorAt(i, c);
+      return c.getHexString();
+    };
+    expect([at(0), at(1), at(2), at(2999)]).toEqual(["ff0000", "0000ff", "000000", "000000"]);
   });
 });

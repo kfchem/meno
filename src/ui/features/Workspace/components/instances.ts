@@ -17,8 +17,6 @@ export function commitInstanceMatrices(mesh: InstancedMesh): void {
   mesh.computeBoundingSphere();
 }
 
-const tint = new THREE.Color();
-
 /**
  * Each of an instanced mesh's first `colors.length` instances in its own
  * colour - or `base`, where it has none - its material white so that it
@@ -29,7 +27,14 @@ const tint = new THREE.Color();
 export function colorInstances(mesh: InstancedMesh, colors: readonly (string | undefined)[], base: string): void {
   if (!colors.length) return;
   const had = mesh.instanceColor != null;
-  colors.forEach((c, i) => mesh.setColorAt(i, tint.set(c ?? base)));
+  // (each colour read from its CSS once, not once for each of the drawing's bonds at every frame of a drag)
+  const read = new Map<string, THREE.Color>();
+  colors.forEach((c, i) => {
+    const css = c ?? base;
+    let color = read.get(css);
+    if (!color) read.set(css, (color = new THREE.Color(css)));
+    mesh.setColorAt(i, color);
+  });
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   if (!had) for (const m of [mesh.material].flat()) m.needsUpdate = true;
 }
