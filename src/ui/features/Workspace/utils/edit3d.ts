@@ -163,10 +163,11 @@ export function withValue(xyz: readonly number[], path: readonly number[], value
   return out;
 }
 
-/** A frame's places, in ångströms: the first frame's from its atoms. */
+/** A frame's places, in ångströms: the first frame's from its atoms - kept to the frames it has, as the frame drawn is (utils/molecule3d `frameOf`). */
 export function placesOf(m: Pick<Molecule3D, "atoms" | "frames">, frame: number): number[] {
-  if (frame <= 0 || !m.frames?.[frame - 1]) return m.atoms.flatMap((a) => [a.x, a.y, a.z]);
-  return [...m.frames[frame - 1]];
+  const f = Math.min(Math.max(0, Math.round(frame)), m.frames?.length ?? 0);
+  if (f === 0) return m.atoms.flatMap((a) => [a.x, a.y, a.z]);
+  return [...m.frames![f - 1]];
 }
 
 /**

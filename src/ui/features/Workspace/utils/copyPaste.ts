@@ -507,10 +507,13 @@ export function readCarried3D(given: unknown): Carried3D | null {
   if (!bonds.every((b) => index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
   const at = m.at as Partial<Pt & { z: number }>;
   if (!isNum(at.x) || !isNum(at.y)) return null;
-  // (what does not read is left out, not the molecule)
-  const frames = (Array.isArray(m.frames) ? (m.frames as unknown[]) : []).filter(
-    (f): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum),
-  );
+  // (what does not read is left out, not the molecule - and the frame it
+  // showed is still the one shown: where it was left out, the one before it)
+  const listed = Array.isArray(m.frames) ? (m.frames as unknown[]) : [];
+  const whole = (f: unknown): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum);
+  const frames = listed.filter(whole);
+  const shownFrame = Number.isInteger(m.frame) ? Math.min(Math.max(0, m.frame as number), listed.length) : null;
+  const frame = shownFrame == null ? null : listed.slice(0, shownFrame).filter(whole).length;
   const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
   const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
     (x): x is Measure3D => isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
@@ -538,7 +541,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
     ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),
-    ...(Number.isInteger(m.frame) ? { frame: m.frame as number } : {}),
+    ...(frame != null ? { frame } : {}),
     ...(listOf(m.list) ? { list: listOf(m.list) } : {}),
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
