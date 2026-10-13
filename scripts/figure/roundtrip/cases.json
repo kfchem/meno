@@ -1,0 +1,28 @@
+{
+  "//": "Structures the round trip is checked on beside the layout benchmark's (scripts/layout/molecules.json, heldout.json): charges, isotopes, stereochemistry, radicals and metals, each a SMILES whose meaning is not in doubt.",
+  "molecules": [
+    { "name": "Glycine zwitterion", "category": "charges", "smiles": "[NH3+]CC(=O)[O-]" },
+    { "name": "Betaine", "category": "charges", "smiles": "C[N+](C)(C)CC(=O)[O-]" },
+    { "name": "Nitrobenzene", "category": "charges", "smiles": "[O-][N+](=O)c1ccccc1" },
+    { "name": "Pyridinium chloride", "category": "charges", "smiles": "c1cc[nH+]cc1.[Cl-]" },
+    { "name": "Sodium acetate", "category": "charges", "smiles": "CC(=O)[O-].[Na+]" },
+    { "name": "Tetramethylammonium bromide", "category": "charges", "smiles": "C[N+](C)(C)C.[Br-]" },
+    { "name": "Benzenediazonium", "category": "charges", "smiles": "N#[N+]c1ccccc1" },
+    { "name": "Phenyl azide", "category": "charges", "smiles": "[N-]=[N+]=Nc1ccccc1" },
+    { "name": "Methanol-d4", "category": "isotopes", "smiles": "[2H]C([2H])([2H])O[2H]" },
+    { "name": "Acetic acid-1-13C", "category": "isotopes", "smiles": "C[13C](=O)O" },
+    { "name": "Fludeoxyglucose (18F)", "category": "isotopes", "smiles": "OC[C@H]1OC(O)[C@H]([18F])[C@@H](O)[C@@H]1O" },
+    { "name": "(E)-But-2-ene", "category": "stereo", "smiles": "C/C=C/C" },
+    { "name": "(Z)-But-2-ene", "category": "stereo", "smiles": "C/C=C\\C" },
+    { "name": "(E)-Cinnamic acid", "category": "stereo", "smiles": "OC(=O)/C=C/c1ccccc1" },
+    { "name": "(Z)-Tamoxifen", "category": "stereo", "smiles": "CC/C(=C(\\c1ccccc1)/c1ccc(OCCN(C)C)cc1)/c1ccccc1" },
+    { "name": "meso-Tartaric acid", "category": "stereo", "smiles": "O[C@@H](C(=O)O)[C@H](O)C(=O)O" },
+    { "name": "L-Tartaric acid", "category": "stereo", "smiles": "O[C@H](C(=O)O)[C@@H](O)C(=O)O" },
+    { "name": "trans-1,2-Dimethylcyclohexane", "category": "stereo", "smiles": "C[C@@H]1CCCC[C@H]1C" },
+    { "name": "(R)-Ibuprofen", "category": "stereo", "smiles": "CC(C)Cc1ccc(cc1)[C@@H](C)C(=O)O" },
+    { "name": "TEMPO", "category": "radicals", "smiles": "CC1(C)CCCC(C)(C)N1[O]" },
+    { "name": "Cisplatin", "category": "metals", "smiles": "N[Pt](N)(Cl)Cl" },
+    { "name": "Potassium ferricyanide", "category": "metals", "smiles": "[K+].[K+].[K+].N#C[Fe-3](C#N)(C#N)(C#N)(C#N)C#N" },
+    { "name": "Chloro(triphenylphosphine)gold", "category": "metals", "smiles": "Cl[Au]P(c1ccccc1)(c1ccccc1)c1ccccc1" }
+  ]
+}
