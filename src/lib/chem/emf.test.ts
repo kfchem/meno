@@ -48,6 +48,15 @@ describe("layoutEmf", () => {
     expect(frame).toBe(Math.round((widthPt / 72) * 2540));
   });
 
+  it("says its reference device is 96 pixels to the inch, across and down, in millimetres as in micrometres", () => {
+    const v = new DataView(emf.buffer);
+    const [px, py, mmx, mmy, umx, umy] = [72, 76, 80, 84, 100, 104].map((at) => v.getInt32(at, true));
+    expect(px / (mmx / 25.4)).toBe(96);
+    expect(py / (mmy / 25.4)).toBe(96);
+    expect(px / (umx / 25_400)).toBe(96);
+    expect(py / (umy / 25_400)).toBe(96);
+  });
+
   it("carries what it is given in a comment, and draws lines, the wedge and the label", () => {
     expect(emfComments(emf).map((c) => new TextDecoder().decode(c))).toEqual(["MENO{}"]);
     expect(types).toContain(4); // polyline
