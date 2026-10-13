@@ -792,6 +792,13 @@ slowing it - and in the pictures made of it.
   notice in the corner (*Many atoms on the canvas*) with *Keep them*,
   which sets *Very large drawings* (Settings, every style) to *As set*
   for good. A picture made of it has its shade and shadows all the same.
+  Its balls are drawn with as many segments as their size on the screen
+  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
+  across, down to 8 under about 8 - within about 0.3 of a pixel of a
+  circle at each, so that the change is not seen; more at once as balls
+  grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
+  183 ms a frame with 32, and turns at 33 ms.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
