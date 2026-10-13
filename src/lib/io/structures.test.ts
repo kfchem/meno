@@ -249,6 +249,16 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
     expect(readStructures("mol", "e.mol", o("1.1900E+00    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0")).model.atoms).toHaveLength(2);
   });
 
+  it("reads an abbreviation naming an atom the file has not as the atoms it has, and a property line shorter than its count as far as it goes - rather than fail on either", () => {
+    // (read before, both failed with a TypeError)
+    const co = (...props: string[]) => ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000", atom(0, 0, "C"), atom(1.5, 0, "O"), "  1  2  1  0", ...props, "M  END"].join("\n") + "\n";
+    expect(readStructures("mol", "s.mol", co("M  STY  1   1 SUP", "M  SAL   1  2   2   5", "M  SMT   1 OMe")).model.atoms.map((a) => a.el)).toEqual(["C", "OMe"]);
+    const v3 = (sgroup: string) => v3000(["1 C 0 0 0 0", "2 O 1.5 0 0 0"], ["1 1 1 2"]).replace("M  V30 END CTAB", `M  V30 BEGIN SGROUP\nM  V30 ${sgroup}\nM  V30 END SGROUP\nM  V30 END CTAB`);
+    expect(readStructures("mol", "s.mol", v3("1 SUP 0 ATOMS=(2 2 5) XBONDS=(2 1 9) LABEL=OMe")).model.atoms.map((a) => a.el)).toEqual(["C", "OMe"]);
+    expect(readStructures("mol", "s.mol", co("M  STY  2   1 SUP   2")).model.atoms).toHaveLength(2);
+    expect(readStructures("mol", "s.mol", co("M  STY  1   1 SRU", "M  SCN  1   1")).model.atoms).toHaveLength(2);
+  });
+
   it("refuses a mass difference on an element whose table mass Meno does not hold - W, U - rather than drop it; its mass given itself is read", () => {
     // (read anyway, the tungsten and the uranium were of no isotope, saying nothing)
     const heavy = (el: string, iso: string[] = []) =>

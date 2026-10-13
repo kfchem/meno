@@ -69,6 +69,11 @@ not hold - Tc, Pr to Lu, Hf to Ir, and from Po on - unless an M  ISO line
 gives that atom's mass itself, which is read for any element
 (`CtMolecule.unread`).
 
+An Sgroup that names an atom or a bond its table has not - in V2000's
+SAL, SPA, SBL or SAP, or V3000's lists - keeps those it has, and a V2000
+property line that counts more entries than it holds is read for those it
+holds whole: the file is read (before, either failed as it was read).
+
 ## Drawing
 
 | What | How | Why |

@@ -190,6 +190,24 @@ describe("a V2000 molfile", () => {
     expect(mol.sgroups).toEqual([{ type: "SUP", index: 1, atoms: [2], bonds: [1], brackets: [], label: "Me" }]);
   });
 
+  it("keeps of an Sgroup only the atoms and bonds the table has, and of a line shorter than its count only the pairs it holds whole", () => {
+    const two = (...props: string[]) => readMolfile(["", "", "", counts(2, 1), atomLine(0, 0, "C"), atomLine(1, 0, "O"), bondLine(1, 2, 1), ...props, "M  END"].join("\n"))!;
+    const sup = two("M  STY  1   1 SUP", "M  SAL   1  2   2   5", "M  SBL   1  2   1   9", "M  SAP   1  2   2   1 Al   7   1 Br", "M  SMT   1 OMe").sgroups[0];
+    expect(sup).toMatchObject({ atoms: [1], bonds: [0], attachments: [{ atom: 1, leaving: 0, id: "Al" }] });
+    const mul = two("M  STY  1   1 MUL", "M  SAL   1  2   1   2", "M  SPA   1  2   1   3").sgroups[0];
+    expect(mul.patoms).toEqual([0]);
+    // (an old group abbreviation on an atom the table has not: none)
+    expect(two("G    5  1", "Me").sgroups).toEqual([]);
+    // (two Sgroups counted, one given; a connectivity counted, none given; a parent's pair half given)
+    expect(two("M  STY  2   1 SUP   2").sgroups.map((g) => [g.index, g.type])).toEqual([[1, "SUP"]]);
+    expect(two("M  STY  1   1 SRU", "M  SCN  1   1").sgroups.map((g) => [g.type, g.connect])).toEqual([["SRU", undefined]]);
+    const parents = two("M  STY  2   1 SRU   2 SRU", "M  SPL  2   2   1   3", "M  SDS EXP  2   1").sgroups;
+    expect(parents.map((g) => [g.index, g.parent, g.expanded])).toEqual([
+      [1, undefined, true],
+      [2, 1, undefined],
+    ]);
+  });
+
   it("reads a number only as the whole of its field - an E exponent's too - and marks a line that does not read damaged", () => {
     const two = (second: string, bond = bondLine(1, 2, 1)) => readMolfile(["", "", "", counts(2, 1), atomLine(0, 0, "C"), second, bond, "M  END"].join("\n"))!;
     expect(two("1.1900E+01  -2.5e-01    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0").atoms[1]).toMatchObject({ x: 11.9, y: -0.25 });

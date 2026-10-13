@@ -411,20 +411,20 @@ function bondV2000(line: string): { bond: CtBond | null; damaged?: string } {
   return { bond };
 }
 
-/** The pairs on a V2000 "nn8 aaa vvv ..." line, after its tag. */
+/** The pairs on a V2000 "nn8 aaa vvv ..." line, after its tag: as many as it counts, and holds whole. */
 function pairs(rest: string): [number, number][] {
   const t = rest.trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
   const out: [number, number][] = [];
-  for (let k = 0; k < t[0] && 2 + 2 * k <= t.length; k++) out.push([t[1 + 2 * k], t[2 + 2 * k]]);
+  for (let k = 0; k < t[0] && 2 + 2 * k < t.length; k++) out.push([t[1 + 2 * k], t[2 + 2 * k]]);
   return out;
 }
 
-/** The pairs on a V2000 "nn8 sss ttt ..." line whose second items are words. */
+/** The pairs on a V2000 "nn8 sss ttt ..." line whose second items are words: as many as it counts, and holds whole. */
 function wordPairs(rest: string): [number, string][] {
   const t = rest.trim().split(/\s+/);
   const out: [number, string][] = [];
   const n = Number.parseInt(t[0], 10);
-  for (let k = 0; k < n && 2 + 2 * k <= t.length; k++) out.push([Number.parseInt(t[1 + 2 * k], 10), t[2 + 2 * k]]);
+  for (let k = 0; k < n && 2 + 2 * k < t.length; k++) out.push([Number.parseInt(t[1 + 2 * k], 10), t[2 + 2 * k]]);
   return out;
 }
 
@@ -515,6 +515,8 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       const p = int(l.slice(6, 9)) - 1;
       const text = (ls[i + 1] ?? "").trim();
       i++;
+      // (an atom the table has not: no group)
+      if (!mol.atoms[a]) continue;
       const side = sideOf(mol, a, p);
       const bond = mol.bonds.findIndex((b) => (b.a1 === a && b.a2 === p) || (b.a1 === p && b.a2 === a));
       const n = Math.max(0, ...sgroups.keys(), ...mol.sgroups.map((g) => g.index)) + 1;
@@ -650,7 +652,7 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       case "SDS": {
         // "M  SDS EXPn15 sss ..."
         const t = l.slice(10).trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
-        for (let k = 0; k < t[0]; k++) sgroup(t[1 + k]).expanded = true;
+        for (let k = 0; k < t[0] && 1 + k < t.length; k++) sgroup(t[1 + k]).expanded = true;
         break;
       }
       case "SAL":
@@ -658,7 +660,9 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       case "SPA": {
         const t = rest.trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
         const g = sgroup(t[0]);
-        const items = t.slice(2, 2 + t[1]).map((v) => v - 1);
+        // (only those the table has: an atom or a bond past it is no part of the group)
+        const within = tag === "SBL" ? mol.bonds.length : mol.atoms.length;
+        const items = t.slice(2, 2 + t[1]).map((v) => v - 1).filter((v) => v >= 0 && v < within);
         if (tag === "SAL") g.atoms.push(...items);
         else if (tag === "SBL") g.bonds.push(...items);
         else g.patoms = [...(g.patoms ?? []), ...items];
@@ -734,10 +738,10 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
           const e = l.slice(13 + 11 * k, 24 + 11 * k);
           const atom = int(e.slice(1, 4)) - 1;
           const out = int(e.slice(5, 8));
-          if (atom < 0) continue;
+          if (atom < 0 || atom >= mol.atoms.length) continue;
           g.attachments = [
             ...(g.attachments ?? []),
-            { atom, leaving: out > 0 ? out - 1 : null, id: e.slice(9, 11).trim() },
+            { atom, leaving: out > 0 && out <= mol.atoms.length ? out - 1 : null, id: e.slice(9, 11).trim() },
           ];
         }
         break;
