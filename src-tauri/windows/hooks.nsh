@@ -29,6 +29,14 @@
   Delete "$INSTDIR\resources\plugins\gaussian-input\requirements.lock"
   Delete "$INSTDIR\resources\plugins\gaussian-input\worker.py"
   RMDir "$INSTDIR\resources\plugins\gaussian-input"
+  ; 0.1.12: the Python console's worker and Meno's own Python locks, no
+  ; longer carried (docs/ARCHITECTURE.md): their folders go once empty.
+  Delete "$INSTDIR\resources\workers\interactive_worker.py"
+  RMDir "$INSTDIR\resources\workers"
+  Delete "$INSTDIR\resources\py\requirements.lock"
+  Delete "$INSTDIR\resources\py\requirements.console.lock"
+  Delete "$INSTDIR\resources\py\requirements.node.lock"
+  RMDir "$INSTDIR\resources\py"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
