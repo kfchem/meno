@@ -124,6 +124,44 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       expect(kept(typed), typed).toBe(label);
   });
 
+  it("keeps HN typed before a group as NH and the group, whatever its name starts with (rule 3)", () => {
+    for (const [typed, label] of [
+      ["HNtBu", "NHtBu"], ["hntbu", "NHtBu"], ["nhtbu", "NHtBu"], ["HNt-Bu", "NHt-Bu"], ["HNnBu", "NHnBu"], ["HNn-Pr", "NHn-Pr"],
+      ["HNs-Bu", "NHs-Bu"], ["HNsec-Bu", "NHsec-Bu"], ["HNp-Ts", "NHp-Ts"], ["HNp-Tol", "NHp-Tol"], ["HNallyl", "NHallyl"],
+      ["HNvinyl", "NHvinyl"], ["HN2-Naph", "NH2-Naph"], ["HN2-ClTrt", "NH2-ClTrt"],
+      // (sBu, the letters typed: not S and Bu)
+      ["HNsBu", "NHsBu"], ["hnsbu", "NHsBu"], ["nhsbu", "NHsBu"],
+      // (N and iPr, not a complex of nickel: a label stands for part of a structure)
+      ["HNiPr", "NHiPr"], ["hnipr", "NHiPr"],
+    ]) {
+      expect(kept(typed), typed).toBe(label);
+      expect(live(typed).toLowerCase(), typed).toBe(typed.toLowerCase());
+    }
+    expect(live("hntbu")).toBe("HNtBu");
+  });
+
+  it("keeps HN typed before a group however its letters are read into names: HNMOM, though NMO is a reagent", () => {
+    for (const typed of ["HNMOM", "hnmom", "nhmom", "MOMHN"]) expect(kept(typed), typed).toBe("NHMOM");
+    for (const typed of ["HNMPM", "hnmpm"]) expect(kept(typed), typed).toBe("NHMPM");
+    expect(live("hnmom")).toBe("HNMOM");
+  });
+
+  it("reads a heteroatom with a condensed group, as drawn on a bond's left, before an element: h3cs is SCH3, not caesium", () => {
+    for (const typed of ["h3cs", "H3CS", "SCH3"]) expect(kept(typed), typed).toBe("SCH3");
+    expect(live("h3cs")).toBe("H3CS");
+    // (caesium, typed as its symbol is written)
+    expect(kept("CsH3")).toBe("CsH3");
+  });
+
+  it("keeps a molecule as it is written where only a reading with no group turns it round: hsiet3 is HSiEt3", () => {
+    for (const [typed, label] of [
+      ["hsiet3", "HSiEt3"], ["HSiEt3", "HSiEt3"], ["hsime3", "HSiMe3"], ["hsicl3", "HSiCl3"], ["hsiph3", "HSiPh3"],
+    ]) {
+      expect(kept(typed), typed).toBe(label);
+      expect(live(typed), typed).toBe(label);
+    }
+  });
+
   it("keeps a charge typed last where it was, turned round or not", () => {
     for (const typed of ["ho-", "HO-", "oh-", "OH-"]) {
       expect(kept(typed), typed).toBe("OH-");

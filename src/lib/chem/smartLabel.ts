@@ -117,19 +117,41 @@ const CHARGE = /[+\u2212-]+$/;
 
 /**
  * A label typed as it is drawn on a bond's left, or with HN before a group,
- * as it reads from the bond - those that read as part of a structure, from
- * letters each in a word (`whole` false).
+ * as it reads from the bond: turned round where every unit of it is a word
+ * (`inWords`), or with its H after the atom it was typed before.
  */
-function forwards(label: string): string[] {
+function forwards(label: string, reads: Reads): string[] {
   // (a charge typed last stays last: HO- is OH-, H3N+ NH3+)
   const sign = CHARGE.exec(label);
-  if (sign && sign.index > 0) return forwards(label.slice(0, sign.index)).map((f) => f + sign[0]);
+  if (sign && sign.index > 0) return forwards(label.slice(0, sign.index), reads).map((f) => f + sign[0]);
   const out: string[] = [];
   const back = reversedLabel(label);
-  if (back !== label) out.push(back);
-  // (HN typed before a group: NH)
-  const hn = /^H(\d*)([A-Z][a-z]?)(?=[A-Z(]|$)/.exec(label);
-  if (hn && hn[2] !== "H") out.push(`${hn[2]}H${hn[1]}${label.slice(hn[0].length)}`);
+  if (back !== label && inWords(label, reads)) out.push(back);
+  out.push(...hFirst(label, reads).map((h) => h.text));
+  return out;
+}
+
+/**
+ * H typed before an atom - and before a group, if anything follows it - as
+ * it reads from the bond: HN is NH, H2N NH2, HNFmoc NHFmoc. The atom's
+ * symbol is of one letter or of two, and the group's name as it is
+ * written, a small letter or a digit first or not - HNtBu is NHtBu, HNiPr
+ * NHiPr, HN2-Naph NH2-Naph, HNMOM NHMOM (though NMO is a reagent's name) -
+ * but what follows the atom must read: HSIEt3 is no SHIEt3, IEt3 reading
+ * as nothing.
+ */
+function hFirst(label: string, reads: Reads): { text: string; atom: string; group: Reading }[] {
+  const h = /^H(\d*)/.exec(label);
+  if (!h) return [];
+  const out: { text: string; atom: string; group: Reading }[] = [];
+  for (const length of [1, 2]) {
+    const atom = label.slice(h[0].length, h[0].length + length);
+    if (atom.length !== length || !/^[A-Z][a-z]?$/.test(atom) || atom === "H") continue;
+    const rest = label.slice(h[0].length + length);
+    const group = rest ? reads(rest) : null;
+    if (rest && !group) continue;
+    out.push({ text: `${atom}H${h[1]}${rest}`, atom, group });
+  }
   return out;
 }
 
@@ -137,13 +159,37 @@ function forwards(label: string): string[] {
 const HETEROATOM = /^(N|O|P|S|Se)$/;
 
 /**
+ * H typed before a heteroatom and a group, as it reads from the bond, where
+ * that is part of a structure - a charge typed last kept last: HNiPr is
+ * NHiPr. Read so even where the letters as they are written read as a
+ * whole molecule (HNiPr is a complex of nickel too): a label stands for
+ * part of a structure.
+ */
+function heteroatomFirst(label: string, reads: Reads): string[] {
+  const sign = CHARGE.exec(label);
+  const charge = sign && sign.index > 0 ? sign[0] : "";
+  return hFirst(label.slice(0, label.length - charge.length), reads)
+    .filter((h) => h.group && !h.group.whole && HETEROATOM.test(h.atom))
+    .map((h) => h.text + charge)
+    .filter((f) => {
+      const r = reads(f);
+      return !!r && !r.whole;
+    });
+}
+
+/**
  * Whether a label kept is a heteroatom with its H, or with one group behind
- * it - OH, NH2, SMe, OAc, NHBoc - its charge, if it has one, aside.
+ * it - OH, NH2, SMe, OAc, NHBoc - its charge, if it has one, aside. A
+ * condensed group, a carbon and what is on it, is one group: SCH3, OCH2CH3.
  */
 function onHeteroatom(kept: string, reads: Reads): boolean {
   const [first, ...rest] = labelUnits(kept.replace(CHARGE, ""));
   if (!first || !HETEROATOM.test(first)) return false;
   const after = rest[0] && /^H\d*$/.test(rest[0]) ? rest.slice(1) : rest;
+  if (after.length > 1 && /^C\d*$/.test(after[0])) {
+    const condensed = reads(after.join(""));
+    return !!condensed && !condensed.whole;
+  }
   if (after.length !== 1) return after.length === 0 && rest.length > 0;
   const group = reads(after[0].replace(/\d+$/, ""));
   return !!group && !group.whole && !group.element;
@@ -185,7 +231,8 @@ function before(a: readonly number[], b: readonly number[]): boolean {
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
   const own = reads(typed);
-  if (own) return { shown: typed, kept: typed };
+  // (what reads as it is typed is that - a whole molecule but for HN before a group: HNiPr is NHiPr)
+  if (own) return { shown: typed, kept: (own.whole && heteroatomFirst(typed, reads)[0]) || typed };
   let best: { shown: string; kept: string; rank: number[] } | null = null;
   const consider = (shown: string, kept: string, r: Reading, w: Writing) => {
     if (!r || !allowed(typed, kept, r)) return;
@@ -204,12 +251,15 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
     }
     // (as drawn on a bond's left - HO, AcO as typed, or aco - only what reads
     // as nothing as it is written, from letters each in a word: hcl is HCl)
-    if (!r && w.loose === 0 && inWords(w.text, reads))
-      for (const f of forwards(w.text)) {
+    if (!r && w.loose === 0)
+      for (const f of forwards(w.text, reads)) {
         // (a group, drawn the other way round: never a whole molecule)
         const back = reads(f);
         if (back && !back.whole) consider(w.text, f, back, w);
       }
+    // (a whole molecule as it is written, but for HN before a group: hnipr is NHiPr)
+    else if (r?.whole && w.loose === 0)
+      for (const f of heteroatomFirst(w.text, reads)) consider(w.text, f, reads(f), w);
   }
   return best ?? { shown: typed, kept: typed };
 }
