@@ -44,13 +44,16 @@ export default function Deck({
         const active = activeId === id;
         const entry = resolveView(t.content.kind) as ViewEntry;
         return (
+          // (each tab opaque, the window's own white: a view see-through in
+          // part - Settings' tint - showed the tab beneath through it, a
+          // structure among the settings, and that tab then went at once)
           <div
             key={id}
             className={
               active
-                ? "absolute inset-0 flex z-10 meno-fade-in"
+                ? "absolute inset-0 flex z-10 bg-white meno-fade-in"
                 : id === beneath
-                  ? "absolute inset-0 flex z-0"
+                  ? "absolute inset-0 flex z-0 bg-white"
                   : "absolute inset-0 hidden"
             }
           >
