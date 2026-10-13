@@ -474,7 +474,8 @@ Apache-2.0 app:
   ICU's notice, for build scripts (Autoconf's) that are not part of it,
   under Autoconf's exception.
 - **What Meno must do**:
-  - ship every one of these licences, in `resources/licenses/pdfium/`;
+  - ship every one of these licences, in `src-tauri/resources/licenses/`
+    (`PDFium-*.txt`, and pdfium-render's in `pdfium-render-MIT.txt`);
   - credit them in the README;
   - and, as two of them ask of a program shipped without its source,
     say in its documentation that it is "based in part on the work of
@@ -499,12 +500,14 @@ A PDF is a file from anywhere, and is treated as such.
 ### Platforms
 
 - **The same PDFium on every system**: the library for macOS (Apple
-  silicon), Windows (x64) and Linux (x64), from the same release.
+  silicon) and Windows (x64), from the same release; Linux's (x64) is
+  pinned and fetched by the same script, for a Linux build Meno does not
+  make yet.
 - **Carried in the app**:
   - on a Mac, inside the app, signed with it;
   - on Windows, beside Meno's program, with a line in the installer's
     hook for when it is renamed or goes (RELEASING.md);
-  - on Linux, beside it as well.
+  - on Linux, nowhere yet: there is no Linux build.
 
 - **On a Mac, signed as Meno is - ad hoc, with the hardened runtime -
   the app cannot load PDFium's library**: macOS's library validation
