@@ -51,4 +51,38 @@ describe("a PDF page's figures", () => {
     expect(figures).toEqual([[91, 300, 180, 328]]);
     expect(figuresOf([rule, frame])).toEqual([]);
   });
+
+  it("take a reaction scheme whole: its arrow joins the compounds beyond its ends, a + joins those beside it, and its conditions and numbers are its", () => {
+    // (two compounds and a "+", an arrow 20 points on - its line straight and long, its head - and a product 20 points beyond)
+    const plus: PageObject = { kind: "plus", box: [192, 305, 199, 312] };
+    const arrow = [path([268, 308, 330, 309]), path([328, 305, 336, 312])];
+    const conditions = [text([280, 290, 325, 298]), text([276, 279, 330, 287]), text([284, 312, 322, 320])];
+    const numbers = [text([125, 330, 131, 338]), text([215, 330, 221, 338]), text([380, 330, 386, 338])];
+    const figures = figuresOf([...structureAt(100, 300), plus, ...structureAt(210, 300), ...arrow, ...structureAt(356, 300), ...conditions, ...numbers]);
+    expect(figures).toHaveLength(1);
+    const [x0, y0, x1, y1] = figures[0];
+    expect(x0).toBeLessThanOrEqual(91);
+    expect(x1).toBeGreaterThanOrEqual(436);
+    // (both lines of the conditions over the arrow, the line under it, and the numbers under the compounds)
+    expect(y0).toBeLessThanOrEqual(279);
+    expect(y1).toBeGreaterThanOrEqual(338);
+  });
+
+  it("join no compounds without an arrow or a + between them: not by a small word, nor by a chain drawn flat", () => {
+    // (a small word between two compounds - an atom's label, a number - is no "+")
+    const word = text([192, 305, 199, 312]);
+    expect(figuresOf([...structureAt(100, 300), word, ...structureAt(210, 300)])).toHaveLength(2);
+    // (a chain drawn flat is long and thin, but its bonds slant: no arrow's straight line)
+    const chain = [0, 1, 2, 3, 4].map((i) => path([100 + i * 12, 300 + (i % 2) * 7, 112 + i * 12, 307 + (i % 2) * 7]));
+    expect(figuresOf([...chain, ...structureAt(185, 300)])).toHaveLength(2);
+  });
+
+  it("take no column's line of words beside a scheme across two columns, however close", () => {
+    const arrow = [path([150, 308, 212, 309]), path([210, 305, 218, 312])];
+    const lines = [text([50, 291, 290, 299]), text([305, 291, 545, 299])];
+    const figures = figuresOf([...structureAt(60, 300), ...arrow, ...structureAt(238, 300), ...lines, text([0, 0, 595, 10])]);
+    expect(figures).toHaveLength(1);
+    expect(figures[0][1]).toBe(300);
+  });
 });
+

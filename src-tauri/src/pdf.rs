@@ -309,13 +309,15 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
         }
         // what the page is made of, each thing where it lies - 20 bytes each:
         // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 5 a form
-        // holding more), and its box, as a letter's is (`text`)
+        // holding more, 6 text that is a "+" alone, as a scheme sets one
+        // between its compounds), and its box, as a letter's is (`text`)
         "objects" => {
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let mut bytes = Vec::new();
             for obj in page.objects().iter() {
                 let kind: u32 = match obj.object_type() {
+                    PdfPageObjectType::Text if obj.as_text_object().map(|t| t.text().trim() == "+").unwrap_or(false) => 6,
                     PdfPageObjectType::Text => 1,
                     PdfPageObjectType::Path => 2,
                     PdfPageObjectType::Image => 3,
@@ -804,6 +806,35 @@ mod tests {
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
         assert_eq!(head["paths"].as_array().unwrap().len(), 1);
         assert_eq!(head["letters"].as_array().unwrap().len(), 0);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_lone_plus_is_told_from_other_words() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-plus-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "f".repeat(64);
+        // (words with a + among them, and a + set alone, as a scheme sets one between its compounds)
+        let page = "BT /F1 10 Tf 100 700 Td (A + B) Tj ET BT /F1 12 Tf 200 700 Td (+) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let kinds: Vec<u32> = (0..n).map(|i| u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).collect();
+        assert_eq!(kinds, vec![1, 6]);
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }
