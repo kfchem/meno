@@ -1138,7 +1138,11 @@ path it is given:
   where `installed_program` finds it, or Meno's own copy of a program the
   plugin fetched (`downloads[].provides`: Blender; PLUGINS.md, *A program
   Meno fetches*); and, where it is Python, with the rules of
-  `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder; it is given its
+  `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
+  installed separately, and each program beside it, is given as arguments
+  only the files written for its job (or one by its name without its
+  extension, as orca_2mkl takes `input`), options (`-nt`) and numbers
+  (`names_only_written`). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it. Its files are
@@ -1146,9 +1150,17 @@ path it is given:
   most. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be
   `<app data>/jobs/<id>`, links resolved (`runner_folder`), and what it is
-  to run - the program, the programs after it, their environment - what
-  `job_start` would give (`spec_allowed`). Otherwise it writes a Failed
-  record into the folder, saying why, and runs nothing.
+  to run - the program, the programs after it, their arguments against
+  the files in its work folder, their environment - what `job_start`
+  would give (`spec_allowed`). Otherwise it writes a Failed record into
+  the folder, saying why, and runs nothing.
+- A known boundary: the text of a job's input files is not checked on the
+  Rust side. What a plugin writes into a program's input is checked by
+  the plugin's worker (PLUGINS.md: a text option names no program and no
+  file), and `job_start` writes the files as the page gives them. A page
+  that ran script of its own could give ORCA an input that names another
+  program (`%method ProgExt`). The webview's content security policy runs
+  no script but Meno's own; the input texts are not checked again in Rust.
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.

@@ -184,7 +184,10 @@ program and no file, by its program's own reference, and refuses one
 that would (2026-10-13). Gaussian's route section takes no External,
 however shortened, and no `@`, `%`, `#`, `!` or double quotes; ORCA's
 simple input line takes no `%` or `#`, the manual naming a file or a
-program only in a block, in quotes.
+program only in a block, in quotes. These input texts are checked by the
+plugins' workers alone (ARCHITECTURE.md, the known boundary under the
+jobs' rules); what Meno checks itself is which program runs, and that a
+program installed separately is given no file but its job's.
 
 A step's `files` (built 2026-10-11, NCI.md): `{"kinds": ["nci"],
 "programs": ["multiwfn"], "files": ["molden", "gaussian-fchk", "wfn",
