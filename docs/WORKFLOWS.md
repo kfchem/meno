@@ -239,7 +239,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set. Entries of different charge or spin are never alike |
-| Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound |
+| Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
 
@@ -1167,7 +1167,14 @@ Then, of the leftovers the maintainer chose:
   plugin and given back as the output form's `populations`, which a
   conformer set takes as its molecule's shares - what its chip shows -
   in place of Boltzmann's at room temperature from the energies alone.
-  CREST counts a conformer's rotamers in, which Meno cannot.
+- **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
+  number of its rotamers alike, from the same table (`degen`), given back
+  as the output form's `degeneracies` and kept with the molecule
+  (`degeneracies`). Meno's own Boltzmann weights - a *Populations* step's,
+  and the chip's at room temperature where no step found any - count each
+  conformer that many times, as CREST's do: n-butane by GFN-FF, its
+  gauche form found twice alike, is 52% anti and 48% gauche either way,
+  not 68% and 32% as counting each once would give.
 
 Not backward compatible: a workspace or procedure saved with a *3D
 structure* step opens without that step (no shim before 1.0).

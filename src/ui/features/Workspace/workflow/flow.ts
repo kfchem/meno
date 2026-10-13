@@ -103,7 +103,7 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
     // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
     h = hash(m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"), h);
     h = hash(`${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`, h);
-    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}`, h);
+    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`, h);
   }
   h = hash(input.structures.map((s) => s.join(",")).join(";"), h);
   return h.toString(36);
