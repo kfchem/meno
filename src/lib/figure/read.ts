@@ -739,6 +739,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a label with its hydrogens written - NH2, OH, SH - takes no more bonds than they leave it, and an O alone two, a double
   // bond's counted twice: the ends that come nearest its element, a stray one - a methyl's set close - a carbon of its own.
   // An NH's bonds are counted as one each: a ring's, its charge drawn by it, may be double)
+  const overFull = new Set<number>();
   words.forEach((w, k) => {
     const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w));
     if (!m || !(m[2] in BONDS_LEFT)) return;
@@ -752,9 +753,16 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const el = w.letters.find((l) => l.c === m[2][0]);
     const to = (e: End) => (el ? dist(centre(el.box), e.p) : fromBox(e.p, w.box));
     let left = room;
+    let kept = 0;
     for (const e of [...at].sort((p, q) => to(p) - to(q))) {
-      if (order(e) <= left) left -= order(e);
-      else wordOf.delete(e);
+      if (order(e) <= left) {
+        left -= order(e);
+        kept = to(e);
+      } else {
+        wordOf.delete(e);
+        // (one let go as near as those kept, all but: which is the label's is a guess, said)
+        if (to(e) < 1.2 * kept) overFull.add(k);
+      }
     }
   });
   // (a lone H takes one bond: a wedge's or a hash's first, else the nearest)
@@ -775,7 +783,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (k != null) {
       if (!atomOfWord.has(k)) {
         atomOfWord.set(k, atoms.length);
-        atoms.push({ x: 0, y: 0, ...labelOf(words[k]), box: words[k].box });
+        const read = labelOf(words[k]);
+        const said = overFull.has(k) ? ["More bonds come to it than it takes: those nearest its letter kept."] : [];
+        atoms.push({ x: 0, y: 0, ...read, ...(said.length || read.unsure ? { unsure: [...(read.unsure ?? []), ...said] } : {}), box: words[k].box });
       }
       atomOfEnd.set(e, atomOfWord.get(k)!);
     }

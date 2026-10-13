@@ -1115,6 +1115,10 @@ workspace holds.
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
   - a bond drawn twice over;
+  - an O alone, or a label with its hydrogens written, with more bonds
+    coming to it than it takes, where one let go was all but as near as
+    those kept ("More bonds come to it than it takes: those nearest its
+    letter kept.");
   - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -

@@ -848,6 +848,18 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const o = r.atoms.findIndex((a) => a.label === "O");
     expect(r.bonds.filter((b) => b.a === o || b.b === o).map((b) => b.order)).toEqual([2]);
     expect(r.atoms).toHaveLength(11);
+    // (the methyl's end plainly further off than the C=O's: no guess, nothing said)
+    expect(r.atoms[o].unsure).toBeUndefined();
+  });
+
+  it("says so where an O alone has more bonds coming to it than it takes, one let go all but as near as those kept", () => {
+    // (three bonds' ends a little off an O, from three sides, near as far from it as each other - azithromycin's ring O and a
+    // methyl's hash in RDKit's ACS 1996 mode)
+    const o: P = [60, 60];
+    const ends = [90, 210, 330].map((deg, i) => step(o, deg, 0.42 + 0.02 * i));
+    const s = readFigure(figure(ends.map((e, i) => stroke(step(e, [90, 210, 330][i]), e)), word("O", o)));
+    const at = s.atoms.findIndex((a) => a.label === "O");
+    expect(s.atoms[at].unsure).toEqual(["More bonds come to it than it takes: those nearest its letter kept."]);
   });
 
   it("reads two H's drawn over each other, not on one line, as two labels: each its own atom's", () => {
