@@ -164,7 +164,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!outcome) return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     // (what came in changed meanwhile - an edit, an undo, its set deleted: results of what came in before are none of its own - it says so, and runs again when asked)
     if (inputKey(now, still, "meno") !== key) return void fail(id, "What came into it changed while it ran", at, key);
-    doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
+    // (how long it took said first, as a program's step says it: it may take seconds)
+    const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
+    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
   }
 
   /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */

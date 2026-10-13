@@ -32,7 +32,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
     case "energy-window":
       return energyWindow(entries, Number(options.window));
     case "duplicates":
-      return drain(duplicates(entries, holds, Number(options.rmsd), Infinity));
+      return drain(duplicates(entries, holds, Number(options.rmsd), never));
     case "populations":
       return populations(entries, Number(options.temperature));
     case "choose":
@@ -42,8 +42,13 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
   }
 }
 
-/** How a step done in turns goes: told how many entries it has been through after each (`onDone`), its turns let go between (`pause`), each `budget` work, and given up where it is `stopped`. */
-export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<void>; budget?: number; stopped?: () => boolean };
+/**
+ * How a step done in turns goes: each turn as long as `slice` by the clock
+ * `now` (milliseconds), the turns let go between (`pause`), told how many
+ * entries it has been through at most every `tell` (`onDone`), and given
+ * up where it is `stopped`.
+ */
+export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<void>; slice?: number; tell?: number; now?: () => number; stopped?: () => boolean };
 
 /**
  * `runMeno`, Duplicates done in turns that let the page go on between them
@@ -55,21 +60,44 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
 export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
-  const turns = duplicates(entries, holds, Number(options.rmsd), how.budget ?? TURN_WORK);
+  const now = how.now ?? (() => performance.now());
+  const slice = how.slice ?? TURN_MS;
+  let began = now();
+  let told = began;
+  const turns = duplicates(entries, holds, Number(options.rmsd), () => now() - began >= slice);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
-    how.onDone?.(turn.value);
+    // (said at most so often: each saying draws the card again)
+    if (now() - told >= (how.tell ?? TELL_MS)) {
+      how.onDone?.(turn.value);
+      told = now();
+    }
     await (how.pause ?? nextTurn)();
     if (how.stopped?.()) return null;
+    began = now();
   }
 }
 
-/** How much Duplicates does in a turn before it lets the page go on: an entry, and a bound worked out, a unit each; a fit, twenty. */
-export const TURN_WORK = 20_000;
+/** How long a turn of Duplicates' is before it lets the page go on, and how often at most it says how far it is, in milliseconds. */
+export const TURN_MS = 11;
+export const TELL_MS = 100;
 
-/** The next turn of the page's: what waits to be drawn, or pointed at, done first. */
-const nextTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/**
+ * The next turn of the page's - what waits to be drawn, or pointed at,
+ * done first - by a message posted to itself: a timer of nought, set again
+ * and again, is held to four milliseconds at the least, and the turns cost
+ * more than the work.
+ */
+const nextTurn = () =>
+  new Promise<void>((resolve) => {
+    const { port1, port2 } = new MessageChannel();
+    port1.onmessage = () => {
+      port1.close();
+      resolve();
+    };
+    port2.postMessage(null);
+  });
 
 /** What work done in turns comes to, done all at once. */
 function drain<T>(turns: Generator<number, T>): T {
@@ -138,7 +166,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * with those of the same atoms in the same order - a structure there
  * twice is the same structure, not two compounds.
  */
-function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, budget: number): Generator<number, Outcome> {
+function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, due: () => boolean): Generator<number, Outcome> {
   const groups =
     holds === "conformers"
       ? byCompound(entries)
@@ -147,7 +175,7 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number,
   const keptSet = new Set<SetEntry>();
   let before = 0;
   for (const g of groups) {
-    const turns = keptApartInTurns(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most, rmsd, budget);
+    const turns = keptApartInTurns(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most, rmsd, due);
     for (;;) {
       const turn = turns.next();
       if (turn.done) {
@@ -177,11 +205,14 @@ const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
  * conformers took minutes. `measure` is the RMSD (counted, in a test).
  */
 export function keptApart(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number = rmsd): SetEntry[] {
-  return drain(keptApartInTurns(order, most, measure, Infinity));
+  return drain(keptApartInTurns(order, most, measure, never));
 }
 
-/** `keptApart`, in turns of `budget` work (`TURN_WORK`): after each, how many of `order` it has been through. */
-function* keptApartInTurns(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number, budget: number): Generator<number, SetEntry[]> {
+/** A turn that is never over: work done at once. */
+const never = () => false;
+
+/** `keptApart`, in turns, each over once it is `due`: after each, how many of `order` it has been through. */
+function* keptApartInTurns(order: readonly SetEntry[], most: number, measure: (p: readonly number[], q: readonly number[]) => number, due: () => boolean): Generator<number, SetEntry[]> {
   // (bounds worked out in floating point, given a hair's room: one alike by a hair is never passed over)
   const reach = most + 1e-9;
   const kept: { e: SetEntry; radii: Float64Array; rg: number }[] = [];
@@ -197,20 +228,13 @@ function* keptApartInTurns(order: readonly SetEntry[], most: number, measure: (p
     }
     return lo;
   };
-  let work = 0;
   for (const [done, e] of order.entries()) {
-    if (work >= budget) {
-      yield done;
-      work = 0;
-    }
-    work++;
+    if (done > 0 && due()) yield done;
     const shape = shapeOf(e.xyz);
     let alike = false;
     for (let j = from(shape.rg - reach); j < kept.length && kept[j].rg <= shape.rg + reach && !alike; j++) {
       const k = kept[j];
-      work++;
       if (apartAtLeast(k.radii, shape.radii) > reach) continue;
-      work += 20;
       alike = measure(k.e.xyz, e.xyz) <= most;
     }
     if (alike) continue;

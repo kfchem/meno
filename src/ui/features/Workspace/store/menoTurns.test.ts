@@ -4,7 +4,29 @@
  * works; its results go in at the end as one edit; Run pressed again
  * meanwhile starts nothing more.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/** Its turns, as the test has them: one an entry, each waiting to be let go where the gate is shut. */
+const gate = { shut: false, waiting: [] as (() => void)[] };
+vi.mock("../workflow/meno", async (actual) => {
+  const meno = await actual<typeof import("../workflow/meno")>();
+  return {
+    ...meno,
+    runMenoInTurns: (...args: Parameters<typeof meno.runMenoInTurns>) =>
+      meno.runMenoInTurns(args[0], args[1], args[2], args[3], args[4], {
+        ...args[5],
+        slice: 0,
+        tell: 0,
+        pause: () => (gate.shut ? new Promise<void>((go) => gate.waiting.push(go)) : Promise.resolve()),
+      }),
+  };
+});
+
+/** The gate opened, and the turns waiting let go. */
+function open() {
+  gate.shut = false;
+  for (const go of gate.waiting.splice(0)) go();
+}
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import type { Molecule3D } from "./types";
@@ -52,11 +74,20 @@ const many = (): Omit<Molecule3D, "id"> => {
 };
 
 describe("Meno's Duplicates, run from the page", () => {
+  beforeEach(() => {
+    gate.shut = false;
+    gate.waiting.length = 0;
+  });
+
   it("is stopped from its menu at its next turn: nothing put in, and its card says it was stopped", async () => {
     const { st, step, doc } = page(many());
+    gate.shut = true;
     const ran = st().runStep(step);
-    await vi.waitFor(() => expect(st().menoWorking[step]?.done).toBeGreaterThan(0));
+    // (held at a turn, part of the way through)
+    await vi.waitFor(() => expect(gate.waiting).toHaveLength(1));
+    expect(st().menoWorking[step]?.done).toBeGreaterThan(0);
     st().stopStep(step);
+    open();
     await ran;
     expect(st().menoWorking[step]).toBeUndefined();
     const after = st().steps.find((s) => s.id === step)!;
@@ -67,10 +98,14 @@ describe("Meno's Duplicates, run from the page", () => {
 
   it("puts in nothing of what came in before, where that changed while it worked - it says so, and is changed", async () => {
     const { st, step, doc } = page(many());
+    gate.shut = true;
     const ran = st().runStep(step);
-    await vi.waitFor(() => expect(st().menoWorking[step]?.done).toBeGreaterThan(0));
+    // (held at a turn, part of the way through)
+    await vi.waitFor(() => expect(gate.waiting).toHaveLength(1));
+    expect(st().menoWorking[step]?.done).toBeGreaterThan(0);
     // (the molecule moved out of its set meanwhile)
     doc.edit("move", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m) => ({ ...m, at: { x: 50, y: 50 } })) }));
+    open();
     await ran;
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: false, said: "What came into it changed while it ran" });
@@ -80,9 +115,13 @@ describe("Meno's Duplicates, run from the page", () => {
 
   it("puts in nothing where it was deleted while it worked", async () => {
     const { st, step } = page(many());
+    gate.shut = true;
     const ran = st().runStep(step);
-    await vi.waitFor(() => expect(st().menoWorking[step]?.done).toBeGreaterThan(0));
+    // (held at a turn, part of the way through)
+    await vi.waitFor(() => expect(gate.waiting).toHaveLength(1));
+    expect(st().menoWorking[step]?.done).toBeGreaterThan(0);
     st().removeStep(step);
+    open();
     await ran;
     expect(st().steps.some((s) => s.id === step)).toBe(false);
     expect(st().sets).toHaveLength(1);
@@ -92,13 +131,14 @@ describe("Meno's Duplicates, run from the page", () => {
   it("says it is running while it works, and puts its results in at the end, as one edit", async () => {
     const { doc, st, step } = page(waters());
     const ran = st().runStep(step);
-    // (working: its card running, none of its entries through yet)
-    expect(st().menoWorking[step]).toMatchObject({ done: 0, total: 3 });
+    // (working: its card running, not all of its entries through yet)
+    expect(st().menoWorking[step]).toMatchObject({ total: 3 });
+    expect(st().menoWorking[step]!.done).toBeLessThan(3);
     void st().runStep(step);
     await ran;
     expect(st().menoWorking[step]).toBeUndefined();
     const after = st().steps.find((s) => s.id === step)!;
-    expect(after.ran).toMatchObject({ ok: true, said: "2 of 3 kept" });
+    expect(after.ran).toMatchObject({ ok: true, said: "0:00 \u00b7 2 of 3 kept" });
     expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(1);
     expect(doc.history().undoLabel).toBe("run");
   });
