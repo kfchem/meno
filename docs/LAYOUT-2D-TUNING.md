@@ -269,6 +269,16 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     out, the first being bonded to it). Through two benzene rings off a
     hub, a benzene came down on the hub's atom the run ends at. The run is
     now kept off both ends and looked for from each, the better kept.
+- **A core's view chosen by the system alone** (2026-10-14). Ibogaine's
+  isoquinuclidine was seen from the side its ring system alone read best
+  from, which stood the indole on top of the cage, the drawing twice as
+  tall as wide (18.2); from its next side the whole reads 9.3, the indole
+  beside it as it is usually drawn. A cage core's other views are now
+  tried with what hangs from it, as a lone cage's are, and taken where
+  the whole reads clearly better. Nothing else on either list changes.
+  (A crossing in perspective costing a little was tried first: every
+  cage has its back bond crossing, so it moved every score and no
+  drawing. The back bond's gap reads well, L12 found.)
 - **An H no small move clears** (2026-10-14). Three drawings read worse
   to the eye than their score said: vinblastine's indole NH had its H on
   the other half's benzene ring, forskolin's C9 OH sat under its C10

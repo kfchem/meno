@@ -790,6 +790,14 @@ describe("a ring system drawn as a solid", () => {
     };
   };
 
+  it("draws ibogaine's isoquinuclidine from the side that leaves its indole room, the whole lying wide", () => {
+    // (chosen by the system alone, its cage was seen from a side that stood
+    // the indole on top of it, the drawing twice as tall as wide)
+    const g = fromSmiles("CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC");
+    const { x, y } = layout2D(g);
+    expect((Math.max(...y) - Math.min(...y)) / (Math.max(...x) - Math.min(...x))).toBeLessThan(1);
+  }, 30_000);
+
   it("shows the centres of a ring bridged across another by its shape, with no wedge: gelsemine's, ibogaine's", () => {
     // (all but one at most, each read for sure by its bonds as drawn; with
     // wedges wherever no chair or boat showed them, gelsemine had seven)

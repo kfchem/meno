@@ -950,11 +950,19 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
     return o && shows(o) ? { other: o } : {};
   };
   const ties = tried.filter((t) => t.v !== seen && Math.abs(t.by - rankedBy) < 1e-6);
+  // (and each of its other best few views, as a cage's are, its best way
+  // with the rings fused onto it: taken where the whole drawing reads
+  // clearly better - ibogaine's isoquinuclidine, from the side that leaves
+  // its indole and ethyl room, not the one its system alone reads best from)
+  const others = [...new Set(tried.map((t) => t.v))]
+    .filter((v) => v !== seen && !ties.some((t) => t.v === v))
+    .map((v) => tried.filter((t) => t.v === v).reduce((p, q) => (q.by < p.by ? q : p)));
   const views: CageView[] = [
     { ...persp, ...(other && shows(other) ? { other } : {}) },
     ...ties.map((t) => ({ ...t.p, ...otherOf(t), tied: true as const })),
+    ...others.map((t) => ({ ...t.p, ...otherOf(t) })),
   ];
-  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}) };
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(views.length > 1 ? { views } : {}) };
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */

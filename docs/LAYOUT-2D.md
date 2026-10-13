@@ -225,7 +225,10 @@ they hang from.
   its guanidine ring fused to it - the cage is drawn so and the rings
   fused to it flat onto it, the cage's atoms bonded to them showing their
   configuration by a wedge; the cage seen from each of its best few sides,
-  the one that leaves the rest room taken (ibogaine). Where several of its
+  the one that leaves the rest room taken, and the others tried with what
+  hangs from it too, as a cage's are - one taken where the whole drawing
+  reads clearly better (by 3; ibogaine, its isoquinuclidine from the side
+  that lays its indole beside it, not under it). Where several of its
   sides are as good by the system alone - adamantane is alike from all of
   them, seen from either hand - each of those is tried with what hangs from
   it too, none favoured: which came first went by the order of the atoms,
