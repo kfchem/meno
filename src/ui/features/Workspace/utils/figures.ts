@@ -12,7 +12,6 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
 import type { FigureRead } from "../../../../lib/figure/read";
 import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
-import { uprightFigure } from "../../../../lib/figure/turn";
 import { cornerAt } from "../../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
@@ -124,9 +123,7 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
  * figure has it (the maintainer, 2026-10-11: the scheme keeps the figure's
  * layout).
  */
-export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
-  // (its words turned - a page turned for a wide scheme - read upright, each atom still tied to where it lies on the page)
-  const { drawn, onPage } = uprightFigure(given);
+export function figureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
   // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
   const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
   const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
@@ -137,7 +134,7 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   // (one middle and one scale for all of it)
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
-  const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...onPage({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, x, y, bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
   const scheme = schemeOf(read, about);
   return { model, ...(scheme ? { scheme } : {}) };
 }
