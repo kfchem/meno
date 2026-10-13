@@ -354,7 +354,15 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                     continue;
                 }
                 let o = c.origin().ok().map(|(x, y)| at(x.value, y.value));
-                letters.push(json!({"c": ch.to_string(), "box": bx, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name()}));
+                // (which way its line reads as the page is shown: its own turn on the page, and the page's - radians, y down, naught left to right)
+                let dir = match (c.angle_radians(), c.origin()) {
+                    (Ok(a), Ok((x, y))) => {
+                        let (p, q) = (at(x.value, y.value), at(x.value + 10.0 * a.cos(), y.value + 10.0 * a.sin()));
+                        Some((q.1 - p.1).atan2(q.0 - p.0))
+                    }
+                    _ => None,
+                };
+                letters.push(json!({"c": ch.to_string(), "box": bx, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name(), "dir": dir}));
             }
             Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "ms": ms(t)}), vec![]))
         }
@@ -790,10 +798,43 @@ mod tests {
         assert_eq!(letters[0]["c"], json!("O"));
         assert!(near(&letters[0]["size"], 5.0), "{:?}", letters[0]);
         assert!(near(&letters[0]["at"][0], 105.0) && near(&letters[0]["at"][1], 432.0), "{:?}", letters[0]);
+        // (its line reads left to right)
+        assert!(letters[0]["dir"].as_f64().unwrap().abs() < 0.01, "{:?}", letters[0]);
         // within a box round the wedge alone, the wedge alone
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
         assert_eq!(head["paths"].as_array().unwrap().len(), 1);
         assert_eq!(head["letters"].as_array().unwrap().len(), 0);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_turned_pages_letters_read_down_it() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-turned-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "e".repeat(64);
+        // (a page turned a quarter as it is shown, its words set as on any page: they read down it)
+        let page = "BT /F1 10 Tf 100 700 Td (OH) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Rotate 90 /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0})).unwrap();
+        let letters = head["letters"].as_array().unwrap();
+        assert_eq!(letters.len(), 2);
+        for l in letters {
+            assert!((l["dir"].as_f64().unwrap() - std::f64::consts::FRAC_PI_2).abs() < 0.01, "{l:?}");
+        }
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }

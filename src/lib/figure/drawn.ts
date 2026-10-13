@@ -14,8 +14,8 @@ export type PathStep = ["M" | "L" | "C", number, number] | ["Z"];
 /** A path as drawn: filled or stroked, in a colour (#rrggbbaa), how thick its stroke is, its steps, and whether its stroke is dashed. */
 export type FigurePath = { fill: string | null; stroke: string | null; width: number; d: PathStep[]; dash?: boolean };
 
-/** A letter as drawn: what it is, its box, where its baseline starts, its size in points, and its typeface. */
-export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string };
+/** A letter as drawn: what it is, its box, where its baseline starts, its size in points, its typeface, and which way its line reads as the page is shown (radians, y down; naught left to right). */
+export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string; dir?: number | null };
 
 /** A figure as drawn, within a box of its page. */
 export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictures: Box[] };
@@ -232,4 +232,45 @@ export function boxOf(pts: readonly Point[]): Box {
     y1 = Math.max(y1, p.y);
   }
   return [x0, y0, x1, y1];
+}
+
+/** A box turned about a point by a quarter or more: the box round its turned corners. */
+function turnedBox(b: Box, turn: (p: Point) => Point): Box {
+  return boxOf([turn({ x: b[0], y: b[1] }), turn({ x: b[2], y: b[1] }), turn({ x: b[0], y: b[3] }), turn({ x: b[2], y: b[3] })]);
+}
+
+/**
+ * A figure whose words read other than left to right as the page shows it
+ * - a scheme printed sideways, a page turned a quarter - turned so that
+ * they do: by the quarter most of its letters read, turned back; and how a
+ * point of the turned figure is taken back to the page. A figure whose
+ * words read left to right, or that has none, is as it was.
+ */
+export function uprightOf(drawn: FigureDrawn): { drawn: FigureDrawn; back: (p: Point) => Point; quarters: number } {
+  const votes = [0, 0, 0, 0];
+  for (const l of drawn.letters) if (l.dir != null && Number.isFinite(l.dir)) votes[(((Math.round(l.dir / (Math.PI / 2)) % 4) + 4) % 4)]++;
+  const quarters = votes.indexOf(Math.max(...votes));
+  if (!quarters || !votes[quarters]) return { drawn, back: (p) => p, quarters: 0 };
+  const a = -(quarters * Math.PI) / 2;
+  const [c, s] = [Math.round(Math.cos(a)), Math.round(Math.sin(a))];
+  const turn = (p: Point): Point => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c });
+  const back = (p: Point): Point => ({ x: p.x * c + p.y * s, y: -p.x * s + p.y * c });
+  const step = (st: PathStep): PathStep => {
+    if (st[0] === "Z") return st;
+    const q = turn({ x: st[1], y: st[2] });
+    return [st[0], q.x, q.y];
+  };
+  return {
+    drawn: {
+      paths: drawn.paths.map((p) => ({ ...p, d: p.d.map(step) })),
+      letters: drawn.letters.map((l) => {
+        const at = l.at ? turn({ x: l.at[0], y: l.at[1] }) : null;
+        const loose = (l as FigureLetter & { loose?: Box | null }).loose;
+        return { ...l, box: turnedBox(l.box, turn), at: at ? [at.x, at.y] : null, ...(loose ? { loose: turnedBox(loose, turn) } : {}), ...(l.dir != null ? { dir: l.dir + a } : {}) };
+      }),
+      pictures: drawn.pictures.map((b) => turnedBox(b, turn)),
+    },
+    back,
+    quarters,
+  };
 }
