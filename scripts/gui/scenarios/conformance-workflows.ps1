@@ -19,8 +19,8 @@
 #   Quick Add's calculations then offer it.
 # - "step-done": xTB run: its card "0:0n · 3 of 3", a tick; its result set,
 #   "Optimised 3 compounds", put to its right.
-# - "step-failed": Energy window run on molecules with no energies: its
-#   card says why in red - "Not every entry has an energy".
+# - "step-failed": Energy window run on the compound set: its card says
+#   why in red - "Failed · Takes conformer sets".
 # - "step-changed": the set's left edge drawn in past the water: "Input 2
 #   compounds", and xTB, run on three, "Changed · run again".
 # - "running": CREST run (after it was deleted and the deletion undone):
@@ -36,9 +36,11 @@
 # - "zoomed-out": zoomed out below 75%: the chips faded out, the cards and
 #   frames drawn smaller with the page.
 #
-# The page as a Mac's 2560x1720 shot shows it (read off on 2026-10-13;
-# Windows wants its own): after Fit and eight notches out, the set's left
-# edge 722,870; the steps' titles at x 1960 - xTB 722, Energy window 1000,
+# The page as a Mac's 2560x1720 shot shows it (read off main at de4d6790
+# on 2026-10-13; Windows wants its own). Every place below follows from
+# what Fit to content frames: where Fit comes to take in the steps and
+# sets too, they are read off again. After Fit and eight notches out: the
+# set's left edge 722,870; the steps' titles at x 1960 - xTB 722, Energy window 1000,
 # CREST 1280; a step's menu, right-clicked at 2120 on its card, has Run at
 # 2108, 50 lower (Stop there while it runs), Delete at 2491, and "Save as
 # procedure..." at 2215, 138 lower (before it has run: then Show log and
