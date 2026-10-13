@@ -285,6 +285,10 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
       throw bad("a bond of a molecule in 3D joins no atoms");
     }
     if (!(m.frames ?? []).every((f) => Array.isArray(f) && f.length === 3 * n && f.every(finite))) throw bad("a frame of a molecule in 3D is not whole");
+    // (an energy for each frame, the first among them, or none: each frame's is the one at its place)
+    if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
+      throw bad("the energies of a molecule in 3D are not one for each of its frames");
+    }
   }
   return s as StructureRead;
 }
