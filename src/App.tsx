@@ -200,10 +200,10 @@ export default function App() {
   // Something opened - a file, a structure from a document - in a tab of its
   // own: in place of the tab in front, if that is a blank canvas. False when
   // there is no room for another canvas.
-  const openTab = (opened: Opened): boolean => {
+  const openTab = (opened: Opened, inPlace = true): boolean => {
     const s = stateRef.current;
     const front = s.activeId ? s.tabsById[s.activeId] : undefined;
-    const blank = isBlankTab(front) ? front.meta.id : undefined;
+    const blank = inPlace && isBlankTab(front) ? front.meta.id : undefined;
     if (!canOpenKind(s, opened.kind, blank)) {
       setNotice(TOO_MANY_CANVASES);
       return false;
@@ -301,6 +301,11 @@ export default function App() {
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
   const openPaths = async (paths: readonly string[]) => {
+    // (where what is not a workspace file goes: the workspace in front as
+    // Open was pressed - not the tab of a workspace file opened with it,
+    // which opens as it was saved, untouched: the maintainer, 2026-10-13)
+    const front = stateRef.current.activeId;
+    const workspaces: { name: string; workspace: string; path: string }[] = [];
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
     const pdfs: OpenedPdf[] = [];
@@ -332,7 +337,7 @@ export default function App() {
         // (a workspace file: its workspace, and the outputs it keeps held)
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
-          openWorkspaceTab(name, workspace, path);
+          workspaces.push({ name, workspace, path });
           continue;
         }
         const text = new TextDecoder().decode(bytes);
@@ -345,8 +350,12 @@ export default function App() {
         setNotice(`${name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    // (the tab in front now: a workspace file opened among them may have taken the place of the blank one in front)
-    const front = stateRef.current.activeId;
+    // (a workspace file in a tab of its own - in place of a blank one in
+    // front only where nothing else opened is to go there - and that one
+    // brought back in front, to take the rest)
+    const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
+    for (const w of workspaces) openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
     if (pdfs.length) openPdfs(pdfs, front);
     if (pictures.length) openPictures(pictures, front);
@@ -412,10 +421,10 @@ export default function App() {
   // A workspace file's workspace in a tab of its own - where it opens: one
   // that does not - saved by a newer Meno, say - is said so, and leaves no
   // empty tab named after it.
-  const openWorkspaceTab = (name: string, workspace: string, path?: string) => {
+  const openWorkspaceTab = (name: string, workspace: string, path?: string, inPlace = true) => {
     const problem = workspaceProblem(workspace);
     if (problem) setNotice(`${name} could not be read: ${problem}.`);
-    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
+    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace), inPlace);
   };
   // (the key listened for once; what it does is this render's)
   const pickRef = useRef(pickFiles);

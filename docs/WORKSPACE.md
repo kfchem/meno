@@ -410,11 +410,16 @@ Taken on 2026-10-13:
 - **Open adds to the workspace in front.** A structure's file, a
   calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
   workspace in front, as a drop on its canvas adds it: in free space near
-  the middle of the view, one step to undo, an SD file as a stack. Only a
-  `.meno` opens a tab of its own. A file that cannot be read says so in
-  the workspace, and no tab is made; where a plugin could read it, adding
-  the plugin reads it again there. With no workspace in front, the one
-  last in front is brought forward; with none, a canvas is opened for it.
+  the middle of the view, one step to undo, an SD file as a stack. Free
+  space is clear of all on the page and of a workflow's sets and steps'
+  cards - a structure put down in a set's frame would be taken as what the
+  set holds - its own labels and "+" signs counted. Only a `.meno` opens a
+  tab of its own, untouched: opened with other files at once, it opens
+  beside the workspace in front, which takes the rest (the maintainer,
+  2026-10-13). A file that cannot be read says so in the workspace, and no
+  tab is made; where a plugin could read it, adding the plugin reads it
+  again there. With no workspace in front, the one last in front is
+  brought forward; with none, a canvas is opened for it.
 
 ## Stage 2, as built
 
