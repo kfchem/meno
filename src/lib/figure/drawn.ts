@@ -346,8 +346,9 @@ function drawnOver(s: Stroke, t: Stroke): boolean {
   if (lt <= 1.5 * dist(s.a, s.b)) return false;
   const u = { x: (t.b.x - t.a.x) / lt, y: (t.b.y - t.a.y) / lt };
   const ls = dist(s.a, s.b) || 1;
-  if (Math.abs(u.x * (s.b.y - s.a.y) / ls - u.y * (s.b.x - s.a.x) / ls) > Math.sin((3 * Math.PI) / 180)) return false;
   const w = Math.max(s.w, t.w);
+  // (its way, where it is long enough to have one: a piece a few widths long, its ends written to a hundredth, may seem turned)
+  if (ls > 4 * w && Math.abs(u.x * (s.b.y - s.a.y) / ls - u.y * (s.b.x - s.a.x) / ls) > Math.sin((3 * Math.PI) / 180)) return false;
   const on = (p: Point) => {
     const along = (p.x - t.a.x) * u.x + (p.y - t.a.y) * u.y;
     return along >= -w && along <= lt + w && Math.abs((p.y - t.a.y) * u.x - (p.x - t.a.x) * u.y) <= w;

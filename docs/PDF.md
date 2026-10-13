@@ -954,7 +954,9 @@ workspace holds.
 - **Lines drawn again**: a short line lying on a longer one, along it and
   within it - a joint drawn as short pieces along the bonds meeting
   there, as RDKit draws one - is that line's, and left out before
-  anything is measured. A line drawn in two colours - a bond black to
+  anything is measured (a piece only a few widths long need only lie
+  within the line: its ends, written to a hundredth of a point, may turn
+  it a few degrees). A line drawn in two colours - a bond black to
   its middle and its atom's colour on, as RDKit draws one by default -
   is one line: two lines of different colours, end to end along one
   way, with nothing else ending where they meet. So is a wedge drawn in

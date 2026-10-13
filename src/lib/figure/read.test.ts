@@ -3,6 +3,7 @@ import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./dra
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
+import butene from "./fixtures/butene-rdkitacscg.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import ribose from "./fixtures/ribose-rdkit.json";
@@ -678,6 +679,14 @@ describe("a figure drawn by another program", () => {
     const s = read(figure([stroke(...ring, ring[0]), ...pieces]));
     expect(s.atoms).toHaveLength(6);
     expect(s.bonds).toHaveLength(6);
+  });
+
+  it("reads a joint's pieces a few widths long as the bonds' own, though their ends written to a hundredth turn them", () => {
+    // ((E)-but-2-ene as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: each joint drawn again as two pieces half a
+    // point long, their way 4 degrees off their bonds')
+    const r = readFigure(butene as unknown as FigureDrawn);
+    expect(r.atoms).toHaveLength(4);
+    expect(r.bonds.map((b) => b.order).sort()).toEqual([1, 1, 2]);
   });
 });
 
