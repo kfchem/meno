@@ -28,7 +28,7 @@ import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingS
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { canonicalOrder, reordered, restored } from "./canonical";
-import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, type CageView } from "./cage";
+import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, templateViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
@@ -311,8 +311,11 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
         const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
         // (a cage's textbook view kept unless another reads clearly better:
-        // camphor as it is always drawn, not the other way round)
-        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (cageViews.has(i) && v ? CAGE_VIEW_MARGIN : 0);
+        // camphor as it is always drawn, not the other way round - and a
+        // system's views by the template over its projection likewise)
+        const views = cageViews.get(i);
+        const margin = views && (views.some((w) => w.projection) ? views[v].projection : v > 0) ? CAGE_VIEW_MARGIN : 0;
+        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + margin;
         if (s < bestScore) {
           bestScore = s;
           best = v;
@@ -768,9 +771,16 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // (and only a solid with every stereocentre in it as given)
   const projected = wholeFits ? projectCage(mol, sys) : null;
   const whole = projected && keepsConfigurations(mol, sys.atoms, projected.pos, projected.depth) ? projected : null;
+  // (where that is a projection - no view by the template reading well
+  // enough by its own measure - its best few views by the template too,
+  // each with every stereocentre as given, to try with what hangs from
+  // it, the projection taken only where it reads clearly better: two
+  // cages fused, aconitine's, drawn on the chair of its ring A)
+  const wholeViews = () =>
+    whole?.projection ? [...templateViews(mol, sys).filter((v) => keepsConfigurations(mol, sys.atoms, v.pos, v.depth)), whole] : undefined;
   const wholeFaults = whole ? flatCost(mol, sys, whole.pos, whole.depth, true) : Infinity;
   const core = cageCore(mol, sys);
-  if (!core) return whole && (asSolid || wholeFaults < flatFaults - 1) ? { ...whole, solid: true } : { ...flat, solidToo: !!whole };
+  if (!core) return whole && (asSolid || wholeFaults < flatFaults - 1) ? { ...whole, solid: true, views: wholeViews() } : { ...flat, solidToo: !!whole };
   const view = projectCage(mol, core);
   const onto = (v: Omit<CageView, "other">) => {
     const pos = new Map(v.pos);
@@ -883,9 +893,9 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // gelsemine's oxindole, its benzene ring otherwise foreshortened)
   const flatOutside = rings.some((r) => !r.every((a) => coreAtoms.has(a)) && r.some((a, k) => orderOf(mol, a, r[(k + 1) % r.length]) === 2));
   const wholeAllowed = !(flatOutside && perspFaults < Infinity);
-  if (whole && wholeAllowed && (asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
+  if (whole && wholeAllowed && (asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3) return { ...whole, solid: true, views: wholeViews() };
   if (perspFaults >= flatFaults - 1 && !(asSolid && perspFaults < Infinity)) {
-    if (asSolid && whole && wholeAllowed) return { ...whole, solid: true };
+    if (asSolid && whole && wholeAllowed) return { ...whole, solid: true, views: wholeViews() };
     return { ...flat, solidToo: !!whole || perspFaults < Infinity };
   }
   // (an atom of the cage bonded to a ring fused flat onto it shows its

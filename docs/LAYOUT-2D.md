@@ -11,6 +11,16 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
+The same molecule comes out the same however its atoms are listed - drawn
+in another order, read from another file (2026-10-13). The engine puts
+the atoms in an order of the molecule's own first (`canonical.ts`): each
+ranked by its element, charge, H's and bonds, the ranks refined by its
+neighbours' and then by each stereocentre's and double bond's
+configuration against them, until only atoms alike in every way are left
+alike; then taken in the order a walk from the lowest-ranked end atom
+meets them, as a SMILES string writes them. It lays that out, and hands
+the drawing back in the order it was given.
+
 ## What a good drawing is
 
 A structure drawing is read, not looked at. A chemist should take in its
@@ -130,10 +140,16 @@ they hang from.
   plane, the atoms either side of a bond between tetrahedral atoms
   staggered, every stereocentre held the way round it is given, eased
   from several placements and the one that keeps its distances best
-  taken. Its conformation is read from it (`conformation.ts`): each ring
-  flat (a double bond in it), a chair, a boat or puckered. It is built on
-  one of its six-membered rings the solid has as a chair or a boat - never
-  one with a double bond in it -
+  taken - of those that keep them all but as well (within a tenth), the
+  one with the fewest boats: distances alone cannot tell a ring's chair
+  from its boat where nothing bridges it, and it is the chair it is, a
+  boat only where the cage clearly makes one. Its conformation is read
+  from it (`conformation.ts`): each ring flat (a double bond in it), a
+  chair, a boat or puckered. It is built on one of its six-membered rings
+  the solid has as a chair or a boat - never one with a double bond in it
+  - the one at the end of the system, in front: the ring sharing the
+  fewest bonds with the system's other small rings (aconitine's ring A);
+  of rings alike in that, the one whose view reads best -
   drawn as a chair or a boat always is: two zigzags of three atoms, their
   bonds 15 degrees off level, the back one above the front one and joined
   to it by two bonds 60 degrees steep - a chair's zigzags pointing opposite
@@ -168,7 +184,11 @@ they hang from.
   several sides (quinine's quinuclidine) is tried from its best few
   textbook views with what hangs from it, the best kept - another view
   only where it reads clearly better (by 3), so that camphor stays as it
-  is always drawn. A six-membered ring the solid has as a chair or a
+  is always drawn. A system drawn as a projection - no view by the
+  template reading well enough by its own measure - is tried from its
+  best views by the template too, with what hangs from it, the
+  projection kept only where it reads clearly better (two cages fused,
+  aconitine's, drawn on the chair of its ring A). A six-membered ring the solid has as a chair or a
   boat, with no double bond in it, fused on a bond to a ring drawn by the
   template - or to the rest of the cage, its other four atoms in no other
   ring - is drawn by the template too, as decalin's second chair beside

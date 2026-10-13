@@ -261,6 +261,8 @@ export type CageView = {
    * turned round with its depth, which would show it from below.
    */
   other?: Omit<CageView, "other">;
+  /** Seen from the side that reads best, not drawn by the textbook's template. */
+  projection?: true;
 };
 
 /**
@@ -460,6 +462,7 @@ function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): 
   // its distances best taken)
   let best: Vec3[] = rough;
   let bestMiss = Infinity;
+  const found: { X: Vec3[]; m: number }[] = [];
   const size = Math.cbrt(atoms.length);
   for (let k = 0; k < STARTS; k++) {
     const scatter = (i: number, c: number) => size * Math.sin(12.9898 * (i + 1) + 78.233 * (c + 1) + 37.719 * k) * Math.cos(4.1414 * (i + 1) * (k + 1) + c);
@@ -469,13 +472,30 @@ function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): 
     if (handedness(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
     X = rightCentres(mol, atoms, index, settle(X, T, holds(mol, atoms, index)), T);
     const m = miss(X, T);
+    found.push({ X, m });
     if (m < bestMiss - 1e-9) {
       bestMiss = m;
       best = X;
     }
   }
+  // Of those that keep their distances all but as well as the best (within
+  // a tenth of its miss), the one with the fewest boats: the distances
+  // cannot tell a six-membered ring's chair from its boat where nothing
+  // bridges it across, and it is the chair it is - a boat only where the
+  // cage clearly makes one (aconitine's ring A, a chair or a boat by the
+  // order its atoms came in; the maintainer, 2026-10-13)
+  const sixes = mol.rings.filter((r) => r.length === 6 && r.every((a) => index.has(a)));
+  if (sixes.length) {
+    const boats = (X: Vec3[]) => sixes.filter((r) => ringShape(mol, r, (a) => X[index.get(a)!]).kind === "boat").length;
+    const near = found.filter((f) => f.m <= bestMiss + Math.max(NEAR_TIE, 0.1 * bestMiss));
+    const fewest = Math.min(...near.map((f) => boats(f.X)));
+    if (boats(best) > fewest) best = near.filter((f) => boats(f.X) === fewest).sort((p, q) => p.m - q.m)[0].X;
+  }
   return best;
 }
+
+/** How much worse than the best a solid may keep its distances and still count as fitting them as well (`embedAnew`). */
+const NEAR_TIE = 0.002;
 
 /** How many placements a solid is eased from (`embed`). */
 const STARTS = 7;
@@ -660,7 +680,24 @@ export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView 
     });
     hints.set(a, m);
   });
-  return { pos, depth, hints, cost: bestCost };
+  return { pos, depth, hints, cost: bestCost, projection: true };
+}
+
+/**
+ * A system's best few views by the textbook's template, however they read
+ * by the template's own measure (`textbook`): for a system drawn as a
+ * projection, to try with what hangs from it.
+ */
+export function templateViews(mol: Molecule, sys: RingSystem, count = 3): CageView[] {
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const bonds: [number, number][] = [];
+  for (const [k] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
+  }
+  const X = embed(mol, atoms, index);
+  return Array.from({ length: count }, (_, rank) => textbook(mol, sys, X, index, bonds, rank)).filter((v): v is CageView => !!v);
 }
 
 /**
@@ -860,10 +897,30 @@ function textbook(
   const axialRings = new Set(
     cycles.filter((r) => ["chair", "boat"].includes(ringShape(mol, r, at).kind)).flatMap((r) => r),
   );
+  // The ring drawn in front by the template: the one at the end of the
+  // fused system, sharing the fewest bonds with its other rings (aconitine's
+  // ring A; the maintainer, 2026-10-13) - of those the solid has as a chair
+  // or a boat; rings alike in that, the one that reads best.
+  // (its rings all its small rings - the smallest set's, and each six-membered
+  // cycle, paeoniflorin's dioxane among them, which the smallest set leaves out)
+  const others = [...sys.rings.map((r) => mol.rings[r]), ...cycles];
+  const sharedBonds = (cycle: number[]) =>
+    cycle.filter((a, k) => {
+      const b = cycle[(k + 1) % 6];
+      return others.some((r) => {
+        if (r.length === 6 && r.every((v) => cycle.includes(v))) return false;
+        const d = Math.abs(r.indexOf(a) - r.indexOf(b));
+        return r.includes(a) && r.includes(b) && (d === 1 || d === r.length - 1);
+      });
+    }).length;
+  const drawable = cycles.filter((r) => ["chair", "boat"].includes(ringShape(mol, r, at).kind));
+  const fewest = Math.min(...drawable.map(sharedBonds));
+  const front = new Set(drawable.filter((r) => sharedBonds(r) === fewest));
   // the best seen with its front zigzag set off each way: one the other
   // seen from its other side
   const best = new Map<number, Found[]>();
   for (const cycle of cycles) {
+    if (!front.has(cycle)) continue;
     const R = cycle.map(at);
     const c: Vec3 = [0, 1, 2].map((k) => R.reduce((sum, p) => sum + p[k], 0) / 6) as Vec3;
     let nrm: Vec3 = [0, 0, 0];
