@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { useInFront } from "../../layouts/inFront";
 
 /**
  * A ligand's bond orders, which its file does not give and its shape cannot
@@ -13,14 +14,17 @@ export default function OrdersCard({ onGive, onCancel }: { onGive: (smiles: stri
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
+  // (Escape lets it go while its tab is in front: in another tab it is that tab's, the card waiting)
+  const inFront = useInFront();
   useEffect(() => {
+    if (!inFront) return;
     field.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, inFront]);
   const give = async () => {
     if (!smiles.trim() || busy) return;
     setBusy(true);

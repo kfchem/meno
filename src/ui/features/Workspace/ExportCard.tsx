@@ -5,6 +5,7 @@ import type { Holds } from "./fileActions";
 import { rememberable, valuesOf, type Known, type OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionsForm from "../../options/OptionsForm";
+import { useInFront } from "../../layouts/inFront";
 
 /** A molecule in 3D on the page, as Export names it when it asks which to write. */
 export type Offered3D = { id: number; name: string };
@@ -61,7 +62,10 @@ export default function ExportCard({
   const ready = writer.takes !== "molecule" || given.length > 0;
 
   const exportRef = useRef<HTMLButtonElement>(null);
+  // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
+  const inFront = useInFront();
   useEffect(() => {
+    if (!inFront) return;
     exportRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -70,7 +74,7 @@ export default function ExportCard({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, inFront]);
 
   const pick = (id: number) => {
     setPicked(id);

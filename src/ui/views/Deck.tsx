@@ -4,6 +4,7 @@ import type { ViewEntry } from "../views/registry";
 import { useEffect, useRef, useState } from "react";
 import { DURATION } from "../theme/motion";
 import { ErrorBoundary, StoppedCard } from "../layouts/ErrorBoundary";
+import { InFront } from "../layouts/inFront";
 
 type Props = {
   order: TabId[];
@@ -73,14 +74,17 @@ export default function Deck({
               >
                 {/* (keyed by what the tab shows: a view taking its place - or made again - fades in) */}
                 <div key={t.content.kind} className="w-full h-full flex meno-fade-in">
-                  <entry.Component
-                    tabId={id}
-                    content={t.content}
-                    active={active}
-                    document={getDocument(t)}
-                    dispatchPatchData={(patch) => patchData(id, patch)}
-                    renameTab={(label) => renameTab(id, label)}
-                  />
+                  {/* (and whether it is in front, for what is drawn deep in it that hears keys on the window: ui/layouts/inFront) */}
+                  <InFront.Provider value={active}>
+                    <entry.Component
+                      tabId={id}
+                      content={t.content}
+                      active={active}
+                      document={getDocument(t)}
+                      dispatchPatchData={(patch) => patchData(id, patch)}
+                      renameTab={(label) => renameTab(id, label)}
+                    />
+                  </InFront.Provider>
                 </div>
               </ErrorBoundary>
             ) : null}

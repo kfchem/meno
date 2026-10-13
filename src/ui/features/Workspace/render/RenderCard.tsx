@@ -7,6 +7,7 @@ import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
 import { askOf, remembered, renderOptions, type Kind } from "./renderOptions";
+import { useInFront } from "../../../layouts/inFront";
 
 /**
  * Render, asked before it begins (docs/RENDER.md): a picture or a film;
@@ -42,7 +43,10 @@ export default function RenderCard({
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
 
   const renderRef = useRef<HTMLButtonElement>(null);
+  // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
+  const inFront = useInFront();
   useEffect(() => {
+    if (!inFront) return;
     renderRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -51,7 +55,7 @@ export default function RenderCard({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, inFront]);
 
   const go = () => {
     rememberOptions("render", { kind });
