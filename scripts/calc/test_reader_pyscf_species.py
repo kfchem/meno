@@ -10,6 +10,7 @@ and Occup=, then its coefficients - and from no program's output.
 """
 
 import ast
+import math
 import pathlib
 import re
 import unittest
@@ -17,8 +18,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/pyscf/worker.py"
 tree = ast.parse(WORKER.read_text(encoding="utf-8"))
-found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "species_of"]
-names = {"re": re}
+found = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name in ("species_of", "molden_number")) or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("_NUMBER", "_GHOST") for t in n.targets))]
+names = {"re": re, "math": math}
 exec(compile(ast.Module(body=found, type_ignores=[]), str(WORKER), "exec"), names)
 species_of = names["species_of"]
 
@@ -29,12 +30,13 @@ H 3 1 0.000000 -0.757000 -0.469000
 """
 
 
-def molden(atoms, orbitals):
-    """A Molden text of `atoms` ([Atoms] lines) and `orbitals`, each (spin, occupation) - or (None, occupation) for none said."""
+def molden(atoms, orbitals, lowest=-20.5):
+    """A Molden text of `atoms` ([Atoms] lines) and `orbitals`, each (spin, occupation) - or (None, occupation) for none said -
+    the first orbital's energy `lowest` (hartree: oxygen's 1s about -20.5), the rest from -1.0 up."""
     lines = ["[Molden Format]", atoms.rstrip("\n"), "[GTO]", "[MO]"]
     for k, (spin, occ) in enumerate(orbitals):
         lines.append(" Sym= A")
-        lines.append(f" Ene= {-1.0 + 0.1 * k:.4f}")
+        lines.append(f" Ene= {lowest if k == 0 else -1.0 + 0.1 * k:.4f}")
         if spin:
             lines.append(f" Spin= {spin}")
         lines.append(f" Occup= {occ:.6f}")
@@ -96,6 +98,45 @@ class Species(unittest.TestCase):
     def test_occupations_in_fortran_notation_and_keys_in_any_case(self):
         text = molden(WATER, [("Alpha", 2.0)] * 5).replace("Occup= 2.000000", "occup=0.2000000D+01").replace("Spin=", "spin =")
         self.assertEqual(species_of(text), (0, 1))
+
+    def test_a_core_in_no_orbital_and_said_nowhere_leaves_the_charge_unsaid(self):
+        # (methane with a two-electron core on its carbon: its lowest orbital its 2s, not its 1s - the core is counted nowhere)
+        ch4 = "[Atoms] Angs\nC 1 6 0.0 0.0 0.0\nH 2 1 0.63 0.63 0.63\nH 3 1 -0.63 -0.63 0.63\nH 4 1 -0.63 0.63 -0.63\nH 5 1 0.63 -0.63 -0.63\n"
+        self.assertEqual(species_of(molden(ch4, [("Alpha", 2.0)] * 4, lowest=-0.9)), (None, 1))
+        # (all its electrons in orbitals: its 1s at -11.2 hartree)
+        self.assertEqual(species_of(molden(ch4, [("Alpha", 2.0)] * 5, lowest=-11.2)), (0, 1))
+        # (an iron with a ten-electron core: [Fe(CN)6]4- read as +6, were the core not seen to be missing)
+        fe = "[Atoms] Angs\nFe 1 26 0.0 0.0 0.0\n" + "".join(f"C {2 + i} 6 {x} 0.0 0.0\nN {8 + i} 7 {x * 1.6} 0.0 0.0\n" for i, x in enumerate([1.9, -1.9, 1.9, -1.9, 1.9, -1.9]))
+        self.assertEqual(species_of(molden(fe, [("Alpha", 2.0)] * 45, lowest=-11.0))[0], None)
+
+    def test_a_centre_named_as_no_nucleus_adds_no_charge(self):
+        ghost = WATER + "Bq 4 1 0.0 1.5 0.0\n"
+        self.assertEqual(species_of(molden(ghost, [("Alpha", 2.0)] * 5)), (0, 1))
+
+    def test_an_occupation_that_is_not_a_number_gives_nothing_and_never_fails(self):
+        for occ in ["NaN", "Infinity", "", "abc"]:
+            text = molden(WATER, [("Alpha", 2.0)] * 5).replace("Occup= 2.000000", f"Occup= {occ}", 1)
+            self.assertIsNone(species_of(text), occ)
+        # (a three-digit exponent, as Fortran writes one with no letter: read)
+        text = molden(WATER, [("Alpha", 2.0)] * 5 + [("Alpha", 0.0)]).replace("Occup= 0.000000", "Occup= 0.2000000-100")
+        self.assertEqual(species_of(text), (0, 1))
+
+    def test_a_file_that_breaks_the_format_gives_nothing_or_less(self):
+        # ([MO] given twice: its occupations counted twice - none said)
+        h2 = "[Atoms] Angs\nH 1 1 0.0 0.0 0.0\nH 2 1 0.0 0.0 0.74\n"
+        twice = molden(h2, [("Alpha", 2.0)])
+        self.assertIsNone(species_of(twice + twice[twice.index("[MO]"):]))
+        # ([Atoms] numbers given twice: every atom counted all the same)
+        repeated = "[Atoms] Angs\nO 1 8 0.0 0.0 0.0\nH 1 1 0.76 0.59 0.0\nH 2 1 -0.76 0.59 0.0\n"
+        self.assertEqual(species_of(molden(repeated, [("Alpha", 2.0)] * 5)), (0, 1))
+        # (Spin= on the first beta orbital alone: its multiplicity unsaid)
+        partly = molden(WATER, [("Alpha", 1.0)] * 5 + [("Beta", 1.0)] + [(None, 1.0)] * 3)
+        self.assertEqual(species_of(partly)[1], None)
+        # (a blank line among an orbital's keys: nothing)
+        blank = molden(WATER, [("Alpha", 1.0)] * 5 + [("Beta", 1.0)] * 4).replace(" Spin= Beta\n", " Spin= Beta\n\n")
+        self.assertEqual(species_of(blank), (1, 2))
+        # (a restricted file of orbitals of 1 each: each an electron, or two - its charge unsaid too)
+        self.assertEqual(species_of(molden(WATER, [(None, 1.0)] * 5)), (None, None))
 
     def test_nothing_where_the_file_gives_no_atom_or_no_occupation(self):
         self.assertIsNone(species_of("[Molden Format]\n[Atoms] Angs\n[MO]\n"))

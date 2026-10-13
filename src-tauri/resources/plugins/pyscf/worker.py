@@ -27,6 +27,7 @@ PySCF and cclib are used as libraries; none of their code is Meno's.
 
 import base64
 import json
+import math
 import os
 import re
 import sys
@@ -68,6 +69,27 @@ def is_molden(text):
     return re.match(r"\s*\[Molden Format\]", text, re.I) is not None
 
 
+# (a number as a Molden file writes one: an E or Fortran's D before its exponent, or a three-digit exponent's sign alone)
+_NUMBER = re.compile(r"^([-+]?(?:\d+\.?\d*|\.\d+))(?:[EeDd]([-+]?\d+)|([-+]\d{3}))?$")
+
+# (a centre with no nucleus, as programs name one: a ghost atom, a dummy)
+_GHOST = re.compile(r"^(?:x|bq|gh|q)(?:$|[-_:0-9])|:$", re.I)
+
+
+def molden_number(text):
+    """A number as a Molden file writes it ("2.0", "0.2000000D+01",
+    "0.2000000-100"): None where it is none, or not finite."""
+    m = _NUMBER.match(text.strip())
+    if not m:
+        return None
+    exponent = m.group(2) or m.group(3)
+    try:
+        v = float(m.group(1) + (f"e{exponent}" if exponent else ""))
+    except ValueError:
+        return None
+    return v if math.isfinite(v) else None
+
+
 def species_of(text):
     """A Molden file's molecule's charge and spin multiplicity, from its own
     sections - the format gives neither ("[Atoms]" and "[MO]", as the
@@ -75,42 +97,58 @@ def species_of(text):
     unknown (None) where the file does not settle it.
 
     Its charge: the nuclei's - each atom's atomic number, the third field
-    of its [Atoms] line, or, where a [Pseudo] line gives the atom (name,
-    number, charge), the charge its pseudopotential leaves it - less the
-    electrons its orbitals hold (each orbital's "Occup=" in [MO]). Unknown
-    where the occupations do not come to a whole number, or the charge
-    comes to more than 8 either way (a core given nowhere, say).
+    of its [Atoms] line (none for a centre named as one with no nucleus:
+    X, Bq, Gh), or, where a [Pseudo] line gives the atom (name, number,
+    charge), the charge its pseudopotential leaves it - less the electrons
+    its orbitals hold (each orbital's "Occup=" in [MO]). Unknown where the
+    file does not show its cores among its orbitals - no [Pseudo], and its
+    lowest orbital not as low as its heaviest atom's 1s must be (below
+    -Z^2/8 hartree, from Z 3 on): a core in no orbital, nor said, would be
+    counted as charge; where the occupations do not come to a whole number;
+    where a restricted file has no orbital of 2 (each orbital's electron
+    one, or two: it does not say); or where the charge comes to more than 8
+    either way.
 
     Its multiplicity: one more than its unpaired electrons - the alpha
     orbitals' occupations' excess over the beta's, where "Spin=" says which
-    an orbital is; else, every occupation 0, 1 or 2 (within 0.001), a
+    every orbital is; else, every occupation 0, 1 or 2 (within 0.001), a
     singlet with none of 1 and a doublet with one. Unknown where they are
     fractional (natural orbitals), where two or more are 1 (a triplet's,
-    or a singlet diradical's natural orbitals - the same occupations), or
-    where it does not agree with the number of electrons.
+    or a singlet diradical's natural orbitals - the same occupations),
+    where only some orbitals say their spin, or where it does not agree
+    with the number of electrons.
 
-    None where it gives no atom or no occupation."""
+    None where it gives no atom or no occupation, or breaks the format: an
+    occupation that is not a number, [MO] given twice."""
     section = None
-    charges = {}
+    atoms = []
     cores = {}
-    occupied = {"alpha": [], "beta": []}
+    orbitals = []
     keys = {}
+    broken = False
+    seen = set()
     # (an orbital's keys stand together above its coefficients: kept as they come, put down where its coefficients begin)
     def put():
-        if "occup" in keys:
-            occupied[keys.get("spin", "alpha")].append(keys["occup"])
+        if keys:
+            orbitals.append(dict(keys))
         keys.clear()
     for raw in text.splitlines():
         line = raw.strip()
+        # (a blank line is nothing: not the end of an orbital's keys)
+        if not line:
+            continue
         head = re.match(r"\[([^\]]+)\]", line)
         if head:
             put()
             section = head.group(1).strip().lower()
+            if section in seen and section in ("mo", "atoms"):
+                broken = True
+            seen.add(section)
             continue
         fields = line.split()
         if section == "atoms":
             if len(fields) >= 6 and re.fullmatch(r"\d+", fields[1]) and re.fullmatch(r"\d+", fields[2]):
-                charges[int(fields[1])] = int(fields[2])
+                atoms.append((fields[0], int(fields[1]), int(fields[2])))
         elif section == "pseudo":
             if len(fields) >= 3 and re.fullmatch(r"\d+", fields[1]) and re.fullmatch(r"\d+", fields[2]):
                 cores[int(fields[1])] = int(fields[2])
@@ -124,24 +162,42 @@ def species_of(text):
                 put()
             if name == "spin":
                 keys["spin"] = "beta" if value.lower().startswith("beta") else "alpha"
-            elif name == "occup":
-                keys["occup"] = float(value.replace("D", "E").replace("d", "e"))
+            elif name in ("occup", "ene"):
+                keys[name] = molden_number(value)
+                if keys[name] is None:
+                    keys[name + "_unread"] = True
             else:
                 keys[name] = value
     put()
-    if not charges or not (occupied["alpha"] or occupied["beta"]):
+    orbitals = [o for o in orbitals if "occup" in o or "occup_unread" in o]
+    if broken or not atoms or not orbitals or any(o.get("occup_unread") for o in orbitals):
         return None
     whole = lambda x: abs(x - round(x)) <= 1e-3  # noqa: E731
-    electrons = sum(occupied["alpha"]) + sum(occupied["beta"])
-    nuclear = sum(cores.get(n, z) for n, z in charges.items())
+    spun = [o for o in orbitals if "spin" in o]
+    partly = 0 < len(spun) < len(orbitals)
+    alpha = [o["occup"] for o in orbitals if o.get("spin", "alpha") == "alpha"]
+    beta = [o["occup"] for o in orbitals if o.get("spin") == "beta"]
+    electrons = sum(alpha) + sum(beta)
+    nuclei = [(name, n, z) for name, n, z in atoms if not _GHOST.search(name)]
+    nuclear = sum(cores.get(n, z) for _, n, z in nuclei)
     charge = round(nuclear - electrons) if whole(electrons) else None
+    # (no core said: its cores must be among the orbitals - its lowest as low as its heaviest atom's 1s)
+    heaviest = max((z for _, n, z in nuclei if n not in cores), default=0)
+    if charge is not None and not cores and heaviest >= 3:
+        lowest = min((o["ene"] for o in orbitals if o.get("ene") is not None and o["occup"] > 1e-3), default=None)
+        if lowest is None or lowest > -heaviest * heaviest / 8:
+            charge = None
+    if charge is not None and not beta and not spun and not any(abs(o - 2) <= 1e-3 for o in alpha):
+        charge = None
     if charge is not None and abs(charge) > 8:
         charge = None
-    if occupied["beta"]:
-        excess = sum(occupied["alpha"]) - sum(occupied["beta"])
+    if partly:
+        multiplicity = None
+    elif beta:
+        excess = sum(alpha) - sum(beta)
         multiplicity = round(abs(excess)) + 1 if whole(excess) else None
-    elif all(any(abs(o - k) <= 1e-3 for k in (0, 1, 2)) for o in occupied["alpha"]):
-        singles = sum(1 for o in occupied["alpha"] if abs(o - 1) <= 1e-3)
+    elif all(any(abs(o - k) <= 1e-3 for k in (0, 1, 2)) for o in alpha):
+        singles = sum(1 for o in alpha if abs(o - 1) <= 1e-3)
         multiplicity = singles + 1 if singles <= 1 else None
     else:
         multiplicity = None
@@ -348,7 +404,11 @@ def op_read(m):
         mol = orbitals.mol
         atoms = [re.sub(r"[^A-Za-z]", "", mol.atom_pure_symbol(i)).capitalize() for i in range(mol.natm)]
         coords = mol.atom_coords(unit="Angstrom")
-        charge, multiplicity = species_of(m["text"]) or (None, None)
+        # (a file it cannot settle them from leaves them unsaid - never the read failed for it)
+        try:
+            charge, multiplicity = species_of(m["text"]) or (None, None)
+        except Exception:
+            charge, multiplicity = None, None
         result = {
             "schema": SCHEMA,
             "atoms": atoms,

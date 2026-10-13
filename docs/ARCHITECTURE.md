@@ -739,12 +739,18 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   does not settle it. The charge is the nuclei's - each atom's atomic
   number in [Atoms], or the charge its pseudopotential leaves it where
   [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
-  its [MO] occupations hold; unsaid past 8 either way, or where the
-  occupations come to no whole number. The multiplicity is one more than
+  its [MO] occupations hold; unsaid where no [Pseudo] is given and the
+  file does not show its cores among its orbitals (its lowest not below
+  -Z^2/8 hartree for its heaviest atom, from Z 3 on), past 8 either way,
+  where the occupations come to no whole number, or where a restricted
+  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
+  Gh) adds none. The multiplicity is one more than
   the alpha occupations' excess over the beta's; with no Spin= said, a
   singlet or a doublet where every occupation is 0, 1 or 2 and at most one
   is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
-  and a singlet diradical share). It is tested alone
+  and a singlet diradical share; Spin= given for some orbitals only). A
+  file that breaks the format - an occupation that is not a number, [MO]
+  given twice - gives neither, and never fails the read. It is tested alone
   (`scripts/calc/test_reader_pyscf_species.py`, in CI).
   Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
