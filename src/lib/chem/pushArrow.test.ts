@@ -178,4 +178,30 @@ describe("an electron-pushing arrow as a picture writes it", () => {
     expect(near).toBeLessThan(0.01);
     expect(head[0]).toEqual(shape.end);
   });
+
+  it("turns from the curve into the head with no corner: the last run leaves the curve its way and comes into the head the head's way", () => {
+    const { curve, head } = pushStroke(shape, false, m);
+    const [, , c2, at, k1, k2, end] = curve;
+    const cross = (a: { x: number; y: number }, b: { x: number; y: number }) => (a.x * b.y - a.y * b.x) / (Math.hypot(a.x, a.y) * Math.hypot(b.x, b.y));
+    // (the curve's way where it gives way, and the run's as it begins: one)
+    expect(Math.abs(cross({ x: at.x - c2.x, y: at.y - c2.y }, { x: k1.x - at.x, y: k1.y - at.y }))).toBeLessThan(1e-9);
+    // (the run's way as it ends, and the head's - from its back's middle to its point: one)
+    const back = { x: (head[1].x + head[3].x) / 2, y: (head[1].y + head[3].y) / 2 };
+    expect(Math.abs(cross({ x: end.x - k2.x, y: end.y - k2.y }, { x: head[0].x - back.x, y: head[0].y - back.y }))).toBeLessThan(1e-9);
+  });
+
+  it("is drawn on the canvas the same way: no turn in its outline's line sharper than the curve's own", () => {
+    const [line] = pushOutlines(shape, false, m);
+    // (its left side, point to point: each turn small)
+    const left = line.slice(0, line.length / 2);
+    let worst = 0;
+    for (let i = 1; i + 1 < left.length; i++) {
+      const a = { x: left[i].x - left[i - 1].x, y: left[i].y - left[i - 1].y };
+      const b = { x: left[i + 1].x - left[i].x, y: left[i + 1].y - left[i].y };
+      if (Math.hypot(a.x, a.y) < 1e-9 || Math.hypot(b.x, b.y) < 1e-9) continue;
+      worst = Math.max(worst, Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)));
+    }
+    // (the curve itself turns about 0.02-0.04 a step; the corner there was 0.08)
+    expect(worst).toBeLessThan(0.05);
+  });
 });

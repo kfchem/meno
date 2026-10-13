@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
   fontStack,
   labelBox,
   labelSetOf,
+  type Atom as LAtom,
   type LabelBox,
 } from "../../../../lib/chem/layout2d";
 import {
@@ -23,6 +24,12 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import StereoText from "./StereoText";
 import { MarkHold } from "./MarkHold2D";
+import { usePageHtmlLayer } from "./coverLayer";
+import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
+
+/** Nothing worked out, for a drawing with nothing to mark. */
+const NO_ATOMS = new Map<number, LAtom>();
+const NO_MODEL: Model = { atoms: [], bonds: [] };
 
 /** Marks sit over the drawing, and under the canvas's buttons and cards. */
 const Z_RANGE = [20, 10];
@@ -59,26 +66,45 @@ export default function ChemMarks2D({
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const hoveredBond = useEditor((s) => s.hovered.bondId);
+  // (what can be seen of the canvas, the column over its right side left out: where what a mark says is kept - markTip)
+  const gl = useThree((s) => s.gl);
+  const layer = usePageHtmlLayer();
+  const cover = useEditor((s) => s.cover);
+  const room = useCallback((): ScreenBox => {
+    const r = (layer?.current ?? gl.domElement).getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right - cover, bottom: r.bottom };
+  }, [layer, gl, cover]);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => invalidate(), [marks, invalidate]);
 
-  // the structure where it is drawn this frame: a dragged atom where it is
-  const drawn: Model = useMemo(() => {
-    const at = new Map(atoms.map((a) => [a.id, a]));
-    return {
-      atoms: model.atoms.map((a) => {
-        const d = at.get(a.id);
-        return d ? { ...a, x: d.x, y: d.y } : a;
-      }),
-      bonds: model.bonds,
-    };
-  }, [atoms, model]);
+  // (nothing worked out over the drawing while there is nothing to mark -
+  // every frame of a drag over a large drawing - and R, S, E and Z only
+  // where there are any)
+  const stereoWanted = !!marks && (marks.centres.size > 0 || marks.doubleBonds.size > 0);
+  const wanted = stereoWanted || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
+  // each atom where it is drawn this frame: a dragged atom where it is
+  const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
+  // the structure where it is drawn this frame
+  const drawn: Model = useMemo(
+    () =>
+      stereoWanted
+        ? {
+            atoms: model.atoms.map((a) => {
+              const d = at.get(a.id);
+              return d ? { ...a, x: d.x, y: d.y } : a;
+            }),
+            bonds: model.bonds,
+          }
+        : NO_MODEL,
+    [stereoWanted, at, model],
+  );
   // (labels sized in the drawing's units are as big at any zoom: their boxes
   // are not worked out again as the view zooms)
   const labelZoom = opts.units === "px" ? zoom : null;
   const boxes = useMemo(() => {
     const set = labelSetOf(opts);
     const out = new Map<number, LabelBox>();
+    if (!wanted) return out;
     for (const t of layout.texts) {
       const id = t.atom != null ? atoms[t.atom]?.id : undefined;
       if (id == null) continue;
@@ -86,7 +112,7 @@ export default function ChemMarks2D({
       out.set(id, labelBox(t, size, set));
     }
     return out;
-  }, [layout, atoms, opts, labelZoom]);
+  }, [wanted, layout, atoms, opts, labelZoom]);
 
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
@@ -102,28 +128,34 @@ export default function ChemMarks2D({
   // view, as they are once past their least size - go where they went: a
   // zoom does not place them all again)
   const markSize = (fontPx / z).toPrecision(12);
-  // what each is measured from - its atom, its bond's middle - and those put by hand, where they were put
+  // what each of R, S, E and Z is measured from - its atom, its bond's
+  // middle - and those put by hand, where they were put
   const from = useMemo(() => {
-    const at = new Map(drawn.atoms.map((a) => [a.id, a]));
     const out = new Map<string, { x: number; y: number }>();
-    for (const a of drawn.atoms) out.set(`centre-${a.id}`, { x: a.x, y: a.y });
-    for (const b of drawn.bonds) {
+    if (!marks || !stereoWanted) return out;
+    for (const id of marks.centres.keys()) {
+      const a = at.get(id);
+      if (a) out.set(`centre-${id}`, { x: a.x, y: a.y });
+    }
+    for (const b of model.bonds) {
+      if (!marks.doubleBonds.has(b.id)) continue;
       const p = at.get(b.a);
       const q = at.get(b.b);
       if (p && q) out.set(`bond-${b.id}`, { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
     }
     return out;
-  }, [drawn]);
+  }, [marks, stereoWanted, at, model.bonds]);
   const fixed = useMemo(() => {
     const out = new Map<string, { x: number; y: number }>();
+    if (!marks || !stereoWanted) return out;
     const put = (key: string, by?: { x: number; y: number }) => {
       const f = from.get(key);
       if (f && by) out.set(key, { x: f.x + by.x * labelFont, y: f.y + by.y * labelFont });
     };
-    for (const a of drawn.atoms) put(`centre-${a.id}`, a.stereoAt);
-    for (const b of drawn.bonds) put(`bond-${b.id}`, b.stereoAt);
+    for (const a of model.atoms) if (a.stereoAt && marks.centres.has(a.id)) put(`centre-${a.id}`, a.stereoAt);
+    for (const b of model.bonds) if (b.stereoAt && marks.doubleBonds.has(b.id)) put(`bond-${b.id}`, b.stereoAt);
     return out;
-  }, [drawn, from, labelFont]);
+  }, [marks, stereoWanted, model, from, labelFont]);
   const stereo = useMemo(() => {
     // (none to place: nothing to keep them off)
     if (!marks || (!marks.centres.size && !marks.doubleBonds.size)) return [];
@@ -148,7 +180,6 @@ export default function ChemMarks2D({
 
   // Each mark where it goes: a valence problem's box round its atom's label
   // (or a ring round its atom), and the stereodescriptors.
-  const at = useMemo(() => new Map(drawn.atoms.map((a) => [a.id, a])), [drawn]);
   const boxesOf: { key: string; id: number; x: number; y: number; w: number; h: number; round: boolean; message: string; bond?: boolean; dashed?: boolean }[] = [];
   for (const [id, problem] of marks ? [...marks.valence] : []) {
     const a = at.get(id);
@@ -198,8 +229,9 @@ export default function ChemMarks2D({
       dashed: true,
     });
   }
+  const bondsHere = bondsSaid.size ? new Map(model.bonds.filter((b) => bondsSaid.has(b.id)).map((b) => [b.id, b])) : null;
   for (const [id, said] of bondsSaid) {
-    const b = drawn.bonds.find((x) => x.id === id);
+    const b = bondsHere?.get(id);
     const p = b && at.get(b.a);
     const q = b && at.get(b.b);
     if (!p || !q) continue;
@@ -290,9 +322,7 @@ export default function ChemMarks2D({
             style={{ width: m.w, height: m.h, borderRadius: m.round ? "50%" : 3 }}
           >
             {(m.bond ? hoveredBond === m.id : hoveredAtom === m.id) && !leaving && (
-              <div className="meno-fade-in absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm">
-                {m.message}
-              </div>
+              <MarkTip text={m.message} room={room} />
             )}
           </div>
         </PageHtml>
@@ -322,6 +352,31 @@ export default function ChemMarks2D({
         </PageHtml>
       )}
     </group>
+  );
+}
+
+/** What a mark says, under it - moved along, or put over it, to lie where it can be seen (markTip). */
+function MarkTip({ text, room }: { text: string; room: () => ScreenBox }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ dx: number; above: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const mark = el?.parentElement?.getBoundingClientRect();
+    if (!el || !mark) return;
+    setPlace(tipPlace(tipUnder(mark, el.offsetWidth, el.offsetHeight), mark, room()));
+  }, [text, room]);
+  return (
+    <div
+      ref={ref}
+      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
+      style={{
+        [place?.above ? "marginBottom" : "marginTop"]: TIP_GAP_PX,
+        transform: `translateX(calc(-50% + ${place?.dx ?? 0}px))`,
+        visibility: place ? undefined : "hidden",
+      }}
+    >
+      {text}
+    </div>
   );
 }
 

@@ -16,8 +16,8 @@ import { stopJobsAndWait } from "../jobs";
  * *Plugins*, and taken away there; a plugin that fills a role is set up as
  * well the first time the role is needed, unless it was taken away
  * (lib/roles/worker). Its worker is started the first time it is asked to
- * read, write or do a step - or fill a role - then kept for the session, one
- * for all of these (lib/plugins/process). Meno's own reading is always
+ * read, write or do a step - or fill a role - then kept while it is used,
+ * one for all of these (lib/plugins/process). Meno's own reading is always
  * there, and runs in the app (./builtin). The kinds a plugin brings are
  * registered while it is added, and only then (lib/io/kinds).
  */

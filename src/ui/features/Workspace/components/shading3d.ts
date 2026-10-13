@@ -87,7 +87,14 @@ export function useShading3d(o: {
   }, [places, solid, lines, invalidate]);
 
   // the shade as drawn, on its way to what it is to be
-  const shown = useRef({ atoms: openTerms(n), bonds: new Float32Array(0), strength: 0, screen: 0 });
+  // (and what its terms last arrived at - each look's worked out, and how far over: gone over again only once that changes)
+  const shown = useRef<{ atoms: Float32Array; bonds: Float32Array; strength: number; screen: number; arrived: unknown[] | null }>({
+    atoms: openTerms(n),
+    bonds: new Float32Array(0),
+    strength: 0,
+    screen: 0,
+    arrived: null,
+  });
   // its balls, sticks and ribbon drawn into the screen's shade, as deep as it is shaded there
   const screened = useRef(new WeakSet<THREE.Object3D>());
   const screenWeight = useRef(() => shown.current.screen);
@@ -204,8 +211,14 @@ export function useShading3d(o: {
         changed = true;
       }
     };
-    towards(s.atoms, p?.atoms, q?.atoms, (i) => (i % OCCLUSION_TERMS === 0 ? 1 : 0));
-    towards(s.bonds, p?.bonds, q?.bonds, () => 1);
+    // (where they have arrived and are going nowhere else, not gone over again: a still molecule of
+    // a hundred thousand atoms spent 8 ms of every frame of the view moving on nine terms each)
+    const aim = [p, q, f, s.atoms, s.bonds];
+    if (!s.arrived || aim.some((x, i) => x !== s.arrived![i])) {
+      towards(s.atoms, p?.atoms, q?.atoms, (i) => (i % OCCLUSION_TERMS === 0 ? 1 : 0));
+      towards(s.bonds, p?.bonds, q?.bonds, () => 1);
+      s.arrived = changed ? null : aim;
+    }
     if (changed) moving = true;
 
     // given to its balls and sticks, as attributes their material reads

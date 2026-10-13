@@ -11,6 +11,7 @@
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { writeClipboard } from "../../../lib/clipboard";
+import { useTextMenu } from "./textMenu";
 import { isWebAddress } from "../../../lib/pdf/reader";
 import type { ColumnTextEntry } from "./columnText";
 import type { MarkdownReader } from "./markdownReader";
@@ -143,6 +144,16 @@ export default function MarkdownBody({ entry, reader, value }: Props) {
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onKeyDown={onKeyDown}
+      // (a right-click: Meno's menu for the words - read, so Copy and Select All alone)
+      onContextMenu={(e) => {
+        e.preventDefault();
+        useTextMenu.getState().open(e.clientX, e.clientY, {
+          selected: () => reader.selected,
+          hasText: () => value.length > 0,
+          selectAll: () => reader.selectAll(),
+          after: () => entry.redraw(),
+        });
+      }}
       onFocus={() => {
         reader.focused = true;
         entry.redraw();

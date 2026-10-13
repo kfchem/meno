@@ -315,7 +315,9 @@ Taken while stage 1 was built, on 2026-10-03:
     measured (found on Windows, 2026-10-05).
 - **Frames.**
   - A molecule with frames has a chip under it: which frame, of how many.
-    Hovered or selected, the chip opens to a slider.
+    Clicked, the chip opens to a slider; clicked again, or with a press
+    anywhere else or Escape, it shuts (the maintainer, 2026-10-13: it
+    opens on a click, not as its molecule is pointed at or selected).
   - The old viewer's ladder of energies became bars above the slider:
     each frame as high as it is above the lowest, and the chip says by
     how much in kcal/mol. One control serves both a trajectory and a
@@ -354,6 +356,24 @@ Taken on 2026-10-04:
 - **The system's menu bar stays as the system has it.** On a Mac, Meno's
   commands do not go into it. A Mac's window is to get its own controls
   (the close button and its neighbours) at some stage.
+- **The system's right-click menu only where it edits words** (2026-10-13).
+  In a text box - a field in Settings or Quick Add - it gives Cut, Copy and
+  Paste; anywhere else - Settings, the tab bar, a tab, Quick Add's row, a
+  dialog, the column's text, which Meno draws itself - all it gave was the
+  webview's Reload, which starts the whole window afresh, unsaved work and
+  all, so it is kept shut there (`keepSystemMenuShut`, lib/doc/shortcuts).
+  Meno's own menus - the canvas's, a PDF's, a colour set's - open as they
+  do.
+- **Meno's own menu on words written or read in place** (the maintainer,
+  2026-10-13). A right-click on the column's text, on words being written
+  on the page or on an atom's label being written opens a small menu of
+  Meno's, as the canvas's look: Cut, Copy, Paste and Select All, with their
+  keys, each that does not apply now shown but not to be pressed - Cut and
+  Copy with nothing selected, Paste with no text on the clipboard, Cut and
+  Paste on a Markdown text read (`textMenu`, TextEditor). Where nothing is
+  selected, the caret goes where the right-click was first. The words keep
+  the keys while it is open: Escape closes it alone, and a press elsewhere
+  only closes it.
 - **Closing the last tab quits Meno.**
 
 Taken on 2026-10-07:
@@ -793,6 +813,10 @@ slowing it - and in the pictures made of it.
   notice in the corner (*Many atoms on the canvas*) with *Keep them*,
   which sets *Very large drawings* (Settings, every style) to *As set*
   for good. A picture made of it has its shade and shadows all the same.
+  The atoms counted are those drawn and every atom of the residues
+  ribbons stand for (the maintainer's choice, 2026-10-13), so a large
+  protein in ribbons is drawn lighter as it would be as atoms; those a
+  look leaves out otherwise (hydrogens on carbon, water) are not.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -924,7 +948,7 @@ file are shown the way a molecule's frames are, one at a time.
 - **One shown.** The stack shows one molecule. Its chip, just below it,
   says which of how many and the record's title where its file gives one
   (*3 / 60  aspirin*: an SD record's first line, kept on the molecule as
-  `title`) and, hovered or selected, is a slider
+  `title`) and, clicked, is a slider
   through them, as a molecule's frames' chip is (`StackChip3D`). It is the
   stack's chip, not its molecules', so a drag along it goes on through the
   stack. Which one is shown is the view's (`stacksShown`), as a frame is,
@@ -961,7 +985,7 @@ same way.
   drawing of its own.
 - **One shown.** The stack shows one record, with the chip a stack of
   molecules has (`StackChips2D`): which of how many and the title, and,
-  the record hovered or selected, a slider. Which is shown is the view's
+  clicked, a slider. Which is shown is the view's
   (`recordsShown`), not an undo step.
 - **What is drawn and what is kept.** The canvas works on the drawing as
   shown: the store's `model` is the records shown and the rest, made from
@@ -1006,11 +1030,19 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 
 - **Said over it.** *No H in file* where the molecule - for a PDB entry,
   its chains while they are drawn as atoms, or a ligand - has no
-  hydrogens and either has carbon, its orders unknown, or has an atom
-  whose valence, its orders known, leaves room for some; *Bond orders
+  hydrogens and either has a carbon whose neighbours leave room for some,
+  its orders unknown (none or one, but for the end of a C≡O or C≡N; two
+  not in a line; three not in a plane: so not C60, carbon dioxide, CCl4
+  or a metal's carbonyls), or has an atom whose valence, its orders
+  known, leaves room for some; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
-  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  side chains round a ligand, in a look with ribbons, among them); *3
+  frames left out* where frames of its file were left out as it was read
+  (cut short, or with a place that does not read: never without a word);
+  *Atoms in one place* where atoms of it stood within 0.1 Å of another as
+  it was read - a damaged file, or none of a molecule's - which are given
+  no bond. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,
