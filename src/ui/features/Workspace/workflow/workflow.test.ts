@@ -210,6 +210,7 @@ describe("Meno's own steps", () => {
     const now = () => clock++;
     const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { onDone: (n) => done.push(n), pause: async () => void pauses++, slice: 20, tell: 100, now });
     expect(pauses).toBeGreaterThan(10);
+    const quick = pauses;
     // (said far less often than the turns: at most every hundred of the clock's milliseconds)
     expect(done.length).toBeGreaterThan(1);
     expect(done.length).toBeLessThan(pauses / 2);
@@ -221,6 +222,11 @@ describe("Meno's own steps", () => {
     pauses = 0;
     await runMenoInTurns("populations", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 0 });
     expect(pauses).toBe(0);
+    // (the page's own turns long - ten of the clock's milliseconds each: the slices four times as long, and so a quarter as many)
+    let slow = 0;
+    clock = 0;
+    await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void ((clock += 10), slow++), slice: 20, now });
+    expect(slow).toBeLessThan(quick / 1.5);
     // (stopped: given up at the next turn, nothing kept)
     pauses = 0;
     expect(await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 20, now, stopped: () => pauses >= 2 })).toBeNull();

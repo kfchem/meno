@@ -61,7 +61,8 @@ export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
-  const slice = how.slice ?? TURN_MS;
+  const least = how.slice ?? TURN_MS;
+  let slice = least;
   let began = now();
   let told = began;
   const turns = duplicates(entries, holds, Number(options.rmsd), () => now() - began >= slice);
@@ -73,14 +74,18 @@ export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[
       how.onDone?.(turn.value);
       told = now();
     }
+    const left = now();
     await (how.pause ?? nextTurn)();
     if (how.stopped?.()) return null;
     began = now();
+    // (the page's own turn taken into account - a frame drawn, say: each slice at least four times as long as it took, so that the work has four fifths of the time, up to TURN_MOST_MS, the page still answering within a frame or three)
+    slice = Math.min(TURN_MOST_MS, Math.max(least, 4 * (began - left)));
   }
 }
 
-/** How long a turn of Duplicates' is before it lets the page go on, and how often at most it says how far it is, in milliseconds. */
+/** How long a turn of Duplicates' is before it lets the page go on, at least and at most, and how often at most it says how far it is, in milliseconds. */
 export const TURN_MS = 11;
+export const TURN_MOST_MS = 50;
 export const TELL_MS = 100;
 
 /**
