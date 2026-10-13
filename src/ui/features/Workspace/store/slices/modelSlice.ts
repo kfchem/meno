@@ -213,14 +213,15 @@ export const createModelSlice = (
   noteDoubleClickBond: (atomId: number) =>
     set((prev: EditorState) => ({
       ...prev,
-      doubleClickBond: { atomId, depth: doc.history().undoDepth, at: performance.now() },
+      doubleClickBond: { atomId, state: doc.getState(), at: performance.now() },
     })),
 
   takeBackDoubleClickBond: (atomId: number) => {
     const d = get().doubleClickBond;
     set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));
     if (!d || d.atomId !== atomId || performance.now() - d.at > 2 * DOUBLE_CLICK_MS) return;
-    if (doc.history().undoDepth === d.depth) doc.undo();
+    // (the bond's own step, nothing since: the document still as the bond left it)
+    if (doc.getState() === d.state) doc.undo();
   },
 
   drawStrokeAt: (start: { x: number; y: number }, nodes: Parameters<typeof ops.addStroke>[2]) => {
