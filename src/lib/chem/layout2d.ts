@@ -1821,9 +1821,23 @@ function buildWedgeTriangle(
   const points = [...base.points, tipR, tipL];
   // (a base another shape in perspective meets is kept square: see buildBoldBar)
   const soften = [...base.soften.map((v) => v && !squareBase), true, true];
-  return {
-    points: round ? roundPolyCorners(points, tipHalf, soften) : points,
-  };
+  if (!round) return { points };
+  // Rounding a broad end's corner draws it in a little - the more, the more
+  // the wedge tapers: the corners rounded at its full width are set out
+  // across the bond by as much, so that it is as broad as the style says.
+  const across = vperp(dir);
+  const off = (q: Vec2) => vdot(vsub(q, p1), across);
+  const outer = points.map((q, i) => i < base.points.length && soften[i] && Math.abs(Math.abs(off(q)) - baseHalfWorld) <= 1e-6 * baseHalfWorld);
+  let shaped = points;
+  for (let k = 0; k < 3 && outer.some(Boolean); k++) {
+    const rounded = roundPolyCorners(shaped, tipHalf, soften);
+    const short = (side: 1 | -1) => baseHalfWorld - rounded.reduce((m, q) => Math.max(m, side * off(q)), -Infinity);
+    const left = short(1);
+    const right = short(-1);
+    if (Math.abs(left) < 1e-9 * baseHalfWorld && Math.abs(right) < 1e-9 * baseHalfWorld) break;
+    shaped = shaped.map((q, i) => (outer[i] ? vadd(q, vscale(across, off(q) >= 0 ? left : -right)) : q));
+  }
+  return { points: roundPolyCorners(shaped, tipHalf, soften) };
 }
 
 /**
@@ -4402,13 +4416,15 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The CSS font stack for a typeface: itself, its nearest stand-in, then
- * IBM Plex Sans JP for what it lacks - as the canvas draws it.
+ * The CSS font stack for a typeface: itself, its nearest stand-ins, then
+ * IBM Plex Sans JP for what it lacks - as the canvas draws it. IBM Plex
+ * Sans, which Meno carries but a picture's reader seldom has, stands in as
+ * Arial or Helvetica there, the nearest most have.
  */
 export function fontStack(family: string): string {
   const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name);
   const standIn =
-    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : [];
+    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : family === "IBM Plex Sans" ? ["Arial", "Helvetica"] : [];
   return [family, ...standIn, "IBM Plex Sans JP", "sans-serif"]
     .map((name, i, all) => (i === all.length - 1 ? name : quote(name)))
     .join(", ");
