@@ -539,7 +539,15 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (betweenLabels[i]) for (const s of g) inHashes.delete(s);
   });
   const hashes = hashed.filter((_, i) => !betweenLabels[i]);
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s))));
+  // (a short line running straight out of a label to nothing - a methyl's bond squeezed short and cut back at the label, an
+  // N-methyl in a bridge - is a bond too)
+  const tipsOf = shapes.strokes.flatMap((t) => [t.a, t.b].map((p) => ({ p, of: t })));
+  const outOf = (s: Stroke, p: Point, q: Point) => {
+    const from = words.find((w) => fromBox(p, w.box) < 0.15 * bond && dot(unit(centre(w.box), q), unit(p, q)) > 0.9);
+    return !!from && !words.some((w) => w !== from && fromBox(q, w.box) < 0.3 * bond) && !tipsOf.some((t) => t.of !== s && dist(t.p, q) < 0.2 * bond);
+  };
+  const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);

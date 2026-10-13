@@ -6,6 +6,7 @@ import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import cisplatin from "./fixtures/cisplatin-rdkit.json";
+import cocaine from "./fixtures/cocaine-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
@@ -723,6 +724,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const s = read(figure([stroke(step(c, 180), c, step(c, -90)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("OH", o)));
     expect(bondsOf(s)).toContain("C-O up");
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
+  });
+
+  it("reads a short line running straight out of a label to nothing as a bond to a methyl", () => {
+    // (cocaine as RDKit's ACS 1996 mode draws it: its bridge's N-methyl squeezed to half a bond, cut back at the N - a quarter
+    // of a bond shows)
+    const r = readFigure(cocaine as unknown as FigureDrawn);
+    const n = r.atoms.findIndex((a) => a.label === "N");
+    expect(r.bonds.filter((b) => b.a === n || b.b === n)).toHaveLength(3);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(17);
   });
 
   it("reads a short wedge pointing into an H set close, cut back at it, as the H's bond", () => {

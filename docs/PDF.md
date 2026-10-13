@@ -1010,7 +1010,11 @@ workspace holds.
     a bond between them, two side by side a double one, three a triple
     one (N≡N+) - never a hash, however evenly they are set; and so is a
     short line from a joint of bonds to a label stacked tall - an NH with
-    its H over its N - cut back short of its H.
+    its H over its N - cut back short of its H;
+  - a short line, a sixth of a bond long or more, running straight out
+    of a label to nothing - no line's end and no other word by its far
+    end - is a bond to a methyl: an N-methyl in a bridge squeezed short
+    and cut back at its N.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
