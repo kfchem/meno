@@ -33,6 +33,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { MENO_KINDS } from "./lib/io/kinds";
+import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
@@ -294,7 +295,7 @@ export default function App() {
           openWorkspaceTab(name, workspace, path);
           continue;
         }
-        const text = new TextDecoder().decode(bytes);
+        const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
         const opened = openedAs(name, text, path, await kindOfFile(name, text));
         const asText = textsOf(opened);
@@ -343,12 +344,13 @@ export default function App() {
     const texts: OpenedText[] = [];
     for (const f of files) {
       try {
-        const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
           openWorkspaceTab(f.name, workspace);
           continue;
         }
-        const text = await f.text();
+        const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
         const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
         const asText = textsOf(opened);

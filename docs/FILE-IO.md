@@ -328,6 +328,18 @@ How these behave:
   says which plugin the catalogue suggests, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
+- **A file's text is read as its bytes are written** (2026-10-13,
+  `lib/io/text.ts`). Open, a drop, a file pasted and an output read again
+  all read it so:
+  - as UTF-8;
+  - as UTF-16 where a byte order mark says so, either way round;
+  - bytes that are not UTF-8, as Shift_JIS, which Windows in Japanese
+    writes text in;
+  - those that are not Shift_JIS either, as Windows-1252.
+
+  A text is held with its lines ended "\n", however its file ended them.
+  Text Meno puts on the clipboard on Windows has them ended "\r\n", as
+  Windows programs take it.
 - **Office's record is handed to the canvas as the record**, not under a
   made-up name.
 
