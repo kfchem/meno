@@ -999,7 +999,8 @@ workspace holds.
     other for most of the shorter (seven tenths: a cube's parallel edges,
     drawn in perspective half past each other, are none), are a double or a
     triple bond, its ends taken to an atom within a quarter of a bond
-    where its lines run a little past it or stop short of it - its ends the longer line's where one is longer, as a
+    where its lines run a little past it or stop short of it (not an end
+    inside a label's box: that is the label's) - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it (but where the two end together at one end and the longer runs on alone past
     the other, to nothing, while the shorter ends there by other lines, that end is the shorter's), else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its

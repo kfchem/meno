@@ -634,6 +634,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const [p, from] = end === "a" ? [d.a, d.b] : [d.b, d.a];
     const others = drawnBonds.filter((o) => o !== d).flatMap((o) => [o.a, o.b]);
     if (others.some((q) => dist(q, p) < 0.2 * bond)) return;
+    // (a double bond's end inside a label's box comes to the label, not to a bond's end by it - a P=O's to its P)
+    const pad = 0.08 * bond;
+    if (!d.stereo && words.some((w) => fromBox(p, [w.box[0] - pad, w.box[1] - pad, w.box[2] + pad, w.box[3] + pad]) === 0)) return;
     const way = unit(from, p);
     // (a hash's on along its way, a little under half a bond at most - a figure's bonds short to its labels make a bond
     // short; a double bond's, its middle line's end a little off its atom - its lines run past it, or stop short - within a

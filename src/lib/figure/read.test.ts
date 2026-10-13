@@ -4,6 +4,7 @@ import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
+import atp from "./fixtures/atp-rdkit.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import cisplatin from "./fixtures/cisplatin-rdkit.json";
 import cisplatinAcscg from "./fixtures/cisplatin-rdkitacscg.json";
@@ -224,6 +225,12 @@ describe("a figure read as a structure", () => {
     const s = read(figure([stroke(step(c, 150), c, step(c, 210)), stroke(c, d), stroke(step(d, 30), d, step(d, -30)), stroke([c[0] + 2.2, 62.4], [c[0] + 2.2 + 0.25 * L, 62.4])]));
     expect(bondsOf(s).filter((b) => b === "C=C")).toHaveLength(1);
     expect(s.atoms).toHaveLength(6);
+  });
+
+  it("keeps a double bond's end inside a label's box at the label, not carried to a bond's end by it", () => {
+    // (ATP as RDKit draws it by default: a P=O's middle end inside its P's box, a P-OH bond's end 0.23 of a bond off it)
+    const r = readFigure(atp as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(10);
   });
 
   it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {
