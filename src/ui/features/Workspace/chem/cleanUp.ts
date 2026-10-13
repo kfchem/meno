@@ -6,6 +6,8 @@
  */
 import { contractGraph, contractionTrials, hiddenIn } from "../../../../lib/chem/contract";
 import { chemistry } from "../../../../lib/chem/molecule";
+import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Layout2D } from "../../../../lib/layout/engine";
 import { emptyWorkspaceDocument, relayout, writtenAsLabels, type WrittenAsLabel } from "../document";
 import type { EditorStore } from "../store";
@@ -160,7 +162,9 @@ export async function cleanUp(
   }
   const labels = cleaned.flatMap((c) => c.labels);
   const written = labels.length ? writtenAsLabels({ ...emptyWorkspaceDocument(), model }, labels).model : model;
-  const changes = cleaned.map((c) => relayoutFrom(written, c.part, c.job, c.laid));
+  // (in the style it is drawn in: a bond to a terminal label drawn long enough for its labels)
+  const style = styleOf(store.getState().docStyle ?? useAppSettings.getState().drawingStyle);
+  const changes = cleaned.map((c) => relayoutFrom(written, c.part, c.job, c.laid, style));
   store.getState().relayout(
     {
       atoms: changes.flatMap((c) => c.atoms),
@@ -175,11 +179,12 @@ export async function cleanUp(
 /**
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
- * added: a plugin's drawing of a SMILES.
+ * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
+ * given - as Clean-up lays one out.
  */
-export async function laidOut(model: Model): Promise<Model> {
+export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle)): Promise<Model> {
   if (!model.bonds.length) return model;
   const job = layoutJob(model);
-  const change = relayoutFrom(model, model, job, await layOut(job.input));
+  const change = relayoutFrom(model, model, job, await layOut(job.input), style);
   return relayout({ ...emptyWorkspaceDocument(), model, nextId: nextFree(model) }, change).model;
 }
