@@ -10,6 +10,7 @@ import monensin from "./fixtures/monensin-rsc.json";
 import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
 import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
+import tempo from "./fixtures/tempo-rdkit.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
 import glucose from "./fixtures/glucose-rdkit.json";
@@ -758,6 +759,13 @@ describe("a figure drawn in colour by another program", () => {
     expect(r.atoms).toHaveLength(10);
     const oh = r.atoms.findIndex((a) => a.label === "OH" && a.x > 360 && a.y < 130);
     expect(r.bonds.filter((b) => b.a === oh || b.b === oh).map((b) => b.stereo)).toEqual(["up"]);
+  });
+
+  it("reads a radical's dot drawn as a polygon of many corners, small beside the bonds, as its unpaired electron", () => {
+    // (TEMPO as RDKit draws it by default: the O's dot a filled polygon of 76 points, 3 points across - a twenty-eighth of its
+    // bonds, twice its lines' width)
+    const r = readFigure(tempo as unknown as FigureDrawn);
+    expect(r.atoms.find((a) => a.label === "O")?.dots).toBe(1);
   });
 
   it("reads a charge the PDF gives no character for - a control code, drawn flat - as a minus", () => {

@@ -1048,7 +1048,9 @@ workspace holds.
   bond's end, a short line or two across the way to it from an atom by
   it, is that atom's H behind, its hash the rest hidden by the joint at
   the atom and by the H. A small round dot
-  by an atom, twice a line's width or more and at no line's end, is a
+  by an atom - curved, or a polygon of a dozen corners or more, as RDKit
+  draws one - half as wide again as a line or more, under a sixth of a
+  bond, and at no line's end nor a hash's, is a
   radical's unpaired electron; two side by side a pair, read as a singlet
   and marked so (a triplet is drawn the same). A lone H takes one
   bond: its wedge's, where it has one. A word with a charge - written,

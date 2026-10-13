@@ -9,7 +9,7 @@
  */
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
-import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
+import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
  * An atom read: where it lies on the page, its label as drawn - none for a
@@ -459,8 +459,8 @@ function boxGap(a: Box, b: Box): number {
 /** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
 const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
 
-/** How large a radical's dot is drawn, in bonds: at least, and at most. */
-const DOT = [0.05, 0.16] as const;
+/** How large a radical's dot is drawn at most, in bonds (at least half as wide again as a line). */
+const DOT = 0.16;
 
 /** How far an ion is set from the structure at most - or from the ion before it, in a row of them - in bonds, the gap between them. */
 const ION_BY = 2.5;
@@ -815,15 +815,18 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (let i = 0; i < atoms.length; i++) if (from(atoms[i], m.at) < 1.2 * bond && (best < 0 || from(atoms[i], m.at) < from(atoms[best], m.at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + m.charge };
   }
-  // (a radical's electron: a small round dot by an atom, alone - two side by side for a pair - not a letter's, nor a line's
-  // round end or joint: a dot is drawn twice as wide as a line, or more, and lies at no line's end)
+  // (a radical's electron: a small round dot by an atom, alone - two side by side for a pair - not a letter's, a hash's, nor a
+  // line's round end or joint: a dot is drawn half as wide again as a line, or more, and lies at no line's end. Round: curved, or
+  // a polygon of a dozen corners or more, as RDKit draws one)
   const lineWidths = shapes.strokes.map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = lineWidths.length ? lineWidths[Math.floor(lineWidths.length / 2)] : 0;
   const lineEnds = shapes.strokes.flatMap((s) => [s.a, s.b]);
+  const ofHashes = new Set([...inHashes].map((s) => blobOf.get(s)));
+  const round = (b: Blob) => b.curved || b.pts.filter((p, i) => !b.pts.slice(0, i).some((q) => dist(p, q) < 1e-3)).length >= 12;
   const dots = shapes.blobs.filter((b) => {
     const [w, h] = [b.box[2] - b.box[0], b.box[3] - b.box[1]];
     const size = Math.max(w, h);
-    if (!b.curved || inLetters.has(b) || size < DOT[0] * bond || size > DOT[1] * bond || Math.min(w, h) < 0.7 * size || size < 1.8 * lineWidth) return false;
+    if (!round(b) || inLetters.has(b) || ofHashes.has(b) || size > DOT * bond || Math.min(w, h) < 0.7 * size || size < 1.4 * lineWidth) return false;
     return !lineEnds.some((p) => dist(p, centre(b.box)) < size);
   });
   for (const d of dots) {
