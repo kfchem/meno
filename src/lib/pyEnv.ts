@@ -24,10 +24,11 @@ async function sha256(s: string) {
     .join("");
 }
 /**
- * A Python environment: one of Meno's own - the console's, workflows' - or a
- * plugin's (lib/calc/catalog), each from its lock.
+ * A Python environment: a plugin's (lib/calc/catalog), from its lock. Meno
+ * has none of its own (the backend sets up no other: src-tauri/src/lib.rs
+ * `validate_env_info`).
  */
-export type PyProfile = "console" | "node" | `plugin-${string}`;
+export type PyProfile = `plugin-${string}`;
 
 /** The plugin a profile is the environment of; none, for Meno's own. */
 const pluginOf = (profile: PyProfile): PythonPlugin | undefined => PLUGINS.find((p) => p.profile === profile);
@@ -122,14 +123,15 @@ type PyEnvInfo = {
   label: string;
 };
 
-/** What each of Meno's own profiles is for, in words. */
-const PROFILE_USE: Record<"console" | "node", string> = {
-  console: "the console",
-  node: "workflows",
-};
+/** The plugin a profile is the environment of: one Meno knows, or none to set up. */
+function pluginFor(profile: PyProfile): PythonPlugin {
+  const plugin = pluginOf(profile);
+  if (!plugin) throw new Error(`${profile} is not a plugin's environment`);
+  return plugin;
+}
 
-/** Each profile's lock file, among the app's resources: a plugin's in its folder. */
-const lockOf = (profile: PyProfile) => pluginOf(profile)?.lock ?? `resources/py/requirements.${profile}.lock`;
+/** Each profile's lock file, among the app's resources: its plugin's, in its folder. */
+const lockOf = (profile: PyProfile) => pluginFor(profile).lock;
 
 async function baseInfo(
   profile: PyProfile,
@@ -155,7 +157,7 @@ async function baseInfo(
     stampPath: pixi ? `pixi/stamps/${profile}.json` : `uv/stamps/${profile}.json`,
     pythonVersion: pyVer,
     purpose: `python-env:${profile}`,
-    label: plugin ? `Setting up ${plugin.name}` : `Setting up Python for ${PROFILE_USE[profile as keyof typeof PROFILE_USE]}`,
+    label: `Setting up ${plugin?.name ?? profile}`,
   };
 }
 
@@ -163,15 +165,13 @@ type EnvOptions = { lockPath?: string; pythonVersion?: string };
 
 /** Where a profile's environment stands, and whether it needs setting up. */
 async function envState(profile: PyProfile, opts?: EnvOptions) {
-  const defaultLock = lockOf(profile);
-  const fallbackLock = "resources/py/requirements.lock";
-  const useDefault = await exists(defaultLock, {
+  const plugin = pluginFor(profile);
+  const useDefault = await exists(plugin.lock, {
     baseDir: BaseDirectory.Resource,
   });
   // (a plugin's environment from its own lock, or none: never from another's)
-  const plugin = pluginOf(profile);
-  if (!useDefault && plugin && !opts?.lockPath) throw new Error(`${plugin.name}'s lock is not in its folder.`);
-  const lockPath = opts?.lockPath ?? (useDefault ? defaultLock : fallbackLock);
+  if (!useDefault && !opts?.lockPath) throw new Error(`${plugin.name}'s lock is not in its folder.`);
+  const lockPath = opts?.lockPath ?? plugin.lock;
 
   const info = await baseInfo(profile, lockPath, opts?.pythonVersion ?? "3.12");
 
@@ -282,15 +282,13 @@ export async function ensurePyEnv(
       .split(/\r?\n/)
       .filter((line) => /^[A-Za-z0-9_.-]+(==| @ )/.test(line)).length;
     const hashed = /^\s*--hash=/m.test(lockText);
-    const plugin = pluginOf(profile);
+    const plugin = pluginFor(profile);
     const allowed = await askToConnect({
       purpose: info.purpose,
-      title: plugin ? consentTitle(plugin) : `Download Python for ${PROFILE_USE[profile as keyof typeof PROFILE_USE]}?`,
+      title: consentTitle(plugin),
       again: untold,
       detail:
-        (plugin
-          ? `${plugin.description} It runs in a Python ${info.pythonVersion} of its own, `
-          : `To run Python, Meno sets up a Python ${info.pythonVersion} of its own, `) +
+        `${plugin.description} It runs in a Python ${info.pythonVersion} of its own, ` +
         // (a plugin that needs Python alone: no packages to fetch)
         (packages
           ? `with the ${packages} packages it needs, in its data folder${extra.need}. ` +
@@ -338,10 +336,8 @@ export async function ensurePyEnv(
 
 /**
  * Takes a plugin's environment away, and its record of being set up: what
- * Settings' *Plugins* removes. Meno's own environments are not taken away
- * this way.
+ * Settings' *Plugins* removes.
  */
 export async function removePyEnv(profile: PyProfile): Promise<void> {
-  if (!pluginOf(profile)) throw new Error(`${profile} is not a plugin's environment`);
   await invoke("py_env_remove", { payload: await baseInfo(profile, lockOf(profile)) });
 }

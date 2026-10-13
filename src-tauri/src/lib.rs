@@ -44,7 +44,7 @@ struct PyEnvInfo {
     #[serde(rename = "pythonVersion")]
     python_version: String,
     /// What the environment is for, as the user allowed its download
-    /// ("python-env:console"), and in words.
+    /// ("python-env:plugin-rdkit"), and in words.
     #[serde(default)]
     purpose: String,
     #[serde(default)]
@@ -126,27 +126,15 @@ fn validate_env_info(info: &PyEnvInfo) -> Result<ValidatedEnv, String> {
         return Err(format!("unexpected host: {}", info.host));
     }
     let lock = safe_relative(&info.lock_path)?;
-    let is_lock = lock.extension().and_then(|e| e.to_str()) == Some("lock");
     let venv_home = safe_relative(&info.venv_home)?;
-    match plugin_file(&lock) {
-        // (a plugin's: its requirements.lock, made into its own environment)
-        Some((id, file)) => {
-            if file != "requirements.lock" {
-                return Err(format!("unexpected lock file: {}", info.lock_path));
-            }
-            if venv_home != Path::new("uv").join(format!("plugin-{id}")).join("venv") {
-                return Err(format!("unexpected venv location: {}", info.venv_home));
-            }
-        }
-        // (Meno's own, among its locks)
-        None => {
-            if !is_lock || !lock.starts_with("resources/py") {
-                return Err(format!("unexpected lock file: {}", info.lock_path));
-            }
-            if !venv_home.starts_with("uv") || venv_home.as_path() == Path::new("uv") {
-                return Err(format!("unexpected venv location: {}", info.venv_home));
-            }
-        }
+    // (a plugin's: its requirements.lock, made into its own environment and
+    // no other; Meno has no environment of its own)
+    let (id, file) = plugin_file(&lock).ok_or_else(|| format!("unexpected lock file: {}", info.lock_path))?;
+    if file != "requirements.lock" {
+        return Err(format!("unexpected lock file: {}", info.lock_path));
+    }
+    if venv_home != Path::new("uv").join(format!("plugin-{id}")).join("venv") {
+        return Err(format!("unexpected venv location: {}", info.venv_home));
     }
     let venv_python_rel = safe_relative(&info.venv_python_rel)?;
     if !valid_python_version(&info.python_version) {
@@ -988,8 +976,8 @@ mod tests {
 
     #[test]
     fn a_setup_downloads_only_under_a_python_environments_purpose() {
-        let mut info = env_info("resources/py/requirements.lock", "uv/console/venv", "3.12");
-        assert_eq!(setup_purpose(&info).as_deref(), Ok("python-env:console"));
+        let mut info = env_info(LOCK, VENV, "3.12");
+        assert_eq!(setup_purpose(&info).as_deref(), Ok("python-env:plugin-cclib"));
         // nothing but a Python environment's
         for bad in ["python-code", "python-env:", "python-env:a b", "anything"] {
             info.purpose = bad.into();
@@ -1033,7 +1021,7 @@ mod tests {
             },
             _stamp_path: String::new(),
             python_version: py.into(),
-            purpose: "python-env:console".into(),
+            purpose: "python-env:plugin-cclib".into(),
             label: String::new(),
             host: String::new(),
         }
@@ -1046,7 +1034,7 @@ mod tests {
             venv_python_rel: python.into(),
             purpose: "python-env:plugin-pyscf".into(),
             host: "pixi".into(),
-            ..env_info(LOCK, "uv/console/venv", "3.12")
+            ..env_info(LOCK, VENV, "3.12")
         }
     }
 
@@ -1069,12 +1057,14 @@ mod tests {
         ] {
             assert!(validate_env_info(&pixi_info(lock, home, python)).is_err(), "{lock} {home} {python}");
         }
-        let mut odd = env_info(LOCK, "uv/console/venv", "3.12");
+        let mut odd = env_info(LOCK, VENV, "3.12");
         odd.host = "conda".into();
         assert!(validate_env_info(&odd).is_err());
     }
 
-    const LOCK: &str = "resources/py/requirements.console.lock";
+    /// A plugin's lock, and where its environment is made.
+    const LOCK: &str = "resources/plugins/cclib/requirements.lock";
+    const VENV: &str = "uv/plugin-cclib/venv";
 
     #[test]
     fn only_a_plugins_environment_is_taken_away() {
@@ -1118,17 +1108,31 @@ mod tests {
 
     #[test]
     fn env_info_accepts_the_frontend_payload() {
-        let env = validate_env_info(&env_info(LOCK, "uv/console/venv", "3.12"))
-            .expect("frontend payload must validate");
-        assert_eq!(env.venv_home, Path::new("uv/console/venv"));
-        assert!(validate_env_info(&env_info(
-            "resources/py/requirements.lock",
-            "uv/node/venv",
-            "3.12"
-        ))
-        .is_ok());
-        // a plugin's, from its folder
-        assert!(validate_env_info(&env_info("resources/plugins/cclib/requirements.lock", "uv/plugin-cclib/venv", "3.12")).is_ok());
+        // a plugin's, from its folder, made in its own environment
+        let env = validate_env_info(&env_info(LOCK, VENV, "3.12")).expect("frontend payload must validate");
+        assert_eq!((env.lock.as_path(), env.venv_home.as_path()), (Path::new(LOCK), Path::new(VENV)));
+        assert!(!env.pixi);
+    }
+
+    #[test]
+    fn every_lock_meno_takes_pins_its_packages_by_hash() {
+        // (Meno's own environments' locks, unhashed, went with the console)
+        let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+        assert!(!resources.join("py").exists());
+        let package = |l: &str| {
+            let name = l.split_once("==").or_else(|| l.split_once(" @ ")).map(|(n, _)| n).unwrap_or_default();
+            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+        };
+        let mut seen = 0;
+        for entry in fs::read_dir(resources.join("plugins")).unwrap().flatten() {
+            let Ok(text) = fs::read_to_string(entry.path().join("requirements.lock")) else { continue };
+            // (one that names none - a plugin that needs Python alone - has none to pin)
+            if text.lines().any(package) {
+                assert!(lock_is_hashed(&text), "{}", entry.path().display());
+                seen += 1;
+            }
+        }
+        assert!(seen > 0);
     }
 
     #[test]
@@ -1144,20 +1148,28 @@ mod tests {
     #[test]
     fn env_info_rejects_foreign_paths() {
         let cases = [
-            env_info("resources/py/notes.txt", "uv/console/venv", "3.12"),
-            env_info("resources/plugins/cclib/manifest.json", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/plugins/cclib/x/requirements.lock", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/workers/requirements.lock", "uv/console/venv", "3.12"),
-            // a plugin's lock is its requirements.lock, made into its own environment
-            env_info("resources/plugins/cclib/other.lock", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/plugins/cclib/requirements.lock", "uv/plugin-pyscf/venv", "3.12"),
-            env_info("resources/plugins/cclib/requirements.lock", "uv/console/venv", "3.12"),
+            env_info("resources/py/notes.txt", VENV, "3.12"),
+            env_info("resources/plugins/cclib/manifest.json", VENV, "3.12"),
+            env_info("resources/plugins/cclib/x/requirements.lock", VENV, "3.12"),
+            env_info("resources/workers/requirements.lock", VENV, "3.12"),
+            // a plugin's lock is its requirements.lock, made into its own environment, exactly there
+            env_info("resources/plugins/cclib/other.lock", VENV, "3.12"),
+            env_info(LOCK, "uv/plugin-pyscf/venv", "3.12"),
+            env_info(LOCK, "uv/console/venv", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib/venv/x", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib/other", "3.12"),
             env_info("resources/plugins/CClib/requirements.lock", "uv/plugin-CClib/venv", "3.12"),
-            env_info("../outside.lock", "uv/console/venv", "3.12"),
+            env_info("../outside.lock", VENV, "3.12"),
             env_info(LOCK, "../../elsewhere", "3.12"),
             env_info(LOCK, "uv", "3.12"),
             env_info(LOCK, "other/venv", "3.12"),
-            env_info(LOCK, "uv/console/venv", "3.12 --index-url x"),
+            env_info(LOCK, VENV, "3.12 --index-url x"),
+            // Meno's own environments - the console's, workflows' - unhashed: none any more
+            env_info("resources/py/requirements.console.lock", "uv/console/venv", "3.12"),
+            env_info("resources/py/requirements.node.lock", "uv/node/venv", "3.12"),
+            env_info("resources/py/requirements.lock", "uv/node/venv", "3.12"),
+            env_info("resources/py/requirements.lock", "uv/anything/venv", "3.12"),
         ];
         for info in &cases {
             assert!(
