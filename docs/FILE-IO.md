@@ -504,6 +504,9 @@ work.meno (zip)
   output, a text, a PDF or a picture alike - is taken only if its bytes
   are what its SHA-256 says, so that no file can pass for another held
   this session.
+- **Saved within the same limits.** A workspace that would come to more
+  than a workspace file is read with is not written: Save says so, with
+  the sizes, rather than leave a file that would not open again.
 - **The JSON `.meno` of before is not looked for** (the maintainer: not
   needed). One still opens, the JSON being the same as `workspace.json`;
   nothing was added for it, and it is saved as a zip.

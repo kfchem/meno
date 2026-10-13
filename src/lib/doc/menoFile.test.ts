@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { createHash } from "node:crypto";
-import { isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, MOST_FILE, MOST_WORKSPACE, NotMenoFile, readMenoFile } from "./menoFile";
+import { isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, MOST_FILE, MOST_FILES, MOST_WORKSPACE, NotMenoFile, readMenoFile } from "./menoFile";
 import { writeMenoFile } from "./menoFileWriter";
 import { holdPicturesOf, pictureBytes } from "../picture/held";
 
@@ -164,4 +164,26 @@ describe("a workspace file that says other than it holds", () => {
     holdPicturesOf(readMenoFile(menoFileBytes(WORKSPACE, [{ sha256: said, name: "real.png", media: "image/png", data: real }])));
     expect(pictureBytes(said)).toEqual(real);
   });
+});
+
+describe("a workspace written past what a workspace file is read with", () => {
+  it("is not written, and says why - as Save shows it", async () => {
+    const long = "x".repeat(MOST_WORKSPACE + 1);
+    expect(() => menoFileBytes(long, [])).toThrow("A workspace file holds a workspace of at most 256 MB; this one comes to 257 MB.");
+    await expect(writeMenoFile(long, [])).rejects.toThrow(/at most 256 MB/);
+    // (room set aside, never written to: nothing is read of it before it is refused)
+    const huge = new Uint8Array(MOST_FILE + 1);
+    expect(() => menoFileBytes(WORKSPACE, [{ sha256: "a".repeat(64), name: "trajectory.log", media: "text/plain", data: huge }])).toThrow(
+      'A workspace file keeps no file of more than 1 GB; "trajectory.log" comes to 1.1 GB.',
+    );
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ({ sha256: i.toString(16).padStart(64, "0"), name: `${i}.txt`, media: "text/plain", data: strToU8(`${i}`) }));
+    expect(() => menoFileBytes(WORKSPACE, many(MOST_FILES + 1))).toThrow("A workspace file keeps at most 10,000 files; this workspace would keep 10,001.");
+  });
+
+  it("is written up to those limits, and reads back", () => {
+    const many = Array.from({ length: MOST_FILES }, (_, i) => ({ sha256: sha(strToU8(`${i}`)), name: `${i}.txt`, media: "text/plain", data: strToU8(`${i}`) }));
+    const file = readMenoFile(menoFileBytes(WORKSPACE, many));
+    expect(file.files).toHaveLength(MOST_FILES);
+    expect(new TextDecoder().decode(file.data(sha(strToU8("9999")))!)).toBe("9999");
+  }, 60_000);
 });

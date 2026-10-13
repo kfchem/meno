@@ -14,7 +14,8 @@
  * it by, and taken only if they are what it says. Nothing is ever unpacked
  * to the disk; what the file says of its sizes is held to limits before
  * anything is inflated, and nothing is inflated to more than it says, or
- * taken if it comes to less.
+ * taken if it comes to less. A workspace is written only within the limits
+ * it is read with.
  */
 import { strFromU8, strToU8, zipSync, type Zippable } from "fflate";
 import { sha256Hex } from "../binary/sha256";
@@ -38,12 +39,15 @@ export type KeptFile = {
 /** A file kept, with its bytes, as a workspace is written with it. */
 export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 
-/** The most a workspace's own JSON may come to, any one file it keeps, and how many it keeps. */
+/** The most a workspace's own JSON may come to, any one file it keeps, and how many it keeps: read so, and written so. */
 export const MOST_WORKSPACE = 256 * 1024 * 1024;
 export const MOST_FILE = 1024 * 1024 * 1024;
 export const MOST_FILES = 10_000;
 
 const SHA = /^[0-9a-f]{64}$/;
+
+/** A size as the limits are set in - megabytes, or gigabytes from one up - rounded up, so that one past a limit never reads as the limit. */
+const sized = (n: number) => (n >= 2 ** 30 ? `${Math.ceil((n / 2 ** 30) * 10) / 10} GB` : `${Math.ceil(n / 2 ** 20)} MB`);
 
 /** Whether `bytes` - a file's start will do - are a workspace file: a zip whose first entry, stored, says it is one. */
 export function isMenoFile(bytes: Uint8Array): boolean {
@@ -55,19 +59,33 @@ export function isMenoFile(bytes: Uint8Array): boolean {
   return name === "mimetype" && strFromU8(bytes.subarray(start, start + MENO_MEDIA_TYPE.length)) === MENO_MEDIA_TYPE;
 }
 
-/** A workspace written as its file, with the files it keeps. */
+/**
+ * A workspace written as its file, with the files it keeps. Throws, saying
+ * why, where it would come to more than a workspace file is read with
+ * (`readMenoFile`): a file that would not open again is not written.
+ */
 export function menoFileBytes(workspace: string, files: readonly KeptData[]): Uint8Array {
+  // (a string's UTF-8 is at least as long as the string: one far too long is not turned into bytes to be told so)
+  const json = workspace.length <= MOST_WORKSPACE ? strToU8(workspace) : null;
+  if (!json || json.length > MOST_WORKSPACE) {
+    throw new Error(`A workspace file holds a workspace of at most ${sized(MOST_WORKSPACE)}; this one comes to ${sized(json?.length ?? workspace.length)}.`);
+  }
   const index: Record<string, Omit<KeptFile, "sha256">> = {};
   const entries: Zippable = {
     mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }],
-    "workspace.json": [strToU8(workspace), { level: 0 }],
+    "workspace.json": [json, { level: 0 }],
   };
   const kept: Zippable = {};
+  let count = 0;
   for (const f of files) {
     if (!SHA.test(f.sha256) || index[f.sha256]) continue;
+    if (f.data.length > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.data.length)}.`);
     index[f.sha256] = { name: f.name, ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: f.data.length };
     kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") ? 6 : 0 }];
+    count++;
   }
+  if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);
+  // (the list of them - a few hundred bytes a file - cannot come near the workspace's limit, which it is read with)
   entries["files.json"] = [strToU8(JSON.stringify(index, null, 1)), { level: 0 }];
   return zipSync({ ...entries, ...kept });
 }
