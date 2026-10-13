@@ -17,7 +17,7 @@
  * pressed, not it. Lit along its line while the pointer is on it.
  */
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { Shape } from "../store/types";
@@ -50,7 +50,7 @@ import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useStyleOptions } from "../useDrawingStyle";
 import { polyTriangles } from "./polyTriangles";
 
 /** Where shapes lie: under the drawing and its fills (-0.05), over the pictures (Pictures2D's -0.3); each a little over the one before. */
@@ -137,12 +137,13 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
   return (
     <group>
       {fill && (
-        <mesh geometry={fill} frustumCulled={false} raycast={() => {}}>
+        // (drawn only where in view: their triangles are where they are drawn, so their bounds are the shape's)
+        <mesh geometry={fill} raycast={() => {}}>
           <meshBasicMaterial color={s.fill} toneMapped={false} transparent={see} opacity={opacity} />
         </mesh>
       )}
       {line && (
-        <mesh geometry={line} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={() => {}}>
+        <mesh geometry={line} position={[0, 0, Z_STEP / 4]} raycast={() => {}}>
           <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
         </mesh>
       )}
@@ -155,15 +156,20 @@ export default function Shapes2D() {
   const selShapes = useEditor((s) => s.selShapes);
   const hovered = useEditor((s) => s.hoveredShape);
   const draft = useEditor((s) => s.shapeDraft);
-  const { opts } = useDrawnLayout();
+  // (the style's, not the drawing's layout: a zoom draws no shape again - each keeps what the screen sizes in it frame by
+  // frame)
+  const opts = useStyleOptions();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const ink = opts.bondColor ?? "#000000";
   const { camera, gl } = useThree();
-  const toWorld = (cx: number, cy: number): Pt => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
-    return { x: p.x, y: p.y };
-  };
+  const toWorld = useCallback(
+    (cx: number, cy: number): Pt => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
+      return { x: p.x, y: p.y };
+    },
+    [camera, gl],
+  );
   const drafted = draft ? { kind: draft.kind, ...drawnShape(draft.kind, draft.from, draft.to, draft.even) } : null;
   return (
     <group>
@@ -179,7 +185,7 @@ export default function Shapes2D() {
   );
 }
 
-function ShapeItem({
+const ShapeItem = memo(function ShapeItem({
   s,
   z,
   pointPx,
@@ -198,43 +204,53 @@ function ShapeItem({
 }) {
   const store = useEditorStore();
   const { camera, invalidate } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
-  const px = 1 / zoom;
-  // the light along its line, under the pointer or selected, coming and going
+  const pxNow = () => 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  const px = pxNow();
+  // the light along its line, under the pointer or selected, coming and going - its band made only while there is
+  // light, as wide on the screen as the view is zoomed then (`litPx`), and made again as the view zooms meanwhile
   const light = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);
   useEffect(() => () => light.dispose(), [light]);
-  useFrame((_, dt) => {
-    const to = selected ? CHOSEN : hovered ? LIT : 0;
-    if (Math.abs(light.opacity - to) < 1e-3) {
-      light.opacity = to;
-      return;
-    }
-    light.opacity = follow(light.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-    invalidate();
-  });
+  const [litPx, setLitPx] = useState<number | null>(null);
   const key = JSON.stringify(s);
   const width = lineWidthOf(s, pointPx);
-  // (the light's band, as wide on the screen at any zoom: made again as the view zooms)
   const band = useMemo(() => {
-    return shapeGeometry(lines([outlineOf(s, pointPx)], width + 2 * LIT_PX * px));
+    if (litPx == null) return null;
+    return shapeGeometry(lines([outlineOf(s, pointPx)], width + 2 * LIT_PX * litPx));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, pointPx, px]);
-  useEffect(() => () => band.dispose(), [band]);
+  }, [key, pointPx, litPx]);
+  useEffect(() => () => band?.dispose(), [band]);
   // taken hold of by a press held on it: where, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   const [, setTick] = useState(0);
   useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
-    if (!held || !heldShows(held, performance.now())) return;
-    setTick((t) => t + 1);
-    invalidate();
+  const b = shapeBounds(s, pointPx);
+  const m = middleOf(b);
+  // what a press takes: the box round it, as far as a press on its line still takes it on the screen
+  const hold = useRef<THREE.Mesh>(null);
+  const holdPx = useRef(px);
+  // (one frame callback for all of it: the canvas sorts all of those again at every one added)
+  useFrame((_, dt) => {
+    const to = selected ? CHOSEN : hovered ? LIT : 0;
+    if (Math.abs(light.opacity - to) < 1e-3) light.opacity = to;
+    else {
+      light.opacity = follow(light.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
+      invalidate();
+    }
+    const now = pxNow();
+    const lit = to > 0 || light.opacity > 0.005;
+    if (lit && litPx !== now) setLitPx(now);
+    else if (!lit && litPx != null) setLitPx(null);
+    if (hold.current && holdPx.current !== now) {
+      holdPx.current = now;
+      hold.current.scale.set(b.x1 - b.x0 + 2 * EDGE_PX * now, b.y1 - b.y0 + 2 * EDGE_PX * now, 1);
+    }
+    if (held && heldShows(held, performance.now())) {
+      setTick((t) => t + 1);
+      invalidate();
+    }
   });
   // (the last click on it, for a second: its words written)
   const clicked = useRef(0);
-
-  const b = shapeBounds(s, pointPx);
-  const m = middleOf(b);
-  const slack = EDGE_PX * px;
   const filled = !!s.fill && isBox(s.kind);
   const lined = s.stroke !== "none";
   // (what is drawn on the page over it is pressed, not it)
@@ -244,7 +260,7 @@ function ShapeItem({
   };
   const onMove = (e: { point: THREE.Vector3; stopPropagation: () => void }) => {
     const st = store.getState();
-    const hit = !drawingHas() && shapeHit(s, { x: e.point.x, y: e.point.y }, slack, pointPx, filled, lined);
+    const hit = !drawingHas() && shapeHit(s, { x: e.point.x, y: e.point.y }, EDGE_PX * pxNow(), pointPx, filled, lined);
     if (hit) {
       // (the one on top takes it: none under it is lit)
       e.stopPropagation();
@@ -268,7 +284,7 @@ function ShapeItem({
     const ev = e.nativeEvent;
     const st = store.getState();
     // (taken where the press is on it, whatever the pointer last moved over)
-    if (ev.button !== 0 || drawingHas() || !shapeHit(s, { x: e.point.x, y: e.point.y }, slack, pointPx, filled, lined)) return;
+    if (ev.button !== 0 || drawingHas() || !shapeHit(s, { x: e.point.x, y: e.point.y }, EDGE_PX * pxNow(), pointPx, filled, lined)) return;
     e.stopPropagation();
     st.setHoveredShape(s.id);
     if (addsToSelection(ev)) {
@@ -346,23 +362,24 @@ function ShapeItem({
   const now = performance.now();
   return (
     <group position={[0, 0, z]}>
-      {/* (the light along its line, under it) */}
-      <mesh geometry={band} material={light} position={[0, 0, -Z_STEP / 4]} frustumCulled={false} raycast={() => {}} />
+      {/* (the light along its line, under it - while there is light) */}
+      {band && <mesh geometry={band} material={light} position={[0, 0, -Z_STEP / 4]} raycast={() => {}} />}
       <ShapeLook s={s} pointPx={pointPx} ink={ink} />
-      {/* (what a press takes: the box round it, as far as a press on its line still takes it - whether it is taken, its own to say) */}
-      <mesh position={[m.x, m.y, Z_STEP / 2]} scale={[b.x1 - b.x0 + 2 * slack, b.y1 - b.y0 + 2 * slack, 1]} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown}>
+      {/* (what a press takes: the box round it, as far as a press on its line still takes it - whether it is taken, its own
+          to say; never drawn: a pointer finds it all the same) */}
+      <mesh ref={hold} position={[m.x, m.y, Z_STEP / 2]} scale={[b.x1 - b.x0 + 2 * EDGE_PX * px, b.y1 - b.y0 + 2 * EDGE_PX * px, 1]} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        <meshBasicMaterial visible={false} transparent opacity={0} depthWrite={false} />
       </mesh>
       {held && heldShows(held, now) && (
         <group position={[m.x, m.y, 0]}>
           <HeldLight b={{ x0: b.x0 - m.x, x1: b.x1 - m.x, y0: b.y0 - m.y, y1: b.y1 - m.y }} at={held} held={held} now={now} z={Z_STEP / 3} />
         </group>
       )}
-      {selected && <Handles s={s} px={px} toWorld={toWorld} clicked={clicked} onWrite={isBox(s.kind) ? write : undefined} />}
+      {selected && <Handles s={s} toWorld={toWorld} clicked={clicked} onWrite={isBox(s.kind) ? write : undefined} />}
     </group>
   );
-}
+});
 
 /** The pointer each handle shows: a corner's, as it points on the screen; a side's, across or up and down; an end's or a tail's, the move. */
 function cursorOf(h: ShapeHandle): CursorName {
@@ -381,20 +398,25 @@ function cursorOf(h: ShapeHandle): CursorName {
  */
 function Handles({
   s,
-  px,
   toWorld,
   clicked,
   onWrite,
 }: {
   s: Shape;
-  px: number;
   toWorld: (cx: number, cy: number) => Pt;
   /** The last click on the shape - on its line or a handle - for a second. */
   clicked: React.MutableRefObject<number>;
   onWrite?: () => void;
 }) {
   const store = useEditorStore();
-  const { gl } = useThree();
+  const { camera, gl } = useThree();
+  const pxNow = () => 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  // (each the same size on the screen at any zoom)
+  const handles = useRef<(THREE.Group | null)[]>([]);
+  useFrame(() => {
+    const k = HANDLE_PX * pxNow();
+    for (const g of handles.current) if (g && g.scale.x !== k) g.scale.setScalar(k);
+  });
   const start = (h: ShapeHandle, ev: PointerEvent) => {
     if (onWrite && ev.timeStamp - clicked.current < DOUBLE_CLICK_MS) {
       clicked.current = 0;
@@ -415,6 +437,7 @@ function Handles({
     const sides = isBox(was.kind) && h !== "tail" ? { x: h.includes("x0") ? ("x0" as const) : h.includes("x1") ? ("x1" as const) : undefined, y: h.includes("y0") ? ("y0" as const) : h.includes("y1") ? ("y1" as const) : undefined } : null;
     const guide = sides ? guideSides(store, toWorld, from) : null;
     const scale = sides?.x && sides.y ? guideScale(store, toWorld, from, was) : null;
+    const px = pxNow();
     const onMove = (m: PointerEvent) => {
       const q = toWorld(m.clientX, m.clientY);
       let next = reshaped(was, h, q, LEAST_PX * px, m.shiftKey);
@@ -448,11 +471,12 @@ function Handles({
   };
   return (
     <group>
-      {handlesOf(s).map(({ handle, at }) => (
+      {handlesOf(s).map(({ handle, at }, i) => (
         <group
           key={handle}
+          ref={(g) => void (handles.current[i] = g)}
           position={[at.x, at.y, 0.003]}
-          scale={HANDLE_PX * px}
+          scale={HANDLE_PX * pxNow()}
           onPointerOver={() => setCursor(gl.domElement, cursorOf(handle))}
           onPointerOut={() => setCursor(gl.domElement, null)}
           onPointerDown={(e) => {
