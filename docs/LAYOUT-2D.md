@@ -403,9 +403,14 @@ And last, room for the H of every label: the drawing writes it beside the
 symbol on the side the bonds leave free (OH, or HO where they leave to the
 right; under or over the symbol only between bonds on both sides, as in a
 chain's NH, and only where that line is clearer of the bonds than the row
-beside the symbol - two bonds nearly in a line, steep, leave the row open
-and the line above or below on a bond, as tetrodotoxin's guanidine NH). Where it - or its count, NH2's 2 after it and set lower -
-would run into another label, an atom or a bond, the
+beside the symbol, by more than a band of 10 degrees - two bonds nearly
+in a line, steep, leave the row open and the line above or below on a
+bond, as tetrodotoxin's guanidine NH; nearer even, it stays stacked. On
+the row so, it goes on the row's clearer side - a borate's BH- with a
+bond straight right is written HB- - and, the two sides alike, after the
+symbol: NH. lib/layout/names `rowClearer`, `clearRowSide`, which the
+drawing and the engine share). Where it - or its count, NH2's 2 after it
+and set lower - would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved

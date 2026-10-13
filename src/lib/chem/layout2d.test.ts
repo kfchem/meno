@@ -126,12 +126,40 @@ describe("buildTextLabels", () => {
     ]) {
       const nh = at(a, b);
       expect(nh.stack).toBeUndefined();
-      // (its H on the row, on a side clear of both bonds: written after
-      // the symbol, NH, or before it, HN)
-      const side = nh.text === "NH" ? 0 : nh.text === "HN" ? 180 : NaN;
-      expect(side, nh.text).not.toBeNaN();
-      for (const d of [a, b]) expect(Math.min(Math.abs(d - side), 360 - Math.abs(d - side))).toBeGreaterThan(45);
+      // (its H on the row, the two sides alike: after the symbol, always -
+      // not by how a near-naught sum of the bonds rounds)
+      expect(nh.text).toBe("NH");
     }
+    // (nearly so, the row clearer by less than the band: stacked, as it always was)
+    expect(at(47, 227).stack).toBeDefined();
+  });
+
+  it("writes a three-bond label's H on the row's clearer side, never on a bond, where the row is clearer than the line above or below", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const v = (deg: number) => ({ x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180) });
+    const label = (el: string, charge: number, ...degs: number[]) => {
+      const atoms: Atom[] = [{ id: 1, x: 0, y: 0, el, charge }, ...degs.map((d, k) => ({ id: k + 2, ...v(d), el: "C" }))];
+      const [l] = buildTextLabels(
+        atoms,
+        opts(),
+        degs.map((_, k) => ({ a1: 0, a2: k + 1, order: 1 })),
+      );
+      return l;
+    };
+    // (a borate's BH- and an ammonium's NH+, a bond straight right: the H before the symbol, clear of it)
+    for (const [el, charge] of [
+      ["B", -1],
+      ["N", 1],
+    ] as const) {
+      const l = label(el, charge, 0, 120, 240);
+      expect(l.stack).toBeUndefined();
+      expect(l.text.startsWith("H"), l.text).toBe(true);
+    }
+    expect(label("N", 1, 5, 125, 245).text.startsWith("H")).toBe(true);
+    // (a bond straight left: the H after the symbol)
+    const b = label("B", -1, 180, 60, 300);
+    expect(b.stack).toBeUndefined();
+    expect(b.text.startsWith("BH"), b.text).toBe(true);
   });
 
   it("writes them on the side further from every bond where three spread evenly, a hair either way", () => {
