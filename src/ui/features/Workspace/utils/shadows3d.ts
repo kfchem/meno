@@ -8,6 +8,7 @@
  */
 import * as THREE from "three";
 import { KEY_LIGHT_FROM } from "../../../../lib/chem/style3d";
+import { boundInstances } from "./instanceSphere";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 
 /** How soft a shadow's edge is, across, in the page's units: a quarter of an ångström. */
@@ -98,7 +99,8 @@ export function castersNow(set: Iterable<THREE.InstancedMesh>): { spheres: THREE
     if (!shown(c) || !c.count) continue;
     const version = c.instanceMatrix.version;
     if (c.userData.version !== version || !c.boundingSphere) {
-      c.computeBoundingSphere();
+      // (read off the matrices: a large molecule's tens of thousands of balls, at every frame they move)
+      boundInstances(c);
       c.userData.version = version;
     }
     c.updateWorldMatrix(true, false);
