@@ -427,6 +427,14 @@ for them as for an H, by the same small moves (wider turns of a name's own
 bond). Two names one over the other keep a line's space between them, a
 quarter of a bond: with less, taxol's AcO sat on its OBz.
 
+- Two labels share a bond's length: together they may take nine tenths of
+  it (`labelShareMax`), each giving up its share past that. Where one of
+  them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
+  long enough for the two to keep their margins, in the drawing's style -
+  measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,
+  `Workspace/chem/engineLayout.ts` `roomForLabels`). The engine knows
+  nothing of a style's letters; a bond drawn by hand keeps its length.
+
 ## 6. Stereochemistry that reads
 
 - Wedges and hashes on bonds out of rings, never on ring bonds, their
