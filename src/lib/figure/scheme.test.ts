@@ -251,6 +251,14 @@ describe("a reaction scheme's arrows", () => {
     expect(near(s.arrows[0].point, [140, 95])).toBe(true);
     expect(s.figure.atoms).toHaveLength(8);
   });
+
+  it("reads a cross as long as Meno draws one on an arrow with a wide head as a reaction that does not go, not as a + sign", () => {
+    // (Meno's cross is 3.6 head widths across: 11 points on a head 6 wide, past 0.7 of a bond)
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0]), stroke([[96.1, 91.1], [103.9, 98.9]]), stroke([[96.1, 98.9], [103.9, 91.1]])]));
+    expect(s.arrows[0].form).toEqual({ kind: "noReaction" });
+    expect(s.pluses).toEqual([]);
+    expect(s.figure.atoms).toHaveLength(8);
+  });
 });
 
 describe("a reaction scheme's signs and words", () => {

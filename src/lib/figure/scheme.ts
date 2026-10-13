@@ -476,7 +476,8 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     const m = middleOf(path);
     const total = path.slice(1).reduce((s, p, i) => s + dist(path[i], p), 0);
     const by = (p: Point) => dist(p, m) < 0.25 * total;
-    const crossing = shortLines.filter((l) => !taken(l) && by({ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 }) && len(l) < 0.7 * bond);
+    // (each stroke short - as Meno draws a cross on an arrow with a wide head, up to most of a bond)
+    const crossing = shortLines.filter((l) => !taken(l) && by({ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 }));
     let marked = false;
     for (let i = 0; i < crossing.length && !marked; i++) {
       for (let j = i + 1; j < crossing.length && !marked; j++) {
