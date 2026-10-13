@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { PresenceContext } from "motion/react";
 import { createElement } from "react";
-import { Leaving, QUESTION_ARRIVING_MS, heldWhile, type HeldHandlers } from "./leaving";
+import { Leaving, QUESTION_ARRIVING_MS, arrival, heldWhile, type HeldHandlers } from "./leaving";
 
 const event = () => {
   const done = { stopped: false, prevented: false };
@@ -47,5 +47,30 @@ describe("a part coming into view or going out of it", () => {
   it("takes no click as a question comes - one meant for the question before it is not its answer", () => {
     expect(QUESTION_ARRIVING_MS).toBeGreaterThan(0);
     expect(holds(heldAsDrawn(QUESTION_ARRIVING_MS))).toEqual([true, true, true, true]);
+  });
+
+  it("takes no click for a moment from when it is seen - its window back in front - not from when it came, unseen behind another window", () => {
+    const clock = arrival(320);
+    // (asked while Meno was behind another window: its moment passes unseen)
+    clock.seen(false, 0);
+    expect(clock.tooSoon(false, 1000)).toBe(true);
+    // (Meno brought back in front by a click - on Windows the click reaches the page)
+    clock.seen(true, 5000);
+    expect(clock.tooSoon(true, 5010)).toBe(true);
+    expect(clock.tooSoon(true, 5400)).toBe(false);
+    // (behind another window again, and back)
+    clock.seen(false, 6000);
+    expect(clock.tooSoon(false, 6010)).toBe(true);
+    clock.seen(true, 7000);
+    expect(clock.tooSoon(true, 7100)).toBe(true);
+    expect(clock.tooSoon(true, 7400)).toBe(false);
+  });
+
+  it("takes no press while its window is not in front, whichever of the press and the window coming in front comes first", () => {
+    const clock = arrival(320);
+    clock.seen(true, 0);
+    expect(clock.tooSoon(true, 1000)).toBe(false);
+    // (the press before the window says it is in front)
+    expect(clock.tooSoon(false, 1000)).toBe(true);
   });
 });
