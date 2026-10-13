@@ -948,6 +948,14 @@ describe("a figure's words", () => {
     expect(ws.map(labelText)).toEqual(["H", "H"]);
   });
 
+  it("starts a word where a letter as large as the word's own stands off their line, however the word ends", () => {
+    // (as RDKit's ACS 1996 mode sets them: oxytocin's carbonyl O against NH2's 2, five points lower; vancomycin's two H's side by
+    // side, a quarter of a letter apart in height)
+    const at = (c: string, x: number, base: number, size = 7.5): FigureLetter => ({ c, box: [x, base - 0.72 * size, x + 0.6 * size, base], at: [x, base], size });
+    expect(wordsOf([at("N", 100, 102.7), at("H", 104.6, 102.7), at("2", 109.2, 104.4, 4.5), at("O", 112, 107.6)]).map(labelText)).toEqual(["NH2", "O"]);
+    expect(wordsOf([at("H", 208, 138.4), at("H", 214.3, 140.1)]).map(labelText)).toEqual(["H", "H"]);
+  });
+
   it("joins letters set side by side as the PDF sets them, however far apart their ink: a 1's ink well inside its room", () => {
     // (18F as RDKit's ACS 1996 mode writes it: the 1 and the 8 small, their ink 1.4 apart, their rooms 0.35)
     const at = (c: string, box: Box, loose: Box, size: number): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size });

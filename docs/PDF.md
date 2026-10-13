@@ -1062,7 +1062,9 @@ workspace holds.
   word - its letters side by side on one line (their ink near, or their
   rooms as the PDF sets them: a 1's ink stands well inside its room, and
   small letters may be set apart; but two letters as large set over each
-  other, their rooms well into each other, are two; two labels set touching, the first
+  other, their rooms well into each other, are two, and a letter as large
+  as the word's own whose baseline is a tenth of a letter off theirs
+  starts a word; two labels set touching, the first
   ending in its charge - Cl- HN+ - are two, where the word reads as
   nothing and its pieces do): two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
