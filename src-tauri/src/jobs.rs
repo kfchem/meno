@@ -708,13 +708,22 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    // (a group of its own, so that what it leaves running is ended with it)
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let mut child = cmd.spawn().ok()?;
     let mut out = child.stdout.take()?;
-    // (what it prints read apart, so that a full pipe never holds it)
-    let reader = std::thread::spawn(move || {
+    // (what it prints read apart, so that a full pipe never holds it - and
+    // waited for no longer than the program: a child it left holding the
+    // pipe would hold the read for good)
+    let (said, heard) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut text = String::new();
         let _ = out.read_to_string(&mut text);
-        text
+        let _ = said.send(text);
     });
     let start = std::time::Instant::now();
     let ended = loop {
@@ -724,11 +733,27 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
             _ => break false,
         }
     };
-    if !ended {
+    let end_group = |child: &mut std::process::Child| {
+        #[cfg(unix)]
+        // SAFETY: the group made for it above, by its id; ended, it is ended again to no effect.
+        unsafe {
+            libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+        }
         let _ = child.kill();
         let _ = child.wait();
+    };
+    if !ended {
+        end_group(&mut child);
     }
-    let printed = reader.join().unwrap_or_default();
+    let grace = std::time::Duration::from_millis(500);
+    let printed = match heard.recv_timeout(grace) {
+        Ok(text) => text,
+        Err(_) => {
+            // (ended, but what it left holds its output open: ended too, and what it said taken)
+            end_group(&mut child);
+            heard.recv_timeout(grace).unwrap_or_default()
+        }
+    };
     let v = if ended { version_in(&printed, rule) } else { None };
     if let Ok(mut known) = KNOWN.get_or_init(Default::default).lock() {
         known.insert(key, v.clone());
@@ -2191,6 +2216,20 @@ mod tests {
         let q = program_file(&base.join("other"), "blender");
         fs::write(&q, "#!/bin/sh\necho hello\n").unwrap();
         assert_eq!(version_of(&q, &rule), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hears_a_program_say_its_version_though_it_leaves_one_running_that_holds_its_output() {
+        let base = temp();
+        let p = program_file(&base, "blender");
+        // (it says its version and goes, leaving a child of its own that keeps its output open half a minute)
+        fs::write(&p, "#!/bin/sh\necho \"Blender 5.2.2 LTS\"\nsleep 30 &\n").unwrap();
+        let rule = VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() };
+        let begun = std::time::Instant::now();
+        assert_eq!(version_of(&p, &rule), Some("5.2.2".into()));
+        assert!(begun.elapsed() < std::time::Duration::from_secs(5), "{:?}", begun.elapsed());
         let _ = fs::remove_dir_all(base);
     }
 
