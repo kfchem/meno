@@ -85,7 +85,17 @@ export class ReaderClient implements Reader {
     try {
       m = JSON.parse(line);
     } catch {
-      return; // not an answer: what the reader's library printed, say
+      // an answer it could not write as JSON - a number that is not one, say: the question it answers given up
+      // now, rather than waited out
+      const said = /^\s*\{\s*"id"\s*:\s*(\d+)\s*,/.exec(line);
+      const p = said ? this.pending.get(Number(said[1])) : undefined;
+      if (p) {
+        this.pending.delete(Number(said![1]));
+        clearTimeout(p.timer);
+        this.watch?.settled(Number(said![1]));
+        p.reject(new Error(`${this.name} answered in a form Meno cannot read`));
+      }
+      return; // else not an answer: what the reader's library printed, say
     }
     if (m.event === "ready") {
       this.version = m.version ?? "";
