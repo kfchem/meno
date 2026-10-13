@@ -637,6 +637,24 @@ describe("a figure drawn by another program", () => {
   });
 });
 
+describe("a figure drawn large by another program", () => {
+  it("reads a long bond's hash of many lines set close - closer than a twenty-fifth of a bond - as a hash", () => {
+    // (as RDKit draws one filling its canvas: bonds 100 points long, the hash 18 lines 2.6 apart, 0.75 thick, the first under a point)
+    const B = 100;
+    const c: P = [200, 200];
+    const end: P = [c[0] + B * Math.cos(Math.PI / 3), c[1] - B * Math.sin(Math.PI / 3)];
+    const [ux, uy] = unit(c, end);
+    const lines = Array.from({ length: 18 }, (_, k): FigurePath => {
+      const t = 0.08 + k * 0.05;
+      const m: P = [c[0] + (end[0] - c[0]) * t, c[1] + (end[1] - c[1]) * t];
+      const h = 0.25 + k * 0.28;
+      return { ...stroke([m[0] - uy * h, m[1] + ux * h], [m[0] + uy * h, m[1] - ux * h]), width: 0.75 };
+    });
+    const s = read(figure([{ ...stroke([c[0] - B, c[1]], c, [c[0] + B * 0.5, c[1] + B * 0.866]), width: 1.5 }, ...lines]));
+    expect(s.bonds.filter((b) => b.stereo === "down")).toHaveLength(1);
+  });
+});
+
 describe("a figure drawn in colour by another program", () => {
   it("reads a bond drawn in two colours, black to its middle and its atom's colour on, as one bond", () => {
     // (an ethanol as RDKit draws one by default: the C-O bond black, then red from its middle to the O)

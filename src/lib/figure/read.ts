@@ -103,7 +103,8 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
     const m = mid(s.a, s.b);
     const n = mid(t.a, t.b);
     const d = dist(m, n);
-    if (d > 0.4 * bond || d < 0.04 * bond) return false;
+    // (a twenty-fifth of a bond apart at the least - or, a long bond's many lines set close, two and a half lines' widths)
+    if (d > 0.4 * bond || d < Math.min(0.04 * bond, 2.5 * Math.max(s.w, t.w))) return false;
     // (the step from one to the next is across them)
     return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
   };
@@ -142,7 +143,7 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
     // (three at the least, one a line of some width: the dots of joints by a bond's end and a sliver of nothing - a
     // C=O's joints - are none)
     // (lines let go by another hash - its first dot kept there - may be two)
-    if (group.length < (group.every((g) => letGo.has(g)) ? 2 : 3) || !group.some((g) => !dot_(g) && g.w > 0.01 * bond)) {
+    if (group.length < (group.every((g) => letGo.has(g)) ? 2 : 3) || !group.some((g) => !dot_(g) && g.w > 1e-3 * bond)) {
       for (const t of group) if (t !== s) left.add(t);
       continue;
     }
@@ -485,7 +486,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       blobOf.set(s, b);
       return s;
     });
-  const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && len(s) > 0.04 * bond), ...bits];
+  // (a twenty-fifth of a bond at the least - or a line's width and a half: a long bond's hash, its lines set close)
+  const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && len(s) > Math.min(0.04 * bond, 1.5 * s.w)), ...bits];
   // (a line's piece, broken where another passes in front of it - a double bond's by a bridge - is no hash's line)
   const brokenPiece = new Set(short.filter((s) => shapes.strokes.some((t) => t !== s && brokenAcross(s, t, shapes.strokes, bond))));
   const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesOf(short.filter((s) => !brokenPiece.has(s)), bond);
