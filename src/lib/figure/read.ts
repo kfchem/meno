@@ -108,7 +108,10 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
     return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
   };
   const left = new Set(short);
-  for (const s of short) {
+  // (each in turn - those a group let go again at the end, to group anew)
+  const queue = [...short];
+  for (let q = 0; q < queue.length; q++) {
+    const s = queue[q];
     if (!left.has(s)) continue;
     const group = [s];
     left.delete(s);
@@ -120,10 +123,24 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
         }
       }
     }
+    // (its lines all one way, as thick as the rest: lines another way, reached through a dot - two hashes meeting at
+    // an atom, joined by its joints' dots - are another's, let go)
+    const widest = Math.max(0, ...group.filter((g) => !dot_(g)).map((g) => g.w));
+    const ways = group.filter((g) => !dot_(g) && g.w >= 0.5 * widest);
+    const oneWay = (g: Stroke, h: Stroke) => Math.abs(cross(unit(g.a, g.b), unit(h.a, h.b))) < Math.sin((15 * Math.PI) / 180);
+    const most = ways.reduce<Stroke | null>((p, g) => (!p || ways.filter((h) => oneWay(g, h)).length > ways.filter((h) => oneWay(p, h)).length ? g : p), null);
+    if (most && ways.filter((h) => oneWay(most, h)).length * 2 > ways.length) {
+      for (const g of ways) {
+        if (oneWay(most, g)) continue;
+        group.splice(group.indexOf(g), 1);
+        left.add(g);
+        queue.push(g);
+      }
+    }
     // (three at the least, one a line of some width: the dots of joints by a bond's end and a sliver of nothing - a
     // C=O's joints - are none)
     if (group.length < 3 || !group.some((g) => !dot_(g) && g.w > 0.01 * bond)) {
-      for (const t of group.slice(1)) left.add(t);
+      for (const t of group) if (t !== s) left.add(t);
       continue;
     }
     // ordered along the line through their middles
@@ -508,6 +525,16 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
 
   // bonds' ends where they meet; an end alone, its bond pointing into a word, the word's
   type End = { bond: number; side: 0 | 1; p: Point };
+  // (a hash's narrow end set off from its atom - its first lines a joint's dots, taken by another - carried on to the bond
+  // end it points at, a third of a bond on at most)
+  for (const d of drawnBonds) {
+    if (d.stereo !== "down" || d.either) continue;
+    const others = drawnBonds.filter((o) => o !== d).flatMap((o) => [o.a, o.b]);
+    if (others.some((q) => dist(q, d.a) < 0.2 * bond)) continue;
+    const way = unit(d.b, d.a);
+    const ahead = others.filter((q) => dist(q, d.a) < 0.35 * bond && dot(way, unit(d.a, q)) > Math.cos(Math.PI / 6));
+    if (ahead.length) d.a = ahead.reduce((p, q) => (dist(q, d.a) < dist(p, d.a) ? q : p));
+  }
   const ends: End[] = drawnBonds.flatMap((d, i) => [
     { bond: i, side: 0 as const, p: d.a },
     { bond: i, side: 1 as const, p: d.b },

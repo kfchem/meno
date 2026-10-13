@@ -971,7 +971,11 @@ workspace holds.
   - short strokes side by side across a line, evenly spaced, are a bond
     behind, narrow where its lines are shortest (its lines, not the joints
     of the bonds at its ends, drawn as dots or thinner pieces) - one of
-    them at least a line of some width: dots alone are a joint's;
+    them at least a line of some width: dots alone are a joint's. Its
+    lines all go one way, so two hashes meeting at an atom, joined there
+    through its joints' dots, are two; and a hash's narrow end set off
+    from its atom, its first line taken as a joint's, is carried on to
+    the bond end it points at;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however

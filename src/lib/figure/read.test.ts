@@ -3,6 +3,7 @@ import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./dra
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
+import monensin from "./fixtures/monensin-rsc.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
@@ -278,6 +279,17 @@ describe("a figure read as a structure", () => {
     expect(r.bonds.some((b) => b.stereo && (c2(b.a) || c2(b.b)))).toBe(false);
     // (its three wedges and hashes, as drawn)
     expect(r.bonds.filter((b) => b.stereo)).toHaveLength(3);
+  });
+
+  it("reads two hashes meeting at an atom, joined through its joints' dots, as two: each its lines one way", () => {
+    // (monensin as the round trip prints it in the RSC style and Meno's PDF reader reads it: between two of its rings a hash
+    // of upright lines, and from the left ring's carbon a hash of level lines up to an H, its first line a joint's dot)
+    const r = readFigure(monensin as unknown as FigureDrawn);
+    const at = (x: number, y: number) => r.atoms.findIndex((a) => Math.hypot(a.x - x, a.y - y) < 2);
+    const [left, right, h] = [at(148.9, 126.6), at(161.4, 126.5), r.atoms.findIndex((a) => a.label === "H" && Math.hypot(a.x - 152.1, a.y - 115.1) < 2)];
+    const between = (i: number, j: number) => r.bonds.find((b) => (b.a === i && b.b === j) || (b.a === j && b.b === i));
+    expect(between(left, right)?.stereo).toBe("down");
+    expect(between(left, h)?.stereo).toBe("down");
   });
 
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
