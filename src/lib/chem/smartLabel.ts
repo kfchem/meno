@@ -24,6 +24,13 @@
  *    charge typed last stays last: ho- is OH-.
  * 4. A prefix set in italics gets its hyphen: tBu is t-Bu, CO2tBu CO2t-Bu.
  * 5. What reads as nothing stays as typed.
+ * 6. A reagent's name comes before a metal's formula (the maintainer,
+ *    2026-10-13): of letters typed small that read as whole molecules, a
+ *    reagent by its name comes first, then a simple formula, then a metal's
+ *    formula - whatever letters each makes capitals: tbme is TBME, not
+ *    TbMe; cdi CDI, not CdI; cpme CPME, not CpMe; hoac HOAc, not HoAc;
+ *    tmscl TMSCl. A metal's formula typed as it is written is that (HoCl3),
+ *    and one with no reagent of its letters is read as ever (pdcl2 PdCl2).
  *
  * As a label is typed only letters' case changes (`liveLabel`): the same
  * letters, where they were typed, so that the caret stays where it is;
@@ -35,10 +42,12 @@ import { ELEMENTS } from "./elements";
 /**
  * What a label reads as: part of a structure - an element with its H and
  * charge, an abbreviation, a group put together by rule, an Rgroup - or a
- * whole molecule - a reagent, a ligand, a complex - (`whole`); the element,
- * where it is one; null, where it reads as nothing.
+ * whole molecule - a reagent, a ligand, a complex - (`whole`); a whole
+ * molecule's reading (`molecule`): a reagent by its name (TBME, CDI), a
+ * simple formula (HOAc, TMSCl) or a metal's formula (HoAc, PdCl2); the
+ * element, where it is one; null, where it reads as nothing.
  */
-export type Reading = { whole: boolean; element?: string } | null;
+export type Reading = { whole: boolean; element?: string; molecule?: "name" | "formula" | "metal" } | null;
 export type Reads = (label: string) => Reading;
 
 /** The first element after uranium: none from there on is read from letters typed small. */
@@ -248,7 +257,9 @@ function before(a: readonly number[], b: readonly number[]): boolean {
  * is kept as. Part of a structure before a whole molecule - a label stands
  * for part of one - then a heteroatom with its H or a group, as drawn on a
  * bond's left (ho is HO, OH - not holmium; mes MeS, SMe - not mesityl),
- * then the fewest letters made capitals.
+ * then of whole molecules a reagent's name, a simple formula, a metal's
+ * formula (tbme is TBME, hoac HOAc - not TbMe, HoAc), then the fewest
+ * letters made capitals.
  */
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
@@ -260,7 +271,9 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
     if (!r || !allowed(typed, kept, r)) return;
     // (typed as drawn on a bond's left, a heteroatom with its H or a group: HO, MeS)
     const drawn = kept !== shown && onHeteroatom(kept, reads);
-    const rank = [r.whole ? 1 : 0, drawn ? 0 : 1, w.cost, w.loose, w.words];
+    // (a whole molecule: by a reagent's name, as a simple formula, as a metal's formula - rule 6)
+    const molecule = !r.whole ? 0 : r.molecule === "metal" ? 2 : r.molecule === "formula" ? 1 : 0;
+    const rank = [r.whole ? 1 : 0, drawn ? 0 : 1, molecule, w.cost, w.loose, w.words];
     if (!best || before(rank, best.rank)) best = { shown, kept, rank };
   };
   let tried = 0;

@@ -544,6 +544,14 @@ All hover-based, as above.
   4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
      iPr stays.
   5. What reads as nothing stays exactly as typed - no capital made.
+  6. A reagent's name comes before a metal's formula (the maintainer,
+     2026-10-13). Of letters typed small that read as whole molecules, a
+     reagent Meno knows by its name comes first, then a simple formula,
+     then a metal's formula, however many letters each makes capitals:
+     tbme is TBME, not TbMe; cdi CDI, not CdI; cpme CPME, not CpMe; hoac
+     HOAc and hobt HOBt, not holmium's; tmscl TMSCl, not thulium's. A
+     metal's formula typed as it is written is that - HoCl3, TbMe - and one
+     whose letters make no reagent is read as ever: pdcl2 is PdCl2.
 
   As it is typed, only its letters' case changes, as they are read so far
   - the same letters in the same places, the caret where it was; rules 3

@@ -172,6 +172,23 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       expect(kept(typed), typed).toBe(label);
   });
 
+  it("reads a reagent's name before a metal's formula, from letters typed small (rule 6; the maintainer, 2026-10-13)", () => {
+    // (reagents by name; simple formulas, as HOAc and TMSCl are read; and the metals' formulas the letters make too)
+    expect(labelReading("TBME")).toEqual({ whole: true, molecule: "name" });
+    expect(labelReading("HOAc")).toEqual({ whole: true, molecule: "formula" });
+    expect(labelReading("HoAc")).toEqual({ whole: true, molecule: "metal" });
+    for (const [typed, label] of [
+      ["hoac", "HOAc"], ["hobt", "HOBt"], ["hosu", "HOSu"], ["hoat", "HOAt"], ["tbme", "TBME"], ["cpme", "CPME"],
+      ["cdi", "CDI"], ["tmscl", "TMSCl"],
+    ]) {
+      expect(kept(typed), typed).toBe(label);
+      expect(live(typed), typed).toBe(label);
+    }
+    // (a metal's formula typed as it is written is that, and one whose letters make no reagent is read as ever)
+    for (const typed of ["HoAc", "HoCl3", "TbCl3", "TbMe", "CdI"]) expect(kept(typed), typed).toBe(typed);
+    for (const [typed, label] of [["pdcl2", "PdCl2"], ["hocl3", "HoCl3"], ["tbcl3", "TbCl3"]]) expect(kept(typed), typed).toBe(label);
+  });
+
   it("keeps a charge typed last where it was, turned round or not", () => {
     for (const typed of ["ho-", "HO-", "oh-", "OH-"]) {
       expect(kept(typed), typed).toBe("OH-");
@@ -243,7 +260,7 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
   it("reads a group named as an element is as the group (the maintainer, 2026-10-10)", () => {
     for (const g of ["Ac", "Pr", "Ts", "Fm", "At"]) expect(labelReading(g)).toEqual({ whole: false });
     expect(labelReading("Co")).toEqual({ whole: false, element: "Co" });
-    expect(labelReading("HF")).toEqual({ whole: true });
+    expect(labelReading("HF")).toEqual({ whole: true, molecule: "formula" });
     expect(labelReading("nh2")).toBeNull();
   });
 });
