@@ -388,6 +388,10 @@ export type Molecule3D = {
   unknownOrders?: number[];
   /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
   chainOrders?: "dictionary";
+  /** How many of its file's frames were left out as it was read - cut short, or with an atom whose place does not read: said over it (utils/completeness `leftOutMark`). */
+  framesLeftOut?: number;
+  /** How many of its atoms stood in one place with another as it was read - a damaged file, or none of a molecule's: said over it (utils/completeness `TOGETHER_MARK`). */
+  together?: number;
   /**
    * Made by editing a result's shape (utils/edit3d): what it was made from -
    * "conformer 7", "frame 12", an output's name - as its chip says it.
@@ -570,7 +574,7 @@ export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hovered
  * was asked for, started and ended; its place among those waiting, where it
  * waits; and the last line of its log, where it runs.
  */
-export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string };
+export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number } };
 /** A turn, as a quaternion's x, y, z and w. */
 export type Turn3D = [number, number, number, number];
 /** A molecule in 3D rising out of its drawing (EditorState `rising3d`). */
@@ -1153,7 +1157,9 @@ export type EditorState = {
   wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
   /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
-  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran">) => void;
+  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
+  /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
+  jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */

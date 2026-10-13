@@ -309,8 +309,15 @@ What is left before the editor counts as finished, and in what order, is in
   bond's neighbours from its atoms' own bonds. A zoom does not lay the
   drawing out again while the layout made at the zoom it was laid out at
   is the same drawing at this one (`sameAtZooms`: world units, lines wider
-  than the least they are kept at, a wave's turns in as many steps). The
-  round caps are one instanced mesh; the hit areas of atoms and bonds are
+  than the least they are kept at, a wave's turns in as many steps). Nor
+  does a change lay out what it does not touch: the drawing is laid out a
+  structure at a time (`lib/chem/layoutStructures.ts`), each atom and bond
+  reaching the layout as the same object while it is unchanged, and what a
+  structure was laid out to is taken again while all of its atoms and bonds
+  are; structures are laid out together where a name's letters, a note on
+  a bond or a bond in perspective reaches from one to the other, and a
+  drawing with a bracket (an S-group) is laid out whole. A glide moves only
+  the structures that changed. The round caps are one instanced mesh; the hit areas of atoms and bonds are
   never drawn (picking does not ask whether a material is); the ring
   circles the canvas offers are found without a second layout
   (`ringCircles`), when the pointer looks for one; R, S, E and Z are placed
@@ -331,6 +338,13 @@ What is left before the editor counts as finished, and in what order, is in
   the pointer (`PartMenu.tsx`), which offers the same actions to the mouse
   alone. Only the main button works atoms and bonds; the other is the
   menu's. Over a button or a card nothing counts as hovered.
+- **A press keeps its hover**: a handler that stops a press lets R3F take
+  back the hover of the object it is on, where the mesh pressed is not the
+  mesh the object was first hovered by - a PDF's page drawn finer since the
+  pointer came to it is another of its meshes - and the object is told the
+  pointer is out. What is pressed is under the pointer, so a PDF pressed is
+  hovered again (`components/keptHover`); its hover goes at the next move
+  unless the canvas hovers it again by then.
 - **Strokes**: bonds drawn in one gesture are a stroke (`utils/stroke.ts`,
   with the angles in `utils/extendSnap.ts`) - a bond, or a chain - held in
   `extend.stroke` while it is drawn. A chain walks a honeycomb
@@ -537,6 +551,14 @@ closes*).
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
   it was asked for).
+- **Looked at often while young** (2026-10-13). The runner looks for its
+  turn every 400 ms, and at its program every 200 ms - but every 50 ms
+  for the first 3 s of a program, and of a job at the head of the queue,
+  easing back to its old step by 6 s (`step_at`). The page looks at a
+  run's jobs every 100 ms for its newest run's first 3 s, easing back to
+  once a second by 6 s (`workflow/lookEvery`). A step whose program takes
+  0.2 s is seen done within a few tenths of a second, and what runs on, or
+  waits behind others, is watched no more often than before.
 - **Its program** runs in `work/`, its output and errors in `log.txt` -
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
@@ -824,9 +846,11 @@ they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). Meno lays both
-drawings out again with its own engine; only their stereochemistry and
-scale come from these coordinates.
+seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
+CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
+double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
+lays both drawings out again with its own engine; only their
+stereochemistry and scale come from these coordinates.
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
 (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
@@ -1073,7 +1097,24 @@ started in it (`ext_spawn_sidecar`, which takes an interpreter of
 `<data>/uv` or `<data>/pixi`) is given the variables, and the folders before
 its PATH. The consent says what the lock downloads on the computer - its
 packages, and their size (`lib/pixiLock.ts`) - and from where: pixi, the
-first time, from GitHub; conda-forge (conda.anaconda.org); PyPI. A reader
+first time, from GitHub; conda-forge (conda.anaconda.org); PyPI.
+
+Every consent to set a plugin up names every host the set-up contacts
+(`lib/plugins/setUpSources.ts`): the tool's own (releases.astral.sh for uv
+and the Pythons it installs; github.com for pixi), the index or channel
+its lock takes packages from, each package its lock fixes to a URL of its
+own, and each file besides that it downloads. Each host is named with
+where it hands a fetch on: a repository's archive on github.com goes on to
+codeload.github.com, a release's file to
+release-assets.githubusercontent.com, and a file on huggingface.co to
+Hugging Face's content delivery network (hosts under hf.co). A test reads
+every plugin's lock and downloads and checks that the consent names each
+host they fetch from. Each line is made together with the hosts it names
+(`SetUpReach`), and those go with the set-up (`py_env_setup_uv`,
+`py_env_setup_pixi`) and with the fetch of its files (`plugin_files`): the
+proxy lets each reach those alone (net.rs). Another test reads the hosts
+back from every consent's words and checks they are the ones its task is
+kept to, both ways. A reader
 plugin says it is made so by `env: "pixi"`; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
@@ -1143,11 +1184,19 @@ to be able to work with nothing going out at all.
   *purpose* (`python-env:console`, `python-code`) and pointed at the proxy
   with the task's token in its proxy credentials. The proxy carries a
   connection only for a task under way, only for a purpose the user has
-  allowed (`python-code`, the user's own code, needs no asking), only over
-  HTTPS, and never in offline mode. Each connection - host, bytes each way,
-  times, outcome - goes to the window as it happens (`net:connection`, every
-  half second while open) and to `network-log.jsonl` in the app's data
-  folder when it ends. A child that may not use the network - another
+  allowed (`python-code`, the user's own code, needs no asking), only to a
+  host the task's consent named, only over HTTPS, and never in offline
+  mode. Each task is begun with the hosts its consent named
+  (`ConsentRequest.hosts`, made with the consent's lines from one list and
+  sent with what begins the task), each exact or with a leading dot for any
+  host under one (`.hf.co`), at HTTPS's port, 443, unless one is named with
+  another (`host:port`); a connection elsewhere is refused (403) and on the
+  record as blocked, "not a host its consent named" or "not a port its
+  consent named". Only the user's own code names none, and reaches any
+  host - at HTTPS's port alone, as everything does. Each connection - host, bytes
+  each way, times, outcome - goes to the window as it happens
+  (`net:connection`, every half second while open) and to
+  `network-log.jsonl` in the app's data folder when it ends. A child that may not use the network - another
   worker, or the console while Meno is offline - is pointed at the proxy
   with no task, so whatever it reaches for is refused and on the record.
   The proxy is bound, and offline mode and the purposes allowed are read
@@ -1213,7 +1262,7 @@ that every kind of these is in this table, by its id, and no other.
 | RXN file | `rxn` | `.rxn` | `$RXN` | Meno, in its worker (`readStructures`) | Export (`reactionFileText`), Copy | a drawing with its arrow and "+" signs |
 | MOL file | `mol` | `.mol` | `V2000` / `V3000`, `M  END` | Meno, in its worker | Export, Copy (`molWriter.ts`) | a drawing; a molecule in 3D where it says it is 3D or spreads in depth |
 | SD file | `sdf` | `.sdf` | the same, and its name | Meno, in its worker | Export: the drawing as one record, each molecule in 3D as one, or each frame | a drawing, and each 3D record a molecule in 3D beside it |
-| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
+| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`: a tenth over, or 0.15 Å, the more; none within 0.1 Å), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |

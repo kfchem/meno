@@ -88,7 +88,9 @@ describe("a ring bound face-on to a metal", () => {
       }
       expect(s.bonds.some((x) => x.display === "bold"), label).toBe(true);
     }
-  });
+    // (the whole engine on a ligand's picture: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("leans in a bent metallocene, away from the metal's other ligands", () => {
     const zr = laid("Cp2ZrCl2");
@@ -122,11 +124,15 @@ describe("a ring bound face-on to a metal", () => {
       const v = { x: ru.atoms[m].x - ru.atoms[r].x, y: ru.atoms[m].y - ru.atoms[r].y };
       expect(u.x * v.x + u.y * v.y).toBeGreaterThan(0);
     }
-  });
+    // (the whole engine on a half-sandwich complex: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("is drawn alone face-on to a star where the ligand is a label's picture", () => {
     expect(laid("dppf").bonds.some((b) => b.display === "bold")).toBe(true);
-  });
+    // (the whole engine on a ligand's picture: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 });
 
 describe("ligands round a metal", () => {
@@ -143,7 +149,9 @@ describe("ligands round a metal", () => {
         expect(angleAt(pd, p, m, c)).toBeGreaterThan(75);
       }
     }
-  });
+    // (the whole engine on the complexes: about a second alone, a few times
+    // that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("close a chelate through a ferrocene at the metal, its two bonds alike", () => {
     const pd = laid("PdCl2(dppf)");
