@@ -210,7 +210,7 @@ function middleOf(path: readonly Point[]): Point {
 function outlineArrow(b: Blob, bond: number): Found | null {
   if (b.parts.length !== 1 || b.pts.length < 5) return null;
   const { u, mid, long, short } = narrowestBox(b.pts);
-  if (long < 1.0 * bond || long < 4 * short) return null;
+  if (long < 1.0 * bond || long < 2.5 * short) return null;
   const pts = b.pts;
   const at = (t: number): [number, number] | null => {
     const cs: number[] = [];
@@ -244,9 +244,15 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const hiAt = (t: number) => centreAt(t) + width / 2;
   const loAt = (t: number) => centreAt(t) - width / 2;
   const reach = Math.max(width, 0.06 * bond);
+  // (across it at its corners too, a hair either side of each: an outline is widest at one - a half head at its back, which rows
+  // a long arrow's length apart may miss)
+  const atCorners = pts
+    .flatMap((p) => [dot(sub(p, mid), u) - 1e-3 * long, dot(sub(p, mid), u) + 1e-3 * long])
+    .map((t) => ({ t, c: at(t) }))
+    .filter((r): r is { t: number; c: [number, number] } => !!r.c);
   // (a head at an end: wider there than the line, on one side or both)
   const headOf = (sign: 1 | -1): { side: 0 | 1 | -1; tip: Point; length: number } | null => {
-    const end = rows.filter((r) => sign * r.t > long / 2 - 0.35 * long);
+    const end = [...rows, ...atCorners].filter((r) => sign * r.t > long / 2 - 0.35 * long);
     const up = Math.max(...end.map((r) => r.c[1] - hiAt(r.t)));
     const down = Math.max(...end.map((r) => loAt(r.t) - r.c[0]));
     if (up < reach && down < reach) return null;

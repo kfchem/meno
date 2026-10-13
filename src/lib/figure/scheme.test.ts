@@ -259,6 +259,22 @@ describe("a reaction scheme's arrows", () => {
     expect(s.pluses).toEqual([]);
     expect(s.figure.atoms).toHaveLength(8);
   });
+
+  it("reads a long, thick arrow drawn as one outline with a half head", () => {
+    // (its line 2 thick, 84 long; its half head 9 long, standing 2.5 out from the line at its back only - between the rows it was looked at by)
+    const s = read(scheme([filled([[60, 94.01], [143.74, 94.01], [134.83, 98.5], [134.83, 95.99], [60, 95.99]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({ weight: "thick" });
+    expect(near(s.arrows[0].point, [143.74, 94.01])).toBe(true);
+  });
+
+  it("reads a short arrow drawn as one outline, its head wide for its length", () => {
+    // (26 points long, its head 7 wide: under four head widths long)
+    const s = read(scheme([filled([[60, 94.7], [79, 94.7], [79, 91.5], [86, 95], [79, 98.5], [79, 95.3], [60, 95.3]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(near(s.arrows[0].point, [86, 95])).toBe(true);
+    expect(near(s.arrows[0].tail, [60, 95])).toBe(true);
+  });
 });
 
 describe("a reaction scheme's signs and words", () => {
