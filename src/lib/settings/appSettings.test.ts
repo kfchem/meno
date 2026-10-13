@@ -20,7 +20,7 @@ describe("the settings file", () => {
       files: { read: { orca: "cclib" }, also: { orca: ["pyscf"] } },
       plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" }, guided: ["getting-started"] },
       pictures: { dpi: 1200 as const },
-      pointer: { wheelUp: "out" as const },
+      pointer: { wheelUp: "out" as const, largeZoom: "picture" as const },
       labels: { smart: false },
       words: { smart: false },
       calculations: { atOnce: 2, cores: 4 },
@@ -49,7 +49,9 @@ describe("the settings file", () => {
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
     // which way the wheel zooms: in, upwards, unless the file says out
-    expect(acceptAppSettings({ pointer: { wheelUp: "sideways" } }).pointer).toEqual({ wheelUp: "in" });
+    // (and a very large drawing laid out again at every step of a zoom, unless the file says otherwise)
+    expect(acceptAppSettings({ pointer: { wheelUp: "sideways", largeZoom: "blur" } }).pointer).toEqual({ wheelUp: "in", largeZoom: "exact" });
+    expect(acceptAppSettings({ pointer: { largeZoom: "settle" } }).pointer).toEqual({ wheelUp: "in", largeZoom: "settle" });
     // jobs at once and cores for each: whole numbers, at least one, within reason
     expect(acceptAppSettings({ calculations: { atOnce: 0, cores: 2.5 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { atOnce: 65, cores: "8" } }).calculations).toEqual({});

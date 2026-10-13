@@ -17,6 +17,7 @@ import { NEW_ATOM } from "../utils/stroke";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
+import { SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 
 /**
  * How far an atom may move in one change, while a button is held, and still
@@ -60,9 +61,28 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const [zoom, setZoom] = useState(
     () => (camera as THREE.OrthographicCamera).zoom || 1,
   );
+  // A very large drawing, where Settings says so, waits for a zoom to stop
+  // before it is laid out at it (utils/largeZoom): the zoom it is laid out
+  // for is taken up once the view has stayed at one for `SETTLE_MS`.
+  const waits = useRef<"settle" | "picture" | null>(null);
+  const settle = useRef<number | null>(null);
+  const seenZoom = useRef(zoom);
+  useEffect(() => () => void (settle.current != null && window.clearTimeout(settle.current)), []);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    if (z !== zoom) setZoom(z);
+    const moved = z !== seenZoom.current;
+    seenZoom.current = z;
+    if (!waits.current) {
+      if (z !== zoom) setZoom(z);
+      return;
+    }
+    // (from the last frame the zoom changed at: others - a label fading in, the pointer lighting an atom - wait for nothing)
+    if (z === zoom || (!moved && settle.current != null)) return;
+    if (settle.current != null) window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => {
+      settle.current = null;
+      setZoom((camera as THREE.OrthographicCamera).zoom || 1);
+    }, SETTLE_MS);
   });
   const shownModel = useEditor((s) => s.model);
   const fullModel = useEditor((s) => s.fullModel);
@@ -241,6 +261,8 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   );
   // (a label is read by the abbreviations Meno knows, the user's among them)
   const abbreviations = useAppSettings((s) => s.abbreviations);
+  const largeZoom = useAppSettings((s) => s.pointer.largeZoom);
+  waits.current = largeZoom !== "exact" && zoomedLarge(drawnAtoms.length) ? largeZoom : null;
   // The zoom it is laid out at: the view's - or, where the layout made at
   // the zoom it was last laid out at is the drawing at this one as well
   // (sameAtZooms), that one. A zoom then moves the view and leaves the
@@ -255,9 +277,10 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts, abbreviations: see above
     [drawnAtoms, bonds, opts, layoutZoom, fonts, abbreviations],
   );
+  const waiting = waits.current;
   const value = useMemo(
-    () => ({ atoms: drawnAtoms, bonds, opts, layout, zoom }),
-    [drawnAtoms, bonds, opts, layout, zoom],
+    () => ({ atoms: drawnAtoms, bonds, opts, layout, zoom, waits: waiting }),
+    [drawnAtoms, bonds, opts, layout, zoom, waiting],
   );
   return (
     <DrawnLayoutContext.Provider value={value}>

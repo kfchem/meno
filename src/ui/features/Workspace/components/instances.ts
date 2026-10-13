@@ -33,3 +33,26 @@ export function colorInstances(mesh: InstancedMesh, colors: readonly (string | u
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   if (!had) for (const m of [mesh.material].flat()) m.needsUpdate = true;
 }
+
+/**
+ * A plain material for instances drawn across a line - a bond's plane, `y`
+ * - or round, a cap's disc, `xy`, whose width is made wider or narrower
+ * than laid out on the graphics card: `width.value` times, for nothing on
+ * the main thread. A very large drawing waiting for a zoom to stop keeps its
+ * lines as wide as a layout at the zoom would have them so
+ * (utils/largeZoom `lineWidening`).
+ */
+export function widenedMaterial(
+  across: "y" | "xy",
+  params: THREE.MeshBasicMaterialParameters,
+): { material: THREE.MeshBasicMaterial; width: { value: number } } {
+  const width = { value: 1 };
+  const material = new THREE.MeshBasicMaterial(params);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWidth = width;
+    shader.vertexShader =
+      "uniform float uWidth;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\n  transformed.${across} *= uWidth;`);
+  };
+  material.customProgramCacheKey = () => `widened-${across}`;
+  return { material, width };
+}

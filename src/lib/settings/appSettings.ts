@@ -78,7 +78,16 @@ export const CORES_MOST = 1024;
 export type PointerSettings = {
   /** A turn of the wheel upwards zooms in (as maps do), or out. */
   wheelUp: "in" | "out";
+  /**
+   * How a very large drawing is drawn as the view zooms (a trial, the
+   * maintainer 2026-10-13: Workspace/utils/largeZoom): laid out again at
+   * every step; laid out once the zoom stops; or held as a picture and
+   * drawn sharp once it stops.
+   */
+  largeZoom: LargeZoom;
 };
+
+export type LargeZoom = "exact" | "settle" | "picture";
 
 /** How an atom's label is read as it is typed (Workspace/LabelTyping2D; lib/chem/smartLabel). */
 export type LabelSettings = {
@@ -159,7 +168,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   files: { read: {}, also: {} },
   plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
-  pointer: { wheelUp: "in" },
+  pointer: { wheelUp: "in", largeZoom: "exact" },
   labels: { smart: true },
   words: { smart: true },
   calculations: {},
@@ -221,8 +230,8 @@ function acceptProcedures(raw: unknown): SavedProcedure[] {
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
 function acceptPointer(raw: unknown): PointerSettings {
-  const r = (raw ?? {}) as { wheelUp?: unknown };
-  return { wheelUp: r.wheelUp === "out" ? "out" : "in" };
+  const r = (raw ?? {}) as { wheelUp?: unknown; largeZoom?: unknown };
+  return { wheelUp: r.wheelUp === "out" ? "out" : "in", largeZoom: r.largeZoom === "settle" || r.largeZoom === "picture" ? r.largeZoom : "exact" };
 }
 
 function acceptPictures(raw: unknown): PictureSettings {
