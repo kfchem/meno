@@ -6,6 +6,7 @@ import {
   useAppSettings,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
+import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 
 const SWITCHES: { key: keyof Settings; name: string; detail: string }[] = [
   {
@@ -17,11 +18,11 @@ const SWITCHES: { key: keyof Settings; name: string; detail: string }[] = [
   },
   {
     key: "stereoLabels",
-    name: "Show R and S",
+    name: STEREO_LABELS.show,
     detail:
       "R or S beside each stereocentre, E or Z beside each double bond that is one or " +
-      "the other, and Ra or Sa beside an axis (BINAP's), as the Cahn-Ingold-Prelog rules give them. The R/S button on a canvas " +
-      "does the same.",
+      "the other, and Ra or Sa beside an axis (BINAP's), as the Cahn-Ingold-Prelog rules give them. " +
+      `${STEREO_LABELS.show} on the right-click menu on empty space does the same.`,
   },
 ];
 

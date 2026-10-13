@@ -168,7 +168,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text, present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all |
+| Empty space | paste, select all | open, save as, new text, present (with slides), fit, R/S and E/Z, the texts, find in PDFs, drawing style, run all |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
 | Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
@@ -603,8 +603,8 @@ All hover-based, as above.
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
   - Hidden unless asked for, on the drawing and in 3D (the maintainer,
-    2026-10-10): *Show R and S* (the menu, or Settings › Chemistry) shows
-    them; making every stereoisomer a drawing leaves open shows each
+    2026-10-10): *Show R/S and E/Z* (the menu, or Settings › Chemistry;
+    named for both, the maintainer, 2026-10-13) shows them; making every stereoisomer a drawing leaves open shows each
     one's open centres, to tell them apart (docs/WORKSPACE.md, *Told
     apart*).
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
@@ -1063,7 +1063,7 @@ traced from reference drawings.
   drawn in - and PNG. The SVG export draws what the canvas draws (PR #36),
   at ACS 1996's own size (PR #43); PNG to come.
 - No buttons on the canvas (2026-10-04): Open (Ctrl/Cmd+O), Save As, New
-  text, Fit to content (Ctrl/Cmd+1), R and S and Drawing style are on the
+  text, Fit to content (Ctrl/Cmd+1), R/S and E/Z and Drawing style are on the
   right-click menu on empty space; Save is a button in the title bar, by
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu

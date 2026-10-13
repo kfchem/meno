@@ -127,7 +127,7 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
 - **Commands.** The canvas carries nothing but the drawing. Commands are
   on the right-click menus, with their keys: what is under the pointer, or
   the selection, has its own; on empty space, what the workspace does as a
-  whole - Open…, Save As…, New text, Fit to content (Ctrl/Cmd+1), R and S,
+  whole - Open…, Save As…, New text, Fit to content (Ctrl/Cmd+1), R/S and E/Z,
   the texts, Drawing style, Run all. Save is a button in the title bar, by
   Settings (`ctl.save`, the front tab's saver from `lib/doc/savers`), and
   Ctrl/Cmd+S; Export is the selection's (Select all first, for the whole

@@ -386,7 +386,7 @@ Taken on 2026-10-10 (menus and gestures):
   and *3D structures* went with the menu. Save is a button in the title
   bar, by Settings (and Ctrl/Cmd+S); Export is the selection's; a SMILES
   is drawn from Quick Add; Open…, Save As…, New text and what concerns the
-  view - fitting, R and S, the texts, the drawing style - and *Run all*
+  view - fitting, R/S and E/Z, the texts, the drawing style - and *Run all*
   are on the right-click menu on empty space, with their keys.
 - **Quick Add opens at once.** The chain from empty space is one of its
   icons, so a double-click need not wait to see whether a third click
