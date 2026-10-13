@@ -15,6 +15,7 @@ import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
+import { byStructure, type StructureValues } from "../utils/byStructure";
 
 /** How many bonds each atom has, as the drawing counts them to say which end of a wedge is narrow. */
 export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, number> {
@@ -135,12 +136,21 @@ export function forFlatReaders(model: Model): WriterModel {
  * problem is, so that none is shown as if it were certain (the maintainer,
  * 2026-10-11).
  */
-export function unsureOf(model: Model): { atoms: Set<number>; bonds: Set<number> } {
-  if (!model.bonds.some((b) => b.stereo === "up" || b.stereo === "down" || b.order === 2)) return { atoms: new Set(), bonds: new Set() };
+export function unsureOf(model: Model, kept?: StructureValues<Unsure>): { atoms: Set<number>; bonds: Set<number> } {
+  // (a structure at a time, what was found in each kept while it is the same - see byStructure)
+  const found = kept ? byStructure(model, kept, unsureIn) : [unsureIn(model)];
+  return { atoms: new Set(found.flatMap((f) => f.atoms)), bonds: new Set(found.flatMap((f) => f.bonds)) };
+}
+
+/** The stereocentres and double bonds a drawing shows only by luck, by id; see `unsureOf`. */
+export type Unsure = { atoms: number[]; bonds: number[] };
+
+function unsureIn(model: Model): Unsure {
+  if (!model.bonds.some((b) => b.stereo === "up" || b.stereo === "down" || b.order === 2)) return { atoms: [], bonds: [] };
   const { atoms, bonds } = drawingOf(model);
   const found = unsureStereo(atoms, bonds);
   // (the bonds as drawingOf takes them: those between atoms there are)
   const ids = new Set(model.atoms.map((a) => a.id));
   const kept = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
-  return { atoms: new Set(found.atoms.map((i) => model.atoms[i].id)), bonds: new Set(found.bonds.map((i) => kept[i].id)) };
+  return { atoms: found.atoms.map((i) => model.atoms[i].id), bonds: found.bonds.map((i) => kept[i].id) };
 }

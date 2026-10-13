@@ -1,7 +1,9 @@
 import * as THREE from "three";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { colorInstances } from "./instances";
+import { colorInstances, widenedMaterial } from "./instances";
+import { lineWidening } from "../utils/largeZoom";
 
 /**
  * The round caps where bonds meet and where they end, from the shared layout.
@@ -16,6 +18,15 @@ import { colorInstances } from "./instances";
 export default function JoinCaps2D() {
   const { layout, opts } = useDrawnLayout();
   const inst = useRef<THREE.InstancedMesh>(null!);
+  // (as wide as the lines they cap: utils/largeZoom)
+  const drawn = useMemo(
+    () => widenedMaterial("xy", { color: "#ffffff", toneMapped: false, transparent: true, opacity: 1, depthTest: false, depthWrite: false }),
+    [],
+  );
+  useEffect(() => () => drawn.material.dispose(), [drawn]);
+  useFrame(({ camera }) => {
+    drawn.width.value = lineWidening(opts, layout.zoom, (camera as THREE.OrthographicCamera).zoom || 1);
+  });
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
   // Room for as many caps as the drawing has, grown as it does - never
   // shrunk, so that an edit does not make the mesh again - and made in the
@@ -24,14 +35,20 @@ export default function JoinCaps2D() {
   const room = useRef(64);
   while (room.current < layout.fills.length) room.current *= 2;
   const countCap = room.current;
+  const placed = useRef<{ mesh: THREE.InstancedMesh | null; caps: unknown[] }>({ mesh: null, caps: [] });
 
   useLayoutEffect(() => {
     const m = inst.current;
     if (!m) return;
     const fills = layout.fills;
     m.count = fills.length;
+    // (a cap the layout kept - its structure not laid out again - is where it was)
+    if (placed.current.mesh !== m) placed.current = { mesh: m, caps: [] };
+    const was = placed.current.caps;
     for (let i = 0; i < fills.length; i++) {
       const c = fills[i];
+      if (was[i] === c) continue;
+      was[i] = c;
       tmpM.makeScale(c.r, c.r, 1).setPosition(c.c.x, c.c.y, 0);
       m.setMatrixAt(i, tmpM);
     }
@@ -50,14 +67,7 @@ export default function JoinCaps2D() {
       renderOrder={9}
     >
       <circleGeometry args={[1, 24]} />
-      <meshBasicMaterial
-        color="#ffffff"
-        toneMapped={false}
-        transparent
-        opacity={1}
-        depthTest={false}
-        depthWrite={false}
-      />
+      <primitive object={drawn.material} attach="material" dispose={null} />
     </instancedMesh>
   );
 }
