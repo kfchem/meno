@@ -175,6 +175,12 @@ describe("a reaction scheme's arrows", () => {
     expect(near(s.arrows[0].tail, [115, 139])).toBe(true);
   });
 
+  it("takes an x as a cross only on the arrow's line and alone: one in the words over it is a word's", () => {
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], word("3 x 10 min", [75, 89])));
+    expect(s.arrows[0].form).toEqual({});
+    expect(s.words.map((w) => w.text)).toEqual(["3 x 10 min"]);
+  });
+
   it("reads no arrow in a structure alone: a wedge is no head", () => {
     // (a chain with a wedge at its end, along it)
     const s = read({

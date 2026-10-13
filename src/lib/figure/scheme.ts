@@ -454,7 +454,19 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       }
     }
     if (!marked) {
-      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }));
+      // (a letter x on the line itself, standing alone - not one in words over the arrow, as in 3 x 10 min)
+      const onLine = (l: FigureLetter) => {
+        const c = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
+        const off = Math.min(...path.slice(1).map((q, i) => {
+          const p = path[i];
+          const u = unit(p, q);
+          const t = Math.max(0, Math.min(dist(p, q), dot(sub(c, p), u)));
+          return dist(c, along(p, u, t));
+        }));
+        return off < 0.35 * l.size;
+      };
+      const alone = (l: FigureLetter) => !letters.some((m) => m !== l && Math.abs(baseOf(m) - baseOf(l)) < 0.5 * l.size && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 0.5 * l.size);
+      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }) && onLine(l) && alone(l));
       if (x) {
         usedLetters.add(x);
         marked = true;
