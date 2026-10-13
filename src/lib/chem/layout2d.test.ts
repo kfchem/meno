@@ -120,8 +120,18 @@ describe("buildTextLabels", () => {
     // two bonds nearly in a line, steep, on both sides: the line above and
     // below on a bond, the row beside the symbol open - written there
     // (tetrodotoxin's guanidine NH, its H on the bond from above)
-    expect(at(115, 295).stack).toBeUndefined();
-    expect(at(65, 245).stack).toBeUndefined();
+    for (const [a, b] of [
+      [115, 295],
+      [65, 245],
+    ]) {
+      const nh = at(a, b);
+      expect(nh.stack).toBeUndefined();
+      // (its H on the row, on a side clear of both bonds: written after
+      // the symbol, NH, or before it, HN)
+      const side = nh.text === "NH" ? 0 : nh.text === "HN" ? 180 : NaN;
+      expect(side, nh.text).not.toBeNaN();
+      for (const d of [a, b]) expect(Math.min(Math.abs(d - side), 360 - Math.abs(d - side))).toBeGreaterThan(45);
+    }
   });
 
   it("writes them on the side further from every bond where three spread evenly, a hair either way", () => {
