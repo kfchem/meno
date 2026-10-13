@@ -21,16 +21,22 @@
  *    small, a heteroatom with its H or a group, as drawn on the left, comes
  *    before any other reading (the maintainer, 2026-10-12): ho is HO, kept
  *    OH, not holmium; mes MeS, kept SMe, not mesityl (Mes, typed so). A
- *    charge typed last stays last: ho- is OH-.
- * 4. A prefix set in italics gets its hyphen: tBu is t-Bu, CO2tBu CO2t-Bu.
+ *    charge typed last stays last: ho- is OH-. HN before a group is NH and
+ *    the group though the letters read as a whole molecule too (HNiPr is
+ *    NHiPr, not a complex of nickel).
+ * 4. A prefix set in italics - n, s, t, sec, tert, o, m, p - gets its
+ *    hyphen, at a label's start or after an atom: tBu is t-Bu, CO2tBu
+ *    CO2t-Bu, HNtBu NHt-Bu.
  * 5. What reads as nothing stays as typed.
  * 6. A reagent's or a ligand's name comes before a metal's formula (the
- *    maintainer, 2026-10-13): of letters typed small that read as whole
- *    molecules, a reagent by its name comes first, whatever letters it
- *    makes capitals - tbme is TBME, not TbMe; cdi CDI, not CdI; hoac HOAc,
- *    not HoAc; tmscl TMSCl; cpme CPME - and a ligand, part of a structure,
- *    before any. Other molecules, formulas read by rule, are read as ever:
- *    h2zn is H2Zn, pdcl2 PdCl2; one typed as it is written is that (HoCl3).
+ *    maintainer, 2026-10-13), whatever letters it makes capitals: no
+ *    metal's symbol from letters typed small across a group's, a reagent's
+ *    or a ligand's name the letters spell (tbscl is TBSCl, lah LAH, cdi
+ *    CDI), nor holmium's from ho before a group, as rule 3 reads ho (hoac
+ *    is HOAc, hotf HOTf); then a reagent's name before a formula (cpme is
+ *    CPME). Where no name is spelt, formulas are read as ever: h2zn is
+ *    H2Zn, pdcl2 PdCl2, zni2 ZnI2; one typed as it is written is that
+ *    (HoCl3). A group's name of one letter, Z, only as part of a structure.
  *
  * As a label is typed only letters' case changes (`liveLabel`): the same
  * letters, where they were typed, so that the caret stays where it is;
@@ -54,14 +60,30 @@ export type Reads = (label: string) => Reading;
 const AFTER_URANIUM = 93;
 const HEAVY = new Set(ELEMENTS.filter((e) => e.number >= AFTER_URANIUM).map((e) => e.symbol));
 
-type Token = { text: string };
+/**
+ * A word a label is read into: `letter`, a group's name of one letter (Z);
+ * `metal`, a metal's symbol - not a group's name too (Ac, Pr), nor a
+ * nonmetal's or a metalloid's.
+ */
+type Token = { text: string; letter?: true; metal?: true };
 
-let tokens: { from: readonly string[]; words: Token[]; names: Set<string> } | null = null;
-/** What a label is read into: element symbols, and the groups' names (the user's own among them, as they are now) - each as it is written. */
-function vocabulary(): { words: Token[]; names: Set<string> } {
+/** The elements that are no metals, as rule 6 reads a metal's formula: the nonmetals and the metalloids. */
+const NOT_METALS = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn".split(" "));
+
+type Vocabulary = { words: Token[]; names: Set<string>; units: Set<string>; byLetter: Map<string, string[]>; metals: Set<string>; letters: Set<string> };
+let tokens: (Vocabulary & { from: readonly string[] }) | null = null;
+/**
+ * What a label is read into: element symbols, and the groups' names (the
+ * user's own among them, as they are now) - each as it is written; and the
+ * names of groups, reagents and ligands that are no element's symbol, by
+ * their first letter (`byLetter`: TBS, TMS, LAH, CDI), which rule 6 reads a
+ * metal's symbol against.
+ */
+function vocabulary(): Vocabulary {
   const units = labelUnitNames();
   if (tokens?.from !== units) {
     const symbols = ELEMENTS.map((e) => e.symbol).sort();
+    const unitSet = new Set(units);
     // (a group's name of one letter - Z, for Cbz - is no unit a label is read
     // into, a letter being one on its own: a word, all the same)
     const letters = new Set(
@@ -69,23 +91,53 @@ function vocabulary(): { words: Token[]; names: Set<string> } {
         .flatMap((g) => [g.label, ...(g.also ?? [])])
         .filter((t) => t.length === 1 && t !== "R" && !symbols.includes(t)),
     );
-    const words = [
+    const words: Token[] = [
       // (by symbol, as ever: ties among writings keep this order)
-      ...symbols.map((text) => ({ text })),
+      ...symbols.map((text) => (NOT_METALS.has(text) || unitSet.has(text) ? { text } : { text, metal: true as const })),
       ...units.map((text) => ({ text })),
       // (an Rgroup's R)
       { text: "R" },
-      ...[...letters].map((text) => ({ text })),
+      ...[...letters].map((text) => ({ text, letter: true as const })),
     ];
-    tokens = { from: units, words, names: new Set(words.map((w) => w.text)) };
+    // (by their first character, a letter as a capital: what a letter typed, small or not, may begin - 1-Naph by its 1)
+    const byLetter = new Map<string, string[]>();
+    for (const u of units) {
+      if (symbols.includes(u)) continue;
+      const k = u[0].toUpperCase();
+      byLetter.set(k, [...(byLetter.get(k) ?? []), u]);
+    }
+    const metals = new Set(words.filter((w) => w.metal).map((w) => w.text));
+    tokens = { from: units, words, names: new Set(words.map((w) => w.text)), units: unitSet, byLetter, metals, letters };
   }
   return tokens;
 }
 
 const small = (c: string) => c >= "a" && c <= "z";
 
-/** A way of writing what was typed: the text, how many letters it makes capitals, of how many words, and how many letters typed small stay as they were, in no word. */
-type Writing = { text: string; cost: number; words: number; loose: number };
+/**
+ * A way of writing what was typed: the text, how many letters it makes
+ * capitals, of how many words, and how many letters typed small stay as
+ * they were, in no word; and how many of its words are a group's name of
+ * one letter (`letters`: Z) - the fewest, as its words are found.
+ */
+type Writing = { text: string; cost: number; words: number; loose: number; letters: number };
+
+/** Whether `word` may be read from the letters typed at `at`: each the same, or typed small and read as its capital - and how many it makes capitals. */
+function fit(typed: string, at: number, word: string): number | null {
+  if (at + word.length > typed.length) return null;
+  let cost = 0;
+  for (let k = 0; k < word.length; k++) {
+    const t = typed[at + k];
+    const c = word[k];
+    if (t === c) continue;
+    if (small(t) && c === t.toUpperCase()) cost++;
+    else return null;
+  }
+  return cost;
+}
+
+/** The heteroatoms whose symbol is a letter, as an H typed before them reads: H and O, not holmium. */
+const HETERO_LETTER = /^[NOPS]$/;
 
 /**
  * Every way the letters typed can be written as the vocabulary's words, by
@@ -93,19 +145,28 @@ type Writing = { text: string; cost: number; words: number; loose: number };
  * letter where no word fits.
  */
 function writings(typed: string, most = 400): Writing[] {
-  const at: Map<string, Omit<Writing, "text">>[] = [new Map([["", { cost: 0, words: 0, loose: 0 }]])];
+  const at: Map<string, Omit<Writing, "text">>[] = [new Map([["", { cost: 0, words: 0, loose: 0, letters: 0 }]])];
   for (let i = 1; i <= typed.length; i++) at.push(new Map());
   const { words } = vocabulary();
-  const better = (a: Omit<Writing, "text">, b: Omit<Writing, "text">) => a.cost - b.cost || a.loose - b.loose || a.words - b.words;
+  // (fewest capitals made, then fewest one-letter names)
+  const better = (a: Omit<Writing, "text">, b: Omit<Writing, "text">) => a.cost - b.cost || a.letters - b.letters || a.loose - b.loose || a.words - b.words;
   for (let i = 0; i < typed.length; i++) {
     const here = at[i];
     if (!here.size) continue;
-    const put = (j: number, add: string, cost: number, word: boolean, loose: number) => {
+    const put = (j: number, add: string, cost: number, word: boolean, loose: number, letters = 0) => {
       const there = at[j];
       for (const [text, w] of here) {
-        const next = { cost: w.cost + cost, words: w.words + (word ? 1 : 0), loose: w.loose + loose };
+        const next = { cost: w.cost + cost, words: w.words + (word ? 1 : 0), loose: w.loose + loose, letters: w.letters + letters };
         const was = there.get(text + add);
-        if (!was || better(next, was) < 0) there.set(text + add, next);
+        // (the same text, its words found another way - Zn and Bu, Z and nBu: the least of each)
+        if (!was) there.set(text + add, next);
+        else
+          there.set(text + add, {
+            cost: Math.min(was.cost, next.cost),
+            words: Math.min(was.words, next.words),
+            loose: Math.min(was.loose, next.loose),
+            letters: Math.min(was.letters, next.letters),
+          });
       }
       // (only the likeliest kept on)
       if (there.size > most) at[j] = new Map([...there].sort((a, b) => better(a[1], b[1])).slice(0, most));
@@ -113,22 +174,16 @@ function writings(typed: string, most = 400): Writing[] {
     // the letter as typed
     put(i + 1, typed[i], 0, false, small(typed[i]) ? 1 : 0);
     for (const w of words) {
-      const end = i + w.text.length;
-      if (end > typed.length) continue;
-      let cost = 0;
-      let fits = true;
-      for (let k = 0; k < w.text.length && fits; k++) {
-        const t = typed[i + k];
-        const c = w.text[k];
-        if (t === c) continue;
-        if (small(t) && c === t.toUpperCase()) cost++;
-        else fits = false;
-      }
-      if (fits) put(end, w.text, cost, true, 0);
+      const cost = fit(typed, i, w.text);
+      if (cost === null) continue;
+      put(i + w.text.length, w.text, cost, true, 0, w.letter ? 1 : 0);
     }
   }
   return [...at[typed.length]].map(([text, w]) => ({ text, ...w })).sort((a, b) => better(a, b) || (a.text < b.text ? -1 : 1));
 }
+
+/** The elements' symbols: what an H typed before is read before (HN is NH; HTf is no TH and F). */
+const SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /** A charge typed at a label's end: N+, O-, O−. */
 const CHARGE = /[+\u2212-]+$/;
@@ -164,11 +219,14 @@ function hFirst(label: string, reads: Reads): { text: string; atom: string; grou
   const out: { text: string; atom: string; group: Reading }[] = [];
   for (const length of [1, 2]) {
     const atom = label.slice(h[0].length, h[0].length + length);
-    if (atom.length !== length || !/^[A-Z][a-z]?$/.test(atom) || atom === "H") continue;
-    const rest = label.slice(h[0].length + length);
-    const group = rest ? reads(rest) : null;
-    if (rest && !group) continue;
-    out.push({ text: `${atom}H${h[1]}${rest}`, atom, group });
+    if (atom.length !== length || !SYMBOLS.has(atom) || atom === "H") continue;
+    // (the group read as it is written, and with its italic prefix hyphenated: HNsecBu is NHsec-Bu)
+    const written = label.slice(h[0].length + length);
+    for (const rest of new Set([written, hyphened(written)])) {
+      const group = rest ? reads(rest) : null;
+      if (rest && !group) continue;
+      out.push({ text: `${atom}H${h[1]}${rest}`, atom, group });
+    }
   }
   return out;
 }
@@ -235,15 +293,109 @@ function allowed(typed: string, text: string, r: Reading): boolean {
 
 /**
  * The prefixes set in italics (lib/chem/abbreviations `italicUnits`) - n,
- * s, t, sec, tert, o, m, p - before a group, at a label's start or after
- * what is not a letter: tBu, CO2tBu, secBu, pTs. Not i: iPr is upright, as
- * isopropyl is.
+ * s, t, sec, tert, o, m, p - before a group: tBu, CO2tBu, secBu, pTs, and
+ * after an atom, NHtBu, KOtBu, as well. Not i: iPr is upright, as isopropyl
+ * is.
  */
-const ITALIC_PREFIX = /(^|[^A-Za-z-])(sec|tert|[nstomp])(?=[A-Z])/g;
+const ITALIC_PREFIX = /(sec|tert|[nstomp])(?=[A-Z])/g;
 
-/** A label with its italic prefixes hyphenated (rule 4): t-Bu, CO2t-Bu, sec-Bu, p-Ts. */
+/**
+ * A label with its italic prefixes hyphenated (rule 4): t-Bu, CO2t-Bu,
+ * sec-Bu, p-Ts, NHt-Bu, P(o-Tol)3 - where a prefix begins one of its units
+ * (an element's symbol with its letters, a group's name, a letter on its
+ * own), not inside one: SnBu3 and CsF are no S n-Bu3 or C s-F, and a
+ * ligand's name as it is written stays (Me4tBuXPhos). And a prefix of
+ * letters - sec, tert - after what is no small letter, or one of a letter
+ * after an atom's H where the two would be an element's symbol no label
+ * means (rule 2) and no group's name: HNsecBu is NHsec-Bu, NHsBu NHs-Bu -
+ * not hassium; but FmBoc and TsAll stay, Fm and Ts groups, and HSBu.
+ */
 function hyphened(label: string): string {
-  return label.replace(ITALIC_PREFIX, "$1$2-");
+  if (!/(sec|tert|[nstomp])[A-Z]/.test(label)) return label;
+  const units = unitsAt(label);
+  return label.replace(ITALIC_PREFIX, (prefix: string, _p: string, k: number) => {
+    if (label[k - 1] === "-") return prefix;
+    const unit = units.find((u) => u.at <= k && k < u.at + u.unit.length);
+    const symbol = unit?.unit.replace(/\d+$/, "") ?? "";
+    if (unit?.at === k) return SYMBOLS.has(symbol) ? prefix : `${prefix}-`;
+    if (prefix.length > 1 && !/[a-z]/.test(label[k - 1] ?? "")) return `${prefix}-`;
+    // (after an atom's H - NHs-Bu - not at the label's start, where h and s are H and S: hsbu is HSBu)
+    if (unit && unit.at === k - 1 && unit.at > 0 && HEAVY.has(symbol) && !vocabulary().units.has(symbol)) return `${prefix}-`;
+    return prefix;
+  });
+}
+
+/** Where the letters typed make a name of two letters or more (`vocabulary` `byLetter`): what a metal's symbol is not made across. */
+type Span = { from: number; to: number; name: string };
+
+function namesIn(typed: string): Span[] {
+  const { byLetter } = vocabulary();
+  const out: Span[] = [];
+  for (let i = 0; i < typed.length; i++)
+    for (const name of byLetter.get(typed[i].toUpperCase()) ?? []) if (fit(typed, i, name) !== null) out.push({ from: i, to: i + name.length, name });
+  return out;
+}
+
+/** A label's units (lib/chem/abbreviations `labelUnits`) and where each stands - those in parentheses among them, not the parentheses. */
+function unitsAt(text: string, from = 0): { unit: string; at: number }[] {
+  // (a writing's units are asked for as it is shown and as it is kept, keystroke after keystroke: kept a while)
+  const key = `${from}:${text}`;
+  const seen = UNITS_SEEN.get(key);
+  if (seen && seen.of === labelUnitNames()) return seen.units;
+  const out: { unit: string; at: number }[] = [];
+  let at = from;
+  for (const unit of labelUnits(text)) {
+    const held = /^\((.*)\)\d*$/.exec(unit);
+    if (held) out.push(...unitsAt(held[1], at + 1));
+    else out.push({ unit, at });
+    at += unit.length;
+  }
+  if (UNITS_SEEN.size > 5000) UNITS_SEEN.clear();
+  UNITS_SEEN.set(key, { of: labelUnitNames(), units: out });
+  return out;
+}
+
+/** Writings' units as `unitsAt` found them, with the names they were read into then (the user's own change them). */
+const UNITS_SEEN = new Map<string, { of: readonly string[]; units: { unit: string; at: number }[] }>();
+
+/**
+ * How a writing of what was typed reads, as its units are read: how many of
+ * them are a group's name of one letter (Z), and an element after uranium
+ * made from letters typed small (rule 2: hsbu is no HsBu); and how many metals' symbols
+ * it makes from letters typed small where they are not meant (rule 6) -
+ * across a group's, a reagent's or a ligand's name the letters typed make
+ * too - Tb of tbscl, its TBS; La of lah, its LAH - or of an H and a
+ * heteroatom - Ho of hotf, its H and O (ho is HO, not holmium: the
+ * maintainer, 2026-10-12).
+ */
+function unitsMade(typed: string, text: string, spans: readonly Span[]): { letters: number; across: number; heavy: number } {
+  const { metals, letters, units } = vocabulary();
+  let ones = 0;
+  let across = 0;
+  let heavy = 0;
+  // (a name this writing writes where the letters typed make it)
+  const written = (from: number, to: number) => spans.some((n) => n.from === from && n.to === to && text.slice(from, to) === n.name);
+  for (const { unit, at } of unitsAt(text)) {
+    const symbol = unit.replace(/\d+$/, "");
+    if (letters.has(symbol)) ones++;
+    // (an element after uranium from letters typed small - rule 2 - not a
+    // group named as one is, Ts, Fm, nor a prefix typed with its hyphen, the
+    // s of NHs-Bu)
+    if (HEAVY.has(symbol) && !units.has(symbol)) {
+      if (fit(typed, at, symbol) && text[at + symbol.length] !== "-") heavy++;
+      continue;
+    }
+    // (a metal's symbol typed as it is written is that: HoCl3)
+    if (!metals.has(symbol) || !fit(typed, at, symbol)) continue;
+    const end = at + symbol.length;
+    // (across a name this writing does not write there - Tb of TbSCl, across
+    // TBS - not one in a name it writes - Na of 1-Naph - nor across one where
+    // it writes another: Ni of HNiPr, its iPr written, though IPr fits too)
+    if (spans.some((n) => n.from <= at && n.to >= end && written(n.from, n.to))) continue;
+    const overName = spans.some((n) => n.from < end && n.to > at && !(n.from === at && n.to === end) && !written(n.from, n.to));
+    if (overName || (symbol[0] === "H" && HETERO_LETTER.test((symbol[1] ?? "").toUpperCase()))) across++;
+  }
+  return { letters: ones, across, heavy };
 }
 
 /** Whether one rank comes before another: the first place they differ decides. */
@@ -257,8 +409,11 @@ function before(a: readonly number[], b: readonly number[]): boolean {
  * is kept as. Part of a structure before a whole molecule - a label stands
  * for part of one - then a heteroatom with its H or a group, as drawn on a
  * bond's left (ho is HO, OH - not holmium; mes MeS, SMe - not mesityl),
- * then of whole molecules a reagent's name (tbme is TBME, hoac HOAc - not
- * TbMe, HoAc), then the fewest letters made capitals.
+ * then of whole molecules a reagent's name (cpme is CPME, not CpMe),
+ * then the fewest letters made capitals. Before all of these, no metal's
+ * symbol made where it is not meant (rule 6: tbscl is TBSCl, not TbSCl;
+ * lah LAH, not LaH; hotf HOTf, not HoTf); and a group's name of one letter
+ * only as part of a structure (co2z is CO2Z; zni2 ZnI2, not ZNi2).
  */
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
@@ -266,26 +421,47 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   // (what reads as it is typed is that - a whole molecule but for HN before a group: HNiPr is NHiPr)
   if (own) return { shown: typed, kept: (own.whole && heteroatomFirst(typed, reads)[0]) || typed };
   let best: { shown: string; kept: string; rank: number[] } | null = null;
+  const spans = namesIn(typed);
+  const madeOf = new Map<string, { letters: number; across: number; heavy: number }>();
+  const madeFor = (shown: string) => {
+    const made = madeOf.get(shown) ?? unitsMade(typed, shown, spans);
+    madeOf.set(shown, made);
+    return made;
+  };
   const consider = (shown: string, kept: string, r: Reading, w: Writing) => {
     if (!r || !allowed(typed, kept, r)) return;
+    const made = madeFor(shown);
+    // (Z, for Cbz, as part of a structure: no complex of a metal and Z)
+    if (made.letters > 0 && r.whole) return;
     // (typed as drawn on a bond's left, a heteroatom with its H or a group: HO, MeS)
     const drawn = kept !== shown && onHeteroatom(kept, reads);
-    // (a whole molecule by a reagent's name before one by a formula - rule 6)
-    const rank = [r.whole ? 1 : 0, drawn ? 0 : 1, r.whole && !r.named ? 1 : 0, w.cost, w.loose, w.words];
+    // (no metal made where it is not meant, then a whole molecule by a reagent's name before one by a formula - rule 6)
+    const rank = [made.across, r.whole ? 1 : 0, drawn ? 0 : 1, r.whole && !r.named ? 1 : 0, w.cost, made.letters, w.loose, w.words];
     if (!best || before(rank, best.rank)) best = { shown, kept, rank };
   };
-  let tried = 0;
+  // (as many tried of the writings each in words as of those with letters in
+  // no word - a prefix's, sec of secbu - so that neither crowds the other out)
+  const tried = { words: 0, loose: 0 };
   for (const w of writings(typed)) {
-    if (w.cost > 0 && ++tried > 120) break;
+    if (w.cost > 0) {
+      const n = w.loose === 0 ? ++tried.words : ++tried.loose;
+      if (tried.words > 120 && tried.loose > 120) break;
+      if (n > 120) continue;
+    }
     // (as typed - no letter made a capital - it reads as nothing: asked above;
     // or it reads with its italic prefix hyphenated, as it is kept: npent is
     // n-Pent, pTs p-Ts)
     const prefixed = hyphened(w.text);
-    const r = (w.cost > 0 ? reads(w.text) : null) ?? (prefixed !== w.text ? reads(prefixed) : null);
+    // (no element after uranium made from letters typed small, as it is
+    // written - rule 2 - though with its prefix hyphenated it may read:
+    // NHsBu is no hassium, but NHs-Bu)
+    const asWritten = w.cost > 0 && !madeFor(w.text).heavy ? reads(w.text) : null;
+    const r = asWritten ?? (prefixed !== w.text ? reads(prefixed) : null);
     consider(w.text, w.text, r, w);
     // (as drawn on a bond's left - HO, AcO as typed, or aco - only what reads
-    // as nothing as it is written, from letters each in a word: hcl is HCl)
-    if (!r && w.loose === 0)
+    // as nothing as it is written, from letters each in a word, or in a
+    // prefix set in italics: hcl is HCl, hnsecbu NHsec-Bu)
+    if (!r && (w.loose === 0 || prefixed !== w.text))
       for (const f of forwards(w.text, reads)) {
         // (a group, drawn the other way round: never a whole molecule)
         const back = reads(f);

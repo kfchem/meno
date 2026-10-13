@@ -28,11 +28,10 @@ describe("the reagents", () => {
     NMM: "C5H11NO", "2,6-lutidine": "C7H9N", collidine: "C8H11N", "Proton-Sponge": "C14H18N2", TMG: "C5H13N3",
     imidazole: "C3H4N2", LDA: "C6H14LiN", LiHMDS: "C6H18LiNSi2", NaHMDS: "C6H18NNaSi2", KHMDS: "C6H18KNSi2",
     LiTMP: "C9H18LiN",
-    TFA: "C2HF3O2", PTSA: "C7H8O3S", CSA: "C10H16O4S", PPTS: "C12H13NO3S", H2SO4: "H2O4S", HOAc: "C2H4O2",
+    TFA: "C2HF3O2", PTSA: "C7H8O3S", CSA: "C10H16O4S", PPTS: "C12H13NO3S", H2SO4: "H2O4S",
     DCC: "C13H22N2", DIC: "C7H14N2", EDC: "C8H17N3", HATU: "C10H15F6N6OP",
     HBTU: "C11H16F6N5OP", TBTU: "C11H16BF4N5O", COMU: "C12H19F6N4O4P", PyBOP: "C18H28F6N6OP2", BOP: "C12H22F6N6OP2",
     T3P: "C9H21O6P3", CDI: "C7H6N4O", DMTMM: "C10H17ClN4O3", Oxyma: "C5H6N2O3", NHS: "C4H5NO3",
-    HOBt: "C6H5N3O", HOAt: "C5H4N4O", HOSu: "C4H5NO3",
     "Yamaguchi reagent": "C7H2Cl4O", "Mukaiyama reagent": "C6H7ClIN", DPPA: "C12H10N3O3P", DEAD: "C6H10N2O4",
     DIAD: "C8H14N2O4",
     NBS: "C4H4BrNO2", NCS: "C4H4ClNO2", NIS: "C4H4INO2", DBDMH: "C5H6Br2N2O2", TCCA: "C3Cl3N3O3",
@@ -40,7 +39,7 @@ describe("the reagents", () => {
     "Togni I": "C10H10F3IO", "Togni II": "C8H4F3IO2", "Ruppert–Prakash reagent": "C4H9F3Si", "Langlois reagent": "CF3NaO2S", SOCl2: "Cl2OS",
     POCl3: "Cl3OP", PCl5: "Cl5P",
     TFAA: "C4F6O3",
-    "Comins' reagent": "C7H3ClF6N2O4S2", HMDS: "C6H19NSi2", TMSCl: "C3H9ClSi", "Meerwein's salt": "C3H9BF4O", "Eschenmoser's salt": "C3H8IN",
+    "Comins' reagent": "C7H3ClF6N2O4S2", HMDS: "C6H19NSi2", "Meerwein's salt": "C3H9BF4O", "Eschenmoser's salt": "C3H8IN",
     TMSCHN2: "C4H10N2Si", CH2N2: "CH2N2", "Mander's reagent": "C3H3NO2",
     "Tebbe reagent": "C13H18AlClTi", "Petasis reagent": "C12H16Ti", "Schwartz's reagent": "C10H11ClZr",
     "Stryker's reagent": "C108H96Cu6P6", Me2CuLi: "C2H6CuLi",
@@ -68,21 +67,12 @@ describe("the reagents", () => {
     }
   });
 
-  it("hold nothing the rules read as the same molecule (Ac2O, KOt-Bu: by rule) but the formulas written as names", () => {
-    // (HOAc, HOBt, HOAt, HOSu, TMSCl: listed so that typed small they are
-    // read as the reagent before a metal's formula - the maintainer, 2026-10-13)
-    const names = new Set(["HOAc", "HOBt", "HOAt", "HOSu", "TMSCl"]);
+  it("hold nothing the rules read as the same molecule (Ac2O, KOt-Bu, HOBt: by rule)", () => {
     for (const r of REAGENTS) {
       for (const name of [r.label, ...(r.also ?? [])]) {
         const made = byRule(name);
-        if (made && !names.has(name)) expect(structureFormula(made), name).not.toBe(formula(r.label));
+        if (made) expect(structureFormula(made), name).not.toBe(formula(r.label));
       }
-    }
-    // (and as the rule reads them: the same molecule, its label set the same way)
-    for (const name of names) {
-      expect(abbreviationOf(name)?.label, name).toBe(name);
-      expect(structureFormula(byRule(name)!), name).toBe(formula(name));
-      expect(labelUnits(name).length, name).toBeGreaterThan(1);
     }
   });
 
@@ -188,13 +178,13 @@ describe("configurations", () => {
 describe("simple formulas, read by rule", () => {
   it("are molecules: a centre and its valence's groups, or two univalent parts", () => {
     const cases: Record<string, string> = {
-      "i-Pr2NEt": "C8H19N", "n-BuLi": "C4H9Li", MeMgBr: "CH3BrMg", Bu3SnH: "C12H28Sn",
+      "i-Pr2NEt": "C8H19N", "n-BuLi": "C4H9Li", MeMgBr: "CH3BrMg", Bu3SnH: "C12H28Sn", TMSCl: "C3H9ClSi",
       TBSOTf: "C7H15F3O3SSi", "(Boc)2O": "C10H18O5", CH2Cl2: "CH2Cl2", CHCl3: "CHCl3", MeOH: "CH4O", AcOH: "C2H4O2",
       HCO2H: "CH2O2", H2: "H2", HCl: "ClH", TMSCN: "C4H9NSi", "Fmoc-OSu": "C19H15NO5", PhH: "C6H6", BnBr: "C7H7Br",
       Et2O: "C4H10O", AlCl3: "AlCl3", BBr3: "BBr3", NH3: "H3N", H2O: "H2O",
       // (once in the dictionary, now read so)
       Ac2O: "C4H6O3", Boc2O: "C10H18O5", Tf2O: "C2F6O5S2", PhNTf2: "C8H5F6NO4S2", TfOH: "CHF3O3S", TsOH: "C7H8O3S",
-      HBpin: "C6H13BO2", EtOAc: "C4H8O2", "KOt-Bu": "C4H9KO", NaH: "HNa",
+      HOBt: "C6H5N3O", HOAt: "C5H4N4O", HBpin: "C6H13BO2", EtOAc: "C4H8O2", "KOt-Bu": "C4H9KO", NaH: "HNa",
       NaOCl: "ClNaO", Et3N: "C6H15N", TMSCF3: "C4H9F3Si", "Pb(OAc)4": "C8H12O8Pb",
     };
     for (const [label, f] of Object.entries(cases)) {
@@ -202,7 +192,7 @@ describe("simple formulas, read by rule", () => {
       expect(formula(label), label).toBe(f);
     }
     // its name: its molecular formula
-    expect(abbreviationOf("TBSOTf")?.name).toBe("C7H15F3O3SSi");
+    expect(abbreviationOf("TMSCl")?.name).toBe("C3H9ClSi");
   });
 
   it("bind sodium and potassium as ions, and lithium so but to carbon", () => {

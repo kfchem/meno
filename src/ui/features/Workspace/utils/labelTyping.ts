@@ -36,8 +36,8 @@ export function labelKey(e: KeyLike): string | null {
  * its H, its charge, its mass number - or a charge alone, an Rgroup, or
  * what the abbreviations read - Meno's, the user's own, those put together
  * by rule - part of a structure; a reagent or a complex, a whole molecule,
- * by a reagent's name where the reagents list it (TBME, HOAc) - not by a
- * formula read by rule (H2Zn, PdCl2). A group named as an element is - Ac,
+ * by a reagent's name where the reagents list it (TBME, CPME) - not by a
+ * formula read by rule (HOAc, H2Zn, PdCl2). A group named as an element is - Ac,
  * Pr, Ts, Fm, At - is the group (the maintainer, 2026-10-10).
  */
 export function labelReading(label: string): Reading {

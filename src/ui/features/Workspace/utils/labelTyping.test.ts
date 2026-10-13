@@ -101,9 +101,8 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       // (typed as it is written, or as it is drawn: shown as typed)
       for (const typed of [label, drawn]) expect(live(typed), typed).toBe(typed);
     }
-    // (with its italic prefix, turned round or not)
-    for (const typed of ["OtBu", "otbu", "tBuO", "tbuo"]) expect(kept(typed), typed).toBe("OtBu");
-    for (const typed of ["Ot-Bu", "t-BuO"]) expect(kept(typed), typed).toBe("Ot-Bu");
+    // (with its italic prefix hyphenated after the atom, however it was typed - rule 4 - turned round or not)
+    for (const typed of ["OtBu", "otbu", "tBuO", "tbuo", "Ot-Bu", "t-BuO"]) expect(kept(typed), typed).toBe("Ot-Bu");
   });
 
   it("reads letters typed small as a heteroatom with its H or a group, as drawn on a bond's left, before any other reading (the maintainer, 2026-10-12)", () => {
@@ -124,13 +123,15 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       expect(kept(typed), typed).toBe(label);
   });
 
-  it("keeps HN typed before a group as NH and the group, whatever its name starts with (rule 3)", () => {
+  it("keeps HN typed before a group as NH and the group, whatever its name starts with (rule 3), its prefix hyphenated however typed (rule 4)", () => {
     for (const [typed, label] of [
-      ["HNtBu", "NHtBu"], ["hntbu", "NHtBu"], ["nhtbu", "NHtBu"], ["HNt-Bu", "NHt-Bu"], ["HNnBu", "NHnBu"], ["HNn-Pr", "NHn-Pr"],
+      ["HNtBu", "NHt-Bu"], ["hntbu", "NHt-Bu"], ["nhtbu", "NHt-Bu"], ["HNt-Bu", "NHt-Bu"], ["HNnBu", "NHn-Bu"], ["HNn-Pr", "NHn-Pr"],
       ["HNs-Bu", "NHs-Bu"], ["HNsec-Bu", "NHsec-Bu"], ["HNp-Ts", "NHp-Ts"], ["HNp-Tol", "NHp-Tol"], ["HNallyl", "NHallyl"],
-      ["HNvinyl", "NHvinyl"], ["HN2-Naph", "NH2-Naph"], ["HN2-ClTrt", "NH2-ClTrt"],
-      // (sBu, the letters typed: not S and Bu)
-      ["HNsBu", "NHsBu"], ["hnsbu", "NHsBu"], ["nhsbu", "NHsBu"],
+      ["HNvinyl", "NHvinyl"], ["HN2-Naph", "NH2-Naph"], ["HN2-ClTrt", "NH2-ClTrt"], ["hn2-naph", "NH2-Naph"], ["hn1-naph", "NH1-Naph"],
+      // (sBu, the letters typed: not S and Bu, nor hassium)
+      ["HNsBu", "NHs-Bu"], ["hnsbu", "NHs-Bu"], ["nhsbu", "NHs-Bu"],
+      // (and the prefixes of letters, and the groups that need the hyphen to read)
+      ["hnsecbu", "NHsec-Bu"], ["HNsecBu", "NHsec-Bu"], ["nhsecbu", "NHsec-Bu"], ["hnpts", "NHp-Ts"], ["hnptol", "NHp-Tol"],
       // (N and iPr, not a complex of nickel: a label stands for part of a structure)
       ["HNiPr", "NHiPr"], ["hnipr", "NHiPr"],
     ]) {
@@ -162,7 +163,7 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     }
   });
 
-  it("reads a group's name of one letter from letters typed small: z is Z, for Cbz", () => {
+  it("reads a group's name of one letter from letters typed small - z is Z, for Cbz - but only as part of a structure", () => {
     for (const [typed, label] of [
       ["z", "Z"], ["Z", "Z"], ["oz", "OZ"], ["zo", "OZ"], ["ZO", "OZ"], ["co2z", "CO2Z"], ["nhz", "NHZ"], ["hnz", "NHZ"],
     ]) expect(kept(typed), typed).toBe(label);
@@ -170,24 +171,49 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     // (zinc and zirconium, and the groups whose names have a z, as ever)
     for (const [typed, label] of [["zn", "Zn"], ["zr", "Zr"], ["cbz", "Cbz"], ["bz", "Bz"], ["obz", "OBz"], ["moz", "Moz"]])
       expect(kept(typed), typed).toBe(label);
-  });
-
-  it("reads a reagent's name before a metal's formula, from letters typed small (rule 6; the maintainer, 2026-10-13)", () => {
-    // (reagents by name - HOAc among them, though its formula reads too - and the metals' formulas the letters make)
-    for (const name of ["TBME", "CDI", "HOAc", "HOBt", "HOAt", "HOSu", "TMSCl"]) expect(labelReading(name), name).toEqual({ whole: true, named: true });
-    for (const formula of ["HoAc", "H2Zn", "PdCl2", "CpMe"]) expect(labelReading(formula), formula).toEqual({ whole: true });
+    // (their formulas too - zinc iodide, Schwartz's reagent - not Z and a nickel or rhodium complex)
     for (const [typed, label] of [
-      ["hoac", "HOAc"], ["hobt", "HOBt"], ["hosu", "HOSu"], ["hoat", "HOAt"], ["tbme", "TBME"], ["cpme", "CPME"],
-      ["cdi", "CDI"], ["tmscl", "TMSCl"],
+      ["zni2", "ZnI2"], ["zni", "ZnI"], ["cp2zrhcl", "Cp2ZrHCl"], ["zrhcl", "ZrHCl"], ["cp2zrh2", "Cp2ZrH2"], ["zrhbu", "ZrHBu"],
+      ["znbu", "ZnBu"], ["cp2znbu", "Cp2ZnBu"], ["nhcbzpmb", "NHCbzPMB"],
     ]) {
       expect(kept(typed), typed).toBe(label);
       expect(live(typed), typed).toBe(label);
     }
-    // (a metal's formula typed as it is written is that, and one whose letters make no reagent is read as ever)
+    // (and Z in no complex of a metal: what reads as nothing else stays as typed - rule 5)
+    for (const typed of ["nbz", "hoz", "zpro", "zna"]) expect(kept(typed), typed).toBe(typed);
+  });
+
+  it("reads a reagent's or a ligand's name before a metal's formula, from letters typed small (rule 6; the maintainer, 2026-10-13)", () => {
+    // (reagents by name, and formulas read by rule - HOAc and TMSCl among them, no list needed)
+    for (const name of ["TBME", "CDI", "CPME", "LAH"]) expect(labelReading(name), name).toEqual({ whole: true, named: true });
+    for (const formula of ["HOAc", "HOBt", "HOAt", "HOSu", "TMSCl", "HoAc", "H2Zn", "PdCl2", "CpMe"]) expect(labelReading(formula), formula).toEqual({ whole: true });
+    for (const [typed, label] of [
+      // (no metal's symbol across a group's, a reagent's or a ligand's name the letters spell)
+      ["tbme", "TBME"], ["cdi", "CDI"], ["tmscl", "TMSCl"], ["tbscl", "TBSCl"], ["tbsotf", "TBSOTf"], ["tmsotf", "TMSOTf"],
+      ["tmscn", "TMSCN"], ["tipscl", "TIPSCl"], ["tmsoh", "TMSOH"], ["lah", "LAH"],
+      // (nor holmium's from ho before a group: ho is HO - rule 3)
+      ["hoac", "HOAc"], ["hobt", "HOBt"], ["hosu", "HOSu"], ["hoat", "HOAt"], ["hotf", "HOTf"], ["hots", "HOTs"], ["homs", "HOMs"],
+      ["hocl", "HOCl"],
+      // (a reagent's name before a formula)
+      ["cpme", "CPME"],
+    ]) {
+      expect(kept(typed), typed).toBe(label);
+      expect(live(typed), typed).toBe(label);
+    }
+    // (a metal's formula typed as it is written is that, and one whose letters spell no name is read as ever)
     for (const typed of ["HoAc", "HoCl3", "TbCl3", "TbMe", "CdI"]) expect(kept(typed), typed).toBe(typed);
-    for (const [typed, label] of [["pdcl2", "PdCl2"], ["hocl3", "HoCl3"], ["tbcl3", "TbCl3"]]) expect(kept(typed), typed).toBe(label);
+    for (const [typed, label] of [
+      ["pdcl2", "PdCl2"], ["hocl3", "HoCl3"], ["tbcl3", "TbCl3"], ["cocl2", "CoCl2"], ["nicl2", "NiCl2"], ["pd(oac)2", "Pd(OAc)2"],
+      ["co(oac)2", "Co(OAc)2"],
+    ])
+      expect(kept(typed), typed).toBe(label);
     // (of two formulas read by rule, the fewest letters made capitals, as ever: zinc hydride, not H2N and Z)
     expect(kept("h2zn")).toBe("H2Zn");
+  });
+
+  it("reads H typed before an element's symbol only: hTf is triflic acid, not T, H and F", () => {
+    expect(kept("hTf")).toBe("HTf");
+    expect(live("hTf")).toBe("HTf");
   });
 
   it("keeps a charge typed last where it was, turned round or not", () => {
@@ -238,7 +264,11 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       ["npent", "n-Pent"], ["nPent", "n-Pent"], ["nhex", "n-Hex"], ["nhept", "n-Hept"], ["noct", "n-Oct"],
       ["secbu", "sec-Bu"], ["secBu", "sec-Bu"], ["tertbu", "tert-Bu"], ["tertBu", "tert-Bu"],
       ["pTol", "p-Tol"], ["pNs", "p-Ns"], ["pns", "p-Ns"], ["pTs", "p-Ts"], ["pts", "p-Ts"],
+      // (after an atom, in parentheses, and before a reagent's name)
+      ["kotbu", "KOt-Bu"], ["KOtBu", "KOt-Bu"], ["co2tbu", "CO2t-Bu"], ["p(otol)3", "P(o-Tol)3"], ["mcpba", "m-CPBA"], ["mCPBA", "m-CPBA"],
     ]) expect(kept(typed), typed).toBe(label);
+    // (not inside an element's symbol, nor a group's or a ligand's name as it is written)
+    for (const typed of ["SnBu3", "CsF", "OsO4", "Me4tBuXPhos", "FmBoc", "TsCl"]) expect(kept(typed), typed).toBe(typed);
     // (as it is typed, only its letters' case changes)
     expect(live("npent")).toBe("nPent");
     expect(live("pts")).toBe("pTs");
