@@ -4,6 +4,8 @@
 <chem python> scripts/figure/roundtrip/corpus.py          # 1. the structures, and the truth about each -> .roundtrip/corpus.json
 npm run roundtrip -- draw                                  # 2. drawn by Meno, as MOL and as SVG in every style -> .roundtrip/svg
 swift scripts/figure/roundtrip/topdf.swift .roundtrip      # 3. each SVG printed as PDF, three ways -> .roundtrip/pdf
+<chem python> scripts/figure/roundtrip/rdkit_draw.py       # 2b. (also) drawn by RDKit's depictor, four ways -> .roundtrip-rdkit/svg
+swift scripts/figure/roundtrip/topdf.swift .roundtrip-rdkit #    printed likewise; copy its pdf/ into .roundtrip/pdf
 npm run tauri build -- --bundles app                       #    (the app whose PDF reader reads them back)
 npm run roundtrip -- read                                  # 4. each PDF read back as Read as structure reads it -> .roundtrip/read.json
 <chem python> scripts/figure/roundtrip/compare.py          # 5. against the truth -> .roundtrip/report.md, report.json
@@ -17,6 +19,9 @@ build's executable for step 4, `RT_READ` a folder under `.roundtrip` for
 its reads (`compare.py --read=` that folder), and `RT_BOX=page` reads each
 page in a box round all that is on it rather than round the figures found
 there - the figure reader measured apart from finding figures.
+`RT_PRESETS=rdkit,rdkitcg,rdkitacs,rdkitacscg` with `RT_READ=rdkit` reads
+only the structures drawn by RDKit (stage 2b): real papers' figures come
+from many programs, not Meno's alone.
 
 ## What it is for
 

@@ -38,3 +38,4 @@ __pycache__/
 
 # PDFium, fetched for the build (scripts/fetch-pdfium.mjs)
 src-tauri/pdfium/
+.roundtrip-rdkit/
