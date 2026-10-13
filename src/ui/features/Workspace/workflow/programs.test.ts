@@ -35,6 +35,21 @@ describe("what a plugin is given of an entry", () => {
     // (11 electrons with the charge, one of them unpaired, on the radical)
     expect([e.charge, e.multiplicity, e.name]).toEqual([-1, 2, "water"]);
   });
+
+  it("is a molecule read from a calculation in the state its calculation was: its charge and multiplicity, not its atoms' (none, as an output gives them)", () => {
+    // (the ammonium ion, as an output of a cation gives it: five atoms, no charge on any)
+    const nh4: Omit<Molecule3D, "id"> = {
+      atoms: [{ el: "N", x: 0, y: 0, z: 0 }, ...[[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]].map(([x, y, z]) => ({ el: "H", x: 0.6 * x, y: 0.6 * y, z: 0.6 * z }))],
+      bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
+      at: { x: 0, y: 0 },
+      calc: { readers: ["cclib 1.9rc1"], program: "ORCA", charge: 1, multiplicity: 1 },
+    };
+    const [entry] = setEntries([{ ...nh4, id: 1 }], "molecules");
+    expect([pluginEntry(entry).charge, pluginEntry(entry).multiplicity]).toEqual([1, 1]);
+    // (drawn and made in 3D - no calculation said otherwise - it is what its atoms say: neutral NH4, a doublet)
+    const [drawn] = setEntries([{ ...nh4, calc: undefined, id: 2 }], "molecules");
+    expect([pluginEntry(drawn).charge, pluginEntry(drawn).multiplicity]).toEqual([0, 2]);
+  });
 });
 
 describe("the jobs a plugin prepares", () => {
