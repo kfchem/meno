@@ -14,6 +14,7 @@ const doc = () => emptyWorkspaceDocument();
 function slower<T>(small: T, large: T, run: (x: T) => void): number {
   const least = [Infinity, Infinity];
   run(small);
+  run(large);
   for (let k = 0; k < 5; k++) {
     [small, large].forEach((x, i) => {
       const started = performance.now();
@@ -108,8 +109,8 @@ describe("structure document operations", () => {
 
   it("deletes everything selected in a large drawing in time in step with its size", () => {
     // (rings of six carbons side by side, all selected: each bond's ends were
-    // looked for among every atom - 10.5 s for 28 000 atoms. Four times the
-    // rings now take about four times as long, not sixteen)
+    // looked for among every atom - 10.5 s for 28 000 atoms. Eight times the
+    // rings now take about eight times as long, not sixty-four)
     const page = (rings: number): WorkspaceDocument => {
       const atoms: Model["atoms"] = [];
       const bonds: Model["bonds"] = [];
@@ -126,7 +127,7 @@ describe("structure document operations", () => {
       const next = ops.deleteParts(d, d.model.atoms.map((a) => a.id), d.model.bonds.map((b) => b.id));
       expect(next.model.atoms).toHaveLength(0);
     };
-    expect(slower(page(500), page(2000), deleted)).toBeLessThan(9);
+    expect(slower(page(250), page(2000), deleted)).toBeLessThan(24);
   });
 
   it("lays some of the structure out afresh in one operation", () => {

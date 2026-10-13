@@ -28,6 +28,7 @@ const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9
 function slower<T>(small: T, large: T, run: (x: T) => void): number {
   const least = [Infinity, Infinity];
   run(small);
+  run(large);
   for (let k = 0; k < 5; k++) {
     [small, large].forEach((x, i) => {
       const started = process.cpuUsage();
@@ -146,8 +147,8 @@ describe("fragmentOf and partOf", () => {
   it("find the structures of a large drawing in time in step with its size", () => {
     // (toluenes side by side: each structure found went over every bond of
     // the drawing again, and each atom asked for was looked for among every
-    // atom - 17 s for a thousand structures. Four times the structures now
-    // take about four times as long, not sixteen)
+    // atom - 17 s for a thousand structures. Eight times the structures now
+    // take about eight times as long, not sixty-four)
     const page = (n: number): Model => {
       const atoms: Model["atoms"] = [];
       const bonds: Model["bonds"] = [];
@@ -165,7 +166,7 @@ describe("fragmentOf and partOf", () => {
       expect(held).toHaveLength(m.atoms.length / 7);
       expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
     };
-    expect(slower(page(500), page(2000), found)).toBeLessThan(9);
+    expect(slower(page(250), page(2000), found)).toBeLessThan(24);
   });
 });
 
