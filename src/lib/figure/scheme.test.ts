@@ -189,6 +189,14 @@ describe("a reaction scheme's signs and words", () => {
     expect(strokes.figure.atoms).toHaveLength(8);
   });
 
+  it("spaces words by how their letters are set, where the figure says: a 1's ink stands well inside its room", () => {
+    // (each letter's loose box from where it starts to where the next would; the 1's ink narrow inside it)
+    const set = (c: string, x: number, w: number, ink: [number, number]): FigureLetter => ({ c, box: [x + ink[0], 81, x + ink[1], 88], loose: [x, 79, x + w, 90], at: [x, 88], size: 10 });
+    const letters = [set("1", 70, 5.6, [1.2, 3.6]), set(".", 75.6, 2.8, [0.9, 1.9]), set("L", 81.2, 5.6, [0.7, 5]), set("D", 86.8, 7.2, [0.8, 6.6]), set("A", 94, 6.7, [0, 6.7])];
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], letters));
+    expect(s.words.map((w) => w.text)).toEqual(["1. LDA"]);
+  });
+
   it("reads the words over and under an arrow as its, written as Meno writes them, and a compound's number in bold where it stands", () => {
     const s = read(
       scheme(

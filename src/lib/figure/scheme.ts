@@ -569,7 +569,10 @@ function rowText(r: Row): { text: string; styles: (WordsStyle | undefined)[] } {
       prev = l;
       continue;
     }
-    if (prev && prev.c.trim() && l.box[0] - prev.box[2] > 0.2 * r.size && !text.endsWith(" ")) {
+    // (a space where the letters stand apart: by how they are set, where the figure says - a 1's ink stands well inside its room - else by their ink)
+    const gap = prev?.loose && l.loose ? l.loose[0] - prev.loose[2] : prev ? l.box[0] - prev.box[2] : 0;
+    const apart = prev?.loose && l.loose ? 0.15 * r.size : 0.2 * r.size;
+    if (prev && prev.c.trim() && gap > apart && !text.endsWith(" ")) {
       text += " ";
       styles.push(undefined);
     }
