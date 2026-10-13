@@ -263,6 +263,12 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     perspective has its bonds left out of the bonds' lengths, and the rest
     alone spread wider: turned, Pd(PPh3)4 measured a point worse for that
     alone. The two are measured on the same bonds now.
+  - A macrocycle's run between atoms placed was looked for from one end,
+    which end by the order of the ring's atoms, and the search did not keep
+    the run off its own two ends (the placed atoms' crowding leaves them
+    out, the first being bonded to it). Through two benzene rings off a
+    hub, a benzene came down on the hub's atom the run ends at. The run is
+    now kept off both ends and looked for from each, the better kept.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -440,13 +446,6 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
-- **The macrocycle rule test skipped at two orders** (2026-10-13).
-  Laid out in two of its own orders (`OWN_ORDERS`), the engine draws the
-  macrocycles strung through benzene rings (`engine.test.ts`) tangled: of
-  the two sides of a para-substituted benzene, the smallest set of rings
-  has a macrocycle run along one by the order of the atoms, and along the
-  inner side the benzene lands on the hub. It passes at four orders; main
-  drew it wrong in three of eight input orders too.
 - **A phenyl of Pd(PPh3)4 across a Pd-P bond** (`hapto.test.ts`, skipped;
   main too). Its phenyls are turned as a propeller where that reads better,
   but the one across the bond is on a P whose rings turning does not help.

@@ -112,7 +112,9 @@ they hang from.
   where several run through the same ring, that ring is drawn first and
   each macrocycle is a zigzag from ring to ring, turning as a hexagon
   does where it runs through one, so that the ring comes out regular,
-  and kept clear of where the rest of that ring will fall.
+  and kept clear of where the rest of that ring will fall, and of the
+  two atoms it runs between - looked for from each of them, the better
+  kept.
 - **Bridged systems**: where a ring is fused on a side as well - morphine,
   artemisinin, taxol - the system is drawn flat: the smaller ring of a
   bridged pair regular, the larger arcing round it with the bridge inside

@@ -508,9 +508,18 @@ function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = 
       run.push(ring[j]);
       j = (j + 1) % n;
     }
-    // a macrocycle's run is a chain, drawn as one: a zigzag, never an arc
-    if (n >= MACROCYCLE && run.length >= 3) placeChainRun(ring[i], ring[j], run, pos, rings);
-    else placeRun(ring[i], ring[j], run, n, pos);
+    // a macrocycle's run is a chain, drawn as one: a zigzag, never an arc -
+    // looked for from either end, the better kept (which end it was looked
+    // for from went by the order of the ring's atoms, and from one end the
+    // way round that clears the rest can be cut before it is reached)
+    if (n >= MACROCYCLE && run.length >= 3) {
+      const there = new Map(pos);
+      const back = new Map(pos);
+      const thereCost = placeChainRun(ring[i], ring[j], run, there, rings);
+      const backCost = placeChainRun(ring[j], ring[i], [...run].reverse(), back, rings);
+      const kept = backCost < thereCost - 1e-9 ? back : there;
+      for (const v of run) pos.set(v, kept.get(v)!);
+    } else placeRun(ring[i], ring[j], run, n, pos);
   }
 }
 
@@ -758,7 +767,7 @@ function placeChainRun(
   run: number[],
   pos: Map<number, Point>,
   rings: number[][] = [],
-): void {
+): number {
   // the six-membered rings the run passes through, yet to be drawn: where
   // it does, it turns as the hexagon does, the same way at each atom
   const hexagon = (u: number, v: number, w: number) =>
@@ -830,7 +839,10 @@ function placeChainRun(
         // (still able to reach the far end)
         if (dist(p, b) > left + 1e-9) continue;
         let cost = st.cost + crowd(p) + 5 * crosses(last, p) + onGhost(p, st.ghosts);
-        for (let j = 0; j < st.at.length - 1; j++) if (dist(p, st.at[j]) < 0.9) cost += 20;
+        // (nor onto either end of the run, which the placed atoms' crowding
+        // leaves out: the far end only while the run is still bonds from it)
+        for (const q of [a, ...st.at.slice(0, -1)]) if (dist(p, q) < 0.9) cost += 20;
+        if (left >= 2 && dist(p, b) < 0.9) cost += 20;
         // a zigzag turns each way in turn; a corner is two turns alike
         if (turn === st.turn && ring < 0) cost += 0.3;
         // entering a hexagon: room for the rest of it, kept from then on
@@ -839,7 +851,9 @@ function placeChainRun(
           const u = step >= 2 ? st.at[step - 2] : a;
           const fresh = rest(ring, u, last, p, run[step - 1], run[step]);
           for (const g of fresh) {
-            cost += crowd(g);
+            // (the run's two ends crowded as placed atoms are: the rest of a
+            // hexagon is bonded to neither)
+            cost += crowd(g) + (dist(g, a) < 0.6 ? 50 : 0) + (dist(g, b) < 0.6 ? 50 : 0);
             for (const q of [a, ...st.at, p]) if (dist(q, g) < 0.9) cost += 20;
           }
           ghosts = [...ghosts, ...fresh];
@@ -894,7 +908,7 @@ function placeChainRun(
   }
   if (!best) {
     placeRun(from, to, run, run.length + 2, pos);
-    return;
+    return Infinity;
   }
   // the strain of closing it shared out along the chain: bonds 1, each
   // chain atom's neighbours a 120-degree angle apart, clear of what is
@@ -924,6 +938,7 @@ function placeChainRun(
     }
   }
   run.forEach((atom, i) => pos.set(atom, line[i + 1]));
+  return bestCost;
 }
 
 /** The points a bond's length from both `p` and `q`. */
