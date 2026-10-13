@@ -169,8 +169,22 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
 
   it("leaves what reads as nothing as typed - no capital made", () => {
     expect(kept("x")).toBe("x");
-    expect(kept("lg")).toBe("lg");
+    expect(kept("qj")).toBe("qj");
     expect(kept("")).toBe("");
+  });
+
+  it("reads a symbol for a kind of group as the name it is, as TBS - typed small, or as drawn on a bond's left", () => {
+    // (the maintainer, 2026-10-13: PG, LG, EWG, EDG, Nu, E, Hal and Het are names; hal was AlH, het HEt)
+    for (const [typed, label] of [
+      ["pg", "PG"], ["lg", "LG"], ["ewg", "EWG"], ["edg", "EDG"], ["nu", "Nu"], ["e", "E"], ["hal", "Hal"], ["het", "Het"],
+      ["opg", "OPG"], ["nhpg", "NHPG"], ["ch2hal", "CH2Hal"],
+      // (typed as drawn on a bond's left: kept as it reads from the bond)
+      ["PGO", "OPG"], ["pgo", "OPG"], ["pghn", "NHPG"], ["NuO", "ONu"],
+    ]) expect(kept(typed), typed).toBe(label);
+    // (an element still, where that changes fewer letters - and none after uranium from letters typed small)
+    expect(kept("eu")).toBe("Eu");
+    expect(kept("ne")).toBe("Ne");
+    expect(live("nhpg")).toBe("NHPG");
   });
 
   it("reads condensed formulas as groups, by the H that makes a molecule of each", () => {

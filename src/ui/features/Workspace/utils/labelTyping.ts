@@ -11,7 +11,7 @@
  * once the text is committed.
  */
 
-import { abbreviationOf } from "../../../../lib/chem/abbreviations";
+import { abbreviationOf, GENERIC_SYMBOLS } from "../../../../lib/chem/abbreviations";
 import type { Reading } from "../../../../lib/chem/smartLabel";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 
@@ -32,9 +32,10 @@ export function labelKey(e: KeyLike): string | null {
 
 /**
  * What a label reads as (lib/chem/smartLabel `Reading`): an element - with
- * its H, its charge, its mass number - or a charge alone, an Rgroup, or
- * what the abbreviations read - Meno's, the user's own, those put together
- * by rule - part of a structure; a reagent or a complex, a whole molecule.
+ * its H, its charge, its mass number - or a charge alone, an Rgroup, a
+ * symbol for a kind of group (PG, Nu), or what the abbreviations read -
+ * Meno's, the user's own, those put together by rule - part of a
+ * structure; a reagent or a complex, a whole molecule.
  * A group named as an element is - Ac, Pr, Ts, Fm, At - is the group (the
  * maintainer, 2026-10-10).
  */
@@ -45,6 +46,13 @@ export function labelReading(label: string): Reading {
   if (read.kind === "element" && named && isElementSymbol(label)) return { whole: false };
   if (read.kind !== "text") return { whole: false, ...(read.kind === "element" ? { element: read.el } : {}) };
   if (/^R\d+$/.test(label)) return { whole: false };
+  // (a symbol for a kind of group - PG, Nu, Hal - alone, or behind what
+  // reads as part of a structure: OPG, NHPG, CH2Hal - its element said, so
+  // that none after uranium is read from letters typed small: NHPG, not NhPG)
+  const generic = named ? undefined : [...GENERIC_SYMBOLS.keys()].find((g) => label.endsWith(g));
+  if (generic && label === generic) return { whole: false };
+  const before = generic ? labelReading(label.slice(0, -generic.length)) : null;
+  if (before && !before.whole) return { whole: false, ...(before.element ? { element: before.element } : {}) };
   if (!named) return null;
   return { whole: named.kind === "reagent" || named.kind === "complex" };
 }

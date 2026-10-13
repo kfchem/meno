@@ -29,7 +29,7 @@
  * letters, where they were typed, so that the caret stays where it is;
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
-import { labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
+import { GENERIC_SYMBOLS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 
 /**
@@ -56,8 +56,9 @@ function vocabulary(): { words: Token[]; names: Set<string> } {
       // (by symbol, as ever: ties among writings keep this order)
       ...ELEMENTS.map((e) => e.symbol).sort().map((text) => ({ text })),
       ...units.map((text) => ({ text })),
-      // (an Rgroup's R)
+      // (an Rgroup's R; an electrophile's E, a name one letter long)
       { text: "R" },
+      ...[...GENERIC_SYMBOLS.keys()].filter((g) => !units.includes(g)).map((text) => ({ text })),
     ];
     tokens = { from: units, words, names: new Set(words.map((w) => w.text)) };
   }

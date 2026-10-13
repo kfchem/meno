@@ -476,6 +476,7 @@ export function labelProblem(label: string, except?: CustomAbbreviation): string
   if (l.length > 24) return "A label is at most 24 characters.";
   if (/^[\d,]/.test(l) || /^[+−-]|[+−-]$/.test(l)) return "A label starts with a letter and ends without a charge.";
   if (ELEMENTS.has(l)) return `${l} is an element's symbol.`;
+  if (GENERIC_SYMBOLS.has(l)) return `${l} already means ${GENERIC_SYMBOLS.get(l)}.`;
   const own = custom.get(l);
   if (own && own !== except) return `${l} is already one of yours: ${own.name || own.label}.`;
   if (!own) {
@@ -591,20 +592,38 @@ function smilesGroup(smiles: string): GroupStructure {
 
 const ELEMENTS = new Set(TABLE.map((e) => e.symbol));
 /**
+ * The symbols for a kind of group rather than a group, and what each stands
+ * for (the maintainer, 2026-10-13): names, as TBS is - read whole, so never
+ * turned round on a bond's left (OPG is PGO there, not GPO), written so
+ * however typed (pg is PG), and no label of the user's own - but holding no
+ * structure.
+ */
+export const GENERIC_SYMBOLS: ReadonlyMap<string, string> = new Map([
+  ["PG", "a protecting group"],
+  ["LG", "a leaving group"],
+  ["EWG", "an electron-withdrawing group"],
+  ["EDG", "an electron-donating group"],
+  ["Nu", "a nucleophile"],
+  ["E", "an electrophile"],
+  ["Hal", "a halogen"],
+  ["Het", "a heteroatom"],
+]);
+/**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.
  */
 let UNITS: string[] = [];
-/** The units labels are read into: the groups', the user's own among them. */
+/** The units labels are read into: the groups', the user's own among them, and the symbols for a kind of group. */
 function setUnits(): void {
-  UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, "pin", "Phth"])]
-    // (Bpin is B and pin, and so on the left pinB)
+  UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, ...GENERIC_SYMBOLS.keys(), "pin", "Phth"])]
+    // (Bpin is B and pin, and so on the left pinB; a capital alone - E - is a
+    // unit as it is, and here would come before Eu)
     .filter((u) => u.length > 1 && u !== "Bpin")
     .sort((x, y) => y.length - x.length);
 }
 setUnits();
 
-/** The names labels are read into - the groups', the user's own among them, ligands' and reagents' - as they are written. */
+/** The names labels are read into - the groups', the user's own among them, ligands', reagents' and the symbols for a kind of group - as they are written. */
 export function labelUnitNames(): readonly string[] {
   return UNITS;
 }
@@ -646,7 +665,9 @@ export function labelUnits(text: string): string[] {
       }
       unit = text.slice(i, j + 1);
     } else {
-      unit = UNITS.find((u) => text.startsWith(u, i)) ?? letters(text, i);
+      // (a symbol for a kind of group only where its word ends: NHallyl is
+      // NH and allyl, PGe P and Ge)
+      unit = UNITS.find((u) => text.startsWith(u, i) && !(GENERIC_SYMBOLS.has(u) && /[a-z]/.test(text[i + u.length] ?? ""))) ?? letters(text, i);
     }
     i += unit.length;
     // its count - after a letter or a bracket, not a ring's position (2,6-)
