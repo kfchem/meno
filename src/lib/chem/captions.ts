@@ -329,10 +329,12 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
     };
     const room = () => width! - inset(first);
     const wide = (l: { text: string; src: readonly number[] }, to = l.text.length, cut?: Cut) => runsWidth(captionRuns(l.text.slice(0, to), l.src.slice(0, to).map((i) => styles[i]), cut), fontSize, set);
+    // (how wide the line is, measured whole as it was begun, and kept on as words go on it)
+    let lineW = 0;
     // (a line begun with a word - or a bullet and its word, kept together for `keep` letters - too wide for its room: broken, a line for each piece but the last, which the line goes on from)
     const begin = (w: { text: string; src: number[] }, keep = 0) => {
       let rest = { text: w.text, src: [...w.src] };
-      while (wraps && wide(rest, undefined, { first: tail }) > room()) {
+      while (wraps && (lineW = wide(rest, undefined, { first: tail })) > room()) {
         const cut = breakIn(rest, room(), (to) => wide(rest, to, { first: tail, last: true }), keep);
         // (a letter alone too wide: a line of its own, as it is)
         if (cut.at >= rest.text.length) break;
@@ -352,12 +354,24 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
       }
       const was: { text: string; src: number[] } = line;
       const gap = was.src[was.src.length - 1] + 1;
-      const next: { text: string; src: number[] } = { text: `${was.text} ${w.text}`, src: [...was.src, gap, ...w.src] };
+      const next = () => ({ text: `${was.text} ${w.text}`, src: [...was.src, gap, ...w.src] });
       // (an item's bullet stays with its first word)
       const bulletAlone = item && first && was.src.length && was.src[was.src.length - 1] < at + item.head;
-      if (bulletAlone) begin(next, was.text.length + 1);
-      else if (!wraps || wide(next, undefined, { first: tail }) <= room()) line = next;
-      else {
+      if (bulletAlone) {
+        begin(next(), was.text.length + 1);
+        continue;
+      }
+      // (the line with the word on it: the line's width and the space and word's - the word its line's first, set as typed, where the line holds no word yet; measured whole only where that comes to the room's edge, so that it is the same to the last bit, and as long a line costs no more)
+      let withW = 0;
+      if (wraps) {
+        withW = lineW + wide({ text: ` ${w.text}`, src: [gap, ...w.src] }, undefined, { first: tail && !/[^\s,;/]/.test(was.text) });
+        if (Math.abs(withW - room()) <= 1e-9 * Math.max(1, Math.abs(room()))) withW = wide(next(), undefined, { first: tail });
+      }
+      if (!wraps || withW <= room()) {
+        was.text += ` ${w.text}`;
+        was.src.push(gap, ...w.src);
+        lineW = withW;
+      } else {
         flush(false);
         begin(w);
       }
