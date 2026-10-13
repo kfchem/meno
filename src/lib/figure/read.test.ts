@@ -6,6 +6,7 @@ import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
+import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
 import tetrodotoxin from "./fixtures/tetrodotoxin-rsc.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
@@ -635,6 +636,13 @@ describe("a figure read as a structure", () => {
     // cage above cut short at the H)
     const r = readFigure(tetrodotoxin as unknown as FigureDrawn);
     const nh = r.atoms.findIndex((a) => a.label === "NH" && Math.hypot(a.x - 116.2, a.y - 131.3) < 2);
+    expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
+  });
+
+  it("reads a short line from a joint of bonds to an NH stacked tall, cut back at its H, as the N's bond", () => {
+    // (tetrodotoxin as Meno's own style prints it: the bond from the cage above shows only a little short of the H)
+    const r = readFigure(tetrodotoxinMeno as unknown as FigureDrawn);
+    const nh = r.atoms.findIndex((a) => a.label === "NH");
     expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
   });
 

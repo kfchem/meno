@@ -998,7 +998,9 @@ workspace holds.
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
-    one (N≡N+) - never a hash, however evenly they are set.
+    one (N≡N+) - never a hash, however evenly they are set; and so is a
+    short line from a joint of bonds to a label stacked tall - an NH with
+    its H over its N - cut back short of its H.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
@@ -1014,7 +1016,10 @@ workspace holds.
   word, the word is its atom's label (at its element: an end outside it,
   much nearer its H than its element, is a carbon set close; and a label
   with its hydrogens written - NH2, OH - takes no more bonds than they
-  leave it, the ends nearest its element), read as a label typed is read - an
+  leave it, the ends nearest its element; an H set right over or under an
+  N, O, S or P is that label's - an NH set between two bonds, its H stacked
+  - and a bond cut back at the H, pointing on at the element, is the
+  label's too), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last

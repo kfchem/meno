@@ -518,7 +518,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     words.splice(i, 1);
   }
   const labelled = (p: Point, out: Point) => words.some((w) => reaches(p, out, w.box, bond));
-  const between = (s: Stroke) => labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b));
+  // (a short line between two labels - or from a joint of bonds to a label stacked tall, an NH with its H over it, cut back
+  // short of it)
+  const stacked = (p: Point, out: Point) => words.some((w) => w.box[3] - w.box[1] > 1.15 * w.size && reaches(p, out, w.box, bond, 0.6));
+  const atJoint = (s: Stroke, p: Point) => shapes.strokes.some((t) => t !== s && (dist(t.a, p) < 0.2 * bond || dist(t.b, p) < 0.2 * bond));
+  const between = (s: Stroke) =>
+    (labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b))) ||
+    (atJoint(s, s.a) && stacked(s.b, unit(s.a, s.b))) ||
+    (atJoint(s, s.b) && stacked(s.a, unit(s.b, s.a)));
   // (short lines side by side, each from one label to another - N≡N+ - are a bond between them, double or triple, not a hash)
   const betweenLabels = hashGroups.map((g) => g.every((s) => between(s)));
   hashGroups.forEach((g, i) => {
