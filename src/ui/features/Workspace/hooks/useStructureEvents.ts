@@ -470,12 +470,6 @@ export function useStructureEvents(
   };
 
   /**
-   * The box round what a file read brings, about the point its middle is
-   * put at: its drawing (half a bond round each atom, for its labels), its
-   * molecules in 3D in the row they stand in, and its arrow.
-   */
-
-  /**
    * Files put on the page at `at`, dropped or pasted - copied in the Finder
    * or Explorer - or opened: PDFs and pictures held and laid there; a
    * record's drawing, a text's sheet, or a structure read from its file,
