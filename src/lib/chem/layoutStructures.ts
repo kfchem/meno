@@ -133,6 +133,7 @@ function placed(texts: TextItem[], at: readonly number[]): TextItem[] {
  */
 export function clustersOf(atoms: readonly Atom[], bonds: readonly Bond[]): Part[] {
   const n = atoms.length;
+  // (in typed arrays by atom: this runs at every frame of a drag over a drawing of tens of thousands)
   const up = new Int32Array(n);
   for (let i = 0; i < n; i++) up[i] = i;
   // (without recursion: a long chain would overflow the stack)
@@ -161,70 +162,83 @@ export function clustersOf(atoms: readonly Atom[], bonds: readonly Bond[]): Part
       if (e != null) join(b.a1, e);
     }
   }
-  // each structure: its box, and how far past it its names and notes reach
-  type Box = { root: number; x0: number; y0: number; x1: number; y1: number; longest: number; names: number; notes: boolean };
-  const boxOf = new Map<number, Box>();
-  let longest = 0;
+  // each structure, by its first atom: its box, and how far past it its names and notes reach
+  const root = new Int32Array(n);
+  const x0 = new Float64Array(n);
+  const y0 = new Float64Array(n);
+  const x1 = new Float64Array(n);
+  const y1 = new Float64Array(n);
+  const longest = new Float64Array(n);
+  const names = new Float64Array(n);
+  const notes = new Uint8Array(n);
+  const roots: number[] = [];
   for (let i = 0; i < n; i++) {
     const r = top(i);
+    root[i] = r;
     const a = atoms[i];
-    let box = boxOf.get(r);
-    if (!box) boxOf.set(r, (box = { root: r, x0: a.x, y0: a.y, x1: a.x, y1: a.y, longest: 0, names: 0, notes: false }));
-    box.x0 = Math.min(box.x0, a.x);
-    box.y0 = Math.min(box.y0, a.y);
-    box.x1 = Math.max(box.x1, a.x);
-    box.y1 = Math.max(box.y1, a.y);
+    if (r === i) {
+      roots.push(i);
+      x0[i] = x1[i] = a.x;
+      y0[i] = y1[i] = a.y;
+    } else {
+      if (a.x < x0[r]) x0[r] = a.x;
+      if (a.x > x1[r]) x1[r] = a.x;
+      if (a.y < y0[r]) y0[r] = a.y;
+      if (a.y > y1[r]) y1[r] = a.y;
+    }
     // (in bond lengths, a name's letters and the room kept round them: lib/layout/names)
-    if (isName(a.el)) box.names = Math.max(box.names, Math.max(-nameBox(a.el, true).x0, nameBox(a.el, false).x1) + 0.45);
+    if (a.el !== "C" && isName(a.el)) names[r] = Math.max(names[r], Math.max(-nameBox(a.el, true).x0, nameBox(a.el, false).x1) + 0.45);
   }
+  let longestOfAll = 0;
   for (const b of bonds) {
-    const box = boxOf.get(top(b.a1))!;
+    const r = root[b.a1];
     const len = Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y);
-    box.longest = Math.max(box.longest, len);
-    longest = Math.max(longest, len);
-    if (b.query || b.reactingCentre != null || b.stereoGroup) box.notes = true;
+    if (len > longest[r]) longest[r] = len;
+    if (len > longestOfAll) longestOfAll = len;
+    if (b.query || b.reactingCentre != null || b.stereoGroup) notes[r] = 1;
   }
-  const boxes = [...boxOf.values()];
   // (how far past its atoms each looks at others: a name's letters, then
   // others' H set beside their labels a bond out; a note, three bonds)
-  const pad = (box: Box) => {
-    const L = box.longest || longest || 1;
-    return Math.max(box.names ? (box.names + 1) * L : 0, box.notes ? 3 * L : 0);
-  };
-  const reachOf = new Map(boxes.map((box) => [box.root, pad(box)]));
-  const group = new Map<number, number>(boxes.map((box) => [box.root, box.root]));
+  const reach = new Float64Array(n);
+  for (const r of roots) {
+    const L = longest[r] || longestOfAll || 1;
+    reach[r] = Math.max(names[r] ? (names[r] + 1) * L : 0, notes[r] ? 3 * L : 0);
+  }
+  // structures whose boxes meet, swept from the left, put together
+  const group = new Int32Array(n);
+  for (const r of roots) group[r] = r;
   const groupTop = (r: number): number => {
     let g = r;
-    while (group.get(g) !== g) g = group.get(g)!;
-    group.set(r, g);
+    while (group[g] !== g) g = group[g];
+    group[r] = g;
     return g;
   };
-  // boxes that meet, swept from the left
-  const order = [...boxes].sort((p, q) => p.x0 - reachOf.get(p.root)! - (q.x0 - reachOf.get(q.root)!));
-  let open: Box[] = [];
-  for (const box of order) {
-    const r = reachOf.get(box.root)!;
-    const left = box.x0 - r;
-    open = open.filter((o) => o.x1 + reachOf.get(o.root)! >= left);
+  const order = [...roots].sort((p, q) => x0[p] - reach[p] - (x0[q] - reach[q]));
+  let open: number[] = [];
+  for (const r of order) {
+    const left = x0[r] - reach[r];
+    open = open.filter((o) => x1[o] + reach[o] >= left);
     for (const o of open) {
-      const q = reachOf.get(o.root)!;
-      if (o.y0 - q <= box.y1 + r && box.y0 - r <= o.y1 + q) {
-        const a = groupTop(o.root);
-        const b = groupTop(box.root);
-        if (a !== b) group.set(Math.max(a, b), Math.min(a, b));
+      if (y0[o] - reach[o] <= y1[r] + reach[r] && y0[r] - reach[r] <= y1[o] + reach[o]) {
+        const a = groupTop(o);
+        const b = groupTop(r);
+        if (a !== b) group[Math.max(a, b)] = Math.min(a, b);
       }
     }
-    open.push(box);
+    open.push(r);
   }
-  const parts = new Map<number, Part>();
-  const partOf = new Int32Array(n);
+  const parts: Part[] = [];
+  const partOf = new Int32Array(n).fill(-1);
+  const at = new Int32Array(n);
   for (let i = 0; i < n; i++) {
-    const g = groupTop(top(i));
-    partOf[i] = g;
-    let part = parts.get(g);
-    if (!part) parts.set(g, (part = { atoms: [], bonds: [] }));
-    part.atoms.push(i);
+    const g = groupTop(root[i]);
+    if (partOf[g] < 0) {
+      partOf[g] = parts.length;
+      parts.push({ atoms: [], bonds: [] });
+    }
+    at[i] = partOf[g];
+    parts[at[i]].atoms.push(i);
   }
-  bonds.forEach((b, k) => parts.get(partOf[b.a1])!.bonds.push(k));
-  return [...parts.values()];
+  for (let k = 0; k < bonds.length; k++) parts[at[bonds[k].a1]].bonds.push(k);
+  return parts;
 }
