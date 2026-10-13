@@ -3431,8 +3431,20 @@ export function buildAllPrimitives(
   // the rings' circles, and the bonds they stand in for - in the colour of
   // the ring's bonds where they are all given one
   const ringed = ringCircles(atoms, bonds, opts, adjBonds);
+  // (a ring's bonds found from its own atoms' bonds - not every bond tried
+  // again for every circle)
+  const indexOfId = ringed.circles.length ? new Map(atoms.map((a, i) => [a.id, i])) : null;
+  const ringBonds = (key: string): Bond[] => {
+    const ids = new Set(key.split("-").map(Number));
+    const out: Bond[] = [];
+    for (const id of ids) {
+      const i = indexOfId!.get(id);
+      for (const b of i == null ? [] : (adjBonds.get(i) ?? [])) if (b.a1 === i && ids.has(atoms[b.a2].id)) out.push(b);
+    }
+    return out;
+  };
   for (const c of ringed.circles) {
-    const color = c.key ? sameColor(bonds.filter((b) => c.key!.split("-").includes(String(atoms[b.a1].id)) && c.key!.split("-").includes(String(atoms[b.a2].id)))) : undefined;
+    const color = c.key ? sameColor(ringBonds(c.key)) : undefined;
     circles.push(color ? { ...c, color } : c);
   }
   const aromaticEdges = ringed.edges;

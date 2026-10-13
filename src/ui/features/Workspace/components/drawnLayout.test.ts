@@ -122,4 +122,35 @@ describe("a drawing laid out for the canvas", () => {
     }
     expect(ringCircles(atoms, bonds, editorLayoutOptions(ACS_1996, { aromaticCircle: true })).circles).toHaveLength(2);
   });
+
+  it("gives a thousand rings' circles their rings' colours at little more than the drawing's own cost", () => {
+    // (a thousand benzene rings, every other one's bonds coloured, and one
+    // with a bond of another colour among them, whose circle has none)
+    const atoms: LAtom[] = [];
+    const bonds: LBond[] = [];
+    for (let r = 0; r < 1000; r++) {
+      for (let k = 0; k < 6; k++) atoms.push({ id: r * 6 + k + 1, x: (r % 40) * 4 + Math.cos((Math.PI / 3) * k), y: Math.floor(r / 40) * 4 + Math.sin((Math.PI / 3) * k), el: "C" });
+      for (let k = 0; k < 6; k++) {
+        const color = r === 1 && k === 0 ? "#0072b2" : r % 2 ? "#d55e00" : undefined;
+        bonds.push({ a1: r * 6 + k, a2: r * 6 + ((k + 1) % 6), order: k % 2 ? 1 : 2, stereo: "none", ...(color ? { color } : {}) });
+      }
+    }
+    const timed = (aromaticCircle: boolean) => {
+      const opts = editorLayoutOptions(ACS_1996, { aromaticCircle });
+      // (once first, so that neither is timed starting cold)
+      layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
+      const started = performance.now();
+      const laid = layoutMolecule(atoms, bonds, opts, startingZoom(ACS_1996));
+      return { laid, ms: performance.now() - started };
+    };
+    const plain = timed(false);
+    const { laid, ms } = timed(true);
+    expect(laid.circles).toHaveLength(1000);
+    expect(laid.circles!.filter((c) => c.color === "#d55e00")).toHaveLength(499);
+    expect(laid.circles!.filter((c) => c.color)).toHaveLength(499);
+    // (where every bond was tried again for every circle, the circles took
+    // four times the drawing's own time: timed beside the same drawing
+    // without them, so that a machine busy with other work slows both alike)
+    expect(ms).toBeLessThan(2 * plain.ms + 50);
+  });
 });
