@@ -342,14 +342,18 @@ How these behave:
   `lib/io/text.ts`). Open, a drop, a file pasted and an output read again
   all read it so:
   - as UTF-8;
-  - as UTF-16 where a byte order mark says so, either way round;
+  - as UTF-16 where a byte order mark says so, either way round, or
+    with no mark where every other byte of its start is NUL (the high
+    byte of Latin letters and digits);
   - bytes that are not UTF-8, as Shift_JIS, which Windows in Japanese
     writes text in;
   - those that are not Shift_JIS either, as Windows-1252.
 
   A text is held with its lines ended "\n", however its file ended them.
   Text Meno puts on the clipboard on Windows has them ended "\r\n", as
-  Windows programs take it.
+  Windows programs take it. Export writes a text beside its original as
+  UTF-8, its lines ended "\n" and with no byte order mark, whatever its
+  file was written in: Meno holds the text, not the bytes it was read from.
 - **Office's record is handed to the canvas as the record**, not under a
   made-up name.
 

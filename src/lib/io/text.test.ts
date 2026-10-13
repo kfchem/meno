@@ -17,6 +17,17 @@ describe("a file's text, as its bytes are written", () => {
     expect(textOf(bytes(0xfe, 0xff, 0, 67, 0, 67, 0, 79, 0, 13, 0, 10, 0x30, 0xa2))).toBe("CCO\r\n\u30a2");
   });
 
+  it("reads UTF-16 with no byte order mark where every other byte of its start is NUL, either way round", () => {
+    const le = (s: string) => Uint8Array.from([...s].flatMap((c) => [c.charCodeAt(0) & 0xff, c.charCodeAt(0) >> 8]));
+    const be = (s: string) => Uint8Array.from([...s].flatMap((c) => [c.charCodeAt(0) >> 8, c.charCodeAt(0) & 0xff]));
+    expect(textOf(le("CCO\r\n"))).toBe("CCO\r\n");
+    expect(textOf(be("CCO\r\n"))).toBe("CCO\r\n");
+    // (with words in Japanese among the Latin letters)
+    expect(textOf(le(`CCO, ${ACETONE}\n`))).toBe(`CCO, ${ACETONE}\n`);
+    // (UTF-8 has no NUL: read as ever)
+    expect(textOf(new TextEncoder().encode(`CCO ${ACETONE}`))).toBe(`CCO ${ACETONE}`);
+  });
+
   it("reads bytes that are not UTF-8 as Shift_JIS, as Windows in Japanese writes text", () => {
     expect(textOf(bytes(131, 65, 131, 90, 131, 103, 131, 147))).toBe(ACETONE);
     expect(textOf(bytes(131, 129, 131, 94, 131, 109, 129, 91, 131, 139, 13, 10))).toBe(`${METHANOL}\r\n`);
