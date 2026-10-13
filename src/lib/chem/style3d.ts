@@ -265,6 +265,25 @@ export function hiddenAtoms(m: Leaving, look: MoleculeLook): Uint8Array {
   return hidden;
 }
 
+/**
+ * How many atoms a look counts toward a very large drawing (the
+ * maintainer's choice, 2026-10-13): those it draws as atoms, and every atom
+ * of the residues its ribbons stand for - so that a large protein in
+ * ribbons is drawn lighter as its atoms would be - but none it leaves out
+ * otherwise: hydrogens on carbon where it hides them, water. `hidden` is
+ * the look's `hiddenAtoms`, where it is known already.
+ */
+export function countedAtoms(m: Leaving, look: MoleculeLook, hidden = hiddenAtoms(m, look)): number {
+  const bp = m.biopolymer;
+  const inRun = new Uint8Array(bp?.residues.length ?? 0);
+  if (bp && look.biopolymers === "ribbons") {
+    for (const run of chainRuns(bp, m.atoms as readonly { el: string; x: number; y: number; z: number }[])) for (const r of run.residues) inRun[r] = 1;
+  }
+  let n = 0;
+  for (let i = 0; i < m.atoms.length; i++) if (!hidden[i] || (bp && inRun[bp.residueOf[i]])) n++;
+  return n;
+}
+
 /** Whether a look leaves out hydrogens on carbon that it would otherwise draw: what a molecule says of itself (`HIDDEN_MARK`). */
 export function hidesCarbonHydrogens(m: Leaving, look: MoleculeLook): boolean {
   if (look.hydrogens !== "carbonHidden") return false;

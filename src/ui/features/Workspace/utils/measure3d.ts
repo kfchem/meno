@@ -30,26 +30,43 @@ export function kindOf(atoms: number[]): MeasureKind {
   return atoms.length === 2 ? "distance" : atoms.length === 3 ? "angle" : "torsion";
 }
 
+/** Shorter than this, in ångströms, two atoms are in one place: no way from one to the other. */
+const ONE_PLACE = 1e-6;
+/** Nearer straight than this - the sine of the angle at an atom - three atoms are in a line: no plane through them. */
+const IN_A_LINE = 1e-3;
+
 /**
  * What a measurement comes to: a distance in ångströms, an angle in degrees,
  * a torsion angle in degrees from -180 to 180 - the sign IUPAC's, positive
  * when, looking along the middle bond, the far atom is turned clockwise from
- * the near one. `places` in world units.
+ * the near one. `places` in world units. NaN where there is none to give:
+ * an angle with two of its atoms in one place, or a torsion with three of
+ * its atoms in a line (across a triple bond, say) - it would otherwise
+ * read 90° or 0°, as if it were one.
  */
 export function measureValue(places: ArrayLike<number>, atoms: number[]): number {
   const p = atoms.map((i) => at(places, i));
   if (p.length === 2) return p[0].distanceTo(p[1]) / WORLD_PER_ANGSTROM;
-  if (p.length === 3) return THREE.MathUtils.radToDeg(p[0].clone().sub(p[1]).angleTo(p[2].clone().sub(p[1])));
+  const short = ONE_PLACE * WORLD_PER_ANGSTROM;
+  if (p.length === 3) {
+    const u = p[0].clone().sub(p[1]);
+    const v = p[2].clone().sub(p[1]);
+    if (u.length() < short || v.length() < short) return NaN;
+    return THREE.MathUtils.radToDeg(u.angleTo(v));
+  }
   const b1 = p[1].clone().sub(p[0]);
   const b2 = p[2].clone().sub(p[1]);
   const b3 = p[3].clone().sub(p[2]);
+  if (b1.length() < short || b2.length() < short || b3.length() < short) return NaN;
   const n1 = b1.clone().cross(b2);
   const n2 = b2.clone().cross(b3);
+  if (n1.length() < IN_A_LINE * b1.length() * b2.length() || n2.length() < IN_A_LINE * b2.length() * b3.length()) return NaN;
   return THREE.MathUtils.radToDeg(Math.atan2(b2.clone().normalize().dot(n1.clone().cross(n2)), n1.dot(n2)));
 }
 
-/** A measurement as it is written: "1.54 Å", "109.5°", "−60.2°". */
+/** A measurement as it is written: "1.54 Å", "109.5°", "−60.2°" - and "–" where it has none (measureValue). */
 export function measureText(kind: MeasureKind, value: number): string {
+  if (!Number.isFinite(value)) return "–";
   const n = kind === "distance" ? value.toFixed(2) : value.toFixed(1);
   // (a true minus sign, and no "-0.0")
   const signed = /^-0\.0+$/.test(n) ? n.slice(1) : n.replace(/^-/, "−");
@@ -188,8 +205,11 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
     y: balls.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
   };
   const placed: LabelBox[] = [];
+  // (none of an atom its look leaves out - hydrogens on carbon, where it
+  // hides them - as the canvas draws none: Molecule3DView)
+  const hidden = solid.hidden[look];
   return measures
-    .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n))
+    .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n && !hidden[i]))
     .map((x) => {
       const marks = measureMarks(places, x.atoms);
       const lines = piecesOf(marks);

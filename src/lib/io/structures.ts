@@ -7,7 +7,7 @@
  */
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf } from "../../utils/xyzEnergies";
-import { bondsByDistance } from "../../utils/structureParsers";
+import { atomsTogether, bondsByDistance, xyzFrames } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
@@ -34,6 +34,10 @@ export type FileMolecule3D = {
   biopolymer?: Biopolymer;
   /** Its bonds' orders "unknown": its file gives coordinates alone (an XYZ or PDB file). */
   bondOrders?: "unknown";
+  /** How many of its file's frames were left out - cut short, or with an atom whose place does not read - as the molecule says over it. */
+  framesLeftOut?: number;
+  /** How many of its atoms stand in one place with another, as it is read (utils/structureParsers `atomsTogether`): said over it. */
+  together?: number;
 };
 
 /**
@@ -123,34 +127,45 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     };
   }
 
-  // MOL, SDF, XYZ formats: parse molecules and convert to editor model
-  const molecules = readMoleculesFromText(content, kind);
-
   // 3D structures stand on the page as they are: an XYZ file's frames are
   // one molecule's, a MOL or SD file's records each a molecule of its own -
   // where the file says it is 3D, or its atoms spread in depth.
-  if (kind === "xyz" && molecules.length && molecules[0].atoms.length) {
-    const [first, ...rest] = molecules;
+  if (kind === "xyz") {
+    const frames = xyzFrames(content.replace(/\r\n?/g, "\n"));
+    // (a frame cut short, or with an atom whose place does not read, is left
+    // out - and its energy with it - so that each frame kept is the one
+    // shown, measured and written: every atom of the first whole one, each
+    // somewhere; and never without a word: the molecule says how many)
+    const firstWhole = frames.find((atoms) => atoms.length > 0 && atoms.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)));
+    const n = firstWhole?.length ?? 0;
+    const whole = (atoms: (typeof frames)[number]) => atoms.length === n && atoms.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z));
+    const kept = new Set(frames.flatMap((atoms, i) => (n && whole(atoms) ? [i] : [])));
+    if (!kept.size) throw noMolecules(name);
+    const [first, ...rest] = frames.filter((_, i) => kept.has(i));
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = rest.length ? energiesOf(xyzComments(content)) : undefined;
+    const energies = frames.length > 1 ? energiesOf(xyzComments(content))?.filter((_, i) => kept.has(i)) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },
       molecules3d: [
         {
-          atoms: first.atoms,
-          bonds: first.bonds,
+          atoms: first,
+          // (its bonds as its first frame has them; frame by frame, they are found where they are drawn)
+          bonds: bondsByDistance(first),
           bondsFrom: "distance",
           bondOrders: "unknown",
-          ...(rest.length ? { frames: rest.map((f) => f.atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
-          ...(energies?.length === molecules.length ? { energies } : {}),
+          ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
+          ...(rest.length && energies?.length === kept.size ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
+          ...(kept.size < frames.length ? { framesLeftOut: frames.length - kept.size } : {}),
+          ...togetherIn(first),
         },
       ],
     };
   }
-  // (in a MOL or SD file, each record is a drawing or a molecule in 3D)
-  const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
+  // MOL and SD files: their records, each a drawing or a molecule in 3D
+  const molecules = readMoleculesFromText(content, kind);
+  const said = saysThreeD(content);
   const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && (said[i] || depthOf(m) > 0.1);
   const molecules3d = molecules
     .filter(inDepth)
@@ -218,6 +233,12 @@ function pdbBonds(atoms: readonly PdbAtom[], conect: readonly [number, number][]
   return [...given, ...near.filter((b) => !seen.has(`${b.a1} ${b.a2}`))].sort((x, y) => x.a1 - y.a1 || x.a2 - y.a2);
 }
 
+/** How many atoms stand in one place with another, where any do: what the molecule says over it. */
+function togetherIn(atoms: readonly { x: number; y: number; z: number }[]): { together?: number } {
+  const n = atomsTogether(atoms.flatMap((a) => [a.x, a.y, a.z]));
+  return n ? { together: n } : {};
+}
+
 const parsedAtom = (a: PdbAtom): ParsedAtom => ({ el: a.element, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) });
 
 /**
@@ -248,10 +269,11 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         ...biopolymer(first),
         // (a PDB file gives no bond orders: CONECT records say which atoms are bonded, not how)
         bondOrders: "unknown" as const,
+        ...togetherIn(first),
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const }));
+  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const, ...togetherIn(atoms) }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -285,6 +307,8 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
       throw bad("a bond of a molecule in 3D joins no atoms");
     }
     if (!(m.frames ?? []).every((f) => Array.isArray(f) && f.length === 3 * n && f.every(finite))) throw bad("a frame of a molecule in 3D is not whole");
+    if (m.framesLeftOut != null && !(Number.isInteger(m.framesLeftOut) && m.framesLeftOut > 0)) throw bad("a molecule in 3D's frames left out are no count");
+    if (m.together != null && !(Number.isInteger(m.together) && m.together > 0)) throw bad("a molecule in 3D's atoms in one place are no count");
   }
   return s as StructureRead;
 }
