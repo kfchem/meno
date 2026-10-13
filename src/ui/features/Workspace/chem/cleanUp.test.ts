@@ -254,7 +254,10 @@ describe("cleanUp", () => {
     // (OBz and OAc side by side on a line, a hair - 0.005 of a bond - within
     // the space reckoned between two names: not letters running together)
     expect(crowding(1) - crowding(0)).toBeLessThan(0.05);
-  });
+    // (the whole engine on taxol, each of its ways of being written: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("cleans up taxol drawn any which way with its names and its ring-fusion H clear of one another", async () => {
     // (a drawing a reader cleaned up to find C3's H standing on the A of
