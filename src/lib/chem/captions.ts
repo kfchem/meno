@@ -10,6 +10,7 @@
 import { italicUnits, labelUnits, unitRuns } from "./abbreviations";
 import { ACS_LABEL_SET, labelBox, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
 import { wordsLine, type SchemeArrow } from "./reactionScheme";
+import { letterStarts } from "../text/editing";
 import type { ArrowCorner } from "./reactionArrow";
 
 /** How far apart a caption's lines are, baseline to baseline, in ems. */
@@ -132,7 +133,7 @@ export function toggled(styles: readonly (WordsStyle | undefined)[], side: "bold
  * (`styles`, by its place in the line), those letters set as they were
  * marked.
  */
-export function captionRuns(line: string, styles?: readonly (WordsStyle | undefined)[]): TextRun[] {
+export function captionRuns(line: string, styles?: readonly (WordsStyle | undefined)[], cut?: Cut): TextRun[] {
   const runs: TextRun[] = [];
   const push = (r: TextRun) => {
     const last = runs[runs.length - 1];
@@ -150,11 +151,16 @@ export function captionRuns(line: string, styles?: readonly (WordsStyle | undefi
     else runs.push({ ...r });
   };
   const formula: TextRun[] = [];
-  for (const piece of line.split(/([\s,;/]+)/)) {
-    if (!piece) continue;
-    if (/^[\s,;/]+$/.test(piece)) formula.push({ text: piece });
+  const pieces = line.split(/([\s,;/]+)/);
+  const isWord = (piece: string) => !!piece && !/^[\s,;/]+$/.test(piece);
+  const firstWord = pieces.findIndex(isWord);
+  const lastWord = pieces.length - 1 - [...pieces].reverse().findIndex(isWord);
+  pieces.forEach((piece, k) => {
+    if (!piece) return;
+    // (what is left of a word broken on the line before, or the part of one broken after it: as typed, not read as a formula - its hyphen no charge, a locant no count)
+    if (!isWord(piece) || (cut?.first && k === firstWord) || (cut?.last && k === lastWord)) formula.push({ text: piece });
     else formula.push(...wordRuns(piece));
-  }
+  });
   if (!styles?.some((st) => !isPlain(st))) {
     for (const r of formula) push(r);
     return runs;
@@ -213,7 +219,25 @@ export function listItem(line: string): { level: number; mark: string; head: num
  * width's edge it begins (`indent`: a list's level, and under an item's
  * first line, its bullet).
  */
-type Laid = { text: string; src: number[]; ends: boolean; indent: number };
+type Laid = { text: string; src: number[]; ends: boolean; indent: number; cut?: Cut; hang?: number };
+
+/**
+ * Where a line's words were broken (the maintainer, 2026-10-13): whether
+ * its first word is what is left of a word broken on the line before
+ * (`first`), and whether its last is the part of one broken after it
+ * (`last`) - each set as typed (captionRuns).
+ */
+export type Cut = { first?: boolean; last?: boolean };
+
+/** Of a line's letters `[from, to)`, the ends of a broken word they hold: none, if they hold neither end of the line's words. */
+function cutOf(l: { text: string; cut?: Cut }, from: number, to: number): Cut | undefined {
+  if (!l.cut) return undefined;
+  const lead = l.text.search(/\S/);
+  const end = l.text.trimEnd().length;
+  const first = !!l.cut.first && lead >= 0 && from <= lead && to > lead;
+  const last = !!l.cut.last && to >= end && from < end;
+  return first || last ? { first, last } : undefined;
+}
 
 /** A typed line's words as they are kept on a line - a number with the unit after it as one - each with where it begins in the caption's text. */
 function unbreakable(para: string, at: number): { text: string; src: number[] }[] {
@@ -251,12 +275,8 @@ const BREAKS_BEFORE = /[([{]/u;
  * whether the break is at a space, which goes.
  */
 function breakIn(w: { text: string }, room: number, wide: (to: number) => number, keep: number): { at: number; space: boolean } {
-  // (the places between its letters - a letter of two code units one letter)
-  const ends: number[] = [];
-  for (let i = 0; i < w.text.length; ) {
-    i += w.text.codePointAt(i)! > 0xffff ? 2 : 1;
-    ends.push(i);
-  }
+  // (the places between its letters, as the reader sees them: an emoji with its modifiers, a letter with its accents, one)
+  const ends = [...letterStarts(w.text).slice(1), w.text.length];
   let lo = 0;
   let hi = ends.length - 1;
   // (as many letters as fit - one at least)
@@ -272,6 +292,9 @@ function breakIn(w: { text: string }, room: number, wide: (to: number) => number
     if (w.text[at] === " ") return { at, space: true };
     if (BREAKS_AFTER.test(w.text[at - 1]) || BREAKS_BEFORE.test(w.text[at])) return { at, space: false };
   }
+  // (at the edge - where that falls at a space, or just after one, the space going with the break: no line of a space alone, nor one ending in it)
+  if (w.text[fits] === " ") return { at: fits, space: true };
+  if (fits > 1 && w.text[fits - 1] === " ") return { at: fits - 1, space: true };
   return { at: fits, space: false };
 }
 
@@ -293,24 +316,33 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
     const wraps = width != null && width > 0;
     let line: { text: string; src: number[] } | null = null;
     let first = true;
-    const flush = (ends: boolean) => {
-      out.push({ text: line?.text ?? "", src: line?.src ?? [], ends, indent: level + (first ? 0 : hang) });
+    // (the line begins with what is left of a word broken on the line before)
+    let tail = false;
+    // (a list's level and hang no more than half the width: its lines in it, however deep the list)
+    const inset = (isFirst: boolean) => {
+      const i = level + (isFirst ? 0 : hang);
+      return wraps ? Math.min(i, width! / 2) : i;
+    };
+    const flush = (ends: boolean, head = false) => {
+      out.push({ text: line?.text ?? "", src: line?.src ?? [], ends, indent: inset(first), ...(tail || head ? { cut: { first: tail, last: head } } : {}), ...(item && first ? { hang } : {}) });
       first = false;
+      tail = false;
       line = null;
     };
-    const room = () => width! - level - (first ? 0 : hang);
-    const wide = (l: { text: string; src: readonly number[] }, to = l.text.length) => runsWidth(runsOf(l.text.slice(0, to), l.src.slice(0, to)), fontSize, set);
+    const room = () => width! - inset(first);
+    const wide = (l: { text: string; src: readonly number[] }, to = l.text.length, cut?: Cut) => runsWidth(captionRuns(l.text.slice(0, to), l.src.slice(0, to).map((i) => styles[i]), cut), fontSize, set);
     // (a line begun with a word - or a bullet and its word, kept together for `keep` letters - too wide for its room: broken, a line for each piece but the last, which the line goes on from)
     const begin = (w: { text: string; src: number[] }, keep = 0) => {
       let rest = { text: w.text, src: [...w.src] };
-      while (wraps && wide(rest) > room()) {
-        const cut = breakIn(rest, room(), (to) => wide(rest, to), keep);
+      while (wraps && wide(rest, undefined, { first: tail }) > room()) {
+        const cut = breakIn(rest, room(), (to) => wide(rest, to, { first: tail, last: true }), keep);
         // (a letter alone too wide: a line of its own, as it is)
         if (cut.at >= rest.text.length) break;
         line = { text: rest.text.slice(0, cut.at), src: rest.src.slice(0, cut.at) };
-        flush(false);
+        flush(false, true);
         const from = cut.at + (cut.space ? 1 : 0);
         rest = { text: rest.text.slice(from), src: rest.src.slice(from) };
+        tail = true;
         keep = 0;
       }
       line = rest;
@@ -326,7 +358,7 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
       // (an item's bullet stays with its first word)
       const bulletAlone = item && first && was.src.length && was.src[was.src.length - 1] < at + item.head;
       if (bulletAlone) begin(next, was.text.length + 1);
-      else if (!wraps || wide(next) <= room()) line = next;
+      else if (!wraps || wide(next, undefined, { first: tail }) <= room()) line = next;
       else {
         flush(false);
         begin(w);
@@ -399,7 +431,7 @@ export function captionWords(
 
 /** Each laid line's letters across: where each place in it lies - before each letter, and at its end - and where it begins, as `align` lays it in `box` about `x`. */
 function across(laid: readonly Laid[], x: number, box: number, fontSize: number, set: LabelSet, align: CaptionAlign, styles: readonly (WordsStyle | undefined)[]): number[][] {
-  const runsOf = (l: Laid, from: number, to: number) => captionRuns(l.text.slice(from, to), l.src.slice(from, to).map((i) => styles[i]));
+  const runsOf = (l: Laid, from: number, to: number) => captionRuns(l.text.slice(from, to), l.src.slice(from, to).map((i) => styles[i]), cutOf(l, from, to));
   const wide = (l: Laid, from = 0, to = l.text.length) => runsWidth(runsOf(l, from, to), fontSize, set);
   return laid.map((l) => {
     const words = [...l.text.matchAll(/\S+/g)];
@@ -410,13 +442,19 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
     let starts: number[];
     if (align === "justify" && !l.ends && words.length > 1) {
       const widths = words.map((m) => wide(l, m.index!, m.index! + m[0].length));
-      const gap = (box - inset - widths.reduce((a, b) => a + b, 0)) / (words.length - 1);
-      let at = lineStart;
-      starts = widths.map((ww) => {
-        const st = at;
-        at += ww + gap;
-        return st;
-      });
+      // (a list item's bullet where its line begins, the words after it spread from where its lines hang)
+      const lead = l.hang != null && words.length > 2 ? 1 : 0;
+      const hung = lead ? l.hang! : 0;
+      const gap = (box - inset - hung - widths.slice(lead).reduce((a, b) => a + b, 0)) / (words.length - lead - 1);
+      let at = lineStart + hung;
+      starts = [
+        ...(lead ? [lineStart] : []),
+        ...widths.slice(lead).map((ww) => {
+          const st = at;
+          at += ww + gap;
+          return st;
+        }),
+      ];
     } else starts = words.map((m) => lineStart + (m.index ? wide(l, 0, m.index) : 0));
     const xs: (number | undefined)[] = new Array(l.text.length + 1);
     words.forEach((m, k) => {
@@ -432,7 +470,8 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
 /** How wide the caption's lines lie: as wide as it was made, or as its widest line reaches. */
 function boxOf(laid: readonly Laid[], fontSize: number, set: LabelSet, width: number | undefined, styles: readonly (WordsStyle | undefined)[]): number {
   if (width != null && width > 0) return width;
-  return Math.max(0, ...laid.map((l) => l.indent + runsWidth(captionRuns(l.text, l.src.map((i) => styles[i])), fontSize, set)));
+  // (the widest - as many lines as there are, not spread into a call)
+  return laid.reduce((most, l) => Math.max(most, l.indent + runsWidth(captionRuns(l.text, l.src.map((i) => styles[i]), l.cut), fontSize, set)), 0);
 }
 
 function setWords(
@@ -459,7 +498,7 @@ function setWords(
   const words: { x: number; y: number; w: number }[] = [];
   const put = (l: Laid, from: number, to: number, start: number, lineY: number) => {
     const t = l.text.slice(from, to);
-    const runs = captionRuns(t, l.src.slice(from, to).map((i) => styles[i]));
+    const runs = captionRuns(t, l.src.slice(from, to).map((i) => styles[i]), cutOf(l, from, to));
     if (!runs.length) return;
     words.push({ x: start, y: lineY, w: runsWidth(runs, fontSize, set) });
     // (placeLabel centres the first letter on x: the start, and half of it)
@@ -519,7 +558,7 @@ function cutRuns(runs: readonly TextRun[], n: number): TextRun[] {
  * stand where the space it keeps does, or at the line's edge; a list
  * item's tabs, where its line begins.
  */
-export type CaptionPlaces = { at: { line: number; x: number }[]; lines: { y: number; x0: number; x1: number }[] };
+export type CaptionPlaces = { at: { line: number; x: number; inside?: true }[]; lines: { y: number; x0: number; x1: number }[] };
 
 export function captionPlaces(
   text: string,
@@ -541,7 +580,9 @@ export function captionPlaces(
   // (each letter set: on its line, where its place is)
   const before = new Map<number, { line: number; j: number }>();
   laid.forEach((l, li) => l.src.forEach((s, j) => before.set(s, { line: li, j })));
-  const at: { line: number; x: number }[] = [];
+  const at: { line: number; x: number; inside?: true }[] = [];
+  // (the places between letters as the reader sees them - an emoji with its modifiers one, a letter of two code units one: no caret goes inside one)
+  const between = new Set([...letterStarts(text), text.length]);
   let li = 0;
   let from = 0;
   for (const typed of text.split("\n")) {
@@ -562,6 +603,9 @@ export function captionPlaces(
     from += typed.length + 1;
     li = Math.min(li + 1, laid.length - 1);
   }
+  at.forEach((a, k) => {
+    if (!between.has(k)) a.inside = true;
+  });
   return { at, lines };
 }
 
@@ -573,7 +617,7 @@ export function captionPlaceAt(p: CaptionPlaces, q: { x: number; y: number }): n
   });
   let best = -1;
   p.at.forEach((a, k) => {
-    if (a.line === line && (best < 0 || Math.abs(a.x - q.x) < Math.abs(p.at[best].x - q.x))) best = k;
+    if (a.line === line && !a.inside && (best < 0 || Math.abs(a.x - q.x) < Math.abs(p.at[best].x - q.x))) best = k;
   });
   return Math.max(0, best);
 }
