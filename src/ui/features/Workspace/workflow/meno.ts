@@ -42,30 +42,26 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
   }
 }
 
+/** How a step done in turns goes: told how many entries it has been through after each (`onDone`), its turns let go between (`pause`), each `budget` work, and given up where it is `stopped`. */
+export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<void>; budget?: number; stopped?: () => boolean };
+
 /**
  * `runMeno`, Duplicates done in turns that let the page go on between them
- * (`pause`) - thousands of conformers alike take seconds - saying after
- * each how many entries it has been through (`onDone`). The other steps
- * take no time to speak of, and are done at once.
+ * - thousands of conformers alike take seconds - saying after each how
+ * many entries it has been through, and given up between two where it is
+ * stopped: null. The other steps take no time to speak of, and are done
+ * at once.
  */
-export async function runMenoInTurns(
-  kind: StepKind,
-  entries: readonly SetEntry[],
-  holds: SetKind,
-  own?: OptionValues,
-  energiesBy?: string,
-  onDone?: (done: number) => void,
-  pause: () => Promise<void> = nextTurn,
-  budget = TURN_WORK,
-): Promise<Outcome> {
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
-  const turns = duplicates(entries, holds, Number(options.rmsd), budget);
+  const turns = duplicates(entries, holds, Number(options.rmsd), how.budget ?? TURN_WORK);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
-    onDone?.(turn.value);
-    await pause();
+    how.onDone?.(turn.value);
+    await (how.pause ?? nextTurn)();
+    if (how.stopped?.()) return null;
   }
 }
 

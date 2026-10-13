@@ -205,17 +205,21 @@ describe("Meno's own steps", () => {
     const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
     const done: number[] = [];
     let pauses = 0;
-    const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, (n) => done.push(n), async () => void pauses++, 2_000);
+    const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { onDone: (n) => done.push(n), pause: async () => void pauses++, budget: 2_000 });
     expect(pauses).toBeGreaterThan(1);
     expect(done).toHaveLength(pauses);
     // (further each turn, and never all of it before the last)
     expect(done.every((n, i) => n > (done[i - 1] ?? 0) && n < order.length)).toBe(true);
     expect(out).toEqual(runMeno("duplicates", order, "conformers"));
-    expect(out.ok && out.kept).toHaveLength(1_500);
+    expect(out?.ok && out.kept).toHaveLength(1_500);
     // (the other steps, done at once)
     pauses = 0;
-    await runMenoInTurns("populations", order, "conformers", undefined, undefined, undefined, async () => void pauses++, 1);
+    await runMenoInTurns("populations", order, "conformers", undefined, undefined, { pause: async () => void pauses++, budget: 1 });
     expect(pauses).toBe(0);
+    // (stopped: given up at the next turn, nothing kept)
+    pauses = 0;
+    expect(await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void pauses++, budget: 2_000, stopped: () => pauses >= 2 })).toBeNull();
+    expect(pauses).toBe(2);
   });
 
   it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {

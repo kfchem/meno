@@ -437,7 +437,10 @@ Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
 so it works in turns that let the page go on. Its card says it is
 running, and how many of its entries it has been through, and its results
-go in at the end as one edit. It lays a conformer only over those kept
+go in at the end as one edit. Stop, from its menu, gives it up at its
+next turn ("Stopped after m:ss"); where what comes in changes meanwhile
+(an edit, an undo, its set deleted), nothing of the old is put in, and it
+says so, changed, to be run again. It lays a conformer only over those kept
 that could be alike: their radii of gyration, and each atom's distance
 from the middle, within the RMSD asked. Those are bounds the RMSD never
 falls below, so it keeps what laying each over every one would.
