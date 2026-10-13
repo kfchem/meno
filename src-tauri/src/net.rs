@@ -6,9 +6,9 @@
 //! process, and is pointed at a proxy the app runs on the loopback address.
 //! The proxy lets a connection through only for a task the app began (the
 //! task's token rides in the proxy credentials), only for a purpose the user
-//! has allowed, and not at all in offline mode; it records each one - where
-//! to, for what, how much, how it ended - in the app's data folder, and tells
-//! the window as it goes.
+//! has allowed, only to a host the task's consent named, and not at all in
+//! offline mode; it records each one - where to, for what, how much, how it
+//! ended - in the app's data folder, and tells the window as it goes.
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -23,7 +23,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 /// Purposes that need no asking: the user's own code, run by the user.
+/// Only these may begin a task that reaches any host.
 const IMPLICIT: &[&str] = &["python-code"];
+
+/// The most hosts a task's consent may name.
+const MOST_HOSTS: usize = 64;
 
 /// How long an idle connection is kept open.
 const IDLE: Duration = Duration::from_secs(120);
@@ -64,6 +68,10 @@ pub struct Task {
     pub purpose: String,
     /// What it is, in words: "Setting up Python for the console".
     pub label: String,
+    /// The hosts it may reach: those its consent named, each exact
+    /// (`pypi.org`) or a leading dot for any host under one (`.hf.co`).
+    /// None, any host - the user's own code alone (`IMPLICIT`).
+    pub hosts: Option<Vec<String>>,
     pub started: u64,
     pub ended: Option<u64>,
     /// "done" or "failed" once ended.
@@ -137,19 +145,33 @@ impl Net {
         IMPLICIT.contains(&purpose) || self.0.granted.lock().unwrap().contains(purpose)
     }
 
-    /// Begins a task that may use the network - refused in offline mode, or
-    /// when its purpose has not been allowed.
-    pub fn begin(&self, purpose: &str, label: &str) -> Result<TaskHandle, String> {
+    /// Begins a task that may use the network, to reach `hosts` alone - the
+    /// hosts its consent named (`host_named`). Refused in offline mode, when
+    /// its purpose has not been allowed, or when it names no hosts, or a
+    /// pattern that is not a host's: only the user's own code (`IMPLICIT`)
+    /// may name none, and reach any host.
+    pub fn begin(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
         if self.offline() {
             return Err(format!("{label}: Meno is offline"));
         }
         if !self.allowed(purpose) {
             return Err(format!("{label}: not allowed to use the network"));
         }
+        match &hosts {
+            None if !IMPLICIT.contains(&purpose) => return Err(format!("{label}: its consent named no hosts")),
+            Some(h) if h.is_empty() || h.len() > MOST_HOSTS => return Err(format!("{label}: its consent named no hosts, or too many")),
+            Some(h) => {
+                if let Some(bad) = h.iter().find(|p| !pattern_ok(p)) {
+                    return Err(format!("{label}: not a host: {bad}"));
+                }
+            }
+            None => {}
+        }
         let task = Task {
             id: uuid::Uuid::new_v4().to_string(),
             purpose: purpose.into(),
             label: label.into(),
+            hosts,
             started: now_ms(),
             ended: None,
             outcome: None,
@@ -233,6 +255,50 @@ impl Net {
     }
 }
 
+impl Task {
+    /// Whether it may reach `host`: one its consent named - or any, for
+    /// the user's own code.
+    fn reaches(&self, host: &str) -> bool {
+        self.hosts.as_deref().is_none_or(|named| host_named(named, host))
+    }
+}
+
+/// Whether a pattern names a host: its name - lower-case letters, digits
+/// and hyphens, in labels between dots - or, after a leading dot, the name
+/// any host under which is meant, of two labels at least (`.hf.co`; never a
+/// whole top-level domain, `.co`).
+fn pattern_ok(pattern: &str) -> bool {
+    let (under, name) = match pattern.strip_prefix('.') {
+        Some(name) => (true, name),
+        None => (false, pattern),
+    };
+    let label_ok = |l: &str| {
+        (1..=63).contains(&l.len())
+            && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && !l.starts_with('-')
+            && !l.ends_with('-')
+    };
+    (1..=253).contains(&name.len()) && name.split('.').all(label_ok) && (!under || name.split('.').count() >= 2)
+}
+
+/// Whether `host` is one of those `named`: one named as it is, or one under
+/// a name given with a leading dot - `us.aws.cdn.hf.co` under `.hf.co`, but
+/// not `hf.co` itself, nor `evilhf.co`. Whatever its case, and with or
+/// without the dot that may end a name; a host that is not a name - one
+/// with any other character in it - is none of them.
+fn host_named(named: &[String], host: &str) -> bool {
+    let host = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
+    if host.is_empty() || !host.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.') {
+        return false;
+    }
+    named.iter().any(|p| match p.strip_prefix('.') {
+        Some(_) => host
+            .strip_suffix(p.as_str())
+            .is_some_and(|sub| !sub.is_empty() && !sub.starts_with('.') && !sub.ends_with('.')),
+        None => host == *p,
+    })
+}
+
 /// Sets a child's proxy variables to `proxy`, both cases, and lets it reach
 /// only the machine itself directly.
 fn point_at_proxy(cmd: &mut Command, proxy: &str) {
@@ -256,7 +322,7 @@ impl Net {
     /// for as long as it runs, when Meno may go out; anything else - another
     /// worker, or the console while Meno is offline - nowhere.
     pub fn route_sidecar(&self, cmd: &mut Command, console: bool) -> Option<TaskHandle> {
-        let task = console.then(|| self.begin("python-code", "Python run in the console").ok()).flatten();
+        let task = console.then(|| self.begin("python-code", "Python run in the console", None).ok()).flatten();
         match &task {
             Some(task) => task.route(cmd),
             None => self.route_nowhere(cmd),
@@ -465,6 +531,8 @@ impl Net {
             Some(("407 Proxy Authentication Required", "not from a task Meno began"))
         } else if !self.allowed(c.purpose.as_deref().unwrap_or("")) {
             Some(("403 Forbidden", "not allowed to use the network"))
+        } else if !task.as_ref().is_some_and(|t| t.reaches(&request.host)) {
+            Some(("403 Forbidden", "not a host its consent named"))
         } else {
             None
         };
@@ -666,19 +734,61 @@ mod tests {
         }
     }
 
+    /// Hosts, as a task's consent names them.
+    fn named(hosts: &[&str]) -> Option<Vec<String>> {
+        Some(hosts.iter().map(|h| h.to_string()).collect())
+    }
+
     #[test]
     fn begins_a_task_only_when_allowed_and_online() {
         let net = Net::default();
-        assert!(net.begin("python-env:console", "Setting up").is_err());
+        assert!(net.begin("python-env:console", "Setting up", named(&["pypi.org"])).is_err());
         net.0.granted.lock().unwrap().insert("python-env:console".into());
-        let task = net.begin("python-env:console", "Setting up").unwrap();
+        let task = net.begin("python-env:console", "Setting up", named(&["pypi.org"])).unwrap();
         assert_eq!(net.0.tasks.lock().unwrap().len(), 1);
         task.finish(true);
         assert!(net.0.tasks.lock().unwrap().is_empty());
         // the user's own code needs no asking; offline, nothing goes
-        assert!(net.begin("python-code", "Python").is_ok());
+        assert!(net.begin("python-code", "Python", None).is_ok());
         net.0.offline.store(true, Ordering::SeqCst);
-        assert!(net.begin("python-code", "Python").is_err());
+        assert!(net.begin("python-code", "Python", None).is_err());
+    }
+
+    #[test]
+    fn begins_a_task_that_names_no_hosts_for_the_users_own_code_alone() {
+        let net = Net::default();
+        net.0.granted.lock().unwrap().insert("python-env:console".into());
+        // a set-up must name the hosts its consent named
+        let none = net.begin("python-env:console", "Setting up", None).err().unwrap();
+        assert_eq!(none, "Setting up: its consent named no hosts");
+        assert!(net.begin("python-env:console", "Setting up", named(&[])).is_err());
+        assert!(net.0.tasks.lock().unwrap().is_empty());
+        // and only hosts: no pattern for a whole top-level domain, nor anything else
+        for bad in [".co", "*.hf.co", "PyPI.org", "pypi.org:443", "https://pypi.org", "a..b", "-a.org", ""] {
+            assert!(net.begin("python-env:console", "Setting up", named(&["pypi.org", bad])).is_err(), "{bad}");
+        }
+        let task = net.begin("python-env:console", "Setting up", named(&["pypi.org", ".hf.co", "127.0.0.1"])).unwrap();
+        let held = net.0.tasks.lock().unwrap().values().next().unwrap().hosts.clone();
+        assert_eq!(held, named(&["pypi.org", ".hf.co", "127.0.0.1"]));
+        task.finish(true);
+        // the user's own code reaches any host
+        let own = net.begin("python-code", "Python", None).unwrap();
+        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.reaches("example.com") && t.reaches("pypi.org")));
+        own.finish(true);
+    }
+
+    #[test]
+    fn knows_a_host_named_and_one_under_a_name_given_with_a_leading_dot() {
+        let hosts = named(&["pypi.org", ".hf.co"]).unwrap();
+        for host in ["pypi.org", "PyPI.org", "pypi.org.", "us.aws.cdn.hf.co", "cas-bridge.xethub.hf.co"] {
+            assert!(host_named(&hosts, host), "{host}");
+        }
+        // a host under one named exactly is not named; nor is the name a leading dot is put before
+        for host in ["files.pypi.org", "hf.co", "evilhf.co", "hf.co.example.com", ".hf.co", "x..hf.co", "us.aws.cdn.hf.co\0", "pypi.org/", "", "example.com"] {
+            assert!(!host_named(&hosts, host), "{host}");
+        }
+        assert!(pattern_ok("pypi.org") && pattern_ok(".hf.co") && pattern_ok("127.0.0.1") && pattern_ok("localhost"));
+        assert!(!pattern_ok(".co") && !pattern_ok(".") && !pattern_ok("hf.co.") && !pattern_ok("a_b.org"));
     }
 
     fn encode_base64(bytes: &[u8]) -> String {
@@ -695,11 +805,16 @@ mod tests {
 
     /// Asks the proxy at `port` to connect to `to`, as `token`'s; the status line it answers.
     async fn ask(port: u16, to: u16, token: Option<&str>) -> (TcpStream, String) {
+        ask_for(port, "127.0.0.1", to, token).await
+    }
+
+    /// Asks the proxy at `port` to connect to `host`'s port `to`, as `token`'s; the status line it answers.
+    async fn ask_for(port: u16, host: &str, to: u16, token: Option<&str>) -> (TcpStream, String) {
         let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
         let auth = token
             .map(|t| format!("Proxy-Authorization: Basic {}\r\n", encode_base64(format!("meno:{t}").as_bytes())))
             .unwrap_or_default();
-        c.write_all(format!("CONNECT 127.0.0.1:{to} HTTP/1.1\r\n{auth}\r\n").as_bytes())
+        c.write_all(format!("CONNECT {host}:{to} HTTP/1.1\r\n{auth}\r\n").as_bytes())
             .await
             .unwrap();
         let mut head = Vec::new();
@@ -711,46 +826,58 @@ mod tests {
         (c, status)
     }
 
+    /// Somewhere to go on the loopback address - it says back what it is
+    /// told, once - and the proxy, served: the network, the proxy's port,
+    /// and the port of the place to go.
+    async fn proxy_and_echo() -> (Net, u16, u16) {
+        let echo = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let to = echo.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = echo.accept().await {
+                tokio::spawn(async move {
+                    let mut b = [0u8; 64];
+                    let n = s.read(&mut b).await.unwrap_or(0);
+                    let _ = s.write_all(&b[..n]).await;
+                });
+            }
+        });
+        let net = Net::default();
+        let proxy = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = proxy.local_addr().unwrap().port();
+        let _ = net.0.port.set(port);
+        let serving = net.clone();
+        tokio::spawn(async move {
+            while let Ok((s, _)) = proxy.accept().await {
+                let n = serving.clone();
+                tokio::spawn(async move { n.serve(s).await });
+            }
+        });
+        (net, port, to)
+    }
+
+    /// Says `hello` through a connection the proxy carries, and hears it back.
+    async fn hello(c: &mut TcpStream) {
+        c.write_all(b"hello").await.unwrap();
+        let mut back = [0u8; 5];
+        c.read_exact(&mut back).await.unwrap();
+        assert_eq!(&back, b"hello");
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()
+    }
+
     #[test]
     fn carries_a_tasks_connection_counted_and_refuses_the_rest() {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        rt.block_on(async {
-            // somewhere to go: it says back what it is told, once
-            let echo = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
-            let to = echo.local_addr().unwrap().port();
-            tokio::spawn(async move {
-                while let Ok((mut s, _)) = echo.accept().await {
-                    tokio::spawn(async move {
-                        let mut b = [0u8; 64];
-                        let n = s.read(&mut b).await.unwrap_or(0);
-                        let _ = s.write_all(&b[..n]).await;
-                    });
-                }
-            });
-            let net = Net::default();
-            let proxy = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
-            let port = proxy.local_addr().unwrap().port();
-            let _ = net.0.port.set(port);
-            let serving = net.clone();
-            tokio::spawn(async move {
-                while let Ok((s, _)) = proxy.accept().await {
-                    let n = serving.clone();
-                    tokio::spawn(async move { n.serve(s).await });
-                }
-            });
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
             net.0.granted.lock().unwrap().insert("python-env:test".into());
-            let task = net.begin("python-env:test", "Testing").unwrap();
+            let task = net.begin("python-env:test", "Testing", named(&["127.0.0.1"])).unwrap();
 
             // the task's own: through, both ways, counted
             let (mut c, status) = ask(port, to, Some(&task.token)).await;
             assert_eq!(status, "HTTP/1.1 200 Connection Established");
-            c.write_all(b"hello").await.unwrap();
-            let mut back = [0u8; 5];
-            c.read_exact(&mut back).await.unwrap();
-            assert_eq!(&back, b"hello");
+            hello(&mut c).await;
             drop(c);
             let done = loop {
                 let found = net.0.recent.lock().unwrap().iter().find(|c| c.outcome == "done").cloned();
@@ -773,6 +900,66 @@ mod tests {
             let blocked = net.0.recent.lock().unwrap().iter().filter(|c| c.outcome == "blocked").count();
             assert_eq!(blocked, 2);
         });
+    }
+
+    #[test]
+    fn carries_a_task_only_to_the_hosts_its_consent_named() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+
+            // a host named: through
+            let task = net.begin("python-env:test", "Testing", named(&["pypi.org", "127.0.0.1"])).unwrap();
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            hello(&mut c).await;
+            drop(c);
+            task.finish(true);
+
+            // one not named: refused before anything is reached, and on the record as blocked
+            let task = net.begin("python-env:test", "Testing", named(&["pypi.org", ".hf.co"])).unwrap();
+            let (_, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            // (nor the name a leading dot is put before: the hosts under it alone)
+            let (_, status) = ask_for(port, "hf.co", 443, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            let blocked: Vec<Connection> = net.0.recent.lock().unwrap().iter().filter(|c| c.outcome == "blocked").cloned().collect();
+            assert_eq!(blocked.len(), 2);
+            for (c, host) in blocked.iter().zip(["127.0.0.1", "hf.co"]) {
+                assert_eq!(c.host, host);
+                assert_eq!(c.purpose.as_deref(), Some("python-env:test"));
+                assert_eq!(c.reason.as_deref(), Some("not a host its consent named"));
+            }
+            task.finish(true);
+
+            // the user's own code: any host
+            let own = net.begin("python-code", "Python", None).unwrap();
+            let (mut c, status) = ask(port, to, Some(&own.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            hello(&mut c).await;
+        });
+    }
+
+    #[test]
+    fn puts_a_connection_refused_for_its_host_on_the_record_with_why() {
+        let path = std::env::temp_dir().join(format!("meno-net-hosts-{}.jsonl", uuid::Uuid::new_v4()));
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            let _ = net.0.log.set(path.clone());
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin("python-env:test", "Testing", named(&["pypi.org"])).unwrap();
+            let (_, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            task.finish(true);
+        });
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let entries: Vec<serde_json::Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        let c = entries.iter().find_map(|e| e.get("connection")).expect("the connection, on the record");
+        assert_eq!((c["host"].as_str(), c["outcome"].as_str()), (Some("127.0.0.1"), Some("blocked")));
+        assert_eq!(c["reason"], "not a host its consent named");
+        // (and the task, with the hosts its consent named)
+        assert_eq!(entries[0]["task"]["hosts"], serde_json::json!(["pypi.org"]));
     }
 
     #[test]
@@ -804,7 +991,7 @@ mod tests {
         let mut nowhere = Command::new("true");
         net.route_nowhere(&mut nowhere);
         assert_eq!(proxy_of(&nowhere).as_deref(), Some("http://127.0.0.1:0"));
-        let task = net.begin("python-code", "Python").unwrap();
+        let task = net.begin("python-code", "Python", None).unwrap();
         let mut routed = Command::new("true");
         task.route(&mut routed);
         assert!(proxy_of(&routed).unwrap().ends_with("@127.0.0.1:0"));
@@ -857,7 +1044,7 @@ mod tests {
         assert!(offline.allowed("app-update") && offline.allowed("python-env:chem"));
         assert!(!offline.allowed("Not A Purpose!"));
         // offline, not even the user's own code goes out
-        assert!(offline.begin("python-code", "Python").is_err());
+        assert!(offline.begin("python-code", "Python", None).is_err());
 
         // missing or unreadable: the defaults, as the window takes them
         for text in [None, Some("not json"), Some(r#"{"network":{"offline":"yes"}}"#)] {
@@ -871,7 +1058,7 @@ mod tests {
             net.load_settings(&path);
             assert!(!net.offline(), "{text:?}");
             assert!(!net.allowed("app-update"), "{text:?}");
-            assert!(net.begin("python-code", "Python").is_ok(), "{text:?}");
+            assert!(net.begin("python-code", "Python", None).is_ok(), "{text:?}");
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -880,7 +1067,7 @@ mod tests {
     fn routes_a_child_through_the_proxy_with_its_token() {
         let net = Net::default();
         let _ = net.0.port.set(4567);
-        let task = net.begin("python-code", "Python").unwrap();
+        let task = net.begin("python-code", "Python", None).unwrap();
         let mut cmd = Command::new("true");
         task.route(&mut cmd);
         // by name, whatever its case: on Windows HTTPS_PROXY and
