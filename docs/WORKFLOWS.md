@@ -279,8 +279,9 @@ one of the kinds of calculation it does (decided: 16):
 
 ![Quick Add with one button for calculations](workflows/2-quick-add.svg)
 
-- **Quick Add keeps its four** - bond, text, reaction arrow, "+" - and
-  gains **one button**: *Calculations*, a small graph of two joined
+- **Quick Add keeps its ten** - bond, chain, SMILES, text, reaction
+  arrow, "+", electron-pushing arrow, slide, pen, shapes (`QuickAdd.tsx`)
+  - and gains **one button**: *Calculations*, a small graph of two joined
   sets, after a thin rule.
 - **Pressed, it opens** a panel below the row, a line for each plugin
   added that does steps - those that run a program first - then Meno:
@@ -317,16 +318,20 @@ one of the kinds of calculation it does (decided: 16):
 A click on a step opens it, in place, to its options - as a molecule's
 frames chip opens to its slider:
 
+- what it does: another of the kinds of calculation its plugin does,
+  where it does more than one (*Calculation*; *Who does a step*) - the
+  options the two share kept as they were;
 - the plugin's own options, drawn in Meno's general form (`lib/options`,
   as Export draws a writer's): for xTB, its method (GFN2-xTB, GFN1-xTB,
   GFN-FF), solvent, optimisation level; for *Energy window*, the window
-  (3 kcal/mol);
-- the charge and the unpaired electrons, read from each entry as Export
-  reads them, and changeable;
-- what it does: another of the kinds of calculation its plugin does,
-  where it does more than one (*Who does a step*) - the options the two
-  share kept as they were;
-- *Show log* and *Show files* once it has run.
+  (3 kcal/mol) - or *No options*;
+- its runs, where it has more than one: each when, and what it said,
+  with *Show* to put its results back on the page (*Results*).
+
+The charge and the unpaired electrons are not on the card: each entry's
+are read as Export reads them (`pluginEntry`), and given with it. *Show
+log* and *Show files* are on the step's menu (right-click), once it has
+run.
 
 Another click on its title, Escape, or a press elsewhere closes it. The
 step's options are its own: it starts with the defaults Settings,
@@ -498,9 +503,15 @@ gave), and one can be shown again.
 ## Saving and sharing
 
 - **The workspace keeps it all** (`.meno`, FILE-IO.md, *The workspace
-  file*): sets, steps, wires, options; each run - when, with what
-  options, which program and version, how it ended; logs and outputs, as
-  files kept by their SHA-256; results as entries on the page.
+  file*): sets, steps, wires, options; each run - when, its kind and
+  options, what it said and how it ended, how long it took, its jobs by
+  id - and the molecules each of its last ten gave; the outputs its
+  molecules were read from, as files kept by their SHA-256, each
+  molecule's calculation saying its program and version as the output
+  does; a job's log, as a text, where it was shown; results as entries
+  on the page. A job's own folder stays in Meno's data folder, not in the
+  file. (Each run keeping its program, version and log with it is a
+  requirement for the rebuild.)
 - **Shared, a workspace is the procedure with its results**: opened
   elsewhere, everything is there to read, and runs again where the same
   plugins are added.
