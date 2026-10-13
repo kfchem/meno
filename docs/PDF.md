@@ -105,9 +105,10 @@ stops being part of the work.
 - **Read where it lies**:
   - Zoomed into, the top page's text and figures come up, sharp at
     any zoom.
-  - The wheel or two fingers over the stack go to the next page and the
-    one before, the top page lifting off and going under (*Movement*,
-    below).
+  - Its pages are turned by the top page's corners, folding as the stack
+    is hovered, by the arrow keys over it, or by its menu, the top page
+    lifting off and going under (*Movement*, below). The wheel and two
+    fingers zoom and move the view over it, as over the rest of the page.
   - The right-click menu has *Spread pages*. The pages lift off the
     stack one after another and lie side by side on the page, in rows,
     to be read and compared at once. *Gather pages* puts them back.
@@ -153,23 +154,26 @@ stops being part of the work.
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
 - **Only what is in view is drawn**, nearest first, then the pages next
-  in the way the view is going. A tile no longer wanted is dropped, not
-  finished. Pages far out of view are let go, and drawn again when they
-  come back.
+  in the way the view is going. A tile no longer wanted when its turn
+  comes is dropped, never sent to PDFium; one sent is drawn to the end.
+  Pages far out of view are let go, and drawn again when they come back.
 
 ### Text
 
-- **A drag that starts on text selects text**, as in any reader: a
-  double-click selects a word, a triple-click a line. ⌘C copies it, and
-  the right-click menu has *Copy*.
+- **In the column, a drag that starts on text selects text**, as in any
+  reader: a double-click selects a word, a triple-click a line. On a
+  stack, a drag moves the view, and a long press on its words selects
+  from the word under it (*As built*, step 3). ⌘C copies it, and the
+  right-click menu has *Copy*.
 - **PDFium says where each letter is**, and Meno selects and marks by
   that, on the stack and in the column alike.
 
 ### Search
 
-- **⌘F** with the column or a PDF in front, or *Find in PDF…* in Meno's
-  menu, opens a field at the column's top. It has two choices beside it,
-  *This PDF* and *All PDFs*.
+- **⌘F** in a workspace holding a PDF, or *Find in PDF…* in the
+  right-click menu on empty space, opens a field at the column's top, on
+  the PDF it shows or else the one under the pointer. It has two choices
+  beside it, *This PDF* and *All PDFs*.
 - **What it finds**:
   - each place is marked on the pages, in the column and on the stacks;
   - the places are counted (*3 of 12*);
@@ -177,9 +181,10 @@ stops being part of the work.
     closes the field.
 - **With *All PDFs***, the places are listed under each PDF's name, and
   going to one shows that PDF.
-- **How letters are matched**: by PDFium's own search, without regard to
-  case. Whether a word broken across a line's end is found is measured in
-  the trial (step 0), and made so if PDFium does not find it.
+- **How letters are matched**: by Meno's own search, over the letters
+  PDFium reads, without regard to case. A line's end reads as a space,
+  and a word broken by a hyphen at a line's end is found whole (*The
+  trial*, below).
 
 ## Taking things out
 
@@ -379,8 +384,8 @@ together, in short eased transitions.
   Sans JP).
 - **Reached from Rust** through `pdfium-render` (MIT or Apache-2.0).
 - **What Meno asks of it**: a part of a page drawn at a scale, its text
-  with where each letter is, search, links, and what a page is made of
-  - paths, text and pictures - which stage 5 reads.
+  with where each letter is, links, and what a page is made of - paths,
+  text and pictures - which stage 5 reads. Meno searches the text itself.
 
 ### Where it runs
 
@@ -391,12 +396,14 @@ together, in short eased transitions.
   so on the page and in the column, with *Open again*; Meno, and the
   work not yet saved, go on. Chrome keeps PDFium apart for the same
   reason.
-- **It draws on threads of its own**, a page at a time, each part in a
-  way that can be stopped. A request no longer wanted is dropped.
-- **Pictures come back as they are drawn**: the colours of each pixel,
-  in the order a WebGL texture takes them (PDFium's
-  `FPDF_REVERSE_BYTE_ORDER`), with no image format in between. They go
-  to the window as bytes, not as text (Tauri's binary response).
+- **It answers one request at a time**, on one thread, in the order they
+  come. Parts to draw wait in the window, nearest first, three at most
+  sent at a time; one no longer wanted before it is sent is dropped.
+- **Pictures come back as PNGs**, previews, tiles and figures alike:
+  PDFium's pixels, in the order a WebGL texture takes them
+  (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
+  white. They go to the window as bytes, not as text (Tauri's binary
+  response), and are unpacked off its main thread.
 
 ### One canvas
 
@@ -467,7 +474,8 @@ Apache-2.0 app:
   ICU's notice, for build scripts (Autoconf's) that are not part of it,
   under Autoconf's exception.
 - **What Meno must do**:
-  - ship every one of these licences, in `resources/licenses/pdfium/`;
+  - ship every one of these licences, in `src-tauri/resources/licenses/`
+    (`PDFium-*.txt`, and pdfium-render's in `pdfium-render-MIT.txt`);
   - credit them in the README;
   - and, as two of them ask of a program shipped without its source,
     say in its documentation that it is "based in part on the work of
@@ -492,12 +500,14 @@ A PDF is a file from anywhere, and is treated as such.
 ### Platforms
 
 - **The same PDFium on every system**: the library for macOS (Apple
-  silicon), Windows (x64) and Linux (x64), from the same release.
+  silicon) and Windows (x64), from the same release; Linux's (x64) is
+  pinned and fetched by the same script, for a Linux build Meno does not
+  make yet.
 - **Carried in the app**:
   - on a Mac, inside the app, signed with it;
   - on Windows, beside Meno's program, with a line in the installer's
     hook for when it is renamed or goes (RELEASING.md);
-  - on Linux, beside it as well.
+  - on Linux, nowhere yet: there is no Linux build.
 
 - **On a Mac, signed as Meno is - ad hoc, with the hardened runtime -
   the app cannot load PDFium's library**: macOS's library validation
@@ -576,6 +586,7 @@ Built:
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), or one broken (*it could not be read*, with PDFium's reason). One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -671,7 +682,7 @@ Built:
   - The words selected are marked in Meno's light, the same on the stack and in the column.
   - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too.
   - Selecting words lets the drawing's selection go. Esc, or a click elsewhere, lets the words go.
-- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the Edit menu.
+- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the right-click menu on empty space.
   - A field opens over the top of the column, holding the words selected, if any.
   - *This PDF* or *All PDFs* choose where to look, and the count shows as *3 of 12*.
   - Enter goes to the next place and Shift+Enter to the one before. Esc closes the field.
@@ -732,9 +743,10 @@ Not yet, and where it comes:
 
 Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
-  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture.
+  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is.
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame.
-  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. Its caption, and a column's lines beside it, are not.
+  - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it.
+  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
   - A page's figures are worked out once, when its words are first wanted: as it comes into the column, or onto the screen at a size its words can be read.
 - **A box, in the column.** A press in a figure, or where no word is near, begins a box.
   - Let go where it was pressed, in a figure, it is that figure's box, labels and all. On a link, the link is followed instead.
@@ -758,7 +770,7 @@ Decided while building it, for the maintainer to confirm:
 - **A picture carried out lies just where it was let go**, over another picture if it was let go there; one opened or put on the page is put clear of the rest.
 
 Not yet, and where it comes:
-- **A scanned page**: it is one picture over most of the page, so no figure is found on it. A box drawn by hand takes part of it.
+- **A scanned page**: it is one picture over most of the page - or several, strips or tiles that cover it together - so no figure is found on it. A box drawn by hand takes part of it.
 - **Reading a figure as a structure**: stage 5.
 
 ### Step 5: texts drawn by Meno (2026-10-10, under way)
@@ -951,25 +963,80 @@ workspace holds.
   lines and curves - filled or stroked and how thick; each letter with
   its box, where its line starts and its size; through a form, a figure
   a journal placed whole, under the matrices that placed it.
+- **Which way its words read**: each letter's line, as the page is shown.
+  A figure whose words read down the page or up it - a scheme printed
+  sideways, a page turned a quarter - is turned by that quarter and read
+  upright. Its structure is drawn upright, and each atom is tied to where
+  it lies on the page as shown.
+- **Lines drawn again**: a short line lying on a longer one, along it and
+  within it - a joint drawn as short pieces along the bonds meeting
+  there, as RDKit draws one - is that line's, and left out before
+  anything is measured (a piece only a few widths long need only lie
+  within the line: its ends, written to a hundredth of a point, may turn
+  it a few degrees). A line drawn in two colours - a bond black to
+  its middle and its atom's colour on, as RDKit draws one by default -
+  is one line: two lines of different colours, end to end along one
+  way, with nothing else ending where they meet (a double bond's other
+  line, side by side, its colour changing there too, is nothing else). So is a wedge drawn in
+  two colours: a filled four-cornered shape of another colour going on
+  from its wide end, the same way and wider, is its wide half. A wedge
+  filled and then stroked round - as RDKit draws one, its outline a path
+  of its own in the PDF - has its edges as its own: a line from one of
+  its corners to another is no bond.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
+  Where every line is drawn short between labels - a metal's bonds, Pt to
+  N and Cl - each is measured on to the middles of the letters it is cut
+  short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;
-  - lines side by side, a fifth of a bond or so apart, are a double or a
-    triple bond - its ends the longer line's where one is longer, as a
+  - lines side by side, a fifth of a bond or so apart and alongside each
+    other for most of the shorter (seven tenths: a cube's parallel edges,
+    drawn in perspective half past each other, are none), are a double or a
+    triple bond, its ends taken to an atom within a quarter of a bond
+    where its lines run a little past it or stop short of it - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it, else the middle line's;
-  - a filled wedge is a bond in front, narrow at its stereocentre;
-  - short strokes side by side across a line, evenly spaced, are a bond
-    behind, narrow where they are shortest;
+  - a filled wedge is a bond in front, narrow at its stereocentre - its
+    narrow end a point, rounded, or cut flat a line's width across, and
+    its wide end cut slanting along the bond it meets however far; one
+    under three tenths of a bond long only where its wide end points
+    into a label (a stereocentre's H set close, the wedge cut back at it),
+    and one cut back so far it is wider than long - three corners, two
+    sides from its tip as long, its wide end longer - narrow at that tip;
+  - short strokes side by side across a line, evenly spaced - a
+    twenty-fifth of a bond apart or more, or two and a half of their
+    widths where a long bond's many lines are set close - are a bond
+    behind, narrow where its lines are shortest (its lines, not the joints
+    of the bonds at its ends, drawn as dots or thinner pieces; the first
+    of its own lines may be a dot: a small filled shape, or a line next to
+    nothing long whose round ends make it one, as Meno's own style draws
+    it) - one of them at least a line of some width: dots alone are a
+    joint's. Its
+    lines all go one way, so two hashes meeting at an atom, joined there
+    through its joints' dots, are two; and a hash's narrow end set off
+    from its atom, its first line taken as a joint's or stopping short,
+    is carried on to the bond end it points at, under half a bond on -
+    such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's - is
-    joined again;
+  - a bond broken where another passes in front of it - a bridge's, a
+    cage's back edge, a double bond's two lines - is joined again, however
+    short one of its pieces, and its pieces are never a hash's lines; its
+    gap may be near half a bond (nine twentieths), as a figure with many
+    labels, more of its lines cut short of them than drawn whole, has its
+    bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is
-    a bond between them, two side by side a double one.
+    a bond between them, two side by side a double one, three a triple
+    one (N≡N+) - never a hash, however evenly they are set; and so is a
+    short line from a joint of bonds to a label stacked tall - an NH with
+    its H over its N - cut back short of its H;
+  - a short line, a sixth of a bond long or more, running straight out
+    of a label to nothing - no line's end and no other word by its far
+    end - is a bond to a methyl: an N-methyl in a bridge squeezed short
+    and cut back at its N.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
@@ -981,15 +1048,52 @@ workspace holds.
   (l or I, O or 0) is read as the one that makes its label read; one that
   matched weakly is marked ("Its letters are drawn as shapes: read as
   "Cl".").
-- **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
-  word, the word is its atom's label, read as a label typed is read - an
+- **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
+  one word do not meet each other there: bonds drawn short of a metal
+  from two sides; and an end by both ends of a bond shorter than ends lie
+  apart where they meet - a hash to an H set close - meets the nearer);
+  where a bond points into a
+  word - its letters side by side on one line (their ink near, or their
+  rooms as the PDF sets them: a 1's ink stands well inside its room, and
+  small letters may be set apart; two labels set touching, the first
+  ending in its charge - Cl- HN+ - are two, where the word reads as
+  nothing and its pieces do): two capitals as large set
+  off one line, two H's of atoms side by side drawn half over each other,
+  are two - the word is its atom's label (at its element: an end outside it,
+  much nearer its H than its element, is a carbon set close; and a label
+  with its hydrogens written - NH2, OH - takes no more bonds than they
+  leave it, and an O alone two, a double bond counted twice, the ends
+  nearest its element; an H set right over or under an
+  N, O, S or P is that label's - an NH set between two bonds, its H stacked
+  - and a bond cut back at the H, pointing on at the element, is the
+  label's too), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
-  MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
-  a charge. A lone H takes one bond: its wedge's, where it has one. A word
-  with a charge beside the structure, at no bond's end, is an ion. A word
-  written as a compound's number - 1, 12b, 3', (4) - is no atom's label,
-  however close under a bond it is set.
+  MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last
+  (H3N+ is NH3+). A subscript is a count, a superscript
+  a charge (a letter the PDF gives no character for, a control code,
+  drawn flat - more than twice as wide as tall - a minus: a hyphen as
+  WebKit prints one), and digits set high before the element its isotope's mass
+  number (13C, 18F, 2H); a count set low before any letter - the H of an
+  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  as Meno draws one and as many papers do - is the charge of the atom it is
+  by, however the page is turned and where a box drawn across it cuts some
+  of its ring off; never a bond, nor a scheme's "+". A lone H at no
+  bond's end, a short line or two across the way to it from an atom by
+  it, is that atom's H behind, its hash the rest hidden by the joint at
+  the atom and by the H. A small round dot
+  by an atom - curved, or a polygon of a dozen corners or more, as RDKit
+  draws one - half as wide again as a line or more, under a sixth of a
+  bond, and at no line's end nor a hash's, is a
+  radical's unpaired electron; two side by side a pair, read as a singlet
+  and marked so (a triplet is drawn the same). A lone H takes one
+  bond: its wedge's, where it has one. A word with a charge - written,
+  or drawn in a ring beside it - by the structure, at no bond's end and
+  not an H by another atom's label (an element's ion set close by one is
+  still an ion), is an ion (Na+, Br-), and several set in a
+  row each by the one before (three K+). A word written as a compound's
+  number - 1, 12b, 3', (4) - is no atom's label, however close under a
+  bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - a label that writes more or fewer hydrogens than its atom's bonds leave
@@ -997,7 +1101,8 @@ workspace holds.
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
-  - a bond drawn twice over.
+  - a bond drawn twice over;
+  - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -
 its left two bonds past their right edge, its top level with theirs, and on
@@ -1026,6 +1131,15 @@ Times), each placed in a page as a journal places a figure - every
 structure is read right, its stereochemistry with it, in about 35 ms for
 the figure of twenty, 65-75 ms where its letters are outlines.
 
+**Checked by a round trip** (`scripts/figure/roundtrip`): structures whose
+SMILES is known - the layout benchmark's, and charges, isotopes,
+stereochemistry, radicals and metals - drawn by Meno, exported as SVG in
+each drawing style, printed to PDF (as it is, the page turned a quarter,
+and in another typeface), read back as *Read as structure* reads them, and
+compared with the truth by canonical SMILES, stereochemistry, isotopes and
+charges kept. Every difference there is a bug of the worst kind: nothing
+on the page shows it.
+
 ### A reaction scheme read (built 2026-10-12)
 
 Decided by the maintainer (2026-10-11): Meno's arrows first gained the
@@ -1038,30 +1152,54 @@ layout.
 *Read as structure* reads a box as a scheme (`lib/figure/scheme`). Its
 arrows and "+" signs are taken out of what the figure is drawn with
 first; its structures are read from the rest, as above; and its letters
-that no structure took are read as words.
+that no structure took are read as words - but a word on a side of the
+scheme, over or under no arrow, that a "+" on its line joins to the rest,
+within a bond of it (or two and a half of its letters' height, where
+that is further), and that reads as a whole molecule is that
+molecule: a reagent Meno reads it as (H2O, HCl, NaCl), or an element its
+hydrogens and charge leave nothing to bond (I-, Na+, NH3). It is marked
+("Written as words beside a "+": read as a molecule."). Words over or
+under an arrow stay words, and so does any word that is no whole
+molecule (decided 2026-10-14). Its bonds' length is its
+lines' (above) where three or more of them that long meet another long
+line at an end - a structure's joints; else, where its lines are more
+than twice as long as its letters are tall, by its letters, its lines
+being arrows.
 
 - **Arrows**: a line - or a row of dashes, or lines joined at corners -
-  with a head at its end. The head can be filled, whole or half; an open
+  with a head at its end. The head can be filled, whole or half (its
+  edges stroked as well, as some programs draw one, go with it); an open
   chevron of two strokes or an outline; or a single barb, a half head's.
+  A head may be small beside the bonds, as RDKit's reaction drawing
+  draws one - a twelfth of a bond - but is two of its line's widths long
+  at least.
   An arrow drawn as one filled outline, its line and its head in one
-  shape, is read by how wide it is along its length.
+  shape, is read by how wide it is along its length, measured from its
+  line's middle fitted along it.
   - heads at both ends: two heads;
   - two arrows side by side, pointing opposite ways, a short way apart
     and alongside each other: an equilibrium, its heads full where both
     are whole. It goes the way its upper line goes, as an equilibrium
     is printed (the right-hand line where they stand upright);
   - two lines ending within an open head: a retrosynthesis's arrow;
-  - a cross on its middle, of two strokes or a letter x: a reaction that
-    does not go;
+  - a cross on its middle, of two strokes or a letter x on its line and
+    alone (an x in the words over it, as in 3 x 10 min, is a word's): a
+    reaction that does not go;
   - a line stroked dashed, or drawn as dashes: dashed;
   - its corners, where its lines turn;
   - its weight, from its line against the bonds' (thin under three
     quarters of it, thick over 1.6 times), and its colour, where it is
     drawn in one rather than black or near it.
 - **"+" signs**: a "+" set alone, two strokes crossing at their middles,
-  square to each other and as long, touching nothing, or a filled cross.
+  square to each other and as long, touching nothing - no other line
+  ending at its arms' ends, though a molecule may stand a little past
+  them - or a filled cross.
 - **Words**: letters set in lines - a smaller letter set high or low with
-  its line - and lines one close under another in blocks.
+  its line - and lines one close under another in blocks. A space goes
+  where letters stand apart, measured by how they are set: each letter's
+  room as the PDF gives it, from where it starts to where the next would
+  (a 1's ink stands well inside its room), or by their ink where it gives
+  none.
   - A block over or under an arrow, along its longest stretch and near
     it, is that arrow's words.
   - The rest stand where they are drawn: a compound's number among them,
@@ -1085,7 +1223,18 @@ words put over an arrow do.
 **How well**: on a scheme drawn for it - two reactants with a "+" and a
 product, an arrow with words over it and under it, three compounds'
 numbers in bold - and on a row of arrows of each kind, everything is read
-as drawn.
+as drawn. So is everything in 29 more figures drawn many ways:
+- heads filled, barbed, curved, open, as one outline with the line, or
+  filled and stroked, and lines as filled bars;
+- arrows going right, left, down and at a slant;
+- equilibria with half heads, with barbs, with lines of unequal length,
+  and with full heads;
+- retrosynthetic, dashed, crossed, thick and coloured arrows;
+- words beside a downward arrow, words under an arrow with a structure
+  drawn over it, and words with an x or a "+" in them, in italics, with
+  formulas and footnotes;
+- a "+" larger than the words, a charge's "+" beside its atom, and two
+  steps one after the other.
 
 Not yet:
 - **A curved arrow** (an electron-pushing arrow's curve) is not read.

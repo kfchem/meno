@@ -15,6 +15,7 @@ import { selFrom, selTo, type Sel } from "../../../../lib/text/editing";
 import { COLORS } from "../../../theme/colors";
 import type { Composing } from "../../TextEditor/editor";
 import type { TypingField } from "../../TextEditor/typingField";
+import { fieldTarget, useTextMenu } from "../../TextEditor/textMenu";
 import type { WordsEditor } from "../utils/wordsEditor";
 import type { CaptionPress } from "../store/types";
 
@@ -202,13 +203,25 @@ export function usePressAmong(o: {
       e.preventDefault();
       e.stopPropagation();
     };
+    // (a right-click among them: Meno's menu for the words - the caret put there first, where nothing is selected)
+    const onMenu = (e: MouseEvent) => {
+      const q = hit(e);
+      if (!q) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (selFrom(ed.sel) === selTo(ed.sel)) {
+        ed.pressAt(q, 1, false);
+        field.current?.sync();
+      }
+      useTextMenu.getState().open(e.clientX, e.clientY, fieldTarget(ed, () => field.current));
+    };
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("dblclick", swallow, true);
-    window.addEventListener("contextmenu", swallow, true);
+    window.addEventListener("contextmenu", onMenu, true);
     return () => {
       window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("dblclick", swallow, true);
-      window.removeEventListener("contextmenu", swallow, true);
+      window.removeEventListener("contextmenu", onMenu, true);
     };
     // (the press that opened them, once - as they open)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,6 +1,6 @@
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { TAU, follow } from "../../../theme/motion";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
@@ -83,9 +83,9 @@ export function Texts2D({
   // measuring here. Until the font is known nothing is drawn, rather than a
   // label in some other font that then jumps.
   const family = opts.fontFamily ?? "Arial";
-  const texts = items.map((t) => t.text);
   // (a letter no typeface of Meno's has drawn as a white square - as the layout measured it: lib/chem/labelFonts `STAND_IN`)
-  const font = useLabelFontUrl(family, needsFallback(texts));
+  const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
+  const font = useLabelFontUrl(family, fallback);
   // Once the font is in, the labels fade in (TAU.quick) rather than appear:
   // each label's own opacity brought up a frame at a time, not the labels
   // drawn again - a drawing can have thousands.
@@ -128,15 +128,26 @@ export function Texts2D({
   // view zooming leaves them as they are)
   const labelZoom = opts.units === "px" ? zoom : null;
   const labelColor = opts.labelColor ?? "black";
+  // (each text drawn as it was while it is the same object, drawn the same
+  // way: a structure the layout did not lay out again keeps its labels, and
+  // React passes them by - not a thousand labels drawn again at every frame
+  // of a drag)
+  const made = useRef<{ under: unknown[]; texts: WeakMap<TextItem, { key: string; label: ReactElement }> }>({ under: [], texts: new WeakMap() });
   const labels = useMemo(() => {
     if (font === null) return null;
     const set = labelSetOf(opts);
     const glyphs = labelFont(set.fontFamily);
     const fill = shadow || moved ? 0 : seen.current.level;
+    const under = [opts, labelZoom, labelColor, font, moved, shadow, renderOrder, fill];
+    if (under.some((v, k) => v !== made.current.under[k])) made.current = { under, texts: new WeakMap() };
+    const kept = made.current.texts;
     return items.map((t, i) => {
+      const key = keyOf ? keyOf(t, i) : `txt-${i}`;
+      const was = kept.get(t);
+      if (was && was.key === key) return was.label;
       const fontWorld = labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx;
-      return (
-        <group key={keyOf ? keyOf(t, i) : `txt-${i}`}>
+      const label = (
+        <group key={key}>
           {/* (a mark - a charge's circle, a radical's dot - is drawn with the lines) */}
           {placeLabel(t, fontWorld, set).map((run, k) => run.mark ? null : (
             // (an italic run - the t of t-Bu - slanted about its baseline)
@@ -165,6 +176,8 @@ export function Texts2D({
           ))}
         </group>
       );
+      kept.set(t, { key, label });
+      return label;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
   }, [items, opts, labelZoom, labelColor, font, moved, shadow, renderOrder]);

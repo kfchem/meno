@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { commitInstanceMatrices } from "./instances";
+import { colorInstances, commitInstanceMatrices } from "./instances";
 
 // A unit disc per instance, the way the atom pick mesh is built, and a ray
 // straight down the view axis, the way a click on the 2D canvas arrives.
@@ -52,5 +52,55 @@ describe("commitInstanceMatrices", () => {
 
     expect(picked(mesh, -10, 5)).toEqual([0]);
     expect(picked(mesh, 10, 0)).toEqual([]);
+  });
+});
+
+describe("commitInstanceMatrices' sphere", () => {
+  it("holds every instance, as long, turned and scaled as each is, and no more than a little past them", () => {
+    const mesh = discs(3);
+    const m = new THREE.Matrix4();
+    mesh.setMatrixAt(0, m.compose(new THREE.Vector3(-5, 2, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
+    mesh.setMatrixAt(1, m.compose(new THREE.Vector3(7, -3, 0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.7), new THREE.Vector3(4, 0.3, 1)));
+    mesh.setMatrixAt(2, m.compose(new THREE.Vector3(1, 9, 0.01), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
+    commitInstanceMatrices(mesh);
+    const ours = mesh.boundingSphere!.clone();
+    // (each instance's own sphere, as three.js works it out, inside ours)
+    mesh.geometry.computeBoundingSphere();
+    for (let i = 0; i < 3; i++) {
+      mesh.getMatrixAt(i, m);
+      const own = mesh.geometry.boundingSphere!.clone().applyMatrix4(m);
+      expect(ours.center.distanceTo(own.center) + own.radius).toBeLessThanOrEqual(ours.radius + 1e-9);
+    }
+    // (and not much larger than three.js's sphere round them all)
+    mesh.computeBoundingSphere();
+    expect(ours.radius).toBeLessThan(mesh.boundingSphere!.radius * 1.5);
+    // (and each instance picked where it is)
+    commitInstanceMatrices(mesh);
+    expect(picked(mesh, 7, -3)).toEqual([1]);
+    expect(picked(mesh, 1, 9)).toEqual([2]);
+  });
+
+  it("is nothing for no instances", () => {
+    const mesh = discs(4);
+    mesh.count = 0;
+    commitInstanceMatrices(mesh);
+    expect(mesh.boundingSphere!.isEmpty()).toBe(true);
+  });
+});
+
+describe("colorInstances", () => {
+  it("gives each instance its colour, or the base, reading each colour once however many instances have it", () => {
+    const mesh = discs(3000);
+    const colors = Array.from({ length: 3000 }, (_, i) => (i % 3 === 0 ? "#ff0000" : i % 3 === 1 ? "#0000ff" : undefined));
+    const read = vi.spyOn(THREE.Color.prototype, "setStyle");
+    colorInstances(mesh, colors, "black");
+    expect(read.mock.calls.length).toBeLessThanOrEqual(3);
+    read.mockRestore();
+    const at = (i: number) => {
+      const c = new THREE.Color();
+      mesh.getColorAt(i, c);
+      return c.getHexString();
+    };
+    expect([at(0), at(1), at(2), at(2999)]).toEqual(["ff0000", "0000ff", "000000", "000000"]);
   });
 });

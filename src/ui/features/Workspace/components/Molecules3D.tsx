@@ -187,6 +187,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // going over to another, the one let go of drawn as it goes (`receding`), the next as it comes (`arriving`)
   const stacksShown = useEditor((s) => s.stacksShown);
   const hiddenStacked = useMemo(() => hiddenInStacks(molecules, stacksShown), [molecules, stacksShown]);
+  // (each molecule made from the drawing, whether the drawing has changed since: worked out as either changes,
+  // not at every render - a pointer moving over the drawing renders this - for every one of them)
+  const changedSince = useMemo(() => new Set(molecules.filter((m) => m.drawnFrom && linkOf(m, drawing) === "changed").map((m) => m.id)), [molecules, drawing]);
   const [receding, setReceding] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number; start: number }[]>([]);
   const arriving = useRef(new Map<number, number>());
   const showingBefore = useRef<{ shown: Map<number, number>; turns: typeof turns; frames: typeof frames } | null>(null);
@@ -692,7 +695,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             overlay={!!overlay[m.id]}
             linkedAtom={hoveredDrawn != null && m.drawnFrom ? (m.drawnFrom.indexOf(hoveredDrawn) >= 0 ? m.drawnFrom.indexOf(hoveredDrawn) : null) : null}
             onHoverAtom={(atom) => store.getState().setHoveredAtom3d(m.id, atom)}
-            onRemake={remake && linkOf(m, drawing) === "changed" ? () => remake(m.id) : undefined}
+            onRemake={remake && changedSince.has(m.id) ? () => remake(m.id) : undefined}
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
