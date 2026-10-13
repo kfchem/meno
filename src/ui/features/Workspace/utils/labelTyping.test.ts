@@ -205,6 +205,18 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     expect(kept("ipr")).toBe("iPr");
   });
 
+  it("hyphenates every italic prefix Meno knows, and finds the readings that need the hyphen (rule 4)", () => {
+    for (const [typed, label] of [
+      ["npent", "n-Pent"], ["nPent", "n-Pent"], ["nhex", "n-Hex"], ["nhept", "n-Hept"], ["noct", "n-Oct"],
+      ["secbu", "sec-Bu"], ["secBu", "sec-Bu"], ["tertbu", "tert-Bu"], ["tertBu", "tert-Bu"],
+      ["pTol", "p-Tol"], ["pNs", "p-Ns"], ["pns", "p-Ns"], ["pTs", "p-Ts"], ["pts", "p-Ts"],
+    ]) expect(kept(typed), typed).toBe(label);
+    // (as it is typed, only its letters' case changes)
+    expect(live("npent")).toBe("nPent");
+    expect(live("pts")).toBe("pTs");
+    expect(live("secbu")).toBe("secBu");
+  });
+
   it("leaves what reads as nothing as typed - no capital made", () => {
     expect(kept("x")).toBe("x");
     expect(kept("lg")).toBe("lg");

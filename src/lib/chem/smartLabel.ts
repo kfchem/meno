@@ -215,6 +215,19 @@ function allowed(typed: string, text: string, r: Reading): boolean {
   return !(r?.element && HEAVY.has(r.element) && text !== typed);
 }
 
+/**
+ * The prefixes set in italics (lib/chem/abbreviations `italicUnits`) - n,
+ * s, t, sec, tert, o, m, p - before a group, at a label's start or after
+ * what is not a letter: tBu, CO2tBu, secBu, pTs. Not i: iPr is upright, as
+ * isopropyl is.
+ */
+const ITALIC_PREFIX = /(^|[^A-Za-z-])(sec|tert|[nstomp])(?=[A-Z])/g;
+
+/** A label with its italic prefixes hyphenated (rule 4): t-Bu, CO2t-Bu, sec-Bu, p-Ts. */
+function hyphened(label: string): string {
+  return label.replace(ITALIC_PREFIX, "$1$2-");
+}
+
 /** Whether one rank comes before another: the first place they differ decides. */
 function before(a: readonly number[], b: readonly number[]): boolean {
   const k = a.findIndex((v, i) => v !== b[i]);
@@ -243,12 +256,13 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   };
   let tried = 0;
   for (const w of writings(typed)) {
-    // (as typed - no letter made a capital - it reads as nothing: asked above)
-    const r = w.cost > 0 ? reads(w.text) : null;
-    if (w.cost > 0) {
-      if (++tried > 120) break;
-      consider(w.text, w.text, r, w);
-    }
+    if (w.cost > 0 && ++tried > 120) break;
+    // (as typed - no letter made a capital - it reads as nothing: asked above;
+    // or it reads with its italic prefix hyphenated, as it is kept: npent is
+    // n-Pent, pTs p-Ts)
+    const prefixed = hyphened(w.text);
+    const r = (w.cost > 0 ? reads(w.text) : null) ?? (prefixed !== w.text ? reads(prefixed) : null);
+    consider(w.text, w.text, r, w);
     // (as drawn on a bond's left - HO, AcO as typed, or aco - only what reads
     // as nothing as it is written, from letters each in a word: hcl is HCl)
     if (!r && w.loose === 0)
@@ -275,11 +289,10 @@ export function liveLabel(typed: string, reads: Reads): string {
 
 /**
  * The label as it is kept: as the reading chosen reads from its bond (rule
- * 3); its italic prefixes hyphenated where that reads the same (rule 4).
+ * 3); its italic prefixes hyphenated where that reads (rule 4).
  */
 export function keptLabel(typed: string, reads: Reads): string {
   const { kept } = chosen(typed, reads);
-  // (t, s and n before a group, at the label's start or after what is not a letter: t-Bu)
-  const hyphened = kept.replace(/(^|[^A-Za-z-])([tsn])(?=[A-Z])/g, "$1$2-");
-  return hyphened !== kept && reads(hyphened) ? hyphened : kept;
+  const prefixed = hyphened(kept);
+  return prefixed !== kept && reads(prefixed) ? prefixed : kept;
 }
