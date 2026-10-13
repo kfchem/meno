@@ -1504,7 +1504,7 @@ function WorkspaceContent({
             }}
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles);
+              const drawn = await structureFromSmiles(smiles, style);
               const st = store.getState();
               const { at } = quickAdd;
               st.setQuickAdd(null);
