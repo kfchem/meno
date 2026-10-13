@@ -157,6 +157,18 @@ export function narrowestBox(pts: readonly Point[]): { u: Point; mid: Point; lon
  */
 function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedge: Wedge } | null {
   if (pts.length < 3) return null;
+  // (a wedge cut back to an H set close, wider than it is long: three corners, two sides from its tip as long as each other and the
+  // third, its wide end, longer - its narrowest box lies along that end, not down the wedge)
+  const corners = pts.filter((p, i) => !pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+  if (!curved && corners.length === 3) {
+    for (let i = 0; i < 3; i++) {
+      const [tip, p, q] = [corners[i], corners[(i + 1) % 3], corners[(i + 2) % 3]];
+      const [sp, sq, end] = [dist(tip, p), dist(tip, q), dist(p, q)];
+      if (Math.abs(sp - sq) < 0.1 * Math.max(sp, sq) && end > 1.05 * Math.max(sp, sq)) {
+        return { wedge: { tip, base: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, w: end, outline: pts } };
+      }
+    }
+  }
   const { u, mid, long, short } = narrowestBox(pts);
   // (a wedge cut short at a label may be little longer than wide; a bar is long)
   if (long <= 0 || long < 1.2 * short) return null;
@@ -176,7 +188,12 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     }
     return bs.length >= 2 ? Math.max(...bs) - Math.min(...bs) : 0;
   };
-  const [w0, w1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
+  // (the wider end measured where it is widest in its half: one cut slanting far along - a tip rounded, its wide end cut
+  // along the bond it meets for a sixth of its length - is narrower a tenth in)
+  const widest = (sign: number) => Math.max(...[0.1, 0.2, 0.3, 0.4].map((f) => widthAt(sign * f * long)));
+  const [n0, n1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
+  const [m0, m1] = [widest(-1), widest(1)];
+  const [w0, w1] = m1 >= m0 ? [n0, m1] : [m0, n1];
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
   if (!curved && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
@@ -191,12 +208,42 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
     return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: b(hi) - b(lo), outline: pts } };
   }
   if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short, outline: pts } };
-  return null;
+  // (a wedge cut flat at its narrow end, a line's width across - four corners: its narrowest box lies along a
+  // side, not down its middle, so it is told by its ends instead)
+  const cut = curved ? null : flatTipped(pts);
+  return cut ? { wedge: cut } : null;
+}
+
+/** A wedge drawn as four corners - its narrow end a short edge, its wide end the opposite one, far apart - or none. */
+function flatTipped(given: Point[]): Wedge | null {
+  const pts = given.filter((p, i) => dist(p, given[(i + 1) % given.length]) > 1e-3);
+  if (pts.length !== 4) return null;
+  const edge = (i: number) => [pts[i], pts[(i + 1) % 4]] as const;
+  const length = (i: number) => dist(...edge(i));
+  // (its ends: the two opposite edges shorter together)
+  const [e, f] = length(0) + length(2) <= length(1) + length(3) ? [0, 2] : [1, 3];
+  const [narrow, wide] = length(e) <= length(f) ? [e, f] : [f, e];
+  const mid = (i: number) => {
+    const [p, q] = edge(i);
+    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  };
+  const [tip, base] = [mid(narrow), mid(wide)];
+  // (each end as wide as it is across the way from one to the other: a wide end cut slanting along a bond is longer than wide)
+  const l = dist(tip, base);
+  if (!l) return null;
+  const across = (i: number) => {
+    const [p, q] = edge(i);
+    return Math.abs(((q.x - p.x) * (base.y - tip.y) - (q.y - p.y) * (base.x - tip.x)) / l);
+  };
+  if (across(narrow) >= 0.4 * across(wide) || l < 2.5 * across(wide)) return null;
+  return { tip, base, w: across(wide), outline: given };
 }
 
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */
 export function shapesOf(drawn: FigureDrawn): Shapes {
   const out: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
+  // (each filled shape read as a line or as a shape of no kind, and its corners)
+  const cornersOf = new Map<object, Point[]>();
   for (const path of drawn.paths) {
     const parts = partsOf(path.d);
     const filled = !blank(path.fill);
@@ -213,9 +260,14 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       for (const p of parts) {
         const pc = p.straight.some((s) => !s);
         const read = filledShape(p.pts, pc);
-        if (read && "stroke" in read) out.strokes.push({ ...read.stroke, ink });
-        else if (read && "wedge" in read) out.wedges.push({ ...read.wedge, ink });
-        else out.blobs.push({ pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc, ink });
+        if (read && "wedge" in read) {
+          out.wedges.push({ ...read.wedge, ink });
+          continue;
+        }
+        const made = read && "stroke" in read ? { ...read.stroke, ink } : { pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc, ink };
+        if ("a" in made) out.strokes.push(made);
+        else out.blobs.push(made);
+        if (!pc) cornersOf.set(made, p.pts);
       }
       if (!stroked) continue;
     }
@@ -229,6 +281,65 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
         for (let i = 1; i < pts.length; i++) if (dist(pts[i - 1], pts[i]) > 1e-3) out.strokes.push({ a: pts[i - 1], b: pts[i], w, ink, ...dash });
       } else {
         out.curves.push({ pts: p.pts, closed: p.closed, w, ink });
+      }
+    }
+  }
+  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
+  // one - is that line's, not a line of its own)
+  out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
+  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as RDKit
+  // draws one by default - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
+  // widening on the same way)
+  out.wedges = out.wedges.map((w) => {
+    const l = dist(w.tip, w.base);
+    if (!l) return w;
+    const u = { x: (w.base.x - w.tip.x) / l, y: (w.base.y - w.tip.y) / l };
+    // (read as a shape of no kind, or as a line where it is long and its ends near as wide)
+    for (const b of [...out.blobs, ...out.strokes]) {
+      const pts = cornersOf.get(b);
+      if (!pts || (b.ink ?? "") === (w.ink ?? "")) continue;
+      const corners = pts.filter((p, i) => !pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+      if (corners.length !== 4) continue;
+      const near = corners.filter((p) => dist(p, w.base) <= 0.75 * w.w + 0.5);
+      const far = corners.filter((p) => !near.includes(p));
+      if (near.length !== 2 || far.length !== 2) continue;
+      const end = { x: (far[0].x + far[1].x) / 2, y: (far[0].y + far[1].y) / 2 };
+      const on = (end.x - w.base.x) * u.x + (end.y - w.base.y) * u.y;
+      const off = Math.abs((end.x - w.base.x) * u.y - (end.y - w.base.y) * u.x);
+      if (on <= 0 || off > 0.2 * on || dist(far[0], far[1]) <= dist(near[0], near[1])) continue;
+      out.blobs = out.blobs.filter((x) => x !== b);
+      out.strokes = out.strokes.filter((x) => x !== b);
+      return { ...w, base: end, w: dist(far[0], far[1]), outline: [...(w.outline ?? []), ...corners] };
+    }
+    return w;
+  });
+  // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
+  const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
+  out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
+  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
+  // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < out.strokes.length && !merged; i++) {
+      for (let j = 0; j < out.strokes.length && !merged; j++) {
+        const [s, t] = [out.strokes[i], out.strokes[j]];
+        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline) continue;
+        const w = Math.max(s.w, t.w);
+        if (dist(s.b, t.a) > w) continue;
+        const ls = dist(s.a, s.b), lt = dist(t.a, t.b);
+        if (!ls || !lt) continue;
+        const cos = ((s.b.x - s.a.x) * (t.b.x - t.a.x) + (s.b.y - s.a.y) * (t.b.y - t.a.y)) / (ls * lt);
+        if (cos < Math.cos((3 * Math.PI) / 180)) continue;
+        // (a line side by side with it - a double bond's other, its colours changing at the same place - is no other ending there)
+        const alongside = (o: Stroke) => {
+          const lo = dist(o.a, o.b);
+          return lo > 0 && Math.abs(((o.b.x - o.a.x) * (s.b.y - s.a.y) - (o.b.y - o.a.y) * (s.b.x - s.a.x)) / (lo * ls)) < Math.sin((3 * Math.PI) / 180);
+        };
+        const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o));
+        if (others.length) continue;
+        out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
+        out.strokes.splice(j, 1);
+        merged = true;
       }
     }
   }
@@ -284,4 +395,20 @@ export function uprightOf(drawn: FigureDrawn): { drawn: FigureDrawn; back: (p: P
     back,
     quarters,
   };
+}
+
+/** Whether line `s` lies on a longer line `t`, along it and within it, as one drawn again over it. */
+function drawnOver(s: Stroke, t: Stroke): boolean {
+  const lt = dist(t.a, t.b);
+  if (lt <= 1.5 * dist(s.a, s.b)) return false;
+  const u = { x: (t.b.x - t.a.x) / lt, y: (t.b.y - t.a.y) / lt };
+  const ls = dist(s.a, s.b) || 1;
+  const w = Math.max(s.w, t.w);
+  // (its way, where it is long enough to have one: a piece a few widths long, its ends written to a hundredth, may seem turned)
+  if (ls > 4 * w && Math.abs(u.x * (s.b.y - s.a.y) / ls - u.y * (s.b.x - s.a.x) / ls) > Math.sin((3 * Math.PI) / 180)) return false;
+  const on = (p: Point) => {
+    const along = (p.x - t.a.x) * u.x + (p.y - t.a.y) * u.y;
+    return along >= -w && along <= lt + w && Math.abs((p.y - t.a.y) * u.x - (p.x - t.a.x) * u.y) <= w;
+  };
+  return on(s.a) && on(s.b);
 }

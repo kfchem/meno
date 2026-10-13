@@ -968,27 +968,75 @@ workspace holds.
   sideways, a page turned a quarter - is turned by that quarter and read
   upright. Its structure is drawn upright, and each atom is tied to where
   it lies on the page as shown.
+- **Lines drawn again**: a short line lying on a longer one, along it and
+  within it - a joint drawn as short pieces along the bonds meeting
+  there, as RDKit draws one - is that line's, and left out before
+  anything is measured (a piece only a few widths long need only lie
+  within the line: its ends, written to a hundredth of a point, may turn
+  it a few degrees). A line drawn in two colours - a bond black to
+  its middle and its atom's colour on, as RDKit draws one by default -
+  is one line: two lines of different colours, end to end along one
+  way, with nothing else ending where they meet (a double bond's other
+  line, side by side, its colour changing there too, is nothing else). So is a wedge drawn in
+  two colours: a filled four-cornered shape of another colour going on
+  from its wide end, the same way and wider, is its wide half. A wedge
+  filled and then stroked round - as RDKit draws one, its outline a path
+  of its own in the PDF - has its edges as its own: a line from one of
+  its corners to another is no bond.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
+  Where every line is drawn short between labels - a metal's bonds, Pt to
+  N and Cl - each is measured on to the middles of the letters it is cut
+  short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;
-  - lines side by side, a fifth of a bond or so apart, are a double or a
-    triple bond - its ends the longer line's where one is longer, as a
+  - lines side by side, a fifth of a bond or so apart and alongside each
+    other for most of the shorter (seven tenths: a cube's parallel edges,
+    drawn in perspective half past each other, are none), are a double or a
+    triple bond, its ends taken to an atom within a quarter of a bond
+    where its lines run a little past it or stop short of it - its ends the longer line's where one is longer, as a
     ring's second line is drawn inside it, else the middle line's;
-  - a filled wedge is a bond in front, narrow at its stereocentre;
-  - short strokes side by side across a line, evenly spaced, are a bond
-    behind, narrow where they are shortest - the first there may be a
-    dot: a small filled shape, or a line next to nothing long whose round
-    ends make it one, as Meno's own style draws it;
+  - a filled wedge is a bond in front, narrow at its stereocentre - its
+    narrow end a point, rounded, or cut flat a line's width across, and
+    its wide end cut slanting along the bond it meets however far; one
+    under three tenths of a bond long only where its wide end points
+    into a label (a stereocentre's H set close, the wedge cut back at it),
+    and one cut back so far it is wider than long - three corners, two
+    sides from its tip as long, its wide end longer - narrow at that tip;
+  - short strokes side by side across a line, evenly spaced - a
+    twenty-fifth of a bond apart or more, or two and a half of their
+    widths where a long bond's many lines are set close - are a bond
+    behind, narrow where its lines are shortest (its lines, not the joints
+    of the bonds at its ends, drawn as dots or thinner pieces; the first
+    of its own lines may be a dot: a small filled shape, or a line next to
+    nothing long whose round ends make it one, as Meno's own style draws
+    it) - one of them at least a line of some width: dots alone are a
+    joint's. Its
+    lines all go one way, so two hashes meeting at an atom, joined there
+    through its joints' dots, are two; and a hash's narrow end set off
+    from its atom, its first line taken as a joint's or stopping short,
+    is carried on to the bond end it points at, under half a bond on -
+    such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's - is
-    joined again;
+  - a bond broken where another passes in front of it - a bridge's, a
+    cage's back edge, a double bond's two lines - is joined again, however
+    short one of its pieces, and its pieces are never a hash's lines; its
+    gap may be near half a bond (nine twentieths), as a figure with many
+    labels, more of its lines cut short of them than drawn whole, has its
+    bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is
-    a bond between them, two side by side a double one.
+    a bond between them, two side by side a double one, three a triple
+    one (N≡N+) - never a hash, however evenly they are set; and so is a
+    short line from a joint of bonds to a label stacked tall - an NH with
+    its H over its N - cut back short of its H;
+  - a short line, a sixth of a bond long or more, running straight out
+    of a label to nothing - no line's end and no other word by its far
+    end - is a bond to a methyl: an N-methyl in a bridge squeezed short
+    and cut back at its N.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
@@ -1000,15 +1048,52 @@ workspace holds.
   (l or I, O or 0) is read as the one that makes its label read; one that
   matched weakly is marked ("Its letters are drawn as shapes: read as
   "Cl".").
-- **Atoms**: where bonds' ends meet, a carbon; where a bond points into a
-  word, the word is its atom's label, read as a label typed is read - an
+- **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
+  one word do not meet each other there: bonds drawn short of a metal
+  from two sides; and an end by both ends of a bond shorter than ends lie
+  apart where they meet - a hash to an H set close - meets the nearer);
+  where a bond points into a
+  word - its letters side by side on one line (their ink near, or their
+  rooms as the PDF sets them: a 1's ink stands well inside its room, and
+  small letters may be set apart; two labels set touching, the first
+  ending in its charge - Cl- HN+ - are two, where the word reads as
+  nothing and its pieces do): two capitals as large set
+  off one line, two H's of atoms side by side drawn half over each other,
+  are two - the word is its atom's label (at its element: an end outside it,
+  much nearer its H than its element, is a carbon set close; and a label
+  with its hydrogens written - NH2, OH - takes no more bonds than they
+  leave it, and an O alone two, a double bond counted twice, the ends
+  nearest its element; an H set right over or under an
+  N, O, S or P is that label's - an NH set between two bonds, its H stacked
+  - and a bond cut back at the H, pointing on at the element, is the
+  label's too), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
-  MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
-  a charge. A lone H takes one bond: its wedge's, where it has one. A word
-  with a charge beside the structure, at no bond's end, is an ion. A word
-  written as a compound's number - 1, 12b, 3', (4) - is no atom's label,
-  however close under a bond it is set.
+  MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last
+  (H3N+ is NH3+). A subscript is a count, a superscript
+  a charge (a letter the PDF gives no character for, a control code,
+  drawn flat - more than twice as wide as tall - a minus: a hyphen as
+  WebKit prints one), and digits set high before the element its isotope's mass
+  number (13C, 18F, 2H); a count set low before any letter - the H of an
+  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  as Meno draws one and as many papers do - is the charge of the atom it is
+  by, however the page is turned and where a box drawn across it cuts some
+  of its ring off; never a bond, nor a scheme's "+". A lone H at no
+  bond's end, a short line or two across the way to it from an atom by
+  it, is that atom's H behind, its hash the rest hidden by the joint at
+  the atom and by the H. A small round dot
+  by an atom - curved, or a polygon of a dozen corners or more, as RDKit
+  draws one - half as wide again as a line or more, under a sixth of a
+  bond, and at no line's end nor a hash's, is a
+  radical's unpaired electron; two side by side a pair, read as a singlet
+  and marked so (a triplet is drawn the same). A lone H takes one
+  bond: its wedge's, where it has one. A word with a charge - written,
+  or drawn in a ring beside it - by the structure, at no bond's end and
+  not an H by another atom's label (an element's ion set close by one is
+  still an ion), is an ion (Na+, Br-), and several set in a
+  row each by the one before (three K+). A word written as a compound's
+  number - 1, 12b, 3', (4) - is no atom's label, however close under a
+  bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - a label that writes more or fewer hydrogens than its atom's bonds leave
@@ -1016,7 +1101,8 @@ workspace holds.
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
-  - a bond drawn twice over.
+  - a bond drawn twice over;
+  - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -
 its left two bonds past their right edge, its top level with theirs, and on
@@ -1066,12 +1152,27 @@ layout.
 *Read as structure* reads a box as a scheme (`lib/figure/scheme`). Its
 arrows and "+" signs are taken out of what the figure is drawn with
 first; its structures are read from the rest, as above; and its letters
-that no structure took are read as words.
+that no structure took are read as words - but a word on a side of the
+scheme, over or under no arrow, that a "+" on its line joins to the rest,
+within a bond of it (or two and a half of its letters' height, where
+that is further), and that reads as a whole molecule is that
+molecule: a reagent Meno reads it as (H2O, HCl, NaCl), or an element its
+hydrogens and charge leave nothing to bond (I-, Na+, NH3). It is marked
+("Written as words beside a "+": read as a molecule."). Words over or
+under an arrow stay words, and so does any word that is no whole
+molecule (decided 2026-10-14). Its bonds' length is its
+lines' (above) where three or more of them that long meet another long
+line at an end - a structure's joints; else, where its lines are more
+than twice as long as its letters are tall, by its letters, its lines
+being arrows.
 
 - **Arrows**: a line - or a row of dashes, or lines joined at corners -
   with a head at its end. The head can be filled, whole or half (its
   edges stroked as well, as some programs draw one, go with it); an open
   chevron of two strokes or an outline; or a single barb, a half head's.
+  A head may be small beside the bonds, as RDKit's reaction drawing
+  draws one - a twelfth of a bond - but is two of its line's widths long
+  at least.
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
   line's middle fitted along it.
@@ -1090,7 +1191,9 @@ that no structure took are read as words.
     quarters of it, thick over 1.6 times), and its colour, where it is
     drawn in one rather than black or near it.
 - **"+" signs**: a "+" set alone, two strokes crossing at their middles,
-  square to each other and as long, touching nothing, or a filled cross.
+  square to each other and as long, touching nothing - no other line
+  ending at its arms' ends, though a molecule may stand a little past
+  them - or a filled cross.
 - **Words**: letters set in lines - a smaller letter set high or low with
   its line - and lines one close under another in blocks. A space goes
   where letters stand apart, measured by how they are set: each letter's
