@@ -67,4 +67,28 @@ describe("an axis of chirality", () => {
     const text = writeMolfile(expanded("(R)-BINAP").model);
     expect(text.split("\n").some((line) => /^\s*\d+\s+\d+\s+1\s+[16]\s/.test(line))).toBe(true);
   }, 30_000);
+
+  it("is not read from a wedge on a bond out of the end's ring: a sulfoxide's S is a centre, and Clean-up does not turn it over", () => {
+    // methyl phenyl sulfoxide, the wedge from S to its methyl: S's other
+    // groups at the end of a single bond in no ring, as an axis's are
+    const ring = [150, 210, 270, 330, 30, 90].map((deg, k) => ({
+      id: 10 + k,
+      x: 1.732 + Math.cos((deg * Math.PI) / 180),
+      y: -1 + Math.sin((deg * Math.PI) / 180),
+      r: 0.9,
+      el: "C",
+    }));
+    const m: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "S" }, { id: 2, x: -0.866, y: -0.5, r: 0.9, el: "C" }, { id: 3, x: 0, y: 1, r: 0.9, el: "O" }, ...ring],
+      bonds: [
+        { id: 20, a: 1, b: 2, order: 1, stereo: "up" },
+        { id: 21, a: 1, b: 3, order: 2 },
+        { id: 22, a: 1, b: 10, order: 1 },
+        ...ring.map((r, k) => ({ id: 30 + k, a: r.id, b: ring[(k + 1) % 6].id, order: (k % 2 ? 1 : 2) as 1 | 2 })),
+      ],
+    };
+    // (left as it is drawn: laid out, a centre with a lone pair would be lost)
+    expect(() => layoutJob(m)).toThrow(/lone pair/);
+  });
 });
+

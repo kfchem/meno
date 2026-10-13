@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, xyzComments } from "./io";
-import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
@@ -89,10 +88,6 @@ const water = (dim: "2D" | "3D", z: [number, number, number]) =>
   ].join("\n");
 
 describe("files of 3D structures", () => {
-  afterEach(() => {
-    for (const n of useNotices.getState().notices) useNotices.getState().dismiss(n.id);
-  });
-
   it("open an XYZ file as one molecule in 3D, its other frames kept", async () => {
     const r = await processFileContent("cholesterol.xyz", sampleXyz);
     expect(r.model.atoms).toHaveLength(0);
@@ -102,13 +97,12 @@ describe("files of 3D structures", () => {
     const twoFrames = "2\nfirst\nH 0 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.80 0 0\n";
     const t = await processFileContent("h2.xyz", twoFrames);
     expect(t.molecules3d![0].frames).toEqual([[0, 0, 0, 0.8, 0, 0]]);
-    expect(useNotices.getState().notices).toEqual([]);
   });
 
-  it("open a trajectory whose last frame is cut short with the frames before it, saying in a notice how many were left out", async () => {
+  it("open a trajectory whose last frame is cut short with the frames before it, the molecule saying how many were left out", async () => {
     const r = await processFileContent("md.xyz", "2\nfirst\nH 0 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.80 0 0\n2\nthird\nH 0 0 0\n");
     expect(r.molecules3d![0].frames).toHaveLength(1);
-    expect(useNotices.getState().notices).toMatchObject([{ title: "Part of the file left out", text: expect.stringMatching(/^md.xyz ends before the atoms of its last frame do: 1 of its 3 frames is left out/) }]);
+    expect(r.molecules3d![0].framesLeftOut).toBe(1);
   });
 
   it("keep each frame's energy, where a calculation reader finds one", async () => {

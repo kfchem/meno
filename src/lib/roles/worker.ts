@@ -11,8 +11,8 @@ import type { ChemClient } from "./client";
  * The worker of the plugin that fills a role (lib/plugins/roles,
  * docs/PLUGINS.md): the plugin chosen for the role where it is used - else
  * the first that fills it - set up the first time a role it fills is
- * needed, asking before it downloads, and started once, then kept for the
- * session: the one process the plugin has (lib/plugins/process). One the
+ * needed, asking before it downloads, and started, then kept while it is
+ * used: the one process the plugin has (lib/plugins/process). One the
  * chemist took away in Settings, Plugins is not set up again of itself:
  * the role says to add it.
  */

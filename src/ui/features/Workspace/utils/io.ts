@@ -6,12 +6,11 @@ import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
-import { bondsByDistance } from "../../../../utils/structureParsers";
+import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
-import { useNotices } from "../../../notices";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -36,8 +35,6 @@ export type ProcessedFileResult = {
   /** Molecules in 3D, as a file of 3D structures has them: not yet placed on the page. */
   /** Its molecules in 3D, each showing its first frame, or the one `frame` says. */
   molecules3d?: (Omit<Molecule3D, "id" | "at"> & { frame?: number })[];
-  /** What of the file was left out as it was read, as the chemist is told (lib/io/structures). */
-  leftOut?: string;
 };
 
 /**
@@ -81,11 +78,8 @@ export async function processFileContent(
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
   // a structure's file: what it holds, as its reader gives it, checked -
-  // its several records drawn flat a stack of drawings - and what was left
-  // out of it, a trajectory's last frame cut short, said in the corner
-  const read = stackedRead(await readStructureFile(filename, content, kind));
-  if (read.leftOut) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: read.leftOut });
-  return read;
+  // its several records drawn flat a stack of drawings
+  return stackedRead(await readStructureFile(filename, content, kind));
 }
 
 /**
@@ -202,6 +196,8 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
   if (!n || !f0) throw new Error(`No molecule found in ${filename || "the file"}.`);
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
+  // (atoms in one place with another: said over it)
+  const together = atomsTogether(f0);
   const frames = rest.map((f) => [...f]);
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
   return {
@@ -216,6 +212,7 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
         ...(frames.length ? { frames, frame: frames.length } : {}),
         ...(energies ? { energies } : {}),
         ...(filename ? { name: filename } : {}),
+        ...(together ? { together } : {}),
         calc: calcOf(out, readers, source),
       },
     ],

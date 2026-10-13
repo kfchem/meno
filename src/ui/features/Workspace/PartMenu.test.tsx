@@ -102,6 +102,10 @@ describe("the right-click menu", () => {
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
     expect(icons).toEqual(["Edit text", "Size…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
+    // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
+    expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);
+    expect(html).toMatch(/Subscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+=|⌘=)<\/kbd>/);
+    expect(html).not.toMatch(/Shift\+=|⇧⌘=/);
     expect(html).toMatch(/aria-label="Bold" aria-pressed="true"/);
     expect(html).toMatch(/aria-label="Italic" aria-pressed="false"/);
     expect(html).toMatch(/Align right<\/span><svg[^>]*aria-label="Chosen"/);

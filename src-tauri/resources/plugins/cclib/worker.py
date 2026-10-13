@@ -34,10 +34,8 @@ warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
 import cclib  # noqa: E402
-from cclib.parser.utils import PeriodicTable  # noqa: E402
+from cclib.parser.utils import PeriodicTable, convertor  # noqa: E402
 
-# cclib's energies are in electronvolts; Meno's, in hartrees
-EV_PER_HARTREE = 27.211386245988
 # calories per mole in a hartree, for an entropy
 CAL_PER_HARTREE = 627509.474
 
@@ -57,6 +55,9 @@ SCHEMES = {
 }
 # an orbital's frontier names: how many below the HOMO and above the LUMO a list gives
 ORBITALS_EACH_SIDE = 10
+# a frequency smaller than this, either way, is a translation or a rotation - which some outputs list
+# among the vibrations (xTB's, at naught) - and no vibration (cm-1)
+FREQUENCY_LEAST = 1.0
 
 ELEMENTS = PeriodicTable().element
 
@@ -78,12 +79,20 @@ def frame_energies(data, frames):
         candidates.append([float(e) for e in data.scfenergies])
     for found in candidates:
         if len(found) == frames:
-            return [e / EV_PER_HARTREE for e in found]
+            return [hartrees(e) for e in found]
     if frames == 1:
         for found in candidates:
             if found:
-                return [found[-1] / EV_PER_HARTREE]
+                return [hartrees(found[-1])]
     return None
+
+
+def hartrees(ev):
+    """An energy cclib gives in electronvolts, in hartrees again - by cclib's
+    own factor, so that it is the output's value as printed: another factor
+    (CODATA's newer one differs in the eighth digit) moves an energy of a
+    hundred hartrees by some 10^-6."""
+    return convertor(ev, "eV", "hartree")
 
 
 def method_of(meta):
@@ -210,7 +219,8 @@ def orbitals(data):
 
 def vibrations(data, n):
     """The vibrations, as a list: each one's frequency (an imaginary one negative), its
-    symmetry and IR intensity where given; chosen, the molecule moves along its displacements."""
+    symmetry and IR intensity where given; chosen, the molecule moves along its displacements.
+    The translations and rotations an output lists with them, at a frequency of naught, are left out."""
     if not has(data, "vibfreqs"):
         return []
     freqs = [float(f) for f in data.vibfreqs]
@@ -227,11 +237,15 @@ def vibrations(data, n):
         columns.append({"label": "IR intensity", "unit": "km/mol", "digits": 1})
     rows = []
     for i, f in enumerate(freqs):
-        cells = [i + 1] + ([str(syms[i])] if syms is not None else []) + [f] + ([float(irs[i])] if irs is not None else [])
+        if abs(f) < FREQUENCY_LEAST:
+            continue
+        cells = [len(rows) + 1] + ([str(syms[i])] if syms is not None else []) + [f] + ([float(irs[i])] if irs is not None else [])
         row = {"cells": cells}
         if disps is not None and i < len(disps) and len(disps[i]) == n:
             row["move"] = [float(v) for xyz in disps[i] for v in xyz]
         rows.append(row)
+    if not rows:
+        return []
     return [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": columns, "rows": rows}]
 
 

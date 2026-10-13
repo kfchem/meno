@@ -214,8 +214,6 @@ export type Molecule = {
   atoms: ParsedAtom[];
   bonds: ParsedBond[];
   ct?: CtMolecule;
-  /** Fewer atoms than its file says it has - an XYZ frame the file ends in the middle of. */
-  cut?: true;
 };
 
 /**

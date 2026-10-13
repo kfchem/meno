@@ -14,6 +14,43 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(() => readStructures("mol", "x.mol", "nothing")).toThrow(/No molecules found in x.mol/);
   });
 
+  it("leaves out an XYZ file's frame cut short, or with a place that does not read, and its energy with it", () => {
+    const frame = (e: string, x: string) => `3\nenergy: ${e}\nO 0 0 0\nH ${x} 0.59 0\nH -0.76 0.59 0\n`;
+    // (the second frame damaged, the last cut short - as a file still being written is)
+    const text = frame("-76.1", "0.76") + frame("-76.2", "0.7x") + frame("-76.3", "0.77") + frame("-76.4", "0.78").split("\n").slice(0, 4).join("\n");
+    const read = readStructures("xyz", "t.xyz", text);
+    expect(checkedStructures(read, "t.xyz")).toBe(read);
+    const m = read.molecules3d![0];
+    expect(m.atoms[1].x).toBe(0.76);
+    // (its bonds as its first frame has them)
+    expect(m.bonds).toEqual([
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+    ]);
+    expect(m.frames).toEqual([[0, 0, 0, 0.77, 0.59, 0, -0.76, 0.59, 0]]);
+    expect(m.energies).toEqual([-76.1, -76.3]);
+    // (and says so: never without a word)
+    expect(m.framesLeftOut).toBe(2);
+    // (none whole: none read)
+    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow(/No molecules found in t.xyz/);
+  });
+
+  it("leaves out a first frame with a place that does not read, says so, and is the first whole one", () => {
+    const read = readStructures("xyz", "h.xyz", "2\nfirst\nH 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.8 0 0\n");
+    const m = read.molecules3d![0];
+    expect(m.atoms.map((a) => a.x)).toEqual([0, 0.8]);
+    expect(m.frames).toBeUndefined();
+    expect(m.framesLeftOut).toBe(1);
+    expect(checkedStructures(read, "h.xyz")).toBe(read);
+  });
+
+  it("says where atoms of it stand in one place - a damaged file - and finds them no bond", () => {
+    const m = readStructures("xyz", "c.xyz", "3\n\nC 0 0 0\nC 0 0 0\nC 1.5 0 0\n").molecules3d![0];
+    expect(m.together).toBe(1);
+    expect(m.bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 2], [1, 2]]);
+    expect(readStructures("xyz", "w.xyz", WATER).molecules3d![0].together).toBeUndefined();
+  });
+
   it("is checked as the page takes it, as any reader's answer is", () => {
     const read = readStructures("xyz", "w.xyz", WATER);
     expect(checkedStructures(read, "w.xyz")).toBe(read);
@@ -278,9 +315,9 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
     expect(m.atoms).toHaveLength(3);
     expect(m.frames).toHaveLength(1);
     // (never silently: how many frames were left out is said)
-    expect(read.leftOut).toBe("w.xyz ends before the atoms of its last frame do: 1 of its 3 frames is left out, and the 2 before opened. The file may be cut short, or still being written.");
+    expect(m.framesLeftOut).toBe(1);
     expect(checkedStructures(read, "w.xyz")).toBe(read);
-    expect(readStructures("xyz", "w.xyz", `${WATER}${WATER}`).leftOut).toBeUndefined();
+    expect(readStructures("xyz", "w.xyz", `${WATER}${WATER}`).molecules3d![0].framesLeftOut).toBeUndefined();
   });
 
   it("reads a PDB file with a byte-order mark, or lines ended by CR alone, as it reads the file", () => {
