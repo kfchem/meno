@@ -155,10 +155,15 @@ describe("layout2D", () => {
     const smiles = "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O";
     const given = input(smiles);
     const ttx = layout2D(given);
-    const centres = given.atoms.flatMap((a, i) => (a.tetra && ttx.depth[i] != null ? [i] : []));
-    expect(given.atoms.filter((_, i) => ttx.depth[i] != null)).toHaveLength(14);
     const mol = perceive(given);
     const sys = mol.systems.find((x) => x.atoms.length === 14)!;
+    // (the 14 atoms of its cage system in perspective, and else only the
+    // first atom of each group off it, at its atom's depth)
+    expect(sys.atoms.every((a) => ttx.depth[a] != null)).toBe(true);
+    for (const [i] of given.atoms.entries()) {
+      if (ttx.depth[i] != null && !sys.atoms.includes(i)) expect(mol.neighbours[i].some((b) => sys.atoms.includes(b)), `${i}`).toBe(true);
+    }
+    const centres = sys.atoms.filter((i) => given.atoms[i].tetra);
     const shown = shownBySolid(mol, sys, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
     for (const c of centres) {
       if (ttx.solid[c]) expect(shown.has(c), `C${c} shown by the solid's shape`).toBe(true);
@@ -474,6 +479,18 @@ describe("layout2D", () => {
           expect(Math.hypot(h.x - p.x - t * vx, h.y - p.y - t * vy), `${smiles.slice(0, 12)} ${a} H on ${b.a}-${b.b}`).toBeGreaterThan(0.3);
         }
       }
+    }
+  }, 30_000);
+
+  it("sets a group off a solid at the depth of the atom it leaves, so a bond of the solid behind it is drawn broken", () => {
+    // camphor's methyls on its cage, aconitine's N-ethyl over its cage
+    for (const smiles of ["CC1(C)C2CCC1(C)C(=O)C2", "CCN1C[C@@]2([C@@H](C[C@@H]([C@@]34[C@@H]2[C@H]([C@@H](C31)[C@@]5([C@@H]6[C@H]4C[C@@]([C@@H]6OC(=O)C7=CC=CC=C7)([C@H]([C@@H]5O)OC)O)OC(=O)C)OC)OC)O)COC"]) {
+      const g = fromSmiles(smiles);
+      const { depth, solid } = layout2D(g);
+      const mol = perceive(g);
+      const off = g.bonds.flatMap((b) => [[b.a, b.b], [b.b, b.a]]).filter(([c, d]) => solid[c] && mol.systemOf[d] !== mol.systemOf[c]);
+      expect(off.length, smiles).toBeGreaterThan(0);
+      for (const [c, d] of off) if (depth[d] == null || !solid[d]) expect(depth[d], `${c}-${d}`).toBe(depth[c]);
     }
   }, 30_000);
 

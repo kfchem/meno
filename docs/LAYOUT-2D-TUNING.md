@@ -269,6 +269,12 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     out, the first being bonded to it). Through two benzene rings off a
     hub, a benzene came down on the hub's atom the run ends at. The run is
     now kept off both ends and looked for from each, the better kept.
+- **A group over its own cage** (2026-10-14). Aconitine's N-ethyl leaves
+  the front of its cage and crosses a bond at the back: a group's atoms
+  had no depth, so the bond was not broken and the crossing counted as a
+  fault. A group's first atom now takes the depth of the solid's atom it
+  leaves, so the bond behind it is drawn broken and the crossing is how a
+  solid looks (aconitine 32.86 -> 27.86, nothing else changes).
 - **Which side of a sugar a ring of sugars runs along** (2026-10-14).
   alpha-Cyclodextrin's macrocycle passes each glucose by four atoms, and
   the two ways round between them are as long: by C2 and C3, or by the
