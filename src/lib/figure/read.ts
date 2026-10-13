@@ -221,7 +221,20 @@ function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<S
       const middle = group[offs.indexOf([...offs].sort((p, q) => p - q)[1])];
       ends = [middle.a, middle.b];
     } else if (len(sorted[1]) < 0.85 * len(sorted[0])) {
-      ends = [sorted[0].a, sorted[0].b];
+      // (the longer line's ends, the second drawn inside it - but where the two end together at one end and the longer runs on alone
+      // past the other, to nothing, while the shorter ends there by other lines' ends, it ran on past its atom: that end is the
+      // shorter's, taken onto the longer)
+      const [l0, l1] = sorted;
+      const along = (p: Point) => dot(u, { x: p.x - l0.a.x, y: p.y - l0.a.y });
+      const on = (t: number): Point => ({ x: l0.a.x + u.x * t, y: l0.a.y + u.y * t });
+      const [s0, s1] = [along(l1.a), along(l1.b)].sort((p, q) => p - q);
+      const [e0, e1] = [along(l0.a), along(l0.b)].sort((p, q) => p - q);
+      const others = lines.filter((m) => !group.includes(m)).flatMap((m) => [m.a, m.b]);
+      const byOthers = (p: Point, r: number) => others.some((q) => dist(p, q) < r * bond);
+      const ranOn = (alone: Point, short: Point) => !byOthers(alone, 0.15) && byOthers(short, 0.25);
+      if (Math.abs(s1 - e1) < 0.1 * bond && s0 - e0 > 0.2 * bond && ranOn(on(e0), on(s0))) ends = [on(s0), on(e1)];
+      else if (Math.abs(s0 - e0) < 0.1 * bond && e1 - s1 > 0.2 * bond && ranOn(on(e1), on(s1))) ends = [on(e0), on(s1)];
+      else ends = [l0.a, l0.b];
     } else {
       // (the line through their middle, along the first)
       const o = (offs[0] + offs[1]) / 2;

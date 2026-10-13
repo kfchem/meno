@@ -215,6 +215,18 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toEqual(["C-C", "C=O"]);
   });
 
+  it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {
+    // (bilobalide's lactone C=O as RDKit draws it from CoordGen's coordinates: the two lines end together at the O, and one runs on
+    // a third of a bond past the carbon)
+    const c: P = [60, 60];
+    const o = step(c, 90);
+    const [ux, uy] = unit(c, o);
+    const side = (p: P, d: number): P => [p[0] - uy * d, p[1] + ux * d];
+    const s = read(figure([stroke(step(c, 210), c, step(c, -30)), stroke(side(along(c, o, 0.05), 1.3), side(along(c, o, 0.75), 1.3)), stroke(side(along(c, o, -0.33), -1.3), side(along(c, o, 0.75), -1.3))], word("O", o)));
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C=O"]);
+    expect(s.atoms).toHaveLength(4);
+  });
+
   it("joins a ring's C=O whose two lines run a little past its carbon", () => {
     // (camphor as the RSC style exports it: the C=O's two lines, side by side, ending 3 points into the ring from its carbon)
     const s = read(
