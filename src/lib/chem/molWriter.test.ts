@@ -520,8 +520,8 @@ describe("past what V2000 holds", () => {
     // (units past V2000's 20 columns too, and with units V3000 holds them all)
     const units = "milligrams per millilitre of solvent";
     expect(readMolfile(writeMolfile(dat({ name, data: ["1"], units })))!.sgroups[0].field).toMatchObject({ name, units });
-    // (but with a type but text, which Meno's V3000 has no field for: V2000, its name cut, its type kept)
-    expect(readMolfile(writeMolfile(dat({ name, data: ["1"], type: "N" })))!.sgroups[0].field).toMatchObject({ name: name.slice(0, 30), type: "N" });
+    // (and with a type but text: V3000 holds it in FIELDINFO, so the name is whole and the type kept)
+    expect(readMolfile(writeMolfile(dat({ name, data: ["1"], type: "N" })))!.sgroups[0].field).toMatchObject({ name, type: "N" });
   });
 
   it("writes a data Sgroup's units, type, display and query as it read them, V2000 and V3000, through the editor and back", () => {
@@ -533,8 +533,9 @@ describe("past what V2000 holds", () => {
     expect(v2).toContain(`M  SDD   1 ${display}\n`);
     expect(readMolfile(v2)!.sgroups[0].field).toEqual(field);
     const v3 = writeMolfile(m, { version: "V3000" });
-    expect(v3.replace(/-\nM {2}V30 /g, "")).toContain(`FIELDINFO=g/mol FIELDDISP="${display}"`);
-    const { type: _type, ...v3000Field } = field;
+    // (FIELDINFO as <type><units/format>: CTfile Formats, chapter 2, the V3000 Sgroup fields)
+    expect(v3.replace(/-\nM {2}V30 /g, "")).toContain(`FIELDINFO="N g/mol" FIELDDISP="${display}"`);
+    const v3000Field = field;
     expect(readMolfile(v3)!.sgroups[0].field).toEqual(v3000Field);
     // (opened in the editor - V2000's and V3000's alike - kept on its atoms, and written back again)
     const opened = (text: string) => reread(text).atoms[0].sgroups![0].field;
@@ -543,8 +544,13 @@ describe("past what V2000 holds", () => {
     const reopened = reread(v2);
     expect(readMolfile(writeMolfile(reopened, { version: "V2000" }))!.sgroups[0].field).toEqual(field);
     expect(readMolfile(writeMolfile(reopened, { version: "V3000" }))!.sgroups[0].field).toEqual(v3000Field);
-    // (a V3000 file's own, opened and written as V2000: its FIELDINFO the units, its FIELDDISP the display - and text, V2000's type where none is given)
-    expect(opened(writeMolfile(reread(v3), { version: "V2000" }))).toEqual({ ...v3000Field, type: "T" });
+    // (a V3000 file's own, opened and written as V2000: its FIELDINFO the type and units, its FIELDDISP the display)
+    expect(opened(writeMolfile(reread(v3), { version: "V2000" }))).toEqual(field);
+    // (a FIELDINFO that gives no type and units - another program's own - kept as it was, and written back)
+    const own = 'M  V30 BEGIN SGROUP\nM  V30 1 DAT 0 ATOMS=(1 1) FIELDNAME=note FIELDINFO="seen by X" FIELDDATA=yes\nM  V30 END SGROUP\n';
+    const v3own = v3.replace(/M {2}V30 BEGIN SGROUP[\s\S]*?M {2}V30 END SGROUP\n/, own);
+    expect(readMolfile(v3own)!.sgroups[0].field).toEqual({ name: "note", data: ["yes"], info: "seen by X" });
+    expect(writeMolfile(reread(v3own), { version: "V3000" }).replace(/-\nM {2}V30 /g, "")).toContain(`FIELDINFO="seen by X"`);
   });
 
   it("cuts a title at 80 characters, never within one", () => {

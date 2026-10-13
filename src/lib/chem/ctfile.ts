@@ -122,14 +122,18 @@ export type CtSgroup = {
   className?: string;
   /**
    * A data Sgroup's field, its data and how it is shown: its name; its type
-   * (F formatted, N numeric, T text: V2000's M  SDT); its units or format
-   * (M  SDT, V3000's FIELDINFO); its display, as the file writes it (M  SDD,
-   * FIELDDISP); and its query's type and operator.
+   * (F formatted, N numeric, T text) and its units or format (V2000's
+   * M  SDT; V3000's FIELDINFO where it gives them, as <type><units/format>);
+   * a FIELDINFO that does not, as the program that wrote it wrote it
+   * (`info`: CTfile Formats, chapter 2, the V3000 Sgroup fields - "program-
+   * specific field information"); its display, as the file writes it
+   * (M  SDD, FIELDDISP); and its query's type and operator.
    */
   field?: {
     name: string;
     type?: string;
     units?: string;
+    info?: string;
     data: string[];
     display?: string;
     queryType?: string;
@@ -1114,7 +1118,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
           name: one("FIELDNAME") ?? "",
           data: kw.get("FIELDDATA") ?? [],
           ...(one("FIELDDISP") ? { display: one("FIELDDISP") } : {}),
-          ...(one("FIELDINFO") ? { units: one("FIELDINFO") } : {}),
+          ...fieldInfo(one("FIELDINFO")),
           ...(one("QUERYTYPE") ? { queryType: one("QUERYTYPE") } : {}),
           ...(one("QUERYOP") ? { queryOp: one("QUERYOP") } : {}),
         };
@@ -1280,3 +1284,18 @@ export function readRxnfile(text: string): CtReaction {
   if (mols.length > r + p + g) reaction.products.push(...mols.slice(r + p + g));
   return reaction;
 }
+
+/**
+ * What a V3000 data Sgroup's FIELDINFO says: its type and units, where it
+ * reads as <type><units/format> as V2000 has them (F, N or T, then its units
+ * or format - CTfile Formats, chapter 2, the V3000 Sgroup fields); else, as
+ * written, what the program that wrote it meant by it (`info`).
+ */
+export function fieldInfo(text: string | undefined): { type?: string; units?: string; info?: string } {
+  if (!text) return {};
+  const m = /^([FNT])(?: (.*))?$/.exec(text);
+  if (!m) return { info: text };
+  const units = (m[2] ?? "").trim();
+  return { type: m[1], ...(units ? { units } : {}) };
+}
+

@@ -157,12 +157,13 @@ export type SgroupMark = {
   parent?: number;
   /**
    * A data Sgroup's field and data, and what its file says besides, kept to
-   * be written back: its units or format, its type (F, N or T), how it is
+   * be written back: its units or format, its type (F, N or T), a V3000
+   * FIELDINFO that gives neither (as read), how it is
    * displayed (V2000's M  SDD, V3000's FIELDDISP, as the file writes it - not
    * followed in the drawing) and its query's type and operator
    * (lib/chem/ctfile `CtSgroup.field`).
    */
-  field?: { name: string; data: string[]; units?: string; type?: string; display?: string; queryType?: string; queryOp?: string };
+  field?: { name: string; data: string[]; units?: string; type?: string; info?: string; display?: string; queryType?: string; queryOp?: string };
 };
 
 /**

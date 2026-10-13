@@ -556,8 +556,9 @@ function ctabV3000(given: WriterModel): string[] {
           (g.expanded ? " ESTATE=E" : "") +
           (g.field
             ? ` FIELDNAME=${v30String(g.field.name)}` +
-              // (its units or format V3000's FIELDINFO; its display and query as V2000's)
-              (g.field.units ? ` FIELDINFO=${v30String(g.field.units)}` : "") +
+              // (its type and units as V3000's FIELDINFO, <type><units/format> - or, where
+              // a file gave one that reads as neither, that, as it was; its display and query as V2000's)
+              (fieldInfoOf(g.field) ? ` FIELDINFO=${v30String(fieldInfoOf(g.field)!)}` : "") +
               (g.field.display ? ` FIELDDISP=${v30String(g.field.display)}` : "") +
               (g.field.queryType ? ` QUERYTYPE=${v30String(g.field.queryType)}` : "") +
               (g.field.queryOp ? ` QUERYOP=${v30String(g.field.queryOp)}` : "") +
@@ -620,14 +621,9 @@ export function needsV3000(given: WriterModel): boolean {
     model.atoms.some((a) => (a.map ?? 0) > 999 || !fitsF10(a.x * scale) || !fitsF10(a.y * scale)) ||
     groups.length > 999 ||
     model.atoms.some((a) => (a.list?.symbols.length ?? 0) > ALS_MOST) ||
-    // (a data Sgroup's long field name, units or data - but not where it
-    // has a type but text, which Meno's V3000 has no field for: cut in
-    // V2000, rather than lost)
+    // (a data Sgroup's long field name, units or data: V3000 holds its type as well, in FIELDINFO)
     groups.some(
-      (g) =>
-        g.field &&
-        (g.field.type ?? "T") === "T" &&
-        (g.field.name.length > SDT_NAME || (g.field.units ?? "").length > SDT_UNITS || g.field.data.some((d) => d.length > SED_MOST)),
+      (g) => g.field && (g.field.name.length > SDT_NAME || (g.field.units ?? "").length > SDT_UNITS || g.field.data.some((d) => d.length > SED_MOST)),
     ) ||
     model.bonds.some((b) => ((b.dative || b.coordination) && b.order === 1) || b.hydrogen || b.stereoGroup || b.endpoints?.length) ||
     // (V2000 has only the chiral flag: no racemic nor relative groups)
@@ -783,3 +779,18 @@ export function writeSdf(
 ): string {
   return writeMolfile(model, options) + "$$$$\n";
 }
+
+/**
+ * A data field's V3000 FIELDINFO: a file's own, where it gave one that read
+ * as no type and units (`info`); else its type and units as
+ * <type><units/format>, the type as V2000's two places hold it (CTfile
+ * Formats, chapter 2, the V3000 Sgroup fields) - none for plain text with no
+ * units.
+ */
+export function fieldInfoOf(field: { type?: string; units?: string; info?: string }): string | null {
+  if (field.info) return field.info;
+  const type = field.type ?? "T";
+  if (type === "T" && !field.units) return null;
+  return field.units ? `${type} ${field.units}` : type;
+}
+

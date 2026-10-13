@@ -383,6 +383,7 @@ function markSgroups(
                 data: g.field.data,
                 ...(g.field.units ? { units: g.field.units } : {}),
                 ...(g.field.type ? { type: g.field.type } : {}),
+                ...(g.field.info ? { info: g.field.info } : {}),
                 ...(g.field.display ? { display: g.field.display } : {}),
                 ...(g.field.queryType ? { queryType: g.field.queryType } : {}),
                 ...(g.field.queryOp ? { queryOp: g.field.queryOp } : {}),

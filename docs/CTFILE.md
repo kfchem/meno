@@ -41,8 +41,12 @@ title, its first line; the record's data items are not kept:
   atoms, crossing and containment bonds, labels, subtypes, connectivity,
   brackets and their style, expansion state, attachment points, parents,
   and a data Sgroup's field - its name, type, units or format (V2000's
-  M  SDT, V3000's FIELDINFO) and query - its data and its display (M  SDD,
-  FIELDDISP), all kept on its atoms in the editor to be written back.
+  M  SDT; V3000's FIELDINFO, which the format calls program-specific field
+  information and gives as <type><units/format>: *CTfile Formats*, chapter
+  2, the V3000 Sgroup fields - read so where it is F, N or T then its units,
+  else kept as it was written) and query - its data and its display
+  (M  SDD, FIELDDISP), all kept on its atoms in the editor to be written
+  back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
   highlighting, a file's own.
@@ -411,8 +415,9 @@ as a structure above the arrow is the file's reagent.
 Every Sgroup goes back with its type, atoms, bonds out, label or
 multiplier, subtype, connectivity, bracket style, parent, component number,
 expansion state and data, and its brackets where Meno draws them; a data
-Sgroup with its field's name, type (V2000), units or format (M  SDT,
-FIELDINFO), query and display (M  SDD, FIELDDISP) as its file gave them -
+Sgroup with its field's name, type and units or format (M  SDT; FIELDINFO
+as <type><units/format>, or another program's FIELDINFO as it was), query
+and display (M  SDD, FIELDDISP) as its file gave them -
 the display as the file wrote it, its place not followed; a haptic bond
 with its endpoints (V3000).
 
@@ -461,9 +466,8 @@ where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past
 the format's *automatic V3000 output*, long fields); an atom list past the
 16 symbols an M  ALS line holds; a data Sgroup's field name past the 30
 columns of its M  SDT line, its units past their 20, or its data past the
-200 characters V2000's SCD and SED lines hold - but not one with a type
-but text, which Meno's V3000 has no field for: that is cut, in V2000,
-rather than lost; a coordination or hydrogen bond (V2000's types stop at 8), and
+200 characters V2000's SCD and SED lines hold (V3000 holds its type too,
+in FIELDINFO); a coordination or hydrogen bond (V2000's types stop at 8), and
 whether a coordination bond is shown plainly (DISP=COORD). A title is cut
 at 80 characters, never within one. A query bond is written with its query
 type, and a double bond of either configuration as V2000's stereo 3,
