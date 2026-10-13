@@ -96,6 +96,10 @@ export function createSelectionSlice(set: SetState) {
     /** A whole structure: every atom bonded to this one, however far along, and their bonds. */
     selectStructure: (id: number) =>
       set((prev: EditorState) => {
+        // (an atom no longer drawn - a long press's timer ending after an
+        // undo took it away - selects nothing: it held an atom unseen,
+        // which Delete and the menu then acted on)
+        if (!prev.model.atoms.some((a) => a.id === id)) return prev;
         const atoms = fragmentOf(prev.model, id);
         const bonds = new Set(prev.model.bonds.filter((b) => atoms.has(b.a)).map((b) => b.id));
         return { ...prev, sel: { atoms, bonds }, selAnchor: id };

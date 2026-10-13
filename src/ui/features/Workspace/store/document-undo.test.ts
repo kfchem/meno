@@ -372,6 +372,20 @@ describe("editor store over a document", () => {
     expect(state().hovered.atomId).toBe(b);
   });
 
+  it("selects nothing for a structure whose atom an undo took away before a long press ended", () => {
+    const { doc, state } = editor();
+    const base = state().addAtom(0, 0, "C");
+    const end = state().addAtomBonded(base, 1.5, 0, "C");
+    // a long press on the atom just drawn, and Cmd+Z before its 320 ms are up
+    doc.undo();
+    state().selectStructure(end);
+    expect(state().sel.atoms.size).toBe(0);
+    expect(state().selAnchor).toBeNull();
+    // what is there is selected whole, as before
+    state().selectStructure(base);
+    expect([...state().sel.atoms]).toEqual([base]);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");
