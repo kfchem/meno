@@ -144,7 +144,8 @@ export default function StyleEditor({
   if (narrow) {
     return (
       <div ref={setBox} className="flex flex-col">
-        <div className="sticky top-0 z-10 bg-white pb-3 border-b border-gh-line">
+        {/* (a little wider than the settings it lies over: a chosen preset's ring, scrolled under it, no longer shows at its sides) */}
+        <div className="sticky top-0 z-10 -mx-1 px-1 bg-white pb-3 border-b border-gh-line">
           <Preview style={style} compact />
         </div>
         <div className="pt-3">{fields}</div>
