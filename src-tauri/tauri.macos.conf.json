@@ -23,7 +23,6 @@
   "bundle": {
     "resources": [
       "resources/py/*.lock",
-      "resources/workers/**/*",
       "resources/plugins/*/manifest.json",
       "resources/plugins/*/*.py",
       "resources/plugins/*/*.lock",
