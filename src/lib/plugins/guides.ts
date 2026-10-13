@@ -67,6 +67,18 @@ export function closeGuide(): void {
   showGuidesDue();
 }
 
+/**
+ * A key pressed while a guide is open: Escape skips it, as Skip does (the
+ * maintainer, 2026-10-13) - unless something else took that Escape first
+ * (`taken`: a label being written, a menu, a drag), which is all it does.
+ * Whether it closed the guide.
+ */
+export function keyOnGuide(key: string, taken: boolean): boolean {
+  if (key !== "Escape" || taken || !useGuide.getState().open) return false;
+  closeGuide();
+  return true;
+}
+
 /** Goes on to the guide's next step; after its last, closes it. */
 export function nextStep(): void {
   const shown = shownStep();
