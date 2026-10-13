@@ -71,22 +71,34 @@ page; a talk is a way through it.
   slide's (*Present from here*), or by the keys slides software has:
   Ctrl/Cmd+Shift+Enter or F5 from the first, Ctrl/Cmd+Enter or Shift+F5
   from the slide that is most nearly what is seen.
-- **The window is given over to it.** It fills the screen (where it did not
-  already), Meno's title bar slides up out of the way, the column of texts
-  shuts, the selection and anything under way on the page are let go, and
-  menus close. The pointer hides after two seconds still.
+- **The window is given over to it**, as slides software plays a talk
+  (the maintainer, 2026-10-13: as PowerPoint does). On a Mac the page goes
+  to a window of the talk's own over the whole of the screen the window is
+  on - borderless, its corners square, over the band beside the notch too,
+  the menu bar and Dock hidden - in place, not in a space of its own; the
+  window it came from stays behind it, as it was, and other programs'
+  windows behind that. Elsewhere the window fills the screen (where it did
+  not already). Meno's title bar slides up out of the way, the column of
+  texts shuts, the selection and anything under way on the page are let
+  go, and menus close. The pointer hides after two seconds still.
 - **From one slide to the next, the view zooms and moves at once**, along
   the way that asks least of the eye: out a little, across and in again,
   the farther apart the two the farther out, so that both stay in sight
   (J. J. van Wijk and W. A. A. Nuij, *Smooth and efficient zooming and
   panning*, IEEE InfoVis 2003). From 0.6 s for a slide beside the last to
   1.4 s at most, gentle at both ends.
-- **Come to a slide**, it fills the screen as far as it fits, and the page
-  about it goes under a veil of the page's own white - unless the slide
-  shows the page around it. On the way, the page is seen whole. Its number
-  (*3 / 5*) shows a moment in a corner.
+- **Come to a slide**, it fills the screen as far as it fits - below the
+  notch, in the middle of what is left, as slides software lays a slide -
+  and everything about it goes black (the maintainer, 2026-10-13: as
+  PowerPoint does): the margins where the screen's proportions and the
+  slide's differ, and the band beside the notch - unless the slide shows
+  the page around it. On the way from one slide to the next the black goes
+  and the page is seen whole, so that the way between them reads; it comes
+  back as the view arrives. Its number (*3 / 5*) shows a moment in a
+  corner.
 - **In a slide**: a drag on a molecule in 3D turns it and lets it coast, as
-  on the page, and two clicks show it in its other look; a film plays from
+  on the page, and two clicks show it in its other look - for the talk
+  alone, the workspace's look as it was; a film plays from
   its start as its slide comes, and a click on it pauses it or plays it on.
   A click elsewhere goes on. A drag elsewhere, the wheel and a pinch move
   and zoom the view freely - for a question; the veil goes meanwhile, and
@@ -98,9 +110,13 @@ page; a talk is a way through it.
   a full stop makes the screen black, W or a comma white, and back. Escape
   ends the talk. No other key does anything while a talk is given: nothing
   on the page can be changed by one.
-- **Ended**, the view eases back to where it was, the molecules turned in
-  the talk turn back as they were, the window is as it was and the column
-  opens again on what it showed. A talk changes nothing in the workspace.
+- **Ended**, the page goes back to its window, at once ready for the
+  pointer and the keys - what is under the pointer lit, a key taken,
+  without a click - the view eases back to where it was, the molecules
+  turned in the talk turn back as they were, and shown in their other look
+  are shown as they were, the window is as it was and the column opens
+  again on what it showed. A talk changes nothing in the workspace:
+  nothing to undo, nothing unsaved.
 - **Nothing comes up over it.** The network's cards, notices, a question
   about the network and an update ready to go in wait until the talk ends,
   and are shown then, each for its while; a question waited for holds
@@ -223,9 +239,17 @@ words, a width they break into lines at, and how their lines lie.
   drives the view (`viewGoal.ts` `setViewDriven`), and takes it up again
   from where the talk left it.
 - `ui/presenting.ts`: the title bar's way made (App), and the window full
-  screen by the app's own command `present_window` (`src-tauri/src/present.rs`:
-  macOS's simple full screen, the keys given back to the page), which needs
-  no window permission.
+  screen by the app's own command `present_window` (`src-tauri/src/present.rs`),
+  which needs no window permission. On a Mac it moves the window's content
+  view - wry's, the one WKWebView in it - into a borderless window of the
+  talk's own (`MenoTalkWindow`, one that can take the keys) over the whole
+  screen, and back as the talk ends: the main window's look is never
+  touched, since taking a window's title bar away and giving it back (as
+  macOS's simple full screen does) left the page deaf to the pointer's
+  moves until it had left the window and come back. It tells the talk the
+  screen's top inset (the notch's band), which the slide is laid below
+  (`slideFit`). Molecules switched to their other look in a talk are the
+  view's (`talkLooks`), let go as it ends.
 - Chips that work a molecule (`meno-control-chip`: its frames, *Make
   again*) are hidden while a talk is given (`[data-presenting]` on the
   page's HTML layer).

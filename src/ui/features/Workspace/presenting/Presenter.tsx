@@ -7,8 +7,8 @@
  *   view goes to the first slide;
  * - from one slide to the next, the view zooms and moves at once along the
  *   way that asks least of the eye (zoomPath), out and in again the farther
- *   apart they are; come to a slide, the page about it is veiled in white,
- *   unless the slide shows the page about it;
+ *   apart they are; come to a slide - laid below a Mac's notch - the page
+ *   about it goes black, unless the slide shows the page about it;
  * - while it is given, a drag on a molecule in 3D turns it, coasting as on
  *   the page, and two clicks on one show it in its other look; a click on a
  *   film plays it or pauses it, and a film on a slide plays from its start
@@ -69,6 +69,8 @@ type Run = {
   texts: { open: boolean; pdf: number | null; text: number | null; cover: number };
   /** Whether the talk made the window full screen (and so puts it back). */
   madeFull: boolean;
+  /** How far down from the screen's top a slide keeps clear - a Mac's notch - in pixels. */
+  top: number;
   /** The view on its way to a slide; or moved freely by the presenter (`free`, where it is going, eased there); or, neither, at the slide. */
   flight: { path: ZoomPath; start: number; ms: number } | null;
   free: ViewNow | null;
@@ -124,7 +126,7 @@ export default function Presenter() {
       if (!s) return;
       const w = sizeNow.current.width;
       const h = sizeNow.current.height;
-      const path = zoomPath(viewOf(viewNow(), w), viewOf(slideFit(s, w, h), w));
+      const path = zoomPath(viewOf(viewNow(), w), viewOf(slideFit(s, w, h, r.top), w));
       const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       r.flight = { path, start: performance.now(), ms: reduced ? 1 : flightMs(path) };
       r.free = null;
@@ -272,7 +274,8 @@ export default function Presenter() {
       const onDouble = (e: MouseEvent) => {
         const on = moleculeAt(e);
         if (on == null) return;
-        st().switchLook3d(on);
+        // (for the talk alone: the view's, gone as it ends - the workspace as it was)
+        st().switchTalkLook3d(on);
         invalidate();
       };
       const onWheel = (e: WheelEvent) => {
@@ -392,6 +395,7 @@ export default function Presenter() {
         turns: s.turns3d,
         texts: { open: s.textsOpen, pdf: s.pdfShown, text: s.textShown, cover: s.textsOpen ? s.cover : 0 },
         madeFull: false,
+        top: 0,
         flight: null,
         free: null,
         veil: 0,
@@ -408,9 +412,22 @@ export default function Presenter() {
       setViewDriven(cam, true);
       if (s.textsOpen) s.closeTexts();
       setPresentingWindow(true);
-      void windowFullScreen(true).then((made) => {
-        if (run.current === r) r.madeFull = made;
-        else if (made) void windowFullScreen(false);
+      void windowFullScreen(true).then(({ made, top }) => {
+        if (run.current !== r) {
+          if (made) void windowFullScreen(false);
+          return;
+        }
+        r.madeFull = made;
+        if (top === r.top) return;
+        r.top = top;
+        // (the slide on its way there laid below the notch from where the view now is; at rest, it eases there)
+        if (r.flight) {
+          const s = st().slides[st().presenting?.at ?? -1];
+          const w = sizeNow.current.width;
+          const h = sizeNow.current.height;
+          if (s) r.flight = { ...r.flight, path: zoomPath(viewOf(viewNow(), w), viewOf(slideFit(s, w, h, top), w)), start: performance.now() };
+        }
+        invalidate();
       });
       if (stage.veil) stage.veil.style.transition = "";
       r.detach = attach(r);
@@ -434,7 +451,14 @@ export default function Presenter() {
       if (stage.layer) stage.layer.style.cursor = "";
       setViewDriven(cam, false);
       setPresentingWindow(false);
-      if (r.madeFull) void windowFullScreen(false);
+      if (r.madeFull)
+        void windowFullScreen(false).then(() =>
+          // (the page back in its window: nothing on it holding the keys - a tab's close button taken as the page came back, a key would close it)
+          requestAnimationFrame(() => {
+            const a = document.activeElement;
+            if (a instanceof HTMLElement && a !== document.body) a.blur();
+          }),
+        );
       if (!settle) return;
       // (back where it was - less the half of the column the view goes as the column opens again: FollowCover)
       const s = st();
@@ -448,6 +472,7 @@ export default function Presenter() {
         from.set(m.id, now ? new THREE.Quaternion(...now) : new THREE.Quaternion());
       }
       if (from.size) turningBack.current = { from, to: r.turns, start: performance.now() };
+      s.endTalkLooks();
       // (the column as it was: what it read rising into it again)
       if (r.texts.open) {
         if (r.texts.pdf != null && s.pdfs.some((p) => p.id === r.texts.pdf)) s.readPdf(r.texts.pdf);
@@ -506,7 +531,7 @@ export default function Presenter() {
       if (t >= 1) r.flight = null;
       moving = true;
     } else {
-      const goal = r.free ?? (s ? slideFit(s, w, h) : null);
+      const goal = r.free ?? (s ? slideFit(s, w, h, r.top) : null);
       if (goal) {
         const d = Math.min(dt, 1 / 20);
         const zoom = Math.exp(follow(Math.log(cam.zoom || 1), Math.log(goal.zoom), d, TAU.move));

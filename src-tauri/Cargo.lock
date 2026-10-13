@@ -7,10 +7,10 @@ name = "Meno"
 version = "0.1.11"
 dependencies = [
  "base64 0.22.1",
- "dispatch2",
  "flate2",
  "fontdb",
  "libc",
+ "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "pdfium-render",

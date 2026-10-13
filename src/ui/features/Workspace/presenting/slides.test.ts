@@ -110,3 +110,17 @@ describe("slides on the page", () => {
     expect(bandsAbout({ left: -10, top: -10, width: 1200, height: 800 }, 1000, 600).every(([, , w, h]) => w * h === 0)).toBe(true);
   });
 });
+
+describe("a slide laid for a talk below a Mac's notch", () => {
+  it("fits the screen below the band the notch keeps, in the middle of what is left - as slides software lays it", () => {
+    const s = { x: 0, y: 0, w: 32, h: 18 };
+    // (a 1710 by 1112 screen, its top 38 points the notch's: the slide as wide as the screen, 962 tall)
+    const f = slideFit(s, 1710, 1112, 38);
+    expect(f.zoom).toBeCloseTo(1710 / 32, 9);
+    // (its middle on the screen: halfway down what is left below the band)
+    const middleOnScreen = 1112 / 2 - (s.y - f.y) * f.zoom;
+    expect(middleOnScreen).toBeCloseTo(38 + (1112 - 38) / 2, 6);
+    // (none kept: as before)
+    expect(slideFit(s, 1710, 1112)).toEqual({ x: 0, y: 0, zoom: Math.min(1710 / 32, 1112 / 18) });
+  });
+});
