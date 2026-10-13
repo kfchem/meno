@@ -158,6 +158,13 @@ eases to the frame and the molecules once, as the render is begun, where
 they are not all in view; what it makes lands as the view then is, never
 moving it again (the maintainer, 2026-10-11).
 
+**Its workspace's tab closed**, a render stops with it - what it makes
+would come to no page: its job is stopped as a step's is, its folder kept
+until Settings, *Calculations*, *Jobs*, clears it, and nothing is put on
+the page. Another workspace's renders go on. Closing asks nothing
+more for a render: a tab with unsaved changes asks as before, and one
+without closes at once.
+
 What it makes is a **picture** on the page (docs/PDF.md, *A picture*): a
 PNG, or a **film** - an MP4 - which plays where it lies, over and over,
 without sound. A film is a picture whose media is `video/mp4`: it is
@@ -255,5 +262,6 @@ By the maintainer, 2026-10-10 to 2026-10-12:
   R and S, PDB ribbons (lane L5) - none is in the scene yet.
 - Films with a transparent background (a video kind that keeps it, which
   every system's web view plays, is wanted first).
-- A render goes on if its workspace is closed, and what it makes is then
-  lost; it is not picked up again as a workflow's job is.
+- A render is not picked up again as a workflow's job is: its workspace's
+  tab closing stops it (*On the page*), and Meno's window closed as a
+  whole leaves it running, what it makes kept only in its job's folder.

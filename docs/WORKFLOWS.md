@@ -465,6 +465,9 @@ gave), and one can be shown again.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
+- **A render asked for with Render…** is no step's (RENDER.md): nothing
+  picks it up again, so its workspace's tab closing stops it, saved or
+  not, and asks nothing more. Render as a step's jobs are a step's.
 
 ### Undo
 

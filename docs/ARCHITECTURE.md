@@ -1000,6 +1000,11 @@ put on the page with `putPicture`). The card asking for one is
 `render/RenderCard.tsx` (Meno's own choices in `render/renderOptions.ts`),
 the frames standing where renders will put what they make
 `render/Renders2D.tsx`, and Save picture or film `render/savePicture.ts`.
+Renders are kept for each workspace's store, not in its document, so its
+tab closing stops them (`App.tsx`'s `closeTab`, through `letGoOf`:
+`stopRenders` on the store `madeStoreOf` finds) - their jobs stopped, the
+wait between looks cut short, nothing put on the page; the last tab's
+closing quits Meno once they have been asked to stop.
 - **Selected** with the rest (`selPictures`): a box or a lasso takes those
   whose middle it holds (`molecules3dIn`), a dragged selection carries
   them (`utils/dragSelection`, `MarkPlaces.pictures`), and the selection's
