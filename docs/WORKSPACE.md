@@ -362,6 +362,16 @@ Taken on 2026-10-04:
   all, so it is kept shut there (`keepSystemMenuShut`, lib/doc/shortcuts).
   Meno's own menus - the canvas's, a PDF's, a colour set's - open as they
   do.
+- **Meno's own menu on words written or read in place** (the maintainer,
+  2026-10-13). A right-click on the column's text, on words being written
+  on the page or on an atom's label being written opens a small menu of
+  Meno's, as the canvas's look: Cut, Copy, Paste and Select All, with their
+  keys, each that does not apply now shown but not to be pressed - Cut and
+  Copy with nothing selected, Paste with no text on the clipboard, Cut and
+  Paste on a Markdown text read (`textMenu`, TextEditor). Where nothing is
+  selected, the caret goes where the right-click was first. The words keep
+  the keys while it is open: Escape closes it alone, and a press elsewhere
+  only closes it.
 - **Closing the last tab quits Meno.**
 
 Taken on 2026-10-07:

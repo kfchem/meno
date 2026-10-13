@@ -51,6 +51,7 @@ import {
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
+import TextMenuHost from "./ui/features/TextEditor/TextMenuHost";
 import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
@@ -666,6 +667,8 @@ export default function App() {
       <GuideCard />
       <ConsentDialog />
       <UpdateNotice />
+      {/* (the right-click menu on words typed or read in place: TextEditor/textMenu) */}
+      <TextMenuHost />
       <Deck
         order={state.mountOrder}
         tabs={state.tabsById}
