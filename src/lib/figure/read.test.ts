@@ -366,6 +366,30 @@ describe("a figure's charges drawn in rings", () => {
     expect(s.atoms.find((a) => a.el === "O")?.charge).toBe(-1);
   });
 
+  it("reads a word by the structure with a charge in a ring beside it as an ion, and a row of them each by the one before", () => {
+    // (an ammonium: a chain to an N, its + in a ring at its corner, a methyl's bond by it; two chlorides in a row to its right,
+    // past where an ion written Cl- is looked for)
+    const c: P = [40, 60];
+    const n = step(step(c, 30), -30);
+    const cl1: P = [n[0] + 1.8 * L, n[1]];
+    const cl2: P = [cl1[0] + 1.9 * L, n[1]];
+    const s = read(
+      figure(
+        [
+          stroke(c, step(c, 30), along(step(c, 30), n, 0.65)),
+          stroke(along(n, step(n, 30), 0.35), step(n, 30)),
+          ...charge([n[0] + 5.5, n[1] + 6.5], "+"),
+          ...charge([cl1[0] + 13.5, cl1[1] - 6], "-"),
+          ...charge([cl2[0] + 13.5, cl2[1] - 6], "-"),
+        ],
+        [...word("N", n), ...word("Cl", cl1), ...word("Cl", cl2)],
+      ),
+    );
+    expect(s.atoms.filter((a) => a.el === "Cl").map((a) => a.charge)).toEqual([-1, -1]);
+    expect(s.atoms.find((a) => a.el === "N")?.charge).toBe(1);
+    expect(bondsOf(s)).toEqual(["C-C", "C-N", "N-C"]);
+  });
+
   it("reads a + in a ring as no scheme's + sign", () => {
     const s = readScheme(nitro("-"));
     expect(s.pluses).toHaveLength(0);

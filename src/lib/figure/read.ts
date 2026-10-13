@@ -389,6 +389,15 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
   return bondLength(lengths, sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0);
 }
 
+/** How far apart two boxes lie: nothing where they meet. */
+function boxGap(a: Box, b: Box): number {
+  return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
+}
+
+/** How far an ion is set from the structure at most - or from the ion before it, in a row of them - in bonds, the gap between them. */
+const ION_BY = 2.5;
+const BOND_PER_SIZE = 1.4;
+
 /**
  * A figure read: the shapes its paths make (or `given`: those a scheme's
  * arrows and signs were taken out of) read as bonds, their ends where they
@@ -580,21 +589,40 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (const b of ring ?? []) b.aromatic = true;
   }
 
-  // words at no bond's end but by the structure, with a charge: ions, standing alone
+  // words at no bond's end but by the structure, with a charge - written, or drawn in a ring beside them: ions,
+  // standing alone; several set in a row (K+ K+ K+) each by the one before
   const placed = atoms.length ? boxOf(atoms) : null;
+  // (a word right by an atom's label - an H set under an N - is that label's, never an ion)
+  const labels = atoms.flatMap((a) => (a.box ? [a.box] : []));
+  const byLabel = (w: Word) => labels.some((b) => fromBox(centre(w.box), b) < 0.6 * bond);
+  const charged = (w: Word) => /^[A-Z][A-Za-z0-9]*[+-]$/.test(labelText(w)) || (/^[A-Z][A-Za-z0-9]*$/.test(labelText(w)) && marks.some((m) => fromBox(m.at, w.box) < m.r + 0.3 * bond));
+  // (measured by bonds - or, all of them drawn short to labels, by the labels' letters: a bond is drawn half as long again as they are set)
+  const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
+  const ionBy = ION_BY * Math.max(bond, sizes.length ? BOND_PER_SIZE * sizes[Math.floor(sizes.length / 2)] : 0);
+  const ions = new Set<number>();
+  for (let more = !!placed; more; ) {
+    more = false;
+    words.forEach((w, k) => {
+      if (atomOfWord.has(k) || ions.has(k) || !charged(w) || byLabel(w)) return;
+      if (boxGap(w.box, placed!) < ionBy || [...ions].some((i) => boxGap(w.box, words[i].box) < ionBy)) {
+        ions.add(k);
+        more = true;
+      }
+    });
+  }
   const left: FigureLetter[] = [];
   words.forEach((w, k) => {
     if (atomOfWord.has(k)) return;
-    const text = labelText(w);
-    if (placed && /^[A-Z][A-Za-z0-9]*[+-]$/.test(text) && fromBox(centre(w.box), placed) < 1.5 * bond) {
+    if (ions.has(k)) {
       const c = centre(w.letters.find((l) => /[A-Z]/.test(l.c))?.box ?? w.box);
       atoms.push({ x: c.x, y: c.y, ...labelOf(w), box: w.box });
     } else left.push(...w.letters);
   });
-  // (each charge drawn in a ring, the nearest atom's)
+  // (each charge drawn in a ring, the nearest atom's - a labelled one's measured from its label, as the ring is set by it)
+  const from = (a: ReadAtom, p: Point) => (a.box ? fromBox(p, a.box) : dist(a, p));
   for (const m of marks) {
     let best = -1;
-    for (let i = 0; i < atoms.length; i++) if (dist(atoms[i], m.at) < 1.2 * bond && (best < 0 || dist(atoms[i], m.at) < dist(atoms[best], m.at))) best = i;
+    for (let i = 0; i < atoms.length; i++) if (from(atoms[i], m.at) < 1.2 * bond && (best < 0 || from(atoms[i], m.at) < from(atoms[best], m.at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + m.charge };
   }
   return { atoms, bonds, bond, left: { letters: left } };
