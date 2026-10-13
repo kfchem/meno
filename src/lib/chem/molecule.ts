@@ -155,8 +155,14 @@ export type SgroupMark = {
   componentNumber?: number;
   /** The group it is within, by id. */
   parent?: number;
-  /** A data Sgroup's field and data. */
-  field?: { name: string; data: string[]; units?: string; type?: string };
+  /**
+   * A data Sgroup's field and data, and what its file says besides, kept to
+   * be written back: its units or format, its type (F, N or T), how it is
+   * displayed (V2000's M  SDD, V3000's FIELDDISP, as the file writes it - not
+   * followed in the drawing) and its query's type and operator
+   * (lib/chem/ctfile `CtSgroup.field`).
+   */
+  field?: { name: string; data: string[]; units?: string; type?: string; display?: string; queryType?: string; queryOp?: string };
 };
 
 /**

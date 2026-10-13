@@ -2,7 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
+import type { AbbreviationStructure, AtomChem, BondChem, SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
@@ -198,7 +198,7 @@ type Group = {
   componentNumber?: number;
   /** Its parent, by its place in the list. */
   parent?: number;
-  field?: { name: string; data: string[]; units?: string; type?: string };
+  field?: SgroupMark["field"];
 };
 
 /**
@@ -240,9 +240,10 @@ function groupsOf(model: WriterModel, sups: Sup[]): Group[] {
   return out;
 }
 
-/** How many symbols a V2000 M  ALS line holds, how wide an M  SDT line's field name is, and how much data an SCD/SED run holds ("CTfile Formats", the properties block). */
+/** How many symbols a V2000 M  ALS line holds, how wide an M  SDT line's field name and units are, and how much data an SCD/SED run holds ("CTfile Formats", the properties block). */
 const ALS_MOST = 16;
 const SDT_NAME = 30;
+const SDT_UNITS = 20;
 const SED_MOST = 200;
 
 /** The types whose brackets are drawn, and so written. */
@@ -369,8 +370,13 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
         }
       }
       if (g.type === "DAT" && g.field) {
-        // (a field name of 30 characters at most, its units 20: a longer name, V3000 - `needsV3000`)
-        lines.push(`M  SDT ${i3(n)} ${g.field.name.padEnd(SDT_NAME).slice(0, SDT_NAME)}${(g.field.type ?? "T").slice(0, 1)}${(g.field.units ?? "").padEnd(20).slice(0, 20)}`);
+        // its name, type, units and query, in their columns - a name of 30
+        // characters at most, units of 20: longer, V3000 (`needsV3000`) -
+        // and its display as the file had it
+        const f = g.field;
+        const query = f.queryType || f.queryOp ? `${(f.queryType ?? "").padEnd(2).slice(0, 2)}${f.queryOp ?? ""}` : "";
+        lines.push(`M  SDT ${i3(n)} ${f.name.padEnd(SDT_NAME).slice(0, SDT_NAME)}${(f.type ?? "T").slice(0, 1)}${(f.units ?? "").padEnd(SDT_UNITS).slice(0, SDT_UNITS)}${query}`);
+        if (f.display) lines.push(`M  SDD ${i3(n)} ${f.display}`);
         for (const d of g.field.data) {
           // 69 characters a line: SCD for all but the last, SED for that
           for (let j = 0; j + 69 < d.length; j += 69) lines.push(`M  SCD ${i3(n)} ${d.slice(j, j + 69)}`);
@@ -548,7 +554,15 @@ function ctabV3000(given: WriterModel): string[] {
           brackets.map((b) => ` BRKXYZ=(9 ${v30Number(b.x1)} ${v30Number(b.y1)} 0 ${v30Number(b.x2)} ${v30Number(b.y2)} 0 0 0 0)`).join("") +
           (g.paren ? " BRKTYP=PAREN" : "") +
           (g.expanded ? " ESTATE=E" : "") +
-          (g.field ? ` FIELDNAME=${v30String(g.field.name)}${g.field.data.map((d) => ` FIELDDATA=${v30String(d)}`).join("")}` : ""),
+          (g.field
+            ? ` FIELDNAME=${v30String(g.field.name)}` +
+              // (its units or format V3000's FIELDINFO; its display and query as V2000's)
+              (g.field.units ? ` FIELDINFO=${v30String(g.field.units)}` : "") +
+              (g.field.display ? ` FIELDDISP=${v30String(g.field.display)}` : "") +
+              (g.field.queryType ? ` QUERYTYPE=${v30String(g.field.queryType)}` : "") +
+              (g.field.queryOp ? ` QUERYOP=${v30String(g.field.queryOp)}` : "") +
+              g.field.data.map((d) => ` FIELDDATA=${v30String(d)}`).join("")
+            : ""),
       );
     });
     lines.push("M  V30 END SGROUP");
@@ -589,11 +603,11 @@ function titleLine(title: string | undefined): string {
  * atoms, bonds or Sgroups, or mapping numbers (three columns each), or a
  * coordinate past xxxxx.xxxx ("CTfile Formats", automatic V3000 output:
  * long fields), an atom list past the sixteen symbols an M  ALS line
- * holds, a data Sgroup's field name past its 30 columns or data past the
- * 200 characters V2000's hold; a coordination or a hydrogen bond, and
- * whether the one is drawn as a plain line (V2000's bond types stop at 8);
- * racemic and relative stereo groups, a stereo bond's group and a haptic
- * bond's endpoints.
+ * holds, a data Sgroup's field name past its 30 columns, its units past
+ * their 20 or data past the 200 characters V2000's hold; a coordination or
+ * a hydrogen bond, and whether the one is drawn as a plain line (V2000's
+ * bond types stop at 8); racemic and relative stereo groups, a stereo
+ * bond's group and a haptic bond's endpoints.
  */
 export function needsV3000(given: WriterModel): boolean {
   // (as written: a label's atoms - a complex's coordination bonds - among them)
@@ -606,10 +620,15 @@ export function needsV3000(given: WriterModel): boolean {
     model.atoms.some((a) => (a.map ?? 0) > 999 || !fitsF10(a.x * scale) || !fitsF10(a.y * scale)) ||
     groups.length > 999 ||
     model.atoms.some((a) => (a.list?.symbols.length ?? 0) > ALS_MOST) ||
-    // (a data Sgroup's long field name or data - but not where it has
-    // units, or a type but text, which Meno's V3000 writes no field for:
-    // cut in V2000, rather than lost)
-    groups.some((g) => g.field && !g.field.units && (g.field.type ?? "T") === "T" && (g.field.name.length > SDT_NAME || g.field.data.some((d) => d.length > SED_MOST))) ||
+    // (a data Sgroup's long field name, units or data - but not where it
+    // has a type but text, which Meno's V3000 has no field for: cut in
+    // V2000, rather than lost)
+    groups.some(
+      (g) =>
+        g.field &&
+        (g.field.type ?? "T") === "T" &&
+        (g.field.name.length > SDT_NAME || (g.field.units ?? "").length > SDT_UNITS || g.field.data.some((d) => d.length > SED_MOST)),
+    ) ||
     model.bonds.some((b) => ((b.dative || b.coordination) && b.order === 1) || b.hydrogen || b.stereoGroup || b.endpoints?.length) ||
     // (V2000 has only the chiral flag: no racemic nor relative groups)
     model.atoms.some((a) => a.stereoGroup && a.stereoGroup.kind !== "abs")

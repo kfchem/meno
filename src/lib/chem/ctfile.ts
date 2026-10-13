@@ -120,14 +120,18 @@ export type CtSgroup = {
   /** A contracted abbreviation's crossing bond and the vector to it (SBV, CSTATE). */
   bondVectors?: { bond: number; x: number; y: number }[];
   className?: string;
-  /** A data Sgroup's field, its data and how it is shown. */
+  /**
+   * A data Sgroup's field, its data and how it is shown: its name; its type
+   * (F formatted, N numeric, T text: V2000's M  SDT); its units or format
+   * (M  SDT, V3000's FIELDINFO); its display, as the file writes it (M  SDD,
+   * FIELDDISP); and its query's type and operator.
+   */
   field?: {
     name: string;
     type?: string;
     units?: string;
     data: string[];
     display?: string;
-    info?: string;
     queryType?: string;
     queryOp?: string;
   };
@@ -1110,7 +1114,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
           name: one("FIELDNAME") ?? "",
           data: kw.get("FIELDDATA") ?? [],
           ...(one("FIELDDISP") ? { display: one("FIELDDISP") } : {}),
-          ...(one("FIELDINFO") ? { info: one("FIELDINFO") } : {}),
+          ...(one("FIELDINFO") ? { units: one("FIELDINFO") } : {}),
           ...(one("QUERYTYPE") ? { queryType: one("QUERYTYPE") } : {}),
           ...(one("QUERYOP") ? { queryOp: one("QUERYOP") } : {}),
         };
