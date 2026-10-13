@@ -196,7 +196,11 @@ they hang from.
   now as cocaine's is), not where a near pair is the drawing's own
   (adamantane's back CH2 by a front bridgehead). A stereocentre the
   easing turns - a bridgehead whose three bonds lie nearly in the page
-  can tip through - goes back where the solid puts it. Adamantane is then a chair with its three axial bonds
+  can tip through - goes back where the solid puts it. A view that eases
+  a double bond in a ring of seven atoms or fewer trans, its neighbours
+  round the ring either side of it, counts that as heavily as a bridge
+  drawn so: tetrodotoxin's guanidine ring, seen nearly edge on, came out
+  with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there - one of the solid's behind a group leaving it

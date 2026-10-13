@@ -346,6 +346,17 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   what it is found from now - the atoms, bonds and configurations
   (2026-10-13) - and cages are drawn in about half the time, the
   drawings the same.
+- **A threshold the atom order tips.** With its double bonds read back,
+  tetrodotoxin with C4 inverted drew its guanidine C=N trans in its own
+  order, and cis in the order it was written in (2026-10-14). Its solid
+  comes out a hundredth or two of a bond different in each order, and
+  that was enough to put two textbook views of its cage either side of a
+  threshold: an OH's label 0.84 of a bond from the guanidine N in one
+  order, 0.86 in another, a label's breadth being 0.85. The view that won
+  in its own order sees the guanidine ring nearly edge on, and easing it
+  to bonds of one length made the C=N a zigzag. A view that draws a
+  double bond in a small ring trans now counts it as a bridge does, and
+  every order draws the same view.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
