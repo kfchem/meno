@@ -211,6 +211,12 @@ describe("cleanUp", () => {
     };
     const laid = await laidOut(model);
     expect(laid.atoms).toHaveLength(9);
+    // and drawn straight, as an azide is: N-N-N 180 degrees
+    const at = (id: number) => laid.atoms.find((a) => a.id === id)!;
+    const [p, q, r] = [at(7), at(8), at(9)];
+    const cos = ((p.x - q.x) * (r.x - q.x) + (p.y - q.y) * (r.y - q.y)) / Math.hypot(p.x - q.x, p.y - q.y) / Math.hypot(r.x - q.x, r.y - q.y);
+    const t = Math.acos(Math.max(-1, Math.min(1, cos)));
+    expect((t * 180) / Math.PI).toBeGreaterThan(175);
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {

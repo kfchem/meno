@@ -997,7 +997,9 @@ lipids each have their own way of being drawn, which it should know.
      the ring is drawn. Nor does a double bond cumulated with another - an
      azide's N=N, an allene's C=C - whose shared atom is straight through:
      it has no cis or trans, however a drawing bends it (phenyl azide from
-     a SMILES was refused, 2026-10-13).
+     a SMILES was refused, 2026-10-13). A chain of three cumulated double
+     bonds (hexa-2,3,4-triene) does have a cis or trans across it, end to
+     end; that is not read, before or after Clean-up.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
