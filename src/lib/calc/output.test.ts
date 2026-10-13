@@ -83,6 +83,16 @@ describe("what a reader hands back", () => {
     expect(readCalc(JSON.parse(JSON.stringify(c)), 3, 2)?.unread).toEqual([{ from: "pyscf", why: "no basis" }]);
   });
 
+  it("of a file of several jobs, keeps which job it is and what it did, says so in its line, and reads it back", () => {
+    const job = { ...water, job: { number: 1, of: 2, kind: "Optimisation" } };
+    const calc = calcOf(job, ["cclib"]);
+    expect(calc.job).toEqual({ number: 1, of: 2, kind: "Optimisation" });
+    expect(calcLine(calc)).toBe("ORCA 6.0.1 · job 1 of 2, optimisation · B3LYP/def2-SVP · charge 0, singlet");
+    expect(readCalc(JSON.parse(JSON.stringify(calc)), 3, 1)!.job).toEqual(calc.job);
+    // (not a job of several: none kept)
+    for (const bad of [{ number: 1, of: 1 }, { number: 3, of: 2 }, { number: 0, of: 2 }, { number: "1", of: 2 }]) expect(calcOf({ ...water, job: bad as never }, ["cclib"]).job).toBeUndefined();
+  });
+
   it("is said in a line: program, method and basis, charge and multiplicity", () => {
     expect(calcLine(calcOf(water, ["cclib"]))).toBe("ORCA 6.0.1 · B3LYP/def2-SVP · charge 0, singlet");
     expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge -1, doublet");
@@ -135,6 +145,15 @@ describe("what several readers found in one output", () => {
       { id: "wiberg", on: "pairs", group: "NBO", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
     ],
   };
+
+  it("keeps, of a file of several jobs, its jobs as its reader read them", () => {
+    const sp: ReaderOutput = { ...water, job: { number: 2, of: 2, kind: "Single point" } };
+    const opt: ReaderOutput = { ...water, job: { number: 1, of: 2, kind: "Optimisation" } };
+    const { output } = combine([{ from: "cclib", version: "1.9rc1", output: { ...sp, jobs: [opt, sp] } }, { from: "nbo", version: "7", output: nbo }]);
+    expect(output.jobs).toEqual([opt, sp]);
+    expect(output.job).toEqual(sp.job);
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }]).output.jobs).toBeUndefined();
+  });
 
   it("is put together: the geometries, and what the calculation was, the first's that gives them; every reader's results, each its own", () => {
     const { output, readers } = combine([

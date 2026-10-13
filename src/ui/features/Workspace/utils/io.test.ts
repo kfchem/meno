@@ -162,6 +162,25 @@ describe("a calculation's output, as a reader read it", () => {
     expect(m.calc).toMatchObject({ readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", optimised: true });
   });
 
+  // (the maintainer, 2026-10-13: a file of several jobs - Gaussian's Link1, ORCA's $new_job - opens as one molecule for each)
+  it("of a file of several jobs, stands as one molecule for each, side by side: each its own frames, energies and words", () => {
+    const sp = { ...out, method: "HF", basis: "3-21G", frames: [out.frames[2]], energies: [-75.58], optimised: null, job: { number: 2, of: 2, kind: "Single point" } };
+    const opt = { ...out, method: "HF", basis: "STO-3G", job: { number: 1, of: 2, kind: "Optimisation" } };
+    const r = calcResult({ ...sp, jobs: [opt, sp] }, ["cclib 1.9rc1"], "link1.log", { name: "link1.log", sha256: "c".repeat(64) });
+    const [a, b] = r.molecules3d!;
+    expect(r.molecules3d).toHaveLength(2);
+    expect([a.name, b.name]).toEqual(["link1.log, job 1", "link1.log, job 2"]);
+    // (nothing of one job put with the other's: the opt's path and energies its own, the single point's one frame and energy)
+    expect([a.frames, a.energies]).toEqual([out.frames.slice(1), [-76.30, -76.31, -76.32]]);
+    expect([b.frames, b.energies]).toEqual([undefined, [-75.58]]);
+    expect(a.calc).toMatchObject({ basis: "STO-3G", optimised: true, job: { number: 1, of: 2, kind: "Optimisation" }, source: { sha256: "c".repeat(64) } });
+    expect(b.calc).toMatchObject({ basis: "3-21G", job: { number: 2, of: 2, kind: "Single point" } });
+    expect(b.calc!.optimised).toBeUndefined();
+    // (a job that gives no geometry stands as none; a file of one job, as before)
+    expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["cclib"], "x.log").molecules3d).toHaveLength(1);
+    expect(calcResult(out, ["cclib"], "one.out").molecules3d![0].name).toBe("one.out");
+  });
+
   it("keeps no energies that are not one a frame", () => {
     const [m] = calcResult({ ...out, energies: [-76.32] }, ["cclib"], "x.out").molecules3d!;
     expect(m.energies).toBeUndefined();
