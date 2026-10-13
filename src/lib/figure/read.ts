@@ -528,15 +528,24 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
 
   // bonds' ends where they meet; an end alone, its bond pointing into a word, the word's
   type End = { bond: number; side: 0 | 1; p: Point };
-  // (a hash's narrow end set off from its atom - its first lines a joint's dots, taken by another - carried on to the bond
-  // end it points at, a third of a bond on at most)
-  for (const d of drawnBonds) {
-    if (d.stereo !== "down" || d.either) continue;
+  // (a hash's narrow end set off from its atom - its first lines a joint's dots, taken by another - and a double or triple
+  // bond's ends, its lines set off from the ring it leaves: each carried on to the bond end it points at, a third of a bond on
+  // at most)
+  const carry = (d: Drawn, end: "a" | "b") => {
+    const [p, from] = end === "a" ? [d.a, d.b] : [d.b, d.a];
     const others = drawnBonds.filter((o) => o !== d).flatMap((o) => [o.a, o.b]);
-    if (others.some((q) => dist(q, d.a) < 0.2 * bond)) continue;
-    const way = unit(d.b, d.a);
-    const ahead = others.filter((q) => dist(q, d.a) < 0.35 * bond && dot(way, unit(d.a, q)) > Math.cos(Math.PI / 6));
-    if (ahead.length) d.a = ahead.reduce((p, q) => (dist(q, d.a) < dist(p, d.a) ? q : p));
+    if (others.some((q) => dist(q, p) < 0.2 * bond)) return;
+    const way = unit(from, p);
+    // (a hash's on along its way; a double bond's, its middle line's end a little off its atom - its lines run past it, or
+    // stop short - within a quarter of a bond)
+    const ahead = d.stereo
+      ? others.filter((q) => dist(q, p) < 0.35 * bond && dot(way, unit(p, q)) > Math.cos(Math.PI / 6))
+      : others.filter((q) => dist(q, p) < 0.25 * bond);
+    if (ahead.length) d[end] = ahead.reduce((r, q) => (dist(q, p) < dist(r, p) ? q : r));
+  };
+  for (const d of drawnBonds) {
+    if (d.stereo === "down" && !d.either) carry(d, "a");
+    else if (d.order > 1 && !d.stereo) for (const end of ["a", "b"] as const) carry(d, end);
   }
   const ends: End[] = drawnBonds.flatMap((d, i) => [
     { bond: i, side: 0 as const, p: d.a },

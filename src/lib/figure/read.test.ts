@@ -187,6 +187,28 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toEqual(["C-C", "C=O"]);
   });
 
+  it("joins a ring's C=O whose two lines run a little past its carbon", () => {
+    // (camphor as the RSC style exports it: the C=O's two lines, side by side, ending 3 points into the ring from its carbon)
+    const s = read(
+      figure(
+        [
+          stroke([90.8, 79.6], [101.8, 88], [108.7, 100], [122.1, 103.6], [115.1, 115.6], [101.8, 112], [88.4, 115.6], [95.3, 103.6], [100.7, 102.2]),
+          stroke([102.8, 101.6], [108.7, 100]),
+          stroke([101.8, 112], [101.8, 88], [107.1, 75.2]),
+          stroke([101.8, 112], [94.8, 124]),
+          stroke([91.5, 114.8], [80.9, 122.9]),
+          stroke([90, 112.8], [79.4, 120.9]),
+        ],
+        word("O", [77.3, 124.3]),
+      ),
+    );
+    const o = s.atoms.findIndex((a) => a.el === "O");
+    const co = s.bonds.find((b) => b.a === o || b.b === o)!;
+    const c = co.a === o ? co.b : co.a;
+    expect(co.order).toBe(2);
+    expect(s.bonds.filter((b) => b.a === c || b.b === c)).toHaveLength(3);
+  });
+
   it("reads a triple bond from three lines", () => {
     const a: P = [20, 40];
     const b = step(a, 0);
