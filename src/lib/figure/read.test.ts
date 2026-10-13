@@ -770,12 +770,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
   });
 
-  it("reads a line a little over a quarter of a bond, from a joint into a label, as the label's bond", () => {
-    // (as RDKit draws a crowded OH by default - ouabain's - its bond cut back at the label to 0.3 of a bond)
+  it("reads a line under three tenths of a bond, from a joint into a label, as the label's bond", () => {
+    // (as RDKit draws a crowded OH by default - ouabain's - its bond cut back at the label to 0.3 of a bond; and in its ACS 1996
+    // mode an amide's C-N into its HN, 0.18 of a bond - microcystin-LR's)
     const c: P = [60, 60];
     const o = step(c, -90, 0.6);
-    const s = read(figure([stroke(step(c, 150), c, step(c, 30)), stroke(c, along(c, o, 0.47))], word("OH", o)));
-    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-O"]);
+    for (const t of [0.47, 0.3]) {
+      const s = read(figure([stroke(step(c, 150), c, step(c, 30)), stroke(c, along(c, o, t))], word("OH", o)));
+      expect(bondsOf(s), String(t)).toEqual(["C-C", "C-C", "C-O"]);
+    }
   });
 
   it("reads a short line running straight out of a label to nothing as a bond to a methyl", () => {
