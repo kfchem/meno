@@ -105,6 +105,19 @@ describe("a caption made as wide as something", () => {
     expect(captionLines("• Pneumonoultramicroscopic", 1, undefined, 4)[0].startsWith("• P")).toBe(true);
   });
 
+  it("breaks a word of thousands of letters - formulas among its pieces - as it breaks a short one", () => {
+    const piece = "CH3,C12H22O11,NH4+;Cl−/(S)-BINAP-";
+    const long = piece.repeat(120);
+    for (const width of [1.5, 4, 9]) {
+      const lines = captionLines(long, 1, undefined, width);
+      expect(lines.join("")).toBe(long);
+      for (const t of captionSet(long, 0, 0, 1, undefined, width).items) expect(runsWidth(t.runs!, 1)).toBeLessThanOrEqual(width + 1e-9);
+      // (each piece breaks as it does alone)
+      const alone = captionLines(piece.repeat(3), 1, undefined, width);
+      expect(lines.slice(0, alone.length - 1)).toEqual(alone.slice(0, -1));
+    }
+  });
+
   it("sets the ends of a word it broke as typed - a hyphen at a break no charge, a locant no count", () => {
     const set = captionSet("2-amino-3-(4-hydroxyphenyl)propanoic acid", 0, 0, 1, undefined, 7);
     expect(set.items.map((t) => t.text)).toEqual(["2-amino-3-(4-", "hydroxyphenyl)", "propanoic acid"]);

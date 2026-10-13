@@ -266,17 +266,26 @@ const BREAKS_BEFORE = /[([{]/u;
 /**
  * Where to break a word - or a number and its unit, or a bullet and its
  * first word - too wide for the `room` its line has (the maintainer,
- * 2026-10-13): as late as its letters fit, at the space between a number
- * and its unit, after a hyphen, a comma or a closing bracket, or before an
- * opening one, where one falls in that much and after `keep` - else at the
- * room's edge; never before its first letter. The place in its text, and
- * whether the break is at a space, which goes.
+ * 2026-10-13), what is left of it from `from` on: as late as its letters
+ * fit, at the space between a number and its unit, after a hyphen, a comma
+ * or a closing bracket, or before an opening one, where one falls in that
+ * much and after `keep` letters - else at the room's edge; never before
+ * its first letter. `ends` are the ends of the word's letters, as the
+ * reader sees them - an emoji with its modifiers, a letter with its
+ * accents, one. The place in its text, and whether the break is at a
+ * space, which goes.
  */
-function breakIn(w: { text: string }, room: number, wide: (to: number) => number, keep: number): { at: number; space: boolean } {
-  // (the places between its letters, as the reader sees them: an emoji with its modifiers, a letter with its accents, one)
-  const ends = [...letterStarts(w.text).slice(1), w.text.length];
+function breakIn(text: string, from: number, ends: readonly number[], room: number, wide: (to: number) => number, keep: number): { at: number; space: boolean } {
+  // (the first letter's end past `from`)
   let lo = 0;
   let hi = ends.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ends[mid] > from) hi = mid;
+    else lo = mid + 1;
+  }
+  const first = lo;
+  hi = ends.length - 1;
   // (as many letters as fit - one at least)
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
@@ -284,16 +293,61 @@ function breakIn(w: { text: string }, room: number, wide: (to: number) => number
     else hi = mid - 1;
   }
   const fits = ends[lo];
-  for (let k = lo; k >= 0; k--) {
+  for (let k = lo; k >= first; k--) {
     const at = ends[k];
-    if (at <= keep || at >= w.text.length) continue;
-    if (w.text[at] === " ") return { at, space: true };
-    if (BREAKS_AFTER.test(w.text[at - 1]) || BREAKS_BEFORE.test(w.text[at])) return { at, space: false };
+    if (at <= from + keep || at >= text.length) continue;
+    if (text[at] === " ") return { at, space: true };
+    if (BREAKS_AFTER.test(text[at - 1]) || BREAKS_BEFORE.test(text[at])) return { at, space: false };
   }
   // (at the edge - where that falls at a space, or just after one, the space going with the break: no line of a space alone, nor one ending in it)
-  if (w.text[fits] === " ") return { at: fits, space: true };
-  if (fits > 1 && w.text[fits - 1] === " ") return { at: fits - 1, space: true };
+  if (text[fits] === " ") return { at: fits, space: true };
+  if (fits > from + 1 && text[fits - 1] === " ") return { at: fits - 1, space: true };
   return { at: fits, space: false };
+}
+
+/**
+ * How wide letters `[from, to)` of a word come to on a line - its first
+ * word as typed where `cut.first` says, its last where `cut.last` does,
+ * the others read as captionRuns reads them - from its pieces (between
+ * spaces, commas, semicolons and slashes) measured once, each letter as
+ * typed and each piece whole as read: for a word broken again and again,
+ * none read again for each break. NaN where a piece read is cut. Added up
+ * otherwise than one measure is, it may differ from that in the last bits.
+ */
+function piecesWide(w: { text: string; src: readonly number[] }, styles: readonly (WordsStyle | undefined)[], fontSize: number, set: LabelSet): (from: number, to: number, cut: Cut) => number {
+  // (words and what parts them, by turns - a word maybe empty at either end)
+  const pieces = w.text.split(/([\s,;/]+)/);
+  const starts = [0];
+  for (const p of pieces) starts.push(starts[starts.length - 1] + p.length);
+  const pieceOf = new Int32Array(w.text.length);
+  const typed = [0];
+  const read = [0];
+  pieces.forEach((p, i) => {
+    const st = w.src.slice(starts[i], starts[i + 1]).map((k) => styles[k]);
+    const places = runsPlaces(captionRuns(p, st, { first: true }), fontSize, set);
+    const before = typed[typed.length - 1];
+    for (let j = 1; j <= p.length; j++) typed.push(before + places[Math.min(j, places.length - 1)]);
+    pieceOf.fill(i, starts[i], starts[i + 1]);
+    read.push(read[i] + (i % 2 === 0 && p ? runsWidth(captionRuns(p, st), fontSize, set) : places[places.length - 1]));
+  });
+  return (from, to, cut) => {
+    if (to <= from) return 0;
+    const i0 = pieceOf[from];
+    const i1 = pieceOf[to - 1];
+    const firstWord = i0 % 2 === 0 ? i0 : i0 < i1 ? i0 + 1 : -1;
+    const lastWord = i1 % 2 === 0 ? i1 : i1 > i0 ? i1 - 1 : -1;
+    // (all whole and read, then the ends - and a word as typed - as they are)
+    let sum = read[i1 + 1] - read[i0];
+    for (const i of new Set([i0, i1, cut.first ? firstWord : -1, cut.last ? lastWord : -1])) {
+      if (i < 0) continue;
+      const a = Math.max(from, starts[i]);
+      const b = Math.min(to, starts[i + 1]);
+      const asTyped = i % 2 === 1 || (!!cut.first && i === firstWord) || (!!cut.last && i === lastWord);
+      if (!asTyped && (a > starts[i] || b < starts[i + 1])) return NaN;
+      if (asTyped) sum += typed[b] - typed[a] - (read[i + 1] - read[i]);
+    }
+    return sum;
+  };
 }
 
 /** A caption's lines as they are laid: as typed - or, given a `width`, each typed line broken into lines no wider than it - and each letter's style, by its place in the text. */
@@ -333,19 +387,31 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
     let lineW = 0;
     // (a line begun with a word - or a bullet and its word, kept together for `keep` letters - too wide for its room: broken, a line for each piece but the last, which the line goes on from)
     const begin = (w: { text: string; src: number[] }, keep = 0) => {
-      let rest = { text: w.text, src: [...w.src] };
-      while (wraps && (lineW = wide(rest, undefined, { first: tail })) > room()) {
-        const cut = breakIn(rest, room(), (to) => wide(rest, to, { first: tail, last: true }), keep);
+      // (what is left of it, from here on)
+      let from = 0;
+      // (a word too wide: its pieces measured, and its letters' ends found, once for all its breaks - what is left of it measured whole only where that comes to the room's edge, so that each break falls where that would put it)
+      let piecesIn: ReturnType<typeof piecesWide> | undefined;
+      let ends: number[] = [];
+      const wideOf = (to: number, cut: Cut) => {
+        const x = piecesIn ? piecesIn(from, to, cut) : NaN;
+        if (Number.isFinite(x) && Math.abs(x - room()) > 1e-9 * Math.max(1, Math.abs(room()))) return x;
+        return wide({ text: w.text.slice(from), src: w.src.slice(from) }, to - from, cut);
+      };
+      while (wraps && (lineW = wideOf(w.text.length, { first: tail })) > room()) {
+        if (!piecesIn) {
+          piecesIn = piecesWide(w, styles, fontSize, set);
+          ends = [...letterStarts(w.text).slice(1), w.text.length];
+        }
+        const cut = breakIn(w.text, from, ends, room(), (to) => wideOf(to, { first: tail, last: true }), keep);
         // (a letter alone too wide: a line of its own, as it is)
-        if (cut.at >= rest.text.length) break;
-        line = { text: rest.text.slice(0, cut.at), src: rest.src.slice(0, cut.at) };
+        if (cut.at >= w.text.length) break;
+        line = { text: w.text.slice(from, cut.at), src: w.src.slice(from, cut.at) };
         flush(false, true);
-        const from = cut.at + (cut.space ? 1 : 0);
-        rest = { text: rest.text.slice(from), src: rest.src.slice(from) };
+        from = cut.at + (cut.space ? 1 : 0);
         tail = true;
         keep = 0;
       }
-      line = rest;
+      line = { text: w.text.slice(from), src: w.src.slice(from) };
     };
     for (const w of words) {
       if (!line) {
