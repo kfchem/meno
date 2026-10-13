@@ -248,7 +248,11 @@ The first five run a program; the last five work on a set's entries
 alone (*Who does a step*). A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
-molecules in 3D only. More kinds come with Meno as they are needed - a
+molecules in 3D only. A lone atom - the ion of a salt drawn as ions -
+has no conformers to find and nothing to optimise; xtb, CREST, ORCA and
+Gaussian each stop when asked to. Their plugins work out its energy
+where it is instead, and it comes back where it was - in *Conformers*,
+its only conformer. More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
 out - each specified before it is built.
 
