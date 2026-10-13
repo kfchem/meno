@@ -148,15 +148,16 @@ function xyzElement(given: string): string {
 }
 
 /**
- * An XYZ file's frames, each its atoms and their bonds by distance, as far
- * as a line gives a frame's count of atoms (as `xyzComments` reads them,
- * so each frame has its comment line). A frame cut short holds the atoms
- * it has; an atom whose place does not read stands nowhere (NaN): which
- * frames to keep is the reader's (lib/io/structures).
+ * An XYZ file's frames' atoms, as far as a line gives a frame's count of
+ * atoms (as `xyzComments` reads them, so each frame has its comment line).
+ * A frame cut short holds the atoms it has; an atom whose place does not
+ * read stands nowhere (NaN): which frames to keep is the reader's
+ * (lib/io/structures). Their bonds are found for those kept, not here: a
+ * trajectory's would be found frame by frame for nothing.
  */
-export function parseXYZ(xyz: string): Molecule[] {
+export function xyzFrames(xyz: string): Atom[][] {
   const lines = xyz.trim().split("\n");
-  const frames: Molecule[] = [];
+  const frames: Atom[][] = [];
 
   let i = 0;
   while (i < lines.length) {
@@ -164,19 +165,24 @@ export function parseXYZ(xyz: string): Molecule[] {
     if (!(atomCount > 0)) break;
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
 
-    const atoms: Atom[] = atomLines.map((line) => {
-      const [element, x, y, z] = line.trim().split(/\s+/);
-      return {
-        el: xyzElement(element ?? ""),
-        x: Number(x),
-        y: Number(y),
-        z: Number(z),
-      };
-    });
-
-    frames.push({ atoms, bonds: bondsByDistance(atoms) });
+    frames.push(
+      atomLines.map((line) => {
+        const [element, x, y, z] = line.trim().split(/\s+/);
+        return {
+          el: xyzElement(element ?? ""),
+          x: Number(x),
+          y: Number(y),
+          z: Number(z),
+        };
+      }),
+    );
     i += 2 + atomCount;
   }
 
   return frames;
+}
+
+/** An XYZ file's frames (`xyzFrames`), each with its bonds by distance. */
+export function parseXYZ(xyz: string): Molecule[] {
+  return xyzFrames(xyz).map((atoms) => ({ atoms, bonds: bondsByDistance(atoms) }));
 }

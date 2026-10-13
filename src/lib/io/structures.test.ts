@@ -22,6 +22,11 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(checkedStructures(read, "t.xyz")).toBe(read);
     const m = read.molecules3d![0];
     expect(m.atoms[1].x).toBe(0.76);
+    // (its bonds as its first frame has them)
+    expect(m.bonds).toEqual([
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+    ]);
     expect(m.frames).toEqual([[0, 0, 0, 0.77, 0.59, 0, -0.76, 0.59, 0]]);
     expect(m.energies).toEqual([-76.1, -76.3]);
     // (none whole: none read)
