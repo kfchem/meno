@@ -605,7 +605,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return [e, words.flatMap((w, k) => (reaches(e.p, out, w.box, bond) ? [k] : []))];
     }),
   );
-  for (const e of ends) meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
+  // (and an end by both ends of a bond shorter than that - a hash to an H set close - meets the nearer)
+  const otherEnd = (e: End) => (e.side === 0 ? drawnBonds[e.bond].b : drawnBonds[e.bond].a);
+  for (const e of ends)
+    meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w)));

@@ -1028,7 +1028,9 @@ workspace holds.
   "Cl".").
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
-  from two sides); where a bond points into a
+  from two sides; and an end by both ends of a bond shorter than ends lie
+  apart where they meet - a hash to an H set close - meets the nearer);
+  where a bond points into a
   word - its letters side by side on one line: two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
   are two - the word is its atom's label (at its element: an end outside it,

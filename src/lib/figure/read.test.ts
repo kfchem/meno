@@ -7,6 +7,7 @@ import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import cisplatin from "./fixtures/cisplatin-rdkit.json";
 import cocaine from "./fixtures/cocaine-rdkitacs.json";
+import cortisol from "./fixtures/cortisol-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
@@ -733,6 +734,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const n = r.atoms.findIndex((a) => a.label === "N");
     expect(r.bonds.filter((b) => b.a === n || b.b === n)).toHaveLength(3);
     expect(r.atoms.filter((a) => !a.label)).toHaveLength(17);
+  });
+
+  it("reads a hash shorter than bonds' ends lie apart where they meet, from an atom to an H set close, as the H's bond", () => {
+    // (cortisol as RDKit's ACS 1996 mode draws it: its C9 and C14 H's each a hash of three lines a seventh of a bond long, its
+    // wide end as near the stereocentre's other bonds' ends as they meet)
+    const r = readFigure(cortisol as unknown as FigureDrawn);
+    const hs = r.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.label === "H");
+    expect(hs).toHaveLength(3);
+    for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i).map((b) => !!b.stereo)).toEqual([true]);
   });
 
   it("reads a short wedge pointing into an H set close, cut back at it, as the H's bond", () => {
