@@ -1041,18 +1041,21 @@ first; its structures are read from the rest, as above; and its letters
 that no structure took are read as words.
 
 - **Arrows**: a line - or a row of dashes, or lines joined at corners -
-  with a head at its end. The head can be filled, whole or half; an open
+  with a head at its end. The head can be filled, whole or half (its
+  edges stroked as well, as some programs draw one, go with it); an open
   chevron of two strokes or an outline; or a single barb, a half head's.
   An arrow drawn as one filled outline, its line and its head in one
-  shape, is read by how wide it is along its length.
+  shape, is read by how wide it is along its length, measured from its
+  line's middle fitted along it.
   - heads at both ends: two heads;
   - two arrows side by side, pointing opposite ways, a short way apart
     and alongside each other: an equilibrium, its heads full where both
     are whole. It goes the way its upper line goes, as an equilibrium
     is printed (the right-hand line where they stand upright);
   - two lines ending within an open head: a retrosynthesis's arrow;
-  - a cross on its middle, of two strokes or a letter x: a reaction that
-    does not go;
+  - a cross on its middle, of two strokes or a letter x on its line and
+    alone (an x in the words over it, as in 3 x 10 min, is a word's): a
+    reaction that does not go;
   - a line stroked dashed, or drawn as dashes: dashed;
   - its corners, where its lines turn;
   - its weight, from its line against the bonds' (thin under three
@@ -1061,7 +1064,11 @@ that no structure took are read as words.
 - **"+" signs**: a "+" set alone, two strokes crossing at their middles,
   square to each other and as long, touching nothing, or a filled cross.
 - **Words**: letters set in lines - a smaller letter set high or low with
-  its line - and lines one close under another in blocks.
+  its line - and lines one close under another in blocks. A space goes
+  where letters stand apart, measured by how they are set: each letter's
+  room as the PDF gives it, from where it starts to where the next would
+  (a 1's ink stands well inside its room), or by their ink where it gives
+  none.
   - A block over or under an arrow, along its longest stretch and near
     it, is that arrow's words.
   - The rest stand where they are drawn: a compound's number among them,
@@ -1085,7 +1092,18 @@ words put over an arrow do.
 **How well**: on a scheme drawn for it - two reactants with a "+" and a
 product, an arrow with words over it and under it, three compounds'
 numbers in bold - and on a row of arrows of each kind, everything is read
-as drawn.
+as drawn. So is everything in 29 more figures drawn many ways:
+- heads filled, barbed, curved, open, as one outline with the line, or
+  filled and stroked, and lines as filled bars;
+- arrows going right, left, down and at a slant;
+- equilibria with half heads, with barbs, with lines of unequal length,
+  and with full heads;
+- retrosynthetic, dashed, crossed, thick and coloured arrows;
+- words beside a downward arrow, words under an arrow with a structure
+  drawn over it, and words with an x or a "+" in them, in italics, with
+  formulas and footnotes;
+- a "+" larger than the words, a charge's "+" beside its atom, and two
+  steps one after the other.
 
 Not yet:
 - **A curved arrow** (an electron-pushing arrow's curve) is not read.
