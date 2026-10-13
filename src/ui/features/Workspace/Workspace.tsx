@@ -62,7 +62,7 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { offeredNames, writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
-import { menuTargetGone } from "./utils/menuTarget";
+import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf } from "./chem/drawing";
 import ColourCard, { type ColourTarget } from "./ColourCard";
@@ -940,7 +940,8 @@ function WorkspaceContent({
           : {}),
       }
     : undefined;
-  useEffect(() => setMenu(null), [model]); // what it was about may be gone
+  // (a change to the drawing: a menu about the drawing closed, what it was about may be gone - no other, a step's say)
+  useEffect(() => setMenu((m) => (m && aboutDrawing(m) ? null : m)), [model]);
   // (what it was about gone otherwise - words, a picture, a PDF undone away while it is open: no menu left over nothing)
   useEffect(() => {
     if (!menu?.kind) return;
