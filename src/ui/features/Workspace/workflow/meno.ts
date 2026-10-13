@@ -8,7 +8,7 @@
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
-import { rmsd } from "./rmsd";
+import { centred, rmsdCentred, spread } from "./rmsd";
 
 /** Kilocalories per mole in a hartree (CODATA 2018). */
 export const KCAL_PER_HARTREE = 627.5094740631;
@@ -98,12 +98,16 @@ function duplicates(entries: readonly SetEntry[], holds: SetKind, most: number):
       ? byCompound(entries)
       : [...entries.reduce((m, e) => m.set(atomsOf(e), [...(m.get(atomsOf(e)) ?? []), e]), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
+  // (each one about its centre, once; and its spread: a pair whose spreads differ by more than `most` is no duplicate, and is not laid over - the RMSD is never less)
+  const about = new Map(entries.map((e) => [e, centred(e.xyz)]));
+  const spreads = new Map(entries.map((e) => [e, spread(e.xyz)]));
+  const near = (k: SetEntry, e: SetEntry) => Math.abs(spreads.get(k)! - spreads.get(e)!) <= most && rmsdCentred(about.get(k)!, about.get(e)!) <= most;
   const keptSet = new Set<SetEntry>();
   for (const g of groups) {
     const order = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
     const kept: SetEntry[] = [];
     for (const e of order) {
-      if (kept.some((k) => rmsd(k.xyz, e.xyz) <= most)) continue;
+      if (kept.some((k) => near(k, e))) continue;
       kept.push(e);
       keptSet.add(e);
     }
