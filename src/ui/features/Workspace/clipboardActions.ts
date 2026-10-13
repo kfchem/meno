@@ -38,7 +38,7 @@ type Pt = { x: number; y: number };
 export function useClipboardActions(
   store: EditorStore,
   onError: (message: string) => void,
-  openFiles?: (files: File[], at: Pt) => Promise<void>,
+  openFiles?: (files: File[], at: Pt) => Promise<unknown>,
 ) {
   const busy = useCallback(() => {
     const st = store.getState();

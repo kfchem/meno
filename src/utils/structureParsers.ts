@@ -244,15 +244,20 @@ function xyzElement(given: string): string {
   return elementOf(symbol) ? symbol : given;
 }
 
+/** A coordinate as an XYZ file writes it: a decimal number, with an exponent after an E where it has one - not Fortran's D, "nan", "Infinity" or hexadecimal. */
+const COORDINATE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+
 /**
  * An XYZ file's frames' atoms, as far as a line gives a frame's count of
  * atoms (as `xyzComments` reads them, so each frame has its comment line).
  * A frame cut short holds the atoms it has; an atom whose place does not
- * read stands nowhere (NaN): which frames to keep is the reader's
- * (lib/io/structures). Their bonds are found for those kept, not here: a
- * trajectory's would be found frame by frame for nothing.
+ * read as a number (`COORDINATE`) stands nowhere (NaN): which frames to
+ * keep is the reader's (`wholeXyzFrames`). Where `why` is given, it is told
+ * why each frame is damaged, in the words a refusal of the file says it
+ * (undefined for a whole one). Their bonds are found for those kept, not
+ * here: a trajectory's would be found frame by frame for nothing.
  */
-export function xyzFrames(xyz: string): Atom[][] {
+export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
   const lines = xyz.trim().split("\n");
   const frames: Atom[][] = [];
 
@@ -261,25 +266,45 @@ export function xyzFrames(xyz: string): Atom[][] {
     const atomCount = parseInt(lines[i].trim(), 10);
     if (!(atomCount > 0)) break;
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
+    let damaged = atomLines.length < atomCount ? `The XYZ file ends before its atoms do: it says ${atomCount}, and gives ${atomLines.length}.` : undefined;
 
     frames.push(
-      atomLines.map((line) => {
-        const [element, x, y, z] = line.trim().split(/\s+/);
-        return {
-          el: xyzElement(element ?? ""),
-          x: Number(x),
-          y: Number(y),
-          z: Number(z),
-        };
+      atomLines.map((line, k) => {
+        const [element, ...place] = line.trim().split(/\s+/);
+        const [x, y, z] = [0, 1, 2].map((d) => {
+          const t = place[d] ?? "";
+          if (COORDINATE.test(t)) return Number(t);
+          damaged ??= `Line ${i + 3 + k} of the XYZ file gives ${element} a place that is not a number: "${t}".`;
+          return NaN;
+        });
+        return { el: xyzElement(element ?? ""), x, y, z };
       }),
     );
+    why?.push(damaged);
     i += 2 + atomCount;
   }
 
   return frames;
 }
 
-/** An XYZ file's frames (`xyzFrames`), each with its bonds by distance. */
+/**
+ * An XYZ file's frames that are whole - every atom of the first whole one,
+ * each somewhere - by their places among its frames, and how many it has;
+ * the others are left
+ * out, to be said in a count (a trajectory still being written, a frame
+ * damaged). None whole, the file is refused, saying why of its first
+ * frame: "The XYZ file ends before its atoms do: it says 3, and gives 2."
+ */
+export function wholeXyzFrames(xyz: string): { frames: Atom[][]; kept: number[]; total: number } {
+  const why: (string | undefined)[] = [];
+  const frames = xyzFrames(xyz, why);
+  const n = frames.find((atoms, i) => atoms.length > 0 && !why[i])?.length ?? 0;
+  const kept = frames.flatMap((atoms, i) => (n && !why[i] && atoms.length === n ? [i] : []));
+  if (!kept.length && why[0]) throw new Error(why[0]);
+  return { frames: kept.map((i) => frames[i]), kept, total: frames.length };
+}
+
+/** An XYZ file's whole frames (`wholeXyzFrames`), each with its bonds by distance. */
 export function parseXYZ(xyz: string): Molecule[] {
-  return xyzFrames(xyz).map((atoms) => ({ atoms, bonds: bondsByDistance(atoms) }));
+  return wholeXyzFrames(xyz).frames.map((atoms) => ({ atoms, bonds: bondsByDistance(atoms) }));
 }

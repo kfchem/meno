@@ -160,37 +160,47 @@ function inRow(ms: Omit<Molecule3D, "id" | "at">[]): Carried3D[] {
 
 /**
  * A calculation's output, as its readers read it (`readers`, each its id
- * and version), as an opened file's molecules: one molecule in 3D, its
- * atoms where the first geometry puts them and its bonds found as an XYZ
- * file's are, the rest of its geometries its frames; their energies, and
- * what the calculation says of it; showing its last geometry, an
- * optimisation's end.
+ * and version), as an opened file's molecules: one molecule in 3D - or,
+ * of a file that holds several jobs (Gaussian's Link1, ORCA's $new_job),
+ * one for each job, side by side, in order. Each has its atoms where its
+ * first geometry puts them and its bonds found as an XYZ file's are, the
+ * rest of its geometries its frames; their energies, and what the
+ * calculation says of it; showing its last geometry, an optimisation's
+ * end. A job's geometries, energies and populations are its own: nothing
+ * of one job is put with another's.
  */
 export function calcResult(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): ProcessedFileResult {
-  const n = out.atoms.length;
-  const [f0, ...rest] = out.frames.filter((f) => f.length === 3 * n);
-  if (!n || !f0) throw new Error(`No molecule found in ${filename || "the file"}.`);
+  const jobs = Array.isArray(out.jobs) && out.jobs.length > 1 ? out.jobs : [out];
+  const molecules3d = jobs.flatMap((job) => {
+    const m = jobMolecule(job, readers, filename, source);
+    return m ? [m] : [];
+  });
+  if (!molecules3d.length) throw new Error(`No molecule found in ${filename || "the file"}.`);
+  return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
+}
+
+/** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
+function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
+  const n = out.atoms?.length ?? 0;
+  const [f0, ...rest] = (out.frames ?? []).filter((f) => f.length === 3 * n);
+  if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
   // (atoms in one place with another: said over it)
   const together = atomsTogether(f0);
   const frames = rest.map((f) => [...f]);
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
+  const calc = calcOf(out, readers, source);
+  const name = filename && calc.job ? `${filename}, job ${calc.job.number}` : filename;
   return {
-    model: { atoms: [], bonds: [] },
-    centroid: { x: 0, y: 0 },
-    molecules3d: [
-      {
-        atoms: first.atoms,
-        bonds: first.bonds,
-        bondsFrom: "distance" as const,
-        bondOrders: "unknown" as const,
-        ...(frames.length ? { frames, frame: frames.length } : {}),
-        ...(energies ? { energies } : {}),
-        ...(filename ? { name: filename } : {}),
-        ...(together ? { together } : {}),
-        calc: calcOf(out, readers, source),
-      },
-    ],
+    atoms: first.atoms,
+    bonds: first.bonds,
+    bondsFrom: "distance" as const,
+    bondOrders: "unknown" as const,
+    ...(frames.length ? { frames, frame: frames.length } : {}),
+    ...(energies ? { energies } : {}),
+    ...(name ? { name } : {}),
+    ...(together ? { together } : {}),
+    calc,
   };
 }
