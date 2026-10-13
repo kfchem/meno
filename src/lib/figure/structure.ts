@@ -19,6 +19,9 @@ export type LabelReader = (label: string) => { el: string; charge?: number; isot
  */
 export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; isotope?: number; read: boolean } {
   const tries = [drawn, reversedLabel(drawn)];
+  // (a charge written last stays last, turned round or not: H3N+ as NH3+)
+  const charged = /^(.+?)(\d*[+-]+\d*)$/.exec(drawn);
+  if (charged) tries.push(`${reversedLabel(charged[1])}${charged[2]}`);
   const hn = /^H(\d*)([A-Z][a-z]?)(?=[A-Z(]|$)/.exec(drawn);
   if (hn && hn[2] !== "H") tries.push(`${hn[2]}H${hn[1]}${drawn.slice(hn[0].length)}`);
   for (const t of tries) {

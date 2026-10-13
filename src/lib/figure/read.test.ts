@@ -688,6 +688,8 @@ describe("a figure's words", () => {
   });
 
   it("reads a drawn label turned round, and HN before a group as NH", () => {
+    // (its charge written last stays last: H3N+ as NH3+)
+    expect(readDrawnLabel("H3N+", reads)).toEqual({ el: "N", charge: 1, read: true });
     expect(readDrawnLabel("MeO2C", reads)).toEqual({ el: "CO2Me", read: true });
     expect(readDrawnLabel("BocHN", reads)).toEqual({ el: "NHBoc", read: true });
     expect(readDrawnLabel("Zz", reads).read).toBe(false);

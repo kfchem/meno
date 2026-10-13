@@ -1017,7 +1017,8 @@ workspace holds.
   leave it, the ends nearest its element), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
-  MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
+  MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last
+  (H3N+ is NH3+). A subscript is a count, a superscript
   a charge, and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
   H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
