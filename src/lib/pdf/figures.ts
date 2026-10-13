@@ -75,9 +75,10 @@ const MOST_OF_PAGE = 0.8;
  * - long and thin - joins what lies beyond its ends, level with it, this
  * far off at most; a "+" what lies either side of it; the words over and
  * under an arrow (its conditions) are the scheme's this far off; and a short
- * word - a compound's number - a little farther off than other labels.
+ * word - a compound's number, under it or over it - a little farther off
+ * than other labels.
  */
-const ARROW_REACH_PT = 30;
+const ARROW_REACH_PT = 36;
 const ARROW_THICK_PT = 14;
 const ARROW_LONG = 2.5;
 /** An arrow's line: straight, level or upright, this long at the least, and thin for its length - no bond of a chain, drawn slanting and short. */
@@ -152,14 +153,18 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     return Math.max(w, h) >= ARROW_LINE_PT && Math.min(w, h) <= ARROW_LINE_THIN * Math.max(w, h);
   });
   const arrows = parts.filter((g) => arrowLike(g) && lines.some((l) => l[0] >= g[0] - 0.5 && l[1] >= g[1] - 0.5 && l[2] <= g[2] + 0.5 && l[3] <= g[3] + 0.5));
-  const groups = schemesOf(parts, arrows, pluses);
+  // (each compound measured with the labels right beside it - an OH at the end nearest the arrow - an arrow as it is, its line thin)
+  const withLabels = parts.map((g) => (arrows.includes(g) ? g : words.reduce((b, w) => (meet(grow(g, LABEL_PT), w) && w[2] - w[0] < Math.max(SHORT_WORD_PT, 0.6 * (g[2] - g[0])) ? union(b, w) : b), g)));
+  const groups = schemesOf(withLabels, arrows, pluses);
   // (its labels: words over it, or beside it - none as wide as most of it, as a column's line is; a short word,
   // a compound's number, a little farther off; the words over and under its arrows, a line or two of them)
   const labelOf = (g: Box, b: Box, w: Box) => {
     const wide = w[2] - w[0];
     if (wide >= 0.6 * (b[2] - b[0]) && wide >= SHORT_WORD_PT) return false;
     if (meet(grow(b, LABEL_PT), w)) return true;
-    if (wide <= SHORT_WORD_PT && meet(grow(g, NUMBER_PT), w)) return true;
+    // (a number under a compound, or over it - along it, not beside it, where its neighbour's label may stand)
+    const mid = (w[0] + w[2]) / 2;
+    if (wide <= SHORT_WORD_PT && mid >= g[0] && mid <= g[2] && meet(grow(g, NUMBER_PT), w)) return true;
     return arrows.some((a) => meet(a, g) && conditionOf(a, w));
   };
   const labelled = groups.map((g) => {
