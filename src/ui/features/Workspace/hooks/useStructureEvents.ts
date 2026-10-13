@@ -556,6 +556,8 @@ export function useStructureEvents(
       store
         .getState()
         .appendModel(toModel(shifted), importedScheme(result, dx, dy, place));
+      // (put past the edge of a page wider than the view: the view goes to show it, eased, as Fit goes)
+      if ("beyond" in place && place.beyond) store.getState().requestFit();
       setImportError(null);
       return true;
     } catch (err) {

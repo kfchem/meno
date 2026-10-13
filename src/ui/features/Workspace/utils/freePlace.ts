@@ -39,7 +39,12 @@ export function freePlace(there: readonly Box[], foot: Box, at: Pt, step: number
     const c = { x: at.x + i * step, y: at.y + j * step };
     if (clear(c)) return c;
   }
-  return at;
+  // (nothing near clear - beside a drawing wider than the reach: past the
+  // right of all there is, else below it, never over it)
+  if (!there.length) return at;
+  const right = { x: Math.max(...there.map((b) => b.x1)) + gap - foot.x0 + step / 2, y: at.y };
+  if (clear(right)) return right;
+  return { x: at.x, y: Math.min(...there.map((b) => b.y0)) - gap - foot.y1 - step / 2 };
 }
 
 const NONE = new Set<number>();
@@ -146,6 +151,10 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
  * (`pageBoxes`) by a bond's length. `scheme` places its arrow, "+" signs
  * and molecules in 3D about the middle of its atoms.
  */
-export function placeOpened(st: EditorState, result: ProcessedFileResult, scheme: ImportedScheme, at: Pt, drawingStyle: DrawingStyle): Pt {
-  return freePlace(pageBoxes(st, drawingStyle), footOf(result, scheme, drawingStyle), at, NOMINAL_BOND_LENGTH);
+export function placeOpened(st: EditorState, result: ProcessedFileResult, scheme: ImportedScheme, at: Pt, drawingStyle: DrawingStyle): Pt & { beyond: boolean } {
+  const reach = 24;
+  const place = freePlace(pageBoxes(st, drawingStyle), footOf(result, scheme, drawingStyle), at, NOMINAL_BOND_LENGTH, NOMINAL_BOND_LENGTH, reach);
+  // (put past the edge of all there is, out of the view, perhaps: the view is to go to it)
+  const beyond = Math.max(Math.abs(place.x - at.x), Math.abs(place.y - at.y)) > reach * NOMINAL_BOND_LENGTH;
+  return { ...place, beyond };
 }

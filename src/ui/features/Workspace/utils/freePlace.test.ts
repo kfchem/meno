@@ -28,13 +28,23 @@ describe("where a file opened onto a page goes", () => {
     expect(freePlace(there, one, { x: 0, y: 0 }, 1, 0)).toEqual({ x: 0, y: -1 });
   });
 
+  it("goes past the right of all there is where nothing near is clear, never over it", () => {
+    // (a drawing far wider than the reach - 24 steps - about the view's middle)
+    const wide = { x0: -200, y0: -200, x1: 200, y1: 200 };
+    const at = freePlace([wide], foot, { x: 0, y: 0 }, 1.5);
+    expect(at.x + foot.x0).toBeGreaterThanOrEqual(wide.x1 + 1.5);
+    expect(at.y).toBe(0);
+  });
+
   it("goes to the right of what is there, of places as near", () => {
     const at = freePlace([{ x0: -3, y0: -3, x1: 3, y1: 3 }], { x0: -1, y0: -1, x1: 1, y1: 1 }, { x: 0, y: 0 }, 1);
     expect(at).toEqual({ x: 5, y: 0 });
   });
 
-  it("stays in the middle of the view where no place near is clear", () => {
+  it("goes past the right of a page that fills all near the view, at the view's height", () => {
     const everywhere = { x0: -1000, y0: -1000, x1: 1000, y1: 1000 };
-    expect(freePlace([everywhere], foot, { x: 1, y: 2 }, 1.5)).toEqual({ x: 1, y: 2 });
+    const at = freePlace([everywhere], foot, { x: 1, y: 2 }, 1.5);
+    expect(at.y).toBe(2);
+    expect(at.x + foot.x0).toBeGreaterThanOrEqual(1000 + 1.5);
   });
 });
