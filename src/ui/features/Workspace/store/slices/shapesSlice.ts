@@ -38,7 +38,7 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       ),
     styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
     colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) =>
-      doc.edit(which === "fill" ? "fill shapes" : "colour shapes' lines", (d) => ops.restyleShapes(d, ids, { [which]: color }), gesture ? { coalesceKey: `colour-shapes:${gesture}` } : undefined),
+      doc.edit(which === "fill" ? "fill shapes" : "colour shapes' lines", (d) => ops.restyleShapes(d, ids, { [which]: color }), gesture ? gestureStep(`colour-shapes:${gesture}`) : undefined),
     orderShapes: (ids: readonly number[], front: boolean) => doc.edit(front ? "bring shapes to front" : "send shapes to back", (d) => ops.orderShapes(d, ids, front)),
     removeShape: (id: number) => {
       if (doc.edit("delete shape", (d) => ops.removeShapes(d, [id])))

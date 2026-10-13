@@ -1223,6 +1223,12 @@ export type EditorState = {
    * or highlighted in it - or (null) none: one step.
    */
   colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** One colour given to all a selection holds - atoms and bonds, electron arrows, words, reaction arrows, writing by hand - as one step. */
+  colourTogether: (
+    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+    color: string | null,
+    gesture?: string,
+  ) => void;
   /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
@@ -1444,7 +1450,7 @@ export type EditorState = {
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
-  openModel: (next: Model, scheme?: ImportedScheme) => void;
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => void;
   /** Joins what readers reading an output as well have found to each molecule read from it (lib/calc/readings): learnt of the document, not done to it - nothing to undo. */
   joinReadings: () => void;
   /** A file opened over the canvas's contents, as one undo step. */

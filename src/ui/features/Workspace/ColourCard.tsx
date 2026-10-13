@@ -117,12 +117,9 @@ export default function ColourCard({
     if (row === "ring") s.fillRings(target.rings, color, gesture);
     else if (row === "line") s.colourShapes(shapes.map((x) => x.id), "stroke", color ?? "none", gesture);
     else if (row === "fill" || row === "tint") s.colourShapes(boxes.map((x) => x.id), "fill", color, gesture);
-    else {
-      if (parts || arrows.length) s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
-      if (words.length && row === "color") s.colourWords(words, color, gesture);
-      if (lines.length && row === "color") s.setArrowForm(lines, { color }, gesture);
-      if (inks.length && row === "color") s.colourInks(inks.map((k) => k.id), color, gesture);
-    }
+    else if (row === "highlight") s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
+    // (all of it, one step)
+    else s.colourTogether({ atoms: target.atoms, bonds: target.bonds, pushes: arrows, words, arrows: lines, inks: inks.map((k) => k.id) }, color, gesture);
   };
   // (a marker's own colour not listed twice: a swatch fewer)
   const width = 92 + (palette.length + 2 - (markerOwn && palette.includes(markerOwn) ? 1 : 0)) * (SWATCH + 4) + 12;
