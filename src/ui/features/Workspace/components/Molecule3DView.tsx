@@ -25,7 +25,8 @@ import { useShading3d } from "./shading3d";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
-import { ribbonMesh } from "../utils/ribbon";
+import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
+import { commitInstanceMatrices } from "./instances";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -156,7 +157,7 @@ export type Molecule3DViewProps = {
   holding: { from: number; start: number } | null;
   /** Being moved by the pointer: where it stands is where it is put, at once. */
   following: boolean;
-  /** Its frames shown in full beside it - hovered or selected - or as a count. */
+  /** It is pointed at or selected: a single geometry's chip is seen then (Frames3D, which a click opens). */
   framesOpen: boolean;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
@@ -269,7 +270,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useEffect(() => () => ribbonGeo.dispose(), [ribbonGeo]);
   const hullMat = useMemo(() => grownMaterial(), []);
   useEffect(() => () => hullMat.dispose(), [hullMat]);
-  const ribbonResidues = useRef<Int32Array>(new Int32Array(0));
+  // (its residues as spheres, which the pointer is found over: utils/ribbon)
+  const ribbonHits = useRef<RibbonSpheres>({ residues: new Int32Array(0), centres: new Float32Array(0), radii: new Float32Array(0) });
   // (going over to a look without ribbons, the residue pointed at is let go)
   const ribbonsNow = solid.ribbons[look];
   useEffect(() => {
@@ -308,8 +310,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
-  // (how many atoms each look draws: a very large drawing is counted by them - utils/largeDrawing)
-  const drawnAtoms = useMemo(() => ({ primary: hidden.primary.filter((h) => !h).length, secondary: hidden.secondary.filter((h) => !h).length }), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const rings = useRef(new Map<number, { v: number; vel: number; to: number }>());
   const sleeves = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -375,9 +375,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       m.shares?.length === solid.frames.length
         ? m.shares
         : m.conformerSet && m.energies?.length === solid.frames.length
-          ? populations(m.energies)
+          ? populations(m.energies, m.degeneracies)
           : undefined,
-    [m.shares, m.conformerSet, m.energies, solid.frames.length],
+    [m.shares, m.conformerSet, m.energies, m.degeneracies, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
@@ -737,8 +737,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     level.current = nextLevel;
     selLevel.current = nextSel;
 
-    // (both looks' atoms while it goes over from one to the other)
-    atoms.current.userData.shown = fill.current === 0 ? drawnAtoms.primary : fill.current === 1 ? drawnAtoms.secondary : Math.max(drawnAtoms.primary, drawnAtoms.secondary);
+    // (the atoms a very large drawing is counted by - utils/largeDrawing - both looks' while it goes over from one to the other)
+    const { counted } = solid;
+    atoms.current.userData.counted = fill.current === 0 ? counted.primary : fill.current === 1 ? counted.secondary : Math.max(counted.primary, counted.secondary);
     const radius = (i: number) => {
       const r = solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
       return r * (swell.current.get(i)?.v ?? 1) * risen.current;
@@ -785,7 +786,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (runs.length && m.biopolymer && (reshaped || dirty.current || ribbonMade.current !== ribbonScale)) {
       const made = ribbonMesh(p, runs, m.biopolymer, style.ribbonColours, ribbonScale, WORLD_PER_ANGSTROM);
       fillGeometry(ribbonGeo, made);
-      ribbonResidues.current = made.residues;
+      ribbonHits.current = ribbonSpheres(made);
       ribbonMade.current = ribbonScale;
     }
     const ribbonsShown = runs.length > 0 && ribbonScale > 1e-3;
@@ -911,8 +912,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         b.set(p[3 * bond.a2], p[3 * bond.a2 + 1], p[3 * bond.a2 + 2]);
         placePiece(sleeveMesh, i, a, b, v > 0.001 ? bondReach(bond.order, bondR) + CHOSEN_PX * px * v : 0);
       });
-      sleeveMesh.instanceMatrix.needsUpdate = true;
-      sleeveMesh.computeBoundingSphere();
+      commitInstanceMatrices(sleeveMesh);
       sleeveMesh.visible = sleeves.current.size > 0 && bondsShown;
     }
     // the measurements: drawn afresh as the atoms move, fading in and out
@@ -1159,15 +1159,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               geometry={ribbonGeo}
               renderOrder={OVER_PAGE}
               frustumCulled={false}
-              // (found under the pointer only while it is there to be seen)
+              // (found under the pointer only while it is there to be seen - a
+              // residue at a time, by the spheres round them, not by every
+              // one of its triangles: utils/ribbon `residueOnRay`)
               raycast={function (this: THREE.Mesh, rc, hits) {
-                if (this.visible) THREE.Mesh.prototype.raycast.call(this, rc, hits);
+                if (!this.visible) return;
+                const local = rc.ray.clone().applyMatrix4(toLocal.copy(this.matrixWorld).invert());
+                const hit = residueOnRay(ribbonHits.current, local);
+                if (!hit) return;
+                const point = hit.point.applyMatrix4(this.matrixWorld);
+                const distance = rc.ray.origin.distanceTo(point);
+                if (distance < rc.near || distance > rc.far) return;
+                hits.push({ distance, point, object: this, residue: hit.residue } as THREE.Intersection & { residue: number });
               }}
               onPointerMove={(e) => {
                 e.stopPropagation();
-                const index = ribbonGeo.getIndex();
-                const v = e.faceIndex != null && index ? index.getX(3 * e.faceIndex) : -1;
-                const r = v >= 0 ? ribbonResidues.current[v] : undefined;
+                const r = (e as unknown as { residue?: number }).residue;
                 if (r != null && r !== hoverResidue) setHoverResidue(r);
               }}
               onPointerOut={() => setHoverResidue(null)}
@@ -1472,6 +1479,7 @@ function fillGeometry(g: THREE.BufferGeometry, m: { positions: Float32Array; nor
 }
 
 const mtx = new THREE.Matrix4();
+const toLocal = new THREE.Matrix4();
 const colour = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion();
@@ -1488,15 +1496,14 @@ function placeAtoms(mesh: THREE.InstancedMesh, places: Float32Array, radius: (i:
     mtx.makeScale(r, r, r).setPosition(places[3 * i], places[3 * i + 1], places[3 * i + 2]);
     mesh.setMatrixAt(i, mtx);
   }
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  // (its sphere read off the matrices, not each ball's taken into it: a protein's tens of thousands at every frame it moves)
+  commitInstanceMatrices(mesh);
 }
 
 /** Each bond's lines, cylinders from end to end, `extra` thicker all round (by line, if it is a function). */
 function placeBonds(mesh: THREE.InstancedMesh, lines: BondLine[], extra: number | ((k: number) => number)) {
   lines.forEach((line, k) => placePiece(mesh, k, line.a, line.b, line.r + (line.r > 0 ? (typeof extra === "number" ? extra : extra(k)) : 0)));
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  commitInstanceMatrices(mesh);
 }
 
 /** A cylinder of radius `r` from `a` to `b`, as instance `k`. */

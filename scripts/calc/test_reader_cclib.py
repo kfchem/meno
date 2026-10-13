@@ -18,6 +18,8 @@ the files are not there.
 import importlib.util
 import json
 import pathlib
+import re
+import types
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -59,6 +61,22 @@ class Protocol(unittest.TestCase):
         self.assertTrue(a["error"])
         self.assertFalse(worker.answer(json.dumps({"id": 5, "op": "read", "name": "x.out", "text": ""}))["ok"])
         self.assertFalse(worker.answer(json.dumps({"id": 6, "op": "run", "code": "1"}))["ok"])
+
+
+class Energies(unittest.TestCase):
+    def test_an_energy_is_the_outputs_value_as_printed(self):
+        # (cclib gives electronvolts by its own factor; back by the same one, an energy is the output's to the last digit)
+        from cclib.parser.utils import convertor
+
+        for printed in (-76.0105049953, -1.1167593073, -2573.987654321098):
+            self.assertAlmostEqual(worker.hartrees(convertor(printed, "hartree", "eV")), printed, delta=1e-10)
+
+    def test_each_frame_s_energy_as_the_output_prints_it(self):
+        for rel, printed in (("ORCA/dvb_gopt.out", r"FINAL SINGLE POINT ENERGY\s+(-?\d+\.\d+)"), ("Gaussian/dvb_gopt.out", r"SCF Done:\s+E\(\w+\)\s+=\s+(-?\d+\.\d+)")):
+            path = sample(rel)
+            values = [float(v) for v in re.findall(printed, path.read_text(encoding="utf-8"))]
+            r = read(path)["result"]
+            self.assertAlmostEqual(r["energies"][-1], values[-1], delta=1e-9, msg=rel)
 
 
 class Orca(unittest.TestCase):
@@ -164,6 +182,30 @@ class XTB(unittest.TestCase):
         # (cclib reads xTB's HOMO as many numbers: no orbitals are said rather than wrong ones)
         r = read(sample("XTB/dvb_opt.out"))["result"]
         self.assertIsNone(result(r, "orbitals"))
+
+
+class Vibrations(unittest.TestCase):
+    def test_translations_and_rotations_listed_at_naught_are_no_vibrations(self):
+        # (as an xTB output lists them: six at naught before the molecule's own, with intensities of their own; an imaginary one kept, negative)
+        data = types.SimpleNamespace(
+            vibfreqs=[-0.0, -0.0, 0.0, 0.0, 0.0, 0.0, -120.5, 1539.1, 3642.25],
+            vibirs=[38.18, 58.16, 32.15, 167.64, 70.04, 108.65, 4.0, 133.26, 6.78],
+            vibdisps=[[[0.0, 0.0, float(k)]] * 3 for k in range(9)],
+            vibsyms=None,
+        )
+        v = worker.vibrations(data, 3)[0]
+        self.assertEqual([row["cells"] for row in v["rows"]], [[1, -120.5, 4.0], [2, 1539.1, 133.26], [3, 3642.25, 6.78]])
+        # (each its own displacements)
+        self.assertEqual([row["move"][2] for row in v["rows"]], [6.0, 7.0, 8.0])
+        self.assertEqual(worker.vibrations(types.SimpleNamespace(vibfreqs=[0.0] * 6), 3), [])
+
+    def test_an_xtb_output_s_vibrations_are_the_molecule_s_own(self):
+        r = read(sample("XTB/dvb_ir.out"))["result"]
+        rows = result(r, "vibrations")["rows"]
+        # (divinylbenzene: 20 atoms, 3 x 20 - 6 vibrations, numbered from one)
+        self.assertEqual(len(rows), 54)
+        self.assertTrue(all(abs(row["cells"][1]) >= 1 for row in rows))
+        self.assertEqual([row["cells"][0] for row in rows], list(range(1, 55)))
 
 
 class EveryProgram(unittest.TestCase):

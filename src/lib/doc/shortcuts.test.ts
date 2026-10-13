@@ -10,6 +10,7 @@ import {
   isSelectAllKey,
   keepClipboard,
   keepPageUnselected,
+  keepSystemMenuShut,
   openIntent,
   saveIntent,
   shortcutLabel,
@@ -164,6 +165,34 @@ describe("selection keys", () => {
   });
 });
 
+describe("keepSystemMenuShut", () => {
+  // (0.1.11: a right-click on Settings, the tab bar - anywhere but Meno's
+  // own menus - showed the webview's menu, its one item Reload, which starts
+  // the whole window afresh)
+  const shut = (target: unknown) => {
+    let prevented = false;
+    keepSystemMenuShut({ target, preventDefault: () => (prevented = true) });
+    return prevented;
+  };
+
+  it("keeps the system's menu shut on what is not typed in", () => {
+    for (const tagName of ["DIV", "BODY", "BUTTON", "CANVAS", "SPAN", "IMG", "SELECT"]) expect(shut({ tagName }), tagName).toBe(true);
+    for (const type of ["checkbox", "radio", "range", "button", "color"]) expect(shut({ tagName: "INPUT", type }), type).toBe(true);
+    expect(shut(null)).toBe(true);
+    expect(shut(undefined)).toBe(true);
+    // (the column's text, which Meno draws: what it is typed through is no field the system edits - its menu there was Reload alone)
+    expect(shut({ tagName: "DIV", dataset: { textField: "" } })).toBe(true);
+  });
+
+  it("lets it show where the system edits the words: its Cut, Copy and Paste", () => {
+    expect(shut({ tagName: "INPUT" })).toBe(false);
+    for (const type of ["text", "search", "number", "password", "TEXT"]) expect(shut({ tagName: "INPUT", type }), type).toBe(false);
+    expect(shut({ tagName: "TEXTAREA" })).toBe(false);
+    expect(shut({ tagName: "TEXTAREA", dataset: { nativeUndo: "" } })).toBe(false);
+    expect(shut({ tagName: "SPAN", isContentEditable: true })).toBe(false);
+  });
+});
+
 describe("chargeStep", () => {
   it("is + or - on its own, outside text fields", () => {
     expect(chargeStep({ key: "+" })).toBe(1);
@@ -210,5 +239,20 @@ describe("openIntent, isFitKey and shortcutLabel", () => {
     expect(shortcutLabel("S", true, true)).toBe("\u21e7\u2318S");
     expect(shortcutLabel("S", true, false)).toBe("Ctrl+Shift+S");
     expect(shortcutLabel("1", false, false)).toBe("Ctrl+1");
+  });
+});
+
+describe("+ and = for letters raised and lowered", () => {
+  it("are read by what the key gives, wherever a keyboard has it", async () => {
+    const { plusOrEquals } = await import("./shortcuts");
+    // (a US keyboard: Shift and = for +, = alone)
+    expect(plusOrEquals({ key: "+", code: "Equal", shiftKey: true })).toBe("+");
+    expect(plusOrEquals({ key: "=", code: "Equal" })).toBe("=");
+    // (a Japanese one: Shift and ; for +, Shift and - for =)
+    expect(plusOrEquals({ key: "+", code: "Semicolon", shiftKey: true })).toBe("+");
+    expect(plusOrEquals({ key: "=", code: "Minus", shiftKey: true })).toBe("=");
+    // (the number pad's +)
+    expect(plusOrEquals({ key: "+", code: "NumpadAdd" })).toBe("+");
+    expect(plusOrEquals({ key: "-", code: "Minus" })).toBeNull();
   });
 });
