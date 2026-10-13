@@ -1393,7 +1393,7 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
-      <AboveGuide over={dropRef} shown={active}>
+      <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
         {ask3d && (
           <Ask3D
