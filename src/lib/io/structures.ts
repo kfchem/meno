@@ -93,6 +93,19 @@ function depthOf(m: Molecule): number {
   return hi - lo;
 }
 
+/**
+ * Whether a molecule's atoms - two or more - all stand at one point: a file
+ * written with no coordinates, as some programs write one, every atom at
+ * 0, 0, 0. Such a record is no molecule in 3D, whatever its header says,
+ * and is laid out as it is opened (`placed`, ui/features/Workspace/utils/io).
+ */
+export function unplaced(atoms: readonly { x: number; y: number; z?: number }[]): boolean {
+  if (atoms.length < 2) return false;
+  const [a] = atoms;
+  const near = (p: number, q: number) => Math.abs(p - q) < 1e-6;
+  return atoms.every((b) => near(b.x, a.x) && near(b.y, a.y) && near(b.z ?? 0, a.z ?? 0));
+}
+
 /** Why a file holds nothing to read, as the chemist is told. */
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
@@ -151,7 +164,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   // (in a MOL or SD file, each record is a drawing or a molecule in 3D)
   const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
-  const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && (said[i] || depthOf(m) > 0.1);
+  const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && !unplaced(m.atoms) && (said[i] || depthOf(m) > 0.1);
   const molecules3d = molecules
     .filter(inDepth)
     .map((m) => {

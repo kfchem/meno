@@ -8,8 +8,11 @@ import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc
 import { bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
-import type { StructureRead } from "../../../../lib/io/structures";
+import { unplaced, type StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
+import { emptyWorkspaceDocument, relayout } from "../document";
+import { layoutJob, nextFree, relayoutFrom } from "../chem/engineLayout";
+import { layOut } from "../chem/layOut";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -78,7 +81,44 @@ export async function processFileContent(
   }
   // a structure's file: what it holds, as its reader gives it, checked -
   // its several records drawn flat a stack of drawings
-  return stackedRead(await readStructureFile(filename, content, kind));
+  return stackedRead(await placed(await readStructureFile(filename, content, kind)));
+}
+
+/**
+ * A file's structures given places where it gave them none: each record -
+ * the file, where it has one - whose atoms all stand at one point
+ * (lib/io/structures `unplaced`), as a file written with no coordinates
+ * has them, laid out as Clean-up lays a structure out, where it stood, its
+ * fragments side by side. They were opened as a pile, each atom over the
+ * next, only a label to be seen. One the engine cannot lay out is left as
+ * it is.
+ */
+export async function placed(read: StructureRead): Promise<StructureRead> {
+  const groups = read.records?.map((r) => r.atoms) ?? [read.model.atoms.map((a) => a.id)];
+  let model = editorModelOf(read.model);
+  let records = read.records;
+  let moved = false;
+  for (const [k, group] of groups.entries()) {
+    const ids = new Set(group);
+    const part = { atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
+    if (!unplaced(part.atoms)) continue;
+    try {
+      const job = layoutJob(part);
+      const change = relayoutFrom(model, part, job, await layOut(job.input));
+      const was = new Set(model.atoms.map((a) => a.id));
+      model = relayout({ ...emptyWorkspaceDocument(), model, nextId: nextFree(model) }, change).model;
+      moved = true;
+      // (a record's atoms as they are now: any H the layout took away gone, any it added its own)
+      if (records) {
+        const now = new Set(model.atoms.map((a) => a.id));
+        const added = model.atoms.filter((a) => !was.has(a.id)).map((a) => a.id);
+        records = records.map((r, j) => (j === k ? { ...r, atoms: [...r.atoms.filter((id) => now.has(id)), ...added] } : r));
+      }
+    } catch {
+      // (left as it was read)
+    }
+  }
+  return moved ? { ...read, model, ...(records ? { records } : {}) } : read;
 }
 
 /**
