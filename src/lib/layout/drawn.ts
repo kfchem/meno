@@ -129,12 +129,17 @@ export function readStereo(
   });
 
   const cisTrans = new Map<number, CisTrans>();
+  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
     const ra = neighbours[a].find((n) => n !== b);
     const rb = neighbours[b].find((n) => n !== a);
     if (ra == null || rb == null || inSmallRing(neighbours, a, b)) return;
+    // (an end with a second double bond, or a triple one - an azide's
+    // middle N, an allene's middle C - is straight through, and the bond
+    // has no cis or trans of its own, however the drawing bends it)
+    if (cumulated(a, b) || cumulated(b, a)) return;
     // a wavy bond at either end: either configuration
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
     const along = { x: atoms[b].x - atoms[a].x, y: atoms[b].y - atoms[a].y };
@@ -239,7 +244,9 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
           return off > 1e-3 && off < UNSURE_TURN;
         });
     const groups = neighbours[a].some((n) => n !== b) && neighbours[b].some((n) => n !== a);
-    if (groups && (inLine(a, b) || inLine(b, a))) doubles.push(i);
+    // (nor one cumulated with another, which has none: readStereo)
+    const cumulated = [a, b].some((end) => neighbours[end].some((n) => n !== (end === a ? b : a) && bondOf.get(key(end, n))!.order >= 2));
+    if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
   return { atoms: centres, bonds: doubles };
 }

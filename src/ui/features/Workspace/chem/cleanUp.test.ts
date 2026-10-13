@@ -197,6 +197,22 @@ describe("cleanUp", () => {
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!), `${c}`).toBe(true);
   });
 
+  it("lays out phenyl azide that has just arrived with its azide bent: no cis or trans to keep there", async () => {
+    // RDKit's drawing as it may come, N(-)=N(+)=N off a straight line
+    const ring = Array.from({ length: 6 }, (_, i) => atom(i + 1, 1.8 * Math.cos((i * Math.PI) / 3), 1.8 * Math.sin((i * Math.PI) / 3)));
+    const model: Model = {
+      atoms: [...ring, atom(7, 3.6, 0, "N"), { ...atom(8, 5.2, 0.6, "N"), charge: 1 }, { ...atom(9, 6.8, 0.2, "N"), charge: -1 }],
+      bonds: [
+        ...ring.map((_, i): Bond => ({ id: 100 + i, a: i + 1, b: ((i + 1) % 6) + 1, order: i % 2 ? 1 : 2 })),
+        { id: 106, a: 1, b: 7, order: 1 },
+        { id: 107, a: 7, b: 8, order: 2 },
+        { id: 108, a: 8, b: 9, order: 2 },
+      ],
+    };
+    const laid = await laidOut(model);
+    expect(laid.atoms).toHaveLength(9);
+  });
+
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
     // methyl phenyl sulfoxide's S, wedged: its fourth group a lone pair
     const sulfoxide: Model = {
