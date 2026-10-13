@@ -18,7 +18,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 - **RDKit is a plugin of its own**, independent like the others.
 - **Nothing is kept running ahead of need.** Every plugin starts when it
   is first needed and stays for the session, as RDKit does now. More
-  plugins kept running would only take more memory.
+  plugins kept running would only take more memory. (Since 2026-10-13, a
+  worker unused for 15 minutes is stopped: *When plugins run*.)
 - **A fingerprint might lead into a workflow**, and so might other such
   results.
 - **Plugins are completely independent, and Meno builds only a general
@@ -366,8 +367,25 @@ fills.
   structure is drawn, since the chemical checks run by themselves once
   it is at hand (`useChemMarks`, `chemAtHand`). Its first import may
   take a while; up to 90 s is allowed.
-- **Keeping it.** It is then kept for the session. If it stops, the next
+- **Keeping it.** It is then kept while it is used. If it stops, the next
   request starts it again.
+- **Stopped when unused** (the maintainer, 2026-10-13;
+  `lib/plugins/idle.ts`). A worker that has gone 15 minutes unused is
+  stopped, and started again when next needed, so that a plugin holding a
+  large model does not keep its memory all day. Unused means:
+  - no request unanswered: each request asked holds the clock, and the
+    last one answered (or given up on) starts it again;
+  - nothing heard from the worker: each line it says starts the clock
+    again;
+  - no job of its plugin waiting or running (`liveJobsOf`). A worker kept
+    for a job is looked at again after another 15 minutes.
+
+  The stop is no one's error: nothing waits on the worker, and nothing
+  says it stopped. Settings, *Chemistry* says again that the plugin is
+  set up and starts when a structure is drawn, as before its first start.
+  The next request waits for the worker to start, as a session's first
+  request does: a role says "Starting RDKit…" meanwhile, and a file's
+  reading or a step waits as on its first use.
 - **Held on a request.** A worker answers one request at a time, in the
   order asked. If the request it is on is not answered in that request's
   time, the worker is stopped, and the next request starts it afresh
@@ -388,7 +406,7 @@ fills.
   name and description from its manifest; no code of Meno's names it.
 
 The calculation readers start the same way, on first use, and are stopped
-only when taken away or when Meno quits. Every plugin's environment is
+the same way: unused for 15 minutes, taken away, or when Meno quits. Every plugin's environment is
 named for it, `plugin-<id>` (the maintainer, 2026-10-06); those made before
 under other names are left where they were.
 
@@ -409,8 +427,9 @@ no plugin is kept running ahead of need):
   alone: Meno's proxy refuses any other (docs/ARCHITECTURE.md, *The
   network*).
 - **Started** the first time it is asked for. Nothing starts with Meno.
-- **Kept** for the session, and started again if it stops.
-- **Stopped** when it is taken away, or when Meno quits.
+- **Kept** while it is used, and started again if it stops.
+- **Stopped** when it has gone 15 minutes unused (the maintainer,
+  2026-10-13), when it is taken away, or when Meno quits.
 
 RDKit is an ordinary plugin. It is in use all day only because, by
 default, it fills the core roles, and so it is asked for as soon as a
@@ -552,7 +571,8 @@ The same for every plugin and for Meno's own parts:
 By the maintainer, 2026-10-06:
 
 1. **No plugin is kept running ahead of need.** Every plugin runs as RDKit
-   does now: started when first needed, kept for the session.
+   does now: started when first needed, kept for the session. (Revised
+   2026-10-13: kept while it is used, stopped once unused for 15 minutes.)
 2. **The other roles are chosen where they are used** (*Chemistry*,
    *Molecules in 3D*, a workflow step), not in the Plugins tab. The
    Plugins tab says what each plugin offers.
