@@ -461,7 +461,9 @@ gave), and one can be shown again.
 - **Opened again**, a workspace looks at its jobs: done - their results
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was
-  restarted, say) - *Stopped*, with their logs.
+  restarted, say) - *Stopped*, with their logs. Where some are gone and
+  others done, those done come in and the others are counted failed:
+  *1 of 3 failed · It stopped without finishing*.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
@@ -771,7 +773,12 @@ Decided while building it, for the maintainer to confirm:
 - **Deleting a running step asks first** - and so does an undo or a redo
   that would take one away (*Undo*); deleted, a step's jobs are
   stopped and their folders taken away. Undone, the step comes back
-  without them; its results keep its logs.
+  without them; its results keep its logs. Deleted while its jobs are
+  still being started (a long conformer set, Run just pressed), it starts
+  no more, and those it started are stopped and taken away the same.
+- **Failed entries are counted as entries**: a job for several entries
+  that failed counts each of them (*2 of 3 failed*), and where its runner
+  said why (*xtb could not be started*) that is the reason given.
 - **Show log** opens each job's log as a text of the workspace, *Optimise
   log* (*Optimise log 2*, ... where there are several), following the
   job while it runs; a text that grows at its end keeps its last lines in

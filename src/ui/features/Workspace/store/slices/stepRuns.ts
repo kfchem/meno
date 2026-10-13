@@ -392,6 +392,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const jobs: StepJob[] = [];
     try {
       for (const p of prepared) {
+        if (gone(id)) break;
         const path = paths.get(p.program);
         const ask = {
           plugin: plugin.id,
@@ -410,11 +411,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const j of jobs) void stopJob(j.id).catch(() => {});
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
+    if (gone(id)) return forgetStarted(jobs);
     doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
   }
+
+  /**
+   * Whether a step is gone while its jobs are readied or started - deleted,
+   * its adding undone - for which none is to be started, and those that
+   * were are stopped and taken away (`forgetStarted`): none left running,
+   * unseen, for no step. (Its `running` is set only once they have started.)
+   */
+  const gone = (id: number) => !stepOf(doc.getState(), id);
+
+  /** Jobs started for a step that has gone since: stopped, and their folders taken away once they have ended. */
+  const forgetStarted = (jobs: readonly StepJob[]) => {
+    for (const j of jobs) {
+      forgotten.add(j.id);
+      void (async () => {
+        await stopJob(j.id).catch(() => {});
+        const until = Date.now() + STOP_WAIT_MS;
+        while (Date.now() < until) {
+          const r = await jobOf(j.id).catch(() => null);
+          if (!r || finished(r.state)) break;
+          await new Promise((go) => setTimeout(go, 500));
+        }
+        await removeJob(j.id).catch(() => {});
+      })();
+    }
+  };
 
   /** A Render step's options split: Meno's own choices (the picture's size, shape and materials), and the plugin's. */
   const renderChoices = (kind: StepKind, options: OptionValues) => {
@@ -450,6 +477,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       for (const [i, e] of entries.entries()) {
+        if (gone(id)) break;
         const source = input.molecules.find((m) => m.id === e.from);
         const rendered = renderScene([{ m: entryCarried(e, source, e.from != null ? turns[e.from] : undefined) }], style, ask);
         const entry = { scene: SCENE, film: false, width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps };
@@ -466,6 +494,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const j of jobs) void stopJob(j.id).catch(() => {});
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
+    if (gone(id)) return forgetStarted(jobs);
     doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
     void lookAtJobs();
@@ -484,12 +513,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const made: Rendered[] = [];
     const whys: string[] = [];
     for (const [k, j] of run.jobs.entries()) {
+      const record = records[k];
+      // (gone without finishing - the computer restarted, say - while others were done: said so, the others' pictures made)
+      if (!record || record.state === "gone") {
+        whys.push("It stopped without finishing");
+        continue;
+      }
       if (!client) {
         whys.push("What did it is not added");
         continue;
       }
       try {
-        const said = (await client.collect("render", [{ scene: SCENE, film: false }], theirs, {}, await wholeLog(j.id), records[k]!.state)) as { why?: unknown; made?: unknown };
+        const said = (await client.collect("render", [{ scene: SCENE, film: false }], theirs, {}, await wholeLog(j.id), record.state)) as { why?: unknown; made?: unknown };
         if (typeof said?.why === "string") {
           whys.push(said.why.trim().slice(0, 300) || "It did not say why");
           continue;
@@ -600,8 +635,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const as = { kind, options: run.options };
       const close = () => doc.amend((x) => setRunning(x, id, undefined), { unsaved: true });
 
-      // stopped - or gone without saying how it ended: nothing comes in
-      if (records.some((r) => !r || r.state === "stopped" || r.state === "gone")) {
+      // stopped - or every one gone without saying how it ended: nothing comes in. (Some gone - the computer restarted,
+      // say - and others done: those done come in, the others said failed, as WORKFLOWS.md, When Meno closes, has it.)
+      const lost = records.map((r) => !r || r.state === "gone");
+      if (records.some((r) => r?.state === "stopped") || lost.every(Boolean)) {
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
         return close();
       }
@@ -617,16 +654,31 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const total = run.jobs.reduce((n, j) => n + j.entries.length, 0);
       const worked: Worked[] = [];
       const whys: string[] = [];
+      // (how many of its entries failed, and why: a job that failed fails each entry it was for)
+      let failed = 0;
+      const fails = (n: number, why: string) => {
+        failed += n;
+        whys.push(why);
+      };
       const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
       for (const [k, j] of run.jobs.entries()) {
-        const record = records[k]!;
         const mine = j.entries.map((i) => entries[i]);
+        if (lost[k]) {
+          fails(j.entries.length, "It stopped without finishing");
+          continue;
+        }
+        const record = records[k]!;
         if (!client || !plugin) {
-          whys.push("What did it is not added");
+          fails(j.entries.length, "What did it is not added");
           continue;
         }
         if (mine.some((e) => !e)) {
-          whys.push("What came into it changed while it ran");
+          fails(j.entries.length, "What came into it changed while it ran");
+          continue;
+        }
+        // (failed before its program could say: its runner's own words - "orca could not be started", say)
+        if (record.state === "failed" && record.why) {
+          fails(j.entries.length, record.why);
           continue;
         }
         const log = await wholeLog(j.id);
@@ -640,11 +692,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         try {
           said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, record.state), mine.length);
         } catch (e) {
-          whys.push(message(e));
+          fails(mine.length, message(e));
           continue;
         }
         if ("why" in said) {
-          whys.push(said.why);
+          fails(mine.length, said.why);
           continue;
         }
         // (an output for Meno's readers: read as one opened is, and kept as it is)
@@ -653,13 +705,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             const text = "log" in r ? log : files[r.file];
             const read = text ? await readWithReaders(r, text) : `It wrote no ${r.name}`;
             if (typeof read === "string") {
-              whys.push(read);
+              fails(1, read);
               continue;
             }
             const made =
               kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source);
             if (typeof made === "string") {
-              whys.push(made);
+              fails(1, made);
               continue;
             }
             // (the wavefunction it wrote besides, where it did: kept with what was read, for a step that takes one)
@@ -678,11 +730,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           for (const [i, s] of said.surfaces.entries()) {
             const out = await surfacesRead(j.id, mine[i], s, there);
             if (typeof out === "string") {
-              whys.push(out);
+              fails(1, out);
               continue;
             }
             const made = workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined);
-            if (typeof made === "string") whys.push(made);
+            if (typeof made === "string") fails(1, made);
             else worked.push(made);
           }
           continue;
@@ -691,7 +743,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (by the version its worker said it runs, as a reader's is kept)
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           const made = kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined) : workedOf(kind, mine[i], out, readers, log ? source : undefined);
-          if (typeof made === "string") whys.push(made);
+          if (typeof made === "string") fails(1, made);
           else worked.push(...(Array.isArray(made) ? made : [made]));
         }
       }
@@ -701,7 +753,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
-      const said = ok ? found : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
+      const said = ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`;
       bringIn(id, worked, givesFor(kind, input?.holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
       close();
     } finally {

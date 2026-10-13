@@ -5,6 +5,8 @@ import type { Job, JobAsk } from "../../../../lib/jobs";
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
 const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
 let next = 1;
+/** Where set, what each job's start waits on once its folder is made - a step's jobs started one by one, as the runner does. */
+let holdStart: Promise<void> | null = null;
 const idOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 vi.mock("../../../../lib/jobs", async (actual) => ({
@@ -13,6 +15,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     asked.started.push(ask);
     const id = idOf(next++);
     jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "waiting", created: Date.now(), log: "", files: {} });
+    if (holdStart) await holdStart;
     return id;
   },
   listJobs: async () => [...jobs.values()],
@@ -148,6 +151,17 @@ function editor() {
 }
 
 const settle = () => new Promise((go) => setTimeout(go, 0));
+
+/** The page of `editor`, with `n` waters in its set: `n` entries, a job each. */
+function waters(n: number) {
+  const made = editor();
+  for (let i = 1; i < n; i++) made.doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: i % 2 ? 1 : -1, y: 1 } }));
+  return made;
+}
+
+/** A job of the test's ended: done with what it wrote, or as `state` says. */
+const end = (n: number, state: Job["state"] = "done", more: Partial<Job> = {}) =>
+  Object.assign(jobs.get(idOf(n))!, { state, started: 1000, ended: 2000, ...(state === "done" ? { files: { "xtbopt.log": "-5.0705" } } : {}), ...more });
 
 describe("a step that runs a plugin's program", () => {
   beforeEach(() => {
@@ -461,6 +475,66 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
+  it("deleted while its jobs are being started, starts no more - and stops those started, and takes them away", async () => {
+    const { st, step } = waters(3);
+    let go = () => {};
+    holdStart = new Promise((r) => (go = r));
+    const ran = st().runStep(step);
+    for (let i = 0; i < 8 && !asked.started.length; i++) await settle();
+    expect(asked.started).toHaveLength(1);
+    st().removeStep(step, true);
+    holdStart = null;
+    // (the runner stops it as soon as it is asked)
+    end(1, "stopped");
+    go();
+    await ran;
+    for (let i = 0; i < 4; i++) await settle();
+    expect(asked.started).toHaveLength(1);
+    expect(asked.stopped).toEqual([idOf(1)]);
+    expect(asked.removed).toEqual([idOf(1)]);
+    expect(st().steps).toHaveLength(0);
+  });
+
+  it("brings in what the jobs done gave where another went without finishing - that one said failed", async () => {
+    const { st, step } = waters(3);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(3);
+    end(1);
+    end(2, "gone");
+    end(3);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "1 of 3 failed \u00b7 It stopped without finishing" });
+    expect(st().molecules3d).toHaveLength(3 + 2);
+  });
+
+  it("counts a job that failed as each entry it was for - and says why in its runner's words, where the runner said", async () => {
+    const { st, step } = waters(3);
+    const two = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1], ...two }, { entries: [2], ...two }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1, "failed", { why: "xtb could not be started" });
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 xtb could not be started" });
+    expect(st().molecules3d).toHaveLength(3 + 1);
+    // (where it did not: the plugin's, for each entry of the job)
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1], ...two }, { entries: [2], ...two }] }) as never);
+    const again = st().runStep(step);
+    await settle();
+    await settle();
+    end(3, "failed");
+    end(4);
+    await st().lookAtJobs();
+    await again;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);
@@ -701,5 +775,25 @@ describe("Render as a step", () => {
     expect(st().pictures).toEqual([]);
     expect(st().sets.some((b) => b.made?.step === step)).toBe(false);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
+  });
+
+  it("makes the pictures of the jobs done where another went without finishing - that one said failed", async () => {
+    const { st } = waters(2);
+    const step = st().addStep("render", "blender", 10, 0);
+    st().connect({ set: st().sets[0].id }, step);
+    const one = { program: "blender", args: [], files: [], reads: [] };
+    // (a job prepared for each entry, one by one)
+    for (let i = 0; i < 2; i++) worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }] }) as never);
+    const ran = st().runStep(step);
+    // (each scene written before its job starts)
+    for (let i = 0; i < 20 && asked.started.length < 2; i++) await settle();
+    madeFiles.set(`/jobs/${idOf(2)}/picture.png`, png(240, 120, 3));
+    end(1, "gone");
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().pictures).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "1 of 2 failed \u00b7 It stopped without finishing" });
   });
 });
