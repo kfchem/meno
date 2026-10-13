@@ -122,23 +122,9 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
   const core = useMemo(() => strokesBounds(k.strokes, width / 2), [k.strokes, width]);
   // the light round its strokes, under the pointer or selected, coming and going
   const [light, setLight] = useState(0);
-  useFrame((_, dt) => {
-    const to = selected ? CHOSEN : hovered ? LIT : 0;
-    if (Math.abs(light - to) < 1e-3) {
-      if (light !== to) setLight(to);
-      return;
-    }
-    setLight(follow(light, to, Math.min(dt, 1 / 20), TAU.quick));
-    invalidate();
-  });
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   const [, setTick] = useState(0);
   useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
-    if (!held || !heldShows(held, performance.now())) return;
-    setTick((t) => t + 1);
-    invalidate();
-  });
   const padded = (pad: number) => (core ? boundsPadded(core, pad) : { x0: 0, y0: 0, x1: 0, y1: 0 });
   const b = padded(EDGE_PX * px);
   const m = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
@@ -147,7 +133,18 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
   const bandPx = useRef(px);
   const [, setLitZoom] = useState(0);
   const litPx = useRef(px);
-  useFrame(() => {
+  // (one frame callback for all of it: the canvas sorts all of those again at every one added, and writing comes in
+  // thousands of pieces)
+  useFrame((_, dt) => {
+    const to = selected ? CHOSEN : hovered ? LIT : 0;
+    if (Math.abs(light - to) >= 1e-3) {
+      setLight(follow(light, to, Math.min(dt, 1 / 20), TAU.quick));
+      invalidate();
+    } else if (light !== to) setLight(to);
+    if (held && heldShows(held, performance.now())) {
+      setTick((t) => t + 1);
+      invalidate();
+    }
     const now = pxNow();
     if (band.current && bandPx.current !== now) {
       bandPx.current = now;

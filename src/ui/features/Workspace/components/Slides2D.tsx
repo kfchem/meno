@@ -21,7 +21,7 @@
  * - Lit while the pointer is on its edge or its number.
  */
 import * as THREE from "three";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import { useEditor, useEditorStore } from "../store";
@@ -79,14 +79,21 @@ export default function Slides2D() {
   // as the view moves at a talk's start and end, and gone once unseen
   const seen = useRef(presenting ? 0 : 1);
   const [gone, setGone] = useState(presenting);
+  // each part's work at a frame - its size on the screen, how much it is seen - done here, in one of the canvas's frame
+  // callbacks, not one of its own each: the canvas sorts all of those again at every one added, and a talk's end adds
+  // the slides' parts all at once
+  const parts = useMemo(() => new Set<PartFrame>(), []);
   useFrame((_, dt) => {
     const to = presenting ? 0 : 1;
     const now = seen.current;
-    if (now === to) return;
-    const next = Math.abs(now - to) < 0.01 ? to : follow(now, to, Math.min(dt, 1 / 20), TAU.move);
-    seen.current = next;
-    if ((next === 0) !== gone) setGone(next === 0);
-    invalidate();
+    if (now !== to) {
+      const next = Math.abs(now - to) < 0.01 ? to : follow(now, to, Math.min(dt, 1 / 20), TAU.move);
+      seen.current = next;
+      if ((next === 0) !== gone) setGone(next === 0);
+      invalidate();
+    }
+    const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+    for (const part of parts) part(px, dt);
   });
   // a number being dragged onto another slide: where it is, and the slide it is over
   const [carried, setCarried] = useState<{ id: number; at: Pt; over: number | null } | null>(null);
@@ -142,28 +149,47 @@ export default function Slides2D() {
   const carriedSeen = useCallback(() => 0.85, []);
   if (!slides.length || (gone && presenting)) return null;
   return (
-    <group position={[0, 0, Z]}>
-      {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} opacity={joinSeen} /> : null))}
-      {slides.map((s, i) => (
-        <SlideFrame
-          key={s.id}
-          s={s}
-          n={i + 1}
-          seen={seen}
-          font={font}
-          selected={selSlides.has(s.id)}
-          lit={hovered === s.id || carried?.over === s.id}
-          toWorld={toWorld}
-          onCarry={startCarry}
-        />
-      ))}
-      {carried && (
-        <group position={[carried.at.x, carried.at.y, 0.01]}>
-          <SlideNumber n={slides.findIndex((x) => x.id === carried.id) + 1} font={font} opacity={carriedSeen} />
-        </group>
-      )}
-    </group>
+    <PartFrames.Provider value={parts}>
+      <group position={[0, 0, Z]}>
+        {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} opacity={joinSeen} /> : null))}
+        {slides.map((s, i) => (
+          <SlideFrame
+            key={s.id}
+            s={s}
+            n={i + 1}
+            seen={seen}
+            font={font}
+            selected={selSlides.has(s.id)}
+            lit={hovered === s.id || carried?.over === s.id}
+            toWorld={toWorld}
+            onCarry={startCarry}
+          />
+        ))}
+        {carried && (
+          <group position={[carried.at.x, carried.at.y, 0.01]}>
+            <SlideNumber n={slides.findIndex((x) => x.id === carried.id) + 1} font={font} opacity={carriedSeen} />
+          </group>
+        )}
+      </group>
+    </PartFrames.Provider>
   );
+}
+
+/** A part's work at each frame, before it is drawn: given a pixel's size on the page, and the frame's time. */
+type PartFrame = (px: number, dt: number) => void;
+const PartFrames = createContext<Set<PartFrame> | null>(null);
+
+/** `work` done at each frame by the slides' one frame callback (Slides2D), as long as the part is there. */
+function usePartFrame(work: PartFrame): void {
+  const parts = useContext(PartFrames);
+  const latest = useRef(work);
+  latest.current = work;
+  useEffect(() => {
+    if (!parts) return;
+    const part: PartFrame = (px, dt) => latest.current(px, dt);
+    parts.add(part);
+    return () => void parts.delete(part);
+  }, [parts]);
 }
 
 /**
@@ -172,10 +198,8 @@ export default function Slides2D() {
  * by drawing anything again - and once more where `deps` change.
  */
 function useScreenSize(place: (px: number) => void, deps: readonly unknown[]): void {
-  const { camera } = useThree();
   const at = useRef<{ px: number; deps: readonly unknown[] } | null>(null);
-  useFrame(() => {
-    const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  usePartFrame((px) => {
     const was = at.current;
     if (was && was.px === px && was.deps.length === deps.length && was.deps.every((d, i) => d === deps[i])) return;
     at.current = { px, deps };
@@ -189,7 +213,7 @@ function SlideNumber({ n, font, opacity }: { n: number; font: string | null; opa
   const disc = useRef<THREE.MeshBasicMaterial>(null);
   const figures = useRef<THREE.Mesh & { fillOpacity: number }>(null);
   useScreenSize((px) => group.current?.scale.setScalar(px), []);
-  useFrame(() => {
+  usePartFrame(() => {
     const o = opacity();
     if (disc.current) disc.current.opacity = o;
     if (figures.current) figures.current.fillOpacity = o;
@@ -241,7 +265,15 @@ function SlideFrame({
   // its line, lit while the pointer is on it, coming and going
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.base, transparent: true, opacity: REST, depthTest: false, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => material.dispose(), [material]);
-  useFrame((_, dt) => {
+  // taken hold of by a press held on its edge: where, lit from there
+  const [held, setHeld] = useState<(Held & Pt) | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => invalidate(), [held, invalidate]);
+  usePartFrame((_, dt) => {
+    if (held && heldShows(held, performance.now())) {
+      setTick((t) => t + 1);
+      invalidate();
+    }
     const to = (lit || selected ? LIT : REST) * seen.current;
     material.color.set(selected ? COLORS.highlight : COLORS.base);
     if (Math.abs(material.opacity - to) < 1e-3) {
@@ -249,15 +281,6 @@ function SlideFrame({
       return;
     }
     material.opacity = follow(material.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-    invalidate();
-  });
-  // taken hold of by a press held on its edge: where, lit from there
-  const [held, setHeld] = useState<(Held & Pt) | null>(null);
-  const [, setTick] = useState(0);
-  useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
-    if (!held || !heldShows(held, performance.now())) return;
-    setTick((t) => t + 1);
     invalidate();
   });
 
@@ -546,7 +569,7 @@ function Join({ from, to, opacity }: { from: Pt; to: Pt; opacity: () => number }
     },
     [from.x, from.y, to.x, to.y, material],
   );
-  useFrame(() => {
+  usePartFrame(() => {
     const o = opacity();
     material.uniforms.uOpacity.value = o;
     if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
