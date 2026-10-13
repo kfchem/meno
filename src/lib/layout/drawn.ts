@@ -89,6 +89,13 @@ const WEDGE_LIFT = 0.8;
  */
 const HAIR = 0.2;
 
+/**
+ * The elements a stereocentre with three groups and a lone pair for its
+ * fourth is of - a sulfoxide's S, a phosphine's P - as RDKit reads one:
+ * such an atom at the end of a single bond is no axis's end.
+ */
+const LONE_PAIR_CENTRES = new Set(["S", "Se", "Te", "P", "As", "Sb"]);
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],
@@ -129,12 +136,17 @@ export function readStereo(
   });
 
   const cisTrans = new Map<number, CisTrans>();
+  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
     const ra = neighbours[a].find((n) => n !== b);
     const rb = neighbours[b].find((n) => n !== a);
     if (ra == null || rb == null || inSmallRing(neighbours, a, b)) return;
+    // (an end with a second double bond, or a triple one - an azide's
+    // middle N, an allene's middle C - is straight through, and the bond
+    // has no cis or trans of its own, however the drawing bends it)
+    if (cumulated(a, b) || cumulated(b, a)) return;
     // a wavy bond at either end: either configuration
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
     const along = { x: atoms[b].x - atoms[a].x, y: atoms[b].y - atoms[a].y };
@@ -160,6 +172,9 @@ export function readStereo(
       const near = neighbours[i].filter((n) => n !== j);
       const far = neighbours[j].filter((n) => n !== i);
       if (near.length !== 2 || far.length !== 2 || atoms[i].hs || atoms[j].hs || tetra.has(i)) continue;
+      // (read as an axis's, the wedge from a sulfoxide's S to its methyl
+      // turned the S over: laid out, the axis was kept and the centre not)
+      if (LONE_PAIR_CENTRES.has(atoms[i].el ?? "C")) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
       if (lifted == null || inRing(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C"))) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];
@@ -239,7 +254,9 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
           return off > 1e-3 && off < UNSURE_TURN;
         });
     const groups = neighbours[a].some((n) => n !== b) && neighbours[b].some((n) => n !== a);
-    if (groups && (inLine(a, b) || inLine(b, a))) doubles.push(i);
+    // (nor one cumulated with another, which has none: readStereo)
+    const cumulated = [a, b].some((end) => neighbours[end].some((n) => n !== (end === a ? b : a) && bondOf.get(key(end, n))!.order >= 2));
+    if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
   return { atoms: centres, bonds: doubles };
 }

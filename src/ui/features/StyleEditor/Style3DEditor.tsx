@@ -28,6 +28,7 @@ import Molecule3DView from "../Workspace/components/Molecule3DView";
 import KeyLight3D from "../Workspace/components/KeyLight3D";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import HideHydrogensAsk from "./HideHydrogensAsk";
+import { useAtLeastWide } from "./sideBySide";
 import { SAMPLE_3D } from "./sample3d";
 
 /**
@@ -69,10 +70,13 @@ export default function Style3DEditor({
     if (key === "hydrogens" && value === "carbonHidden" && look.hydrogens !== "carbonHidden") setAsking(editing);
     else onChange(withLookSetting(choice, editing, key, value));
   };
+  // (side by side with the preview only where there is room for both: else the preview above, as the drawing's editor has it)
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const roomy = useAtLeastWide(box);
   const lookGroups = [...new Set(LOOK_3D_FIELDS.map((f) => f.group))];
   const sharedGroups = [...new Set(SCENE_3D_FIELDS.map((f) => f.group))];
   return (
-    <div className="flex gap-8 items-start">
+    <div ref={setBox} className={roomy ? "flex gap-8 items-start" : "flex flex-col gap-6"}>
       <div className="min-w-0 flex-1">
         <Styles choice={choice} editing={editing} onEdit={setEditing} onChange={onChange} />
         <div className="mt-6 flex items-center gap-2">
@@ -94,6 +98,7 @@ export default function Style3DEditor({
               {LOOK_3D_FIELDS.filter((f) => f.group === group).map((f) => (
                 <Row
                   key={f.key}
+                  stacked={!roomy}
                   field={f}
                   value={look[f.key]}
                   changed={f.key in changes}
@@ -128,6 +133,7 @@ export default function Style3DEditor({
               {SCENE_3D_FIELDS.filter((f) => f.group === group).map((f) => (
                 <Row
                   key={f.key}
+                  stacked={!roomy}
                   field={f}
                   value={style[f.key]}
                   changed={f.key in choice.shared}
@@ -140,7 +146,7 @@ export default function Style3DEditor({
         ))}
         {children}
       </div>
-      <div className="w-[26rem] shrink-0 sticky top-4">
+      <div className={roomy ? "w-[26rem] shrink-0 sticky top-4" : "order-first"}>
         <div className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Preview</div>
         <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label={`A molecule drawn in ${edited.name}`}>
           <Preview style={shownStyle} look={shownLook} onDouble={() => setEditing(choice[other])} />
@@ -247,6 +253,7 @@ function Row({
   warn,
   faint,
   off,
+  stacked,
 }: {
   field: Style3DField;
   value: unknown;
@@ -260,6 +267,8 @@ function Row({
   faint?: boolean;
   /** Moot as another setting is: shown faintly, and not to be set. */
   off?: boolean;
+  /** Its control under its words, not beside them: where the editor is narrow. */
+  stacked?: boolean;
 }) {
   return (
     <div
@@ -273,12 +282,12 @@ function Row({
       {(changed || warn) && (
         <span aria-hidden className={clsx("absolute left-0 top-2 bottom-2 w-0.5 rounded-full", warn ? "bg-accel-accent" : "bg-accel-base")} />
       )}
-      <div className="flex gap-3 items-start">
+      <div className={clsx("flex gap-3", stacked ? "flex-col items-stretch gap-2" : "items-start")}>
         <div className="min-w-0 flex-1">
           <div className={clsx("text-sm", warn ? "text-accel-accent font-medium" : "text-gh-black")}>{field.label}</div>
           <p className="text-xs leading-snug text-gh-gray mt-0.5">{field.description}</p>
         </div>
-        <div className={clsx("shrink-0 flex items-center gap-1.5 pt-0.5", off && "pointer-events-none")} inert={off || undefined}>
+        <div className={clsx("shrink-0 flex items-center gap-1.5", stacked ? "justify-end" : "pt-0.5", off && "pointer-events-none")} inert={off || undefined}>
           <Control field={field} value={value} onSet={onSet} />
           <button
             onClick={() => onSet(was.value)}

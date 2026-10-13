@@ -9,7 +9,8 @@
 //! It goes on the network only as Meno's network lets it (net.rs): as a
 //! task with the purpose the plugin's environment is set up under - so only
 //! once the user has allowed that, having been told of these files and
-//! their size - its requests through Meno's proxy. A download cut short is
+//! their size, and where from - its requests through Meno's proxy, to the
+//! hosts that consent named alone. A download cut short is
 //! taken up where it stopped, where the server allows it.
 //!
 //! One may instead be a program the plugin runs, Meno's own copy of it
@@ -352,10 +353,12 @@ fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
 
 /// A plugin's files: where they stand; and, with `fetch`, those not kept
 /// fetched - under the plugin's setting-up purpose, so refused unless the
-/// user has allowed that - and kept, how far they have come said as they
-/// come (`plugin-files:progress`); an archive unpacked, and thrown away.
+/// user has allowed that, from the hosts its consent named (`hosts`,
+/// lib/plugins/setUpSources.ts) alone - and kept, how far they have come
+/// said as they come (`plugin-files:progress`); an archive unpacked, and
+/// thrown away.
 #[tauri::command]
-pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool) -> Result<FilesState, String> {
+pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Option<Vec<String>>) -> Result<FilesState, String> {
     if !crate::plugin_id_ok(&plugin) {
         return Err(format!("not a plugin's id: {plugin}"));
     }
@@ -376,7 +379,7 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool) -> Result
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let name = manifest.get("name").and_then(Value::as_str).unwrap_or(&plugin).to_string();
     // (refused here when Meno is offline, or setting the plugin up was not allowed)
-    let task = app.state::<Net>().begin(&format!("python-env:plugin-{plugin}"), &format!("Downloading what {name} needs"))?;
+    let task = app.state::<Net>().begin(&format!("python-env:plugin-{plugin}"), &format!("Downloading what {name} needs"), hosts)?;
     let proxy = task.proxy_url().ok_or("Meno's network is not up")?;
     let client = client_builder()
         .user_agent(concat!("Meno/", env!("CARGO_PKG_VERSION")))

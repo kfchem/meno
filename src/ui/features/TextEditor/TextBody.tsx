@@ -11,6 +11,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, type MouseEvent as ReactMo
 import type { ColumnTextEntry } from "./columnText";
 import { FONT, LINE_PX, TAB } from "./linePictures";
 import { hasEditContext, typingField, type TypingField } from "./typingField";
+import { fieldTarget, useTextMenu } from "./textMenu";
+import { selFrom, selTo } from "../../../lib/text/editing";
 
 /** `write`: a text just made to be written in, given the keys as it shows - `onWrite` told once it has them. */
 type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void };
@@ -95,7 +97,8 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
 
   // (a press: the caret there, the field given the keys; a drag selects on, the text scrolling on past its edges)
   const onMouseDown = (e: ReactMouseEvent) => {
-    if (e.button !== 0) return;
+    // (another button: the keys kept where they are - a right-click's menu works on them)
+    if (e.button !== 0) return e.preventDefault();
     e.preventDefault();
     field.current?.focus();
     const box = boxRef.current!.getBoundingClientRect();
@@ -117,11 +120,23 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
     window.addEventListener("mouseup", onUp);
   };
 
+  // (a right-click: Meno's menu for the words - the caret put there first, where nothing is selected)
+  const onContextMenu = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    if (selFrom(ed.sel) === selTo(ed.sel)) {
+      const box = boxRef.current!.getBoundingClientRect();
+      ed.pressAt(e.clientX - box.left, e.clientY - box.top, 1, false);
+      field.current?.sync();
+    }
+    useTextMenu.getState().open(e.clientX, e.clientY, fieldTarget(ed, () => field.current));
+  };
+
   return (
     <div
       ref={boxRef}
       className="relative w-full h-full overflow-hidden cursor-text"
       onMouseDown={onMouseDown}
+      onContextMenu={onContextMenu}
       // (the field, laid at the caret, never scrolls the text's box to show itself)
       onScroll={(e) => {
         e.currentTarget.scrollTop = 0;

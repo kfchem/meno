@@ -3,11 +3,21 @@ import { StoreApi } from "zustand";
 
 type SetState = StoreApi<EditorState>["setState"];
 
+/**
+ * The state with the atom and the bond under the pointer as given - the
+ * same state where they are as they were: a pointer moving over a drawing
+ * says so at every move, and a new state each time drew everything that
+ * reads the editor's state again.
+ */
+function hovering(prev: EditorState, atomId: number | null, bondId: number | null): EditorState {
+  return prev.hovered.atomId === atomId && prev.hovered.bondId === bondId ? prev : { ...prev, hovered: { atomId, bondId } };
+}
+
 export function createHoverSlice(set: SetState) {
   return {
     setHoveredFromId: (id: number) =>
       set((prev: EditorState) => {
-        if (!id) return { ...prev, hovered: { atomId: null, bondId: null } };
+        if (!id) return hovering(prev, null, null);
         // Suppress hover on the moving atom and bonds directly connected to it
         const movingId = prev.moveDrag.active ? prev.moveDrag.atomId : null;
         if (movingId != null) {
@@ -22,20 +32,10 @@ export function createHoverSlice(set: SetState) {
         }
         const isAtom = prev.model.atoms.some((a) => a.id === id);
         const isBond = !isAtom && prev.model.bonds.some((b) => b.id === id);
-        return {
-          ...prev,
-          hovered: {
-            atomId: isAtom ? id : null,
-            bondId: isBond ? id : null,
-          },
-        };
+        return hovering(prev, isAtom ? id : null, isBond ? id : null);
       }),
 
-    clearHovered: () =>
-      set((prev: EditorState) => ({
-        ...prev,
-        hovered: { atomId: null, bondId: null },
-      })),
+    clearHovered: () => set((prev: EditorState) => hovering(prev, null, null)),
 
     setHoveredArrow: (id: number | null) =>
       set((prev: EditorState) =>
@@ -52,17 +52,9 @@ export function createHoverSlice(set: SetState) {
         JSON.stringify(prev.hoveredMark) === JSON.stringify(mark) ? prev : { ...prev, hoveredMark: mark },
       ),
 
-    clearAtomHover: () =>
-      set((prev: EditorState) => ({
-        ...prev,
-        hovered: { atomId: null, bondId: prev.hovered.bondId },
-      })),
+    clearAtomHover: () => set((prev: EditorState) => hovering(prev, null, prev.hovered.bondId)),
 
-    clearBondHover: () =>
-      set((prev: EditorState) => ({
-        ...prev,
-        hovered: { atomId: prev.hovered.atomId, bondId: null },
-      })),
+    clearBondHover: () => set((prev: EditorState) => hovering(prev, prev.hovered.atomId, null)),
 
     triggerHoverPulse: (bondId: number) =>
       set((prev: EditorState) => ({

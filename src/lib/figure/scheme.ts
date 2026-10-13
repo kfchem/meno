@@ -40,8 +40,8 @@ type Line = { a: Point; b: Point; w: number; ink?: string; dash: boolean; of: ob
 /** A head's outline as it may be at a line's end: its points, whether it is drawn open (a chevron), and what it was drawn as. */
 type HeadShape = { pts: Point[]; open: boolean; of: object[] };
 
-/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, and what it was drawn as. */
-type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[] };
+/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, what it was drawn as, and - filled - its outline. */
+type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[]; outline?: Point[] };
 
 /** Points' hull, anticlockwise as the page's y goes down. */
 function hull(pts: readonly Point[]): Point[] {
@@ -149,7 +149,7 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     const wide = side === 0 ? (left + right) / length : Math.max(left, right) / length;
     if (wide < (side === 0 ? 0.33 : 0.15)) continue;
     const off = Math.abs(cs[i]) + Math.abs(ts[i]) * 0.1;
-    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off };
+    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off, ...(h.open ? {} : { outline: h.pts }) };
   }
   if (best) {
     const { off: _off, ...head } = best;
@@ -227,20 +227,26 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const middle = rows.filter((r) => Math.abs(r.t) < long / 4);
   if (middle.length < 4) return null;
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-  const lo = median(middle.map((r) => r.c[0]));
-  const hi = median(middle.map((r) => r.c[1]));
-  const width = hi - lo;
+  const width = median(middle.map((r) => r.c[1] - r.c[0]));
   if (width > 0.25 * bond) return null;
+  // (the line's middle along it, fitted: the box round the outline may lean a little off the line)
+  const n0 = middle.length;
+  const mt = middle.reduce((a, r) => a + r.t, 0) / n0;
+  const mc = middle.reduce((a, r) => a + (r.c[0] + r.c[1]) / 2, 0) / n0;
+  const slope = middle.reduce((a, r) => a + (r.t - mt) * ((r.c[0] + r.c[1]) / 2 - mc), 0) / Math.max(1e-9, middle.reduce((a, r) => a + (r.t - mt) ** 2, 0));
+  const centreAt = (t: number) => mc + slope * (t - mt);
+  const hiAt = (t: number) => centreAt(t) + width / 2;
+  const loAt = (t: number) => centreAt(t) - width / 2;
   const reach = Math.max(width, 0.06 * bond);
   // (a head at an end: wider there than the line, on one side or both)
   const headOf = (sign: 1 | -1): { side: 0 | 1 | -1; tip: Point; length: number } | null => {
     const end = rows.filter((r) => sign * r.t > long / 2 - 0.35 * long);
-    const up = Math.max(...end.map((r) => r.c[1] - hi));
-    const down = Math.max(...end.map((r) => lo - r.c[0]));
+    const up = Math.max(...end.map((r) => r.c[1] - hiAt(r.t)));
+    const down = Math.max(...end.map((r) => loAt(r.t) - r.c[0]));
     if (up < reach && down < reach) return null;
     const ts = pts.map((p) => sign * dot(sub(p, mid), u));
     const tip = pts[ts.indexOf(Math.max(...ts))];
-    const wide = end.filter((r) => r.c[1] - hi > 0.5 * reach || lo - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
+    const wide = end.filter((r) => r.c[1] - hiAt(r.t) > 0.5 * reach || loAt(r.t) - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
     // (as the page has it, the side its point's way: 1 its left)
     const left = sign === 1 ? up : down;
     const right = sign === 1 ? down : up;
@@ -251,10 +257,9 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   if (!ahead && !behind) return null;
   const [front, back, sign] = ahead ? [ahead, behind, 1] : [behind!, null, -1];
   const way = sign === 1 ? u : { x: -u.x, y: -u.y };
-  const centre = (lo + hi) / 2;
-  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centre);
+  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centreAt(-sign * long / 2));
   const line: Line = { a: tail, b: front.tip, w: width, ...(b.ink ? { ink: b.ink } : {}), dash: false, of: [b] };
-  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [] });
+  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [], outline: pts });
   return { lines: [line], path: [tail, front.tip], head: head(front), tailHead: back ? head(back) : null };
 }
 
@@ -449,7 +454,19 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       }
     }
     if (!marked) {
-      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }));
+      // (a letter x on the line itself, standing alone - not one in words over the arrow, as in 3 x 10 min)
+      const onLine = (l: FigureLetter) => {
+        const c = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
+        const off = Math.min(...path.slice(1).map((q, i) => {
+          const p = path[i];
+          const u = unit(p, q);
+          const t = Math.max(0, Math.min(dist(p, q), dot(sub(c, p), u)));
+          return dist(c, along(p, u, t));
+        }));
+        return off < 0.35 * l.size;
+      };
+      const alone = (l: FigureLetter) => !letters.some((m) => m !== l && Math.abs(baseOf(m) - baseOf(l)) < 0.5 * l.size && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 0.5 * l.size);
+      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }) && onLine(l) && alone(l));
       if (x) {
         usedLetters.add(x);
         marked = true;
@@ -457,8 +474,19 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     }
     if (marked) a.form = { ...a.form, kind: "noReaction" };
   }
-  // what the arrows were drawn with, all of it
+  // what the arrows were drawn with, all of it - and the strokes along a filled head's edges, where its path is stroked as well as filled
   for (const f of found) for (const l of f.lines) for (const o of l.of) used.add(o);
+  const outlines = found.flatMap((f) => [f.head.outline, f.tailHead?.outline]).filter((o): o is Point[] => !!o && o.length > 2);
+  const onEdge = (p: Point, poly: readonly Point[]) =>
+    poly.some((a, i) => {
+      const b = poly[(i + 1) % poly.length];
+      const l = dist(a, b);
+      if (!(l > 0)) return dist(p, a) < near;
+      const u = unit(a, b);
+      const t = Math.max(0, Math.min(l, dot(sub(p, a), u)));
+      return dist(p, along(a, u, t)) < near;
+    });
+  for (const s of shapes.strokes) if (!used.has(s) && len(s) < 1.2 * bond && outlines.some((o) => onEdge(s.a, o) && onEdge(s.b, o))) used.add(s);
   return { arrows, used, usedLetters };
 }
 
@@ -569,7 +597,10 @@ function rowText(r: Row): { text: string; styles: (WordsStyle | undefined)[] } {
       prev = l;
       continue;
     }
-    if (prev && prev.c.trim() && l.box[0] - prev.box[2] > 0.2 * r.size && !text.endsWith(" ")) {
+    // (a space where the letters stand apart: by how they are set, where the figure says - a 1's ink stands well inside its room - else by their ink)
+    const gap = prev?.loose && l.loose ? l.loose[0] - prev.loose[2] : prev ? l.box[0] - prev.box[2] : 0;
+    const apart = prev?.loose && l.loose ? 0.15 * r.size : 0.2 * r.size;
+    if (prev && prev.c.trim() && gap > apart && !text.endsWith(" ")) {
       text += " ";
       styles.push(undefined);
     }
