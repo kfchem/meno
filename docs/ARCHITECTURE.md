@@ -817,9 +817,11 @@ they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). Meno lays both
-drawings out again with its own engine; only their stereochemistry and
-scale come from these coordinates.
+seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
+CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
+double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
+lays both drawings out again with its own engine; only their
+stereochemistry and scale come from these coordinates.
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
 (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when

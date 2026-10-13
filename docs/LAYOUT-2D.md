@@ -466,7 +466,10 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   hashes, behind it), both rings drawn flat: the only wedge that goes on a
   ring bond, as it must (`axisWedge`). Read back, a wedge narrow at an atom
   with three groups at the end of a single bond in no ring (a ring through
-  a metal aside) is such an axis's (`readStereo`).
+  a metal aside) is such an axis's (`readStereo`) - but for an S, Se, Te,
+  P, As or Sb, its fourth group a lone pair (a sulfoxide's S, a
+  phosphine's P): that is a stereocentre, which Clean-up leaves as drawn,
+  since the engine lays out none with a lone pair.
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the
