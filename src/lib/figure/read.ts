@@ -120,7 +120,9 @@ function hashesOf(short: Stroke[], bond: number): { hashes: Drawn[]; used: Set<S
         }
       }
     }
-    if (group.length < 3) {
+    // (three at the least, one a line of some width: the dots of joints by a bond's end and a sliver of nothing - a
+    // C=O's joints - are none)
+    if (group.length < 3 || !group.some((g) => !dot_(g) && g.w > 0.01 * bond)) {
       for (const t of group.slice(1)) left.add(t);
       continue;
     }

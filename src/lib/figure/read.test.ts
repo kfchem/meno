@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
+import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
@@ -267,6 +268,16 @@ describe("a figure read as a structure", () => {
     const hash = r.bonds.find((b) => b.stereo === "down")!;
     const narrow = r.atoms[hash.a];
     expect(Math.hypot(narrow.x - 136.8, narrow.y - 106)).toBeLessThan(1.5);
+  });
+
+  it("reads no hash from the dots of a C=O's joints and a sliver by them, there being no line among them", () => {
+    // (deoxycytidine as the round trip prints it in the ACS 1996 style and Meno's PDF reader reads it: at its cytosine's C2
+    // the joints of the C=O and the ring's bonds are drawn as dots, a sliver of nothing among them)
+    const r = readFigure(deoxycytidine as unknown as FigureDrawn);
+    const c2 = (i: number) => Math.hypot(r.atoms[i].x - 141, r.atoms[i].y - 120) < 3;
+    expect(r.bonds.some((b) => b.stereo && (c2(b.a) || c2(b.b)))).toBe(false);
+    // (its three wedges and hashes, as drawn)
+    expect(r.bonds.filter((b) => b.stereo)).toHaveLength(3);
   });
 
   it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
