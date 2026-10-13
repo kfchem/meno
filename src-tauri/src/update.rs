@@ -5,7 +5,8 @@
 //! It goes on the network only as Meno's network lets it (net.rs): as a
 //! task with the "app-update" purpose - refused when Meno is offline, or
 //! until the user has allowed it - whose requests go through Meno's proxy,
-//! so that each connection is shown as it is made and kept on the record.
+//! to the hosts its consent named alone, so that each connection is shown
+//! as it is made and kept on the record.
 //! The download is checked against the signing key in tauri.conf.json
 //! before anything is installed. A development build, and a Meno Windows
 //! started for Office, neither look nor install.
@@ -95,20 +96,21 @@ pub fn update_state(app: AppHandle) -> UpdateState {
     app.state::<Updates>().state.lock().unwrap().clone()
 }
 
-/// Asks GitHub for a newer Meno, through Meno's network, and downloads it
-/// when there is one, to be installed as Meno quits.
+/// Asks GitHub for a newer Meno, through Meno's network - to the hosts the
+/// consent to keep Meno up to date named (`hosts`, lib/update.ts) alone -
+/// and downloads it when there is one, to be installed as Meno quits.
 #[tauri::command]
-pub async fn update_check(app: AppHandle) -> UpdateState {
+pub async fn update_check(app: AppHandle, hosts: Option<Vec<String>>) -> UpdateState {
     let updates = app.state::<Updates>();
     if !updates_itself() || updates.ready.lock().unwrap().is_some() || updates.busy.swap(true, Ordering::SeqCst) {
         return updates.state.lock().unwrap().clone();
     }
-    let state = look(&app).await;
+    let state = look(&app, hosts).await;
     app.state::<Updates>().busy.store(false, Ordering::SeqCst);
     state
 }
 
-async fn look(app: &AppHandle) -> UpdateState {
+async fn look(app: &AppHandle, hosts: Option<Vec<String>>) -> UpdateState {
     let failed = |app: &AppHandle, e: String| {
         set(app, |s| {
             s.phase = "failed";
@@ -116,7 +118,7 @@ async fn look(app: &AppHandle) -> UpdateState {
         })
     };
     // (refused here when Meno is offline, or updating is not allowed)
-    let task = match app.state::<Net>().begin(PURPOSE, "Keeping Meno up to date") {
+    let task = match app.state::<Net>().begin(PURPOSE, "Keeping Meno up to date", hosts) {
         Ok(task) => task,
         Err(e) => return failed(app, e),
     };

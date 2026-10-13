@@ -405,7 +405,10 @@ for its roles, once for its steps. Meno's backend lets a plugin's
 no plugin is kept running ahead of need):
 
 - **Set up** the first time something needs it, asking first for the
-  network.
+  network. The consent names every host the set-up contacts, and the
+  set-up - and the fetch of its files besides - may reach those hosts
+  alone: Meno's proxy refuses any other (docs/ARCHITECTURE.md, *The
+  network*).
 - **Started** the first time it is asked for. Nothing starts with Meno.
 - **Kept** for the session, and started again if it stops.
 - **Stopped** when it is taken away, or when Meno quits.

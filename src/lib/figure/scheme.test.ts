@@ -166,6 +166,28 @@ describe("a reaction scheme's arrows", () => {
     expect(s.arrows.find((a) => a.color)).toMatchObject({ form: { weight: "thick" }, color: "#c44848" });
   });
 
+  it("reads an arrow drawn as one outline as one head, though the box round it leans", () => {
+    // (as PDFium gives one back: its points a hair off level, so the narrowest box round it leans a degree or two)
+    const s = read(scheme([filled([[115, 138.70001], [179, 138.70001], [179, 136.5], [185, 139], [179, 141.5], [179, 139.29999], [115, 139.29999], [115, 138.70001]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({});
+    expect(near(s.arrows[0].point, [185, 139])).toBe(true);
+    expect(near(s.arrows[0].tail, [115, 139])).toBe(true);
+  });
+
+  it("takes a head filled and stroked as well - its path's edges drawn too - as the head alone, no bonds of its edges", () => {
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), { ...head([140, 95], [1, 0]), stroke: "#000000ff", width: 0.6 }]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.figure.atoms).toHaveLength(8);
+    expect(s.figure.bonds).toHaveLength(6);
+  });
+
+  it("takes an x as a cross only on the arrow's line and alone: one in the words over it is a word's", () => {
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], word("3 x 10 min", [75, 89])));
+    expect(s.arrows[0].form).toEqual({});
+    expect(s.words.map((w) => w.text)).toEqual(["3 x 10 min"]);
+  });
+
   it("reads no arrow in a structure alone: a wedge is no head", () => {
     // (a chain with a wedge at its end, along it)
     const s = read({
@@ -187,6 +209,14 @@ describe("a reaction scheme's signs and words", () => {
     expect(strokes.pluses).toHaveLength(1);
     expect(near(strokes.pluses[0], [65, 95])).toBe(true);
     expect(strokes.figure.atoms).toHaveLength(8);
+  });
+
+  it("spaces words by how their letters are set, where the figure says: a 1's ink stands well inside its room", () => {
+    // (each letter's loose box from where it starts to where the next would; the 1's ink narrow inside it)
+    const set = (c: string, x: number, w: number, ink: [number, number]): FigureLetter => ({ c, box: [x + ink[0], 81, x + ink[1], 88], loose: [x, 79, x + w, 90], at: [x, 88], size: 10 });
+    const letters = [set("1", 70, 5.6, [1.2, 3.6]), set(".", 75.6, 2.8, [0.9, 1.9]), set("L", 81.2, 5.6, [0.7, 5]), set("D", 86.8, 7.2, [0.8, 6.6]), set("A", 94, 6.7, [0, 6.7])];
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], letters));
+    expect(s.words.map((w) => w.text)).toEqual(["1. LDA"]);
   });
 
   it("reads the words over and under an arrow as its, written as Meno writes them, and a compound's number in bold where it stands", () => {

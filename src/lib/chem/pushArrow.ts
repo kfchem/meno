@@ -499,14 +499,32 @@ export function pushShape(from: PushEndAt, to: PushEndAt, bend: PushBend | undef
 }
 
 /**
+ * The way from where the curve gives way (`at`, `t` along it) to where the
+ * line ends in the head: a cubic - its two controls - leaving the curve the
+ * way the curve goes there and coming into the head the way the head points
+ * (`heading`), so that there is no corner where the curve and that last
+ * run meet, nor where the run meets the head.
+ */
+function intoHead(shape: Pick<PushShape, "start" | "c1" | "c2" | "end">, t: number, at: P, lineEnd: P, heading: P): [P, P] {
+  // (the curve's way at t, as de Casteljau's last step has it)
+  const lerp = (a: P, b: P) => add(a, mul(sub(b, a), t));
+  const p012 = lerp(lerp(shape.start, shape.c1), lerp(shape.c1, shape.c2));
+  const p123 = lerp(lerp(shape.c1, shape.c2), lerp(shape.c2, shape.end));
+  const along0 = len(sub(p123, p012)) > 1e-12 ? unit(sub(p123, p012)) : heading;
+  const d = len(sub(lineEnd, at)) / 3;
+  return [add(at, mul(along0, d)), sub(lineEnd, mul(heading, d))];
+}
+
+/**
  * Where an arrow's head is and where its line gives way to it: the curve
  * up to `cut` of the way along it (as `along` steps it, `n` steps), then
- * straight on into the head as far as its drawn-in back (`lineEnd`); the
+ * on into the head as far as its drawn-in back (`lineEnd`), turning
+ * smoothly from the curve's way to the head's (`intoHead`); the
  * head along the curve's last stretch, so that it points the way the curve
  * comes in, barbed as the style draws it - full, or (`half`) the one side
  * of it on the outside of the curve, as a fishhook is drawn.
  */
-function headOf(shape: PushShape, half: boolean, m: PushMeasures, pts: readonly P[]): { cut: number; lineEnd: P; head: P[] } {
+function headOf(shape: PushShape, half: boolean, m: PushMeasures, pts: readonly P[]): { cut: number; lineEnd: P; heading: P; head: P[] } {
   const t = Math.max(0, m.thickness / 2);
   const n = pts.length - 1;
   let total = 0;
@@ -527,7 +545,7 @@ function headOf(shape: PushShape, half: boolean, m: PushMeasures, pts: readonly 
   const head = half
     ? [e, add(base, mul(outside, w)), add(notch, mul(outside, -t)), sub(e, mul(heading, t * 2))]
     : [e, add(base, mul(across, w)), notch, sub(base, mul(across, w))];
-  return { cut, lineEnd: add(base, mul(heading, inset * h * 0.9)), head };
+  return { cut, lineEnd: add(base, mul(heading, inset * h * 0.9)), heading, head };
 }
 
 /**
@@ -537,9 +555,13 @@ function headOf(shape: PushShape, half: boolean, m: PushMeasures, pts: readonly 
  */
 export function pushOutlines(shape: PushShape, half: boolean, m: PushMeasures): P[][] {
   const t = Math.max(0, m.thickness / 2);
-  const pts = along(shape, 64);
-  const { cut, lineEnd, head } = headOf(shape, half, m, pts);
-  const line = [...pts.slice(0, cut + 1), lineEnd];
+  const n = 64;
+  const pts = along(shape, n);
+  const { cut, lineEnd, heading, head } = headOf(shape, half, m, pts);
+  // (the last run, from the curve into the head, as its cubic, a few points of it)
+  const [k1, k2] = intoHead(shape, cut / n, pts[cut], lineEnd, heading);
+  const run = Array.from({ length: 6 }, (_, i) => pointAt({ start: pts[cut], c1: k1, c2: k2, end: lineEnd }, (i + 1) / 6));
+  const line = [...pts.slice(0, cut + 1), ...run];
   const sides = line.map((p, i) => {
     const a = line[Math.max(0, i - 1)];
     const b = line[Math.min(line.length - 1, i + 1)];
@@ -568,8 +590,8 @@ export function pushOutlines(shape: PushShape, half: boolean, m: PushMeasures): 
  */
 export function pushStroke(shape: PushShape, half: boolean, m: PushMeasures): { curve: P[]; head: P[] } {
   const n = 64;
-  const { cut, lineEnd, head } = headOf(shape, half, m, along(shape, n));
-  // the curve up to where the head begins (its first part, by de Casteljau), then straight on into the head
+  const { cut, lineEnd, heading, head } = headOf(shape, half, m, along(shape, n));
+  // the curve up to where the head begins (its first part, by de Casteljau), then on into the head with no corner
   const t = cut / n;
   const lerp = (a: P, b: P) => add(a, mul(sub(b, a), t));
   const p01 = lerp(shape.start, shape.c1);
@@ -578,6 +600,6 @@ export function pushStroke(shape: PushShape, half: boolean, m: PushMeasures): { 
   const p012 = lerp(p01, p12);
   const p123 = lerp(p12, p23);
   const at = lerp(p012, p123);
-  const third = mul(sub(lineEnd, at), 1 / 3);
-  return { curve: [shape.start, p01, p012, at, add(at, third), add(at, mul(third, 2)), lineEnd], head };
+  const [k1, k2] = intoHead(shape, t, at, lineEnd, heading);
+  return { curve: [shape.start, p01, p012, at, k1, k2, lineEnd], head };
 }

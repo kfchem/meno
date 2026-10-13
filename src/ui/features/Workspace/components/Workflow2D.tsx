@@ -11,6 +11,7 @@ import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { countOf, type Frame } from "../workflow/entries";
+import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { wordsTooSmall } from "../utils/pageScale";
@@ -45,8 +46,6 @@ const WIRE_HIT_PX = 10;
 const DASH_PX = 6;
 const GAP_PX = 4;
 const DASH_SPEED = 12;
-/** How often the jobs of the steps that run any are looked at, in ms. */
-const LOOK_MS = 1000;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -259,14 +258,20 @@ export default function Workflow2D() {
   }, [programsRun]);
 
   // the jobs of the steps that run any, looked at while there are any - and
-  // at once, so that a workspace opened with jobs under way picks them up
+  // at once, so that a workspace opened with jobs under way picks them up;
+  // often while the newest run is young (workflow/lookEvery)
   const anyRunning = useEditor((s) => s.steps.some((x) => x.running));
+  const newest = useEditor((s) => s.steps.reduce((t, x) => Math.max(t, x.running?.at ?? 0), 0));
   useEffect(() => {
     if (!anyRunning) return;
-    void store.getState().lookAtJobs();
-    const t = setInterval(() => void store.getState().lookAtJobs(), LOOK_MS);
-    return () => clearInterval(t);
-  }, [anyRunning, store]);
+    let t: ReturnType<typeof setTimeout>;
+    const look = () => {
+      void store.getState().lookAtJobs();
+      t = setTimeout(look, lookEvery(Date.now() - newest));
+    };
+    look();
+    return () => clearTimeout(t);
+  }, [anyRunning, newest, store]);
 
   // the zoom: where it crosses what a card's words need to be read; what
   // a hair on the screen is on the page's layer of HTML (`--hair`); and, by

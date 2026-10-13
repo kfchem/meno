@@ -17,6 +17,7 @@ import { NEW_ATOM } from "../utils/stroke";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
+import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 
 /**
  * How far an atom may move in one change, while a button is held, and still
@@ -60,9 +61,36 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const [zoom, setZoom] = useState(
     () => (camera as THREE.OrthographicCamera).zoom || 1,
   );
+  // The zoom it is laid out for (utils/largeZoom): the view's, taken up as
+  // the view moves a hundredth from it (`nearZoom`) - the last of a wheel's
+  // zoom, in steps too small to see, lays nothing out again; and, for a very
+  // large drawing, only once the view has stayed within a hundredth of one
+  // zoom for `SETTLE_MS` (the maintainer, 2026-10-13).
+  const large = useRef(false);
+  const settle = useRef<number | null>(null);
+  // (the zoom the wait was last begun at: the view moving on from it by
+  // less than a hundredth - a label fading in, the pointer lighting an
+  // atom - waits for nothing)
+  const from = useRef(zoom);
+  useEffect(() => () => void (settle.current != null && window.clearTimeout(settle.current)), []);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    if (z !== zoom) setZoom(z);
+    if (!large.current) {
+      if (settle.current != null) window.clearTimeout(settle.current);
+      settle.current = null;
+      from.current = z;
+      if (!nearZoom(z, zoom)) setZoom(z);
+      return;
+    }
+    if (nearZoom(z, from.current)) return;
+    from.current = z;
+    if (settle.current != null) window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => {
+      settle.current = null;
+      const now = (camera as THREE.OrthographicCamera).zoom || 1;
+      from.current = now;
+      setZoom(now);
+    }, SETTLE_MS);
   });
   const shownModel = useEditor((s) => s.model);
   const fullModel = useEditor((s) => s.fullModel);
@@ -241,6 +269,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   );
   // (a label is read by the abbreviations Meno knows, the user's among them)
   const abbreviations = useAppSettings((s) => s.abbreviations);
+  large.current = zoomedLarge(drawnAtoms.length);
   // The zoom it is laid out at: the view's - or, where the layout made at
   // the zoom it was last laid out at is the drawing at this one as well
   // (sameAtZooms), that one. A zoom then moves the view and leaves the

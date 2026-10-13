@@ -23,7 +23,7 @@ import type { PictureToAdd } from "./ui/features/Workspace/store/types";
 import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
-import { keepClipboard, keepPageUnselected, openIntent, undoIntent } from "./lib/doc/shortcuts";
+import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
 import { saverOf } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
@@ -51,6 +51,7 @@ import {
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
+import TextMenuHost from "./ui/features/TextEditor/TextMenuHost";
 import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
@@ -171,6 +172,14 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // The system's own right-click menu, only where it edits words: anywhere
+  // else it offers the webview's Reload (see keepSystemMenuShut). Heard
+  // first, so that nothing that stops the right-click lets it through.
+  useEffect(() => {
+    window.addEventListener("contextmenu", keepSystemMenuShut, true);
+    return () => window.removeEventListener("contextmenu", keepSystemMenuShut, true);
   }, []);
 
   // The last tab closed, Meno goes with it. (Destroyed, not closed: what
@@ -658,6 +667,8 @@ export default function App() {
       <GuideCard />
       <ConsentDialog />
       <UpdateNotice />
+      {/* (the right-click menu on words typed or read in place: TextEditor/textMenu) */}
+      <TextMenuHost />
       <Deck
         order={state.mountOrder}
         tabs={state.tabsById}
