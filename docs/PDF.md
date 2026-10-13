@@ -1072,7 +1072,8 @@ workspace holds.
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
-  - a bond drawn twice over.
+  - a bond drawn twice over;
+  - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -
 its left two bonds past their right edge, its top level with theirs, and on
@@ -1113,7 +1114,14 @@ layout.
 *Read as structure* reads a box as a scheme (`lib/figure/scheme`). Its
 arrows and "+" signs are taken out of what the figure is drawn with
 first; its structures are read from the rest, as above; and its letters
-that no structure took are read as words. Its bonds' length is its
+that no structure took are read as words - but a word on a side of the
+scheme, over or under no arrow, that a "+" on its line joins to the rest,
+within a bond of it, and that reads as a whole molecule is that
+molecule: a reagent Meno reads it as (H2O, HCl, NaCl), or an element its
+hydrogens and charge leave nothing to bond (I-, Na+, NH3). It is marked
+("Written as words beside a "+": read as a molecule."). Words over or
+under an arrow stay words, and so does any word that is no whole
+molecule (decided 2026-10-14). Its bonds' length is its
 lines' (above) where three or more of them that long meet another long
 line at an end - a structure's joints; else, where its lines are more
 than twice as long as its letters are tall, by its letters, its lines

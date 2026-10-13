@@ -22,6 +22,7 @@ import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
@@ -29,6 +30,22 @@ import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types"
 import { picturePng } from "./pictures";
 
 /** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
+/**
+ * Whether a label written alone is a whole molecule: a reagent or a complex
+ * Meno reads it as (H2O, HCl, NaCl, MeOH), or an element whose hydrogens and
+ * charge leave it nothing to bond (I-, Na+, OH-, NH3).
+ */
+export function wholeLabel(label: string): boolean {
+  const r = labelReading(label);
+  if (!r) return false;
+  if (r.whole) return true;
+  const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?([+-]*\d*[+-]*)$/.exec(label);
+  if (!r.element || !m || m[2] !== r.element) return false;
+  const read = readLabel(label, isElementSymbol);
+  const hs = (s: string | undefined) => (s == null ? 0 : s === "" ? 1 : Number.parseInt(s));
+  return read.kind === "element" && implicitHydrogens(read.el, 0, read.charge ?? 0) === hs(m[1]) + hs(m[3]);
+}
+
 export const figureLabels: LabelReader = (label) => {
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
@@ -126,7 +143,7 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
 export function figureFrom(drawn: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
   // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
   const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
-  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
+  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []), wholeLabel);
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };

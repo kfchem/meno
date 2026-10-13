@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { readScheme, type SchemeRead } from "./scheme";
+import { readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
 import dielsAlder from "./fixtures/diels-alder-rdkitrxn.json";
+import esterification from "./fixtures/esterification-rdkitrxn.json";
+import hydrogenation from "./fixtures/hydrogenation-rdkitrxn.json";
 import grignard from "./fixtures/grignard-rdkitrxnacs.json";
 
 // Schemes drawn as a drawing program draws them, in points from the page's
@@ -482,5 +484,22 @@ describe("a reaction drawn by another program", () => {
     const s = readScheme(grignard as unknown as FigureDrawn);
     expect(s.arrows).toHaveLength(1);
     expect(s.pluses).toHaveLength(1);
+  });
+
+  it("reads a word on a side that a plus sign joins to the rest, and that reads as a whole molecule, as that molecule, marked", () => {
+    // (a Fischer esterification as RDKit's reaction drawing draws it: its water, a product, written as words, H2O, after a "+")
+    const whole = (l: string) => l === "H2O";
+    const s = readScheme(esterification as unknown as FigureDrawn, () => true, [], whole);
+    const water = s.figure.atoms.filter((a) => a.label === "H2O");
+    expect(water).toHaveLength(1);
+    expect(water[0].unsure).toEqual([WRITTEN_AS_WORDS]);
+    expect(s.words.map((w) => w.text)).not.toContain("H2O");
+  });
+
+  it("keeps a word no plus sign joins to the rest - an agent by the arrow - a word, though it reads as a whole molecule", () => {
+    // (an alkene's hydrogenation as RDKit's reaction drawing draws it: Pd, the agent, written large by the arrow)
+    const s = readScheme(hydrogenation as unknown as FigureDrawn, () => true, [], () => true);
+    expect(s.words.map((w) => w.text)).toEqual(["Pd"]);
+    expect(s.figure.atoms.some((a) => a.label === "Pd")).toBe(false);
   });
 });

@@ -801,13 +801,24 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
   return { words, pluses };
 }
 
+/** What a molecule written as words beside a "+" is marked with. */
+export const WRITTEN_AS_WORDS = 'Written as words beside a "+": read as a molecule.';
+
 /**
  * A figure read as a scheme: its arrows and "+" signs taken out of what it
  * is drawn with, its structures read from the rest (./read), and the
  * letters no structure took read as words - its conditions, its compounds'
- * numbers, and anything else written there.
+ * numbers, and anything else written there. A word that a "+" joins to the
+ * rest on a side of the scheme - over or under no arrow - and that reads as
+ * a whole molecule (`whole`: H2O, HCl, I-) is that molecule, marked as
+ * written as words; words over or under an arrow stay words.
  */
-export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = []): SchemeRead {
+export function readScheme(
+  drawn: FigureDrawn,
+  reads: (label: string) => boolean = () => true,
+  known: readonly GlyphShape[] = [],
+  whole: (label: string) => boolean = () => false,
+): SchemeRead {
   const shapes = shapesOf(drawn);
   // (how long its bonds are drawn: as most of its lines are - unless, its letters telling, those are arrows, there being no structure)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
@@ -829,8 +840,20 @@ export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean
   for (const o of signs.taken) used.add(o);
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);
-  const { words, pluses } = wordsOf(figure.left.letters, arrows, sizes[Math.floor(sizes.length / 2)]);
-  return { figure: { ...figure, left: { letters: [] } }, arrows, pluses: [...signs.pluses, ...pluses], words, bond: figure.bond || bond };
+  const { words: all, pluses } = wordsOf(figure.left.letters, arrows, sizes[Math.floor(sizes.length / 2)]);
+  // (a "+" on its line, within a bond of it, joins it to the rest)
+  const signed = [...signs.pluses, ...pluses];
+  const atBond = figure.bond || bond;
+  const joined = (w: SchemeWords) =>
+    signed.some((p) => {
+      const h = w.box[3] - w.box[1];
+      return p.y > w.box[1] - 0.3 * h && p.y < w.box[3] + 0.3 * h && Math.max(w.box[0] - p.x, p.x - w.box[2]) < atBond;
+    });
+  const label = (w: SchemeWords) => w.text.replace(/\s+/g, "").replace(/[\u2212\u2013]/g, "-");
+  const molecules = all.filter((w) => w.arrow == null && !w.text.includes("\n") && joined(w) && whole(label(w)));
+  const written = molecules.map((w) => ({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2, label: label(w), box: w.box, unsure: [WRITTEN_AS_WORDS] }));
+  const words = all.filter((w) => !molecules.includes(w));
+  return { figure: { ...figure, atoms: [...figure.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */
