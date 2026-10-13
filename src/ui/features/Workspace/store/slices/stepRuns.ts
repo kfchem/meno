@@ -66,6 +66,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const finishing = new Set<number>();
   /** What has been read of each job's log: how far, and its last line. */
   const logs = new Map<string, { from: number; line: string; progress?: { done: number; total: number } }>();
+  // (the jobs whose folders were taken away with their step, deleted: no log or files of theirs to show, should it come back)
+  const forgotten = new Set<string>();
   /** The texts that show a job's log, by the job. */
   const shown = new Map<string, number>();
   let looking = false;
@@ -841,10 +843,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       await revealItemInDir(await jobFolder(job));
     },
     lookAtJobs,
-    /** A step deleted: its jobs stopped, and their files taken away once they have ended. */
-    forgetJobs: (step: { running?: { jobs: StepJob[] }; ran?: StepRan }) => {
-      const jobs = [...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? [])];
+    /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
+    jobsKept: (step: { ran?: StepRan }) => (step.ran?.jobs ?? []).some((j) => !forgotten.has(j)),
+    /** A step deleted: its jobs stopped, and their files taken away once they have ended - those of every run it keeps, not its last alone. */
+    forgetJobs: (step: { running?: { jobs: StepJob[] }; ran?: StepRan; runs?: readonly StepRan[] }) => {
+      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])];
       for (const job of jobs) {
+        forgotten.add(job);
         void (async () => {
           await stopJob(job).catch(() => {});
           const until = Date.now() + STOP_WAIT_MS;
