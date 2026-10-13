@@ -105,9 +105,10 @@ stops being part of the work.
 - **Read where it lies**:
   - Zoomed into, the top page's text and figures come up, sharp at
     any zoom.
-  - The wheel or two fingers over the stack go to the next page and the
-    one before, the top page lifting off and going under (*Movement*,
-    below).
+  - Its pages are turned by the top page's corners, folding as the stack
+    is hovered, by the arrow keys over it, or by its menu, the top page
+    lifting off and going under (*Movement*, below). The wheel and two
+    fingers zoom and move the view over it, as over the rest of the page.
   - The right-click menu has *Spread pages*. The pages lift off the
     stack one after another and lie side by side on the page, in rows,
     to be read and compared at once. *Gather pages* puts them back.
@@ -153,23 +154,26 @@ stops being part of the work.
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
 - **Only what is in view is drawn**, nearest first, then the pages next
-  in the way the view is going. A tile no longer wanted is dropped, not
-  finished. Pages far out of view are let go, and drawn again when they
-  come back.
+  in the way the view is going. A tile no longer wanted when its turn
+  comes is dropped, never sent to PDFium; one sent is drawn to the end.
+  Pages far out of view are let go, and drawn again when they come back.
 
 ### Text
 
-- **A drag that starts on text selects text**, as in any reader: a
-  double-click selects a word, a triple-click a line. ⌘C copies it, and
-  the right-click menu has *Copy*.
+- **In the column, a drag that starts on text selects text**, as in any
+  reader: a double-click selects a word, a triple-click a line. On a
+  stack, a drag moves the view, and a long press on its words selects
+  from the word under it (*As built*, step 3). ⌘C copies it, and the
+  right-click menu has *Copy*.
 - **PDFium says where each letter is**, and Meno selects and marks by
   that, on the stack and in the column alike.
 
 ### Search
 
-- **⌘F** with the column or a PDF in front, or *Find in PDF…* in Meno's
-  menu, opens a field at the column's top. It has two choices beside it,
-  *This PDF* and *All PDFs*.
+- **⌘F** in a workspace holding a PDF, or *Find in PDF…* in the
+  right-click menu on empty space, opens a field at the column's top, on
+  the PDF it shows or else the one under the pointer. It has two choices
+  beside it, *This PDF* and *All PDFs*.
 - **What it finds**:
   - each place is marked on the pages, in the column and on the stacks;
   - the places are counted (*3 of 12*);
@@ -177,9 +181,10 @@ stops being part of the work.
     closes the field.
 - **With *All PDFs***, the places are listed under each PDF's name, and
   going to one shows that PDF.
-- **How letters are matched**: by PDFium's own search, without regard to
-  case. Whether a word broken across a line's end is found is measured in
-  the trial (step 0), and made so if PDFium does not find it.
+- **How letters are matched**: by Meno's own search, over the letters
+  PDFium reads, without regard to case. A line's end reads as a space,
+  and a word broken by a hyphen at a line's end is found whole (*The
+  trial*, below).
 
 ## Taking things out
 
@@ -379,8 +384,8 @@ together, in short eased transitions.
   Sans JP).
 - **Reached from Rust** through `pdfium-render` (MIT or Apache-2.0).
 - **What Meno asks of it**: a part of a page drawn at a scale, its text
-  with where each letter is, search, links, and what a page is made of
-  - paths, text and pictures - which stage 5 reads.
+  with where each letter is, links, and what a page is made of - paths,
+  text and pictures - which stage 5 reads. Meno searches the text itself.
 
 ### Where it runs
 
@@ -391,12 +396,14 @@ together, in short eased transitions.
   so on the page and in the column, with *Open again*; Meno, and the
   work not yet saved, go on. Chrome keeps PDFium apart for the same
   reason.
-- **It draws on threads of its own**, a page at a time, each part in a
-  way that can be stopped. A request no longer wanted is dropped.
-- **Pictures come back as they are drawn**: the colours of each pixel,
-  in the order a WebGL texture takes them (PDFium's
-  `FPDF_REVERSE_BYTE_ORDER`), with no image format in between. They go
-  to the window as bytes, not as text (Tauri's binary response).
+- **It answers one request at a time**, on one thread, in the order they
+  come. Parts to draw wait in the window, nearest first, three at most
+  sent at a time; one no longer wanted before it is sent is dropped.
+- **Pictures come back as PNGs**, previews, tiles and figures alike:
+  PDFium's pixels, in the order a WebGL texture takes them
+  (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
+  white. They go to the window as bytes, not as text (Tauri's binary
+  response), and are unpacked off its main thread.
 
 ### One canvas
 
@@ -467,7 +474,8 @@ Apache-2.0 app:
   ICU's notice, for build scripts (Autoconf's) that are not part of it,
   under Autoconf's exception.
 - **What Meno must do**:
-  - ship every one of these licences, in `resources/licenses/pdfium/`;
+  - ship every one of these licences, in `src-tauri/resources/licenses/`
+    (`PDFium-*.txt`, and pdfium-render's in `pdfium-render-MIT.txt`);
   - credit them in the README;
   - and, as two of them ask of a program shipped without its source,
     say in its documentation that it is "based in part on the work of
@@ -492,12 +500,14 @@ A PDF is a file from anywhere, and is treated as such.
 ### Platforms
 
 - **The same PDFium on every system**: the library for macOS (Apple
-  silicon), Windows (x64) and Linux (x64), from the same release.
+  silicon) and Windows (x64), from the same release; Linux's (x64) is
+  pinned and fetched by the same script, for a Linux build Meno does not
+  make yet.
 - **Carried in the app**:
   - on a Mac, inside the app, signed with it;
   - on Windows, beside Meno's program, with a line in the installer's
     hook for when it is renamed or goes (RELEASING.md);
-  - on Linux, beside it as well.
+  - on Linux, nowhere yet: there is no Linux build.
 
 - **On a Mac, signed as Meno is - ad hoc, with the hardened runtime -
   the app cannot load PDFium's library**: macOS's library validation
@@ -576,6 +586,7 @@ Built:
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), or one broken (*it could not be read*, with PDFium's reason). One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -671,7 +682,7 @@ Built:
   - The words selected are marked in Meno's light, the same on the stack and in the column.
   - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too.
   - Selecting words lets the drawing's selection go. Esc, or a click elsewhere, lets the words go.
-- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the Edit menu.
+- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the right-click menu on empty space.
   - A field opens over the top of the column, holding the words selected, if any.
   - *This PDF* or *All PDFs* choose where to look, and the count shows as *3 of 12*.
   - Enter goes to the next place and Shift+Enter to the one before. Esc closes the field.
@@ -732,9 +743,10 @@ Not yet, and where it comes:
 
 Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
-  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture.
+  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is.
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame.
-  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. Its caption, and a column's lines beside it, are not.
+  - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it.
+  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
   - A page's figures are worked out once, when its words are first wanted: as it comes into the column, or onto the screen at a size its words can be read.
 - **A box, in the column.** A press in a figure, or where no word is near, begins a box.
   - Let go where it was pressed, in a figure, it is that figure's box, labels and all. On a link, the link is followed instead.
@@ -758,7 +770,7 @@ Decided while building it, for the maintainer to confirm:
 - **A picture carried out lies just where it was let go**, over another picture if it was let go there; one opened or put on the page is put clear of the rest.
 
 Not yet, and where it comes:
-- **A scanned page**: it is one picture over most of the page, so no figure is found on it. A box drawn by hand takes part of it.
+- **A scanned page**: it is one picture over most of the page - or several, strips or tiles that cover it together - so no figure is found on it. A box drawn by hand takes part of it.
 - **Reading a figure as a structure**: stage 5.
 
 ### Step 5: texts drawn by Meno (2026-10-10, under way)
@@ -951,6 +963,11 @@ workspace holds.
   lines and curves - filled or stroked and how thick; each letter with
   its box, where its line starts and its size; through a form, a figure
   a journal placed whole, under the matrices that placed it.
+- **Which way its words read**: each letter's line, as the page is shown.
+  A figure whose words read down the page or up it - a scheme printed
+  sideways, a page turned a quarter - is turned by that quarter and read
+  upright. Its structure is drawn upright, and each atom is tied to where
+  it lies on the page as shown.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
@@ -1041,18 +1058,21 @@ first; its structures are read from the rest, as above; and its letters
 that no structure took are read as words.
 
 - **Arrows**: a line - or a row of dashes, or lines joined at corners -
-  with a head at its end. The head can be filled, whole or half; an open
+  with a head at its end. The head can be filled, whole or half (its
+  edges stroked as well, as some programs draw one, go with it); an open
   chevron of two strokes or an outline; or a single barb, a half head's.
   An arrow drawn as one filled outline, its line and its head in one
-  shape, is read by how wide it is along its length.
+  shape, is read by how wide it is along its length, measured from its
+  line's middle fitted along it.
   - heads at both ends: two heads;
   - two arrows side by side, pointing opposite ways, a short way apart
     and alongside each other: an equilibrium, its heads full where both
     are whole. It goes the way its upper line goes, as an equilibrium
     is printed (the right-hand line where they stand upright);
   - two lines ending within an open head: a retrosynthesis's arrow;
-  - a cross on its middle, of two strokes or a letter x: a reaction that
-    does not go;
+  - a cross on its middle, of two strokes or a letter x on its line and
+    alone (an x in the words over it, as in 3 x 10 min, is a word's): a
+    reaction that does not go;
   - a line stroked dashed, or drawn as dashes: dashed;
   - its corners, where its lines turn;
   - its weight, from its line against the bonds' (thin under three
@@ -1061,7 +1081,11 @@ that no structure took are read as words.
 - **"+" signs**: a "+" set alone, two strokes crossing at their middles,
   square to each other and as long, touching nothing, or a filled cross.
 - **Words**: letters set in lines - a smaller letter set high or low with
-  its line - and lines one close under another in blocks.
+  its line - and lines one close under another in blocks. A space goes
+  where letters stand apart, measured by how they are set: each letter's
+  room as the PDF gives it, from where it starts to where the next would
+  (a 1's ink stands well inside its room), or by their ink where it gives
+  none.
   - A block over or under an arrow, along its longest stretch and near
     it, is that arrow's words.
   - The rest stand where they are drawn: a compound's number among them,
@@ -1085,7 +1109,18 @@ words put over an arrow do.
 **How well**: on a scheme drawn for it - two reactants with a "+" and a
 product, an arrow with words over it and under it, three compounds'
 numbers in bold - and on a row of arrows of each kind, everything is read
-as drawn.
+as drawn. So is everything in 29 more figures drawn many ways:
+- heads filled, barbed, curved, open, as one outline with the line, or
+  filled and stroked, and lines as filled bars;
+- arrows going right, left, down and at a slant;
+- equilibria with half heads, with barbs, with lines of unequal length,
+  and with full heads;
+- retrosynthetic, dashed, crossed, thick and coloured arrows;
+- words beside a downward arrow, words under an arrow with a structure
+  drawn over it, and words with an x or a "+" in them, in italics, with
+  formulas and footnotes;
+- a "+" larger than the words, a charge's "+" beside its atom, and two
+  steps one after the other.
 
 Not yet:
 - **A curved arrow** (an electron-pushing arrow's curve) is not read.
