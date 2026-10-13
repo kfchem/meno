@@ -20,7 +20,7 @@ import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
 import { condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
-import { complexStructure, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
+import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
@@ -466,6 +466,7 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
   }
   COMPOSED_SEEN.clear();
   GROUP_SEEN.clear();
+  forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
 }
