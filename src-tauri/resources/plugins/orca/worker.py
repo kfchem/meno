@@ -29,7 +29,13 @@ else:
 
 - a simple input line, begun by "!": the method and basis set, a
   dispersion correction (D3BJ, D4), the run - SP, OPT or FREQ - and, for
-  implicit solvation, CPCM(solvent) or SMD(solvent);
+  implicit solvation, CPCM(solvent) or SMD(solvent). What is typed into
+  it - the method, the basis set, the keywords - stays on that line, with
+  no "#", which begins a comment, and no "%", which begins a block: the
+  manual names a file or a program only in a block, in quotes (%MOInp
+  "file", %method ProgExt "path"), so a step's text names neither - a
+  workspace's steps may come from someone else, and run where it is
+  opened;
 - %pal nprocs, the processes a run uses, where it may use more than one;
   %maxcore, the memory for each, in MB;
 - the coordinates, "* xyz charge multiplicity", an atom a line - its

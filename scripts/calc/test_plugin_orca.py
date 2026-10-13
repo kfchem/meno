@@ -82,6 +82,12 @@ class Prepare(unittest.TestCase):
         self.assertNotIn("then", job)
         self.assertEqual(job["reads"], [])
 
+    def test_text_typed_into_the_simple_input_line_names_no_program_and_no_file(self):
+        # (the manual names them only in a block, begun by "%", in quotes: %method ProgExt "path", %MOInp "file")
+        for options in ({"keywords": 'ExtOpt %method ProgExt "/bin/sh" end'}, {"keywords": 'MORead %moinp "/etc/hosts"'}, {"basis": "def2-SVP\n%method ProgExt x end"}):
+            said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))
+            self.assertFalse(said["ok"], options)
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))

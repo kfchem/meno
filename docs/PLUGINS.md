@@ -168,6 +168,16 @@ a choice, a number, a text or a switch, each with a label and a default it
 takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
 charge, multiplicity or name, for a writer's).
 
+A step's options are saved with its workspace, and a workspace may come
+from someone else: whatever a text option holds runs, as the plugin
+writes it into its program's input, when Run is pressed on the computer
+it is opened on. So a plugin writes a text option so that it names no
+program and no file, by its program's own reference, and refuses one
+that would (2026-10-13). Gaussian's route section takes no External,
+however shortened, and no `@`, `%`, `#`, `!` or double quotes; ORCA's
+simple input line takes no `%` or `#`, the manual naming a file or a
+program only in a block, in quotes.
+
 A step's `files` (built 2026-10-11, NCI.md): `{"kinds": ["nci"],
 "programs": ["multiwfn"], "files": ["molden", "gaussian-fchk", "wfn",
 "wfx"]}` - a wavefunction another plugin read is given to Multiwfn's step,
