@@ -799,6 +799,17 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i).map((b) => !!b.stereo)).toEqual([true]);
   });
 
+  it("reads a wedge cut back to a triangle of near equal sides, stroked round, as a wedge narrow at the corner a line ends at", () => {
+    // (ibogaine's wedge to an H as RDKit's ACS 1996 mode draws it: three sides of 1.75 points, filled and its outline stroked)
+    const c: P = [60, 60];
+    const h = step(c, 120, 0.45);
+    const [ux, uy] = unit(c, h);
+    const base = along(c, h, (1.75 * 0.866) / (0.45 * L));
+    const corners: P[] = [c, [base[0] - uy * 0.875, base[1] + ux * 0.875], [base[0] + uy * 0.875, base[1] - ux * 0.875]];
+    const s = read(figure([stroke(step(c, 0), c, step(c, 240)), stroke(c, step(c, -60)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("H", h)));
+    expect(bondsOf(s)).toContain("C-H up");
+  });
+
   it("reads a wedge to an H set close, cut back so far it is wider than long, as the H's bond from its stereocentre", () => {
     const c: P = [60, 60];
     const h = step(c, 120, 0.55);

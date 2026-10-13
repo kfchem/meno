@@ -1007,7 +1007,8 @@ workspace holds.
     under three tenths of a bond long only where its wide end points
     into a label (a stereocentre's H set close, the wedge cut back at it),
     and one cut back so far it is wider than long - three corners, two
-    sides from its tip as long, its wide end longer - narrow at that tip;
+    sides from its tip as long, its wide end longer - narrow at that tip,
+    or, its three sides near as long, at the one corner a line ends at;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
