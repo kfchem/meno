@@ -28,6 +28,7 @@ import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonMesh } from "../utils/ribbon";
 import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
+import { raycastByResidue, raycastSpheres } from "./raycast3d";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -1157,6 +1158,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           renderOrder={OVER_PAGE}
           frustumCulled={false}
           receiveShadow
+          // (each atom met where its sphere is, worked out exactly, not by its triangles: components/raycast3d)
+          raycast={function (this: THREE.InstancedMesh, rc, hits) {
+            raycastSpheres(this, rc, hits);
+          }}
           onPointerMove={(e) => {
             e.stopPropagation();
             if (e.instanceId != null && e.instanceId !== hoverAtom) setHoverAtom(e.instanceId);
@@ -1195,9 +1200,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               geometry={ribbonGeo}
               renderOrder={OVER_PAGE}
               frustumCulled={false}
-              // (found under the pointer only while it is there to be seen)
+              // (found under the pointer only while it is there to be seen, and
+              // only among the triangles of residues the ray goes near: components/raycast3d)
               raycast={function (this: THREE.Mesh, rc, hits) {
-                if (this.visible) THREE.Mesh.prototype.raycast.call(this, rc, hits);
+                if (this.visible) raycastByResidue(this, rc, hits, ribbonResidues.current);
               }}
               onPointerMove={(e) => {
                 e.stopPropagation();
