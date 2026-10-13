@@ -181,7 +181,10 @@ import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
-import { isBlankDocument, SHAPE_PAD } from "./document";
+import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
+import { freePlace, pageBoxes } from "./utils/freePlace";
+import { sheetRoom } from "./utils/textSheets";
+import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -258,6 +261,17 @@ function WorkspaceContent({
     viewMiddle,
   } = useStructureEvents(initialPayload, initialFilename, officeId == null, initialKind, initialPath);
   pdfTarget.current = pasteTarget;
+  // (where what is opened onto the page goes, of what it takes up about the
+  // point it is put at: in free space near the middle of the view, clear of
+  // all that is there - as files opened go, utils/freePlace)
+  const freeNear = useRef<(rooms: readonly { x0: number; y0: number; x1: number; y1: number }[]) => { x: number; y: number }>(() => ({ x: 0, y: 0 }));
+  freeNear.current = (rooms) => {
+    const st = store.getState();
+    const middle = viewMiddle();
+    if (!rooms.length) return middle;
+    const foot = { x0: Math.min(...rooms.map((r) => r.x0)), y0: Math.min(...rooms.map((r) => r.y0)), x1: Math.max(...rooms.map((r) => r.x1)), y1: Math.max(...rooms.map((r) => r.y1)) };
+    return freePlace(pageBoxes(st, styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle)), foot, middle, NOMINAL_BOND_LENGTH);
+  };
   // (how files opened are put on the page: as a drop puts them, in free space near the middle of the view - this render's)
   const openedFiles = useRef<(files: OpenedFile[]) => Promise<void>>(async () => {});
   openedFiles.current = async (opened) => {
@@ -297,16 +311,28 @@ function WorkspaceContent({
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
   useEffect(
-    () => (ownTab && officeId == null ? setTextTaker(tabId, (texts) => store.getState().addTexts(texts, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setTextTaker(tabId, (texts) => {
+            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState()).flatMap((t) => sheetRoom(t) ?? []);
+            store.getState().addTexts(texts, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
   );
   // (and PDFs and pictures opened, on its page where it is looked at: docs/PDF.md)
   useEffect(
-    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, pdfTarget.current())) : undefined),
+    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }).map(pdfRoom)))) : undefined),
     [ownTab, officeId, tabId, store],
   );
   useEffect(
-    () => (ownTab && officeId == null ? setPictureTaker(tabId, (pictures) => void store.getState().addPictures(pictures, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setPictureTaker(tabId, (pictures) => {
+            const rooms = picturesInRow(pictures, { x: 0, y: 0 }).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
+            void store.getState().addPictures(pictures, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
   );
   // (and structures' files and calculations' outputs opened, as a drop on it puts them: ui/views/files)
