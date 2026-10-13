@@ -147,13 +147,15 @@ export function labelSpot(
 }
 
 /**
- * How much of a conformer set each conformer is at room temperature (298 K),
- * by Boltzmann: from its energy in hartrees, the shares adding up to one.
+ * How much of a conformer set each conformer is at room temperature (298.15
+ * K), by Boltzmann: from its energy in hartrees - each weighed by its
+ * degeneracy where its conformer search said one - the shares adding up to
+ * one.
  */
-export function populations(energies: readonly number[]): number[] {
+export function populations(energies: readonly number[], degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
   const lowest = Math.min(...energies);
-  const w = energies.map((e) => Math.exp(-(e - lowest) / RT_HARTREE));
+  const w = energies.map((e, i) => (degeneracies?.length === energies.length ? degeneracies[i] : 1) * Math.exp(-(e - lowest) / RT_HARTREE));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);
 }

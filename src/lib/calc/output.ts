@@ -35,6 +35,12 @@ export type ReaderOutput = {
    * out: a conformer search's (CREST counts each conformer's rotamers in).
    */
   populations?: number[] | null;
+  /**
+   * Each geometry's degeneracy - how many forms of it the program found
+   * alike, its rotamers (CREST's) - where it says: what Meno's own
+   * Boltzmann weights count in too, as the program's populations do.
+   */
+  degeneracies?: number[] | null;
   /** Whether an optimisation came to an end, where it was one. */
   optimised?: boolean | null;
   /** Everything else it found, in the general form (results.ts) - read, and those that do not read as results left out. */
