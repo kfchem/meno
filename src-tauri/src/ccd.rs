@@ -20,6 +20,9 @@ pub const PURPOSE: &str = "ccd";
 
 const LABEL: &str = "Looking up chemical components";
 
+/// The most a component's file may be: one component's text, kilobytes as a rule.
+const MOST_BYTES: u64 = 4 * 1024 * 1024;
+
 /// Whether a name can be a component's id: one to five capital letters and
 /// digits, as the dictionary's are - and so safe in a path and a URL.
 pub fn valid_id(id: &str) -> bool {
@@ -112,7 +115,9 @@ pub async fn ccd_components(app: AppHandle, ids: Vec<String>, fetch: bool) -> Re
             continue;
         }
         let response = response.error_for_status().map_err(|e| format!("fetching {url}: {e}"))?;
-        let text = response.text().await.map_err(|e| format!("fetching {url}: {e}"))?;
+        // (read as it comes, so much at most: the dictionary's files are plain text)
+        let body = crate::tools::body_within(response, &url, MOST_BYTES).await?;
+        let text = String::from_utf8_lossy(&body).into_owned();
         if !is_component(&id, &text) {
             return Err(format!("{url} is not the component's file"));
         }
