@@ -391,7 +391,11 @@ As this part of step 5 was built (#155, from main beside step 3):
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
-    isotopes, as a copy's MOL file does (docs/CTFILE.md).
+    isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
+    one shown, or every one - is written with the bonds it has, as the
+    page shows them: a trajectory's bonds, found from distances, form and
+    break as its frames go. A copy's MOL file, a PDB file and what a
+    plugin's writer is given are the same.
   - **SVG** takes no options yet.
 - **What a writer takes** is said by it (step 7): Meno's own take the
   page, as before; a plugin's, one molecule - the molecules in 3D
@@ -713,9 +717,11 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   for it.
 - **What is written** (Export, molecules in 3D only): HETATM records, each
   molecule a residue of its own named UNL - the Chemical Component
-  Dictionary's unknown ligand - in chain A; every bond in CONECT records;
-  a MODEL for each frame where the writer's options ask; END. No HEADER,
-  CRYST1 or MASTER: a file of coordinates, not an entry of the archive.
+  Dictionary's unknown ligand - in chain A; a MODEL for each frame where
+  the writer's options ask; every bond the frame written has in CONECT
+  records - one set of them serves every model, so with a MODEL for each
+  frame, the first frame's; END. No HEADER, CRYST1 or MASTER: a file of
+  coordinates, not an entry of the archive.
 
 As step 7's writer was built - decided with the maintainer on
 2026-10-06:

@@ -26,6 +26,9 @@ describe("molecules in 3D as a writer is given them", () => {
     expect(m.atoms[1]).toEqual({ el: "H", x: 1.96, y: 2, z: 3, isotope: 2 });
     const shown = writtenOf([water({ frames: [[0, 0, 0, 0.97, 0, 0, 0, 0.97, 0]], frame: 1 })]);
     expect(shown.atoms.map((a) => a.x)).toEqual([0, 0.97, 0]);
+    // (with the bonds that frame has, where they go frame by frame: one hydrogen gone 3 Å off)
+    const parting = water({ frames: [[1, 2, 3, 1.96, 2, 3, 1, 5, 3]], frame: 1, bondsFrom: "distance" });
+    expect(writtenOf([parting]).bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
   });
 
   it("is several as one system, each as it stands on the page - placed and turned - its ångströms kept", () => {

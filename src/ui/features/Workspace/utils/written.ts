@@ -2,7 +2,7 @@ import type { WrittenAtom, WrittenMolecule } from "../../../../lib/io/writers";
 import type { Carried3D } from "../store/types";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D } from "../style3d";
-import { heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { bondsAt, heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
 
 /** A molecule in 3D's atoms' places in one of its frames, where its file had them, in ångströms: x, y, z of each. */
 function frameXyz(m: Carried3D, frame = 0): number[] {
@@ -26,7 +26,8 @@ const stem = (name: string) => name.replace(/\.[^.]*$/, "");
 
 /**
  * Molecules in 3D as one molecule a writer is given (lib/io/writers
- * `WrittenMolecule`), in ångströms, each in the frame it shows: one, where
+ * `WrittenMolecule`), in ångströms, each in the frame it shows, with the
+ * bonds that frame has: one, where
  * its file had it; several, one system, as they stand on the page - each
  * turned and placed as it is seen, its file's ångströms kept - so that a
  * complex put together on the page is written as it was put together.
@@ -64,7 +65,7 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = curr
         ...(a.radical ? { radical: a.radical } : {}),
       });
     });
-    for (const b of m.bonds) bonds.push({ a1: first + b.a1, a2: first + b.a2, order: b.order });
+    for (const b of bondsAt(m, m.frame)) bonds.push({ a1: first + b.a1, a2: first + b.a2, order: b.order });
   }
   const names = molecules.map((m) => (m.name ? stem(m.name) : "")).filter(Boolean);
   return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}) };

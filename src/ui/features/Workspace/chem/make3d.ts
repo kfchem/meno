@@ -18,7 +18,7 @@ import { editorModelOf, processFileContent } from "../utils/io";
 import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
-import { lookOf, solidOf } from "../utils/molecule3d";
+import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
@@ -374,8 +374,10 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number):
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
-  const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
-  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
+  // (with the bonds that frame has, where they go frame by frame)
+  const bonds = bondsAt(m, frame);
+  const wanted = bonds.length > 0 && bonds.every((b) => b.order === 1);
+  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
   const model = await laidOut(drawn).catch(() => drawn);
   // (its heavy atoms came back in their order)

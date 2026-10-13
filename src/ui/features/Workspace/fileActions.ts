@@ -146,10 +146,11 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
   // in 3D - the frame it shows, where its file had it, or each of its
-  // frames, numbered, with its energy where it is known
+  // frames, numbered, with its energy where it is known - each frame with
+  // the bonds it has
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
     const name = m.name ? stem(m.name) : title;
-    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), m.bonds, { title: name }) + "$$$$\n"];
+    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), bondsAt(m, m.frame), { title: name }) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       const energy = m.energies?.[i];
@@ -170,17 +171,19 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
  * Molecules in 3D as a PDB file holds them (lib/chem/pdb): each a residue of
  * its own, in the frame it shows - or, every frame, a model for each frame
  * there is, each molecule in its frame of that number, or in the frame it
- * shows where it has none of that number. Throws where there are none.
+ * shows where it has none of that number - with the bonds that frame has.
+ * The file's CONECT records serve every model: the first model's bonds.
+ * Throws where there are none.
  */
 export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}): string {
   if (!molecules.length) throw new Error("There are no molecules in 3D to write: a PDB file holds no drawing.");
   const framesOf = (m: Carried3D) => 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
   const count = options.frames === "all" ? Math.max(...molecules.map(framesOf)) : 1;
   const models = Array.from({ length: count }, (_, i) =>
-    molecules.map((m) => ({
-      atoms: frameAtoms(m, options.frames === "all" && i < framesOf(m) ? i : m.frame),
-      bonds: m.bonds,
-    })),
+    molecules.map((m) => {
+      const frame = options.frames === "all" && i < framesOf(m) ? i : m.frame;
+      return { atoms: frameAtoms(m, frame), bonds: bondsAt(m, frame) };
+    }),
   );
   return writePdb(models);
 }

@@ -344,6 +344,28 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     }
   });
 
+  it("writes a trajectory's frame with the bonds that frame has, where they go frame by frame", () => {
+    // (two carbons bonded, then 3 Å apart: an XYZ file's frames, bonds by distance)
+    const parting = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "C", x: 1.5, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      frames: [[0, 0, 0, 3, 0, 0]],
+      bondsFrom: "distance" as const,
+      at: { x: 0, y: 0 },
+      frame: 1,
+      name: "parting.xyz",
+    };
+    const drawn = { atoms: [], bonds: [], molecules3d: [parting] };
+    const bondsOf = (text: string) => readStructures("sdf", "parting.sdf", text).molecules3d!.map((m) => m.bonds.length);
+    expect(bondsOf(structureFileText(drawn, "/tmp/parting.sdf"))).toEqual([0]);
+    expect(bondsOf(structureFileText(drawn, "/tmp/parting.sdf", { frames: "all" }))).toEqual([1, 0]);
+    expect(structureFileText(drawn, "/tmp/parting.pdb")).not.toMatch(/^CONECT/m);
+    expect(structureFileText({ ...drawn, molecules3d: [{ ...parting, frame: 0 }] }, "/tmp/parting.pdb")).toMatch(/^CONECT/m);
+  });
+
   it("writes molecules in 3D as a PDB file - each a residue, the frame shown or a model for each frame - which reads back as they were", async () => {
     const { processFileContent } = await import("./utils/io");
     const oh = {

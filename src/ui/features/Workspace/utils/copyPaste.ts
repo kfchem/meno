@@ -20,7 +20,7 @@ import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../.
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
-import { asSeen } from "./molecule3d";
+import { asSeen, bondsAt } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
@@ -125,7 +125,8 @@ export function clipItems(part: Drawn): ClipItem[] {
         flavor: "mol",
         text: writeMolfile3d(
           seen.flat(),
-          ms.flatMap((m, i) => m.bonds.map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
+          // (each with the bonds the frame it shows has)
+          ms.flatMap((m, i) => bondsAt(m, m.frame).map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
           { title: ms.length === 1 ? ms[0].name?.replace(/\.[^.]*$/, "") : undefined },
         ),
       },

@@ -196,6 +196,23 @@ describe("molecules in 3D on the clipboard", () => {
     expect(items.some((i) => i.flavor === "rxn")).toBe(false);
   });
 
+  it("go to other programs with the bonds the frame they show has, where they go frame by frame", () => {
+    // (two carbons bonded, then 3 Å apart: an XYZ file's frames, bonds by distance)
+    const parting = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "C", x: 1.5, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      frames: [[0, 0, 0, 3, 0, 0]],
+      bondsFrom: "distance" as const,
+      at: { x: 0, y: 0 },
+    };
+    const counts = (frame: number) => clipItems({ atoms: [], bonds: [], molecules3d: [{ ...parting, frame }] }).find((i) => i.flavor === "mol")!.text!.split("\n")[3].slice(0, 6);
+    expect(counts(0)).toBe("  2  1");
+    expect(counts(1)).toBe("  2  0");
+  });
+
   it("keep their radicals in the molfile other programs are given", () => {
     const hydroxyl = {
       atoms: [

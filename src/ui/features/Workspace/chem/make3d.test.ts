@@ -241,6 +241,17 @@ describe("a molecule in 3D drawn as a formula", () => {
     expect(known.asked[0].perceive).toBe(false);
   });
 
+  it("is drawn with the bonds the frame drawn has, where they go frame by frame", async () => {
+    // (two carbons bonded, then 3 Å apart: an XYZ file's frames, bonds by distance)
+    const parting = { ...chain(2), frames: [[0, 0, 0, 3, 0, 0]], bondsFrom: "distance" as const };
+    const asked = worker(true);
+    await formulaOf(asked.chem, parting, 0);
+    await formulaOf(asked.chem, parting, 1);
+    expect(asked.asked.map((a) => a.molblock!.split("\n")[3].slice(0, 6))).toEqual(["  2  1", "  2  0"]);
+    // (no bonds in it: none whose orders to seek)
+    expect(asked.asked[1].perceive).toBe(false);
+  });
+
   it("is drawn with its radicals", async () => {
     const asked = worker(true);
     const radical = { ...chain(2), atoms: chain(2).atoms.map((a, i) => (i === 0 ? { ...a, radical: "doublet" as const } : a)) };
