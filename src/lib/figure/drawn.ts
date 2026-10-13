@@ -268,6 +268,30 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
   // one - is that line's, not a line of its own)
   out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
+  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as RDKit
+  // draws one by default - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
+  // widening on the same way)
+  out.wedges = out.wedges.map((w) => {
+    const l = dist(w.tip, w.base);
+    if (!l) return w;
+    const u = { x: (w.base.x - w.tip.x) / l, y: (w.base.y - w.tip.y) / l };
+    for (let k = 0; k < out.blobs.length; k++) {
+      const b = out.blobs[k];
+      if (b.curved || b.parts.length !== 1 || (b.ink ?? "") === (w.ink ?? "")) continue;
+      const corners = b.pts.filter((p, i) => !b.pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+      if (corners.length !== 4) continue;
+      const near = corners.filter((p) => dist(p, w.base) <= 0.75 * w.w + 0.5);
+      const far = corners.filter((p) => !near.includes(p));
+      if (near.length !== 2 || far.length !== 2) continue;
+      const end = { x: (far[0].x + far[1].x) / 2, y: (far[0].y + far[1].y) / 2 };
+      const on = (end.x - w.base.x) * u.x + (end.y - w.base.y) * u.y;
+      const off = Math.abs((end.x - w.base.x) * u.y - (end.y - w.base.y) * u.x);
+      if (on <= 0 || off > 0.2 * on || dist(far[0], far[1]) <= dist(near[0], near[1])) continue;
+      out.blobs.splice(k, 1);
+      return { ...w, base: end, w: dist(far[0], far[1]), outline: [...(w.outline ?? []), ...corners] };
+    }
+    return w;
+  });
   // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
   const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));

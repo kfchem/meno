@@ -5,6 +5,7 @@ import { bondLength, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
+import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
@@ -729,6 +730,15 @@ describe("a figure whose wedges are filled and then stroked round", () => {
 });
 
 describe("a figure drawn in colour by another program", () => {
+  it("reads a wedge drawn in two colours, black to its middle and its atom's colour on, as one wedge", () => {
+    // (D-ribose as RDKit draws it by default: the wedge to an OH black from the ring to its middle, its wide half red - filled,
+    // and stroked round as a path apart)
+    const r = readFigure(ribose as unknown as FigureDrawn);
+    expect(r.atoms).toHaveLength(10);
+    const oh = r.atoms.findIndex((a) => a.label === "OH" && a.x > 360 && a.y < 130);
+    expect(r.bonds.filter((b) => b.a === oh || b.b === oh).map((b) => b.stereo)).toEqual(["up"]);
+  });
+
   it("reads a bond drawn in two colours, black to its middle and its atom's colour on, as one bond", () => {
     // (an ethanol as RDKit draws one by default: the C-O bond black, then red from its middle to the O)
     const c: P = [60, 60];
