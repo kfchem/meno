@@ -14,6 +14,13 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(() => readStructures("mol", "x.mol", "nothing")).toThrow(/No molecules found in x.mol/);
   });
 
+  it("opens a trajectory the file ends in the middle of with its whole frames, each with its energy", () => {
+    const frame = (e: number, z: number) => `3\n energy: ${e} gnorm: 0.01 xtb: 6.7.1\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
+    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gnorm: 0.01\nO 0 0 0.02\n");
+    expect(checkedStructures(read, "md.xyz")).toBe(read);
+    expect(read.molecules3d![0]).toMatchObject({ frames: [[0, 0, 0.01, 0.76, 0.59, 0, -0.76, 0.59, 0]], energies: [-5.07, -5.08], framesLeftOut: 1 });
+  });
+
   it("leaves out an XYZ file's frame cut short, or with a place that does not read, and its energy with it", () => {
     const frame = (e: string, x: string) => `3\nenergy: ${e}\nO 0 0 0\nH ${x} 0.59 0\nH -0.76 0.59 0\n`;
     // (the second frame damaged, the last cut short - as a file still being written is)
@@ -31,8 +38,9 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(m.energies).toEqual([-76.1, -76.3]);
     // (and says so: never without a word)
     expect(m.framesLeftOut).toBe(2);
-    // (none whole: none read)
-    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow(/No molecules found in t.xyz/);
+    // (none whole: the file refused, saying why of its first frame)
+    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow('t.xyz could not be read: line 4 gives H a place that is not a number: "0.7x".');
+    expect(() => readStructures("xyz", "t.xyz", "3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("t.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).");
   });
 
   it("leaves out a first frame with a place that does not read, says so, and is the first whole one", () => {

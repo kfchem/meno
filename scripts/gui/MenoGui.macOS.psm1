@@ -881,9 +881,10 @@ function Complete-FileDialog {
       it up, and Return then does nothing at all. So: '/', wait for the sheet
       to be a window, the rest of the path, wait for the lookup to show, then
       Return to go there - which leaves the file selected - and Return again
-      to open it.
+      to open it. With -All, every file in that file's folder is chosen
+      (Cmd+A) before Return, to open several at once.
     #>
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [switch] $All)
     if (-not $Path.StartsWith("/")) { throw "the path has to be absolute: '$Path'" }
     $panel = Wait-DialogWindows -What "the open panel" -Until { param($d) $d.Count -ge 1 }
     $before = $panel.Count
@@ -911,6 +912,10 @@ function Complete-FileDialog {
     Send-MenoKey -Key Enter
     Wait-DialogWindows -What "the sheet to take the path (it shows no suggestion when it has not looked the path up)" -Until { param($d) $d.Count -le $before }.GetNewClosure() | Out-Null
     Start-Sleep -Milliseconds 500
+    if ($All) {
+        Send-MenoShortcut -Key A
+        Start-Sleep -Milliseconds 400
+    }
     Send-MenoKey -Key Enter
     Wait-DialogWindows -What "the open panel to close" -Until { param($d) $d.Count -eq 0 } | Out-Null
 }
