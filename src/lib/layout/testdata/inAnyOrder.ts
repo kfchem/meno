@@ -4,9 +4,9 @@ import type { LayoutInput } from "../perceive";
 import { fromSmiles } from "./readBack";
 
 /**
- * The molecule with its atoms - and its bonds, each either way round - in
- * another order, the same from the same seed: as another hand might have
- * drawn it, or another file listed it.
+ * The molecule with its atoms - its bonds, each either way round, and each
+ * centre's neighbours - in another order, the same from the same seed: as
+ * another hand might have drawn it, or another file listed it.
  */
 export function shuffled(g: LayoutInput, seed: number): LayoutInput {
   let x = seed;
@@ -19,9 +19,22 @@ export function shuffled(g: LayoutInput, seed: number): LayoutInput {
   }
   const from = new Array<number>(to.length);
   to.forEach((t, o) => (from[t] = o));
+  // (and each centre's neighbours in another order, its volume turned with
+  // each swap: the same configuration, written as another file writes it)
   const atoms = from.map((o) => {
     const a = g.atoms[o];
-    return a.tetra ? { ...a, tetra: { neighbours: a.tetra.neighbours.map((n) => (n < 0 ? n : to[n])), volume: a.tetra.volume } } : a;
+    if (!a.tetra) return a;
+    const ns = a.tetra.neighbours.map((n) => (n < 0 ? n : to[n]));
+    let volume = a.tetra.volume;
+    const heavy = ns.filter((n) => n >= 0);
+    for (let i = heavy.length - 1; i > 0; i--) {
+      const j = Math.floor(next() * (i + 1));
+      if (i !== j) {
+        [heavy[i], heavy[j]] = [heavy[j], heavy[i]];
+        volume = (volume === 1 ? -1 : 1) as 1 | -1;
+      }
+    }
+    return { ...a, tetra: { neighbours: [...heavy, ...ns.filter((n) => n < 0)], volume } };
   });
   const bonds = g.bonds.map((b) => {
     const stereo = b.stereo && { ...b.stereo, refs: [to[b.stereo.refs[0]], to[b.stereo.refs[1]]] as [number, number] };

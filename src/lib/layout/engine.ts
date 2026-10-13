@@ -77,9 +77,13 @@ export function layout2D(input: LayoutInput): Layout2D {
   let bestScore = Infinity;
   for (let way = 0; way < OWN_ORDERS; way++) {
     const to = canonicalOrder(input, way);
-    const out = restored(layoutInOrder(reordered(input, to)), to);
-    const score = OWN_ORDERS > 1 ? drawingScore(input, perceive(input), out) : 0;
-    if (score < bestScore - 1e-9) [best, bestScore] = [out, score];
+    const own = reordered(input, to);
+    const laid = layoutInOrder(own);
+    // (measured in that order too, the same whatever order the atoms came
+    // in: the measure reads some things by atom order - which of rings as
+    // long the smallest set holds)
+    const score = OWN_ORDERS > 1 ? drawingScore(own, perceive(own), laid) : 0;
+    if (score < bestScore - 1e-9) [best, bestScore] = [restored(laid, to), score];
   }
   return best!;
 }

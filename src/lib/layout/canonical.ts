@@ -120,7 +120,7 @@ export function reordered(input: LayoutInput, to: readonly number[]): LayoutInpu
     const a = input.atoms[o];
     return {
       ...a,
-      ...(a.tetra ? { tetra: { neighbours: a.tetra.neighbours.map((m) => (m < 0 ? m : to[m])), volume: a.tetra.volume } } : {}),
+      ...(a.tetra ? { tetra: inOrder(a.tetra.neighbours.map((m) => (m < 0 ? m : to[m])), a.tetra.volume) } : {}),
       ...(a.pi ? { pi: a.pi.map((m) => to[m]) } : {}),
     };
   });
@@ -155,6 +155,18 @@ export function restored(out: Layout2D, to: readonly number[]): Layout2D {
     wedges: out.wedges.map((w) => ({ ...w, from: atom(w.from), to: atom(w.to) })),
     hydrogens: out.hydrogens.map((h) => ({ ...h, on: atom(h.on) })),
   };
+}
+
+/**
+ * A centre's neighbours in their order, its implicit H last, and the volume
+ * that says the same configuration of them: a centre written with its
+ * neighbours in another order is the same centre, and laid out the same.
+ */
+function inOrder(neighbours: readonly number[], volume: 1 | -1): { neighbours: number[]; volume: 1 | -1 } {
+  const sorted = [...neighbours].sort((p, q) => (p < 0 ? 1 : q < 0 ? -1 : p - q));
+  // (the sign of the permutation taking one order to the other)
+  const key = (n: number) => (n < 0 ? Infinity : n);
+  return { neighbours: sorted, volume: (volume * parity(neighbours.map(key))) as 1 | -1 };
 }
 
 /** Each key's rank among the distinct keys, in sorted order. */
