@@ -141,39 +141,35 @@ export default function StyleEditor({
     </div>
   );
 
-  if (narrow) {
-    return (
-      <div ref={setBox} className="flex flex-col">
-        {/* (a little wider than the settings it lies over: a chosen preset's ring, scrolled under it, no longer shows at its sides) */}
-        <div className="sticky top-0 z-10 -mx-1 px-1 bg-white pb-3 border-b border-gh-line">
-          <Preview style={style} compact />
-        </div>
-        <div className="pt-3">{fields}</div>
-      </div>
-    );
-  }
+  // (one tree at either width, only its classes changing - the preview put
+  // above the fields when narrow by its order, not by moving it - so that
+  // crossing from one to the other keeps the fields and the preview as they
+  // are, and the search box its caret)
   return (
-    <div ref={setBox} className="flex gap-8 items-start">
-      <nav className="hidden xl:block w-44 shrink-0 sticky top-4 text-sm">
-        {STYLE_GROUPS.map((g) => (
-          <a
-            key={g}
-            href={`#${groupId(g)}`}
-            onClick={(e) => {
-              e.preventDefault();
-              document
-                .getElementById(groupId(g))
-                ?.scrollIntoView({ behavior: "smooth" });
-            }}
-            className="block px-2 py-1 rounded-md text-gh-gray hover:text-gh-black hover:bg-gh-base"
-          >
-            {g}
-          </a>
-        ))}
-      </nav>
-      {fields}
-      <div className="w-[26rem] shrink-0 sticky top-4">
-        <Preview style={style} />
+    <div ref={setBox} className={narrow ? "flex flex-col" : "flex gap-8 items-start"}>
+      {!narrow && (
+        <nav className="hidden xl:block w-44 shrink-0 sticky top-4 text-sm">
+          {STYLE_GROUPS.map((g) => (
+            <a
+              key={g}
+              href={`#${groupId(g)}`}
+              onClick={(e) => {
+                e.preventDefault();
+                document
+                  .getElementById(groupId(g))
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="block px-2 py-1 rounded-md text-gh-gray hover:text-gh-black hover:bg-gh-base"
+            >
+              {g}
+            </a>
+          ))}
+        </nav>
+      )}
+      <div className={narrow ? "pt-3" : "contents"}>{fields}</div>
+      {/* (narrow, a little wider than the settings it lies over: a chosen preset's ring, scrolled under it, no longer shows at its sides) */}
+      <div className={narrow ? "order-first sticky top-0 z-10 -mx-1 px-1 bg-white pb-3 border-b border-gh-line" : "w-[26rem] shrink-0 sticky top-4"}>
+        <Preview style={style} compact={narrow} />
       </div>
     </div>
   );
