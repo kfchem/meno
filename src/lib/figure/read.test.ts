@@ -216,6 +216,15 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(s)).toEqual(["C-C", "C=O"]);
   });
 
+  it("reads a double bond drawn short, its second line a quarter of a bond, as a double bond", () => {
+    // (huperzine A's ethylidene C=C as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: 0.6 of a bond, squeezed in)
+    const c: P = [60, 60];
+    const d: P = [60 + 0.6 * L, 60];
+    const s = read(figure([stroke(step(c, 150), c, step(c, 210)), stroke(c, d), stroke(step(d, 30), d, step(d, -30)), stroke([c[0] + 2.2, 62.4], [c[0] + 2.2 + 0.25 * L, 62.4])]));
+    expect(bondsOf(s).filter((b) => b === "C=C")).toHaveLength(1);
+    expect(s.atoms).toHaveLength(6);
+  });
+
   it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {
     // (bilobalide's lactone C=O as RDKit draws it from CoordGen's coordinates: the two lines end together at the O, and one runs on
     // a third of a bond past the carbon)

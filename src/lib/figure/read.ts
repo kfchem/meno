@@ -586,13 +586,23 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     return !!from && !words.some((w) => w !== from && fromBox(q, w.box) < 0.3 * bond) && !tipsOf.some((t) => t.of !== s && dist(t.p, q) < 0.2 * bond);
   };
   const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
+  // (and a short line alongside a longer, within its stretch - a double bond's second line, the bond drawn short)
+  const inner = (s: Stroke) =>
+    len(s) > 0.15 * bond &&
+    shapes.strokes.some((t) => {
+      if (t === s || len(t) < 0.3 * bond || Math.abs(cross(unit(t.a, t.b), unit(s.a, s.b))) > Math.sin((8 * Math.PI) / 180)) return false;
+      const u = unit(t.a, t.b);
+      const off = Math.abs(cross(u, { x: mid(s.a, s.b).x - t.a.x, y: mid(s.a, s.b).y - t.a.y }));
+      const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
+      return off > 0.06 * bond && off < 0.4 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
+    });
   // (and a line over three twentieths of a bond long, from a joint - another line's end at its own - into a label: a bond cut back at the
   // label further than most)
   const others = [...hashed.flatMap((h) => [h.a, h.b]), ...shapes.wedges.flatMap((w) => [w.tip, w.base])];
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s) || toLabel(s)));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);

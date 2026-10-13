@@ -994,7 +994,8 @@ workspace holds.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;
-  - lines side by side, a fifth of a bond or so apart and alongside each
+  - lines side by side - the second may be short, from three twentieths
+    of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
     drawn in perspective half past each other, are none), are a double or a
     triple bond, its ends taken to an atom within a quarter of a bond
