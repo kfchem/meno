@@ -129,7 +129,7 @@ impl Net {
     /// The proxy's port - or, should it not be up, 0: a connection there is
     /// refused at once, so a child pointed at it reaches nothing rather than
     /// going out on its own.
-    fn proxy_port(&self) -> u16 {
+    pub(crate) fn proxy_port(&self) -> u16 {
         self.0.port.get().copied().unwrap_or(0)
     }
 
@@ -244,12 +244,18 @@ fn point_at_proxy(cmd: &mut Command, proxy: &str) {
     }
 }
 
+/// Points a child at the proxy on `port` with no task's token
+/// (`Net::route_nowhere`): what a job is given, as its runner checks it.
+pub fn route_nowhere_at(cmd: &mut Command, port: u16) {
+    point_at_proxy(cmd, &format!("http://127.0.0.1:{port}"));
+}
+
 impl Net {
     /// Points a child that may not use the network - the chemistry worker,
     /// or the console while Meno is offline - at the proxy with no task's
     /// token: whatever it reaches for is refused, and goes on the record.
     pub fn route_nowhere(&self, cmd: &mut Command) {
-        point_at_proxy(cmd, &format!("http://127.0.0.1:{}", self.proxy_port()));
+        route_nowhere_at(cmd, self.proxy_port());
     }
 
     /// Routes a Python sidecar: the console's, the user's own code, as a task

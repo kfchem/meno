@@ -24,7 +24,10 @@
 //!
 //! A job runs only a program a plugin names (its manifest's `steps`, each
 //! with the `programs` it needs), from that plugin's environment - Python
-//! only with a script of the plugin's - and reaches no network.
+//! only with a script of the plugin's - and reaches no network. Its runner
+//! asks the same again of what its folder says (`spec_allowed`), and takes
+//! only a folder in Meno's data folder's `jobs`: anything can write a
+//! `job.json`, and start Meno's executable with it.
 
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
@@ -208,17 +211,28 @@ pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
 
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
 /// run, and what the runner ends with. None where it was started as Meno.
+/// A folder that is not a job of Meno's is not run, and nothing is written.
 pub fn job_mode() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);
     if args.next()? != JOB_FLAG {
         return None;
     }
     let dir = PathBuf::from(args.next()?);
-    Some(run_job(&dir))
+    let (Some(data), Some(plugins)) = (data_dir_here(), plugins_here()) else { return Some(1) };
+    Some(runner(&data, &plugins, &dir))
 }
 
-/// Run the job in `dir`: wait for its turn, run its program, and write down how it ended.
-pub fn run_job(dir: &Path) -> i32 {
+/// What a job's runner does with the folder it was given, Meno's data folder
+/// being `data` and its plugins in `plugins`: the job run, where it is one
+/// of Meno's (`runner_folder`) and runs what Meno would have it run (`spec_allowed`).
+fn runner(data: &Path, plugins: &Path, dir: &Path) -> i32 {
+    let Ok(dir) = runner_folder(data, dir) else { return 1 };
+    run_job(&dir, &|spec| spec_allowed(data, plugins, spec))
+}
+
+/// Run the job in `dir`: wait for its turn, run its program, and write down
+/// how it ended - where what it is to run is `allowed`; else it fails, saying why.
+pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> i32 {
     // (held until the runner goes: while it is held, the job is not gone)
     let Ok(lock) = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)) else { return 1 };
     // (another runner has it - or, for a moment, one looking whether it is there)
@@ -236,6 +250,12 @@ pub fn run_job(dir: &Path) -> i32 {
         let _ = write_record(dir, &record);
         return 1;
     };
+    // (checked as it was read: what runs is what was checked)
+    if let Err(why) = allowed(&spec) {
+        let record = JobRecord { ended: Some(now_ms()), why: Some(format!("Meno does not run it: {why}")), ..JobRecord::new(JobState::Failed, spec.created) };
+        let _ = write_record(dir, &record);
+        return 1;
+    }
     let base = JobRecord::new(JobState::Waiting, spec.created);
     let end = |state: JobState, started: Option<u64>, code: Option<i32>, why: Option<String>| {
         let _ = write_record(dir, &JobRecord { state, started, ended: Some(now_ms()), code, why, ..base.clone() });
@@ -1056,6 +1076,22 @@ fn manifest_of(plugin_dir: &Path, id: &str) -> Result<serde_json::Value, String>
 /// chemist located it (`located`) or where the system finds programs, with
 /// what it is given. None, where the manifest declares no such program.
 pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Option<&str>) -> Result<Option<Found>, String> {
+    let Some(decl) = installed_decl(plugin_dir, id, name)? else {
+        return Ok(None);
+    };
+    let path_var = std::env::var_os("PATH");
+    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
+    // (one too old for Meno: said, not run)
+    if let Some(why) = chosen.why {
+        return Err(why);
+    }
+    installed_at(&decl, PathBuf::from(chosen.path), path_var.as_deref()).map(Some)
+}
+
+/// The program `name` of plugin `id` installed separately, as its manifest
+/// declares it, where one of its steps names it. None, where the manifest
+/// declares no such program.
+fn installed_decl(plugin_dir: &Path, id: &str, name: &str) -> Result<Option<Installed>, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
@@ -1066,17 +1102,16 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
     if !programs_named(&manifest).iter().any(|p| p == name) {
         return Err(format!("{id} names no program {name}"));
     }
-    let path_var = std::env::var_os("PATH");
-    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
-    // (one too old for Meno: said, not run)
-    if let Some(why) = chosen.why {
-        return Err(why);
-    }
-    let program = PathBuf::from(chosen.path);
-    let env = installed_env(&decl, &program, path_var.as_deref())?;
+    Ok(Some(decl))
+}
+
+/// A program installed separately, at `program`: what it is given, and
+/// where the programs beside it would be.
+fn installed_at(decl: &Installed, program: PathBuf, path_var: Option<&std::ffi::OsStr>) -> Result<Found, String> {
+    let env = installed_env(decl, &program, path_var)?;
     let folder = program.parent().map(Path::to_path_buf).unwrap_or_default();
     let beside = decl.beside.iter().map(|(n, f)| (n.clone(), folder.join(f))).collect();
-    Ok(Some(Found { program, activation: None, env, beside }))
+    Ok(Found { program, activation: None, env, beside })
 }
 
 // --- a job's folder ----------------------------------------------------------
@@ -1183,6 +1218,148 @@ fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+// --- what a job's runner takes -----------------------------------------------
+
+/// What a job's program is given: its environment's activation - or,
+/// installed separately, its folders and variables - a network that refuses
+/// it (the proxy on `port`, with no task's: while Meno is open, it says so),
+/// and the cores it may use.
+fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, String> {
+    let mut given = Command::new(&found.program);
+    if let Some(activation) = &found.activation {
+        pixienv::activate(&mut given, activation);
+    }
+    given.envs(found.env.iter().map(|(k, v)| (k, v)));
+    crate::net::route_nowhere_at(&mut given, port);
+    if let Some(cores) = cores {
+        for key in THREADS {
+            given.env(key, cores.clamp(1, 1024).to_string());
+        }
+    }
+    given
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
+        .collect()
+}
+
+/// The proxy's port a job was pointed at, as `given_env` points it: none, where it was not.
+fn proxy_port_of(env: &BTreeMap<String, String>) -> Option<u16> {
+    let (_, proxy) = env.iter().find(|(k, _)| k.eq_ignore_ascii_case("HTTPS_PROXY"))?;
+    let port = proxy.strip_prefix("http://127.0.0.1:")?;
+    port.bytes().all(|b| b.is_ascii_digit()).then_some(port)?.parse().ok()
+}
+
+/// The program a job's spec names, found again as `job_start` found it: one
+/// its plugin declares installed separately, at the path the spec gives - a
+/// copy of it by its file's name, as where the chemist located it is taken -
+/// or else one in the plugin's environment, at that path and no other.
+fn found_again(data: &Path, plugin_dir: &Path, spec: &JobSpec) -> Result<Found, String> {
+    let program = Path::new(&spec.program);
+    if let Some(decl) = installed_decl(plugin_dir, &spec.plugin, &spec.name)? {
+        let copy = installed_found(&decl, Some(&spec.program), None, &Bases::default(), true);
+        if copy.first().map(PathBuf::as_path) != Some(program) {
+            return Err(format!("{} is not {}", spec.program, spec.name));
+        }
+        return installed_at(&decl, program.to_path_buf(), std::env::var_os("PATH").as_deref());
+    }
+    let found = plugin_program(data, plugin_dir, &spec.plugin, &spec.name, &spec.args)?;
+    if found.program != program {
+        return Err(format!("{} is not {}'s {}", spec.program, spec.plugin, spec.name));
+    }
+    Ok(found)
+}
+
+/// Whether a job's runner may run what `spec` says (`job.json`, which
+/// anything could have written): only what `job_start` makes - a program
+/// its plugin names, from the plugin's environment or installed separately,
+/// those beside it it declares, and given what `job_start` gives, nothing
+/// else - Meno's data folder `data`, and the plugins it carries in `plugins`.
+pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec) -> Result<(), String> {
+    if !plugin_id(&spec.plugin) {
+        return Err(format!("not a plugin: {}", spec.plugin));
+    }
+    let found = found_again(data, &plugins.join(&spec.plugin), spec)?;
+    let asked: Vec<ThenAsk> = spec.then.iter().map(|t| ThenAsk { program: t.name.clone(), args: t.args.clone() }).collect();
+    if then_of(&found, &spec.name, &asked)? != spec.then {
+        return Err(format!("not the programs beside {}", spec.name));
+    }
+    let port = proxy_port_of(&spec.env).ok_or("not pointed at Meno's network")?;
+    let cores = spec.env.get(THREADS[0]).and_then(|c| c.parse().ok());
+    if given_env(&found, port, cores) != spec.env {
+        return Err(format!("{} given what Meno does not give it", spec.name));
+    }
+    Ok(())
+}
+
+/// A job's folder as its runner takes it (`--job <folder>`): one in `data`'s
+/// `jobs`, by an id Meno gives - links and `..` followed first, so that
+/// neither leads out - and holding what it is to run. Where it is there.
+pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
+    let refused = || format!("not a job of Meno's: {}", dir.display());
+    let jobs = data.join("jobs");
+    let root = jobs.canonicalize().map_err(|_| refused())?;
+    let real = dir.canonicalize().map_err(|_| refused())?;
+    let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if real.parent() != Some(root.as_path()) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
+        return Err(refused());
+    }
+    // (as Meno names it: on Windows a canonical path is one programs may not take as their folder)
+    Ok(jobs.join(id))
+}
+
+/// Meno's identifier (tauri.conf.json), which names its data folder.
+const IDENTIFIER: &str = "com.kfchem.meno";
+
+/// Meno's data folder as Tauri finds it (`app_data_dir`: the system's
+/// folder for applications' data, then Meno's identifier) - for a job's
+/// runner, which has no window to ask.
+fn data_dir_here() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let base = roaming_app_data();
+    #[cfg(unix)]
+    let base = {
+        let home = std::env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute());
+        if cfg!(target_os = "macos") {
+            home.map(|h| h.join("Library").join("Application Support"))
+        } else {
+            let xdg = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).filter(|p| p.is_absolute());
+            xdg.or_else(|| home.map(|h| h.join(".local").join("share")))
+        }
+    };
+    base.map(|b| b.join(IDENTIFIER))
+}
+
+/// The user's roaming application data folder (Windows' known folder, as Tauri reads it).
+#[cfg(windows)]
+fn roaming_app_data() -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath};
+    unsafe {
+        let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
+        let ok = SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, std::ptr::null_mut(), &mut path) == 0;
+        let found = (ok && !path.is_null()).then(|| {
+            let len = (0..).take_while(|&i| *path.add(i) != 0).count();
+            PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
+        });
+        // (given back however it went)
+        windows::Win32::System::Com::CoTaskMemFree(Some(path as *const core::ffi::c_void));
+        found
+    }
+}
+
+/// The plugins Meno carries, where Tauri finds its resources - for a job's runner, as for its data folder.
+fn plugins_here() -> Option<PathBuf> {
+    let info = tauri::PackageInfo {
+        name: "Meno".into(),
+        version: env!("CARGO_PKG_VERSION").parse().ok()?,
+        authors: env!("CARGO_PKG_AUTHORS"),
+        description: env!("CARGO_PKG_DESCRIPTION"),
+        crate_name: env!("CARGO_PKG_NAME"),
+    };
+    let resources = tauri::utils::platform::resource_dir(&info, &tauri::Env::default()).ok()?;
+    Some(resources.join("resources").join("plugins"))
+}
+
 // --- Meno's commands ---------------------------------------------------------
 
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1191,9 +1368,14 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(root)
 }
 
+/// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
+fn job_id_ok(id: &str) -> bool {
+    uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+}
+
 /// A job's folder, by its id - which is only ever one Meno made.
 fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    let ok = uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id);
+    let ok = job_id_ok(id);
     let dir = jobs_root(app)?.join(id);
     if !ok || !dir.join(SPEC).is_file() {
         return Err(format!("no job {id}"));
@@ -1252,32 +1434,13 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     };
     let then = then_of(&found, &payload.program, &payload.then)?;
 
-    // what it is given: its environment's activation - or, installed
-    // separately, its folders and variables - a network that refuses it
-    // (and, while Meno is open, says so), the cores it may use
-    let mut given = Command::new(&found.program);
-    if let Some(activation) = &found.activation {
-        pixienv::activate(&mut given, activation);
-    }
-    given.envs(found.env.iter().map(|(k, v)| (k, v)));
-    net.route_nowhere(&mut given);
-    if let Some(cores) = payload.cores {
-        for key in THREADS {
-            given.env(key, cores.clamp(1, 1024).to_string());
-        }
-    }
-    let env = given
-        .get_envs()
-        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
-        .collect();
-
     let spec = JobSpec {
         plugin: payload.plugin.clone(),
         name: payload.program.clone(),
         program: found.program.to_string_lossy().into_owned(),
         args: payload.args,
         stdin: payload.stdin,
-        env,
+        env: given_env(&found, net.proxy_port(), payload.cores),
         slots: payload.slots.unwrap_or(1).clamp(1, 64),
         created: now_ms(),
         then,
@@ -1437,6 +1600,11 @@ mod tests {
             then: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
+    }
+
+    /// A job run as its runner runs one, what it is to run taken as it is.
+    fn run_job(dir: &Path) -> i32 {
+        super::run_job(dir, &|_| Ok(()))
     }
 
     fn wait_for(what: impl Fn() -> bool) {
@@ -1758,6 +1926,163 @@ mod tests {
         assert!(plugin_program(&empty, &dir2, "demo", "xtb", &[]).unwrap_err().contains("not in"));
         let _ = fs::remove_dir_all(data.parent().unwrap());
         let _ = fs::remove_dir_all(empty.parent().unwrap());
+    }
+
+    /// A job's spec as `job_start` makes it, for what was found.
+    fn spec_for(plugin: &str, name: &str, found: &Found, args: &[&str]) -> JobSpec {
+        JobSpec {
+            plugin: plugin.into(),
+            name: name.into(),
+            program: found.program.to_string_lossy().into_owned(),
+            args: args.iter().map(|a| a.to_string()).collect(),
+            stdin: None,
+            env: given_env(found, 4567, Some(2)),
+            slots: 1,
+            created: now_ms(),
+            then: vec![],
+        }
+    }
+
+    #[test]
+    fn a_runner_takes_only_a_folder_in_meno_s_jobs_folder() {
+        let base = temp();
+        let data = base.join("data");
+        let jobs = data.join("jobs");
+        // (no jobs' folder yet: nothing is one)
+        let elsewhere = shell(&base.join("elsewhere"), ECHO, 1);
+        assert!(runner_folder(&data, &elsewhere).is_err());
+        let (id, dir) = make_job(&jobs, &read_spec(&elsewhere).unwrap(), &[]).unwrap();
+        assert_eq!(runner_folder(&data, &dir), Ok(jobs.join(&id)));
+        assert_eq!(runner_folder(&data, &dir.join(WORK).join("..")), Ok(jobs.join(&id)));
+        // outside it, by its path or by `..`; inside one; not by an id Meno gives; holding nothing to run
+        let up = jobs.join(&id).join("..").join("..").join("..").join("elsewhere").join(elsewhere.file_name().unwrap());
+        let inside = make_job(&dir.join(WORK), &read_spec(&dir).unwrap(), &[]).unwrap().1;
+        let named = jobs.join("not-an-id");
+        fs::create_dir_all(&named).unwrap();
+        fs::copy(dir.join(SPEC), named.join(SPEC)).unwrap();
+        let empty = jobs.join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&empty).unwrap();
+        for bad in [&elsewhere, &up, &inside, &named, &empty, &jobs, &jobs.join(SPEC)] {
+            assert!(runner_folder(&data, bad).is_err(), "{}", bad.display());
+        }
+        // a link in it to a folder outside
+        #[cfg(unix)]
+        {
+            let link = jobs.join(uuid::Uuid::new_v4().to_string());
+            std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
+            assert!(runner_folder(&data, &link).is_err());
+        }
+        // and the runner, refusing one, writes nothing and ends saying so
+        let empty_plugins = base.join("plugins");
+        assert_eq!(runner(&data, &empty_plugins, &elsewhere), 1);
+        assert!(!elsewhere.join(RECORD).exists() && !elsewhere.join(RUNNER_LOCK).exists() && !elsewhere.join(LOG).exists());
+        assert!(!base.join("elsewhere").join(QUEUE_LOCK).exists());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_runs_only_what_job_start_would_have_it_run() {
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let (data, dir) = plugin(r#"["xtb"]"#, &[&exe("xtb"), &exe("other")]);
+        let plugins = dir.parent().unwrap().to_path_buf();
+        let found = plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap();
+        let good = spec_for("demo", "xtb", &found, &["in.xyz"]);
+        assert_eq!(spec_allowed(&data, &plugins, &good), Ok(()));
+        // a program its plugin does not name; another file under a name it names; another plugin's
+        let other = Found { program: found.program.with_file_name(exe("other")), ..plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap() };
+        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[])).unwrap_err().contains("names no program other"));
+        let (program, _) = shell_program();
+        let elsewhere = JobSpec { program, ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &elsewhere).is_err());
+        for plugin in ["../demo", "absent"] {
+            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }).is_err(), "{plugin}");
+        }
+        // given what Meno does not give: code loaded into it, a network of its own, no proxy, programs after it
+        let with = |k: &str, v: &str| {
+            let mut env = good.env.clone();
+            env.insert(k.into(), v.into());
+            JobSpec { env, ..good.clone() }
+        };
+        for (k, v) in [("DYLD_INSERT_LIBRARIES", "/tmp/x.dylib"), ("LD_PRELOAD", "/tmp/x.so"), ("PYTHONPATH", "/tmp"), ("HTTPS_PROXY", "http://example.org:8080"), ("OMP_NUM_THREADS", "lots")] {
+            assert!(spec_allowed(&data, &plugins, &with(k, v)).is_err(), "{k}");
+        }
+        let unrouted = JobSpec { env: BTreeMap::new(), ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &unrouted).unwrap_err().contains("not pointed at Meno's network"));
+        let then = JobSpec { then: vec![Then { name: "sh".into(), program: shell_program().0, args: vec![] }], ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &then).is_err());
+
+        // and run by the runner: refused, failing, saying why, nothing run; allowed, run
+        let jobs = data.join("jobs");
+        let refused = make_job(&jobs, &with("LD_PRELOAD", "/tmp/x.so"), &[]).unwrap().1;
+        assert_eq!(runner(&data, &plugins, &refused), 1);
+        let r = current_record(&refused).unwrap();
+        assert_eq!((r.state, r.started), (JobState::Failed, None));
+        assert!(r.why.unwrap().contains("Meno does not run it"));
+        assert!(!refused.join(LOG).exists());
+        #[cfg(unix)]
+        {
+            fs::write(&found.program, "#!/bin/sh\necho ran\n").unwrap();
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&found.program, fs::Permissions::from_mode(0o755)).unwrap();
+            let ran = make_job(&jobs, &good, &[]).unwrap().1;
+            assert_eq!(runner(&data, &plugins, &ran), 0);
+            assert_eq!(current_record(&ran).unwrap().state, JobState::Done);
+            assert_eq!(read_log(&ran, 0, LOG_MOST).0, "ran\n");
+        }
+        let _ = fs::remove_dir_all(data.parent().unwrap());
+    }
+
+    #[test]
+    fn a_runner_runs_a_program_installed_separately_only_as_its_plugin_declares_it() {
+        let base = temp();
+        let plugins = base.join("plugins");
+        let plugin = plugins.join("demo");
+        fs::create_dir_all(&plugin).unwrap();
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let manifest = serde_json::json!({
+            "id": "demo",
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
+        });
+        fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
+        let orca = program_file(&base.join("orca_6"), &exe("orca"));
+        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
+        let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        let data = base.join("data");
+        assert_eq!(spec_allowed(&data, &plugins, &good), Ok(()));
+        // a file of another name where it was located; one beside it it does not declare
+        let other = program_file(&base.join("orca_6"), &exe("orcb"));
+        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }).is_err());
+        let mut beside = good.clone();
+        beside.then[0].program = other.to_string_lossy().into_owned();
+        assert!(spec_allowed(&data, &plugins, &beside).is_err());
+        // what its declaration does not give it
+        let mut env = good.env.clone();
+        env.insert("GAUSS_EXEDIR".into(), base.to_string_lossy().into_owned());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }).is_err());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_finds_meno_s_data_folder_by_meno_s_identifier() {
+        let conf: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap()).unwrap();
+        assert_eq!(conf["identifier"], IDENTIFIER);
+        assert_eq!(conf["productName"], "Meno");
+        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(IDENTIFIER)));
+        assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
+    }
+
+    #[test]
+    fn reads_the_port_a_job_was_pointed_at() {
+        let env = |v: &str| BTreeMap::from([("HTTPS_PROXY".to_string(), v.to_string())]);
+        assert_eq!(proxy_port_of(&env("http://127.0.0.1:4567")), Some(4567));
+        assert_eq!(proxy_port_of(&env("http://127.0.0.1:0")), Some(0));
+        for bad in ["http://meno:t@127.0.0.1:4567", "http://127.0.0.1:+1", "http://127.0.0.1:70000", "http://10.0.0.1:80", ""] {
+            assert_eq!(proxy_port_of(&env(bad)), None, "{bad}");
+        }
+        assert_eq!(proxy_port_of(&BTreeMap::new()), None);
     }
 
     #[test]
