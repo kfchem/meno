@@ -30,6 +30,7 @@ each atom's element, place, charge and radical, the bonds by index:
 """
 
 import json
+import re
 import os
 import sys
 
@@ -91,10 +92,110 @@ def op_to_smiles(m):
     return {"smiles": Chem.MolToSmiles(Chem.RemoveHs(read(m["molblock"])))}
 
 
+# The atoms a SMILES may write without brackets, and those aromatic in brackets.
+ORGANIC = {"B", "C", "N", "O", "P", "S", "F", "Cl", "Br", "I", "b", "c", "n", "o", "p", "s", "*"}
+AROMATIC_IN_BRACKETS = {"b", "c", "n", "o", "p", "s", "se", "as", "te"}
+
+
+def ordinal(k):
+    """1st, 2nd, 3rd, 4th..."""
+    return f"{k}{'th' if 10 <= k % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(k % 10, 'th')}"
+
+
+def is_element(symbol):
+    try:
+        return Chem.GetPeriodicTable().GetAtomicNumber(symbol) > 0
+    except RuntimeError:
+        return False
+
+
+def why_unreadable(smiles):
+    """Why a SMILES cannot be read, in a few plain words about the SMILES
+    itself - a ring left open, a parenthesis or bracket not closed, a symbol
+    that is no element, an atom with more bonds than it can take - or None
+    where none of these says it."""
+    s = smiles.strip()
+    if not s:
+        return "it is empty"
+    depth = 0
+    rings = {}
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "[":
+            end = s.find("]", i)
+            if end < 0:
+                return "a [ is not closed"
+            inside = s[i + 1 : end]
+            sym = re.match(r"\d*([A-Z][a-z]?|se|as|te|[a-z]|\*)", inside)
+            if not sym:
+                return f"[{inside}] names no element"
+            name = sym.group(1)
+            if name != "*" and not (name in AROMATIC_IN_BRACKETS or is_element(name)):
+                return f"{name} is not an element"
+            i = end + 1
+            continue
+        if ch == "]":
+            return "a ] closes no ["
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                return "a ) closes no ("
+            depth -= 1
+        elif ch.isdigit() or ch == "%":
+            digit = s[i + 1 : i + 3] if ch == "%" else ch
+            label = f"%{digit}" if ch == "%" else digit
+            if label in rings:
+                del rings[label]
+            else:
+                rings[label] = i
+            i += 3 if ch == "%" else 1
+            continue
+        elif ch.isalpha() or ch == "*":
+            two = s[i : i + 2]
+            if two in ("Cl", "Br"):
+                i += 2
+                continue
+            if ch not in ORGANIC:
+                # (an element written without the brackets it needs - Na, Fe, the
+                # capital read as an atom of its own - or no element at all)
+                pair = s[i - 1] + ch if i > 0 and ch.islower() and s[i - 1].isupper() else None
+                if pair and is_element(pair):
+                    return f"{pair} is written in brackets: [{pair}]"
+                own = two if len(two) == 2 and two[1].islower() and is_element(two) else ch
+                if own[0].isupper() and is_element(own):
+                    return f"{own} is written in brackets: [{own}]"
+                return f"{ch} is not an element"
+        i += 1
+    if rings:
+        label = min(rings, key=rings.get)
+        return f"a ring is left open: {label} is opened and not closed"
+    if depth > 0:
+        return "a ( is not closed"
+    mol = Chem.MolFromSmiles(s, sanitize=False)
+    if mol is None:
+        return None
+    for problem in Chem.DetectChemistryProblems(mol):
+        kind = problem.GetType()
+        if kind == "AtomValenceException":
+            k = problem.GetAtomIdx()
+            atom = mol.GetAtomWithIdx(k)
+            bonds = int(round(sum(b.GetBondTypeAsDouble() for b in atom.GetBonds()) + atom.GetNumExplicitHs()))
+            return f"its {ordinal(k + 1)} atom, {atom.GetSymbol()}, has {bonds} bonds, more than it can take"
+        if kind in ("KekulizeException", "AtomKekulizeException"):
+            atoms = sorted(problem.GetAtomIndices())
+            if len(atoms) > 1:
+                return f"the aromatic ring of its atoms {atoms[0] + 1} to {atoms[-1] + 1} cannot have alternating double bonds"
+            return "an aromatic atom (in lowercase) is in no ring that can be aromatic"
+    return None
+
+
 def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
-        raise ValueError("This SMILES could not be read.")
+        why = why_unreadable(m["smiles"])
+        raise ValueError(f"This SMILES could not be read: {why}." if why else "This SMILES could not be read.")
     lay_out_2d(mol)
     block = Chem.MolToV3KMolBlock(mol)
     # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
