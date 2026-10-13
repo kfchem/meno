@@ -5,7 +5,9 @@ Each MOL block is read by RDKit as a MOL file is (its wedges and its double
 bonds' geometry giving the stereochemistry) and compared with the truth by
 canonical SMILES, stereochemistry, isotopes and charges kept. Where they
 differ, what differs: the formula, the bonds, the charges, the isotopes or
-the stereochemistry alone (the same SMILES without it). Written to
+the stereochemistry alone (the same SMILES without it). A reaction's read
+is compared side by side - its reactants, agents and products, each the
+molecules read there - and where a side differs, which. Written to
 .roundtrip/report.json and .roundtrip/report.md.
 
     <chem python> scripts/figure/roundtrip/compare.py [--read=<folder under .roundtrip>]
@@ -69,8 +71,32 @@ def verdict(truth, molblock):
     return "bonds", got
 
 
+SIDES = ("reactants", "agents", "products")
+
+
+def reaction_verdict(truth, r):
+    """'ok', or which sides of a reaction differ from the truth; and what was read on each."""
+    if r.get("none"):
+        return f"nothing read: {r['none']}", None
+    if not r.get("arrows"):
+        return "no arrow read", None
+    got = {}
+    for k in SIDES:
+        molblock = (r.get("sides") or {}).get(k) or ""
+        m = Chem.MolFromMolBlock(molblock, removeHs=True) if molblock else None
+        if molblock and m is None:
+            return f"{k}: not a valid molecule (valence)", None
+        got[k] = sorted(Chem.MolToSmiles(f) for f in Chem.GetMolFrags(m, asMols=True)) if m else []
+    wrong = [k for k in SIDES if got[k] != truth[k]]
+    if wrong:
+        return "sides differ: " + ", ".join(f"{k} ({len(got[k])} for {len(truth[k])})" for k in wrong), got
+    return ("ok" if r["arrows"] == 1 else f"arrows: {r['arrows']} for 1"), got
+
+
 def main():
-    corpus = {m["name"]: m for m in json.loads((OUT / "corpus.json").read_text())["molecules"]}
+    data = json.loads((OUT / "corpus.json").read_text())
+    corpus = {m["name"]: m for m in data["molecules"]}
+    reactions = {r["name"]: r for r in data.get("reactions", [])}
     drawn = json.loads((OUT / "drawn.json").read_text())
     at = next((OUT / a[7:] for a in sys.argv[1:] if a.startswith("--read=")), OUT)
     read_path = at / "read.json"
@@ -81,6 +107,12 @@ def main():
         v, got = verdict(m["truth"], d.get("mol"))
         rows.append({"name": d["name"], "category": m["category"], "stage": "drawn", "preset": "", "variant": "", "verdict": v, "got": got, "truth": m["truth"], **({"warning": d["warning"]} if d.get("warning") else {})})
     for r in read:
+        if r["name"] in reactions:
+            rx = reactions[r["name"]]
+            v, got = reaction_verdict(rx, r)
+            pluses = max(0, len(rx["reactants"]) - 1) + max(0, len(rx["products"]) - 1)
+            rows.append({"name": r["name"], "category": "reaction", "stage": "read", "preset": r["preset"], "variant": r["variant"], "verdict": v, "got": got, "truth": rx["smiles"], "pluses": f"{r.get('pluses', 0)} for {pluses}"})
+            continue
         m = corpus[r["name"]]
         v, got = verdict(m["truth"], r.get("mol"))
         if r.get("none"):

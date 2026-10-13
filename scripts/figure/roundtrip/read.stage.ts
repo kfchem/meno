@@ -13,6 +13,12 @@
  * reads beside these; RT_BOX=page a box round all that is on the page, not
  * the figures found - the figure reader measured apart from finding figures;
  * RT_PRESETS=a,b only the drawings in those styles (rdkit_draw.py's too).
+ *
+ * A reaction's drawing (rdkit_draw.py's) is read the same way, and its
+ * molecules told apart by where they stand to its longest arrow - before
+ * its tail the reactants, past its point the products, along it (over or
+ * under it) the agents - each side written as a MOL file of its own, with
+ * how many arrows and "+" signs were read.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,6 +29,7 @@ import { figuresOf, pageObjectsOf, type Box } from "../../../src/lib/pdf/figures
 import type { FigureDrawn } from "../../../src/lib/figure/drawn";
 import { structureFileText } from "../../../src/ui/features/Workspace/fileActions";
 import { figureFrom } from "../../../src/ui/features/Workspace/utils/figures";
+import type { Model } from "../../../src/ui/features/Workspace/store/types";
 import { fileName } from "./names";
 
 const OUT = resolve(process.cwd(), ".roundtrip");
@@ -76,9 +83,32 @@ class Reader {
   }
 }
 
+/** A reaction's molecules by where each stands to the longest arrow: before its tail, along it, past its point. */
+export function sidesOf(model: Model, arrows: readonly { x: number; y: number; angle: number; length: number }[]): Record<"reactants" | "agents" | "products", Model> {
+  const sides = { reactants: { atoms: [], bonds: [] }, agents: { atoms: [], bonds: [] }, products: { atoms: [], bonds: [] } } as Record<"reactants" | "agents" | "products", Model>;
+  const arrow = arrows.reduce<(typeof arrows)[number] | null>((p, a) => (!p || a.length > p.length ? a : p), null);
+  if (!arrow) return sides;
+  // (each molecule: the atoms its bonds join)
+  const group = new Map(model.atoms.map((a) => [a.id, a.id]));
+  const root = (id: number): number => (group.get(id) === id ? id : root(group.get(id)!));
+  for (const b of model.bonds) group.set(root(b.a), root(b.b));
+  const u = { x: Math.cos(arrow.angle), y: Math.sin(arrow.angle) };
+  for (const r of new Set(model.atoms.map((a) => root(a.id)))) {
+    const atoms = model.atoms.filter((a) => root(a.id) === r);
+    const ids = new Set(atoms.map((a) => a.id));
+    const at = { x: atoms.reduce((t, a) => t + a.x, 0) / atoms.length, y: atoms.reduce((t, a) => t + a.y, 0) / atoms.length };
+    const along = (at.x - arrow.x) * u.x + (at.y - arrow.y) * u.y;
+    const side = sides[along < -arrow.length / 2 ? "reactants" : along > arrow.length / 2 ? "products" : "agents"];
+    side.atoms.push(...atoms);
+    side.bonds.push(...model.bonds.filter((b) => ids.has(b.a)));
+  }
+  return sides;
+}
+
 it("reads every PDF back", async () => {
-  const { molecules } = JSON.parse(readFileSync(resolve(OUT, "corpus.json"), "utf8")) as { molecules: { name: string }[] };
-  const nameOf = new Map(molecules.map((m) => [fileName(m.name), m.name]));
+  const { molecules, reactions = [] } = JSON.parse(readFileSync(resolve(OUT, "corpus.json"), "utf8")) as { molecules: { name: string }[]; reactions?: { name: string }[] };
+  const nameOf = new Map([...molecules, ...reactions].map((m) => [fileName(m.name), m.name]));
+  const isReaction = new Set(reactions.map((r) => r.name));
   const cache = resolve(OUT, "cache");
   mkdirSync(cache, { recursive: true });
   // (the reader keeps every PDF it is asked about open: started afresh every so often)
@@ -123,7 +153,16 @@ it("reads every PDF back", async () => {
         writeFileSync(resolve(READ, "figures", file.replace(/\.pdf$/, ".json")), JSON.stringify({ box, ...head }));
         const got = figureFrom(head as unknown as FigureDrawn, sha, 0);
         if ("none" in got) entry.none = got.none;
-        else entry.mol = structureFileText(got.model, "read.mol");
+        else {
+          entry.mol = structureFileText(got.model, "read.mol");
+          if (isReaction.has(String(entry.name))) {
+            const arrows = got.scheme?.arrows ?? [];
+            entry.arrows = arrows.length;
+            entry.pluses = got.scheme?.pluses?.length ?? 0;
+            const sides = sidesOf(got.model, arrows);
+            entry.sides = Object.fromEntries(Object.entries(sides).map(([k, m]) => [k, m.atoms.length ? structureFileText(m, "read.mol") : ""]));
+          }
+        }
       }
     } catch (e) {
       entry.none = `failed: ${e instanceof Error ? e.message : String(e)}`;

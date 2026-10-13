@@ -4,7 +4,7 @@
 <chem python> scripts/figure/roundtrip/corpus.py          # 1. the structures, and the truth about each -> .roundtrip/corpus.json
 npm run roundtrip -- draw                                  # 2. drawn by Meno, as MOL and as SVG in every style -> .roundtrip/svg
 swift scripts/figure/roundtrip/topdf.swift .roundtrip      # 3. each SVG printed as PDF, three ways -> .roundtrip/pdf
-<chem python> scripts/figure/roundtrip/rdkit_draw.py       # 2b. (also) drawn by RDKit's depictor, four ways -> .roundtrip-rdkit/svg
+<chem python> scripts/figure/roundtrip/rdkit_draw.py       # 2b. (also) drawn by RDKit's depictor, four ways, and the reactions two -> .roundtrip-rdkit/svg
 swift scripts/figure/roundtrip/topdf.swift .roundtrip-rdkit #    printed likewise; copy its pdf/ into .roundtrip/pdf
 npm run tauri build -- --bundles app                       #    (the app whose PDF reader reads them back)
 npm run roundtrip -- read                                  # 4. each PDF read back as Read as structure reads it -> .roundtrip/read.json
@@ -22,6 +22,14 @@ there - the figure reader measured apart from finding figures.
 `RT_PRESETS=rdkit,rdkitcg,rdkitacs,rdkitacscg` with `RT_READ=rdkit` reads
 only the structures drawn by RDKit (stage 2b): real papers' figures come
 from many programs, not Meno's alone.
+
+The reactions of `reactions.json` - textbook reactions written as reaction
+SMILES - are drawn by RDKit's reaction drawing (stage 2b: `rdkitrxn`, its
+options as they come, and `rdkitrxnacs`, its ACS 1996 mode) and read back
+as *Read as structure* reads a scheme: the molecules read before the
+longest arrow's tail, along it and past its point are compared with the
+reactants, agents and products, each side's molecules by canonical SMILES.
+`RT_PRESETS=rdkitrxn,rdkitrxnacs` with `RT_READ=rxn` reads only them.
 
 ## What it is for
 
