@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
-import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { clipboardFiles, copying, openWorkspacesFrom, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { isWorkspaceFile } from "./utils/workspace";
 import { styleOf } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { chemMolblock } from "../../../lib/roles/molblock";
@@ -166,8 +167,14 @@ export function useClipboardActions(
       if (busy()) return;
       const { place: at, pastes: now } = pastePlace(pastes.current, asked);
       try {
-        // (files copied in the Finder or Explorer: as they would come dropped there)
-        const files = openFiles ? await clipboardFiles() : [];
+        // (files copied in the Finder or Explorer: as they would come dropped
+        // there - but a workspace file opened by its path, to be saved back to it)
+        const byPath = openFiles ? await openWorkspacesFrom("clipboard") : 0;
+        const files = (openFiles ? await clipboardFiles() : []).filter((f) => !byPath || !isWorkspaceFile(f.name));
+        if (byPath && !files.length) {
+          pastes.current = now;
+          return;
+        }
         if (files.length && openFiles) {
           pastes.current = now;
           await openFiles(files, at);
