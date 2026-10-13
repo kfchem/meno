@@ -142,7 +142,16 @@ export function createWorkspaceDocument(data?: unknown): DocumentStore<Workspace
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
   // (each edit's sets grown to keep what is drawn on in them inside them, as
   // part of it - and its stacks of drawings kept whole: utils/stacks)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before) });
+  // (its history held to about 100 MB: what a step costs is the atoms and
+  // bonds it copies - the lists a drawing's edit makes anew, not those it
+  // shares with the step before; the maintainer, 2026-10-13)
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before), cost: stepCost });
+}
+
+/** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
+export function stepCost(state: WorkspaceDocument, before: WorkspaceDocument | undefined): number {
+  const { atoms, bonds } = state.model;
+  return (atoms !== before?.model.atoms ? atoms.length : 0) + (bonds !== before?.model.bonds ? bonds.length : 0);
 }
 
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */

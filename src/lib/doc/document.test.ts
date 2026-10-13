@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDocument, DEFAULT_COALESCE_MS, gestureStep } from "./document";
+import { createDocument, DEFAULT_COALESCE_MS, DEFAULT_HISTORY_LIMIT, gestureStep } from "./document";
 
 type Doc = { atoms: string[]; title: string };
 
@@ -183,6 +183,44 @@ describe("createDocument", () => {
     expect(doc.travelled()).toBe(true);
     doc.amend((d) => ({ ...d, title: "learnt" }));
     expect(doc.travelled()).toBe(false);
+  });
+
+  it("keeps a thousand steps by default, the 1001st dropping the oldest", () => {
+    expect(DEFAULT_HISTORY_LIMIT).toBe(1000);
+    const doc = createDocument<Doc>(initial);
+    for (let i = 1; i <= 1000; i++) doc.edit(`add ${i}`, addAtom(String(i)));
+    expect(doc.history().undoDepth).toBe(1000);
+    doc.edit("add 1001", addAtom("1001"));
+    expect(doc.history().undoDepth).toBe(1000);
+    // every step back but the first: as far as undo goes, the document holds atom 1
+    while (doc.undo());
+    expect(doc.getState().atoms).toEqual(["1"]);
+    // and all of them forward again
+    while (doc.redo());
+    expect(doc.getState().atoms).toHaveLength(1001);
+  });
+
+  it("holds its history to what its steps cost, the oldest dropped first, the steps to redo kept whole", () => {
+    // each step costs 10, and 45 may be held: the present and three before it
+    const doc = createDocument<Doc>(initial, { cost: () => 10, budget: 45 });
+    for (const el of ["C", "O", "N", "S", "P", "F"]) doc.edit(`add ${el}`, addAtom(el));
+    expect(doc.history().undoDepth).toBe(3);
+    while (doc.undo());
+    expect(doc.getState().atoms).toEqual(["C", "O", "N"]);
+    // all three to redo, though the budget was full
+    expect(doc.history().redoDepth).toBe(3);
+    while (doc.redo());
+    expect(doc.getState().atoms).toEqual(["C", "O", "N", "S", "P", "F"]);
+    // a step that costs more than all of it still leaves one to undo
+    const big = createDocument<Doc>(initial, { cost: () => 1000, budget: 45 });
+    big.edit("add C", addAtom("C"));
+    big.edit("add O", addAtom("O"));
+    expect(big.history().undoDepth).toBe(1);
+    // and a step that copies nothing costs nothing: the thousand steps kept
+    const free = createDocument<Doc>(initial, { cost: (s, b) => (s.atoms === b?.atoms ? 0 : 10), budget: 45 });
+    free.edit("add C", addAtom("C"));
+    for (let i = 0; i < 1100; i++) free.edit(`title ${i}`, (d) => ({ ...d, title: String(i) }));
+    expect(free.history().undoDepth).toBe(1000);
   });
 
   it("tracks the saved state, including after an undo back to it", () => {

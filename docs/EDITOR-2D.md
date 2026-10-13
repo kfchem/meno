@@ -303,6 +303,12 @@ highlight's colour, under the drawing, and a small handle stands above it.
   or moves it from under the pointer (2026-10-13: an atom dragged, undone
   back across the page, stayed lit, and Delete or a letter acted on it
   there); it lights again as the pointer next moves.
+- Undo and redo (Ctrl/⌘ Z; Ctrl/⌘ Shift Z or Ctrl Y to redo) go a
+  thousand steps back per document, held to about 100 MB: a step costs
+  the atoms and bonds it copies, so a drawing of a few thousand atoms
+  keeps its thousand steps and a stack of 28,000 about 430. A step past
+  either drops the oldest; the steps to redo are never dropped, nor the
+  last one to undo (the maintainer, 2026-10-13: it was a hundred steps).
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,

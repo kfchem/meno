@@ -1,3 +1,4 @@
+import { DEFAULT_HISTORY_LIMIT } from "../../../../lib/doc/document";
 import type { Turn3D } from "./types";
 
 /**
@@ -16,8 +17,8 @@ type Step = {
   turnsAfter: Record<number, Turn3D>;
 };
 
-/** How many such steps are kept: as many as undo goes back. */
-const KEPT = 100;
+/** How many such steps are kept: as many as undo goes back (it was a hundred, as undo was, and stayed so when undo went to a thousand). */
+const KEPT = DEFAULT_HISTORY_LIMIT;
 
 const journals = new WeakMap<object, Step[]>();
 

@@ -34,7 +34,11 @@ hold both.
   - an orthographic camera, drawn only when something changes;
   - instanced bonds and pick targets, troika text, unlit materials;
   - its structure is the tab's document, with undo and saving: one flat
-    model with no notion of separate molecules;
+    model with no notion of separate molecules; undo goes back a thousand
+    steps per document, held to about 100 MB - each step costing the atom
+    and bond lists it copies (`stepCost`) - the oldest dropped first
+    (`DEFAULT_HISTORY_LIMIT`, `DEFAULT_HISTORY_BUDGET`, lib/doc; the
+    maintainer, 2026-10-13 - it was a hundred steps);
   - atoms carry a depth (`Atom.z`) only for cages Clean-up draws in
     perspective.
 - **The 3D viewer** (`ui/features/MoleculeViewer`, retired in stage 1):

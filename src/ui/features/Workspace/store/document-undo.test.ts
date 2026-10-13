@@ -591,3 +591,32 @@ describe("a document's own drawing style", () => {
     expect(state().savedPath).toBe("/work/second.mol");
   });
 });
+
+describe("a workspace's history, held to about 100 MB (the maintainer, 2026-10-13)", () => {
+  it("costs a step the atoms and bonds it copies: a small drawing keeps its thousand steps, a large one fewer", async () => {
+    const { createDocument, DEFAULT_HISTORY_BUDGET } = await import("../../../../lib/doc/document");
+    const { stepCost } = await import("../document");
+    const { emptyWorkspaceDocument } = await import("../document");
+    // a move copies the atoms, not the bonds; words copy neither
+    const base = emptyWorkspaceDocument();
+    const drawn = { ...base, model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }], bonds: [] } };
+    const moved = { ...drawn, model: { ...drawn.model, atoms: [{ ...drawn.model.atoms[0], x: 1 }] } };
+    expect(stepCost(moved, drawn)).toBe(1);
+    expect(stepCost({ ...moved, texts: [] }, moved)).toBe(0);
+    expect(stepCost(moved, undefined)).toBe(1);
+    // 300 atoms: a thousand steps, the 1001st dropping the oldest
+    const { doc: small, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    for (let i = 1; i < 300; i++) state().addAtom(i, 0, "C");
+    for (let i = 0; i < 1001; i++) state().moveAtoms([{ id: a, x: 0, y: i }], `drag-${i}`);
+    expect(small.history().undoDepth).toBe(1000);
+    // 10,000 atoms, a budget of a million: a hundred moves held, the oldest gone
+    const atoms = Array.from({ length: 10_000 }, (_, i) => ({ id: i + 1, x: i, y: 0, r: 0.9, el: "C" }));
+    const big = createDocument({ ...base, model: { atoms, bonds: [] } }, { cost: stepCost, budget: 1_000_000 });
+    for (let i = 0; i < 150; i++) big.edit("move", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((x, k) => (k === 0 ? { ...x, y: i } : x)) } }));
+    expect(big.history().undoDepth).toBeGreaterThanOrEqual(98);
+    expect(big.history().undoDepth).toBeLessThanOrEqual(100);
+    // and the workspace's own budget
+    expect(DEFAULT_HISTORY_BUDGET).toBe(25_000_000);
+  });
+});

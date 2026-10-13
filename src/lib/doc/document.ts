@@ -21,8 +21,20 @@
 
 /** Successive edits are merged into one undo step for this long by default. */
 export const DEFAULT_COALESCE_MS = 500;
-/** Undo steps kept per document. */
-export const DEFAULT_HISTORY_LIMIT = 100;
+/**
+ * Undo steps kept per document, the oldest dropped first (the maintainer,
+ * 2026-10-13: a thousand; it was a hundred, which a long session of
+ * drawing ran past).
+ */
+export const DEFAULT_HISTORY_LIMIT = 1000;
+/**
+ * What the history of a document that says what its steps cost
+ * (`DocumentOptions.cost`) holds at most, in what they cost - for a
+ * workspace, the atoms and bonds its steps copy: about 100 MB (the
+ * maintainer, 2026-10-13). A drawing of a few thousand atoms keeps its
+ * thousand steps; a stack of 28,000 about 430. The oldest go first.
+ */
+export const DEFAULT_HISTORY_BUDGET = 25_000_000;
 
 export type EditMeta = {
   /**
@@ -107,6 +119,8 @@ type Entry<T> = {
   label: string;
   coalesceKey?: string;
   at: number;
+  /** What keeping it costs beyond the step before it (`DocumentOptions.cost`). */
+  cost?: number;
 };
 
 export type DocumentOptions<T = unknown> = {
@@ -119,6 +133,15 @@ export type DocumentOptions<T = unknown> = {
    * keep a structure drawn on inside them).
    */
   settle?: (next: T, before: T) => T;
+  /**
+   * What keeping a state in the history costs beyond the state before it
+   * (none before the first): what it holds that that one does not share.
+   * Given, the history holds no more than `budget` of it, the oldest steps
+   * dropped first - never one to redo, nor the last one to undo.
+   */
+  cost?: (state: T, before: T | undefined) => number;
+  /** How much the history may hold, in what `cost` counts; DEFAULT_HISTORY_BUDGET. */
+  budget?: number;
 };
 
 export function createDocument<T>(
@@ -133,6 +156,25 @@ export function createDocument<T>(
   let future: Entry<T>[] = [];
   let savedState: T = initial;
   let travelled = false;
+
+  // (the history kept within what it may hold, where its steps say what
+  // they cost: the oldest dropped first, down to one step to undo; the
+  // steps to redo kept whole)
+  const budget = options.budget ?? DEFAULT_HISTORY_BUDGET;
+  const costOf = (e: Entry<T>, before: Entry<T> | undefined) => (e.cost ??= options.cost!(e.state, before?.state));
+  const bound = () => {
+    if (!options.cost) return;
+    let held = costOf(past[0] ?? present, undefined);
+    for (let i = 1; i < past.length; i++) held += costOf(past[i], past[i - 1]);
+    present.cost = undefined;
+    if (past.length) held += costOf(present, past[past.length - 1]);
+    let drop = 0;
+    while (held > budget && past.length - drop > 1) {
+      held -= past[drop].cost ?? 0;
+      drop++;
+    }
+    if (drop) past = past.slice(drop);
+  };
 
   const listeners = new Set<() => void>();
   const notify = () => {
@@ -166,10 +208,12 @@ export function createDocument<T>(
         // Keep the step that is already on the stack and move its end point,
         // so undo jumps back to before the whole gesture.
         present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        bound();
       } else {
         past.push(present);
         if (past.length > limit) past = past.slice(past.length - limit);
         present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        bound();
       }
       future = [];
       notify();
