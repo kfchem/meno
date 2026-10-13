@@ -24,14 +24,20 @@ export default function JoinCaps2D() {
   const room = useRef(64);
   while (room.current < layout.fills.length) room.current *= 2;
   const countCap = room.current;
+  const placed = useRef<{ mesh: THREE.InstancedMesh | null; caps: unknown[] }>({ mesh: null, caps: [] });
 
   useLayoutEffect(() => {
     const m = inst.current;
     if (!m) return;
     const fills = layout.fills;
     m.count = fills.length;
+    // (a cap the layout kept - its structure not laid out again - is where it was)
+    if (placed.current.mesh !== m) placed.current = { mesh: m, caps: [] };
+    const was = placed.current.caps;
     for (let i = 0; i < fills.length; i++) {
       const c = fills[i];
+      if (was[i] === c) continue;
+      was[i] = c;
       tmpM.makeScale(c.r, c.r, 1).setPosition(c.c.x, c.c.y, 0);
       m.setMatrixAt(i, tmpM);
     }
