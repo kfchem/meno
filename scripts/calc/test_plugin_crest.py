@@ -185,8 +185,10 @@ class Collect(unittest.TestCase):
 T /K                                  :   298.15
 """
         self.assertEqual(worker.populations_in(log), [0.7, 0.3])
+        # (and each one's degeneracy: the first found twice alike, the second once)
+        self.assertEqual(worker.degeneracies_in(log), [2, 1])
         out = ask("collect", step="conformers", entries=[METHANOL], options={}, files={"crest_conformers.xyz": ENSEMBLE}, log=log, ended="done")["outputs"][0]
-        self.assertEqual(out["populations"], [0.7, 0.3])
+        self.assertEqual((out["populations"], out["degeneracies"]), ([0.7, 0.3], [2, 1]))
         # (no table, or not one for each conformer: none)
         self.assertIsNone(worker.populations_in(" Version 2.12\n"))
         short = ask("collect", step="conformers", entries=[METHANOL], options={}, files={"crest_conformers.xyz": ENSEMBLE}, log=log.replace("3   1.069   -11.39100    0.30000    0.30000       2       1     mtd3", ""), ended="done")

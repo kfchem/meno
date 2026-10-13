@@ -204,6 +204,16 @@ describe("a conformer search", () => {
     const made = conformersWorked(WATER, out, []);
     if (typeof made === "string") throw new Error(made);
     expect(made.map((w) => w.share)).toEqual([0.7, 0.3]);
+    // (and each one's degeneracy, kept with the molecule for a Boltzmann weight to count in)
+    const counted = conformersWorked(WATER, { ...out, degeneracies: [1, 2] }, []);
+    if (typeof counted === "string") throw new Error(counted);
+    expect(counted.map((w) => w.degeneracy)).toEqual([1, 2]);
+    expect(resultsOf({ ok: true, holds: "conformers", kept: counted, aside: [], said: "" }).molecules[0].degeneracies).toEqual([1, 2]);
+    // (all one, or not a whole number for each: none kept)
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }).molecules[0].degeneracies).toBeUndefined();
+    const odd = conformersWorked(WATER, { ...out, degeneracies: [1, 1.5] }, []);
+    if (typeof odd === "string") throw new Error(odd);
+    expect(odd.map((w) => w.degeneracy)).toEqual([undefined, undefined]);
     const without = conformersWorked(WATER, { ...out, populations: [0.7] }, []);
     if (typeof without === "string") throw new Error(without);
     expect(without.map((w) => w.share)).toEqual([undefined, undefined]);

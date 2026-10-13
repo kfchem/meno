@@ -125,7 +125,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
-    const w = boltzmann(g.map((e) => e.energy!), kelvin);
+    // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
+    const w = boltzmann(g.map((e) => e.energy!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }
   const compounds = byCompound(entries).length;
@@ -163,11 +164,15 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
   return { ok: true, holds: "molecules", kept, aside, said: by && number == null ? `${said} · ${by}` : said };
 }
 
-/** Boltzmann's shares of energies in hartrees at `kelvin`, adding up to one. */
-export function boltzmann(energies: readonly number[], kelvin: number): number[] {
+/**
+ * Boltzmann populations at `kelvin`, from energies in hartrees: each
+ * weighed by its degeneracy where given - the forms of it alike, each as
+ * likely - the shares adding up to one.
+ */
+export function boltzmann(energies: readonly number[], kelvin: number, degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
   const lowest = Math.min(...energies);
-  const w = energies.map((e) => Math.exp(-(e - lowest) / (R_HARTREE * kelvin)));
+  const w = energies.map((e, i) => (degeneracies?.[i] ?? 1) * Math.exp(-(e - lowest) / (R_HARTREE * kelvin)));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);
 }
