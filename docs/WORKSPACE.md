@@ -539,7 +539,9 @@ Each result says what it belongs to, and Meno puts it there:
   as Meno learns them: a surface, for an orbital's row.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
-  after what the calculation was and its energy.
+  after what the calculation was and its energy. One ranked 0 - how the
+  run went, "Run ended with an error" - is said however long the line
+  (2026-10-13).
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
