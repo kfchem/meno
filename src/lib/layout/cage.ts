@@ -1394,10 +1394,12 @@ function drawOn(
   });
   // the rest eased to bonds of one length, each held near where it was put
   // - and eased again with atoms not bonded to each other kept apart, that
-  // taken where it reads better by the view's own measure: put where the
-  // solid seen from the template's side has them, one can land on another
-  // (scopolamine's epoxide by its N), where adamantane's back CH2 by a
-  // front bridgehead is how it is always drawn
+  // taken where it leaves fewer atoms nearer another than 0.6 of a bond and
+  // reads better by `viewCost` at its defaults (with no depth, as a flat
+  // drawing is weighed against a solid): put where the solid seen from the
+  // template's side has them, one can land on another (scopolamine's
+  // epoxide by its N), where adamantane's back CH2 by a front bridgehead is
+  // how it is always drawn
   const anchor = pts.map((p) => ({ ...p }));
   const bonded = new Set(bonds.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
   const ease = (apart: readonly [number, number][] = []): Point[] => {
@@ -1455,17 +1457,20 @@ function drawOn(
   // (only where some atom is nearer another than the measure allows: else
   // keeping them apart cannot read better; and only the pairs near enough
   // to come into it)
+  const crowded = nearPairs(plain, bonds);
   const pairs: [number, number][] = [];
-  let crowded = false;
   for (let i = 0; i < plain.length; i++)
     for (let j = i + 1; j < plain.length; j++) {
       if ((fixed.has(i) && fixed.has(j)) || bonded.has(`${i},${j}`)) continue;
-      const l = Math.hypot(plain[j].x - plain[i].x, plain[j].y - plain[i].y);
-      if (l < 1.2) pairs.push([i, j]);
-      if (l < 0.6) crowded = true;
+      if (Math.hypot(plain[j].x - plain[i].x, plain[j].y - plain[i].y) < 1.2) pairs.push([i, j]);
     }
   const apart = crowded ? ease(pairs) : plain;
-  const better = apart !== plain && viewCost(apart, bonds) < viewCost(plain, bonds) - 1e-9 ? apart : plain;
+  // (taken only where fewer atoms are left too near another, and the whole
+  // reads better: bicyclo[2.2.2]octane's back bridge comes as near the back
+  // bridgehead in every view, and eased apart it only comes a little less
+  // near, its bonds uneven)
+  const better =
+    apart !== plain && nearPairs(apart, bonds) < crowded && viewCost(apart, bonds) < viewCost(plain, bonds) - 1e-9 ? apart : plain;
   better.forEach((p, i) => (pts[i] = p));
   const toViewer = normalise(crossV([fit.x[0], fit.x[1], fit.x[2]], [fit.y[0], fit.y[1], fit.y[2]]));
   putBackTurned(
@@ -1508,6 +1513,20 @@ export function putBackTurned(
     back++;
   }
   return back;
+}
+
+/**
+ * How many atoms not bonded to each other come nearer than `near` of a
+ * mean bond - those `viewCost` counts, at its own `near` and with no depth.
+ */
+function nearPairs(pts: Point[], bonds: [number, number][], near = 0.6): number {
+  const mean = bonds.map(([a, b]) => Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y)).reduce((s, v) => s + v, 0) / bonds.length;
+  const bonded = new Set(bonds.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
+  let n = 0;
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++)
+      if (!bonded.has(`${i},${j}`) && Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) / mean < near) n++;
+  return n;
 }
 
 /** How near, in bonds, two atoms not bonded to each other may come as a cage is eased onto its template (`drawOn`). */
