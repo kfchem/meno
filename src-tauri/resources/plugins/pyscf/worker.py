@@ -39,7 +39,7 @@ logging.disable(logging.CRITICAL)
 
 import numpy  # noqa: E402
 import cclib  # noqa: E402
-from cclib.parser.utils import PeriodicTable  # noqa: E402
+from cclib.parser.utils import PeriodicTable, convertor  # noqa: E402
 from pyscf.tools import molden  # noqa: E402
 
 ELEMENTS = PeriodicTable().element
@@ -175,7 +175,8 @@ def molecule_of(data):
     frames = [[float(v) for xyz in step for v in xyz] for step in getattr(data, "atomcoords", []) if len(step) == len(atoms)]
     energies = None
     if has(data, "scfenergies") and len(data.scfenergies) == len(frames) and frames:
-        energies = [float(e) / EV_PER_HARTREE for e in data.scfenergies]
+        # (cclib's electronvolts, in hartrees again by cclib's own factor: the output's values as printed)
+        energies = [convertor(float(e), "eV", "hartree") for e in data.scfenergies]
     return {
         "schema": SCHEMA,
         "program": meta.get("package"),

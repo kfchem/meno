@@ -105,7 +105,10 @@ describe("readStereo", () => {
         expect(sameConfiguration(a.tetra, t!, (n) => (hydrogen.has(n) ? -1 : n)), `${name} ${i}`).toBe(true);
       });
     }
-  });
+    // (the whole engine on each of the molecules, cages among them: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("reads every centre in a cage for sure, not by a hair", () => {
     // each bond out of a cage turned a little either way reads the same:
@@ -133,7 +136,9 @@ describe("readStereo", () => {
       }
       expect(out.solid.some(Boolean), name).toBe(true);
     }
-  });
+    // (the whole engine on each of the cages: about a second alone, a few times
+    // that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("says a perspective centre to a flat reader on a bond no other centre's wedge is on", () => {
     // tetrodotoxin drawn as a solid, its C4 wedged on its bond to C4a, which
@@ -154,7 +159,9 @@ describe("readStereo", () => {
     for (const w of wedgesForFlat(atoms, bonds).wedges) {
       if (w.to >= 0) expect(wedged.has([w.from, w.to].sort((p, q) => p - q).join(",")), `${w.from}-${w.to}`).toBe(false);
     }
-  });
+    // (the whole engine on tetrodotoxin's cage: under half a second alone,
+    // a few times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
     // an atom of a ring laid across another's face, behind it - gibberellic

@@ -5,7 +5,7 @@ import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
-import { bondsByDistance } from "../../../../utils/structureParsers";
+import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
@@ -186,6 +186,8 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
+  // (atoms in one place with another: said over it)
+  const together = atomsTogether(f0);
   const frames = rest.map((f) => [...f]);
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
   const calc = calcOf(out, readers, source);
@@ -198,6 +200,7 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(frames.length ? { frames, frame: frames.length } : {}),
     ...(energies ? { energies } : {}),
     ...(name ? { name } : {}),
+    ...(together ? { together } : {}),
     calc,
   };
 }
