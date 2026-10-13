@@ -17,6 +17,7 @@ import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
 import sodiumAcetateAcs from "./fixtures/sodium-acetate-rdkitacs.json";
 import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
+import strychnine from "./fixtures/strychnine-acs1996serif.json";
 import tempo from "./fixtures/tempo-rdkit.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fdg from "./fixtures/fdg-rdkitacscg.json";
@@ -231,6 +232,17 @@ describe("a figure read as a structure", () => {
     // (ATP as RDKit draws it by default: a P=O's middle end inside its P's box, a P-OH bond's end 0.23 of a bond off it)
     const r = readFigure(atp as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
     expect(r.atoms.filter((a) => !a.label)).toHaveLength(10);
+  });
+
+  it("reads a short hash to an H set close as the H's bond, not its widest stroke as a bond between the H and a label by it", () => {
+    // (strychnine as the round trip prints it in the ACS 1996 style, in Times: an H's hash of two lines and the dots at its
+    // narrow end, its widest line by the H and pointing past it to the N above)
+    const r = readFigure(strychnine as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const h = r.atoms.findIndex((a) => a.label === "H" && a.x < 112);
+    const toH = r.bonds.filter((b) => b.a === h || b.b === h);
+    expect(toH).toHaveLength(1);
+    expect(toH[0].stereo).toBe("down");
+    expect(r.atoms[toH[0].a].label).toBeUndefined();
   });
 
   it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {

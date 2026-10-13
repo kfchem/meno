@@ -1036,7 +1036,10 @@ workspace holds.
     aromatic ring is;
   - a short dash between two labels - two words, not one word's ends - as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
-    one (N≡N+) - never a hash, however evenly they are set; and so is a
+    one (N≡N+) - never a hash, however evenly they are set (but a short
+    line side by side with another that runs to no label is a hash's: its
+    widest line by an H set close, the hash two lines and the dots at its
+    narrow end); and so is a
     short line from a joint of bonds to a label stacked tall - an NH with
     its H over its N - cut back short of its H;
   - a short line, a sixth of a bond long or more, running straight out

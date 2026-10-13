@@ -89,27 +89,33 @@ type Drawn = { a: Point; b: Point; order: 1 | 2 | 3; stereo?: "up" | "down" | "w
  * where the strokes are shortest. Equal throughout, its narrow end is not
  * told by the strokes.
  */
+// (a hash's first strokes, at its narrow end, may be dots: no way of their own - a small filled
+// shape not twice as long as wide; a line stroked has its path's way, however short, unless it is
+// next to nothing long - a dot drawn as a line's round ends)
+const dotOf = (s: Stroke, filled: ReadonlySet<Stroke>) => len(s) < (filled.has(s) ? 2 : 0.5) * s.w;
+
+/** Two short strokes side by side as a hash's are: one way (or one a dot), near, the step from one to the next across them. */
+function sideBySide(s: Stroke, t: Stroke, bond: number, filled: ReadonlySet<Stroke>): boolean {
+  const [sDot, tDot] = [dotOf(s, filled), dotOf(t, filled)];
+  if (sDot && tDot) return false;
+  const [line, other] = sDot ? [t, s] : [s, t];
+  const u = unit(line.a, line.b);
+  if (!(sDot || tDot) && Math.abs(cross(u, unit(other.a, other.b))) > Math.sin((12 * Math.PI) / 180)) return false;
+  const m = mid(s.a, s.b);
+  const n = mid(t.a, t.b);
+  const d = dist(m, n);
+  // (a twenty-fifth of a bond apart at the least - or, a long bond's many lines set close, two and a half lines' widths)
+  if (d > 0.4 * bond || d < Math.min(0.04 * bond, 2.5 * Math.max(s.w, t.w))) return false;
+  // (the step from one to the next is across them)
+  return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
+}
+
 function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): { hashes: Drawn[]; used: Set<Stroke>; groups: Stroke[][] } {
   const used = new Set<Stroke>();
   const hashes: Drawn[] = [];
   const groups: Stroke[][] = [];
-  // (a hash's first strokes, at its narrow end, may be dots: no way of their own - a small filled
-  // shape not twice as long as wide; a line stroked has its path's way, however short, unless it is
-  // next to nothing long - a dot drawn as a line's round ends)
-  const dot_ = (s: Stroke) => len(s) < (filled.has(s) ? 2 : 0.5) * s.w;
-  const near = (s: Stroke, t: Stroke) => {
-    if (dot_(s) && dot_(t)) return false;
-    const [line, other] = dot_(s) ? [t, s] : [s, t];
-    const u = unit(line.a, line.b);
-    if (!dot_(other) && Math.abs(cross(u, unit(other.a, other.b))) > Math.sin((12 * Math.PI) / 180)) return false;
-    const m = mid(s.a, s.b);
-    const n = mid(t.a, t.b);
-    const d = dist(m, n);
-    // (a twenty-fifth of a bond apart at the least - or, a long bond's many lines set close, two and a half lines' widths)
-    if (d > 0.4 * bond || d < Math.min(0.04 * bond, 2.5 * Math.max(s.w, t.w))) return false;
-    // (the step from one to the next is across them)
-    return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
-  };
+  const dot_ = (s: Stroke) => dotOf(s, filled);
+  const near = (s: Stroke, t: Stroke) => sideBySide(s, t, bond, filled);
   const left = new Set(short);
   // (each in turn - those a group let go again at the end, to group anew)
   const queue = [...short];
@@ -579,6 +585,11 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (betweenLabels[i]) for (const s of g) inHashes.delete(s);
   });
   const hashes = hashed.filter((_, i) => !betweenLabels[i]);
+  // (but a short line side by side with another that is no such line - a hash's widest stroke by an H set close, the hash
+  // too short to be told as one, two lines and the dots at its narrow end - is no bond between labels)
+  const filled = new Set(bits);
+  const dash = (s: Stroke) =>
+    between(s) && !short.some((t) => t !== s && !inHashes.has(t) && len(t) > 0.04 * bond && sideBySide(s, t, bond, filled) && !between(t));
   // (a short line running straight out of a label to nothing - a methyl's bond squeezed short and cut back at the label, an
   // N-methyl in a bridge - is a bond too)
   const tipsOf = shapes.strokes.flatMap((t) => [t.a, t.b].map((p) => ({ p, of: t })));
@@ -603,7 +614,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s) || toLabel(s) || inner(s)));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
