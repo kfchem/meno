@@ -438,6 +438,8 @@ export type Molecule3D = {
   numbers?: number[];
   /** Each frame's share of its compound, as a *Populations* step worked it out; unset, by Boltzmann at room temperature where it is a conformer set. */
   shares?: number[];
+  /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
+  degeneracies?: number[];
   /**
    * Its frames are the path to its last geometry - an optimisation's, made
    * by a step (docs/WORKFLOWS.md, *Results*) - so that a set takes it as
