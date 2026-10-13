@@ -1340,6 +1340,8 @@ function propellers(
       return { x, rings };
     })
     .filter((h) => h.rings.length >= 2 && !faceOn.has(h.x));
+  // (the rings turned so far measured in perspective as the next are tried)
+  const shown = [...solid];
   for (const { x, rings } of hubs) {
     const sides = rings.map((c) => sideAtoms(mol, x, c));
     if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
@@ -1363,12 +1365,16 @@ function propellers(
       });
       return { trial, lift };
     };
-    const before = scorer(mol, piece, depth, solid)(pos);
+    // (measured on the same bonds as turned: a ring in perspective has its
+    // bonds left out of the bonds' lengths, and the rest alone spread wider)
+    const asTurned = new Array<boolean>(mol.n).fill(false);
+    for (const side of sides) for (const v of side) asTurned[v] = true;
+    const before = scorer(mol, piece, depth, shown, undefined, undefined, undefined, asTurned)(pos);
     let best: { score: number; trial: Grown; lift: Map<number, number> } | null = null;
     for (const phi of PROPELLER) {
       const { trial, lift } = turnTo(phi);
       const seen = [...depth];
-      const persp = [...solid];
+      const persp = [...shown];
       for (const [v, l] of lift) {
         seen[v] = l;
         persp[v] = true;
@@ -1378,7 +1384,10 @@ function propellers(
     }
     if (!best || best.score >= before - 1e-6) continue;
     for (const [v, p] of best.trial) pos.set(v, p);
-    for (const [v, l] of best.lift) depth[v] = l;
+    for (const [v, l] of best.lift) {
+      depth[v] = l;
+      shown[v] = true;
+    }
     turned.push(...sides);
     crowded = clashing(mol, piece, pos);
     if (!crowded.size) return;
@@ -1826,6 +1835,7 @@ export function scorer(
   hydrogenRoom?: number,
   sugarFaces?: boolean,
   hydrogenInk?: boolean,
+  unmeasured?: readonly boolean[],
 ): (pos: Grown) => number {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
@@ -1871,6 +1881,7 @@ export function scorer(
       tetra,
       hydrogenRoom,
       hydrogenInk,
+      ...(unmeasured ? { unmeasured: piece.map((a) => unmeasured[a] ?? false) } : {}),
       // (names' letters counted lightly while the parts are set - the way
       // a molecule is turned comes first - and made room for last, with
       // the H's)

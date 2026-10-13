@@ -42,6 +42,13 @@ export type Geometry = {
    */
   perspective?: readonly boolean[];
   /**
+   * Atoms whose bonds among themselves are left out of the bonds' lengths,
+   * as a solid's are, though drawn flat: a drawing measured against the
+   * same with those rings turned into perspective, on the same bonds - the
+   * rest alone spread wider than with them.
+   */
+  unmeasured?: readonly boolean[];
+  /**
    * How near each atom is to the viewer, where the drawing says (a cage, or
    * a bridge drawn across a ring): a bond passing in front of another is
    * drawn with the one behind broken, and their crossing is no fault.
@@ -399,7 +406,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     g.elements?.[b] !== "*" &&
     !ringBond.has(pair(a, b));
   const lengths = edges
-    .filter(([a, b]) => !isH(a) && !isH(b) && !solid(a, b))
+    .filter(([a, b]) => !isH(a) && !isH(b) && !solid(a, b) && !(g.unmeasured?.[a] && g.unmeasured?.[b]))
     .map(([a, b]) => Math.hypot(x[a] - x[b], y[a] - y[b]) / (toMetal(a, b) ? METAL_BOND : 1));
   const L = median(lengths);
   const mean = lengths.reduce((s, v) => s + v, 0) / Math.max(lengths.length, 1);

@@ -154,15 +154,28 @@ describe("ligands round a metal", () => {
     // (the whole engine on a complex this size: slower on CI's runners)
   }, 30_000);
 
-  // (known to fail with the molecule laid out in its own orders, two or
-  // four: the order that draws Pd(PPh3)4 best turns no ring, and the one
-  // that turns them measures worse - docs/LAYOUT-2D-TUNING.md, Open)
-  it.skip("turn crowded aryl rings as a propeller where that reads better, their near edges bold, the bonds toward them wedges", () => {
+  it("turn crowded aryl rings as a propeller where that reads better, their near edges bold, the bonds toward them wedges", () => {
     const pd = laid("Pd(PPh3)4");
     const turned = pd.atoms.filter((a) => a.el === "C" && a.z != null);
     expect(turned.length).toBeGreaterThan(0);
     expect(pd.bonds.some((b) => b.display === "bold")).toBe(true);
     expect(pd.bonds.some((b) => b.display === "wedge")).toBe(true);
+  }, 30_000);
+
+  // (known to fail, on main too: one of Pd(PPh3)4's phenyls lies across a
+  // Pd-P bond, its P's rings not the ones turned - docs/LAYOUT-2D-TUNING.md,
+  // Open)
+  it.skip("lay no phenyl across a bond from the metal", () => {
+    const pd = laid("Pd(PPh3)4");
+    const [m] = find(pd, "Pd");
+    const crosses = (p: number, q: number, r: number, t: number) => {
+      const side = (a: number, b: number, c: number) =>
+        Math.sign((pd.atoms[b].x - pd.atoms[a].x) * (pd.atoms[c].y - pd.atoms[a].y) - (pd.atoms[b].y - pd.atoms[a].y) * (pd.atoms[c].x - pd.atoms[a].x));
+      return side(p, q, r) * side(p, q, t) < 0 && side(r, t, p) * side(r, t, q) < 0;
+    };
+    const toMetal = pd.bonds.filter((b) => b.a1 === m || b.a2 === m);
+    const rings = pd.bonds.filter((b) => pd.atoms[b.a1].el === "C" && pd.atoms[b.a2].el === "C");
+    for (const b of toMetal) for (const r of rings) expect(crosses(b.a1, b.a2, r.a1, r.a2), `${b.a1}-${b.a2} by ${r.a1}-${r.a2}`).toBe(false);
   }, 30_000);
 });
 
