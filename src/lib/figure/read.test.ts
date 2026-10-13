@@ -655,6 +655,20 @@ describe("a figure drawn large by another program", () => {
   });
 });
 
+describe("a figure whose wedges are filled and then stroked round", () => {
+  it("reads the strokes round a wedge as its edges, not bonds: its wide end at an OH is the O's", () => {
+    // (as RDKit's ACS 1996 mode draws one and a PDF holds it: the wedge filled, then its outline stroked as a path apart)
+    const c: P = [60, 60];
+    const o = step(c, 45);
+    const base = along(c, o, 0.62);
+    const [ux, uy] = unit(c, o);
+    const corners: P[] = [c, [base[0] - uy * 1.3, base[1] + ux * 1.3], [base[0] + uy * 1.3, base[1] - ux * 1.3]];
+    const s = read(figure([stroke(step(c, 180), c, step(c, -90)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("OH", o)));
+    expect(bondsOf(s)).toContain("C-O up");
+    expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
+  });
+});
+
 describe("a figure drawn in colour by another program", () => {
   it("reads a bond drawn in two colours, black to its middle and its atom's colour on, as one bond", () => {
     // (an ethanol as RDKit draws one by default: the C-O bond black, then red from its middle to the O)

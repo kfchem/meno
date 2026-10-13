@@ -261,6 +261,9 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
   // one - is that line's, not a line of its own)
   out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
+  // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
+  const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
+  out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
   // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
   // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
   for (let merged = true; merged; ) {

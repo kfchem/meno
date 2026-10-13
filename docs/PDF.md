@@ -957,7 +957,10 @@ workspace holds.
   anything is measured. A line drawn in two colours - a bond black to
   its middle and its atom's colour on, as RDKit draws one by default -
   is one line: two lines of different colours, end to end along one
-  way, with nothing else ending where they meet.
+  way, with nothing else ending where they meet. A wedge filled and then
+  stroked round - as RDKit draws one, its outline a path of its own in
+  the PDF - has its edges as its own: a line from one of its corners to
+  another is no bond.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
