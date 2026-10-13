@@ -341,8 +341,8 @@ Taken while stage 1 was built, on 2026-10-03:
 - **Calculation readers** (the maintainer): reading what calculation
   programs write is to be plugins, added and removed online. Meno itself
   reads geometry. The one reader so far, energies on an XYZ file's comment
-  lines (CREST, xtb, ORCA), lives apart in `lib/calc`, and what it finds
-  is plain data on the molecule.
+  lines (CREST, xtb, ORCA), lives apart (`src/utils/xyzEnergies.ts`), and
+  what it finds is plain data on the molecule.
 
 Taken on 2026-10-04:
 
@@ -386,7 +386,9 @@ Taken on 2026-10-07:
   - since 2026-10-09 it lies over the canvas's right side, the view
     following it, and the PDFs read there are named among its texts
     (docs/PDF.md, step 2).
-  The small previews on the page, decided on 2026-10-04, are not made yet.
+  The small previews on the page, decided on 2026-10-04, are made: each
+  text has a sheet on the page with its first lines and its name under it,
+  coming as an icon (docs/PDF.md, *A text*).
 
 Taken on 2026-10-10 (menus and gestures):
 
@@ -418,12 +420,14 @@ Taken on 2026-10-13:
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo drawn without a configuration is ringed on
-  the drawing while Meno asks what to make: every stereoisomer it gives,
-  one, or none for now. Each is made as a conformer set (RDKit's ETKDG,
-  then MMFF94) and comes onto the page as a molecule in 3D, its frames the
-  conformers, lowest first. Of two enantiomers, one is made as the other's
-  mirror image, so the two have the same conformers and shares.
+  everything selected (Select all first, for everything drawn). Stereo
+  drawn without a configuration is ringed on the drawing while Meno asks
+  what to make: every stereoisomer it gives, one, or none for now. Each is
+  made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
+  chosen - UFF where MMFF has no parameters for the molecule) and comes
+  onto the page as a molecule in 3D, its frames the conformers, lowest
+  first. Of two enantiomers, one is made as the other's mirror image, so
+  the two have the same conformers and shares.
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest
@@ -482,10 +486,11 @@ read and attached to its molecule. Agreed with the maintainer on
 - **A reader is a plugin.** Each runs as a worker in a Python environment
   of its own, as RDKit does: set up from a lock that Meno carries, every
   package pinned by its hash, and only when asked for, with the network's
-  consent. Readers are added and removed in Settings, *Calculation
-  readers*; opening a file that no installed reader reads says which
-  would. Which readers there are is Meno's own list for now. A list
-  fetched online needs a way to trust it (signing), and comes later.
+  consent. Readers are added and removed in Settings, *Plugins*, and which
+  reads a kind that several read is chosen in *Files*; opening a file that
+  no reader added reads says which would. Which readers there are is
+  Meno's own list for now. A list fetched online needs a way to trust it
+  (signing), and comes later.
 - **The first reader is cclib** (BSD-3), which reads ORCA, Gaussian, xTB
   and others. It is installed into its plugin's environment as a
   library. Meno does not copy its code, and a reader Meno writes itself is
@@ -587,7 +592,9 @@ with that data written by hand.
 ### In order
 
 1. **3a.** The reader plugins: the worker, the environment, Settings'
-   *Calculation readers* with the choice where they overlap, and cclib's.
+   *Calculation readers* with the choice where they overlap, and cclib's
+   (since then, the readers are in Settings' *Plugins* and the choice in
+   *Files*).
    Geometries, an optimisation's steps, energies, and what the chip says.
 2. **3b.** Vibrations.
 3. **3c.** Results in the general form: what the calculation was in
@@ -603,11 +610,12 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
 2026-10-05.
 
 - **Readers.** cclib (1.9rc1) is the first. Settings, *Calculation
-  readers*, adds it - asking first for the network - and takes it away
-  again, its environment and its record with it. A kind of output is told
-  by what its file starts with. Where readers overlap, every one added
-  reads the output and each one's results are kept, its own; the one
-  chosen for that kind gives the geometries and what the calculation was.
+  readers* (now *Plugins*, the choice where readers overlap in *Files*),
+  adds it - asking first for the network - and takes it away again, its
+  environment and its record with it. A kind of output is told by what its
+  file starts with. Where readers overlap, every one added reads the
+  output and each one's results are kept, its own; the one chosen for that
+  kind gives the geometries and what the calculation was.
 - **Opening an output.** It opens on a canvas tab of its own, its last
   geometry shown, an optimisation's steps as its frames. With no reader
   added that reads it, Meno says which to add; an output with no geometry

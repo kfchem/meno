@@ -333,8 +333,8 @@ How these behave:
 
 - **A PDF** opened or dropped goes onto the page of the workspace in front
   (docs/PDF.md), held in Meno's cache by its SHA-256; a workspace's file
-  keeps it, stored as it was (`application/pdf`). Pasting a PDF copied in
-  the Finder or Explorer is not taken yet.
+  keeps it, stored as it was (`application/pdf`). A PDF copied in the
+  Finder or Explorer and pasted goes there too, as a file dropped does.
 - **A picture** - a PNG or a JPEG opened or dropped, or a picture pasted
   where nothing on the clipboard reads as a structure - goes onto the page
   likewise (docs/PDF.md, step 4a), held this session by its SHA-256
@@ -351,17 +351,17 @@ How these behave:
     SHA-256. A promise is asked for from there when the file is still
     there and unchanged, and Meno may still read it. Otherwise it asks
     for the file, as now.
-- **Closing a tab with unsaved changes** offers Save, beside Keep and
-  Discard.
+- **Closing a tab with unsaved changes** asks, with Cancel, *Close
+  without saving* and Save.
 - **Export…** (on the selection's menu since 2026-10-10: what is
   selected, Select all first for the whole page) offers every kind a
   writer added writes, each written by the one assigned:
   - MOL, SDF, RXN, PDB and SVG, by Meno;
   - Gaussian's input, by its plugin, where it is added (step 7).
 
-  The writer says what it takes: the page, the molecules, or one
-  molecule. Meno asks which where it must, then shows the writer's
-  options, then asks for the file's name.
+  The writer says what it takes: what is selected on the page, or, for a
+  plugin's, the molecules in 3D selected, as one molecule. Meno shows the
+  writer's options, then asks for the file's name.
 
   The name it suggests is never the file the canvas was opened from, as
   Save's never is (the maintainer, 2026-10-07, after the v0.1.7 Windows
@@ -388,14 +388,16 @@ As this part of step 5 was built (#155, from main beside step 3):
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
     written in V2000, or in V3000 where V2000 cannot hold them, as before.
+    The records of molecules in 3D do not follow that choice yet
+    (2026-10-13): each is V2000, or V3000 where V2000 cannot hold it.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`).
   - **SVG** takes no options yet.
-- **What a writer takes** is said by it (step 7): Meno's own take the
-  page, as before; a plugin's, one molecule - the molecules in 3D
-  selected (several, one system), else the one there is, else the one
-  Export asks for.
+- **What a writer takes** is said by it (step 7): Meno's own take what is
+  selected on the page; a plugin's, one molecule - the molecules in 3D
+  selected, several as one system. A plugin's writer is offered only where
+  the selection holds molecules in 3D.
 - **Outputs are found again by path.**
   - A molecule read from an output keeps where the output was, where
     Open said (its `source.path`), with its SHA-256. A workspace saves it.
@@ -404,7 +406,7 @@ As this part of step 5 was built (#155, from main beside step 3):
     taken only if its SHA-256 is the same.
   - **Where it cannot be had** - Meno may no longer read it there after a
     restart, it has moved, or it has changed - the list says to open it
-    again, with *Find it…*. That opens the system's dialog at where the
+    again, with *Find <name>…*. That opens the system's dialog at where the
     output was, and the file chosen is taken only if it is the same output.
     Once taken, the promises that waited on it are asked for again.
   - A saved workspace holds an output's path only where it does not
@@ -449,7 +451,8 @@ work.meno (zip)
   or kept in a workspace opened. Opened, a workspace holds what it keeps
   for the session. A molecule's menu shows its output in the workspace's
   column of texts (*Show <name>*); where it is held nowhere, it is read
-  again where it was, or found (*Find…*).
+  again where it was, or else the system's dialog asks for it
+  (*Find <name>*).
 - **A workspace's texts are kept in it too** (the maintainer, 2026-10-07:
   held in the workspace, editable, written back by Export). Each is a file
   kept, `text/plain`, by its SHA-256 - one that is an output's words kept
@@ -504,7 +507,7 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
 
 - **Its icon** is a document's, not the app's: a sheet, its corner folded,
   carrying Meno's mark (`src-tauri/icons/document/`: `meno-document.svg`,
-  and `meno-document-small.svg`, bolder, for 16 to 24 pixels). The
+  and `meno-document-small.svg`, bolder, for 16 to 32 pixels). The
   `.icns` and the `.ico` are made from them by
   `scripts/icons/document_icon.py`: each size drawn by the Tauri CLI's own
   `tauri icon`, the `.icns` put together by `iconutil`, the `.ico` written
@@ -746,7 +749,8 @@ As step 7's writer was built - decided with the maintainer on
   one seen.
 - **Which molecule:** those selected - several are one system, written as
   they stand on the page, each turned and placed as it is seen, its
-  ångströms kept - else the one there is; else Export asks which.
+  ångströms kept. Export is for the selection (2026-10-10), so there is
+  nothing else to ask.
 - **The contract** (`lib/io/writers`): a writer, Meno's or a plugin's, is
   one `Writer` - the kind it writes, its name, its files' extensions,
   what it takes, its options in the general form, who writes it. A
