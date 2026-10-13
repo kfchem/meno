@@ -18,6 +18,7 @@ import { editorModelOf, processFileContent } from "../utils/io";
 import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
+import { groupShape } from "../utils/groupShape";
 import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { undrawnHydrogens } from "./drawing";
@@ -35,6 +36,18 @@ const GAP = 1.5 * NOMINAL_BOND_LENGTH;
  * before has its atoms (`likeOf`).
  */
 export type Block = { molblock: string; atoms: number[]; bonds: number[]; part: Model; like?: Like };
+
+/**
+ * Whether the drawing still holds each block as it was when its 3D
+ * structure was asked for: its atoms there, as they were, and the bonds
+ * among them. Making one takes a while - and a question about its
+ * stereochemistry may wait - and an undo meanwhile left a molecule of a
+ * structure no longer drawn, tied to atoms gone, the undone step past
+ * redoing. Edits elsewhere on the page do not count.
+ */
+export function blocksStill(blocks: readonly Block[], model: Model): boolean {
+  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(model, b.atoms));
+}
 
 /**
  * Whether a structure stands for a molecule to make in 3D: any with a bond;

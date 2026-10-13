@@ -5,7 +5,7 @@ import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { bareAtomsOf, bareWords, blocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -91,6 +91,20 @@ describe("a lone atom made in 3D", () => {
 });
 
 describe("making a drawn structure in 3D", () => {
+  it("knows whether the drawing still holds what it was asked for, as the molecules come back: an undo meanwhile adds none", () => {
+    const blocks = blocksOf(ethanol, [12]);
+    expect(blocksStill(blocks, ethanol)).toBe(true);
+    // moved: still the same structure
+    const moved = { ...ethanol, atoms: ethanol.atoms.map((a) => ({ ...a, x: a.x + 5 })) };
+    expect(blocksStill(blocks, moved)).toBe(true);
+    // something else drawn beside it: still the same
+    expect(blocksStill(blocks, { ...ethanol, atoms: [...ethanol.atoms, { id: 99, x: 9, y: 9, r: 0.9, el: "N" }] })).toBe(true);
+    // an atom of it undone away, or another element, or a bond gone: not
+    expect(blocksStill(blocks, { atoms: ethanol.atoms.filter((a) => a.id !== 13), bonds: ethanol.bonds.filter((b) => b.a !== 13 && b.b !== 13) })).toBe(false);
+    expect(blocksStill(blocks, { ...ethanol, atoms: ethanol.atoms.map((a) => (a.id === 13 ? { ...a, el: "N" } : a)) })).toBe(false);
+    expect(blocksStill(blocks, { ...ethanol, bonds: ethanol.bonds.slice(1) })).toBe(false);
+  });
+
   it("asks RDKit about each structure the atoms are in, its atoms and bonds known by their ids", () => {
     const [block] = blocksOf(ethanol, [12]);
     expect(block.atoms).toEqual([11, 12, 13]);

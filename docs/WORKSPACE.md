@@ -407,7 +407,11 @@ Taken on 2026-10-10 (menus and gestures):
   one, or none for now. Each is made as a conformer set (RDKit's ETKDG,
   then MMFF94) and comes onto the page as a molecule in 3D, its frames the
   conformers, lowest first. Of two enantiomers, one is made as the other's
-  mirror image, so the two have the same conformers and shares.
+  mirror image, so the two have the same conformers and shares. Where the
+  structure changes while they are made, or while Meno asks - an undo
+  takes it away - none is added, and Meno says so (`blocksStill`; until
+  2026-10-13 a molecule of the structure undone came, tied to atoms gone,
+  and the undone step could not be redone); edits elsewhere do not count.
 - **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
   for a molecule: an element with the H it carries - C is methane, O water,
   N ammonia - or a label Meno knows, written out as the molecule it stands
