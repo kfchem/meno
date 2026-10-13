@@ -20,6 +20,25 @@ import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw"
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
+/**
+ * How many times as long `run` takes on `large` as on `small`: the least
+ * processor time of five runs of each, taken by turns - so that a machine
+ * busy with other work, or a pause to collect garbage, slows neither alone.
+ */
+function slower<T>(small: T, large: T, run: (x: T) => void): number {
+  const least = [Infinity, Infinity];
+  run(small);
+  for (let k = 0; k < 5; k++) {
+    [small, large].forEach((x, i) => {
+      const started = process.cpuUsage();
+      run(x);
+      const used = process.cpuUsage(started);
+      least[i] = Math.min(least[i], used.user + used.system);
+    });
+  }
+  return least[1] / least[0];
+}
+
 // a methyl on a wedge from a CH with two more carbons, and apart from them
 // an ethane
 const model: Model = {
@@ -122,6 +141,31 @@ describe("fragmentOf and partOf", () => {
       [5, 6],
       [1, 2, 3, 4],
     ]);
+  });
+
+  it("find the structures of a large drawing in time in step with its size", () => {
+    // (toluenes side by side: each structure found went over every bond of
+    // the drawing again, and each atom asked for was looked for among every
+    // atom - 17 s for a thousand structures. Four times the structures now
+    // take about four times as long, not sixteen)
+    const page = (n: number): Model => {
+      const atoms: Model["atoms"] = [];
+      const bonds: Model["bonds"] = [];
+      for (let m = 0; m < n; m++) {
+        const first = 7 * m + 1;
+        for (let k = 0; k < 7; k++) atoms.push(atom(first + k, 4 * m + Math.cos(k), Math.sin(k)));
+        for (let k = 0; k < 6; k++) bonds.push({ id: 1_000_000 + first + k, a: first + k, b: first + ((k + 1) % 6), order: k % 2 ? 1 : 2 });
+        bonds.push({ id: 1_000_000 + first + 6, a: first, b: first + 6, order: 1 });
+      }
+      return { atoms, bonds };
+    };
+    const found = (m: Model) => {
+      expect(fragmentsOf(m)).toHaveLength(m.atoms.length / 7);
+      const held = fragmentsHolding(m, m.atoms.map((a) => a.id));
+      expect(held).toHaveLength(m.atoms.length / 7);
+      expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
+    };
+    expect(slower(page(500), page(2000), found)).toBeLessThan(9);
   });
 });
 

@@ -20,15 +20,28 @@ import { layOut } from "./layOut";
  * structure with its metal).
  */
 export function fragmentOf(model: Model, atomId: number): Set<number> {
+  return reached(neighboursIn(model), atomId);
+}
+
+/** The atoms each atom is bonded to: through a haptic bond, every atom of the pi system and its metal. */
+function neighboursIn(model: Model): Map<number, number[]> {
   const next = new Map<number, number[]>();
   const join = (u: number, v: number) => {
-    next.set(u, [...(next.get(u) ?? []), v]);
-    next.set(v, [...(next.get(v) ?? []), u]);
+    for (const [from, to] of [[u, v], [v, u]]) {
+      const here = next.get(from);
+      if (here) here.push(to);
+      else next.set(from, [to]);
+    }
   };
   for (const b of model.bonds) {
     join(b.a, b.b);
     for (const e of b.endpoints ?? []) join(b.a, e);
   }
+  return next;
+}
+
+/** An atom and every atom `next` leads to from it, however far along. */
+function reached(next: Map<number, number[]>, atomId: number): Set<number> {
   const seen = new Set([atomId]);
   const todo = [atomId];
   while (todo.length) {
@@ -55,9 +68,12 @@ export function fragmentsOf(model: Model): Set<number>[] {
   const seen = new Set<number>();
   const out: Set<number>[] = [];
   const bonded = new Set(model.bonds.flatMap((b) => [b.a, b.b]));
+  // (the bonds gone over once for them all, not again for each: a thousand
+  // structures took 17 s)
+  const next = neighboursIn(model);
   for (const a of model.atoms) {
     if (seen.has(a.id) || !bonded.has(a.id)) continue;
-    const f = fragmentOf(model, a.id);
+    const f = reached(next, a.id);
     f.forEach((id) => seen.add(id));
     out.push(f);
   }
@@ -67,9 +83,14 @@ export function fragmentsOf(model: Model): Set<number>[] {
 /** The fragments that hold any of `atoms`, each once. */
 export function fragmentsHolding(model: Model, atoms: Iterable<number>): Set<number>[] {
   const out: Set<number>[] = [];
+  const next = neighboursIn(model);
+  const there = new Set(model.atoms.map((a) => a.id));
+  const taken = new Set<number>();
   for (const id of atoms) {
-    if (out.some((f) => f.has(id)) || !model.atoms.some((a) => a.id === id)) continue;
-    out.push(fragmentOf(model, id));
+    if (taken.has(id) || !there.has(id)) continue;
+    const f = reached(next, id);
+    f.forEach((x) => taken.add(x));
+    out.push(f);
   }
   return out;
 }
