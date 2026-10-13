@@ -226,6 +226,13 @@ T /K                                  :   298.15
         said = ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log=log, ended="failed")
         self.assertEqual(said["why"], "Initial geometry optimization failed!")
         self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log="", ended="stopped")["why"], "CREST said nothing")
+        # (a change in topology, the remedies listed after it: what changed)
+        topology = (" xTB Geometry Optimization\nERROR STOP abnormal termination of crest\n\nError termination. Backtrace:\n#0  0x104fa4403\n"
+                    " WARNING! Change in topology detected!\n The topology change was seen in the initial geometry optimization.\n"
+                    " Try either of these options:\n    C) Fix the initial input geometry by introducing bond length constraints\n"
+                    "       or by using a method with fixed topology (GFN-FF).\n")
+        self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log=topology, ended="failed")["why"],
+                         "Change in topology detected! The topology change was seen in the initial geometry optimization.")
         # (ended, but with no conformers written: why, as it said)
         self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log="a\nlast words\n", ended="done")["why"], "last words")
 

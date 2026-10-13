@@ -302,12 +302,17 @@ def version_in(log):
 
 def why_of(log):
     """Why CREST stopped, as it says: the first line it marks an error or a failure - not the Fortran
-    runtime's own, as it stops, nor its backtrace; else its last."""
+    runtime's own, as it stops, nor its backtrace; else the last warning it gave, with the line after
+    it (a change in topology: what changed, not the remedies it lists after); else its last line."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
     said = [line for line in lines if not re.match(r"ERROR STOP|Error termination|#\d", line)]
     for line in said:
         if re.search(r"error|failed|abnormal", line, re.I):
             return line.strip("* ").strip() or line
+    warned = [k for k, line in enumerate(said) if line.startswith("WARNING!")]
+    if warned:
+        k = warned[-1]
+        return " ".join(said[k:k + 2])[len("WARNING!"):].strip()
     return said[-1] if said else lines[-1] if lines else "CREST said nothing"
 
 
