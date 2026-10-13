@@ -90,10 +90,12 @@ installed yourself are used where they are; Meno never downloads them.
   uninstaller offers to delete Meno's data as well.
 - **Mac**: drag Meno from Applications to the Bin.
 
-Meno keeps its settings, plugins and calculation jobs in its own folder:
-`%APPDATA%\com.kfchem.meno` on Windows and
-`~/Library/Application Support/com.kfchem.meno` on a Mac. Delete that folder to
-remove them too. Your own files are wherever you saved them.
+Meno keeps its settings, its plugins' Python environments and downloads, and
+calculation jobs in its own folder: `~/Library/Application Support/com.kfchem.meno`
+on a Mac. On Windows the settings are in `%APPDATA%\com.kfchem.meno`, and the
+rest, which is large and of this computer alone, in
+`%LOCALAPPDATA%\com.kfchem.meno`. Delete those folders to remove them too. Your
+own files are wherever you saved them.
 
 ## What Meno does
 

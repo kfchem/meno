@@ -5,18 +5,27 @@ import type { ConsentRequest } from "./net/network";
 // (the app's resources and data alike), the commands it is given, and what
 // the user answers when asked.
 const files = new Map<string, string>();
+// (where each was written and looked for: the app's resources, or its local data)
+const wroteIn = new Map<string, number>();
+const lookedIn = new Map<string, number>();
 const commands: { cmd: string; args?: Record<string, unknown> }[] = [];
 const asked: ConsentRequest[] = [];
 const state = { missing: [] as string[], allowed: true, granted: new Set<string>() };
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  BaseDirectory: { AppData: 1, Resource: 2 },
-  exists: async (p: string) => files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`)),
+  BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
+  exists: async (p: string, o?: { baseDir?: number }) => {
+    lookedIn.set(p, o?.baseDir ?? 0);
+    return files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`));
+  },
   readTextFile: async (p: string) => {
     if (!files.has(p)) throw new Error(`no ${p}`);
     return files.get(p)!;
   },
-  writeTextFile: async (p: string, text: string) => void files.set(p, text),
+  writeTextFile: async (p: string, text: string, o?: { baseDir?: number }) => {
+    wroteIn.set(p, o?.baseDir ?? 0);
+    files.set(p, text);
+  },
   mkdir: async () => {},
 }));
 vi.mock("@tauri-apps/plugin-os", () => ({ platform: () => "macos", arch: () => "aarch64" }));
@@ -87,6 +96,10 @@ describe("setting a plugin up, with what it downloads besides", () => {
     expect(fetched()).toBe(true);
     // (the files the user was told of, kept with its record of being set up)
     expect(stamp()).toEqual({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] });
+    // (the record, and the environment looked for, in the local data folder - not the roaming one the settings are in)
+    expect(wroteIn.get(STAMP)).toBe(3);
+    expect(lookedIn.get(STAMP)).toBe(3);
+    expect(lookedIn.get(VENV_PYTHON)).toBe(3);
   });
 
   it("asks again, even where setting it up was allowed, where it has come to need a file the user was not told of", async () => {

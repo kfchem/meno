@@ -286,10 +286,17 @@ fn resource_path(app: &AppHandle, rel: &Path) -> Result<PathBuf, String> {
         .map_err(|e| format!("resolve resource {}: {e}", rel.display()))
 }
 
-fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+/// Where Meno keeps what is large and of this computer alone: the Python
+/// environments uv and pixi make, their caches and the Pythons uv fetches,
+/// the tools that make them (tools.rs), jobs (jobs.rs) and what plugins
+/// download (plugfiles.rs). On Windows the local application data folder,
+/// not the roaming one - which a domain may copy to a server and back at
+/// each sign-in, and keeps within a quota. The settings stay in the roaming
+/// one (`app_data_dir`). On a Mac and on Linux the two are the same folder.
+fn local_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
-        .app_data_dir()
-        .map_err(|e| format!("app data dir: {e}"))
+        .app_local_data_dir()
+        .map_err(|e| format!("local app data dir: {e}"))
 }
 
 #[cfg(windows)]
@@ -342,7 +349,7 @@ fn plugin_stamp(dir: &Path) -> Result<PathBuf, String> {
 #[tauri::command]
 async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String> {
     let env = validate_env_info(&payload)?;
-    let data = app_data_dir(&app)?;
+    let data = local_data_dir(&app)?;
     let rel = plugin_env_dir(&env.venv_home)?;
     let dir = data.join(&rel);
     if dir.exists() {
@@ -365,7 +372,7 @@ async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String>
 #[tauri::command]
 async fn py_env_python_path_uv(app: AppHandle, payload: PyEnvInfo) -> Result<String, String> {
     let env = validate_env_info(&payload)?;
-    let venv = app_data_dir(&app)?
+    let venv = local_data_dir(&app)?
         .join(&env.venv_home)
         .join(&env.venv_python_rel);
     Ok(venv.to_string_lossy().into_owned())
@@ -414,7 +421,7 @@ async fn py_env_setup_uv(
     };
     let task = net.begin(&setup_purpose(&payload)?, &label)?;
     let lock = resource_path(&app, &env.lock)?;
-    let data = app_data_dir(&app)?;
+    let data = local_data_dir(&app)?;
     // (uv itself, the first time: under the same task, the same consent)
     let uv = tools::ensure(&data, tools::Tool::Uv, task.proxy_url()).await?;
     let venv_dir = data.join(&env.venv_home);
@@ -475,7 +482,7 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     }
     let label = if payload.label.is_empty() { "Setting up Python".to_string() } else { payload.label.clone() };
     let task = net.begin(&setup_purpose(&payload)?, &label)?;
-    let data = app_data_dir(&app)?;
+    let data = local_data_dir(&app)?;
     let lock = resource_path(&app, &env.lock)?;
     let manifest_from = lock.with_file_name("pixi.toml");
     let dir = data.join(&env.venv_home);
@@ -578,7 +585,7 @@ async fn ext_spawn_sidecar(
     net: State<'_, net::Net>,
 ) -> Result<String, String> {
     // (an interpreter of uv's environments, or of pixi's)
-    let data = app_data_dir(&app)?;
+    let data = local_data_dir(&app)?;
     let roots: Vec<PathBuf> = ["uv", "pixi"].iter().filter_map(|r| data.join(r).canonicalize().ok()).collect();
     if roots.is_empty() {
         return Err("the Python environment is not set up".to_string());

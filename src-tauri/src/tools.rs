@@ -7,8 +7,8 @@
 //! built for, are pinned here, so they come with Meno as surely as a bundled
 //! tool would: the archive is fetched through the network task of the
 //! environment it is for - under that environment's consent - checked
-//! against its hash, and its program kept in the app's data folder, in
-//! `tools/<tool>/<version>/`. A version no longer pinned is taken away once
+//! against its hash, and its program kept in the app's local data folder
+//! (lib.rs `local_data_dir`), in `tools/<tool>/<version>/`. A version no longer pinned is taken away once
 //! the new one is in place.
 
 use sha2::{Digest, Sha256};

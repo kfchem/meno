@@ -520,7 +520,7 @@ not taken from either.
 ### Jobs
 
 A program a step runs - xTB's, say - runs as a job (`src-tauri/src/jobs.rs`,
-`lib/jobs.ts`): in a folder of its own, `<app data>/jobs/<id>/`, apart from
+`lib/jobs.ts`): in a folder of its own, `<local app data>/jobs/<id>/`, apart from
 Meno, so that it goes on when Meno closes (WORKFLOWS.md, *When Meno
 closes*).
 
@@ -821,12 +821,22 @@ seconds to over 20 s here (`lay_out_2d` in the worker). Meno lays both
 drawings out again with its own engine; only their stereochemistry and
 scale come from these coordinates.
 
-The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
-(`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
-the lock or Python version changes. uv runs with its Python downloads
-(`uv/python`) and cache (`uv/cache`) under the app data dir too, only
+The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp
+file (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only
+when the lock or Python version changes. uv runs with its Python downloads
+(`uv/python`) and cache (`uv/cache`) under the local app data dir too, only
 uv-managed Pythons, and no user uv configuration (`uv_command` in `lib.rs`):
 nothing of Meno's environments lands in the user's own directories.
+
+The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
+in the webview) holds what is large and of this computer alone: uv's and pixi's
+environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
+download. On Windows that is `%LOCALAPPDATA%\com.kfchem.meno`, not the roaming
+`%APPDATA%` one, which a domain may copy to a server and back at each sign-in
+and keep within a quota; the settings and the network log stay in the roaming
+one. On a Mac and on Linux the two are one folder. A Meno before this kept all
+of it in the roaming folder on Windows; nothing is moved - plugins are set up
+again as they are next used, and the old folders can be deleted.
 
 ### PDFs
 
@@ -1080,12 +1090,12 @@ path it is given:
 - `py_env_*`: the webview names no tool - uv is the one `tools.rs` pins;
   `lockPath` must be a `.lock` file under `resources/py/`, or in a plugin's
   folder, `resources/plugins/<id>/` - for pixi, that folder's `pixi.lock`,
-  made in `<app data>/pixi/plugin-<id>`; `venvHome` must be under `uv/` in the
-  app data dir; relative paths may not contain `..`, `.` or absolute/drive
+  made in `<local app data>/pixi/plugin-<id>`; `venvHome` must be under `uv/` in the
+  local app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
-  inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
+  inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
   script unchanged.
 - A sidecar running the console's worker is a `python-code` task on the
@@ -1110,7 +1120,7 @@ Adding a new worker or interpreter flag means extending these rules
 `lib.rs`.
 
 Files the chemist's own: the webview's file scope (`capabilities/main.json`)
-reaches only the app's data and resources. A file is written elsewhere only
+reaches only the app's data (roaming and local) and resources. A file is written elsewhere only
 where the system's save dialog was answered - Save, Save As, Export - since
 the dialog plugin adds the path it gives back to the file scope, for that
 path alone and for the session; nothing else outside the app's own folders

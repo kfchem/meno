@@ -3,7 +3,8 @@
 //! apart from Meno, so that it goes on when Meno closes - its log written
 //! as it goes, and how it ended recorded.
 //!
-//! A job's folder, in Meno's data folder, `jobs/<id>/`:
+//! A job's folder, in Meno's local data folder (lib.rs `local_data_dir`),
+//! `jobs/<id>/`:
 //!
 //! - `job.json` - what to run: the program, its arguments and environment,
 //!   how many jobs may run at once, when it was asked for;
@@ -1186,7 +1187,7 @@ fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
 // --- Meno's commands ---------------------------------------------------------
 
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = crate::app_data_dir(app)?.join("jobs");
+    let root = crate::local_data_dir(app)?.join("jobs");
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
 }
@@ -1238,7 +1239,7 @@ pub struct ThenAsk {
 /// A job made and its runner started: its id. It waits its turn.
 #[tauri::command]
 pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload: JobAsk) -> Result<String, String> {
-    let data = crate::app_data_dir(&app)?;
+    let data = crate::local_data_dir(&app)?;
     if !plugin_id(&payload.plugin) {
         return Err(format!("not a plugin: {}", payload.plugin));
     }

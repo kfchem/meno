@@ -362,7 +362,7 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool) -> Result
     let manifest = manifest_of(&app, &plugin)?;
     let downloads = needed(&downloads_of(&manifest)?);
     let pixi = manifest.get("environment").and_then(Value::as_str) == Some("pixi");
-    let data = app.path().app_data_dir().map_err(|e| format!("app data dir: {e}"))?;
+    let data = crate::local_data_dir(&app)?;
     let dir = folder(&data, &plugin, pixi);
     let state = |missing: &[&Download]| FilesState {
         folder: dir.to_string_lossy().into_owned(),

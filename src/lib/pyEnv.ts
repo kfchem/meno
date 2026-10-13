@@ -181,7 +181,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
   const lockSha = await sha256(lockText);
 
   const stampExists = await exists(info.stampPath, {
-    baseDir: BaseDirectory.AppData,
+    baseDir: BaseDirectory.AppLocalData,
   });
 
   // (and the files besides that the user was told of, as it was set up: by their SHA-256)
@@ -189,7 +189,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
   if (stampExists) {
     try {
       stamp = JSON.parse(
-        await readTextFile(info.stampPath, { baseDir: BaseDirectory.AppData })
+        await readTextFile(info.stampPath, { baseDir: BaseDirectory.AppLocalData })
       );
     } catch {}
   }
@@ -204,7 +204,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
   const made = info.host === "pixi" ? `${info.venvHome}/activation.json` : `${info.venvHome}/${info.venvPythonRel}`;
   const needSetup =
     !(await exists(made, {
-      baseDir: BaseDirectory.AppData,
+      baseDir: BaseDirectory.AppLocalData,
     })) ||
     stamp.lockSha !== lockSha ||
     stamp.py !== info.pythonVersion;
@@ -243,11 +243,11 @@ export async function ensurePyEnv(
     opts
   );
   // (set up, with the files besides the user was told of)
-  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) }, BaseDirectory.AppData);
+  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) }, BaseDirectory.AppLocalData);
   const extra = besides(pluginOf(profile));
   // (who downloads what: the packages' maker, and Meno the plugin's files besides)
   const downloads = (maker: string) => `${maker}, fetched the first time it is needed, downloads ${extra.need ? "the packages, and Meno the rest" : "them"} - once`;
-  await ensureDir(info.host === "pixi" ? "pixi/stamps" : "uv/stamps", BaseDirectory.AppData);
+  await ensureDir(info.host === "pixi" ? "pixi/stamps" : "uv/stamps", BaseDirectory.AppLocalData);
 
   if (needSetup && info.host === "pixi") {
     // (a conda-forge environment: what pixi downloads on this computer, from its lock)
