@@ -44,7 +44,9 @@ molecules with their references.
 4. **Each piece**:
    - grown from its root system in every frame (`framesFor`: 12, or 24 for
      a frame of squares alone);
-   - improved: single bonds turned over, a ring atom's two groups swapped,
+   - improved: single bonds turned over, a ring atom's two groups swapped
+     (and, where one of them leads back to what the piece grew from, the
+     ring turned under them instead, the frame held: sucrose's fructose),
      then small sides turned over with a bond inside them turned back as
      well (on every frame for a piece of up to 40 atoms, the best three
      otherwise);

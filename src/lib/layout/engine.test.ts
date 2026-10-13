@@ -10,6 +10,7 @@ import { shownBySolid, solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
+import { fromSmiles } from "./testdata/readBack";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -873,6 +874,33 @@ describe("a biaryl with something beside its bond on each ring", () => {
     const side = (p: number) => Math.sign((x[23] - x[22]) * (y[p] - y[22]) - (y[23] - y[22]) * (x[p] - x[22]));
     expect(side(0)).toBe(-side(25));
   }, 30_000);
+});
+
+describe("two sugars linked by their anomeric carbons", () => {
+  it("hangs sucrose's fructose at 120 degrees from its link, its CH2OH by its ring O, the glucose's C1 on the right", () => {
+    // glucose C6 0, C5 1, C4 2, C3 3, C2 4, C1 5, ring O 6; the link's O 7;
+    // fructose C2' 8, C3' 9, C4' 10, C5' 11, ring O 12, C1' 17
+    const input = fromSmiles("C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O[C@]2([C@H]([C@@H]([C@H](O2)CO)O)O)CO)O)O)O)O");
+    const { x, y } = layout2D(input);
+    const angle = (p: number, c: number, q: number) => {
+      const u = { x: x[p] - x[c], y: y[p] - y[c] };
+      const v = { x: x[q] - x[c], y: y[q] - y[c] };
+      return (Math.acos((u.x * v.x + u.y * v.y) / Math.hypot(u.x, u.y) / Math.hypot(v.x, v.y)) * 180) / Math.PI;
+    };
+    // the glycosidic O a zigzag's corner, not opened out to make room
+    expect(angle(5, 7, 8)).toBeCloseTo(120, 0);
+    // the fructose's CH2OH on its anomeric carbon beside its ring O, the
+    // link beside C3' - the other way round, the CH2OH crowds the OH on C3'
+    expect(angle(17, 8, 12)).toBeLessThan(angle(17, 8, 9));
+    // and the sugars as they are drawn: the glucose's C1 on the right, both
+    // ring O's at the top
+    const centre = (r: number[]) => ({ x: r.reduce((t, a) => t + x[a], 0) / r.length, y: r.reduce((t, a) => t + y[a], 0) / r.length });
+    const glucose = centre([1, 2, 3, 4, 5, 6]);
+    const fructose = centre([8, 9, 10, 11, 12]);
+    expect(x[5]).toBeGreaterThan(glucose.x);
+    expect(y[6]).toBeGreaterThan(glucose.y);
+    expect(y[12]).toBeGreaterThan(fructose.y);
+  });
 });
 
 describe("an atom its bonds run straight through", () => {

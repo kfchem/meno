@@ -120,14 +120,8 @@ export function grow(
   };
 
   // a complex is grown from its metal, its ligands round it as the metal's
-  // slots have them (section 7) - the most-bonded metal, where there are
-  // several - where no ring runs through the metal (a chelate through a
-  // ferrocene, dppf's, is closed at the metal instead)
-  const open = (m: number) =>
-    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
-  const centre = piece
-    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
-    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
+  // slots have them (section 7)
+  const centre = metalCentre(mol, piece);
   const root = centre == null ? rootSystem(mol, piece) : -1;
   if (centre != null) {
     pos.set(centre, { x: 0, y: 0 });
@@ -250,6 +244,31 @@ export function grow(
     }
   }
   return pos;
+}
+
+/**
+ * The metal a complex is grown from, its ligands round it: the most-bonded
+ * metal, where there are several - where no ring runs through the metal (a
+ * chelate through a ferrocene, dppf's, is closed at the metal instead);
+ * undefined for a piece with none.
+ */
+function metalCentre(mol: Molecule, piece: number[]): number | undefined {
+  const open = (m: number) =>
+    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
+  return piece
+    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
+    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
+}
+
+/**
+ * The atoms a piece is grown from (`grow`), which its frame sets square:
+ * its metal or its root ring system; none for a chain.
+ */
+export function grownFrom(mol: Molecule, piece: number[]): number[] {
+  const centre = metalCentre(mol, piece);
+  if (centre != null) return [centre];
+  const root = rootSystem(mol, piece);
+  return root >= 0 ? mol.systems[root].atoms : [];
 }
 
 /**

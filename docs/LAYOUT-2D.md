@@ -425,7 +425,13 @@ When parts clash, in this order:
    which way a zigzag turns, which way round a ring system is hung, which
    of a ring atom's two groups goes which way - each is free, and the one
    without the clash is taken (erythromycin's tertiary OH up, out of its
-   sugar's way, its methyl across). A branch turned over
+   sugar's way, its methyl across). Where one of a ring atom's two groups
+   is the way back to the rest - a ring hung from that atom, as sucrose's
+   fructose hangs from its anomeric carbon on the glycosidic O - the two
+   are also swapped with the rest held where it was set, the ring turned
+   under them: swapped about the ring alone, the glucose turned off its
+   frame, so the fructose's CH2OH stayed by the OH on C3' and its link
+   was opened to 140 degrees to make room. A branch turned over
    is tried with what hangs on it turned back as well: tryptophan's side
    chain turned down, its NH2 below, its carboxyl's C=O still up.
 2. **Turn** a substituent off its ideal angle, as little as will do.

@@ -13,6 +13,7 @@ import {
   framesFor,
   flippable,
   grow,
+  grownFrom,
   tridentEnds,
   sideAtoms,
   sidesOf,
@@ -1013,7 +1014,9 @@ export function inkReach(mol: Molecule, a: number, pos: ReadonlyMap<number, Poin
  * Tries each single bond the other way round, and the two groups on a ring
  * atom (`swaps`: the atom, then each group's first atom) each the other's
  * way, keeping what scores better, until nothing does - erythromycin's
- * tertiary OH turned up out of its sugar's way, its methyl across. Then,
+ * tertiary OH turned up out of its sugar's way, its methyl across; where
+ * one of the two leads back to the frame, also with that one held and the
+ * ring turned under it instead (sucrose's fructose on its glycosidic O). Then,
  * `deep`, each small side turned over is tried
  * with each bond within it turned back as well: what hangs on it - a
  * carboxyl's C=O, up - set right again, where turning the side alone would
@@ -1031,6 +1034,18 @@ export function improve(
 ): { pos: Grown; score: number } {
   let pos = start;
   let current = startScore;
+  // (a group of the two that leads back to what the piece was grown from -
+  // sucrose's glucose, beyond the glycosidic O on its fructose's anomeric
+  // carbon - is also tried held still, its frame as it was set, and the
+  // rest turned instead: swapped about the ring atom, the glucose came out
+  // turned 60 degrees from its frame, and the fructose's CH2OH was never
+  // tried on the other side of the link)
+  const from = new Set(swaps.length ? grownFrom(mol, [...start.keys()]) : []);
+  const groups = swaps.map(([a, b, c]) => {
+    const sb = sideAtoms(mol, a, b);
+    const sc = sideAtoms(mol, a, c);
+    return { sb, sc, held: sb.some((v) => from.has(v)) ? b : sc.some((v) => from.has(v)) ? c : -1 };
+  });
   const singly = () => {
     for (let pass = 0; pass < 4; pass++) {
       let better = false;
@@ -1044,20 +1059,27 @@ export function improve(
           better = true;
         }
       }
-      for (const [a, b, c] of swaps) {
+      for (const [k, [a, b, c]] of swaps.entries()) {
         const trial = new Map(pos);
         const at = trial.get(a)!;
         const tb = angleOf(sub(trial.get(b)!, at));
         const tc = angleOf(sub(trial.get(c)!, at));
-        const sb = sideAtoms(mol, a, b);
-        const sc = sideAtoms(mol, a, c);
+        const { sb, sc, held } = groups[k];
         turnSide(trial, sb, at, tc - tb);
         turnSide(trial, sc, at, tb - tc);
-        const s = score(trial);
-        if (s < current - 1e-6) {
-          pos = trial;
-          current = s;
-          better = true;
+        const trials = [trial];
+        if (held >= 0) {
+          const kept = new Map(trial);
+          turnSide(kept, [...kept.keys()], at, held === b ? tb - tc : tc - tb);
+          trials.push(kept);
+        }
+        for (const t of trials) {
+          const s = score(t);
+          if (s < current - 1e-6) {
+            pos = t;
+            current = s;
+            better = true;
+          }
         }
       }
       if (!better) break;
