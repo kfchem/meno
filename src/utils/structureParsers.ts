@@ -1,4 +1,4 @@
-import { singleBondRadius } from "../lib/chem/elements";
+import { ELEMENTS, elementOf, singleBondRadius } from "../lib/chem/elements";
 import type { Molecule, ParsedAtom, ParsedBond, StereoGroup } from "../lib/chem/molecule";
 import { readSDfile, type CtMolecule } from "../lib/chem/ctfile";
 
@@ -138,22 +138,39 @@ export function bondsByDistance(atoms: readonly { el: string; x: number; y: numb
 /** How many atoms a structure has before its bonds are found cube by cube rather than pair by pair. */
 const GRID_FROM = 400;
 
+const BY_NUMBER: ReadonlyMap<number, string> = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
+
+/** An XYZ file's element as the periodic table writes it: its symbol in any case ("CL", "cl"), or its atomic number ("17"); as it is, where it is neither. */
+function xyzElement(given: string): string {
+  if (/^\d+$/.test(given)) return BY_NUMBER.get(Number(given)) ?? given;
+  const symbol = given.charAt(0).toUpperCase() + given.slice(1).toLowerCase();
+  return elementOf(symbol) ? symbol : given;
+}
+
+/**
+ * An XYZ file's frames, each its atoms and their bonds by distance, as far
+ * as a line gives a frame's count of atoms (as `xyzComments` reads them,
+ * so each frame has its comment line). A frame cut short holds the atoms
+ * it has; an atom whose place does not read stands nowhere (NaN): which
+ * frames to keep is the reader's (lib/io/structures).
+ */
 export function parseXYZ(xyz: string): Molecule[] {
   const lines = xyz.trim().split("\n");
   const frames: Molecule[] = [];
 
   let i = 0;
   while (i < lines.length) {
-    const atomCount = parseInt(lines[i].trim());
+    const atomCount = parseInt(lines[i].trim(), 10);
+    if (!(atomCount > 0)) break;
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
 
     const atoms: Atom[] = atomLines.map((line) => {
       const [element, x, y, z] = line.trim().split(/\s+/);
       return {
-        el: element,
-        x: parseFloat(x),
-        y: parseFloat(y),
-        z: parseFloat(z),
+        el: xyzElement(element ?? ""),
+        x: Number(x),
+        y: Number(y),
+        z: Number(z),
       };
     });
 

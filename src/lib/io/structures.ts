@@ -130,9 +130,16 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   // one molecule's, a MOL or SD file's records each a molecule of its own -
   // where the file says it is 3D, or its atoms spread in depth.
   if (kind === "xyz" && molecules.length && molecules[0].atoms.length) {
-    const [first, ...rest] = molecules;
+    // (a frame cut short, or with an atom whose place does not read, is left
+    // out - and its energy with it - so that each frame kept is the one
+    // shown, measured and written: every atom of the first, each somewhere)
+    const n = molecules[0].atoms.length;
+    const whole = (m: Molecule) => m.atoms.length === n && m.atoms.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z));
+    const kept = new Set(molecules.flatMap((m, i) => (whole(m) ? [i] : [])));
+    if (!kept.size) throw noMolecules(name);
+    const [first, ...rest] = molecules.filter((_, i) => kept.has(i));
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = rest.length ? energiesOf(xyzComments(content)) : undefined;
+    const energies = molecules.length > 1 ? energiesOf(xyzComments(content))?.filter((_, i) => kept.has(i)) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },
@@ -143,7 +150,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           bondsFrom: "distance",
           bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((f) => f.atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
-          ...(energies?.length === molecules.length ? { energies } : {}),
+          ...(rest.length && energies?.length === kept.size ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
         },
       ],

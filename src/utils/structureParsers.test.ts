@@ -16,6 +16,25 @@ describe("parseXYZ", () => {
     expect(frames).toHaveLength(2);
     expect(frames[1].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
   });
+
+  it("reads an element in any case, or as its atomic number - so its bonds are found by its own radius", () => {
+    // (C-Cl 1.75 A: bonded; Cl-Cl 3.2 A apart, which a radius not known - 1.5 A each - would bond)
+    for (const [c, cl] of [["C", "CL"], ["c", "cl"], ["6", "17"]]) {
+      const [m] = parseXYZ(`3\n\n${c} 0 0 0\n${cl} 1.75 0 0\n${cl} -1.45 0 0`);
+      expect(m.atoms.map((a) => a.el)).toEqual(["C", "Cl", "Cl"]);
+      expect(m.bonds).toEqual([
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ]);
+    }
+    // (what is neither is left as it is)
+    expect(parseXYZ("1\n\nQq 0 0 0")[0].atoms[0].el).toBe("Qq");
+  });
+
+  it("stops at a line that gives no count of atoms", () => {
+    const frame = "2\ncomment\nC 0 0 0\nC 1.54 0 0";
+    expect(parseXYZ(`${frame}\n${frame}\nEND`)).toHaveLength(2);
+  });
 });
 
 describe("bondsByDistance", () => {

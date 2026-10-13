@@ -14,6 +14,20 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(() => readStructures("mol", "x.mol", "nothing")).toThrow(/No molecules found in x.mol/);
   });
 
+  it("leaves out an XYZ file's frame cut short, or with a place that does not read, and its energy with it", () => {
+    const frame = (e: string, x: string) => `3\nenergy: ${e}\nO 0 0 0\nH ${x} 0.59 0\nH -0.76 0.59 0\n`;
+    // (the second frame damaged, the last cut short - as a file still being written is)
+    const text = frame("-76.1", "0.76") + frame("-76.2", "0.7x") + frame("-76.3", "0.77") + frame("-76.4", "0.78").split("\n").slice(0, 4).join("\n");
+    const read = readStructures("xyz", "t.xyz", text);
+    expect(checkedStructures(read, "t.xyz")).toBe(read);
+    const m = read.molecules3d![0];
+    expect(m.atoms[1].x).toBe(0.76);
+    expect(m.frames).toEqual([[0, 0, 0, 0.77, 0.59, 0, -0.76, 0.59, 0]]);
+    expect(m.energies).toEqual([-76.1, -76.3]);
+    // (none whole: none read)
+    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow(/No molecules found in t.xyz/);
+  });
+
   it("is checked as the page takes it, as any reader's answer is", () => {
     const read = readStructures("xyz", "w.xyz", WATER);
     expect(checkedStructures(read, "w.xyz")).toBe(read);
