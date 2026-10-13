@@ -18,7 +18,8 @@ written back as RXN files.
 ## Reading
 
 Everything below is read and kept (`CtMolecule`, carried on a file's
-molecule as `Molecule.ct`):
+molecule as `Molecule.ct`) - of an SD file, each record's molfile and its
+title, its first line; the record's data items are not kept:
 
 - **Atoms**: coordinates; symbol, or a reserved type (R#, A, Q, X, M, R, *,
   LP) or an atom list (L, `[N,O]`, `NOT [S,Se]`); mass (V2000's mass
@@ -48,7 +49,10 @@ molecule as `Molecule.ct`):
   REAGENT blocks), their molecules in the file's order: reactants,
   products, then reagents.
 
-Not read: V3000 3D blocks and templates (SCSR), RDfiles and XDfiles.
+Not read: an SD file's data items - the `> <name>` fields after each
+record's M  END, among them the energy Meno writes for each frame of a
+molecule in 3D saved with all its frames (`readSDfile`); V3000 3D blocks
+and templates (SCSR), RDfiles and XDfiles.
 
 A connection table that ends before the atoms and bonds its counts line
 gives - an atom's line missing or with no place, a bond's line that joins
@@ -334,7 +338,11 @@ by the same engine: a wedge on a bond out of its rings, its narrow end at
 the centre, an H drawn where it has no other way, or - in a cage - the
 perspective drawing itself; Clean-up reads the configuration back from it
 as the one given (tested). A cage's, shown by its perspective with no
-wedge, is not yet written to a MOL file, as with any cage Clean-up draws.
+wedge, is written to a MOL or SD file - and copied, and sent to RDKit -
+with a wedge that says it, as any cage Clean-up draws is: on a bond out of
+the centre, or on an H added for it after every atom there is
+(`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
+not written, so the cage opens again flat, its configuration wedged.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H
 than its valence leaves - Bu3SnH's tin, a metal's hydride, LiAlH4's
