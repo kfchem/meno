@@ -287,6 +287,10 @@ pub fn run_job(dir: &Path) -> i32 {
             end(JobState::Stopped, None, None, None);
             return 0;
         }
+        // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
+        if !dir.join(SPEC).is_file() || read_record(dir).is_none_or(|r| r.state != JobState::Waiting) {
+            return 1;
+        }
         match take_turn(dir, &spec, &base) {
             Ok(true) => break,
             Ok(false) => std::thread::sleep(WAIT_STEP),
@@ -1666,6 +1670,37 @@ mod tests {
         let (f, s) = (current_record(&first).unwrap(), current_record(&second).unwrap());
         assert_eq!((f.state, s.state), (JobState::Done, JobState::Done));
         assert!(s.started.unwrap() >= f.ended.unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_waiting_job_whose_folder_is_taken_away_waits_no_more() {
+        let root = temp();
+        let first = shell(&root, PAUSE, 1);
+        std::thread::sleep(Duration::from_millis(5));
+        let second = shell(&root, ECHO, 1);
+        let a = {
+            let d = first.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&first).is_some_and(|r| r.state == JobState::Running));
+        let b = {
+            let d = second.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&second).is_some_and(|r| r.state == JobState::Waiting));
+        // (taken away while it waits - cleared, say: its runner goes, never to start it)
+        for _ in 0..40 {
+            if fs::remove_dir_all(&second).is_ok() || !second.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let begun = std::time::Instant::now();
+        assert_eq!(b.join().unwrap(), 1);
+        assert!(begun.elapsed() < Duration::from_secs(3));
+        assert!(!second.exists());
+        a.join().unwrap();
         let _ = fs::remove_dir_all(root);
     }
 
