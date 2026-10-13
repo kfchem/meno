@@ -331,11 +331,16 @@ const DIGITS: Record<Quantity, number> = {
 const DIGITS_MOST = 4;
 const MINUS = "−";
 
-/** A number as it is written: to `digits` decimals, or at most `DIGITS_MOST` with none left trailing; a true minus. */
-function numberText(v: number, digits?: number): string {
+/** A number as it is written, wherever Meno writes one: to `digits` decimals, or at most `DIGITS_MOST` with none left trailing; a true minus, and never "−0". */
+export function numberText(v: number, digits?: number): string {
   let t = digits != null ? v.toFixed(digits) : v.toFixed(DIGITS_MOST).replace(/\.?0+$/, "");
   if (/^-0(\.0*)?$/.test(t)) t = t.slice(1);
   return t.replace(/^-/, MINUS);
+}
+
+/** An energy above the lowest, in kilocalories per mole, as it is written: "1.23 kcal/mol", "12.3 kcal/mol" - its decimals chosen once it is rounded (9.996 is "10.0", not "10.00"). */
+export function aboveText(kcal: number): string {
+  return `${Math.round(kcal * 100) / 100 < 10 ? numberText(kcal, 2) : numberText(kcal, 1)} kcal/mol`;
 }
 
 /**

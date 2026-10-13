@@ -35,7 +35,7 @@ describe("a measurement on a molecule in 3D", () => {
   });
 
   it("is written as a chemist writes it", () => {
-    expect(measureText("distance", 1.5349)).toBe("1.53 Å");
+    expect(measureText("distance", 1.5349)).toBe("1.535 Å");
     expect(measureText("angle", 109.47)).toBe("109.5°");
     expect(measureText("torsion", -60.24)).toBe("−60.2°");
     expect(measureText("torsion", -0.01)).toBe("0.0°");
@@ -97,16 +97,16 @@ describe("a measurement in a picture", () => {
     // (the third measurement names an atom it has not got: left out)
     expect(marks).toHaveLength(2);
     const [distance, angle] = marks;
-    expect(distance.text).toBe("1.52 Å");
-    // (beside the line's middle, where it would cover a hydrogen's ball)
-    expect(Math.abs(distance.label.x - 10)).toBeLessThan(1);
+    expect(distance.text).toBe("1.520 Å");
+    // (beside the line's middle, where it would cover a hydrogen's ball - "1.520 Å" a little wider than "1.52 Å" was)
+    expect(Math.abs(distance.label.x - 10)).toBeLessThan(1.5);
     expect(distance.fan).toHaveLength(0);
     expect(distance.width).toBeCloseTo(2 * MEASURE_RADIUS * WORLD_PER_ANGSTROM, 9);
     expect(angle.fan.length).toBeGreaterThan(0);
     expect(angle.text).toMatch(/°$/);
     // turned a half turn about y: the molecule's left and right swap, the distance's middle stays
     const turned = measurePictureMarks({ ...water, turn: [0, 1, 0, 0] }, STYLE_3D, 0.75)[0];
-    expect(Math.abs(turned.label.x - 10)).toBeLessThan(1);
+    expect(Math.abs(turned.label.x - 10)).toBeLessThan(1.5);
     expect(turned.lines[0][0].x).toBeCloseTo(2 * 10 - distance.lines[0][0].x, 6);
   });
 

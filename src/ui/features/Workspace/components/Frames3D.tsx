@@ -1,11 +1,10 @@
 import PageHtml from "./PageHtml";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
+import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
+import { KCAL_PER_HARTREE } from "../workflow/meno";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 
-/** Kilocalories per mole in a hartree. */
-const KCAL_PER_HARTREE = 627.509474;
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
 const BARS = 30;
@@ -26,15 +25,11 @@ function share(p: number): string {
   return p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`;
 }
 
-/** An energy above the lowest, as it is written: "1.23 kcal/mol". */
-function relative(e: number): string {
-  return `${e < 10 ? e.toFixed(2) : e.toFixed(1)} kcal/mol`;
-}
+/** An energy above the lowest, as it is written: "1.23 kcal/mol" (lib/calc/results). */
+const relative = aboveText;
 
-/** An energy as a calculation gives it, as it is written: "−382.055117 Eh". */
-function absolute(e: number): string {
-  return `${e.toFixed(6).replace(/^-/, "\u2212")} Eh`;
-}
+/** An energy as a calculation gives it, as it is written wherever Meno writes one: "−382.055117 Eh". */
+const absolute = (e: number) => valueText(e, { quantity: "energy" });
 
 /**
  * A molecule's frames, just below it on the page: which one it shows, of

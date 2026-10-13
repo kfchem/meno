@@ -85,7 +85,7 @@ describe("what a reader hands back", () => {
 
   it("is said in a line: program, method and basis, charge and multiplicity", () => {
     expect(calcLine(calcOf(water, ["cclib"]))).toBe("ORCA 6.0.1 · B3LYP/def2-SVP · charge 0, singlet");
-    expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge -1, doublet");
+    expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge \u22121, doublet");
     expect(calcLine({ readers: ["cclib"], charge: 2 })).toBe("charge +2");
     expect(multiplicityName(7)).toBe("multiplicity 7");
   });

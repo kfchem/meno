@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bySource, chipLine, grouped, isMarked, pairValue, readResults, resultKey, resultsOn, valueText, type PairsResult } from "./results";
+import { aboveText, bySource, chipLine, grouped, isMarked, numberText, pairValue, readResults, resultKey, resultsOn, valueText, type PairsResult } from "./results";
 import { cardGroupsOf, readerNameOf, titled } from "./sources";
 
 describe("a calculation's results, as a plugin gives them", () => {
@@ -190,5 +190,22 @@ describe("results from two readers", () => {
   it("fill the chip's line from one reader: the first that ranked any", () => {
     expect(chipLine(["ORCA"], results, 200)).toBe("ORCA · Dipole moment 1.8");
     expect(chipLine(["ORCA"], results.slice(1), 200)).toBe("ORCA · Dipole moment 1.9 · <S²> 0.75");
+  });
+});
+
+// (the numbers audit, 2026-10-14: the same quantity written the same way wherever it shows)
+describe("a number, wherever Meno writes one", () => {
+  it("has a true minus, and is never minus nought", () => {
+    expect(numberText(-1.5, 2)).toBe("\u22121.50");
+    expect(numberText(-0.0001, 3)).toBe("0.000");
+    expect(valueText(-0.0000001, { quantity: "energy" })).toBe("0.000000 Eh");
+  });
+
+  it("writes an energy above the lowest with its decimals chosen once it is rounded", () => {
+    expect(aboveText(1.234)).toBe("1.23 kcal/mol");
+    expect(aboveText(9.994)).toBe("9.99 kcal/mol");
+    expect(aboveText(9.996)).toBe("10.0 kcal/mol");
+    expect(aboveText(12.34)).toBe("12.3 kcal/mol");
+    expect(aboveText(0)).toBe("0.00 kcal/mol");
   });
 });

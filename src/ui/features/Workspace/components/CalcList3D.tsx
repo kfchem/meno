@@ -12,10 +12,10 @@ const HEAD = 20;
 const MARGIN = 8;
 /** How many frames after it opens it has been placed under its molecule, to ask for room. */
 const PLACED_FRAMES = 3;
-/** A surface's value as it is written: "0.050", "0.0020". */
-const isoText = (iso: number) => (iso >= 0.01 ? iso.toFixed(3) : iso.toPrecision(2));
-/** A colour scale's ends, as written: a minus sign, not a hyphen. */
-const scaleText = (v: number) => String(Number(v.toPrecision(3))).replace("-", "\u2212");
+/** A surface's value as it is written: "0.050", "0.0020" - a minus sign, not a hyphen, an exponent's too. */
+const isoText = (iso: number) => (iso >= 0.01 ? iso.toFixed(3) : iso.toPrecision(2)).replace(/-/g, "\u2212");
+/** A colour scale's ends, as written: a minus sign, not a hyphen, an exponent's too. */
+const scaleText = (v: number) => String(Number(v.toPrecision(3))).replace(/-/g, "\u2212");
 /** The scale's colours, as the surface is drawn in them (utils/isosurface `SCALE_STOPS`). */
 const SCALE_CSS = SCALE_STOPS.map(([r, g, b]) => `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`).join(", ");
 

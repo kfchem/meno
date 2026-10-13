@@ -175,7 +175,7 @@ export function calcLine(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const method = [c.method, c.basis].filter(Boolean).join("/");
   const state = [
-    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${c.charge}` : null,
+    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
   ]
     .filter(Boolean)

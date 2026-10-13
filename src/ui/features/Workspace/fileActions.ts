@@ -149,13 +149,16 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // frames, numbered, with its energy where it is known
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
     const name = m.name ? stem(m.name) : title;
-    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), m.bonds, { title: name }) + "$$$$\n"];
+    // (each frame's energy, where it is known: the frame shown's too)
+    const data = (i: number) => {
+      const energy = m.energies?.[i];
+      return energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "";
+    };
+    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), m.bonds, { title: name }) + data(m.frame ?? 0) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
-      const energy = m.energies?.[i];
-      const data = energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "";
       // (each frame with the bonds it has, where they go frame by frame)
-      return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}` }) + data + "$$$$\n";
+      return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}` }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);

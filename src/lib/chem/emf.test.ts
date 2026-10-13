@@ -265,15 +265,15 @@ describe("measurements in a picture", () => {
     measures: [{ id: 1, atoms: [1, 2] }],
   };
   const { layout, opts } = drawingLayout({ ...model, molecules3d: [water3d] }, aromatic, ACS_1996);
-  const text = "1.52 Å";
+  const text = "1.520 Å";
 
   it("are taken in, over the molecules: dashes, the value, and room for it", () => {
     expect(layout.measures).toHaveLength(1);
     const m = layout.measures![0];
     expect(m.text).toBe(text);
     expect(m.lines.length).toBeGreaterThan(3);
-    // (written about where the two atoms meet - beside it, where it would cover a hydrogen's ball - the molecule placed at x 6)
-    expect(Math.abs(m.label.x - 6)).toBeLessThan(1);
+    // (written about where the two atoms meet - beside it, where it would cover a hydrogen's ball - the molecule placed at x 6; "1.520 Å" is a little wider than it was)
+    expect(Math.abs(m.label.x - 6)).toBeLessThan(1.5);
     expect(layout.bounds.max.x).toBeGreaterThan(m.label.x);
   });
 
