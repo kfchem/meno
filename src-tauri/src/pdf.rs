@@ -402,16 +402,22 @@ fn run_reader(cache: &Path) -> i32 {
 type Waiting = Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<(Value, Vec<u8>)>>>>;
 
 /// The reader, as Meno sees it: started when first wanted, asked, answered.
+/// Its process and its input each behind a lock of its own, apart from
+/// Meno's hold on the reader (`PdfState`): a write waiting for room in a
+/// full pipe - a reader that has stopped reading - holds its input alone,
+/// so that the reader can be stopped meanwhile, which ends the write.
 struct Reader {
-    child: Child,
-    stdin: ChildStdin,
+    child: Mutex<Child>,
+    stdin: Mutex<ChildStdin>,
     waiting: Waiting,
     next: AtomicU64,
 }
 
 impl Drop for Reader {
     fn drop(&mut self) {
-        let _ = self.child.kill();
+        if let Ok(child) = self.child.get_mut() {
+            let _ = child.kill();
+        }
     }
 }
 
@@ -446,24 +452,39 @@ impl Reader {
             // (the reader is gone: whoever waits is told so)
             w.lock().unwrap().clear();
         });
-        Ok(Reader { child, stdin, waiting, next: AtomicU64::new(1) })
+        Ok(Reader { child: Mutex::new(child), stdin: Mutex::new(stdin), waiting, next: AtomicU64::new(1) })
     }
 
-    fn ask(&mut self, mut req: Value) -> Result<tokio::sync::oneshot::Receiver<(Value, Vec<u8>)>, String> {
+    /// Whether the reader has gone.
+    fn gone(&self) -> bool {
+        let mut child = self.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        matches!(child.try_wait(), Ok(Some(_)))
+    }
+
+    /// The reader stopped, and waited for.
+    fn stop(&self) {
+        let mut child = self.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    fn ask(&self, mut req: Value) -> Result<tokio::sync::oneshot::Receiver<(Value, Vec<u8>)>, String> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         req["id"] = json!(id);
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.waiting.lock().unwrap().insert(id, tx);
         let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
         line.push(b'\n');
-        self.stdin.write_all(&line).and_then(|_| self.stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"))?;
+        let mut stdin = self.stdin.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        stdin.write_all(&line).and_then(|_| stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"))?;
         Ok(rx)
     }
 }
 
-/// The reader Meno has started, if any.
+/// The reader Meno has started, if any - held only while it is looked at,
+/// started or let go, never while it is written to.
 #[derive(Default)]
-pub struct PdfState(Mutex<Option<Reader>>);
+pub struct PdfState(Mutex<Option<Arc<Reader>>>);
 
 fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("pdf");
@@ -479,28 +500,38 @@ async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), Str
     // reader's first word, and a write for room in its pipe - held, they
     // held a command thread each, and every other PDF request with them)
     let held = app.clone();
-    let rx = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
-        let state = held.state::<PdfState>();
-        let mut guard = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        // (started the first time, and again where it has gone)
-        if guard.as_mut().map(|r| matches!(r.child.try_wait(), Ok(Some(_)))).unwrap_or(true) {
-            *guard = Some(Reader::start(&cache_dir(&held)?)?);
-        }
-        guard.as_mut().unwrap().ask(req)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    let (head, bytes) = match tokio::time::timeout(REPLY_MOST, rx).await {
-        Ok(reply) => reply.map_err(|_| "the PDF reader stopped".to_string())?,
+    let asked = async move {
+        let rx = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+            let state = held.state::<PdfState>();
+            let reader = {
+                let mut guard = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                // (started the first time, and again where it has gone)
+                if guard.as_ref().is_none_or(|r| r.gone()) {
+                    *guard = Some(Arc::new(Reader::start(&cache_dir(&held)?)?));
+                }
+                guard.as_ref().unwrap().clone()
+            };
+            // (written to with Meno's hold let go: a write waiting for room in a
+            // full pipe holds the reader's input alone, and the reader can be
+            // stopped meanwhile - which ends the write)
+            reader.ask(req)
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        rx.await.map_err(|_| "the PDF reader stopped".to_string())
+    };
+    // (the write as well as the answer within the time: a reader that has
+    // stopped reading leaves the write waiting, and only its stop ends it)
+    let (head, bytes) = match tokio::time::timeout(REPLY_MOST, asked).await {
+        Ok(reply) => reply?,
         Err(_) => {
             // (held on it past its time: stopped, so that the next request starts it afresh - what else waits is told it stopped)
             let held = app.clone();
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 let state = held.state::<PdfState>();
                 let taken = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
-                if let Some(mut reader) = taken {
-                    let _ = reader.child.kill();
-                    let _ = reader.child.wait();
+                if let Some(reader) = taken {
+                    reader.stop();
                 }
             })
             .await;
@@ -638,6 +669,34 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // (L8's review of #318: a write waiting for room in the pipe of a reader
+    // that had stopped reading held Meno's hold on the reader, which its stop
+    // needed - PDFs were dead until Meno was started again)
+    #[cfg(unix)]
+    #[test]
+    fn a_reader_that_stopped_reading_is_stopped_while_a_write_waits_on_it() {
+        let mut child = Command::new("sleep").arg("30").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+        let stdin = child.stdin.take().unwrap();
+        let reader = Arc::new(Reader { child: Mutex::new(child), stdin: Mutex::new(stdin), waiting: Arc::new(Mutex::new(HashMap::new())), next: AtomicU64::new(1) });
+        let (tx, rx) = std::sync::mpsc::channel();
+        let asking = reader.clone();
+        std::thread::spawn(move || {
+            // (a megabyte a request: the pipe is full at the first, and the write waits)
+            let big = json!({"op": "page", "pad": "x".repeat(1 << 20)});
+            let ended = (0..8).map(|_| asking.ask(big.clone()).map(|_| ())).find(Result::is_err);
+            let _ = tx.send(ended);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(rx.try_recv().is_err(), "the write is waiting");
+        // (stopped from beside it: the write holds the reader's input alone)
+        let started = Instant::now();
+        reader.stop();
+        let ended = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("the write ended once the reader was stopped");
+        assert!(matches!(ended, Some(Err(_))));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert!(reader.gone());
+    }
 
     #[test]
     fn a_pdf_is_known_by_its_start() {
