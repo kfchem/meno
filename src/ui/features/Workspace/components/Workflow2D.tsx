@@ -20,7 +20,7 @@ import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, PORT_DOWN, PX } from "../workflow/look";
+import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PX } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -213,7 +213,6 @@ function runRows(s: WorkflowStep): RunRow[] {
  * Where on the page's layer of HTML a point of the page is: the layer's
  * origin is the page's, its pixels `PX` world units, downwards.
  */
-const onLayer = (x: number, y: number): React.CSSProperties => ({ position: "absolute", left: x / PX, top: -y / PX });
 
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
@@ -646,8 +645,8 @@ export default function Workflow2D() {
       const how = howOf(takes, s.options, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       return (
-        // (its top at its place: the card grows downwards as it opens)
-        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y)}>
+        // (its top at its place: the card grows downwards as it opens - over the cards below it)
+        <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id)}>
           <StepCard
             step={s}
             info={info}
