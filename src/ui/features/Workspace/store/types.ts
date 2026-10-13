@@ -751,6 +751,17 @@ export type EditorState = {
   gatherStack: (stack: number, shown: number) => void;
   /** Which record each stack of drawings shows, by the stack's id: by the record's place in its file; its first if absent (utils/stacks). */
   recordsShown: Record<number, number>;
+  /**
+   * Molecules in 3D shown in their other look for a talk - two clicks on
+   * one while it is given (docs/PRESENTING.md) - by id: the view's alone,
+   * gone as the talk ends; the document's looks as they were, nothing to
+   * undo, nothing unsaved.
+   */
+  talkLooks: Readonly<Record<number, Look3D>>;
+  /** A molecule in 3D shown in its other look for the talk being given. */
+  switchTalkLook3d: (id: number) => void;
+  /** The looks a talk switched let go: each molecule as the document has it. */
+  endTalkLooks: () => void;
   /** A stack of drawings shows another of its records - selected in its place, where the one it showed was. */
   showRecord: (stack: number, record: number) => void;
   /**
