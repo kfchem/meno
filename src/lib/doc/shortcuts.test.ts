@@ -10,6 +10,7 @@ import {
   isSelectAllKey,
   keepClipboard,
   keepPageUnselected,
+  keepSystemMenuShut,
   openIntent,
   saveIntent,
   shortcutLabel,
@@ -161,6 +162,34 @@ describe("selection keys", () => {
     expect(pressed({ key: "v" })).toBe(false);
     expect(pressed({ shiftKey: true })).toBe(false);
     expect(pressed({ altKey: true })).toBe(false);
+  });
+});
+
+describe("keepSystemMenuShut", () => {
+  // (0.1.11: a right-click on Settings, the tab bar - anywhere but Meno's
+  // own menus - showed the webview's menu, its one item Reload, which starts
+  // the whole window afresh)
+  const shut = (target: unknown) => {
+    let prevented = false;
+    keepSystemMenuShut({ target, preventDefault: () => (prevented = true) });
+    return prevented;
+  };
+
+  it("keeps the system's menu shut on what is not typed in", () => {
+    for (const tagName of ["DIV", "BODY", "BUTTON", "CANVAS", "SPAN", "IMG", "SELECT"]) expect(shut({ tagName }), tagName).toBe(true);
+    for (const type of ["checkbox", "radio", "range", "button", "color"]) expect(shut({ tagName: "INPUT", type }), type).toBe(true);
+    expect(shut(null)).toBe(true);
+    expect(shut(undefined)).toBe(true);
+    // (the column's text, which Meno draws: what it is typed through is no field the system edits - its menu there was Reload alone)
+    expect(shut({ tagName: "DIV", dataset: { textField: "" } })).toBe(true);
+  });
+
+  it("lets it show where the system edits the words: its Cut, Copy and Paste", () => {
+    expect(shut({ tagName: "INPUT" })).toBe(false);
+    for (const type of ["text", "search", "number", "password", "TEXT"]) expect(shut({ tagName: "INPUT", type }), type).toBe(false);
+    expect(shut({ tagName: "TEXTAREA" })).toBe(false);
+    expect(shut({ tagName: "TEXTAREA", dataset: { nativeUndo: "" } })).toBe(false);
+    expect(shut({ tagName: "SPAN", isContentEditable: true })).toBe(false);
   });
 });
 
