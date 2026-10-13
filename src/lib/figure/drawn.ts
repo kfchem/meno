@@ -14,8 +14,8 @@ export type PathStep = ["M" | "L" | "C", number, number] | ["Z"];
 /** A path as drawn: filled or stroked, in a colour (#rrggbbaa), how thick its stroke is, its steps, and whether its stroke is dashed. */
 export type FigurePath = { fill: string | null; stroke: string | null; width: number; d: PathStep[]; dash?: boolean };
 
-/** A letter as drawn: what it is, its box, where its baseline starts, its size in points, and its typeface. */
-export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string };
+/** A letter as drawn: what it is, its box (its ink), where its baseline starts, its size in points, its typeface, and its loose box - from where it starts to where the next letter would, as tall as its typeface. */
+export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string; loose?: Box | null };
 
 /** A figure as drawn, within a box of its page. */
 export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictures: Box[] };

@@ -22,13 +22,14 @@ export function fromSmiles(smiles: string): LayoutInput {
       ...(a.charge ? { charge: a.charge } : {}),
       ...(a.tetra ? { tetra: a.tetra } : {}),
     })),
-    bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
   };
 }
 
 /**
- * The stereocentres a drawing the engine makes with depth does not show as
- * given, read as Meno reads a drawing (drawn.ts): a centre in a solid shown
+ * What a drawing the engine makes does not show as given: its double bonds
+ * the other way round (`turnedDoubleBonds`), on any drawing; and the
+ * stereocentres a drawing with depth does not show as given, read as Meno reads a drawing (drawn.ts): a centre in a solid shown
  * by the drawing itself, each atom where it is and as near the viewer as it
  * is; the rest by the H's and wedges the engine places. And read as a
  * reader sees its depth where the page shows it: a centre the solid shows
@@ -40,9 +41,47 @@ export function fromSmiles(smiles: string): LayoutInput {
  * (scripts/layout/stereo.py has RDKit read every one).
  */
 function misread(input: LayoutInput): string[] {
-  if (!input.atoms.some((a) => a.tetra)) return [];
   const out = layout2D(input);
-  if (!out.depth.some((d) => d != null)) return [];
+  const turned = turnedDoubleBonds(input, out);
+  if (!input.atoms.some((a) => a.tetra) || !out.depth.some((d) => d != null)) return turned;
+  return [...turned, ...misreadCentres(input, out)];
+}
+
+/**
+ * The double bonds a drawing shows the other way round: one the molecule
+ * gives cis or trans, its two given neighbours drawn on the other sides of
+ * it; one in a ring of seven atoms or fewer, cis as such a ring must be,
+ * its neighbours round the ring drawn on opposite sides (it would read
+ * trans). By where the atoms are on the page, as any reader sees them.
+ */
+function turnedDoubleBonds(input: LayoutInput, out: { x: readonly number[]; y: readonly number[] }): string[] {
+  const side = (a: number, b: number, n: number) =>
+    Math.sign((out.x[b] - out.x[a]) * (out.y[n] - out.y[a]) - (out.y[b] - out.y[a]) * (out.x[n] - out.x[a]));
+  const drawnCis = (a: number, b: number, p: number, q: number) => {
+    const [sp, sq] = [side(a, b, p), side(a, b, q)];
+    return sp === 0 || sq === 0 ? null : sp === sq;
+  };
+  const { rings } = perceive(input);
+  return input.bonds.flatMap(({ a, b, order, stereo }) => {
+    if (order !== 2) return [];
+    if (stereo) {
+      const [p, q] = input.bonds.some((e) => (e.a === a && e.b === stereo.refs[0]) || (e.b === a && e.a === stereo.refs[0])) ? stereo.refs : [stereo.refs[1], stereo.refs[0]];
+      const cis = drawnCis(a, b, p, q);
+      return cis === stereo.cis ? [] : [`${input.atoms[a].el}${a}=${input.atoms[b].el}${b}: drawn ${cis == null ? "with a neighbour on its line" : cis ? "cis" : "trans"}, given ${stereo.cis ? "cis" : "trans"}`];
+    }
+    const ring = rings.find((r) => r.length <= 7 && r.includes(a) && r.includes(b));
+    if (!ring) return [];
+    const n = ring.length;
+    const beside = (v: number, other: number) => {
+      const k = ring.indexOf(v);
+      return [ring[(k + 1) % n], ring[(k - 1 + n) % n]].find((u) => u !== other)!;
+    };
+    return drawnCis(a, b, beside(a, b), beside(b, a)) === false ? [`${input.atoms[a].el}${a}=${input.atoms[b].el}${b}: in a ${n}-membered ring, drawn trans`] : [];
+  });
+}
+
+/** The stereocentres a drawing with depth does not show as given (`misread`). */
+function misreadCentres(input: LayoutInput, out: ReturnType<typeof layout2D>): string[] {
   const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({
     x: out.x[i],
     y: out.y[i],
@@ -102,7 +141,7 @@ function misread(input: LayoutInput): string[] {
  * side.)
  */
 export function readsBackAsGiven(list: string, molecules: readonly { name: string; smiles: string }[]): void {
-  describe(`a drawing in perspective, on ${list}`, () => {
+  describe(`a drawing, its double bonds and (in perspective) its centres, on ${list}`, () => {
     // (a large molecule's layout takes a while on a busy machine)
     it.each(molecules.map((m) => [m.name, m.smiles]))(
       "%s reads back as the molecule given",

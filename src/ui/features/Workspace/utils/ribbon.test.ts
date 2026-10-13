@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Biopolymer, ChainRun } from "../../../../lib/chem/biopolymer";
-import { RIBBON_SIZE, ribbonMesh, ribbonPoints, STRUCTURE_COLOURS } from "./ribbon";
+import * as THREE from "three";
+import { residueOnRay, RIBBON_SIZE, ribbonMesh, ribbonPoints, ribbonSpheres, STRUCTURE_COLOURS } from "./ribbon";
 
 /** Six residues along x, 3.8 Å apart, their guides (carbonyl oxygens) to +y: a helix, then a strand of three, then one more. */
 const places: number[] = [];
@@ -56,5 +57,35 @@ describe("a chain's ribbon", () => {
     expect(mesh.indices.length / 3).toBe((points - 1) * 10 * 2 + 2 * 10);
     expect(Math.max(...mesh.indices)).toBeLessThan(mesh.positions.length / 3);
     expect(new Set(mesh.residues)).toEqual(new Set([0, 1, 2, 3, 4, 5]));
+  });
+});
+
+describe("a ribbon under the pointer", () => {
+  const mesh = ribbonMesh(places, [run], bp, "structure", 1, 1);
+  const spheres = ribbonSpheres(mesh);
+
+  it("is found a residue at a time, by a sphere round each residue's own corners", () => {
+    expect([...spheres.residues]).toEqual([0, 1, 2, 3, 4, 5]);
+    for (let k = 0; k < spheres.residues.length; k++) {
+      expect(spheres.radii[k]).toBeGreaterThan(0);
+      // (and none of its corners outside it)
+      mesh.residues.forEach((r, v) => {
+        if (r !== spheres.residues[k]) return;
+        const d = Math.hypot(mesh.positions[3 * v] - spheres.centres[3 * k], mesh.positions[3 * v + 1] - spheres.centres[3 * k + 1], mesh.positions[3 * v + 2] - spheres.centres[3 * k + 2]);
+        expect(d).toBeLessThanOrEqual(spheres.radii[k] + 1e-5);
+      });
+    }
+  });
+
+  it("says the residue a ray meets first - from above the third residue, that one; from the end of the chain along it, the nearest; beside it, none", () => {
+    const at = (x: number, y: number, z: number, dx: number, dy: number, dz: number) => new THREE.Ray(new THREE.Vector3(x, y, z), new THREE.Vector3(dx, dy, dz).normalize());
+    // (the third residue's sphere is about its own corners: a ray down onto where they gather)
+    const k = 2;
+    const c = new THREE.Vector3().fromArray(spheres.centres, 3 * k);
+    expect(residueOnRay(spheres, at(c.x, c.y, 50, 0, 0, -1))?.residue).toBe(2);
+    expect(residueOnRay(spheres, at(-50, 0, 0, 1, 0, 0))?.residue).toBe(0);
+    expect(residueOnRay(spheres, at(50, 0, 0, -1, 0, 0))?.residue).toBe(5);
+    expect(residueOnRay(spheres, at(9.5, 0, 50, 0, 0, 1))).toBeNull();
+    expect(residueOnRay(spheres, at(9.5, 40, 50, 0, 0, -1))).toBeNull();
   });
 });

@@ -54,10 +54,25 @@ function squareStart(n: number): number {
  */
 function hubOf(rings: number[][]): number[] | null {
   const macro = rings.filter((r) => r.length >= MACROCYCLE);
-  if (macro.length < 2) return null;
   const runsThrough = (r: number[]) => macro.filter((m) => r.filter((a) => m.includes(a)).length >= 3).length;
+  if (macro.length === 1) return blockHub(rings, macro[0]);
+  if (macro.length < 2) return null;
   const hubs = rings.filter((r) => r.length === 6 && runsThrough(r) >= 2);
   return hubs.sort((p, q) => runsThrough(q) - runsThrough(p))[0] ?? null;
+}
+
+/**
+ * A macrocycle that runs through a block of rings fused to each other -
+ * rifampicin's ansa chain through its naphthofuranone - starts from the
+ * block, which stays regular: the macrocycle is then a chain drawn round
+ * from it, as an ansa bridge is. The six-membered ring of the block it
+ * runs through fused to the most others, or null.
+ */
+function blockHub(rings: number[][], macro: number[]): number[] | null {
+  const small = rings.filter((r) => r.length < MACROCYCLE);
+  const fused = (r: number[]) => small.filter((q) => q !== r && q.filter((a) => r.includes(a)).length === 2).length;
+  const hubs = small.filter((r) => r.length === 6 && r.filter((a) => macro.includes(a)).length >= 3 && fused(r) >= 1);
+  return hubs.sort((p, q) => fused(q) - fused(p))[0] ?? null;
 }
 
 export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
@@ -177,7 +192,7 @@ export function placeRingSystem(
       }
     });
     if (next < 0) break;
-    placeRing(rings[next], pos, rings);
+    placeRing(rings[next], pos, rings, chainRules(mol, sys));
     placedRing.add(next);
   }
   return pos;
@@ -253,7 +268,7 @@ export function extendRingSystem(mol: Molecule, sys: RingSystem, pos: Map<number
       }
     });
     if (next < 0) break;
-    placeRing(rings[next], pos, rings);
+    placeRing(rings[next], pos, rings, chainRules(mol, sys));
     placed.add(next);
   }
 }
@@ -537,8 +552,62 @@ function macrolactone(mol: Molecule, ring: number[], rings: number[][]): { c1: n
   return found[0];
 }
 
+/**
+ * Whether a chain's neighbours either side of its double bond `u`=`v` -
+ * `x` bonded to `u`, `y` to `v` - are to be cis, as the bond's given cis or
+ * trans says; null where it says nothing.
+ */
+type ChainCis = (x: number, u: number, v: number, y: number) => boolean | null;
+
+/**
+ * What a macrocycle's chain, drawn round from what is placed, keeps to: its
+ * double bonds' cis or trans (`cis`), each atom's neighbours to read them
+ * by at the chain's ends (`neighbours`); and the groups hanging from the
+ * placed atoms, by how big each is, to leave outside the ring it closes
+ * rather than shut in it (`loads`, read when the chain is drawn).
+ */
+type ChainRules = { cis: ChainCis; neighbours: readonly (readonly number[])[]; loads: (pos: Map<number, Point>) => { at: Point; weight: number }[] };
+
+function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
+  const inSys = new Set(sys.atoms);
+  const loads = (pos: Map<number, Point>) =>
+    sys.atoms.flatMap((a) => {
+      if (!pos.has(a)) return [];
+      let weight = 0;
+      for (const b of mol.neighbours[a]) {
+        if (inSys.has(b)) continue;
+        // (a branch's size, a dozen atoms at most)
+        const seen = new Set([a, b]);
+        const todo = [b];
+        while (todo.length && seen.size < 14) {
+          const u = todo.pop()!;
+          for (const v of mol.neighbours[u]) {
+            if (seen.has(v) || inSys.has(v)) continue;
+            seen.add(v);
+            todo.push(v);
+          }
+        }
+        weight += seen.size - 1;
+      }
+      return weight ? [{ at: pos.get(a)!, weight }] : [];
+    });
+  return { cis: chainCis(mol), neighbours: mol.neighbours, loads };
+}
+
+function chainCis(mol: Molecule): ChainCis {
+  return (x, u, v, y) => {
+    const i = mol.bondIndex.get(u < v ? `${u},${v}` : `${v},${u}`);
+    const st = i != null ? mol.bonds[i].stereo : undefined;
+    if (!st || mol.bonds[i!].order !== 2) return null;
+    // (the given refs, the one on u's end first)
+    const [ru, rv] = mol.neighbours[u].includes(st.refs[0]) && st.refs[0] !== v ? st.refs : [st.refs[1], st.refs[0]];
+    // (a ref that is not the chain's neighbour is across from it)
+    return st.cis !== (ru !== x) !== (rv !== y);
+  };
+}
+
 /** Places the atoms of a ring not yet placed, given those that are. */
-function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = []): void {
+function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = [], rules?: ChainRules): void {
   const n = ring.length;
   const placed = ring.map((a) => pos.has(a));
   const count = placed.filter(Boolean).length;
@@ -567,8 +636,8 @@ function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = 
     if (n >= MACROCYCLE && run.length >= 3) {
       const there = new Map(pos);
       const back = new Map(pos);
-      const thereCost = placeChainRun(ring[i], ring[j], run, there, rings);
-      const backCost = placeChainRun(ring[j], ring[i], [...run].reverse(), back, rings);
+      const thereCost = placeChainRun(ring[i], ring[j], run, there, rings, rules);
+      const backCost = placeChainRun(ring[j], ring[i], [...run].reverse(), back, rings, rules);
       const kept = backCost < thereCost - 1e-9 ? back : there;
       for (const v of run) pos.set(v, kept.get(v)!);
     } else placeRun(ring[i], ring[j], run, n, pos);
@@ -819,7 +888,10 @@ function placeChainRun(
   run: number[],
   pos: Map<number, Point>,
   rings: number[][] = [],
+  rules?: ChainRules,
 ): number {
+  const cis = rules?.cis;
+  const loads = rules ? rules.loads(pos) : [];
   // the six-membered rings the run passes through, yet to be drawn: where
   // it does, it turns as the hexagon does, the same way at each atom
   const hexagon = (u: number, v: number, w: number) =>
@@ -897,6 +969,13 @@ function placeChainRun(
         if (left >= 2 && dist(p, b) < 0.9) cost += 20;
         // a zigzag turns each way in turn; a corner is two turns alike
         if (turn === st.turn && ring < 0) cost += 0.3;
+        // (a double bond's cis or trans as given: its chain neighbours cis
+        // where the turns at its two ends are alike, trans where they are
+        // not - a macrocycle's E double bonds, rifampicin's)
+        if (cis && step >= 2) {
+          const want = cis(step >= 3 ? run[step - 3] : from, run[step - 2], run[step - 1], run[step]);
+          if (want != null && (turn === st.turn) !== want) cost += 1000;
+        }
         // entering a hexagon: room for the rest of it, kept from then on
         let ghosts = st.ghosts;
         if (ring >= 0 && st.ring !== ring) {
@@ -917,6 +996,27 @@ function placeChainRun(
     beam = next.slice(0, WIDTH);
     if (!beam.length) break;
   }
+  // the double bonds along a whole line from a to b drawn the other way
+  // round than given, each read by where its neighbours lie - at the ends,
+  // those already placed there
+  const ids = [from, ...run, to];
+  const side = (p: Point, u: Point, v: Point) => Math.sign(cross(sub(v, u), sub(p, u)));
+  const wrongAlong = (line: Point[]) => {
+    if (!cis) return 0;
+    let wrong = 0;
+    for (let i = 0; i + 1 < ids.length; i++) {
+      const [u, v] = [ids[i], ids[i + 1]];
+      const x = i > 0 ? ids[i - 1] : rules!.neighbours[u].find((w) => w !== v && pos.has(w));
+      const y = i + 2 < ids.length ? ids[i + 2] : rules!.neighbours[v].find((w) => w !== u && pos.has(w));
+      if (x == null || y == null) continue;
+      const want = cis(x, u, v, y);
+      if (want == null) continue;
+      const px = i > 0 ? line[i - 1] : pos.get(x)!;
+      const py = i + 2 < ids.length ? line[i + 2] : pos.get(y)!;
+      if ((side(px, line[i], line[i + 1]) === side(py, line[i], line[i + 1])) !== want) wrong++;
+    }
+    return wrong;
+  };
   let best: Point[] | null = null;
   let bestCost = Infinity;
   const angle = (u: Point, v: Point, w: Point) => {
@@ -952,6 +1052,15 @@ function placeChainRun(
       }
       // away from what is placed
       cost -= 0.3 * len(sub(centroid(at), middle));
+      // (the groups on what is placed left outside the ring it closes, the
+      // bigger the more: rifampicin's hydrazone and piperazine, not its OHs)
+      const loop = [a, ...at, b];
+      // (a load on an end is on the loop, neither in it nor out)
+      for (const { at: q, weight } of loads) if (q !== a && q !== b && insidePolygon(q, loop)) cost += 0.5 * weight;
+      // and the double bonds the turns did not see, as given: at the run's
+      // two ends - read with the neighbours placed there - and the last
+      // two, whose far neighbours are only now set
+      cost += 1000 * wrongAlong([a, ...at, b]);
       if (cost < bestCost) {
         bestCost = cost;
         best = at;
@@ -966,7 +1075,6 @@ function placeChainRun(
   // chain atom's neighbours a 120-degree angle apart, clear of what is
   // placed - the rings the run passes through left as they are
   const line = [a, ...best.map((p) => ({ ...p })), b];
-  const ids = [from, ...run, to];
   const free = ids.map((v, i) => i > 0 && i < ids.length - 1 && !rings.some((r) => r.length < MACROCYCLE && r.includes(v)));
   const pull = (i: number, j: number, target: number, k: number) => {
     if (!free[i] && !free[j]) return;
@@ -989,8 +1097,22 @@ function placeChainRun(
       }
     }
   }
-  run.forEach((atom, i) => pos.set(atom, line[i + 1]));
+  // (kept as found where easing it turns a double bond the other way: the
+  // last chain atom eased off a ring atom across that atom's bond)
+  const found = [a, ...best, b];
+  const kept = wrongAlong(line) > wrongAlong(found) ? found : line;
+  run.forEach((atom, i) => pos.set(atom, kept[i + 1]));
   return bestCost;
+}
+
+/** Whether a point lies inside a polygon, its corners in order. */
+function insidePolygon(p: Point, poly: readonly Point[]): boolean {
+  let odd = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [u, v] = [poly[i], poly[j]];
+    if (u.y > p.y !== v.y > p.y && p.x < ((v.x - u.x) * (p.y - u.y)) / (v.y - u.y) + u.x) odd = !odd;
+  }
+  return odd;
 }
 
 /** The points a bond's length from both `p` and `q`. */

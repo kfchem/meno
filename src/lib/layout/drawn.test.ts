@@ -159,7 +159,9 @@ describe("readStereo", () => {
     for (const w of wedgesForFlat(atoms, bonds).wedges) {
       if (w.to >= 0) expect(wedged.has([w.from, w.to].sort((p, q) => p - q).join(",")), `${w.from}-${w.to}`).toBe(false);
     }
-    // (the whole engine on tetrodotoxin, in two of its own orders)
+    // (the whole engine on tetrodotoxin's cage, in two of its own orders:
+    // about a second alone, a few times that on a machine busy with the
+    // rest of the tests)
   }, 30_000);
 
   it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {

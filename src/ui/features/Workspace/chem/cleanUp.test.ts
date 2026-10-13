@@ -174,7 +174,9 @@ describe("cleanUp", () => {
       const s2 = stereo({ atoms: told.atoms.map(({ id, x, y, el }) => atom(id, x, y, el)), bonds: told.bonds as Bond[] });
       for (const [c, t] of s0) expect(sameConfiguration(t, s2.get(c)!), `${name} ${c}, flat`).toBe(true);
     }
-    // (Clean-up on each cage, the engine laying each out in two of its own orders)
+    // (the whole engine on each of the cages, in two of its own orders,
+    // drawn and read back: a second or two alone, a few times that on a
+    // machine busy with the rest of the tests)
   }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {

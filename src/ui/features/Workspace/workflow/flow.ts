@@ -102,7 +102,7 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   for (const m of input.molecules) {
     h = hash(m.atoms.map((a) => `${a.el}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"), h);
     h = hash(`${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`, h);
-    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}`, h);
+    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`, h);
   }
   h = hash(input.structures.map((s) => s.join(",")).join(";"), h);
   return h.toString(36);

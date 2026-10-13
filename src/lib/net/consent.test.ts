@@ -3,7 +3,7 @@ import { askToConnect, useNetwork, type ConsentRequest } from "./network";
 
 describe("asking to use the network", () => {
   afterEach(() => useNetwork.setState({ offline: false, granted: [], asking: null }));
-  const request: ConsentRequest = { purpose: "python-env:plugin-x", title: "Download X?", detail: "X.", sources: ["X, from example.org"] };
+  const request: ConsentRequest = { purpose: "python-env:plugin-x", title: "Download X?", detail: "X.", sources: ["X, from example.org"], hosts: ["example.org"] };
 
   it("does not ask again for a purpose allowed - unless it fetches more than the user was told of", async () => {
     useNetwork.setState({ offline: false, granted: ["python-env:plugin-x"], asking: null });
