@@ -28,7 +28,7 @@ import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonMesh } from "../utils/ribbon";
 import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
-import { raycastByResidue, raycastSpheres } from "./raycast3d";
+import { raycastByResidue, raycastCylinders, raycastSpheres } from "./raycast3d";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -1178,6 +1178,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             renderOrder={OVER_PAGE}
             frustumCulled={false}
             receiveShadow
+            // (each bond met where its cylinder is, worked out exactly: components/raycast3d)
+            raycast={function (this: THREE.InstancedMesh, rc, hits) {
+              raycastCylinders(this, rc, hits);
+            }}
             // (pointed at, a bond says what a calculation found of it - where one did)
             onPointerMove={
               pairResults.length

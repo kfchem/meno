@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { raycastByResidue, raycastSpheres } from "./raycast3d";
+import { raycastByResidue, raycastCylinders, raycastSpheres } from "./raycast3d";
 
 /** A random number from a seed, the same each run. */
 function seeded(seed: number) {
@@ -122,6 +122,61 @@ describe("what the pointer is over on a molecule in 3D", () => {
     expect(hits[0].distance).toBeCloseTo(14, 6);
     hits.length = 0;
     raycastSpheres(mesh, new THREE.Raycaster(new THREE.Vector3(0, 0, 5), new THREE.Vector3(0, 0, -1), 0, 10), hits);
+    expect(hits).toEqual([]);
+  });
+
+  it("is the bond three.js finds, its wall or its cap, but where the ray only grazes a cylinder's facets", () => {
+    // (bonds 1.5 A long between atoms of a ball, placed as the view places them)
+    const { mesh: balls, centres, rnd } = atoms(1200, 0.3);
+    const n = centres.length - 1;
+    const mesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 16), new THREE.MeshStandardMaterial(), n);
+    const m = new THREE.Matrix4();
+    const ends: [THREE.Vector3, THREE.Vector3][] = [];
+    for (let k = 0; k < n; k++) {
+      const a = centres[k];
+      const b = a.clone().add(new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).setLength(1.5));
+      ends.push([a, b]);
+      const dir = b.clone().sub(a);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+      mesh.setMatrixAt(k, m.compose(a.clone().add(b).multiplyScalar(0.5), q, new THREE.Vector3(0.15, dir.length(), 0.15)));
+    }
+    mesh.computeBoundingSphere();
+    balls.parent!.add(mesh);
+    mesh.updateMatrixWorld(true);
+    let grazed = 0;
+    let met = 0;
+    for (let k = 0; k < 400; k++) {
+      const [a, b] = ends[Math.floor(rnd() * n)];
+      const to = mesh.localToWorld(a.clone().lerp(b, rnd()).add(new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, 0).multiplyScalar(0.4)));
+      const { theirs, ours } = both(mesh, (rc, h) => raycastCylinders(mesh, rc, h), rayAt(to, rnd));
+      if (theirs.length) met++;
+      if (theirs[0]?.instanceId === ours[0]?.instanceId) {
+        // (the cylinder holds its facets: met no later, and, a ray coming in at a slant, a little sooner)
+        if (theirs[0]) {
+          expect(ours[0].distance).toBeLessThanOrEqual(theirs[0].distance + 1e-6);
+          expect(theirs[0].distance - ours[0].distance).toBeLessThan(0.3);
+        }
+        continue;
+      }
+      // (a polygon of 16 sides lies inside the cylinder by 2% of its radius)
+      grazed++;
+    }
+    expect(met).toBeGreaterThan(100);
+    expect(grazed).toBeLessThan(12);
+  });
+
+  it("meets a bond along its axis at its cap, and not a bond not drawn", () => {
+    const mesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 16), new THREE.MeshStandardMaterial(), 2);
+    // (one from z = -1 to z = -3, upright to the view; one scaled to nothing)
+    mesh.setMatrixAt(0, new THREE.Matrix4().compose(new THREE.Vector3(0, 0, -2), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)), new THREE.Vector3(0.2, 2, 0.2)));
+    mesh.setMatrixAt(1, new THREE.Matrix4().makeScale(0, 0, 0));
+    mesh.updateMatrixWorld(true);
+    const hits: THREE.Intersection[] = [];
+    raycastCylinders(mesh, new THREE.Raycaster(new THREE.Vector3(0.05, 0, 5), new THREE.Vector3(0, 0, -1)), hits);
+    expect(hits.map((h) => h.instanceId)).toEqual([0]);
+    expect(hits[0].distance).toBeCloseTo(6, 6);
+    hits.length = 0;
+    raycastCylinders(mesh, new THREE.Raycaster(new THREE.Vector3(0.3, 0, 5), new THREE.Vector3(0, 0, -1)), hits);
     expect(hits).toEqual([]);
   });
 

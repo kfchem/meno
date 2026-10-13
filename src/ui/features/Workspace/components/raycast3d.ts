@@ -64,6 +64,78 @@ export function raycastSpheres(mesh: THREE.InstancedMesh, raycaster: THREE.Rayca
 }
 
 
+/**
+ * An instanced mesh of cylinders - a molecule's bonds, each a cylinder of
+ * its geometry (as wide at both ends, its caps on) set from one end of the
+ * bond to the other - hit where each instance's cylinder is, worked out
+ * exactly as `raycastSpheres` works out atoms: the near side of each, its
+ * wall or a cap, nearest first. A cylinder of another shape is left to
+ * three.js.
+ */
+export function raycastCylinders(mesh: THREE.InstancedMesh, raycaster: THREE.Raycaster, hits: THREE.Intersection[]): void {
+  const shape = (mesh.geometry as THREE.CylinderGeometry).parameters;
+  if (!shape || shape.radiusTop !== shape.radiusBottom || shape.openEnded) {
+    THREE.InstancedMesh.prototype.raycast.call(mesh, raycaster, hits);
+    return;
+  }
+  inverse.copy(mesh.matrixWorld).invert();
+  ray.copy(raycaster.ray).applyMatrix4(inverse);
+  const o = ray.origin;
+  const d = ray.direction;
+  const m = mesh.instanceMatrix.array;
+  const half = shape.height / 2;
+  const found: THREE.Intersection[] = [];
+  for (let i = 0; i < mesh.count; i++) {
+    const k = 16 * i;
+    const r = shape.radiusTop * Math.sqrt(m[k] * m[k] + m[k + 1] * m[k + 1] + m[k + 2] * m[k + 2]);
+    if (!(r > 0)) continue;
+    // its axis, from one cap's middle (p) to the other's (p + axis)
+    const ax = m[k + 4] * 2 * half;
+    const ay = m[k + 5] * 2 * half;
+    const az = m[k + 6] * 2 * half;
+    const px = m[k + 12] - ax / 2;
+    const py = m[k + 13] - ay / 2;
+    const pz = m[k + 14] - az / 2;
+    const aa = ax * ax + ay * ay + az * az;
+    if (!(aa > 0)) continue;
+    const ox = o.x - px;
+    const oy = o.y - py;
+    const oz = o.z - pz;
+    const ad = ax * d.x + ay * d.y + az * d.z;
+    const ao = ax * ox + ay * oy + az * oz;
+    const od = ox * d.x + oy * d.y + oz * d.z;
+    const oo = ox * ox + oy * oy + oz * oz;
+    // (a capped cylinder: its wall where the ray meets it between the caps, else a cap)
+    let t: number;
+    const k2 = aa - ad * ad;
+    if (k2 < 1e-12 * aa) {
+      // (along its axis: a cap, where the ray passes within its radius)
+      if (oo - (ao * ao) / aa > r * r) continue;
+      t = ((ad > 0 ? 0 : aa) - ao) / ad;
+    } else {
+      const k1 = aa * od - ao * ad;
+      const k0 = aa * oo - ao * ao - r * r * aa;
+      const disc = k1 * k1 - k2 * k0;
+      if (disc < 0) continue;
+      const root = Math.sqrt(disc);
+      t = (-k1 - root) / k2;
+      const y = ao + t * ad;
+      if (!(y > 0 && y < aa)) {
+        if (ad === 0) continue;
+        t = ((y <= 0 ? 0 : aa) - ao) / ad;
+        if (!(Math.abs(k1 + k2 * t) < root)) continue;
+      }
+    }
+    if (t < 0) continue;
+    hit.copy(d).multiplyScalar(t).add(o).applyMatrix4(mesh.matrixWorld);
+    const distance = raycaster.ray.origin.distanceTo(hit);
+    if (distance < raycaster.near || distance > raycaster.far) continue;
+    found.push({ distance, point: hit.clone(), object: mesh, instanceId: i });
+  }
+  found.sort((p, q) => p.distance - q.distance);
+  for (const f of found) hits.push(f);
+}
+
 /** A ribbon's triangles grouped by the residue they draw, each group with a sphere round it; see `raycastByResidue`. */
 type ResidueGroups = { positions: unknown; index: unknown; versions: string; faces: Int32Array; start: Int32Array; spheres: Float32Array };
 
