@@ -1173,22 +1173,41 @@ pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// How deep in a job's work folder its files are looked for, and how many are listed at most.
+const WORK_DEEPEST: usize = 32;
+const WORK_MOST: usize = 10_000;
+
 /// The files in a job's work folder, by their paths inside it.
 pub fn work_files(dir: &Path) -> Vec<String> {
-    fn walk(base: &Path, at: &Path, out: &mut Vec<String>) {
+    files_within(&dir.join(WORK), WORK_DEEPEST, WORK_MOST)
+}
+
+/// The files in `base`, by their paths inside it: no link followed, nor
+/// listed - a link to a folder above it would never end - at most `deepest`
+/// folders down, and `most` of them.
+fn files_within(base: &Path, deepest: usize, most: usize) -> Vec<String> {
+    fn walk(base: &Path, at: &Path, left: usize, most: usize, out: &mut Vec<String>) {
         let Ok(entries) = fs::read_dir(at) else { return };
         for e in entries.flatten() {
+            if out.len() >= most {
+                return;
+            }
+            // (what it is itself, as `symlink_metadata` says: a link is neither)
+            let Ok(kind) = e.file_type() else { continue };
             let p = e.path();
-            if p.is_dir() {
-                walk(base, &p, out);
-            } else if let Ok(rel) = p.strip_prefix(base) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
+            if kind.is_dir() {
+                if left > 0 {
+                    walk(base, &p, left - 1, most, out);
+                }
+            } else if kind.is_file() {
+                if let Ok(rel) = p.strip_prefix(base) {
+                    out.push(rel.to_string_lossy().replace('\\', "/"));
+                }
             }
         }
     }
-    let base = dir.join(WORK);
     let mut out = Vec::new();
-    walk(&base, &base, &mut out);
+    walk(base, base, deepest, most, &mut out);
     out.sort();
     out
 }
@@ -1874,6 +1893,49 @@ mod tests {
         // lock was held and holding it with it until it runs, has let go too)
         wait_for(|| current_record(&other).unwrap().state == JobState::Gone);
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lists_a_job_s_files_without_following_links_however_they_loop() {
+        use std::os::unix::fs::symlink;
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let work = dir.join(WORK);
+        for sub in ["x", "y"] {
+            fs::create_dir_all(work.join(sub)).unwrap();
+        }
+        fs::write(work.join("x").join("real.txt"), "").unwrap();
+        // a link to its own folder; two folders linking to each other; two links to each other; a link to a file
+        symlink(&work, work.join("self")).unwrap();
+        symlink(work.join("y"), work.join("x").join("to-y")).unwrap();
+        symlink(work.join("x"), work.join("y").join("to-x")).unwrap();
+        symlink(work.join("b"), work.join("a")).unwrap();
+        symlink(work.join("a"), work.join("b")).unwrap();
+        symlink(work.join("input.txt"), work.join("also.txt")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let dir = dir.clone();
+            std::thread::spawn(move || tx.send(work_files(&dir)));
+        }
+        let listed = rx.recv_timeout(Duration::from_secs(10)).expect("listed in finite time");
+        assert_eq!(listed, vec!["input.txt", "x/real.txt"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn lists_a_job_s_files_only_so_deep_and_so_many() {
+        let base = temp();
+        let folders = [base.clone(), base.join("a"), base.join("a").join("b"), base.join("a").join("b").join("c")];
+        for (i, at) in folders.iter().enumerate() {
+            fs::create_dir_all(at).unwrap();
+            fs::write(at.join(format!("f{i}")), "").unwrap();
+        }
+        assert_eq!(files_within(&base, WORK_DEEPEST, WORK_MOST), ["a/b/c/f3", "a/b/f2", "a/f1", "f0"]);
+        assert_eq!(files_within(&base, 1, WORK_MOST), ["a/f1", "f0"]);
+        assert_eq!(files_within(&base, 0, WORK_MOST), ["f0"]);
+        assert_eq!(files_within(&base, WORK_DEEPEST, 2).len(), 2);
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
