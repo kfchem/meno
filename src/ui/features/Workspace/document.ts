@@ -765,7 +765,14 @@ export function replaceDraggedAtomWith(
     bonds.push(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId });
   }
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
-  return { ...doc, model: { atoms, bonds } };
+  // (its electron-pushing arrows with it: an end on the atom dragged now on
+  // the one it was dropped on, and those on a bond that collapsed, or come
+  // to point at where they leave, gone - as a delete leaves them; they were
+  // left on what was gone, drawn no more and dropped on reopening)
+  const onto = (e: PushEnd): PushEnd =>
+    "atom" in e ? (e.atom === movingId ? { atom: targetId } : e) : "gap" in e ? { gap: [e.gap[0] === movingId ? targetId : e.gap[0], e.gap[1] === movingId ? targetId : e.gap[1]] } : e;
+  const pushes = doc.pushes?.map((p) => ({ ...p, from: onto(p.from), to: onto(p.to) })).filter((p) => JSON.stringify(p.from) !== JSON.stringify(p.to));
+  return withPushesOn({ ...doc, model: { atoms, bonds }, ...(pushes ? { pushes } : {}) });
 }
 
 // --- whole-model operations ------------------------------------------------

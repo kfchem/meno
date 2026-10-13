@@ -757,3 +757,30 @@ describe("a complex written out inside a workflow set (the command centre's docu
     }
   });
 });
+
+describe("electron-pushing arrows over a merge (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("go with the atom dragged onto another, and those on a bond that collapsed go - none left on what is gone", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtom(1.5, 0, "O");
+    const c = state().addAtom(3, 0, "C");
+    const ab = state().connectAtoms(a, b, 1);
+    state().connectAtoms(b, c, 1);
+    state().addPush({ bond: ab }, { atom: b }, false);
+    state().addPush({ atom: a }, { atom: c }, false);
+    // a dragged onto b: the bond a-b collapses, a goes
+    state().replaceDraggedAtomWith(a, b);
+    const d = doc.getState();
+    const ids = new Set(d.model.atoms.map((x) => x.id));
+    const bonds = new Set(d.model.bonds.map((x) => x.id));
+    for (const p of d.pushes ?? [])
+      for (const e of [p.from, p.to]) {
+        if ("atom" in e) expect(ids.has(e.atom)).toBe(true);
+        if ("bond" in e) expect(bonds.has(e.bond)).toBe(true);
+      }
+    // the arrow from a now leaves b, where a was dropped
+    expect((d.pushes ?? []).some((p) => "atom" in p.from && p.from.atom === b && "atom" in p.to && p.to.atom === c)).toBe(true);
+    // and the one on the collapsed bond is gone
+    expect((d.pushes ?? []).some((p) => "bond" in p.from && p.from.bond === ab)).toBe(false);
+  });
+});
