@@ -766,6 +766,43 @@ describe("a ring system drawn as a solid", () => {
   }, 30000);
 });
 
+describe("a macrocycle through a block of fused rings", () => {
+  it("draws rifampicin's naphthalene regular, its ansa chain round it, the hydrazone outside", () => {
+    // started from the macrocycle, the naphthalene was squashed to fit it;
+    // started from the naphthofuranone, the ansa chain drawn round it, the
+    // side that shuts in its OHs rather than its hydrazone and piperazine
+    const s = readSmiles("C[C@H]1/C=C/C=C(\\C(=O)NC2=C(C(=C3C(=C2O)C(=C(C4=C3C(=O)[C@](O4)(O/C=C/[C@@H]([C@H]([C@H]([C@@H]([C@@H]([C@@H]([C@H]1O)C)O)C)OC(=O)C)C)OC)C)C)O)O)/C=N/N5CCN(CC5)C)/C");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const g: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
+    };
+    const { x, y } = layout2D(g);
+    const mol = perceive(g);
+    const at = (a: number) => ({ x: x[a], y: y[a] });
+    // (each six-membered ring of the naphthalene a regular hexagon: every atom a bond from its middle)
+    for (const r of mol.rings.filter((q) => q.length === 6 && q.every((a) => mol.el[a] === "C" && mol.rings.some((o) => o !== q && o.length === 6 && o.filter((v) => q.includes(v)).length === 2)))) {
+      const c = { x: r.reduce((t, a) => t + x[a], 0) / 6, y: r.reduce((t, a) => t + y[a], 0) / 6 };
+      for (const a of r) expect(dist(at(a), c)).toBeCloseTo(1, 1);
+    }
+    // (the hydrazone's N=N outside the ring the ansa chain closes)
+    const macro = mol.rings.find((r) => r.length >= 9)!;
+    const inside = (p: { x: number; y: number }) => {
+      let odd = false;
+      for (let i = 0, j = macro.length - 1; i < macro.length; j = i++) {
+        const [u, v] = [at(macro[i]), at(macro[j])];
+        if (u.y > p.y !== v.y > p.y && p.x < ((v.x - u.x) * (p.y - u.y)) / (v.y - u.y) + u.x) odd = !odd;
+      }
+      return odd;
+    };
+    const hydrazone = g.atoms.flatMap((a, i) => (a.el === "N" && mol.neighbours[i].some((n) => g.atoms[n].el === "N") ? [i] : []));
+    expect(hydrazone.length).toBeGreaterThan(0);
+    for (const n of hydrazone) expect(inside(at(n)), `N${n}`).toBe(false);
+  }, 30000);
+});
+
 describe("a tert-butyl, and the other tridents", () => {
   const input = (smiles: string): LayoutInput => {
     const s = readSmiles(smiles);

@@ -199,6 +199,12 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   other, ibogaine's isoquinuclidine to a view that crowded its indole.
   The choice among them is now made on the whole drawing, and a cage's
   next best views are tried with what hangs from it.
+- **A double bond is stereo too.** The read-back guards read the
+  stereocentres only, and huperzine A's bridge drew a ring's C=C trans
+  unnoticed. They read every drawn double bond now (2026-10-13): one the
+  molecule gives cis or trans as given, one in a ring of seven atoms or
+  fewer cis. Meno's SMILES reader keeps a double bond's cis or trans from
+  its / and \ marks for that.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -336,7 +342,9 @@ and the held-out list takes new ones. What it showed, by kind:
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
 - large molecules of two parts, or a macrocycle round an aromatic system
-  (vinblastine, rifampicin), crammed;
+  (vinblastine, rifampicin), crammed - rifampicin done (2026-10-13): its
+  naphthofuranone drawn first and regular, the ansa chain round it with
+  its E/Z as given, its hydrazone outside;
 - orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
   drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
   (done: the turn is chosen counting the fusion H it will carry, which
