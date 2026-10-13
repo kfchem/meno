@@ -29,6 +29,10 @@ import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
+import { freePlace, pageBoxes } from "../utils/freePlace";
+import type { Box } from "../utils/extent";
+import { styleOf } from "../../../../lib/chem/style";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -467,14 +471,47 @@ export function useStructureEvents(
   };
 
   /**
-   * Files put on the page at `at`, dropped or pasted - copied in the Finder
-   * or Explorer: PDFs and pictures held and laid there; a record's drawing,
-   * a text's sheet, or a structure read from its file, there, selected; a
-   * workspace file opened as Open opens it, in a tab of its own.
+   * The box round what a file read brings, about the point its middle is
+   * put at: its drawing (half a bond round each atom, for its labels), its
+   * molecules in 3D in the row they stand in, and its arrow.
    */
-  const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void) => {
+  const footOf = (result: ProcessedFileResult): Box => {
+    const pad = NOMINAL_BOND_LENGTH / 2;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const a of result.model.atoms) {
+      xs.push(a.x - result.centroid.x - pad, a.x - result.centroid.x + pad);
+      ys.push(a.y - result.centroid.y - pad, a.y - result.centroid.y + pad);
+    }
+    const scheme = importedScheme(result, -result.centroid.x, -result.centroid.y);
+    const style = currentStyle3D();
+    (result.molecules3d ?? []).forEach((m, i) => {
+      const at = scheme.molecules3d?.[i]?.at;
+      if (!at) return;
+      const r = solidOf({ ...m, id: 0, at }, style).reach[lookOf(m)];
+      xs.push(at.x - r, at.x + r);
+      ys.push(at.y - r, at.y + r);
+    });
+    for (const a of scheme.arrows ?? []) {
+      const h = a.length / 2;
+      xs.push(a.x - h * Math.abs(Math.cos(a.angle)) - pad, a.x + h * Math.abs(Math.cos(a.angle)) + pad);
+      ys.push(a.y - h * Math.abs(Math.sin(a.angle)) - pad, a.y + h * Math.abs(Math.sin(a.angle)) + pad);
+    }
+    return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : { x0: -pad, y0: -pad, x1: pad, y1: pad };
+  };
+
+  /**
+   * Files put on the page at `at`, dropped or pasted - copied in the Finder
+   * or Explorer - or opened: PDFs and pictures held and laid there; a
+   * record's drawing, a text's sheet, or a structure read from its file,
+   * there, selected; a workspace file opened as Open opens it, in a tab of
+   * its own. Opened (`free`), a structure's file goes in free space near
+   * `at` rather than over what is drawn there, and its path - where Open
+   * said it is - goes with a calculation's output read from it.
+   */
+  const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void, opened?: { path?: string; free?: boolean }): Promise<boolean> => {
     const f = files[0];
-    if (!f) return;
+    if (!f) return false;
     const head = await f.slice(0, MARK_REACH).text();
     const kind = await kindOfFile(f.name, head);
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
@@ -486,8 +523,9 @@ export function useStructureEvents(
         setImportError(null);
       } catch (e) {
         reportImportError("append", e);
+        return false;
       }
-      return;
+      return true;
     }
     // pictures: held, and put on the page where they were dropped (docs/PDF.md, *A picture*)
     const images = files.filter((g) => isPictureName(g.name) || g.type === "image/png" || g.type === "image/jpeg");
@@ -500,20 +538,21 @@ export function useStructureEvents(
         setImportError(null);
       } catch (e) {
         reportImportError("append", e);
+        return false;
       }
-      return;
+      return true;
     }
     // a workspace file: opened as Open opens it - in a tab of its own - not pasted in part (the maintainer, 2026-10-12)
     if (opensAsWorkspace(isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer())), kind?.id, MENO_KINDS.workspace.id)) {
       askToOpenFiles(files.filter((g) => g === f || isWorkspaceFile(g.name)));
       setImportError(null);
-      return;
+      return true;
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
       store.getState().addTexts([{ name: f.name, text: await f.text() }], at);
       setImportError(null);
-      return;
+      return true;
     }
     const text = await f.text();
     // a record dropped: what it holds, beside what is drawn, selected
@@ -522,13 +561,20 @@ export function useStructureEvents(
       if (drawn) {
         store.getState().pasteModel(centredAt(drawn, at));
         setImportError(null);
-      } else reportImportError("append", new Error(`${f.name} could not be read.`));
-      return;
+        return true;
+      }
+      reportImportError("append", new Error(`${f.name} could not be read.`));
+      return false;
     }
     try {
-      const result = await processFileContent(f.name, text, kind);
-      const dx = at.x - result.centroid.x;
-      const dy = at.y - result.centroid.y;
+      const result = await processFileContent(f.name, text, kind, opened?.path);
+      // (opened rather than dropped: in free space near the middle of the view)
+      const st = store.getState();
+      const place = opened?.free
+        ? freePlace(pageBoxes(st, styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle)), footOf(result), at, NOMINAL_BOND_LENGTH)
+        : at;
+      const dx = place.x - result.centroid.x;
+      const dy = place.y - result.centroid.y;
 
       const shifted = {
         atoms: result.model.atoms.map((a) => ({
@@ -541,10 +587,12 @@ export function useStructureEvents(
 
       store
         .getState()
-        .appendModel(toModel(shifted), importedScheme(result, dx, dy, at));
+        .appendModel(toModel(shifted), importedScheme(result, dx, dy, place));
       setImportError(null);
+      return true;
     } catch (err) {
       reportImportError("append", err, again);
+      return false;
     }
   };
 
@@ -578,13 +626,16 @@ export function useStructureEvents(
     }
   };
 
+  /** The middle of what can be seen: the column over the canvas's right side left out. */
+  const viewMiddle = () => {
+    const cam = camRef.current;
+    const cover = store.getState().cover;
+    return { x: (cam?.position.x ?? 0) - (cam?.zoom ? cover / 2 / cam.zoom : 0), y: cam?.position.y ?? 0 };
+  };
   /** Where a paste goes: the pointer, over the drawing; else the middle of the view. */
   const pasteTarget = () => {
     const p = pointerRef.current && clientToWorld(pointerRef.current.x, pointerRef.current.y);
-    const cam = camRef.current;
-    // (the middle of what can be seen: the column over the canvas's right side left out)
-    const cover = store.getState().cover;
-    return p ?? { x: (cam?.position.x ?? 0) - (cam?.zoom ? cover / 2 / cam.zoom : 0), y: cam?.position.y ?? 0 };
+    return p ?? viewMiddle();
   };
 
   return {
@@ -592,6 +643,7 @@ export function useStructureEvents(
     domRef,
     clientToWorld,
     pasteTarget,
+    viewMiddle,
     handleDoubleClick,
     handleWrapperMouseMove,
     handleWrapperMouseLeave,

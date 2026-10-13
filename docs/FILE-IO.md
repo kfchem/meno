@@ -39,7 +39,7 @@ built* below.
 
 | Way in | Kind decided by | Read by, where | Becomes |
 | --- | --- | --- | --- |
-| **Open** (Cmd/Ctrl+O; `<input type=file>`, `App.tsx`) | `openedAs` (`ui/views/openFile.ts`) tells a kind from text, from the extension, `detectFormat` and `outputKindOf`; the canvas then decides again (`processFileContent`, `Workspace/utils/io.ts`) | see the formats below | a new tab; text, a text in the column of the workspace in front (`ui/views/texts.ts`), or of a canvas of its own where none is |
+| **Open** (Cmd/Ctrl+O; `<input type=file>`, `App.tsx`) | `openedAs` (`ui/views/openFile.ts`) tells a kind from text, from the extension, `detectFormat` and `outputKindOf`; the canvas then decides again (`processFileContent`, `Workspace/utils/io.ts`) | see the formats below | added to the workspace in front as a drop adds it (`ui/views/files.ts`, `openFilesAt`), in free space near the middle of the view (`utils/freePlace.ts`), one step to undo - only a `.meno` opens a tab of its own (the maintainer, 2026-10-13); one that cannot be read says so there, and no tab is made; text, a text in its column (`ui/views/texts.ts`). With no workspace in front (Settings, say), the one last in front is brought forward; with none at all, a canvas is opened for it |
 | **A file dropped** on the canvas (`dropAppend`, `useStructureEvents.ts`) | the extension first (`STRUCTURE_FILE`), to know whether to look at the drag's clipboard flavours; then as Open | as Open; a `.meno` opened as Open opens it, in a tab of its own (the maintainer, 2026-10-12) | added to the page; a `.meno`, a tab; text (`opensAsText`), to the column |
 | **An Office picture or object dragged** in | the drag's flavours, in order: Meno record or embedded object, Mac Office object, GVML, PNG, RXN, MOL (`fromClipboard.ts`); read by Rust (`drag_read`; on Windows an overlay window, `drop.rs`) | the record Meno put in it (EMF comment, PNG text chunk, OLE stream) | pasted |
 | **Paste** (`clipboardActions.ts`) | the clipboard's flavours, in the order above, then plain text that looks like a molfile, then SMILES (`fromClipboard.ts`; Rust `clipboard_read`) | the record; CTfiles in TS; SMILES by RDKit (chem worker) | pasted |
@@ -47,7 +47,7 @@ built* below.
 | **Calculation output**, through Open or a drop | `outputKindOf` (`lib/calc/catalog.ts`) - by content only, and only once `detectFormat` has found no structure format | every reader added that reads the kind (`readOutput`, `lib/calc/read.ts`) | a molecule in 3D with what the calculation found |
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
 | **`.meno`** (Open, drop) | the extension | `readWorkspace` (version 1 only); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too |
-| **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a new tab, as Open makes one |
+| **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
 | **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
 
 ### Structure formats
@@ -529,8 +529,9 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -
-  is not lost; then it opens in a tab of its own (in place of a blank one
-  in front), as Open opens it, with the same words where it cannot be
+  is not lost; then it is opened as Open opens it - a workspace file in a
+  tab of its own (in place of a blank one in front), anything else added
+  to the workspace in front - with the same words where it cannot be
   read. On macOS the system tells the running Meno (`RunEvent::Opened`) at
   its start or at any time after. On Windows a file comes as an argument:
   to the Meno it starts; or, where Meno is running already, to that one -

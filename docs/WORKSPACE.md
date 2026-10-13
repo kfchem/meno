@@ -340,7 +340,8 @@ Taken on 2026-10-04:
 
 - **The structure canvas is the workspace** (named Workspace from 2026-10-10), and everything else is to be
   reached from it. The New Tab page is gone: Meno starts on a canvas, "+"
-  makes another, and Open puts a file in a tab of its own. The New… menu
+  makes another, and Open puts a file in a tab of its own (until
+  2026-10-13: Open adds to the workspace in front, below). The New… menu
   goes too, later: the text editor, the Python console and the workflow
   builder are to be reached from the canvas. (Done 2026-10-10: "+" opens
   a workspace and nothing else, and the Python console was removed.)
@@ -393,6 +394,17 @@ Taken on 2026-10-10 (menus and gestures):
   comes (docs/EDITOR-2D.md, *Quick Add*).
 - **A double-click on the canvas shuts the column** beside it: the work
   comes back to the canvas (docs/PDF.md, *One canvas*).
+
+Taken on 2026-10-13:
+
+- **Open adds to the workspace in front.** A structure's file, a
+  calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
+  workspace in front, as a drop on its canvas adds it: in free space near
+  the middle of the view, one step to undo, an SD file as a stack. Only a
+  `.meno` opens a tab of its own. A file that cannot be read says so in
+  the workspace, and no tab is made; where a plugin could read it, adding
+  the plugin reads it again there. With no workspace in front, the one
+  last in front is brought forward; with none, a canvas is opened for it.
 
 ## Stage 2, as built
 

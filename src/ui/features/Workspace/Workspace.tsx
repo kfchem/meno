@@ -50,6 +50,7 @@ import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
 import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
+import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import NameDialog from "../../layouts/NameDialog";
@@ -180,7 +181,7 @@ import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
-import { SHAPE_PAD } from "./document";
+import { isBlankDocument, SHAPE_PAD } from "./document";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -254,8 +255,19 @@ function WorkspaceContent({
     handleMouseDownCapture,
     clientToWorld,
     pasteTarget,
+    viewMiddle,
   } = useStructureEvents(initialPayload, initialFilename, officeId == null, initialKind, initialPath);
   pdfTarget.current = pasteTarget;
+  // (how files opened are put on the page: as a drop puts them, in free space near the middle of the view - this render's)
+  const openedFiles = useRef<(files: OpenedFile[]) => Promise<void>>(async () => {});
+  openedFiles.current = async (opened) => {
+    // (opened onto a page with nothing on it: Save suggests the first file's name beside it, as for a file opened on a canvas of its own)
+    const blank = isBlankDocument(store.getState().writing());
+    for (const [i, f] of opened.entries()) {
+      const put = () => openFilesAt([new File([f.bytes as BlobPart], f.name)], viewMiddle(), () => void put(), { path: f.path, free: true });
+      if ((await put()) && blank && i === 0) store.getState().markOpenedOver(f.path ?? f.name);
+    }
+  };
   useOfficeLink(officeId);
 
   const onCreated = useCanvasSetup(camRef, domRef);
@@ -296,6 +308,11 @@ function WorkspaceContent({
   useEffect(
     () => (ownTab && officeId == null ? setPictureTaker(tabId, (pictures) => void store.getState().addPictures(pictures, pdfTarget.current())) : undefined),
     [ownTab, officeId, tabId, store],
+  );
+  // (and structures' files and calculations' outputs opened, as a drop on it puts them: ui/views/files)
+  useEffect(
+    () => (ownTab && officeId == null ? setFileTaker(tabId, (files) => void openedFiles.current(files)) : undefined),
+    [ownTab, officeId, tabId],
   );
   // What readers reading an output as well find, joined to each molecule
   // read from it as it comes - or as the molecule comes to stand here

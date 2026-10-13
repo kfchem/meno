@@ -1048,12 +1048,15 @@ traced from reference drawings.
   something to lose. (PR #43) Since 2026-10-06 (docs/FILE-IO.md), Save and
   Save As write the workspace (`.meno`) alone; MOL, SDF, RXN and SVG are
   written by Export; and closing offers Save beside Close without saving.
-- Open (Ctrl/Cmd+O, or the menu on empty space) puts a file in a tab of its own - or
-  in place of a blank canvas - named for the file; text goes into the
-  column of the workspace in front (docs/WORKSPACE.md, *Texts*). The canvas is saved
-  nowhere then: Save asks where, suggesting that name. A save names the
-  tab for its file too. A canvas opened from Word or PowerPoint keeps the
-  document's name either way.
+- Open (Ctrl/Cmd+O, or the menu on empty space) adds a file to the
+  workspace in front, as a drop on its canvas does, in free space near
+  the middle of the view; only a `.meno` opens a tab of its own (the
+  maintainer, 2026-10-13: docs/WORKSPACE.md). Text goes into the column of
+  the workspace in front (docs/WORKSPACE.md, *Texts*). Opened onto a
+  workspace with nothing on it, the workspace is saved nowhere then: Save
+  asks where, suggesting the file's name. A save names the tab for its
+  file too. A canvas opened from Word or PowerPoint keeps the document's
+  name either way.
 - Import that keeps charges, isotopes, radicals, atom lists and S-groups, and
   V3000 reactions.
 - SMILES in and out: in from Quick Add's *SMILES* (2026-10-10; a card on
@@ -1068,9 +1071,9 @@ traced from reference drawings.
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu
   (or Ctrl/Cmd+Shift+K on nothing); a SMILES is drawn from Quick Add.
-  (Meno's menu, from its logo, held them until 2026-10-10.) Open puts a
-  file in a tab of its own, never over what is drawn; a file dropped on
-  the drawing is added to it.
+  (Meno's menu, from its logo, held them until 2026-10-10.) Open adds a
+  file to the workspace in front, never over what is drawn; a file
+  dropped on the drawing is added to it, where it is dropped.
 - The clipboard, for Word and PowerPoint: a vector picture in each platform's
   own form (EMF on Windows, PDF on macOS), PNG and MOL alongside it.
   Agreed 2026-09-29: the structure is re-edited from Office - on Windows by
