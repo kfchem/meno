@@ -1026,6 +1026,15 @@ Times), each placed in a page as a journal places a figure - every
 structure is read right, its stereochemistry with it, in about 35 ms for
 the figure of twenty, 65-75 ms where its letters are outlines.
 
+**Checked by a round trip** (`scripts/figure/roundtrip`): structures whose
+SMILES is known - the layout benchmark's, and charges, isotopes,
+stereochemistry, radicals and metals - drawn by Meno, exported as SVG in
+each drawing style, printed to PDF (as it is, the page turned a quarter,
+and in another typeface), read back as *Read as structure* reads them, and
+compared with the truth by canonical SMILES, stereochemistry, isotopes and
+charges kept. Every difference there is a bug of the worst kind: nothing
+on the page shows it.
+
 ### A reaction scheme read (built 2026-10-12)
 
 Decided by the maintainer (2026-10-11): Meno's arrows first gained the
