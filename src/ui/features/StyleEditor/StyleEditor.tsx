@@ -28,6 +28,7 @@ import {
   sampleSvg,
 } from "../../../lib/chem/styleSamples";
 import { useTypefaces } from "../../fonts/typefaces";
+import { useAtLeastWide } from "./sideBySide";
 import TypefacePicker from "./TypefacePicker";
 
 /**
@@ -44,7 +45,7 @@ export type StyleEditorProps = {
    * one.
    */
   onChange: (next: StyleChoice, setting?: string) => void;
-  /** Side by side with the preview, or stacked for a narrow panel. */
+  /** Side by side with the preview where there is room (`SIDE_BY_SIDE_PX`), or stacked for a narrow panel. */
   layout?: "wide" | "narrow";
 };
 
@@ -54,6 +55,10 @@ export default function StyleEditor({
   layout = "wide",
 }: StyleEditorProps) {
   const style = useMemo(() => styleOf(choice), [choice]);
+  // (side by side with the preview only where there is room for both: else as in a narrow panel)
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const roomy = useAtLeastWide(box);
+  const narrow = layout === "narrow" || !roomy;
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const shown = (f: StyleField) =>
@@ -106,7 +111,7 @@ export default function StyleEditor({
                   choice={choice}
                   style={style}
                   onChange={onChange}
-                  stacked={layout === "narrow"}
+                  stacked={narrow}
                 />
               ))}
               {rules.length > 0 && (
@@ -121,7 +126,7 @@ export default function StyleEditor({
                   choice={choice}
                   style={style}
                   onChange={onChange}
-                  stacked={layout === "narrow"}
+                  stacked={narrow}
                 />
               ))}
             </div>
@@ -136,9 +141,9 @@ export default function StyleEditor({
     </div>
   );
 
-  if (layout === "narrow") {
+  if (narrow) {
     return (
-      <div className="flex flex-col">
+      <div ref={setBox} className="flex flex-col">
         <div className="sticky top-0 z-10 bg-white pb-3 border-b border-gh-line">
           <Preview style={style} compact />
         </div>
@@ -147,7 +152,7 @@ export default function StyleEditor({
     );
   }
   return (
-    <div className="flex gap-8 items-start">
+    <div ref={setBox} className="flex gap-8 items-start">
       <nav className="hidden xl:block w-44 shrink-0 sticky top-4 text-sm">
         {STYLE_GROUPS.map((g) => (
           <a
