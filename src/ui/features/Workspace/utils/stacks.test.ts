@@ -160,6 +160,48 @@ describe("a stack of drawings", () => {
     expect(stacked[0].model.bonds.map((b) => b.id)).toEqual([100]);
   });
 
+  it("is taken apart record by record, a thousand of them in about ten times a hundred's time", () => {
+    // (two stacks of n/2 records of 28 atoms in a chain, the second stack's
+    // atoms first, and a loose chain of 28 after them)
+    const stacks = (n: number) => {
+      const atoms: (A & { stack?: AtomStack })[] = [];
+      const bonds: { id: number; a: number; b: number }[] = [];
+      const chain = (stack?: AtomStack) => {
+        const first = atoms.length + 1;
+        for (let i = 0; i < 28; i++) {
+          atoms.push({ id: first + i, x: i, y: 0, ...(stack ? { stack } : {}) });
+          if (i) bonds.push({ id: first + i, a: first + i - 1, b: first + i });
+        }
+      };
+      for (let r = 0; r < n / 2; r++) chain({ id: 2, record: r, ...(r === 0 ? { title: "second" } : {}) });
+      for (let r = 0; r < n / 2; r++) chain({ id: 1, record: r });
+      chain();
+      return { atoms, bonds };
+    };
+    const timed = (n: number) => {
+      const d = stacks(n);
+      const started = performance.now();
+      const parts = recordDrawings(d);
+      return { d, parts, ms: performance.now() - started };
+    };
+    // (once first, so that the tenth is not timed starting cold)
+    timed(100);
+    const tenth = timed(100);
+    const { d, parts, ms } = timed(1000);
+    expect(idsOf(parts.loose.atoms)).toEqual(idsOf(d.atoms.slice(-28)));
+    expect(parts.loose.bonds).toHaveLength(27);
+    // (stack 1 first, its records in order; each a chain of its own)
+    expect(parts.stacked).toHaveLength(1000);
+    expect(parts.stacked[0].model.atoms[0].id).toBe(500 * 28 + 1);
+    expect(parts.stacked[500].model.atoms[0].id).toBe(1);
+    expect(parts.stacked[500].title).toBe("second");
+    expect(parts.stacked.every((r) => r.model.atoms.length === 28 && r.model.bonds.length === 27)).toBe(true);
+    // (where every atom and bond was looked through for every record, a
+    // hundred times: 1.5 s for a thousand records - timed against a tenth
+    // of them, so that a machine busy with other work slows both alike)
+    expect(ms).toBeLessThan(25 * tenth.ms + 100);
+  });
+
   it("brought into a drawing, is numbered after its own, none marked; one record of it alone is no stack", () => {
     const d = carriedDrawing(drawing(), { 1: 1 });
     const added = addedStacks(d.atoms, 4);
