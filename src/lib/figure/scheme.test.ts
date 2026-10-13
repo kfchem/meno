@@ -242,6 +242,15 @@ describe("a reaction scheme's arrows", () => {
     expect(stroked.figure.atoms).toHaveLength(8);
     expect(stroked.figure.bonds.filter((b) => b.stereo)).toEqual([]);
   });
+
+  it("reads a retrosynthesis's arrow whose lines are set close, each ending within the head as near its point as a head's own line may", () => {
+    // (2.6 points apart under a head 8 long: either line alone, its end 1.3 off the head's point, was read as an arrow of its own)
+    const s = read(scheme([stroke([[60, 93.7], [136, 93.7]]), stroke([[60, 96.3], [136, 96.3]]), stroke([[132, 91], [140, 95], [132, 99]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({ kind: "retrosynthetic" });
+    expect(near(s.arrows[0].point, [140, 95])).toBe(true);
+    expect(s.figure.atoms).toHaveLength(8);
+  });
 });
 
 describe("a reaction scheme's signs and words", () => {

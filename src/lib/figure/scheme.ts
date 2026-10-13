@@ -334,6 +334,18 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   const heads = [...filled, ...chevrons];
   const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o));
   const taken = (l: Line) => l.of.some((o) => used.has(o));
+  // (an open head that another line beside this one ends within too, the other side of its point, this line's end off its middle: a retrosynthesis's, read below)
+  const sharedOpenHead = (l: Line, e: Point, u: Point, head: Head) => {
+    const ce = cross(u, sub(e, head.tip));
+    if (!head.open || Math.abs(ce) < Math.max(l.w, 0.03 * bond)) return false;
+    return lines.some((m) => {
+      if (m === l || taken(m) || len(m) < 0.8 * bond || Math.abs(cross(u, unit(m.a, m.b))) > Math.sin((5 * Math.PI) / 180)) return false;
+      const me = dist(m.a, head.tip) < dist(m.b, head.tip) ? m.a : m.b;
+      const t = dot(sub(head.tip, me), u);
+      const cm = cross(u, sub(me, head.tip));
+      return t > -near && t < head.length + near && cm * ce < 0 && Math.abs(cm) < 2 * Math.abs(ce) + near;
+    });
+  };
 
   // arrows drawn as one outline each
   const found: Found[] = [];
@@ -355,7 +367,7 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const u = unit(from, e);
       const free = heads.filter((h) => !h.of.some((o) => used.has(o) || l.of.includes(o)));
       const head = headAt(e, u, l.w, free, barbs.filter((b) => !used.has(b) && !l.of.includes(b)), bond);
-      if (!head) continue;
+      if (!head || sharedOpenHead(l, e, u, head)) continue;
       // (back along it: through a corner where one line, and only one, goes on from its end)
       const chain: Line[] = [l];
       const path: Point[] = [e, from];
