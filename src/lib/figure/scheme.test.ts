@@ -432,4 +432,18 @@ describe("a reaction scheme's signs and words", () => {
     expect(s.words.find((w) => w.text === "2")!.arrow).toBeUndefined();
     expect(s.words.find((w) => w.text === "NaH")!.arrow).toBe(0);
   });
+
+  it("reads no + set small, a charge's size, as a sign, however few other words there are", () => {
+    // (two charges by a ring's carbons, 7 points to the labels' 10, and no other words left once the labels are read)
+    const ring: P[] = [0, 60, 120, 180, 240, 300].map((deg) => [200 + L * Math.cos(((deg + 30) * Math.PI) / 180), 100 - L * Math.sin(((deg + 30) * Math.PI) / 180)]);
+    const charge = (p: P): FigureLetter[] => [{ c: "+", box: [p[0] + 3, p[1] - 9, p[0] + 7, p[1] - 5], at: [p[0] + 3, p[1] - 5], size: 7 }];
+    const s = read({
+      // (a chain ending in an OH, its bond cut short of the label)
+      paths: [chain([0, 100]), stroke([[37.4, 92.8], [44.9, 97.1]]), stroke([...ring, ring[0]]), stroke([[70, 95], [134, 95]]), head([140, 95], [1, 0])],
+      letters: [...word("OH", [46.9, 103.6]), ...charge(ring[0]), ...charge(ring[3])],
+      pictures: [],
+    });
+    expect(s.figure.atoms.some((a) => a.label === "OH")).toBe(true);
+    expect(s.pluses).toEqual([]);
+  });
 });

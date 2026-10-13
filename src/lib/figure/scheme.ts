@@ -735,17 +735,18 @@ function wordsStretch(a: SchemeArrow): { a: Point; b: Point } {
 
 /**
  * The words of a scheme: its letters left over, set in lines and blocks -
- * none across an arrow's line; a "+" alone a sign; a block over or under
- * an arrow - alongside its longest stretch, not across it, near - that
- * arrow's; each written as Meno writes words typed (lib/text/smartWords
- * `writtenAsMeant`).
+ * none across an arrow's line; a "+" alone, as large as the figure's
+ * letters (`usual`, theirs all told: a charge is set smaller), a sign; a
+ * block over or under an arrow - alongside its longest stretch, not
+ * across it, near - that arrow's; each written as Meno writes words typed
+ * (lib/text/smartWords `writtenAsMeant`).
  */
-export function wordsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[]): { words: SchemeWords[]; pluses: Point[] } {
+export function wordsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[], usual?: number): { words: SchemeWords[]; pluses: Point[] } {
   const rows = rowsOf(letters, arrows);
   const words: SchemeWords[] = [];
   const pluses: Point[] = [];
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
-  const usual = sizes[Math.floor(sizes.length / 2)] ?? 10;
+  usual ??= sizes[Math.floor(sizes.length / 2)] ?? 10;
   for (const block of blocksOf(rows, arrows)) {
     const lines = block.map(rowText);
     const text = lines.map((l) => l.text).join("\n");
@@ -815,7 +816,7 @@ export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean
   for (const o of signs.taken) used.add(o);
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);
-  const { words, pluses } = wordsOf(figure.left.letters, arrows);
+  const { words, pluses } = wordsOf(figure.left.letters, arrows, sizes[Math.floor(sizes.length / 2)]);
   return { figure: { ...figure, left: { letters: [] } }, arrows, pluses: [...signs.pluses, ...pluses], words, bond: figure.bond || bond };
 }
 
