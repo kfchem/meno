@@ -75,10 +75,24 @@ function TalkClick([double] $Sx, [double] $Sy, [int] $Count = 1) {
   $w = Get-ClientOrigin
   Invoke-MenoClick -X ([int](($Sx - $w.X) * 2)) -Y ([int](($Sy - $w.Y) * 2)) -Count $Count
 }
-# (every type the system's pasteboard holds now, as AppKit lists them - Meno's own among them)
-function Clipboard([string] $What) {
-  $js = 'ObjC.import("AppKit"); const t = $.NSPasteboard.generalPasteboard.types; const out = []; for (let i = 0; i < t.count; i++) out.push(ObjC.unwrap(t.objectAtIndex(i))); out.join(", ")'
-  Note ("clipboard {0}: {1}" -f $What, ((& /usr/bin/osascript -l JavaScript -e $js 2>&1) -join " "))
+# (the pasteboard's count of changes, as AppKit keeps it)
+function ClipCount { [int]((& /usr/bin/osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSPasteboard.generalPasteboard.changeCount' 2>&1) -join "") }
+# (the types the pasteboard holds, as AppKit lists them - Meno's own among them)
+function Types { (& /usr/bin/osascript -l JavaScript -e 'ObjC.import("AppKit"); const t = $.NSPasteboard.generalPasteboard.types; const out = []; for (let i = 0; i < t.count; i++) out.push(ObjC.unwrap(t.objectAtIndex(i))); out.join(", ")' 2>&1) -join "" }
+# (copied - Cmd+C - and each change the pasteboard takes in the next 4 s, when, and what it holds after: under a second, as a rule - or that nothing reached it)
+function CopyAndList([string] $What) {
+  $before = ClipCount
+  $t0 = Get-Date
+  Send-MenoShortcut C
+  $changes = @()
+  $last = $before
+  do {
+    Start-Sleep -Milliseconds 150
+    $c = ClipCount
+    if ($c -ne $last) { $changes += "{0} ms" -f [int]((Get-Date) - $t0).TotalMilliseconds; $last = $c }
+  } until (((Get-Date) - $t0).TotalSeconds -gt 4)
+  if (-not $changes.Count) { Note "clipboard ${What}: NOTHING copied"; return }
+  Note ("clipboard {0} (changed at {1}): {2}" -f $What, ($changes -join ", "), (Types))
 }
 function ShiftEnter { [MacGui]::Chord([uint16[]] @(56), [uint64[]] @(0x20000), [uint16] 36); Start-Sleep -Milliseconds 150 }
 function SizeUp { [MacGui]::Chord([uint16[]] @(55, 56), [uint64[]] @(0x100000, 0x20000), [uint16] 47); Start-Sleep -Milliseconds 200 }
@@ -256,27 +270,22 @@ Save-Step "after-talk-3"
 Calm
 
 # --- pictures on the clipboard: words alone, a shape alone, a stroke alone ---------
-Invoke-MenoClick -X 1827 -Y 1048
+# (words selected by a long press: a click on them is a hover, then a caret)
+Invoke-MenoDrag -FromX 1827 -FromY 1048 -ToX 1827 -ToY 1048 -Steps 1 -StepMs 10 -PressMs 690
 Start-Sleep -Milliseconds 400
 Save-Step "copy-words"
-Send-MenoShortcut C
-Start-Sleep -Milliseconds 3000
-Clipboard "words"
+CopyAndList "words"
 Calm
 Invoke-MenoClick -X 99 -Y 1150
 Start-Sleep -Milliseconds 400
 Save-Step "copy-shape"
-Send-MenoShortcut C
-Start-Sleep -Milliseconds 3000
-Clipboard "shape"
+CopyAndList "shape"
 Calm
 if ($HasPen) {
   Invoke-MenoClick -X 2279 -Y 1211
   Start-Sleep -Milliseconds 400
   Save-Step "copy-ink"
-  Send-MenoShortcut C
-  Start-Sleep -Milliseconds 3000
-  Clipboard "ink"
+  CopyAndList "ink"
   Calm
 }
 
