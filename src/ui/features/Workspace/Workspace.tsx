@@ -106,6 +106,7 @@ import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { styleOf } from "../../../lib/chem/style";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } from "./fileActions";
@@ -488,7 +489,9 @@ function WorkspaceContent({
       setWorking3d("Drawing the formula…");
       setChemError(null);
       try {
-        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
+        // (laid out in the drawing's style, as Clean-up lays it out)
+        const style = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
