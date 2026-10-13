@@ -8,11 +8,15 @@ differ, what differs: the formula, the bonds, the charges, the isotopes or
 the stereochemistry alone (the same SMILES without it). Written to
 .roundtrip/report.json and .roundtrip/report.md.
 
-    <chem python> scripts/figure/roundtrip/compare.py
+    <chem python> scripts/figure/roundtrip/compare.py [--read=<folder under .roundtrip>]
+
+`--read` compares the reads kept there (read.stage.ts's RT_READ), and
+writes its report there.
 """
 
 import json
 import pathlib
+import sys
 from collections import defaultdict
 
 from rdkit import Chem, RDLogger
@@ -68,7 +72,8 @@ def verdict(truth, molblock):
 def main():
     corpus = {m["name"]: m for m in json.loads((OUT / "corpus.json").read_text())["molecules"]}
     drawn = json.loads((OUT / "drawn.json").read_text())
-    read_path = OUT / "read.json"
+    at = next((OUT / a[7:] for a in sys.argv[1:] if a.startswith("--read=")), OUT)
+    read_path = at / "read.json"
     read = json.loads(read_path.read_text())["read"] if read_path.exists() else []
     rows = []
     for d in drawn["drawn"]:
@@ -81,7 +86,7 @@ def main():
         if r.get("none"):
             v = f"nothing read: {r['none']}"
         rows.append({"name": r["name"], "category": m["category"], "stage": "read", "preset": r["preset"], "variant": r["variant"], "verdict": v, "got": got, "truth": m["truth"]})
-    (OUT / "report.json").write_text(json.dumps(rows, indent=1))
+    (at / "report.json").write_text(json.dumps(rows, indent=1))
     # the match rate: drawn, then read by preset and by variant
     lines = ["# Round trip", ""]
     drawn_rows = [r for r in rows if r["stage"] == "drawn"]
@@ -112,7 +117,7 @@ def main():
     for (stage, kind), rs in sorted(kinds.items(), key=lambda kv: -len(kv[1])):
         names = sorted({r["name"] for r in rs})
         lines.append(f"- {stage}, {kind}: {len(rs)} ({', '.join(names[:12])}{', ...' if len(names) > 12 else ''})")
-    (OUT / "report.md").write_text("\n".join(lines) + "\n")
+    (at / "report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
 

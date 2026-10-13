@@ -8,7 +8,9 @@
  *
  *   npx vitest run --config scripts/figure/roundtrip/vitest.config.ts read
  *
- * MENO names the app's executable, where it is not the bundle built here.
+ * MENO names the app's executable, where it is not the bundle built here;
+ * RT_READ a folder under .roundtrip for what is read, to keep another build's
+ * reads beside these.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -22,6 +24,7 @@ import { figureFrom } from "../../../src/ui/features/Workspace/utils/figures";
 import { fileName } from "./names";
 
 const OUT = resolve(process.cwd(), ".roundtrip");
+const READ = process.env.RT_READ ? resolve(OUT, process.env.RT_READ) : OUT;
 const EXE = process.env.MENO ?? resolve(process.cwd(), "src-tauri/target/release/bundle/macos/Meno.app/Contents/MacOS/Meno");
 /** How far round the figures found the box goes, in points: as a hand draws one. */
 const PAD_PT = 6;
@@ -80,7 +83,7 @@ it("reads every PDF back", async () => {
   let reader = new Reader(EXE, cache);
   await reader.ready();
   let asked = 0;
-  mkdirSync(resolve(OUT, "figures"), { recursive: true });
+  mkdirSync(resolve(READ, "figures"), { recursive: true });
   const only = process.env.ONLY?.toLowerCase().split(",");
   const read: Record<string, unknown>[] = [];
   for (const file of readdirSync(resolve(OUT, "pdf")).sort()) {
@@ -113,7 +116,7 @@ it("reads every PDF back", async () => {
         const { head } = await reader.ask({ op: "figure", sha, page: 0, box });
         if (head.ok === false) throw new Error(String(head.error));
         // (kept, to look into what was read without the reader)
-        writeFileSync(resolve(OUT, "figures", file.replace(/\.pdf$/, ".json")), JSON.stringify({ box, ...head }));
+        writeFileSync(resolve(READ, "figures", file.replace(/\.pdf$/, ".json")), JSON.stringify({ box, ...head }));
         const got = figureFrom(head as unknown as FigureDrawn, sha, 0);
         if ("none" in got) entry.none = got.none;
         else entry.mol = structureFileText(got.model, "read.mol");
@@ -129,6 +132,6 @@ it("reads every PDF back", async () => {
     read.push(entry);
   }
   reader.close();
-  writeFileSync(resolve(OUT, "read.json"), JSON.stringify({ read }, null, 1));
-  console.log(`${read.filter((r) => r.mol).length} of ${read.length} read -> ${resolve(OUT, "read.json")}`);
+  writeFileSync(resolve(READ, "read.json"), JSON.stringify({ read }, null, 1));
+  console.log(`${read.filter((r) => r.mol).length} of ${read.length} read -> ${resolve(READ, "read.json")}`);
 });
