@@ -6,7 +6,7 @@
  * included, with room for its name above it.
  */
 import type { Style3D } from "../../../../lib/chem/style3d";
-import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import type { Model, Molecule3D, Turn3D } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { framesOf, structuresOf, type Frame } from "./entries";
@@ -27,11 +27,22 @@ export function labelReach(layout: Pick<Layout, "texts" | "zoom">, atoms: readon
   for (const t of layout.texts) {
     const id = t.atom != null ? atoms[t.atom]?.id : undefined;
     if (id == null) continue;
+    // (a label the layout kept - its structure not laid out again - reaches where it did)
+    const was = reached.get(t);
+    if (was && was.opts === opts && was.size === size) {
+      out.set(id, was.frame);
+      continue;
+    }
     const b = labelBox(t, size, set);
-    out.set(id, { x0: t.x - b.left, x1: t.x + b.right, y0: t.y - b.bottom, y1: t.y + b.top });
+    const frame = { x0: t.x - b.left, x1: t.x + b.right, y0: t.y - b.bottom, y1: t.y + b.top };
+    reached.set(t, { opts, size, frame });
+    out.set(id, frame);
   }
   return out;
 }
+
+/** How far each label reached, as last worked out, and under what. */
+const reached = new WeakMap<TextItem, { opts: LayoutOptions; size: number; frame: Frame }>();
 
 export function selectionFrame(
   model: Model,
