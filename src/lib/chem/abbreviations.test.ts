@@ -4,6 +4,7 @@ import {
   abbreviationOf,
   abbreviationStructure,
   labelRuns,
+  labelUnitNames,
   labelUnits,
   labelProblem,
   namesRingFirst,
@@ -354,6 +355,18 @@ describe("a label, written", () => {
     expect(labelUnits("CH(CH3)2")).toEqual(["C", "H", "(CH3)2"]);
     expect(labelUnits("OTBDPS")).toEqual(["O", "TBDPS"]);
     expect(labelUnits("SiMe3")).toEqual(["Si", "Me3"]);
+  });
+
+  it("finds each name it reads into by the letter it starts with - the user's own too, and none left of them once taken away", () => {
+    for (const u of labelUnitNames()) if (!u.startsWith("(")) expect(labelUnits(u)).toEqual([u]);
+    const npe = { label: "Npe", name: "2-(4-nitrophenyl)ethyl", smiles: "*CCc1ccc([N+](=O)[O-])cc1" };
+    try {
+      setCustomAbbreviations([npe]);
+      expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Npe"]);
+    } finally {
+      setCustomAbbreviations([]);
+    }
+    expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Np", "e"]);
   });
 
   it("reads outward from its bond when that comes in from the right (IUPAC GR-2.3)", () => {
