@@ -587,16 +587,19 @@ asked for its roles (`lib/roles/worker.ts`) and for the files it reads and
 writes and the steps it does (`lib/calc/workers.ts`), each through a client
 of its own sharing the process's question ids.
 
-The chemistry roles (`lib/plugins/roles.ts`: SMILES, the checks, R and S,
-stereoisomers, conformers, a formula of a molecule in 3D) are filled by a
-plugin that says so in its manifest - RDKit, for now, a folder of its own
-like any plugin (`resources/plugins/rdkit/`, its environment
-`plugin-rdkit`). Its worker is a sidecar, started by `lib/roles/worker.ts`
-(`chemWorker(role)`: the plugin chosen for the role in Settings, else the
-first that fills it) and asked through `lib/roles/client.ts`: JSON lines, a
-fixed set of requests (to_smiles, from_smiles, analyse, and for 3D
+The roles (`lib/plugins/roles.ts`: SMILES; the checks - hydrogens, valence,
+aromatic rings, R and S, E and Z, one role since R and S were folded into
+it; structures read from pictures; stereoisomers; conformers; a formula of
+a molecule in 3D; and pictures and films rendered) are filled by plugins
+that say so in their manifests - RDKit the chemistry roles, MolScribe and
+MolNexTR the pictures, Blender the renders - each a folder of its own like
+any plugin (`resources/plugins/rdkit/`, its environment `plugin-rdkit`).
+A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
+the plugin chosen for the role in Settings, else the first that fills it)
+and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
+requests (to_smiles, from_smiles, analyse, read_picture, and for 3D
 open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
-the worker says its version in its
+a render is a job, `render/renders.ts`; the worker says its version in its
 first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
 blocks or coordinates out. It is set up the first time a role it fills is
@@ -1099,7 +1102,7 @@ started in it (`ext_spawn_sidecar`, which takes an interpreter of
 its PATH. The consent says what the lock downloads on the computer - its
 packages, and their size (`lib/pixiLock.ts`) - and from where: pixi, the
 first time, from GitHub; conda-forge (conda.anaconda.org); PyPI. A reader
-plugin says it is made so by `env: "pixi"`; its record of being set up is
+plugin says it is made so by `environment: "pixi"` in its manifest; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
 else uses (pixi itself stays, in `tools/`).
@@ -1129,10 +1132,13 @@ path it is given:
 - `job_start`: the webview names a plugin and a program, not a path. The
   program must be one the plugin's manifest names (`steps[].programs`),
   never a shell or an interpreter that takes code in its arguments, found
-  in that plugin's environment only - the folders its activation puts on
-  the PATH (pixi), or its venv's `bin`/`Scripts` (uv) - and, where it is
-  Python, with the rules of `ext_spawn_sidecar`, a script in the plugin's
-  folder. Its input files must lie inside its folder; it is given its
+  in that plugin's environment - the folders its activation puts on the
+  PATH (pixi), or its venv's `bin`/`Scripts` (uv) - or, one installed
+  separately that its manifest declares (`installed`: ORCA, Gaussian),
+  where `installed_program` finds it, or Meno's own copy of a program the
+  plugin fetched (`downloads[].provides`: Blender; PLUGINS.md, *A program
+  Meno fetches*); and, where it is Python, with the rules of
+  `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder; it is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it. Its files are
