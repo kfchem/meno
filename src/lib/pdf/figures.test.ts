@@ -62,6 +62,20 @@ describe("a PDF page's figures", () => {
     expect(figures[0][2]).toBeGreaterThanOrEqual(208);
   });
 
+  it("are a small structure too, its labels taking it to 18 points, but no icon in a line of words nor a bullet", () => {
+    // (an acetate drawn small: a bond 10 points long to the carbonyl's carbon, its two lines up to an O, one down to the other O)
+    const acetate = [path([100, 306, 110, 312]), path([109, 296, 110, 306]), path([111, 296, 112, 306]), path([110, 312, 118, 316])];
+    const os = [text([106, 286, 114, 294]), text([119, 313, 127, 321])];
+    const figures = figuresOf([...acetate, ...os]);
+    expect(figures).toEqual([[100, 286, 127, 321]]);
+    // (the same lines - an icon - set in a line of running words, right beside them and level with them)
+    const icon = acetate.map((o): PageObject => ({ ...o, box: [o.box[0] + 100, o.box[1] + 200, o.box[2] + 100, o.box[3] + 200] }));
+    const line = [text([60, 500, 196, 510]), text([222, 500, 400, 510]), text([206, 486, 214, 494])];
+    expect(figuresOf([...icon, ...line])).toEqual([]);
+    // (bullets - each smaller than a bond, a line of words apart - none, however short their words)
+    expect(figuresOf([600, 614, 628].flatMap((y) => [path([60, y, 64, y + 4]), text([68, y - 2, 80, y + 6])]))).toEqual([]);
+  });
+
   it("take a counter-ion with its charge drawn by it, and a row of them, but no short word as far off without one", () => {
     // (a charge as Meno draws one: a ring of small pieces, its sign in it)
     const ring = (cx: number, cy: number): PageObject[] => [

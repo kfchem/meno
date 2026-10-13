@@ -66,6 +66,10 @@ const JOIN_PT = 8;
 const LABEL_PT = 6;
 const LEAST_PT = 24;
 const LEAST_THICK_PT = 4;
+/** A part smaller than a figure is one where it is a bond long at the least (a small drawing's), of this many lines at the least, and its own labels take it to this size. */
+const BOND_PT = 8;
+const LEAST_LINES = 3;
+const SMALL_PT = 18;
 /** A thin thing - a rule - at most this thick, at least this long, is no part of a figure, in points; nor anything over most of the page. */
 const RULE_THICK_PT = 1.5;
 const RULE_LONG_PT = 150;
@@ -168,6 +172,7 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   // (a structure's parts either side of a label - an acetyl past an NH, a group past an O - one, joined
   // through the word between them, before the small are left out)
   const labels = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] <= SHORT_WORD_PT).map((o) => o.box);
+  const running = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] > SHORT_WORD_PT).map((o) => o.box);
   const pieces = throughLabels(
     joined(
       drawn.map((o) => o.box),
@@ -175,9 +180,21 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     ),
     labels,
   );
+  // (a small structure - an acetate, an ammonium drawn small - is one too: a bond long at the least, of a few lines,
+  // its own labels taking it to 18 points; a bullet, an arrow or an icon in a line of words is none)
+  const small = (g: Box) => {
+    const [w, h] = [g[2] - g[0], g[3] - g[1]];
+    if (Math.max(w, h) < BOND_PT || Math.min(w, h) < LEAST_THICK_PT) return false;
+    if (drawn.filter((o) => within(o.box, grow(g, 0.5))).length < LEAST_LINES) return false;
+    // (set in a line of running words - longer than a label, level with it and right beside it - an icon's, not a structure's)
+    const level = (t: Box) => Math.min(t[3], g[3]) - Math.max(t[1], g[1]) > 0.5 * Math.min(t[3] - t[1], h);
+    if (running.some((t) => meet(grow(g, LABEL_PT), t) && level(t))) return false;
+    const b = labels.reduce((acc, l) => (meet(grow(g, LABEL_PT), l) ? union(acc, l) : acc), g);
+    return Math.max(b[2] - b[0], b[3] - b[1]) >= SMALL_PT;
+  };
   const parts = pieces.filter((g) => {
     const [w, h] = [g[2] - g[0], g[3] - g[1]];
-    return (Math.max(w, h) >= LEAST_PT && Math.min(w, h) >= LEAST_THICK_PT) || pictures.some((p) => meet(p, g));
+    return (Math.max(w, h) >= LEAST_PT && Math.min(w, h) >= LEAST_THICK_PT) || pictures.some((p) => meet(p, g)) || small(g);
   });
   // (charges drawn apart from any part - a ring with its sign, or a sign set high - too small to be parts themselves)
   const charges = [...pieces.filter((g) => !parts.includes(g)), ...objects.filter((o) => o.kind === "plus").map((o) => o.box)].filter((g) => Math.max(g[2] - g[0], g[3] - g[1]) <= CHARGE_PT);
