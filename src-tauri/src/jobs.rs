@@ -279,7 +279,7 @@ pub fn run_job(dir: &Path) -> i32 {
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
-            Ok(Turn::Behind) => std::thread::sleep(WAIT_STEP),
+            Ok(Turn::Behind(ahead)) => std::thread::sleep(behind_step(ahead, spec.slots, at_head.get_or_insert_with(Instant::now).elapsed())),
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
                 return 1;
@@ -354,13 +354,42 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
 }
 
 /// A waiting job's turn, as it looks: taken; next - the first waiting, its
-/// turn to come as one running ends; or behind others waiting.
+/// turn to come as one running ends; or behind others waiting, so many of
+/// them before it.
 #[derive(Debug, PartialEq)]
 enum Turn {
     Taken,
     Next,
-    Behind,
+    Behind(u32),
 }
+
+/// How long a waiting job sleeps behind `ahead` others waiting before it,
+/// its queue running `slots` at once: as the head of the queue does where
+/// its turn may come with the next to end (`at_head`, `step_at`); at
+/// `WAIT_STEP` among the next few (`NEAR_EACH` a slot, and `NEAR_MORE`);
+/// further back, `PLACE_STEP` more for each place beyond, shared among the
+/// slots - never longer than the queue takes to come so far, a job a third
+/// of a second at the quickest - up to `BEHIND_MOST`. A queue of hundreds, each
+/// runner looking at every job's folder under one lock every step, kept
+/// that lock all but always held, and its head waiting on it: 150 jobs of
+/// 0.06 s took 130 s to run one after another.
+fn behind_step(ahead: u32, slots: u32, at_head: Duration) -> Duration {
+    let slots = slots.max(1);
+    if ahead < slots {
+        return step_at(at_head, WAIT_STEP);
+    }
+    let near = NEAR_EACH * slots + NEAR_MORE;
+    if ahead < near {
+        return WAIT_STEP;
+    }
+    (PLACE_STEP * (ahead - near + 1) / slots).min(BEHIND_MOST)
+}
+
+/// The places behind the head of the queue that look at the step of old, for each slot and besides; and the longest one further back sleeps.
+const NEAR_EACH: u32 = 4;
+const NEAR_MORE: u32 = 4;
+const BEHIND_MOST: Duration = Duration::from_secs(10);
+const PLACE_STEP: Duration = Duration::from_millis(300);
 
 /// Whether it is this job's turn - the first waiting, with fewer running
 /// than it allows - and, where it is, the job recorded running. Asked by one
@@ -371,9 +400,16 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     queue.lock()?;
     let mut running = 0u32;
     let mut first: Option<(u64, PathBuf)> = None;
+    // (those waiting before it: asked for before it, or at once and by name)
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
     for entry in fs::read_dir(root)?.flatten() {
         let other = entry.path();
         if !other.is_dir() {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
+        if read_record(&other).is_some_and(|r| r.state.finished()) {
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
@@ -381,6 +417,9 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             JobState::Running => running += 1,
             JobState::Waiting => {
                 let key = (record.created, other);
+                if key < mine_key && key.1.file_name() != dir.file_name() {
+                    ahead += 1;
+                }
                 if first.as_ref().is_none_or(|f| key < *f) {
                     first = Some(key);
                 }
@@ -390,7 +429,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     }
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
-        return Ok(Turn::Behind);
+        return Ok(Turn::Behind(ahead));
     }
     if running >= spec.slots.max(1) {
         return Ok(Turn::Next);
@@ -1522,7 +1561,7 @@ mod tests {
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
@@ -1530,6 +1569,29 @@ mod tests {
         assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
         drop(held);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_looks_for_its_turn_seldom_and_one_near_its_head_often() {
+        // (one slot: the one next after the head looks as the head does; the next few at the old step; each further back a step more, up to ten seconds)
+        assert_eq!(behind_step(0, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(7, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(10, 1, Duration::ZERO), PLACE_STEP * 3);
+        assert_eq!(behind_step(500, 1, Duration::ZERO), BEHIND_MOST);
+        // (four slots: the four next after the head might each take one as they come free; further back, the steps shared)
+        assert_eq!(behind_step(3, 4, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(4, 4, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(28, 4, Duration::ZERO), PLACE_STEP * 9 / 4);
+        // (never asleep past its turn: the queue takes at least a third of a second a job, a slot, to come to it)
+        for slots in [1u32, 2, 4, 8] {
+            for ahead in 0..2000u32 {
+                assert!(behind_step(ahead, slots, Duration::from_secs(60)).as_secs_f64() <= f64::from(ahead.saturating_sub(slots - 1).max(1)) / 3.0 / f64::from(slots) + WAIT_STEP.as_secs_f64(), "{slots} {ahead}");
+            }
+        }
+        // (a thousand waiting look some 150 times a second together, where at one step each they looked 2,500)
+        let looks: f64 = (0..1000).map(|k| 1.0 / behind_step(k, 1, Duration::from_secs(60)).as_secs_f64()).sum();
+        assert!(looks < 160.0, "{looks}");
     }
 
     fn wait_for(what: impl Fn() -> bool) {
