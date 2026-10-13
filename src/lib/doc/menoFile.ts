@@ -11,10 +11,14 @@
  * what reading the JSON costs and it reads as it is once unzipped. The files
  * kept - calculations' outputs opened, later PDFs and pictures - are read
  * only when wanted, each by its SHA-256, which is what the workspace knows
- * it by. Nothing is ever unpacked to the disk; what the file says of its
- * sizes is held to limits before anything is inflated.
+ * it by, and taken only if they are what it says. Nothing is ever unpacked
+ * to the disk; what the file says of its sizes is held to limits before
+ * anything is inflated, and nothing is inflated to more than it says, or
+ * taken if it comes to less.
  */
-import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
+import { strFromU8, strToU8, zipSync, type Zippable } from "fflate";
+import { sha256Hex } from "../binary/sha256";
+import { entryBytes, zipEntries } from "../binary/zip";
 
 export const MENO_MEDIA_TYPE = "application/vnd.kfchem.meno+zip";
 
@@ -34,10 +38,10 @@ export type KeptFile = {
 /** A file kept, with its bytes, as a workspace is written with it. */
 export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 
-/** The most a workspace's own JSON may come to, and any one file it keeps. */
-const MOST_WORKSPACE = 256 * 1024 * 1024;
-const MOST_FILE = 1024 * 1024 * 1024;
-const MOST_FILES = 10_000;
+/** The most a workspace's own JSON may come to, any one file it keeps, and how many it keeps. */
+export const MOST_WORKSPACE = 256 * 1024 * 1024;
+export const MOST_FILE = 1024 * 1024 * 1024;
+export const MOST_FILES = 10_000;
 
 const SHA = /^[0-9a-f]{64}$/;
 
@@ -72,7 +76,7 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[]): Ui
 export type MenoFile = {
   workspace: string;
   files: KeptFile[];
-  /** A file kept, by its SHA-256: its bytes; none where it keeps none such, or it will not read. */
+  /** A file kept, by its SHA-256: its bytes; none where it keeps none such, it will not read, or it is not what its SHA-256 says. */
   data(sha256: string): Uint8Array | null;
 };
 
@@ -86,27 +90,22 @@ export class NotMenoFile extends Error {}
  */
 export function readMenoFile(bytes: Uint8Array): MenoFile {
   if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno workspace.");
-  let entries = 0;
-  let head: ReturnType<typeof unzipSync>;
-  try {
-    head = unzipSync(bytes, {
-      filter: (f) => {
-        entries++;
-        if (f.name === "workspace.json" && f.originalSize > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
-        return f.name === "workspace.json" || (f.name === "files.json" && f.originalSize <= MOST_WORKSPACE);
-      },
-    });
-  } catch (e) {
-    if (e instanceof NotMenoFile) throw e;
-    // (begun as a workspace, but not read through: said so, not in the zip reader's words)
-    throw new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
-  }
-  if (entries > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
-  const json = head["workspace.json"];
-  if (!json) throw new NotMenoFile("It holds no workspace.");
+  // (begun as a workspace, but not read through: said so, not in the zip reader's words)
+  const damaged = () => new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
+  const entries = zipEntries(bytes);
+  if (!entries) throw damaged();
+  if (entries.length > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
+  const named = new Map(entries.map((e) => [e.name, e]));
+  const head = named.get("workspace.json");
+  if (!head) throw new NotMenoFile("It holds no workspace.");
+  if (head.size > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
+  const json = entryBytes(head);
+  if (!json) throw damaged();
+  const list = named.get("files.json");
+  const listed = list && list.size <= MOST_WORKSPACE ? entryBytes(list) : null;
   const files: KeptFile[] = [];
   try {
-    const index = JSON.parse(strFromU8(head["files.json"] ?? strToU8("{}"))) as Record<string, Partial<KeptFile>>;
+    const index = JSON.parse(strFromU8(listed ?? strToU8("{}"))) as Record<string, Partial<KeptFile>>;
     for (const [sha256, f] of Object.entries(index ?? {})) {
       if (!SHA.test(sha256) || typeof f?.name !== "string" || typeof f.media !== "string" || typeof f.size !== "number") continue;
       files.push({ sha256, name: f.name.slice(0, 260), ...(typeof f.kind === "string" ? { kind: f.kind } : {}), media: f.media, size: f.size });
@@ -119,13 +118,12 @@ export function readMenoFile(bytes: Uint8Array): MenoFile {
     workspace: strFromU8(json),
     files,
     data: (sha256) => {
-      if (!known.has(sha256)) return null;
-      const name = `files/${sha256}`;
-      try {
-        return unzipSync(bytes, { filter: (f) => f.name === name && f.originalSize <= MOST_FILE })[name] ?? null;
-      } catch {
-        return null;
-      }
+      const entry = known.has(sha256) ? named.get(`files/${sha256}`) : undefined;
+      if (!entry || entry.size > MOST_FILE) return null;
+      const data = entryBytes(entry);
+      // every file kept - an output, a text, a PDF, a picture - is "taken only if they are what it says"
+      // (docs/FILE-IO.md, *The workspace file*): bytes that are not what their SHA-256 says are no such file
+      return data && sha256Hex(data) === sha256 ? data : null;
     },
   };
 }

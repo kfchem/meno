@@ -36,13 +36,21 @@ export async function holdFilm(bytes: Uint8Array): Promise<{ sha256: string } | 
   return { sha256 };
 }
 
-/** A picture's bytes, held this session; read from its workspace's file the first time; none where it is held nowhere. */
+/**
+ * A picture's bytes, held this session; read from its workspace's file the
+ * first time - and taken only if they are what its SHA-256 says (the file
+ * reads them so: lib/doc/menoFile); none where it is held nowhere.
+ */
 export function pictureBytes(sha256: string): Uint8Array | null {
   const h = held.get(sha256);
   if (!h) return null;
   if (!h.bytes) {
     const bytes = h.read?.() ?? null;
-    if (!bytes) return null;
+    if (!bytes) {
+      // (one that does not read, or is not what it says, is held no more: not read again each time it is drawn, and free to be held from elsewhere)
+      held.delete(sha256);
+      return null;
+    }
     h.bytes = bytes;
     h.read = undefined;
   }

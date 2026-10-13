@@ -493,7 +493,17 @@ work.meno (zip)
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
 - **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`).
+  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
+  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is taken for more, or other, than the file says.** What it
+  says of a part's size is not trusted to set room aside by - a few bytes
+  may say a gigabyte: each part is inflated a little at a time, stopped as
+  soon as it comes to more than it says, and taken only if it comes to
+  just that (`lib/binary/zip.ts`). A workspace that does not is said to be
+  damaged; a file kept that does not is not had. And each file kept - an
+  output, a text, a PDF or a picture alike - is taken only if its bytes
+  are what its SHA-256 says, so that no file can pass for another held
+  this session.
 - **The JSON `.meno` of before is not looked for** (the maintainer: not
   needed). One still opens, the JSON being the same as `workspace.json`;
   nothing was added for it, and it is saved as a zip.
