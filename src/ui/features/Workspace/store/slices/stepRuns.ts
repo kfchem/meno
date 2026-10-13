@@ -27,7 +27,7 @@ import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
 import { askOf } from "../../render/renderOptions";
-import { SCENE } from "../../render/renders";
+import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
 import { currentStyle3D } from "../../style3d";
 import { holdPicture } from "../../../../../lib/picture/held";
@@ -65,7 +65,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** Steps whose results are being read back. */
   const finishing = new Set<number>();
   /** What has been read of each job's log: how far, and its last line. */
-  const logs = new Map<string, { from: number; line: string }>();
+  const logs = new Map<string, { from: number; line: string; progress?: { done: number; total: number } }>();
   /** The texts that show a job's log, by the job. */
   const shown = new Map<string, number>();
   let looking = false;
@@ -534,18 +534,20 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   }
 
   /** What a running job's log says last. */
-  async function lastLine(job: string): Promise<string | undefined> {
+  async function lastLine(job: string): Promise<{ line?: string; progress?: { done: number; total: number } }> {
     const was = logs.get(job) ?? { from: 0, line: "" };
-    let { from, line } = was;
+    let { from, line, progress } = was;
     for (let k = 0; k < 40; k++) {
       const read = await readJobLog(job, from).catch(() => null);
       if (!read || read.next === from) break;
-      const lines = read.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      // (how far it is, where its program says so - "progress 12/240" - kept apart from what it says besides)
+      progress = progressOf(read.text) ?? progress;
+      const lines = read.text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^progress \d+\/\d+$/.test(l));
       if (lines.length) line = lines[lines.length - 1];
       from = read.next;
     }
-    logs.set(job, { from, line });
-    return line || undefined;
+    logs.set(job, { from, line, ...(progress ? { progress } : {}) });
+    return { ...(line ? { line } : {}), ...(progress ? { progress } : {}) };
   }
 
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
@@ -761,7 +763,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             continue;
           }
           const place = job.state === "waiting" ? waiting.findIndex((x) => x.id === j.id) + 1 : 0;
-          const line = job.state === "running" ? await lastLine(j.id) : undefined;
+          const { line, progress } = job.state === "running" ? await lastLine(j.id) : {};
           seen[j.id] = {
             state: job.state,
             created: job.created,
@@ -769,6 +771,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             ...(job.ended != null ? { ended: job.ended } : {}),
             ...(place > 0 ? { place } : {}),
             ...(line ? { line } : {}),
+            ...(progress ? { progress } : {}),
           };
         }
       }

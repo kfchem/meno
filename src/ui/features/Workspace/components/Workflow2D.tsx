@@ -538,6 +538,8 @@ export default function Workflow2D() {
       const places = seen.flatMap((x) => (x?.place ? [x.place] : []));
       const starts = seen.flatMap((x) => (x?.started != null ? [x.started] : []));
       const line = seen.find((x) => x?.state === "running" && x.line)?.line;
+      // (a running job that says how far it is - "progress 12/240" - counts that far)
+      const partly = seen.reduce((n, x) => n + (x?.state === "running" && x.progress ? x.progress.done / x.progress.total : 0), 0);
       out.set(s.id, {
         waiting: seen.every((x) => !x || x.state === "waiting"),
         view: {
@@ -546,6 +548,7 @@ export default function Workflow2D() {
           ended: seen.filter((x) => x && finished(x.state)).length,
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
+          ...(partly > 0 ? { share: (seen.filter((x) => x && finished(x.state)).length + partly) / s.running.jobs.length } : {}),
         },
       });
     }

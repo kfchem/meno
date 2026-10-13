@@ -66,7 +66,7 @@ export function Port({
  * their place among those waiting; where they run, since when, how many of
  * how many have ended, and what the log says last.
  */
-export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string };
+export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number };
 
 /** A run as its step lists it: when, what it said, how it was set, whether it is the one shown. */
 export type RunRow = { at: number; said: string; how: string; shown: boolean };
@@ -165,8 +165,8 @@ export type StepCardProps = {
 export default function StepCard(p: StepCardProps) {
   const line = stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
-  // (a run of several jobs: how many have ended, as a share)
-  const progress = p.state === "running" && p.run && p.run.total > 1 ? p.run.ended / p.run.total : undefined;
+  // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
+  const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
   const w = CARD_W / PX;
   return (
     <div

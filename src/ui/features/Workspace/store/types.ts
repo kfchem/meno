@@ -568,7 +568,7 @@ export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hovered
  * was asked for, started and ended; its place among those waiting, where it
  * waits; and the last line of its log, where it runs.
  */
-export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string };
+export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number } };
 /** A turn, as a quaternion's x, y, z and w. */
 export type Turn3D = [number, number, number, number];
 /** A molecule in 3D rising out of its drawing (EditorState `rising3d`). */
