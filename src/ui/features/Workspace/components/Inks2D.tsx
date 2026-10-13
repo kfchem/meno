@@ -11,7 +11,7 @@
  * pointer is pressed, not the writing.
  */
 import * as THREE from "three";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { Ink, InkLook } from "../store/types";
@@ -19,7 +19,7 @@ import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeHit, strokesBounds, type InkStroke } from "../../../../lib/chem/ink";
+import { boundsPadded, inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeHit, strokesBounds, type InkStroke } from "../../../../lib/chem/ink";
 import { setInUse } from "../../../../lib/chem/palette";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { strokesGeometry } from "./inkGeometry";
@@ -28,7 +28,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useStyleOptions } from "../useDrawingStyle";
 
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
 const Z_PEN = 0.3;
@@ -57,7 +57,8 @@ function StrokesLook({ look, strokes, pointPx, ink, extra = 0, color, opacity }:
   useEffect(() => () => geometry.dispose(), [geometry]);
   const o = opacity ?? (marker ? MARKER_OPACITY : 1);
   return (
-    <mesh geometry={geometry} frustumCulled={false} raycast={() => {}}>
+    // (drawn only where in view: its triangles are where they are drawn, so their bounds are the writing's)
+    <mesh geometry={geometry} raycast={() => {}}>
       <meshBasicMaterial color={color ?? inkColour(look, ink, own)} transparent={o < 1} opacity={o} depthWrite={o >= 1} toneMapped={false} side={THREE.DoubleSide} />
     </mesh>
   );
@@ -69,15 +70,20 @@ export default function Inks2D() {
   const hovered = useEditor((s) => s.hoveredInk);
   const draft = useEditor((s) => s.inkDraft);
   const talkInk = useEditor((s) => s.talkInk);
-  const { opts } = useDrawnLayout();
+  // (the style's, not the drawing's layout: a zoom draws none of the writing again - each piece keeps what the screen
+  // sizes in it frame by frame)
+  const opts = useStyleOptions();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const ink = opts.bondColor ?? "#000000";
   const { camera, gl } = useThree();
-  const toWorld = (cx: number, cy: number): Pt => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
-    return { x: p.x, y: p.y };
-  };
+  const toWorld = useCallback(
+    (cx: number, cy: number): Pt => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
+      return { x: p.x, y: p.y };
+    },
+    [camera, gl],
+  );
   return (
     <group>
       {inks.map((k, i) => (
@@ -106,11 +112,14 @@ function TalkStroke({ k, z, pointPx, ink }: { k: { look: InkLook; stroke: InkStr
   );
 }
 
-function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z: number; pointPx: number; ink: string; selected: boolean; hovered: boolean; toWorld: (cx: number, cy: number) => Pt }) {
+const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z: number; pointPx: number; ink: string; selected: boolean; hovered: boolean; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
   const { camera, invalidate } = useThree();
-  const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  const pxNow = () => 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  const px = pxNow();
   const width = inkWidth(k, pointPx);
+  // (its strokes' bounds, found once: what the screen adds round them - where a press still takes it - added as the view zooms)
+  const core = useMemo(() => strokesBounds(k.strokes, width / 2), [k.strokes, width]);
   // the light round its strokes, under the pointer or selected, coming and going
   const [light, setLight] = useState(0);
   useFrame((_, dt) => {
@@ -130,14 +139,31 @@ function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z
     setTick((t) => t + 1);
     invalidate();
   });
-  const b = strokesBounds(k.strokes, width / 2 + EDGE_PX * px) ?? { x0: 0, y0: 0, x1: 0, y1: 0 };
+  const padded = (pad: number) => (core ? boundsPadded(core, pad) : { x0: 0, y0: 0, x1: 0, y1: 0 });
+  const b = padded(EDGE_PX * px);
   const m = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
-  const slack = EDGE_PX * px;
+  // the band a pointer is looked for in, and the light round its strokes while there is light, the same on the screen at any zoom
+  const band = useRef<THREE.Mesh>(null);
+  const bandPx = useRef(px);
+  const [, setLitZoom] = useState(0);
+  const litPx = useRef(px);
+  useFrame(() => {
+    const now = pxNow();
+    if (band.current && bandPx.current !== now) {
+      bandPx.current = now;
+      const c = padded(EDGE_PX * now);
+      band.current.scale.set(c.x1 - c.x0, c.y1 - c.y0, 1);
+    }
+    if (light > 0.005 && litPx.current !== now) {
+      litPx.current = now;
+      setLitZoom((n) => n + 1);
+    }
+  });
   const drawingHas = () => {
     const st = store.getState();
     return st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d != null || st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null || st.hoveredMark != null || st.hoveredSlide != null || st.inkMode != null;
   };
-  const hit = (p: Pt) => k.strokes.some((s) => strokeHit(s, p, slack, width));
+  const hit = (p: Pt) => k.strokes.some((s) => strokeHit(s, p, EDGE_PX * pxNow(), width));
   const onMove = (e: { point: THREE.Vector3; stopPropagation: () => void }) => {
     const st = store.getState();
     if (!drawingHas() && hit({ x: e.point.x, y: e.point.y })) {
@@ -217,9 +243,10 @@ function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z
         </group>
       )}
       <StrokesLook look={k} strokes={k.strokes} pointPx={pointPx} ink={ink} />
-      <mesh position={[m.x, m.y, Z_STEP / 2]} scale={[b.x1 - b.x0, b.y1 - b.y0, 1]} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown}>
+      {/* (never drawn: a pointer finds it all the same) */}
+      <mesh ref={band} position={[m.x, m.y, Z_STEP / 2]} scale={[b.x1 - b.x0, b.y1 - b.y0, 1]} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        <meshBasicMaterial visible={false} transparent opacity={0} depthWrite={false} />
       </mesh>
       {held && heldShows(held, now) && (
         <group position={[m.x, m.y, 0]}>
@@ -228,4 +255,4 @@ function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z
       )}
     </group>
   );
-}
+});

@@ -164,6 +164,11 @@ export function strokesBounds(strokes: readonly InkStroke[], width: number): { x
   return b;
 }
 
+/** Bounds made larger by `pad` all round: of strokes, those `strokesBounds` finds with `pad` added to its width. */
+export function boundsPadded(b: { x0: number; y0: number; x1: number; y1: number }, pad: number): { x0: number; y0: number; x1: number; y1: number } {
+  return { x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad };
+}
+
 /** A stroke moved by `d`. */
 export function strokeMoved(s: InkStroke, d: Vec2): InkStroke {
   const points = s.points.slice();

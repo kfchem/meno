@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inkColour, type InkStroke, markerColour, OneEuro, placesOf, pressureFelt, strokeHit, strokeMoved, strokeOutline, strokesBounds, strokeTriangles, thinned } from "./ink";
+import { boundsPadded, inkColour, type InkStroke, markerColour, OneEuro, placesOf, pressureFelt, strokeHit, strokeMoved, strokeOutline, strokesBounds, strokeTriangles, thinned } from "./ink";
 import { MENO_SET, OKABE_ITO_SET } from "./palette";
 
 const line: InkStroke = { points: [0, 0, 0.5, 5, 0, 0.5, 10, 0, 0.5] };
@@ -38,6 +38,8 @@ describe("a stroke written by hand", () => {
     expect(strokeHit(line, { x: 5, y: 1.2 }, 0.3, 2)).toBe(true);
     expect(strokeHit(line, { x: 5, y: 2 }, 0.3, 2)).toBe(false);
     expect(strokesBounds([line], 2)).toEqual({ x0: -2, y0: -2, x1: 12, y1: 2 });
+    // (found once and padded as the view zooms: as found with the pad in the width)
+    expect(boundsPadded(strokesBounds([line], 2)!, 0.75)).toEqual(strokesBounds([line], 2.75));
     expect(placesOf(strokeMoved(line, { x: 1, y: 2 }))[2]).toEqual({ x: 11, y: 2 });
   });
 
