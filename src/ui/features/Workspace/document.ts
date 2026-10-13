@@ -15,7 +15,7 @@ import type { StyleChoice } from "../../../lib/chem/style";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
-import { ringKeyOf } from "./utils/rings";
+import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
@@ -2060,7 +2060,10 @@ export function colourParts(
 export function fillRings(doc: WorkspaceDocument, keys: readonly string[], color: string | null): WorkspaceDocument {
   const was = doc.ringFills ?? {};
   const next = { ...was };
-  for (const k of keys) {
+  // (a ring no longer drawn - undone away under an open colour card - is
+  // given nothing: its fill was a step that changed nothing to be seen,
+  // and came back on the next ring drawn with its atoms' ids)
+  for (const k of keys.filter((key) => ringThere(doc.model, key))) {
     if (color) next[k] = color;
     else delete next[k];
   }

@@ -4,6 +4,7 @@ import { RISE } from "../../theme/motion";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
+import { colourTargetGone } from "./utils/menuTarget";
 import { stylesOf } from "../../../lib/chem/captions";
 import { isBox, tintOf } from "../../../lib/chem/shapes";
 import { markerColour } from "../../../lib/chem/ink";
@@ -45,6 +46,11 @@ export default function ColourCard({
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
+  // what it is for undone away, or deleted: the card goes with it
+  const gone = useEditor((s) => colourTargetGone(target, s));
+  useEffect(() => {
+    if (gone) onClose();
+  }, [gone, onClose]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

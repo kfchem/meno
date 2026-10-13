@@ -730,7 +730,10 @@ All hover-based, as above.
 
   A swatch is given at once, one step each (as long as the chooser is
   open, one step in all), and the card stays open for the next; Escape, a press elsewhere or the
-  wheel closes it. A selection's colour goes to its atoms and the bonds
+  wheel closes it, and so does an undo, or a delete, of anything it is
+  for; a ring is filled only while it is drawn (until 2026-10-13 a ring
+  undone away under an open card took a fill, an invisible step, and the
+  next ring drawn with its atoms' ids came up filled). A selection's colour goes to its atoms and the bonds
   selected among them; a bond keeps its own colour, its atoms theirs.
   R, S, E and Z are never coloured (2026-10-05), nor is anything Meno
   marks on its own. A colour goes with its part as it moves, is turned
