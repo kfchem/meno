@@ -55,6 +55,15 @@ describe("structureFileText", () => {
     expect(structureFileText(reaction, "/tmp/r.rxn", { version: "V3000" }).startsWith("$RXN V3000")).toBe(true);
   });
 
+  it("writes an SD file's records in 3D in V3000 too where V3000 is asked for - and offers the choice with molecules in 3D alone", async () => {
+    const water = { atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0.96, y: 0, z: 0 }, { el: "H", x: -0.24, y: 0.93, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }], at: { x: 0, y: 0 } };
+    const page = { atoms: [], bonds: [], molecules3d: [water] } as unknown as Parameters<typeof structureFileText>[0];
+    expect(structureFileText(page, "/tmp/w.sdf", { version: "V3000" })).toContain("M  V30 BEGIN CTAB");
+    expect(structureFileText(page, "/tmp/w.sdf", {})).not.toContain("M  V30");
+    const { optionsFor, WRITERS } = await import("../../../lib/io/writers");
+    expect(optionsFor(WRITERS.sdf, { drawing: false, molecules3d: true }).map((o) => o.id)).toContain("version");
+  });
+
   it("writes an SD file's molecule in 3D past 999 atoms in V3000, every frame of it, and it opens again in 3D", () => {
     // a chain of 1001 atoms in 3D, in two frames, and one of five
     const chain = (n: number, dz = 0) => ({
@@ -157,10 +166,10 @@ describe("Export", () => {
     }
   });
 
-  it("shows a writer's options about what the page holds: no version for molecules in 3D alone, no frames for a drawing alone", () => {
+  it("shows a writer's options about what the page holds: an SD file's version for molecules in 3D alone too, no frames for a drawing alone", () => {
     const ids = (holds: { drawing: boolean; molecules3d: boolean }) => optionsFor(WRITERS.sdf, holds).map((o) => o.id);
     expect(ids({ drawing: true, molecules3d: true })).toEqual(["version", "frames"]);
-    expect(ids({ drawing: false, molecules3d: true })).toEqual(["frames"]);
+    expect(ids({ drawing: false, molecules3d: true })).toEqual(["version", "frames"]);
     expect(ids({ drawing: true, molecules3d: false })).toEqual(["version"]);
     expect(optionsFor(WRITERS.svg, { drawing: true, molecules3d: true })).toEqual([]);
   });

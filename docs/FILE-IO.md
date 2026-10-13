@@ -388,6 +388,8 @@ As this part of step 5 was built (#155, from main beside step 3):
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
     written in V2000, or in V3000 where V2000 cannot hold them, as before.
+    In an SD file the choice holds for its records in 3D too, and is
+    offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
