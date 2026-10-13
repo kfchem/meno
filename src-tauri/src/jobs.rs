@@ -1954,9 +1954,10 @@ mod tests {
     fn a_program_is_started_in_its_job_object_then_let_go() {
         let root = temp();
         let mark = root.join("ran.txt");
-        let (shell, flag) = shell_program();
-        let mut cmd = Command::new(&shell);
-        cmd.arg(flag).arg(format!("echo ran>\"{}\"", mark.display())).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let (sh, flag) = shell_program();
+        let mut cmd = Command::new(&sh);
+        // (written by a name in its folder: no quoting for cmd to read otherwise)
+        cmd.current_dir(&root).arg(flag).arg("echo ran>ran.txt").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
         let (mut child, job) = start_held(&mut cmd).unwrap();
         let mut inside = 0;
         unsafe {
@@ -1972,7 +1973,7 @@ mod tests {
         assert!(mark.exists());
         // (and a job's program goes the same way)
         let dir = shell(&root, ECHO, 1);
-        let mut program = spawn_program(&dir, &shell, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
+        let mut program = spawn_program(&dir, &sh, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
         assert!(program.child.wait().unwrap().success());
         let _ = fs::remove_dir_all(root);
     }
