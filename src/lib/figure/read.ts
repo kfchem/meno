@@ -26,6 +26,8 @@ export type ReadAtom = {
   charge?: number;
   /** A charge drawn by it in a ring (lib/figure/charges), beside what its label says. */
   marked?: number;
+  /** A radical's dots drawn by it: one, or two for a pair. */
+  dots?: number;
   box?: Box;
   unsure?: string[];
 };
@@ -422,6 +424,9 @@ function boxGap(a: Box, b: Box): number {
   return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
 }
 
+/** How large a radical's dot is drawn, in bonds: at least, and at most. */
+const DOT = [0.05, 0.16] as const;
+
 /** How far an ion is set from the structure at most - or from the ion before it, in a row of them - in bonds, the gap between them. */
 const ION_BY = 2.5;
 const BOND_PER_SIZE = 1.4;
@@ -670,6 +675,23 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     let best = -1;
     for (let i = 0; i < atoms.length; i++) if (from(atoms[i], m.at) < 1.2 * bond && (best < 0 || from(atoms[i], m.at) < from(atoms[best], m.at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + m.charge };
+  }
+  // (a radical's electron: a small round dot by an atom, alone - two side by side for a pair - not a letter's, nor a line's
+  // round end or joint: a dot is drawn twice as wide as a line, or more, and lies at no line's end)
+  const lineWidths = shapes.strokes.map((s) => s.w).sort((a, b) => a - b);
+  const lineWidth = lineWidths.length ? lineWidths[Math.floor(lineWidths.length / 2)] : 0;
+  const lineEnds = shapes.strokes.flatMap((s) => [s.a, s.b]);
+  const dots = shapes.blobs.filter((b) => {
+    const [w, h] = [b.box[2] - b.box[0], b.box[3] - b.box[1]];
+    const size = Math.max(w, h);
+    if (!b.curved || inLetters.has(b) || size < DOT[0] * bond || size > DOT[1] * bond || Math.min(w, h) < 0.7 * size || size < 1.8 * lineWidth) return false;
+    return !lineEnds.some((p) => dist(p, centre(b.box)) < size);
+  });
+  for (const d of dots) {
+    const at = centre(d.box);
+    let best = -1;
+    for (let i = 0; i < atoms.length; i++) if (from(atoms[i], at) < 0.6 * bond && (best < 0 || from(atoms[i], at) < from(atoms[best], at))) best = i;
+    if (best >= 0) atoms[best] = { ...atoms[best], dots: (atoms[best].dots ?? 0) + 1 };
   }
   return { atoms, bonds, bond, left: { letters: left } };
 }

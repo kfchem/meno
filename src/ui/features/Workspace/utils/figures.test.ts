@@ -91,6 +91,25 @@ describe("a figure read as a structure for the page", () => {
     expect(m.bonds).toHaveLength(4);
   });
 
+  it("reads a radical's dot by an atom as its unpaired electron, and a line's round end as none", () => {
+    // (a nitroxide's N-O: the O's dot at its upper right, twice as wide as a line; a round end drawn at the chain's other end)
+    const disc = ([cx, cy]: P, r: number): FigurePath => {
+      const k = 0.5523 * r;
+      return {
+        fill: "#000000ff",
+        stroke: null,
+        width: 0,
+        d: [["M", cx + r, cy], ["C", cx + r, cy + k], ["C", cx + k, cy + r], ["C", cx, cy + r], ["C", cx - k, cy + r], ["C", cx - r, cy + k], ["C", cx - r, cy], ["C", cx - r, cy - k], ["C", cx - k, cy - r], ["C", cx, cy - r], ["C", cx + k, cy - r], ["C", cx + r, cy - k], ["C", cx + r, cy], ["Z"]],
+      };
+    };
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const o = step(b, -30);
+    const m = structureFrom({ paths: [stroke(a, b, [b[0] + (o[0] - b[0]) * 0.6, b[1] + (o[1] - b[1]) * 0.6]), disc([o[0] + 5, o[1] - 3.5], 0.75), disc(a, 0.3)], letters: letters("O", o), pictures: [] }, SHA, 1) as Model;
+    expect(m.atoms.find((x) => x.el === "O")?.radical).toBe("doublet");
+    expect(m.atoms.filter((x) => x.radical)).toHaveLength(1);
+  });
+
   it("says why there is nothing to read: no lines, or a picture", () => {
     expect(structureFrom({ paths: [], letters: [], pictures: [] }, SHA, 0)).toEqual({ none: "No structure is drawn there." });
     expect("none" in (structureFrom({ paths: [], letters: [], pictures: [[0, 0, 10, 10]] }, SHA, 0) as object)).toBe(true);

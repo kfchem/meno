@@ -186,6 +186,7 @@ function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, a
     el: a.el,
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     seen: spot(read.atoms[i].x, read.atoms[i].y),
   }));
   const bonds: Bond[] = s.bonds.map((b, i) => ({
