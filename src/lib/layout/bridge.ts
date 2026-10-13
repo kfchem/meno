@@ -242,6 +242,44 @@ function layPath(
   return best;
 }
 
+/**
+ * The molecule with every simple cycle of the system as long as its
+ * longest ring in the smallest set added to its rings (up to a few dozen),
+ * and the system with them.
+ */
+function withSmallRings(mol: Molecule, sys: RingSystem): { mol: Molecule; sys: RingSystem } {
+  const longest = Math.max(...sys.rings.map((r) => mol.rings[r].length));
+  const inside = new Set(sys.atoms);
+  const have = new Set(sys.rings.map((r) => [...mol.rings[r]].sort((p, q) => p - q).join(",")));
+  const extra: number[][] = [];
+  const seen = new Set<string>();
+  const walk = (path: number[]) => {
+    if (extra.length >= SMALL_RINGS_MAX) return;
+    const last = path[path.length - 1];
+    for (const b of mol.neighbours[last]) {
+      if (!inside.has(b)) continue;
+      if (b === path[0] && path.length >= 3) {
+        const k = [...path].sort((p, q) => p - q).join(",");
+        if (!have.has(k) && !seen.has(k)) {
+          seen.add(k);
+          extra.push(path);
+        }
+        continue;
+      }
+      if (path.length < longest && b > path[0] && !path.includes(b)) walk([...path, b]);
+    }
+  };
+  for (const a of [...sys.atoms].sort((p, q) => p - q)) walk([a]);
+  if (!extra.length) return { mol, sys };
+  return {
+    mol: { ...mol, rings: [...mol.rings, ...extra] },
+    sys: { atoms: sys.atoms, rings: [...sys.rings, ...extra.map((_, i) => mol.rings.length + i)] },
+  };
+}
+
+/** How many small rings beyond the smallest set's a system is looked at with, at most (`withSmallRings`). */
+const SMALL_RINGS_MAX = 24;
+
 /** The paths of `count` atoms from `from` to `to` along the given bonds. */
 function pathsBetween(from: number, to: number, count: number, bonds: [number, number][]): number[][] {
   const next = new Map<number, number[]>();
@@ -267,7 +305,13 @@ function pathsBetween(from: number, to: number, count: number, bonds: [number, n
  * of choosing which rings to draw flat; null if it has no bridge that can
  * be drawn so.
  */
-export function bridgeAcross(mol: Molecule, sys: RingSystem): Bridged | null {
+export function bridgeAcross(given: Molecule, givenSys: RingSystem): Bridged | null {
+  // (from every small ring of the system, not the smallest set's alone:
+  // which of rings as long that set takes is a tie - the dihydroanthracene
+  // under an ethano bridge has its middle ring, or the two the bridge
+  // makes, by the order its atoms come in - and the rings drawn flat are
+  // looked for among them all)
+  const { mol, sys } = withSmallRings(given, givenSys);
   const options = splits(mol, sys);
   if (!options.length) return null;
   let best: { pos: Map<number, Point>; paths: Path[]; cost: number } | null = null;
@@ -301,8 +345,8 @@ export function bridgeAcross(mol: Molecule, sys: RingSystem): Bridged | null {
   }
   if (!best) return null;
   // in front of the flat rings or behind them, as the solid has it
-  const solid = solidOf(mol, sys);
-  const flat = sys.atoms.filter((a) => !best!.paths.some((p) => p.atoms.includes(a)));
+  const solid = solidOf(given, givenSys);
+  const flat = givenSys.atoms.filter((a) => !best!.paths.some((p) => p.atoms.includes(a)));
   const fit = affineFit(
     flat.map((a) => solid.get(a)!),
     flat.map((a) => best!.pos.get(a)!),
@@ -315,7 +359,7 @@ export function bridgeAcross(mol: Molecule, sys: RingSystem): Bridged | null {
     path.atoms.reduce((s, a) => s + [0, 1, 2].reduce((t, c) => t + (solid.get(a)![c] - mid[c]) * view[c], 0), 0) >= 0 ? 1 : -1,
   );
   const depthOf = (turn: number) => {
-    const depth = new Map<number, number>(sys.atoms.map((a) => [a, 0]));
+    const depth = new Map<number, number>(givenSys.atoms.map((a) => [a, 0]));
     best!.paths.forEach((path, k) => path.atoms.forEach((a) => depth.set(a, ((turn >> k) & 1 ? -1 : 1) * sides[k])));
     return depth;
   };
@@ -325,10 +369,10 @@ export function bridgeAcross(mol: Molecule, sys: RingSystem): Bridged | null {
   // morphine, epimeric at C5, had its bridge on the wrong face and C9 read
   // the other way)
   let depth = depthOf(0);
-  let turned = turnedConfigurations(mol, sys.atoms, best.pos, depth);
+  let turned = turnedConfigurations(given, givenSys.atoms, best.pos, depth);
   for (let turn = 1; turned && turn < 1 << Math.min(best.paths.length, 4); turn++) {
     const other = depthOf(turn);
-    const t = turnedConfigurations(mol, sys.atoms, best.pos, other);
+    const t = turnedConfigurations(given, givenSys.atoms, best.pos, other);
     if (t < turned) [depth, turned] = [other, t];
   }
   return { pos: best.pos, depth, cost: best.cost };
