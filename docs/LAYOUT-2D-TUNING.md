@@ -199,6 +199,18 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   other, ibogaine's isoquinuclidine to a view that crowded its indole.
   The choice among them is now made on the whole drawing, and a cage's
   next best views are tried with what hangs from it.
+- **A cage eased onto its template keeps its atoms apart** (2026-10-13).
+  The atoms of a cage not on its template ring were eased toward bonds of
+  one length with nothing keeping them off each other: seen from the
+  template's side, scopolamine's epoxide landed by its N, and its solid
+  lost to a flat drawing. The easing is run again with atoms not bonded
+  to each other kept 0.7 of a bond apart, and that taken where it reads
+  better by the view measure (atoms nearer than 0.6 counted). Kept apart
+  always, adamantane's bonds came out uneven - its back CH2 0.62 from a
+  front bridgehead is how it is drawn - and tetrodotoxin's C4 mark moved
+  onto a ring bond. A centre the easing turns is put back where the solid
+  has it. Scopolamine (12.2 to 2.1), ibogaine (20.3 to 17.1) and gelsemine
+  (9.5 to 6.9) read better; nothing else changes.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -371,3 +383,6 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
+- **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
+  a tangled flat projection, bonds crossing and the second lines of its
+  double bonds floating inside its faces.

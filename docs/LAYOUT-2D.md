@@ -142,7 +142,15 @@ they hang from.
   bridge between two of them hanging from them however it must;
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
-  eased into place. Adamantane is then a chair with its three axial bonds
+  eased into place - its bonds toward one length, each atom held near
+  where the solid seen from that side puts it - and eased again with
+  atoms not bonded to each other kept 0.7 of a bond apart, that taken
+  where it reads better, by the measure views are chosen by: where the
+  solid seen so puts one atom on another (scopolamine's tropane, a solid
+  now as cocaine's is), not where a near pair is the drawing's own
+  (adamantane's back CH2 by a front bridgehead). A stereocentre the
+  easing turns - a bridgehead whose three bonds lie nearly in the page
+  can tip through - goes back where the solid puts it. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there. Bonds out of the ring follow it - an equatorial

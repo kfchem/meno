@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { axialOut, cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
+import { axialOut, cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, putBackTurned, solidOf, type Vec3 } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -215,4 +215,45 @@ describe("a solid's configurations", () => {
     expect(keepsConfigurations(mol, [0, 1, 2, 3], pos, near)).toBe(true);
     expect(keepsConfigurations(mol, [0, 1, 2, 3], pos, far)).toBe(false);
   });
+
+  it("are put back where the easing turned one: the centre where the solid has it, unless the template holds it", () => {
+    const atoms = [0, 1, 2, 3];
+    const anchors = atoms.map((a) => pos.get(a)!);
+    const depth = [0, 0, 0, 1];
+    // (eased past its neighbours' line, the centre reads the other way)
+    const eased = () => [{ x: 1, y: 1 }, ...anchors.slice(1)];
+    const near = new Map(atoms.map((a, i) => [a, depth[i]]));
+    expect(keepsConfigurations(mol, atoms, new Map(atoms.map((a, i) => [a, eased()[i]])), near)).toBe(false);
+    const pts = eased();
+    expect(putBackTurned(mol, atoms, pts, depth, anchors)).toBe(1);
+    expect(pts[0]).toEqual(anchors[0]);
+    expect(keepsConfigurations(mol, atoms, new Map(atoms.map((a, i) => [a, pts[i]])), near)).toBe(true);
+    const held = eased();
+    expect(putBackTurned(mol, atoms, held, depth, anchors, new Set([0]))).toBe(0);
+    expect(held[0]).toEqual({ x: 1, y: 1 });
+  });
+});
+
+describe("a cage eased onto its template", () => {
+  it("keeps atoms not bonded to each other apart: scopolamine's tropane drawn as a solid, as cocaine's, no atom on another", () => {
+    const s = readSmiles("CN1[C@@H]2CC(C[C@H]1[C@H]3[C@@H]2O3)OC(=O)[C@H](CO)C4=CC=CC=C4");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const input: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+    const out = layout2D(input);
+    const mol = perceive(input);
+    const sys = mol.systems.find((x) => x.atoms.length === 9)!;
+    expect(sys.atoms.every((a) => out.solid[a])).toBe(true);
+    for (const a of sys.atoms)
+      for (const b of sys.atoms) {
+        if (a >= b || mol.neighbours[a].includes(b)) continue;
+        expect(Math.hypot(out.x[a] - out.x[b], out.y[a] - out.y[b]), `${a}-${b}`).toBeGreaterThan(0.55);
+      }
+    // (the whole engine on the tropane: about a second alone, a few times
+    // that on a machine busy with the rest of the tests)
+  }, 30_000);
 });
