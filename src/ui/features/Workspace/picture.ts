@@ -116,7 +116,7 @@ export async function structureInPicture(item: ClipItem): Promise<Drawn | null> 
   if (item.flavor === "png") return fromPng(item.bytes);
   if (item.flavor === "object") return fromObject(item.bytes);
   if (item.flavor !== "gvml") return null;
-  for (const { name, data } of await gvmlImages(item.bytes)) {
+  for (const { name, data } of gvmlImages(item.bytes)) {
     const found = /\.emf$/i.test(name) ? fromEmf(data) : /\.png$/i.test(name) ? fromPng(data) : null;
     if (found) return found;
   }
