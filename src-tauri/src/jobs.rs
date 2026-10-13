@@ -2052,12 +2052,15 @@ mod tests {
         assert_eq!(files_within(&base, 1, WORK_MOST), ["a/f1", "f0"]);
         assert_eq!(files_within(&base, 0, WORK_MOST), ["f0"]);
         assert!(files_within(&base, WORK_DEEPEST, 2).len() <= 1);
-        // (folders counted too: many folders, empty, looked at no further than allowed)
-        for i in 0..50 {
-            fs::create_dir_all(base.join("many").join(i.to_string())).unwrap();
-        }
-        assert!(files_within(&base, WORK_DEEPEST, 10).len() <= 1);
         let _ = fs::remove_dir_all(base);
+        // (folders counted too: fifty folders of a file each, ten looked at - five folders and their files, in whatever order they come)
+        let many = temp();
+        for i in 0..50 {
+            fs::create_dir_all(many.join(format!("d{i}"))).unwrap();
+            fs::write(many.join(format!("d{i}")).join("f"), "").unwrap();
+        }
+        assert_eq!(files_within(&many, WORK_DEEPEST, 10).len(), 5);
+        let _ = fs::remove_dir_all(many);
     }
 
     #[test]
