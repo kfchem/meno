@@ -249,3 +249,25 @@ describe("a transition metal bridged to a main-group metal", () => {
   });
 });
 
+
+describe("a ring bound to a metal atom by atom, as drawn by hand", () => {
+  // ferrocene with a bond from the iron to each carbon: Fe 0, Cp 1-5 and 6-10
+  const ring = (from: number) => Array.from({ length: 5 }, (_, i) => ({ a: from + i, b: from + ((i + 1) % 5), order: i % 2 ? 1 : 2 }));
+  const ferrocene = {
+    atoms: [{ el: "Fe" }, ...Array.from({ length: 10 }, () => ({ el: "C" }))],
+    bonds: [...ring(1), ...ring(6), ...Array.from({ length: 10 }, (_, i) => ({ a: 0, b: i + 1, order: 1 }))],
+  };
+  it("is found: each ring, its metal, and the bonds from the metal to its atoms", async () => {
+    const { ringsBondedAtomByAtom } = await import("./perceive");
+    const found = ringsBondedAtomByAtom(ferrocene);
+    expect(found).toHaveLength(2);
+    for (const r of found) {
+      expect(r.metal).toBe(0);
+      expect(r.ring).toHaveLength(5);
+      expect(r.bonds.map((i) => ferrocene.bonds[i]).every((b) => b.a === 0 && r.ring.includes(b.b))).toBe(true);
+    }
+    // a chelate's donors, bonded to the metal but not to each other, are no such ring (bipyridine, porphyrin)
+    const chelate = { atoms: [{ el: "Ru" }, { el: "N" }, { el: "C" }, { el: "C" }, { el: "N" }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 2, b: 3, order: 1 }, { a: 3, b: 4, order: 1 }, { a: 4, b: 0, order: 1 }] };
+    expect(ringsBondedAtomByAtom(chelate)).toEqual([]);
+  });
+});

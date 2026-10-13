@@ -489,7 +489,11 @@ of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
-  η⁶-benzene, p-cymene - is seen as it is: the metal on its axis, a bond
+  η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
+  the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
+  haptic bond - too: Clean-up gives the engine a star at its centre for
+  those bonds, and they stay drawn from the metal to each atom; the
+  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the
