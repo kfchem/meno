@@ -307,7 +307,11 @@ export function labelText(w: Word): string {
   let lead = true;
   return w.letters
     .map((l) => {
-      const c = l.c === "−" || l.c === "–" ? "-" : l.c;
+      // (a letter the PDF gives no character for - a control code - drawn flat, more than twice as wide as tall, is a minus: a
+      // hyphen printed so by WebKit)
+      const code = l.c.length === 1 ? l.c.charCodeAt(0) : -1;
+      const flat = (code >= 0 && code < 0x20) || code === 0xfffd ? l.box[2] - l.box[0] > 2 * (l.box[3] - l.box[1]) : false;
+      const c = l.c === "−" || l.c === "–" || flat ? "-" : l.c;
       if (l.size >= 0.85 * w.size) {
         lead = false;
         return c;

@@ -1034,7 +1034,9 @@ workspace holds.
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last
   (H3N+ is NH3+). A subscript is a count, a superscript
-  a charge, and digits set high before the element its isotope's mass
+  a charge (a letter the PDF gives no character for, a control code,
+  drawn flat - more than twice as wide as tall - a minus: a hyphen as
+  WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
   H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is

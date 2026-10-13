@@ -6,6 +6,7 @@ import camphor from "./fixtures/camphor-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
+import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
 import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import junction from "./fixtures/monensin-nature-junction.json";
@@ -747,6 +748,12 @@ describe("a figure drawn in colour by another program", () => {
     expect(r.atoms).toHaveLength(10);
     const oh = r.atoms.findIndex((a) => a.label === "OH" && a.x > 360 && a.y < 130);
     expect(r.bonds.filter((b) => b.a === oh || b.b === oh).map((b) => b.stereo)).toEqual(["up"]);
+  });
+
+  it("reads a charge the PDF gives no character for - a control code, drawn flat - as a minus", () => {
+    // (sodium acetate as RDKit draws it by default, printed by WebKit: the O's "-" comes out of the PDF as \x02)
+    const r = readFigure(sodiumAcetate as unknown as FigureDrawn);
+    expect(r.atoms.map((a) => a.label).sort()).toEqual(["Na+", "O", "O-", undefined, undefined].sort());
   });
 
   it("reads a long wedge in two colours as one, its coloured half near as wide at both ends as a filled line", () => {
