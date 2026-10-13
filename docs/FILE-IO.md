@@ -784,7 +784,12 @@ As step 3 was built:
   - `probe` is in place, and tested with made-up plugins.
 - **One exception stays in Meno:** the energies on an XYZ file's comment
   lines (`utils/xyzEnergies.ts`), as agreed on 2026-10-05 - part of
-  reading XYZ, which Meno does itself.
+  reading XYZ, which Meno does itself. A place is read only where it is
+  a number (2026-10-13): "1.19D-01" is not taken for 1.19, nor "nan" for
+  a place, and the file is refused, saying which line. A frame the file
+  ends in the middle of - a trajectory still being written, or cut
+  short - is left out, with its comment line's energy; a trajectory of
+  10,000 frames reads in about a tenth of a second.
 - **The cube reader became Meno's own reading.** It is the reader `meno`,
   under the same contract.
 - **A reader's late findings join every molecule read from the output,**

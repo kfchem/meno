@@ -14,6 +14,13 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(() => readStructures("mol", "x.mol", "nothing")).toThrow(/No molecules found in x.mol/);
   });
 
+  it("opens a trajectory the file ends in the middle of with its whole frames, each with its energy", () => {
+    const frame = (e: number, z: number) => `3\n energy: ${e} gnorm: 0.01 xtb: 6.7.1\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
+    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gnorm: 0.01\nO 0 0 0.02\n");
+    expect(checkedStructures(read, "md.xyz")).toBe(read);
+    expect(read.molecules3d![0]).toMatchObject({ frames: [[0, 0, 0.01, 0.76, 0.59, 0, -0.76, 0.59, 0]], energies: [-5.07, -5.08] });
+  });
+
   it("is checked as the page takes it, as any reader's answer is", () => {
     const read = readStructures("xyz", "w.xyz", WATER);
     expect(checkedStructures(read, "w.xyz")).toBe(read);

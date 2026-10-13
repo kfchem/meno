@@ -132,7 +132,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   if (kind === "xyz" && molecules.length && molecules[0].atoms.length) {
     const [first, ...rest] = molecules;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = rest.length ? energiesOf(xyzComments(content)) : undefined;
+    // (a frame the file ends in the middle of left out: its comment line with it)
+    const energies = rest.length ? energiesOf(xyzComments(content).slice(0, molecules.length)) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },

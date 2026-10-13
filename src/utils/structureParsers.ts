@@ -138,6 +138,16 @@ export function bondsByDistance(atoms: readonly { el: string; x: number; y: numb
 /** How many atoms a structure has before its bonds are found cube by cube rather than pair by pair. */
 const GRID_FROM = 400;
 
+/** A coordinate as an XYZ file writes it: a decimal number, with an exponent after an E where it has one. */
+const COORDINATE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+
+/**
+ * An XYZ file's frames: each its atoms, and its bonds by distance. A frame
+ * the file ends in the middle of - a trajectory still being written, or cut
+ * short - is left out, but for the first. A place that is not a number is
+ * not read as one: "1.19D-01" is not 1.19, nor "nan" a place - the file is
+ * refused, saying which line.
+ */
 export function parseXYZ(xyz: string): Molecule[] {
   const lines = xyz.trim().split("\n");
   const frames: Molecule[] = [];
@@ -146,15 +156,19 @@ export function parseXYZ(xyz: string): Molecule[] {
   while (i < lines.length) {
     const atomCount = parseInt(lines[i].trim());
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
+    if (atomCount > 0 && atomLines.length < atomCount) {
+      if (frames.length) break;
+      throw new Error(`The XYZ file ends before its atoms do: it says ${atomCount}, and gives ${atomLines.length}.`);
+    }
 
-    const atoms: Atom[] = atomLines.map((line) => {
-      const [element, x, y, z] = line.trim().split(/\s+/);
-      return {
-        el: element,
-        x: parseFloat(x),
-        y: parseFloat(y),
-        z: parseFloat(z),
-      };
+    const atoms: Atom[] = atomLines.map((line, k) => {
+      const [element, ...place] = line.trim().split(/\s+/);
+      const [x, y, z] = [0, 1, 2].map((d) => {
+        const t = place[d] ?? "";
+        if (!COORDINATE.test(t)) throw new Error(`Line ${i + 3 + k} of the XYZ file gives ${element} a place that is not a number: "${t}".`);
+        return Number(t);
+      });
+      return { el: element, x, y, z };
     });
 
     frames.push({ atoms, bonds: bondsByDistance(atoms) });
