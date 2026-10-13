@@ -7,6 +7,7 @@ import { COLORS } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { traceEndedBy } from "../utils/press";
+import { setLinePoints } from "../utils/linePoints";
 import { cellOf, cellsWithin, type Honeycomb } from "../utils/honeycomb";
 
 /** How far about the chain's end the honeycomb is shown, in bonds, and how long it takes to open out and to fold away, in seconds. */
@@ -145,7 +146,7 @@ export default function ChainGuide2D() {
     // the trail: where the pointer has been
     const trail = chain ? chain.trail : [];
     if (trail.length > 1) {
-      trailLine.geometry.setFromPoints(trail.map((p) => new THREE.Vector3(p.x, p.y, -0.03)));
+      setLinePoints(trailLine.geometry, trail, -0.03);
       trailLine.visible = true;
     } else trailLine.visible = false;
     if (!shown.current) {
