@@ -959,6 +959,9 @@ workspace holds.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall.
+  Where every line is drawn short between labels - a metal's bonds, Pt to
+  N and Cl - each is measured on to the middles of the letters it is cut
+  short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;

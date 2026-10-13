@@ -88,6 +88,24 @@ describe("a figure read as a structure for the page", () => {
     expect(cut.atoms.find((x) => x.el === "N")?.isotope).toBeUndefined();
   });
 
+  it("reads a metal whose every bond is drawn short between labels, shorter than its letters are tall", () => {
+    // (a square-planar Pt, two N and two Cl round it, each bond under a third of its length between the labels)
+    const pt: P = [120, 200];
+    const ends = [0, 90, 180, 270].map((deg): P => [pt[0] + 1.4 * L * Math.cos((deg * Math.PI) / 180), pt[1] - 1.4 * L * Math.sin((deg * Math.PI) / 180)]);
+    const part = (p: P, q: P, t: number): P => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const m = structureFrom(
+      {
+        paths: ends.map((e) => stroke(part(pt, e, 0.36), part(pt, e, 0.64))),
+        letters: [...letters("Pt", pt), ...ends.flatMap((e, i) => letters(i % 2 ? "Cl" : "N", e))],
+        pictures: [],
+      },
+      SHA,
+      1,
+    ) as Model;
+    expect(m.atoms.map((a) => a.el).sort()).toEqual(["Cl", "Cl", "N", "N", "Pt"]);
+    expect(m.bonds).toHaveLength(4);
+  });
+
   it("says why there is nothing to read: no lines, or a picture", () => {
     expect(structureFrom({ paths: [], letters: [], pictures: [] }, SHA, 0)).toEqual({ none: "No structure is drawn there." });
     expect("none" in (structureFrom({ paths: [], letters: [], pictures: [[0, 0, 10, 10]] }, SHA, 0) as object)).toBe(true);

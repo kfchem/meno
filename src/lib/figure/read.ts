@@ -394,7 +394,18 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
   const joined = shapes.strokes.filter(meets);
   const lengths = [...(joined.length ? joined : shapes.strokes).map(len), ...shapes.wedges.map((w) => dist(w.tip, w.base))];
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
-  return bondLength(lengths, sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0);
+  const least = sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0;
+  const found = bondLength(lengths, least);
+  if (found) return found;
+  // (every line drawn short of a label at either end - a metal's bonds, Pt to N and Cl: each measured on to the middles of the letters it is cut short of)
+  const by = (p: Point) => {
+    const near = letters.filter((l) => /[A-Za-z]/.test(l.c) && fromBox(p, l.box) < 0.5 * l.size);
+    return near.length ? Math.min(...near.map((l) => dist(p, centre(l.box)))) : 0;
+  };
+  return bondLength(
+    shapes.strokes.map((s) => len(s) + by(s.a) + by(s.b)),
+    least,
+  );
 }
 
 /** How far apart two boxes lie: nothing where they meet. */
