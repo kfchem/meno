@@ -423,18 +423,64 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
+    // (Windows: started held, put in its job object, then let go - so that
+    // nothing it starts at once is started outside the job, and stays when
+    // the job is stopped)
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        const CREATE_SUSPENDED: u32 = 0x0000_0004;
+        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
     }
+    #[cfg(unix)]
     let child = cmd.spawn()?;
+    #[cfg(windows)]
+    let mut child = cmd.spawn()?;
+    #[cfg(windows)]
+    let job = job_object_for(&child);
+    #[cfg(windows)]
+    if !let_go(child.id()) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(std::io::Error::other("it could not be let go once started"));
+    }
     Ok(Program {
         #[cfg(windows)]
-        job: job_object_for(&child),
+        job,
         child,
     })
+}
+
+/// A process started held (CREATE_SUSPENDED) let go: each of its threads
+/// resumed. Whether one was.
+#[cfg(windows)]
+fn let_go(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32};
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+    unsafe {
+        let threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if threads == INVALID_HANDLE_VALUE || threads.is_null() {
+            return false;
+        }
+        let mut entry: THREADENTRY32 = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+        let mut resumed = false;
+        let mut more = Thread32First(threads, &mut entry) != 0;
+        while more {
+            if entry.th32OwnerProcessID == pid {
+                let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
+                if !thread.is_null() {
+                    resumed |= ResumeThread(thread) != u32::MAX;
+                    CloseHandle(thread);
+                }
+            }
+            more = Thread32Next(threads, &mut entry) != 0;
+        }
+        CloseHandle(threads);
+        resumed
+    }
 }
 
 /// A job object holding the program - and so what it starts - which takes
@@ -511,8 +557,10 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
+    // (never a shell, by its name's stem: `cmd.exe` and `bash.exe` as `cmd` and `bash`)
     let single = Path::new(name).file_name().and_then(|n| n.to_str()) == Some(name);
-    if !single || !inside_name(name) || NEVER.contains(&name.to_ascii_lowercase().as_str()) {
+    let never = |n: &str| Path::new(n).file_stem().and_then(|s| s.to_str()).is_some_and(|s| NEVER.contains(&s.to_ascii_lowercase().as_str()));
+    if !single || !inside_name(name) || never(name) {
         return Err(format!("not a program a job runs: {name}"));
     }
     let manifest = fs::read_to_string(plugin_dir.join("manifest.json")).map_err(|e| format!("{id}'s manifest: {e}"))?;
@@ -1166,7 +1214,10 @@ pub fn work_files(dir: &Path) -> Vec<String> {
 /// with no console and nothing to say to Meno - so that it outlives it.
 fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     let mut cmd = Command::new(exe);
-    cmd.arg(JOB_FLAG).arg(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // (in the job's folder: never Meno's, which it would otherwise hold - on
+    // Windows a folder a process is in cannot be taken away, nor the drive
+    // it is on put away)
+    cmd.arg(JOB_FLAG).arg(dir).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1347,6 +1398,10 @@ pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
         .flatten()
         .filter_map(|e| {
             let id = e.file_name().to_str()?.to_string();
+            // (one being taken away, or left of one: no job)
+            if id.starts_with(TAKEN) {
+                return None;
+            }
             listed(&id, &e.path())
         })
         .collect();
@@ -1389,6 +1444,21 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// What a job's folder taken away is named first: no job's id.
+const TAKEN: &str = ".taken-";
+
+/// A finished job's folder taken away: moved out of the jobs' way first,
+/// under a name no job has - so that one a program still holds a file in
+/// (Windows) is never left half there, a job no longer whole - then
+/// removed. Where it could not be moved, it is left as it was; what could
+/// not be removed goes the next time finished jobs are cleared.
+fn take_away(dir: &Path) -> std::io::Result<()> {
+    let taken = dir.with_file_name(format!("{TAKEN}{}", uuid::Uuid::new_v4().simple()));
+    fs::rename(dir, &taken)?;
+    let _ = fs::remove_dir_all(&taken);
+    Ok(())
+}
+
 /// A finished job's folder taken away; one waiting or running is not.
 #[tauri::command]
 pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
@@ -1396,21 +1466,28 @@ pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
     if !current_record(&dir).is_some_and(|r| r.state.finished()) {
         return Err(format!("job {id} has not finished: stop it first"));
     }
-    fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+    take_away(&dir).map_err(|e| format!("job {id}'s files could not be taken away: {e}"))
+}
+
+/// Every finished job's folder in `root` taken away - and what was left of
+/// those taken away before: how many.
+fn clear_finished(root: &Path) -> Result<u32, String> {
+    let mut cleared = 0;
+    for e in fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
+        let dir = e.path();
+        if e.file_name().to_string_lossy().starts_with(TAKEN) {
+            let _ = fs::remove_dir_all(&dir);
+        } else if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
+            cleared += 1;
+        }
+    }
+    Ok(cleared)
 }
 
 /// Every finished job's folder taken away: how many.
 #[tauri::command]
 pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
-    let root = jobs_root(&app)?;
-    let mut cleared = 0;
-    for e in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
-        let dir = e.path();
-        if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && fs::remove_dir_all(&dir).is_ok() {
-            cleared += 1;
-        }
-    }
-    Ok(cleared)
+    clear_finished(&jobs_root(&app)?)
 }
 
 #[cfg(test)]
@@ -1727,6 +1804,51 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn takes_finished_jobs_away_out_of_the_way_first_and_what_was_left_of_others() {
+        let root = temp();
+        let done = shell(&root, ECHO, 1);
+        write_record(&done, &JobRecord { ended: Some(3), code: Some(0), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        let failed = shell(&root, ECHO, 1);
+        write_record(&failed, &JobRecord { ended: Some(3), code: Some(1), ..JobRecord::new(JobState::Failed, 1) }).unwrap();
+        // (waiting: its runner starting - not taken)
+        let waiting = shell(&root, ECHO, 1);
+        // (left of one taken away before, a file in it held then)
+        let left = root.join(format!("{TAKEN}0123"));
+        fs::create_dir_all(left.join("work")).unwrap();
+        fs::write(left.join(SPEC), fs::read(waiting.join(SPEC)).unwrap()).unwrap();
+        assert_eq!(clear_finished(&root).unwrap(), 2);
+        assert!(!done.exists() && !failed.exists() && !left.exists());
+        assert!(waiting.exists());
+        // (and one alone, by the same way: nothing of it left under its id)
+        let one = shell(&root, ECHO, 1);
+        write_record(&one, &JobRecord { ended: Some(3), ..JobRecord::new(JobState::Stopped, 1) }).unwrap();
+        take_away(&one).unwrap();
+        assert!(!one.exists());
+        let names: Vec<String> = fs::read_dir(&root).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().all(|n| !n.starts_with(TAKEN)), "{names:?}");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job's program is in its job object from its first instruction, and runs to its end once let go (Windows).
+    #[cfg(windows)]
+    #[test]
+    fn a_program_is_started_in_its_job_object_then_let_go() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let (cmd, flag) = shell_program();
+        let mut program = spawn_program(&dir, &cmd, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
+        assert!(!program.job.is_null());
+        let mut inside = 0;
+        unsafe {
+            use std::os::windows::io::AsRawHandle;
+            windows_sys::Win32::System::JobObjects::IsProcessInJob(program.child.as_raw_handle() as _, program.job, &mut inside);
+        }
+        assert_ne!(inside, 0);
+        assert!(program.child.wait().unwrap().success());
+        let _ = fs::remove_dir_all(root);
+    }
+
     /// A plugin's folder naming `programs`, and Meno's data folder with its uv environment holding `files`.
     fn plugin(programs: &str, files: &[&str]) -> (PathBuf, PathBuf) {
         let base = temp();
@@ -1746,7 +1868,7 @@ mod tests {
     #[test]
     fn runs_only_a_program_its_plugin_names_from_the_plugin_s_environment() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
-        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("other")]);
+        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash", "bash.exe", "CMD.EXE"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("bash.exe"), &exe("CMD.EXE"), &exe("other")]);
         let found = plugin_program(&data, &dir, "demo", "xtb", &["in.xyz".into(), "--opt".into()]).unwrap();
         assert!(found.program.ends_with(exe("xtb")));
         assert!(found.activation.is_none());
@@ -1755,6 +1877,9 @@ mod tests {
         assert!(plugin_program(&data, &dir, "demo", "other", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "named", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "bash", &[]).is_err());
+        // (a shell by its stem, with its extension: as Windows finds `cmd.exe`)
+        assert!(plugin_program(&data, &dir, "demo", "bash.exe", &[]).unwrap_err().contains("not a program a job runs"));
+        assert!(plugin_program(&data, &dir, "demo", "CMD.EXE", &[]).unwrap_err().contains("not a program a job runs"));
         assert!(plugin_program(&data, &dir, "demo", "../xtb", &[]).is_err());
         assert!(plugin_program(&data, &dir, "../demo", "xtb", &[]).is_err());
         // named, but not in its environment
