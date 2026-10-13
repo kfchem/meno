@@ -224,6 +224,24 @@ fn stop_asked(dir: &Path) -> bool {
     dir.join(STOP).exists()
 }
 
+/// Sleeps `long` in slices of `WAIT_STEP` at most, waking as soon as a
+/// slice ends with a stop asked: a job far back in the queue, asleep for
+/// seconds between its looks, stops as quickly as one near its head.
+/// (Only its own folder is looked at, with no lock.)
+fn sleep_watching(dir: &Path, long: Duration) {
+    let until = Instant::now() + long;
+    loop {
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return;
+        }
+        std::thread::sleep(left.min(WAIT_STEP));
+        if stop_asked(dir) {
+            return;
+        }
+    }
+}
+
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
@@ -278,7 +296,7 @@ pub fn run_job(dir: &Path) -> i32 {
         }
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
-            Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
             Ok(Turn::Behind(ahead)) => {
                 // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
                 let near = if near_head(ahead, spec.slots) {
@@ -287,7 +305,7 @@ pub fn run_job(dir: &Path) -> i32 {
                     at_head = None;
                     Duration::ZERO
                 };
-                std::thread::sleep(behind_step(ahead, spec.slots, near))
+                sleep_watching(dir, behind_step(ahead, spec.slots, near))
             }
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
@@ -1588,6 +1606,27 @@ mod tests {
         assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
         drop(held);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_asleep_far_back_in_the_queue_wakes_to_a_stop_within_a_step() {
+        let dir = temp();
+        let asleep = Instant::now();
+        let stop = {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(150));
+                ask_stop(&dir).unwrap();
+            })
+        };
+        sleep_watching(&dir, BEHIND_MOST);
+        stop.join().unwrap();
+        assert!(asleep.elapsed() < Duration::from_millis(150) + WAIT_STEP + Duration::from_millis(250), "{:?}", asleep.elapsed());
+        // (asked nothing, it sleeps all it was to)
+        let dir = temp();
+        let asleep = Instant::now();
+        sleep_watching(&dir, Duration::from_millis(900));
+        assert!(asleep.elapsed() >= Duration::from_millis(900));
     }
 
     #[test]
