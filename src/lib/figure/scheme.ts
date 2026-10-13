@@ -143,7 +143,8 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     const i = ts.indexOf(Math.max(...ts));
     const tip = h.pts[i];
     const length = ts[i] - Math.min(...ts);
-    if (length < 0.08 * bond || length > 1.1 * bond) continue;
+    // (a head may be small beside the bonds - RDKit's reaction drawing sets a head a twelfth of a bond long - but not under two of its lines' widths)
+    if (length < Math.min(0.08 * bond, 2 * w) || length > 1.1 * bond) continue;
     // (its point ahead of the end, or at it, on the line; its back by the end)
     if (ts[i] < -tol || Math.min(...ts) > 0.35 * length + tol || ts[i] > 1.4 * length + tol) continue;
     if (Math.abs(cs[i]) > Math.max(0.18 * length, 1.5 * w)) continue;
@@ -286,7 +287,7 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   const dashed = dashedLines(shapes.strokes, bond);
   const inDashes = new Set(dashed.flatMap((l) => l.of));
   const lines: Line[] = [
-    ...shapes.strokes.filter((s) => !inDashes.has(s) && len(s) > 0.1 * bond).map((s): Line => ({ a: s.a, b: s.b, w: s.w, ...(s.ink ? { ink: s.ink } : {}), dash: !!s.dash, of: [s] })),
+    ...shapes.strokes.filter((s) => !inDashes.has(s) && len(s) > Math.min(0.1 * bond, 2.5 * s.w)).map((s): Line => ({ a: s.a, b: s.b, w: s.w, ...(s.ink ? { ink: s.ink } : {}), dash: !!s.dash, of: [s] })),
     ...dashed,
   ];
   const near = Math.max(0.06 * bond, 2 * lineWidth);
@@ -811,7 +812,12 @@ export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const byLetters = sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 0;
   const byLines = figureBond(shapes, drawn.letters);
-  const bond = byLines && !(byLetters && byLines > 2 * byLetters) ? byLines : byLetters || byLines || 14.4;
+  // (three lines that long or more, each meeting another long line at an end - a structure's bonds at their joints; an arrow's line
+  // meets only its head's short strokes - tell it, however small the letters by them)
+  const long = shapes.strokes.filter((s) => len(s) > 0.5 * byLines);
+  const meetsLong = (s: Stroke) => long.some((t) => t !== s && [t.a, t.b].some((q) => dist(q, s.a) < 0.12 * len(s) || dist(q, s.b) < 0.12 * len(s)));
+  const joints = long.filter((s) => Math.abs(len(s) - byLines) <= byLines / 4 && meetsLong(s)).length;
+  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || joints >= 3) ? byLines : byLetters || byLines || 14.4;
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;

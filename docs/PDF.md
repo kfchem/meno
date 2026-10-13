@@ -1113,12 +1113,19 @@ layout.
 *Read as structure* reads a box as a scheme (`lib/figure/scheme`). Its
 arrows and "+" signs are taken out of what the figure is drawn with
 first; its structures are read from the rest, as above; and its letters
-that no structure took are read as words.
+that no structure took are read as words. Its bonds' length is its
+lines' (above) where three or more of them that long meet another long
+line at an end - a structure's joints; else, where its lines are more
+than twice as long as its letters are tall, by its letters, its lines
+being arrows.
 
 - **Arrows**: a line - or a row of dashes, or lines joined at corners -
   with a head at its end. The head can be filled, whole or half (its
   edges stroked as well, as some programs draw one, go with it); an open
   chevron of two strokes or an outline; or a single barb, a half head's.
+  A head may be small beside the bonds, as RDKit's reaction drawing
+  draws one - a twelfth of a bond - but is two of its line's widths long
+  at least.
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
   line's middle fitted along it.

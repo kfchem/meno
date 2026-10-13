@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { readScheme, type SchemeRead } from "./scheme";
+import aldol from "./fixtures/aldol-rdkitrxn.json";
+import grignard from "./fixtures/grignard-rdkitrxnacs.json";
 
 // Schemes drawn as a drawing program draws them, in points from the page's
 // top left (y down): bonds 14.4 points long, lines 0.6 thick, letters 10
@@ -452,5 +454,24 @@ describe("a reaction scheme's signs and words", () => {
     });
     expect(s.figure.atoms.some((a) => a.label === "OH")).toBe(true);
     expect(s.pluses).toEqual([]);
+  });
+});
+
+describe("a reaction drawn by another program", () => {
+  it("reads an arrow whose open head is small beside the bonds - a twelfth of a bond, three of its lines' widths - as an arrow", () => {
+    // (an aldol addition as RDKit's reaction drawing draws it, its options as they come: two acetaldehydes, "+", the arrow, the
+    // aldol; its head two strokes 3.2 points long, the bonds 38)
+    const s = readScheme(aldol as unknown as FigureDrawn);
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].point.x).toBeGreaterThan(s.arrows[0].tail.x + 40);
+    expect(s.pluses).toHaveLength(1);
+  });
+
+  it("takes the bonds' length from a structure's lines meeting at joints, however small its letters beside them", () => {
+    // (a Grignard addition as RDKit's reaction drawing draws it in its ACS 1996 mode: its letters a third of a bond tall, its arrow
+    // a bond and a quarter long)
+    const s = readScheme(grignard as unknown as FigureDrawn);
+    expect(s.arrows).toHaveLength(1);
+    expect(s.pluses).toHaveLength(1);
   });
 });
