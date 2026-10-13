@@ -188,8 +188,11 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
     y: balls.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
   };
   const placed: LabelBox[] = [];
+  // (none of an atom its look leaves out - hydrogens on carbon, where it
+  // hides them - as the canvas draws none: Molecule3DView)
+  const hidden = solid.hidden[look];
   return measures
-    .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n))
+    .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n && !hidden[i]))
     .map((x) => {
       const marks = measureMarks(places, x.atoms);
       const lines = piecesOf(marks);

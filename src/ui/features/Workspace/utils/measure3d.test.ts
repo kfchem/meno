@@ -110,6 +110,25 @@ describe("a measurement in a picture", () => {
     expect(turned.lines[0][0].x).toBeCloseTo(2 * 10 - distance.lines[0][0].x, 6);
   });
 
+  it("leaves out a measurement of an atom its look leaves out, as the canvas does - a C-H, hydrogens on carbon hidden", () => {
+    const methane = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "H", x: 1.09, y: 0, z: 0 },
+        { el: "O", x: -1.43, y: 0, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      at: { x: 0, y: 0 },
+      measures: [{ id: 1, atoms: [0, 1] }, { id: 2, atoms: [0, 2] }],
+    };
+    expect(measurePictureMarks(methane, STYLE_3D, 0.75).map((x) => x.text)).toEqual(["1.09 Å", "1.43 Å"]);
+    const hiding = { ...STYLE_3D, primary: { ...STYLE_3D.primary, hydrogens: "carbonHidden" as const } };
+    expect(measurePictureMarks(methane, hiding, 0.75).map((x) => x.text)).toEqual(["1.43 Å"]);
+  });
+
   // an O and an N 2.87 Å apart, as in an amino alcohol, and a carbon off to one side
   const pair = (d: number) => ({
     atoms: [
