@@ -45,9 +45,8 @@ export function structuresOf(model: Model): number[][] {
   return out;
 }
 
-/** The middle of a structure's atoms. */
-export function middleOfAtoms(model: Model, ids: readonly number[]): Pt {
-  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+/** The middle of a structure's atoms, found in `byId`: the page's atoms by their ids. */
+export function middleOfAtoms(byId: ReadonlyMap<number, Pt>, ids: readonly number[]): Pt {
   let x = 0;
   let y = 0;
   for (const id of ids) {
@@ -58,13 +57,29 @@ export function middleOfAtoms(model: Model, ids: readonly number[]): Pt {
   return { x: x / ids.length, y: y / ids.length };
 }
 
+/**
+ * The structures drawn, each with its middle: worked out once for each
+ * drawing - a drawing changed is a new one - as every set asks on every
+ * edit, of pages of thousands of atoms (the atoms by id made once, not for
+ * each structure).
+ */
+const drawnAt = new WeakMap<Model, { ids: number[]; at: Pt }[]>();
+function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
+  let found = drawnAt.get(model);
+  if (!found) {
+    const byId = new Map(model.atoms.map((a) => [a.id, a]));
+    found = structuresOf(model).map((ids) => ({ ids, at: middleOfAtoms(byId, ids) }));
+    drawnAt.set(model, found);
+  }
+  return found;
+}
+
 /** Whether `p` lies before `q`: higher on the page, or - about level, within half a bond's height - to its left. */
 const before = (p: Pt, q: Pt) => (Math.abs(p.y - q.y) > 0.9 ? q.y - p.y : p.x - q.x);
 
 /** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
 export function setMembers(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
-  const structures = structuresOf(page.model)
-    .map((ids) => ({ ids, at: middleOfAtoms(page.model, ids) }))
+  const structures = drawnIn(page.model)
     .filter((s) => inside(set, s.at))
     .sort((p, q) => before(p.at, q.at))
     .map((s) => s.ids);

@@ -94,16 +94,31 @@ function hash(text: string, h = 0x811c9dc5): number {
   return h;
 }
 
+/**
+ * What a molecule in 3D adds to a step's key, as text: worked out once for
+ * each molecule - a molecule changed is a new one - since every step's key
+ * is asked on every edit, and a trajectory's frames are many.
+ */
+const keyed = new WeakMap<Molecule3D, readonly string[]>();
+function keyTexts(m: Molecule3D): readonly string[] {
+  let texts = keyed.get(m);
+  if (!texts) {
+    texts = [
+      m.atoms.map((a) => `${a.el}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
+      `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}`,
+    ];
+    keyed.set(m, texts);
+  }
+  return texts;
+}
+
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
-  for (const m of input.molecules) {
-    h = hash(m.atoms.map((a) => `${a.el}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"), h);
-    h = hash(`${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`, h);
-    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}`, h);
-  }
+  for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
   h = hash(input.structures.map((s) => s.join(",")).join(";"), h);
   return h.toString(36);
 }
