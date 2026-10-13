@@ -88,7 +88,8 @@ Everything a plugin is lives in one folder, named by its id:
   <name>.grammar     how a text of a kind it knows is coloured, where it says
   overrides.txt      what its lock overrides, where its makers pin what cannot
                      be installed (MolNexTR's)
-  LICENSE            its licence's text, where it is not Meno's (*Licences*)
+  LICENSE            the licence of its own code, where that is not Meno's
+                     (*Licences*): the Blender plugin's alone
 ```
 
 What it needs besides - a model's trained weights, too large to carry and
@@ -152,7 +153,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | Field | Form | What it says, and how it is checked |
 | --- | --- | --- |
 | `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
-| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; its licence (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
+| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
@@ -248,12 +249,39 @@ carries; a test keeps its kinds and the kinds those plugins read in step.
 
 ## Licences
 
-A plugin carries its own licence (`licence`; its text, `LICENSE`, in its
-folder where it is not Meno's). Meno is Apache-2.0. A plugin whose code
-must be under another licence - a script for Blender, which uses Blender's
-own Python API and so is GPL - may come with Meno while it stands apart
-(the maintainer, 2026-10-10; to be distributed apart later, if those using
-Meno in companies make that worthwhile):
+Meno is Apache-2.0, and so is what the folders of the plugins it carries
+hold - their workers, manifests, locks and grammars - but for one plugin
+(below). A plugin's `licence`, as its `version` and `homepage`, is that of
+what it brings: the program or package its environment is made with
+(cclib's BSD-3-Clause, xTB's LGPL-3.0-or-later, MolScribe's MIT), or,
+where it brings only its own code - an interface to a program installed
+separately, the WFX reader, Getting started - that code's. Settings,
+*Plugins*, shows it.
+
+What a plugin brings is fetched as it is set up - from PyPI, conda-forge
+or its makers' repository, as its lock says - and is carried neither in
+its folder nor in Meno, so its folder holds no text of that licence
+(checked on 2026-10-13 against the licences the packages install;
+MolScribe's as PDF.md, *A picture read*, gives it):
+
+- **cclib** and **RDKit** (BSD-3-Clause) ask that copies passed on, as
+  source or built, keep their notice; **MolScribe** (MIT), that its
+  notice go with copies of it or of substantial parts of it. Meno passes
+  on no copy of any of them: its lock names each, and a worker of Meno's
+  uses it.
+- **xTB** and **CREST** (LGPL-3.0-or-later) set their conditions on
+  conveying them, and none on running them (GPL-3.0, section 2, which the
+  LGPL takes in): Meno runs each as a program apart, from the environment
+  pixi made on the computer.
+- A model's trained weights (`downloads`) are fetched under their own
+  licence too, and not carried.
+
+A plugin's folder holds a licence's text (`LICENSE`) only where its own
+code is under another licence than Meno's. A plugin whose code must be -
+a script for Blender, which uses Blender's own Python API and so is GPL -
+may come with Meno while it stands apart (the maintainer, 2026-10-10; to
+be distributed apart later, if those using Meno in companies make that
+worthwhile):
 
 - it is a folder of its own, with its licence's text, and says it
   (`licence: "GPL-3.0-or-later"`);

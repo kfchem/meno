@@ -517,13 +517,13 @@ gave), and one can be shown again.
 ## Programs and plugins
 
 - **xTB**: a plugin whose environment is made by pixi from conda-forge -
-  xtb 6.7.1, LGPL-3.0, for macOS (Apple silicon and Intel), Windows and
-  Linux. It fills *Optimise*, *Energy* and *Frequencies*, and reads its
-  own outputs back.
+  xtb 6.7.1, LGPL-3.0-or-later, for macOS (Apple silicon and Intel),
+  Windows and Linux. It fills *Optimise*, *Energy* and *Frequencies*, and
+  reads its own outputs back.
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
-  with xtb 6.7.1, LGPL-3.0, on conda-forge for macOS and Linux only. On
-  Windows it cannot be added, and *Conformers* is filled by RDKit alone
-  there. (Not 3.0.2: *As built*, step 5.)
+  with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
+  only. On Windows it cannot be added, and *Conformers* is filled by RDKit
+  alone there. (Not 3.0.2: *As built*, step 5.)
 - **Programs installed separately** (ORCA, Gaussian; step 6): never fetched by
   Meno - their licences do not allow it. A plugin's manifest says which
   program it needs and how to know it (its name, and the line its version
@@ -570,7 +570,7 @@ gave), and one can be shown again.
   with no code taken or read from ReactFlow, the Workflow Builder tab, or
   any other node editor (the maintainer, 2026-10-08). ReactFlow
   (`@xyflow/react`) leaves Meno's dependencies with the tab.
-- **Programs are run, not linked**: xTB and CREST (LGPL-3.0) are
+- **Programs are run, not linked**: xTB and CREST (LGPL-3.0-or-later) are
   separate programs in their plugins' environments, fetched from
   conda-forge with the chemist's consent; their licences are shown in
   Settings, *Plugins*, as each plugin's is.
