@@ -279,7 +279,16 @@ pub fn run_job(dir: &Path) -> i32 {
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
-            Ok(Turn::Behind(ahead)) => std::thread::sleep(behind_step(ahead, spec.slots, at_head.get_or_insert_with(Instant::now).elapsed())),
+            Ok(Turn::Behind(ahead)) => {
+                // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
+                let near = if near_head(ahead, spec.slots) {
+                    at_head.get_or_insert_with(Instant::now).elapsed()
+                } else {
+                    at_head = None;
+                    Duration::ZERO
+                };
+                std::thread::sleep(behind_step(ahead, spec.slots, near))
+            }
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
                 return 1;
@@ -363,21 +372,31 @@ enum Turn {
     Behind(u32),
 }
 
+/// Whether a job `ahead` places back in a queue running `slots` at once is
+/// near enough its head to look as the head does: its turn may come with
+/// the next to end, or the one after. (Only the head takes a turn; so where
+/// jobs end quickly, the one behind it is the head within moments.)
+fn near_head(ahead: u32, slots: u32) -> bool {
+    ahead < 2 * slots.max(1)
+}
+
 /// How long a waiting job sleeps behind `ahead` others waiting before it,
-/// its queue running `slots` at once: as the head of the queue does where
-/// its turn may come with the next to end (`at_head`, `step_at`); at
+/// its queue running `slots` at once: as the head of the queue does near
+/// it (`near_head`; `at_head` how long it has been there, `step_at`); at
 /// `WAIT_STEP` among the next few (`NEAR_EACH` a slot, and `NEAR_MORE`);
 /// further back, `PLACE_STEP` more for each place beyond, shared among the
 /// slots - never longer than the queue takes to come so far, a job a third
 /// of a second at the quickest - up to `BEHIND_MOST`. A queue of hundreds, each
 /// runner looking at every job's folder under one lock every step, kept
 /// that lock all but always held, and its head waiting on it: 150 jobs of
-/// 0.06 s took 130 s to run one after another.
+/// 0.06 s took 130 s to run one after another. (Timed from its first look,
+/// not from when it came near the head, the head's quick step was long
+/// over by then: the next started a quarter of a second after one ended.)
 fn behind_step(ahead: u32, slots: u32, at_head: Duration) -> Duration {
-    let slots = slots.max(1);
-    if ahead < slots {
+    if near_head(ahead, slots) {
         return step_at(at_head, WAIT_STEP);
     }
+    let slots = slots.max(1);
     let near = NEAR_EACH * slots + NEAR_MORE;
     if ahead < near {
         return WAIT_STEP;
@@ -1573,15 +1592,17 @@ mod tests {
 
     #[test]
     fn a_job_far_back_in_the_queue_looks_for_its_turn_seldom_and_one_near_its_head_often() {
-        // (one slot: the one next after the head looks as the head does; the next few at the old step; each further back a step more, up to ten seconds)
+        // (one slot: the two next after the head look as the head does, quickly while new there; the next few at the old step; each further back a step more, up to ten seconds)
         assert_eq!(behind_step(0, 1, Duration::ZERO), QUICK_STEP);
-        assert_eq!(behind_step(1, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(1, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::from_secs(60)), WAIT_STEP);
+        assert_eq!(behind_step(2, 1, Duration::ZERO), WAIT_STEP);
         assert_eq!(behind_step(7, 1, Duration::ZERO), WAIT_STEP);
         assert_eq!(behind_step(10, 1, Duration::ZERO), PLACE_STEP * 3);
         assert_eq!(behind_step(500, 1, Duration::ZERO), BEHIND_MOST);
-        // (four slots: the four next after the head might each take one as they come free; further back, the steps shared)
-        assert_eq!(behind_step(3, 4, Duration::ZERO), QUICK_STEP);
-        assert_eq!(behind_step(4, 4, Duration::ZERO), WAIT_STEP);
+        // (four slots: the eight next after the head might each take one as they come free; further back, the steps shared)
+        assert_eq!(behind_step(7, 4, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(8, 4, Duration::ZERO), WAIT_STEP);
         assert_eq!(behind_step(28, 4, Duration::ZERO), PLACE_STEP * 9 / 4);
         // (never asleep past its turn: the queue takes at least a third of a second a job, a slot, to come to it)
         for slots in [1u32, 2, 4, 8] {
