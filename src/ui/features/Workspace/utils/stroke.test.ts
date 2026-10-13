@@ -127,3 +127,26 @@ describe("a chain stroke", () => {
     expect(lead(apart, 3).nodes.some((n) => n.atomId === 3)).toBe(true);
   });
 });
+
+describe("a chain stroke beside a large drawing", () => {
+  it("takes no longer a step for the drawing's 28 000 atoms: it is gone over once, not at every step", () => {
+    // (a thousand chains of 28 atoms, well away from where the stroke is drawn)
+    const atoms: { id: number; x: number; y: number }[] = [];
+    const bonds: { a: number; b: number }[] = [];
+    for (let m = 0; m < 1000; m++)
+      for (let k = 0; k < 28; k++) {
+        const id = m * 28 + k + 1;
+        atoms.push({ id, x: 100 + (m % 40) * 30 + k * 0.87, y: 100 + Math.floor(m / 40) * 3 + (k % 2) * 0.5 });
+        if (k) bonds.push({ a: id - 1, b: id });
+      }
+    const drawing = { atoms, bonds };
+    const cpu = () => process.cpuUsage().user / 1000;
+    const t0 = cpu();
+    let s = startStroke("chain", NEW_ATOM, drawing, { x: 0, y: 0 }, L);
+    for (let x = 0.05; x <= 2.5; x += 0.05) s = advanceStroke(drawing, s, { x, y: 0.2 }, L);
+    const spent = cpu() - t0;
+    expect(s.nodes.length).toBeGreaterThanOrEqual(2);
+    // (gone over once: about 70 ms of CPU; gone over at every step, about 950)
+    expect(spent).toBeLessThan(350);
+  });
+});

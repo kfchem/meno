@@ -843,7 +843,8 @@ Decided while building it, for the maintainer to confirm:
 
 - **RDKit's conformer search in a step is the one *3D structures* makes
   on the canvas** - ETKDG v3, then MMFF94, MMFF94s or UFF - with the same
-  options, run as a job: RDKit's own Python runs a script of the plugin's
+  options, starting from those chosen in Settings, *Molecules in 3D*
+  (2026-10-13), run as a job: RDKit's own Python runs a script of the plugin's
   on the molecule written into the job's folder, so that a long search
   goes on when Meno closes, as any job does. The stereo is kept as the
   entry's 3D structure has it.

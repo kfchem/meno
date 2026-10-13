@@ -189,7 +189,8 @@ Each point is resolved by the plan below (see *Every point resolved*).
   decided once the measurements were seen (see *Response*).
 - **RDKit is a plugin.** No plugin is kept running ahead of need: each
   starts when first needed and stays for the session, as RDKit does now
-  (PLUGINS.md).
+  (PLUGINS.md). Since 2026-10-13 a worker unused for 15 minutes is
+  stopped, and started again when next needed.
 
 ### The line
 

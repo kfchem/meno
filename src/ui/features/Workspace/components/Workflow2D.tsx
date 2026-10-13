@@ -9,7 +9,7 @@ import { COLORS } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
-import StepCard, { Port, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { countOf, type Frame } from "../workflow/entries";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
@@ -20,6 +20,7 @@ import { DURATION } from "../../../theme/motion";
 import { canWire, givesOf, stateOf } from "../workflow/flow";
 import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { CARD_W, HTML_DISTANCE, PORT_DOWN, PX } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
@@ -533,7 +534,11 @@ export default function Workflow2D() {
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
   };
-  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps]);
+  // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
+  const settingsOptions = useAppSettings((s) => s.options);
+  // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps, settingsOptions]);
   // how each running step's jobs are getting on, as last looked at
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
@@ -551,6 +556,7 @@ export default function Workflow2D() {
           ended: seen.filter((x) => x && finished(x.state)).length,
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
+          ...(shareOf(seen) != null ? { share: shareOf(seen) } : {}),
         },
       });
     }

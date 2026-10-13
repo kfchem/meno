@@ -1019,6 +1019,11 @@ lipids each have their own way of being drawn, which it should know.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
+   - A bond from a label to a label at a terminal atom - Mg-Br, O-3H - is
+     drawn just long enough for the two, in the drawing's style, where at a
+     bond's length they would take more of it than their room
+     (`labelShareMax`; the maintainer, 2026-10-13). Only Clean-up and a
+     SMILES do it: a bond drawn by hand keeps its length.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
      (*Expand abbreviation*) still draws all of it; what is shown by name

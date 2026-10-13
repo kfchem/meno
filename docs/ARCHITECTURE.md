@@ -309,8 +309,15 @@ What is left before the editor counts as finished, and in what order, is in
   bond's neighbours from its atoms' own bonds. A zoom does not lay the
   drawing out again while the layout made at the zoom it was laid out at
   is the same drawing at this one (`sameAtZooms`: world units, lines wider
-  than the least they are kept at, a wave's turns in as many steps). The
-  round caps are one instanced mesh; the hit areas of atoms and bonds are
+  than the least they are kept at, a wave's turns in as many steps). Nor
+  does a change lay out what it does not touch: the drawing is laid out a
+  structure at a time (`lib/chem/layoutStructures.ts`), each atom and bond
+  reaching the layout as the same object while it is unchanged, and what a
+  structure was laid out to is taken again while all of its atoms and bonds
+  are; structures are laid out together where a name's letters, a note on
+  a bond or a bond in perspective reaches from one to the other, and a
+  drawing with a bracket (an S-group) is laid out whole. A glide moves only
+  the structures that changed. The round caps are one instanced mesh; the hit areas of atoms and bonds are
   never drawn (picking does not ask whether a material is); the ring
   circles the canvas offers are found without a second layout
   (`ringCircles`), when the pointer looks for one; R, S, E and Z are placed
@@ -331,6 +338,13 @@ What is left before the editor counts as finished, and in what order, is in
   the pointer (`PartMenu.tsx`), which offers the same actions to the mouse
   alone. Only the main button works atoms and bonds; the other is the
   menu's. Over a button or a card nothing counts as hovered.
+- **A press keeps its hover**: a handler that stops a press lets R3F take
+  back the hover of the object it is on, where the mesh pressed is not the
+  mesh the object was first hovered by - a PDF's page drawn finer since the
+  pointer came to it is another of its meshes - and the object is told the
+  pointer is out. What is pressed is under the pointer, so a PDF pressed is
+  hovered again (`components/keptHover`); its hover goes at the next move
+  unless the canvas hovers it again by then.
 - **Strokes**: bonds drawn in one gesture are a stroke (`utils/stroke.ts`,
   with the angles in `utils/extendSnap.ts`) - a bond, or a chain - held in
   `extend.stroke` while it is drawn. A chain walks a honeycomb
