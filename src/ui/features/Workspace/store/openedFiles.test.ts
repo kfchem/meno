@@ -4,7 +4,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { editorModelOf, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { recordsOf } from "../utils/stacks";
-import { labelBoxes, pageBoxes, placeOpened } from "../utils/freePlace";
+import { labelBoxes, labelledPart, pageBoxes, placeOpened } from "../utils/freePlace";
 import type { Box } from "../utils/extent";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import { MENO } from "../../../../lib/chem/style";
@@ -73,6 +73,17 @@ describe("a file opened onto a workflow", () => {
     expect(apart(drawn, { x0: step.x, y0: step.y - CARD_H, x1: step.x + CARD_W, y1: step.y })).toBeGreaterThan(0);
     // (the frame and the card are among what Open keeps clear of)
     expect(pageBoxes(state(), MENO)).toEqual(expect.arrayContaining([{ x0: -4, y0: -4, x1: 4, y1: 4 }, { x0: 6, y0: 3 - CARD_H, x1: 6 + CARD_W, y1: 3 }]));
+  });
+
+  it("measures only the labels' atoms, and those the same as the whole drawing's", async () => {
+    // (three records of a stack, each with an OH, besides its carbons)
+    const read = await processFileContent("three.sdf", sdf);
+    const part = labelledPart(read.model);
+    // (each O and the carbon it is bonded to - not the stack's every carbon: 6 of its 12 atoms)
+    expect(read.model.atoms).toHaveLength(12);
+    expect(part.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "O", "O", "O"]);
+    const sorted = (boxes: Box[]) => boxes.map((b) => [b.x0, b.y0, b.x1, b.y1].map((v) => v.toFixed(9)).join()).sort();
+    expect(sorted(labelBoxes(part, MENO))).toEqual(sorted(labelBoxes(read.model, MENO)));
   });
 
   it("counts a label as far as it reaches - a reagent written out over an arrow", () => {

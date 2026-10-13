@@ -86,6 +86,25 @@ export function labelBoxes(model: Model, style: DrawingStyle): Box[] {
 }
 
 /**
+ * The part of a drawing whose labels can reach past half a bond: its atoms
+ * that may carry one - all but plain carbons - and those bonded to them,
+ * which decide where its letters go. A carbon written bare is no further
+ * than half a bond round its atom, which every atom is given anyway; so a
+ * thousand records of a stack are not all set out in letters to be
+ * measured, only their labels' atoms.
+ */
+export function labelledPart(model: Model): Model {
+  const labelled = new Set(model.atoms.filter((a) => a.el !== "C" || a.charge || a.isotope || a.radical || a.hCount != null).map((a) => a.id));
+  if (!labelled.size) return { atoms: [], bonds: [] };
+  const near = new Set(labelled);
+  for (const b of model.bonds) {
+    if (labelled.has(b.a)) near.add(b.b);
+    if (labelled.has(b.b)) near.add(b.a);
+  }
+  return { atoms: model.atoms.filter((a) => near.has(a.id)), bonds: model.bonds.filter((b) => near.has(b.a) && near.has(b.b)) };
+}
+
+/**
  * The room what a file brings takes, about the middle of its atoms (its
  * centroid): its atoms, its labels as far as they reach - a reagent written
  * over the arrow - its molecules in 3D, its arrow and its "+" signs, as
@@ -102,7 +121,7 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
   };
   const { x: cx, y: cy } = result.centroid;
   for (const a of result.model.atoms) take(a.x - cx - pad, a.y - cy - pad, a.x - cx + pad, a.y - cy + pad);
-  for (const b of labelBoxes(result.model, drawingStyle)) take(b.x0 - cx, b.y0 - cy, b.x1 - cx, b.y1 - cy);
+  for (const b of labelBoxes(labelledPart(result.model), drawingStyle)) take(b.x0 - cx, b.y0 - cy, b.x1 - cx, b.y1 - cy);
   // (its "+" signs, each a label's size, as the page measures them: ./extent)
   const plusHalf = editorLayoutOptions(drawingStyle).fontPx / 2;
   for (const p of scheme.pluses ?? []) take(p.x - plusHalf, p.y - plusHalf, p.x + plusHalf, p.y + plusHalf);
