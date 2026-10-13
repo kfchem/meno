@@ -157,10 +157,11 @@ and what it holds.
 As Meno's own things look (decided: 15), not as the figures here do:
 
 - **Colours** from Meno's palette only: its greys for frames, lines and
-  words; the accent (`accel-base`) for what is done or chosen; the
-  attention colour (`accel-accent`) for what failed; the canvas's own
-  hover blue for what is under the pointer on the canvas, as an atom or
-  an arrow is lit.
+  words; Meno's base colour (#317689, `COLORS.base`, `accel-base` in the
+  styles) for what is done or chosen; the attention colour (#cd4560,
+  `COLORS.attention`, `accel-accent` in the styles) for what failed; the
+  canvas's own hover blue for what is under the pointer on the canvas,
+  as an atom or an arrow is lit.
 - **Lines** as fine as Meno's cards' and chips' borders - a hair on the
   screen, at any zoom - and wires no heavier than they.
 - **Cards** as Meno's chips and cards are: white, rounded, a hairline
@@ -296,7 +297,7 @@ one of the kinds of calculation it does (decided: 16):
 
 - **Drawn** from a port that gives to one that takes, or the other way: a
   press on a port and a drag. While it is drawn, the ports that would
-  take it are lit in the accent; the others stay as they are.
+  take it are lit in the base colour; the others stay as they are.
 - **What may join**: what a port gives to a port that takes it (*Kinds of
   step*). Nothing is converted on the way: a set of structures does not
   go into *Optimise* - *Conformers* and *Choose one* go between, on the
@@ -397,8 +398,8 @@ once (*Several at once*).
 | --- | --- | --- |
 | Ready | none, grey words | *Ready* |
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
-| Running | turning, the accent | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
-| Done | a tick, the accent | *2:03 · −42.10871 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
+| Running | turning, the base colour | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
+| Done | a tick, the base colour | *2:03 · −42.10871 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it, changed since its run; its results stay as they are |

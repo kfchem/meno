@@ -174,8 +174,8 @@ words, a width they break into lines at, and how their lines lie.
 
 - **As things are moved**: the edges and middles of what is moved line up
   with those of what is near - and with a slide's edges and middle lines -
-  within 6 pixels, a thin line in Meno's accent (#cd4560 - the colour the
-  code calls attention, `COLORS.attention`) showing each that does,
+  within 6 pixels, a thin line in Meno's attention colour (#cd4560,
+  `COLORS.attention`) showing each that does,
   from end to end of what lines up. Spaces between things in a row or a
   column come to the same as others there, each marked. Made larger or
   smaller, a thing takes another's width or height.
@@ -348,8 +348,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   angles.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
   move across or up and down, the way it has gone most.
-- `components/Guides2D.tsx`: the lines and marks in Meno's accent
-  (`COLORS.attention`, #cd4560), one
+- `components/Guides2D.tsx`: the lines and marks in Meno's attention
+  colour (#cd4560, `COLORS.attention`), one
   pixel on the screen at any zoom, coming and going in a short ease.
 
 ### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
