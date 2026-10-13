@@ -64,7 +64,9 @@ export async function heldOutput(hash: string): Promise<{ name: string; text: st
 
 /** The outputs a workspace file keeps, held for the session as it is opened - each read from it only when wanted. */
 export function holdOutputsOf(file: MenoFile): void {
-  const decoder = new TextDecoder();
+  // (its bytes as they were written, a byte-order mark kept: a text from Notepad
+  // began with one, and without it its SHA-256 was not its own - it was lost)
+  const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   for (const f of file.files) {
     if (!f.media.startsWith("text/") || outputs.has(f.sha256)) continue;
     outputs.set(f.sha256, {

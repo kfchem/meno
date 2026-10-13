@@ -45,13 +45,21 @@ const MOST_PIXELS = 48_000_000;
 /** The resolution copied pictures are made at, as Settings says. */
 const pictureDpi = () => useAppSettings.getState().pictures.dpi;
 
+/** The longest side of a canvas a picture is drawn on, in pixels: what WebView2 (Chromium) and Firefox draw at most. */
+const MOST_SIDE = 32_767;
+
 /**
  * The resolution a picture `width` by `height` CSS pixels is made at:
- * `dpi`, or lower where that would come to more than `MOST_PIXELS`.
+ * `dpi`, or lower where that would come to more than `MOST_PIXELS`, or a
+ * side longer than `MOST_SIDE` - a line of words thousands of letters long,
+ * kept at full resolution, was a canvas too wide to draw, and its PNG was
+ * left off the clipboard.
  */
 export function pictureDpiFor(width: number, height: number, dpi: number): number {
   const area = Math.max(width, 1) * Math.max(height, 1) * (dpi / 96) ** 2;
-  return area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const byArea = area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const bySide = Math.floor((MOST_SIDE * 96) / Math.max(width, height, 1));
+  return Math.max(1, Math.min(byArea, bySide));
 }
 
 const utf8 = new TextEncoder();
