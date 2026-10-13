@@ -14,7 +14,7 @@ a workspace holding 2D and 3D together - see [`WORKSPACE.md`](./WORKSPACE.md).
 | App shell (React) | `src/App.tsx`, `src/lib/core/`, `src/ui/layouts/`, `src/ui/views/` | Tab model (open/close/reorder/rename), mapping a tab's `kind` to a view component. |
 | Features (React) | `src/ui/features/*` | One folder per view: the workspace (2D drawing, molecules in 3D, texts, PDFs, workflows) and settings, with the text and style editors they share. |
 | Chemistry helpers (TS) | `src/lib/chem/`, `src/utils/` | File parsing (MOL/SDF/RXN/XYZ/PDB), editor model conversion, 2D depiction layout (bond lines, wedges, labels) and ACS-style sizing. Pure functions — no React, no Tauri. |
-| Python worker | `src-tauri/resources/workers/interactive_worker.py` | Line-delimited JSON REPL run inside a `uv`-managed venv. |
+| Python workers | `src-tauri/resources/plugins/<id>/worker.py` | Each plugin's worker: JSON lines over stdio, run in the plugin's own environment, made by uv or pixi. (The Python Console, a REPL in a tab of its own, was removed from the UI on 2026-10-10.) |
 
 Rule of thumb: parsing and geometry are pure TypeScript (testable with Vitest),
 rendering is React + react-three-fiber, and anything touching processes goes
@@ -86,7 +86,7 @@ src-tauri/
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
   capabilities/           permission sets for the main window
-  resources/py/           the lock files of Meno's own Python profiles (the console's, workflows');
+  resources/py/           the lock files of Meno's own Python profiles;
                           uv and pixi are not bundled but fetched the first time an environment
                           needs one, pinned by version and SHA-256 (src/tools.rs)
   resources/workers/      Meno's own Python worker scripts
@@ -1111,9 +1111,10 @@ path it is given:
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
   script unchanged.
-- A sidecar running the console's worker is a `python-code` task on the
-  network; any other worker is pointed at the proxy with no task, so what it
-  reaches for is refused and on the record.
+- A worker is pointed at the proxy with no task, so what it reaches for is
+  refused and on the record. (The Python Console, whose worker ran the
+  user's own code as a `python-code` task, was removed from the UI on
+  2026-10-10.)
 - `job_start`: the webview names a plugin and a program, not a path. The
   program must be one the plugin's manifest names (`steps[].programs`),
   never a shell or an interpreter that takes code in its arguments, found
@@ -1155,24 +1156,23 @@ to be able to work with nothing going out at all.
   and which left the whole text the letter was in undrawn.
 - **Everything else goes through the app's proxy** (`src-tauri/src/net.rs`),
   on the loopback address. A child process that may use the network - uv
-  setting up Python, a Python sidecar - is begun as a *task* with a
-  *purpose* (`python-env:console`, `python-code`) and pointed at the proxy
-  with the task's token in its proxy credentials. The proxy carries a
-  connection only for a task under way, only for a purpose the user has
-  allowed (`python-code`, the user's own code, needs no asking), only over
-  HTTPS, and never in offline mode. Each connection - host, bytes each way,
+  or pixi setting up a plugin's environment - is begun as a *task* with a
+  *purpose* (`python-env:plugin-<id>`) and pointed at the proxy with the
+  task's token in its proxy credentials. The proxy carries a connection
+  only for a task under way, only for a purpose the user has allowed, only
+  over HTTPS, and never in offline mode. Each connection - host, bytes each way,
   times, outcome - goes to the window as it happens (`net:connection`, every
   half second while open) and to `network-log.jsonl` in the app's data
-  folder when it ends. A child that may not use the network - another
-  worker, or the console while Meno is offline - is pointed at the proxy
-  with no task, so whatever it reaches for is refused and on the record.
+  folder when it ends. A child that may not use the network - a plugin's
+  worker, a job - is pointed at the proxy with no task, so whatever it
+  reaches for is refused and on the record.
   The proxy is bound, and offline mode and the purposes allowed are read
   from the saved settings, as the app starts: before the window has loaded,
   nothing can be started that would go out on its own.
 - **The proxy holds what honours proxy variables** - uv, pip, Python's
-  `urllib`, `requests`. Code in the console that opens a socket of its own,
-  or ignores those variables, is not held by it: Meno does not sandbox the
-  console.
+  `urllib`, `requests`; what opens a socket of its own, or ignores those
+  variables, is not held by it. The Python Console, which ran the user's
+  own code without a sandbox, was removed from the UI on 2026-10-10.
 - **The window asks and shows** (`lib/net/network.ts`, `ui/network/`): a
   purpose's first use of the network waits on the user's yes
   (`askToConnect`, remembered in the settings until withdrawn); each task
