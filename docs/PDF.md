@@ -1116,7 +1116,8 @@ arrows and "+" signs are taken out of what the figure is drawn with
 first; its structures are read from the rest, as above; and its letters
 that no structure took are read as words - but a word on a side of the
 scheme, over or under no arrow, that a "+" on its line joins to the rest,
-within a bond of it, and that reads as a whole molecule is that
+within a bond of it (or two and a half of its letters' height, where
+that is further), and that reads as a whole molecule is that
 molecule: a reagent Meno reads it as (H2O, HCl, NaCl), or an element its
 hydrogens and charge leave nothing to bond (I-, Na+, NH3). It is marked
 ("Written as words beside a "+": read as a molecule."). Words over or

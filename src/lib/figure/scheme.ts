@@ -841,13 +841,13 @@ export function readScheme(
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);
   const { words: all, pluses } = wordsOf(figure.left.letters, arrows, sizes[Math.floor(sizes.length / 2)]);
-  // (a "+" on its line, within a bond of it, joins it to the rest)
+  // (a "+" on its line, within a bond of it - or two and a half of its letters' height, where that is further - joins it to the rest)
   const signed = [...signs.pluses, ...pluses];
   const atBond = figure.bond || bond;
   const joined = (w: SchemeWords) =>
     signed.some((p) => {
       const h = w.box[3] - w.box[1];
-      return p.y > w.box[1] - 0.3 * h && p.y < w.box[3] + 0.3 * h && Math.max(w.box[0] - p.x, p.x - w.box[2]) < atBond;
+      return p.y > w.box[1] - 0.3 * h && p.y < w.box[3] + 0.3 * h && Math.max(w.box[0] - p.x, p.x - w.box[2]) < Math.max(atBond, 2.5 * h);
     });
   const label = (w: SchemeWords) => w.text.replace(/\s+/g, "").replace(/[\u2212\u2013]/g, "-");
   const molecules = all.filter((w) => w.arrow == null && !w.text.includes("\n") && joined(w) && whole(label(w)));

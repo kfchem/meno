@@ -4,6 +4,7 @@ import { readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
 import dielsAlder from "./fixtures/diels-alder-rdkitrxn.json";
 import esterification from "./fixtures/esterification-rdkitrxn.json";
+import esterificationAcs from "./fixtures/esterification-rdkitrxnacs.json";
 import hydrogenation from "./fixtures/hydrogenation-rdkitrxn.json";
 import grignard from "./fixtures/grignard-rdkitrxnacs.json";
 
@@ -494,6 +495,12 @@ describe("a reaction drawn by another program", () => {
     expect(water).toHaveLength(1);
     expect(water[0].unsure).toEqual([WRITTEN_AS_WORDS]);
     expect(s.words.map((w) => w.text)).not.toContain("H2O");
+  });
+
+  it("joins a word to a plus sign a little over a bond off, within two and a half of its letters' height", () => {
+    // (the Fischer esterification in RDKit's ACS 1996 mode: its bonds 6.8 points long, the H2O 3.6 tall and 7.2 past the "+")
+    const s = readScheme(esterificationAcs as unknown as FigureDrawn, () => true, [], (l) => l === "H2O");
+    expect(s.figure.atoms.filter((a) => a.label === "H2O")).toHaveLength(1);
   });
 
   it("keeps a word no plus sign joins to the rest - an agent by the arrow - a word, though it reads as a whole molecule", () => {
