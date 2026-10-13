@@ -17,6 +17,7 @@
 import { snapBond, type Pt } from "./extendSnap";
 import { followChain, startChain, type Chain } from "./chain";
 import { cellOf, nearestCell, neighboursOf } from "./honeycomb";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 /**
  * An atom a stroke has reached: a new one where it goes, an atom already
@@ -51,6 +52,60 @@ type StrokeModel = {
   atoms: readonly { id: number; x: number; y: number }[];
   bonds: readonly { a: number; b: number }[];
 };
+
+type StrokeAtom = StrokeModel["atoms"][number];
+
+/**
+ * A drawing as a stroke asks of it, made once as it changes, not at every
+ * step of a stroke - over a drawing of 28 000 atoms that took 36 to 112 ms
+ * a step (the command centre's hot-path audit): each atom by its id, with
+ * its place in the drawing; what each is bonded to; and the atoms by
+ * square, `GRID` a side, to find one near a point.
+ */
+type StrokeIndex = {
+  byId: Map<number, { atom: StrokeAtom; order: number }>;
+  bonded: Map<number, number[]>;
+  squares: Map<string, number[]>;
+};
+const GRID = 0.5 * NOMINAL_BOND_LENGTH;
+const indexes = new WeakMap<object, { bonds: object; index: StrokeIndex }>();
+const squareOf = (x: number, y: number) => `${Math.floor(x / GRID)} ${Math.floor(y / GRID)}`;
+
+function indexOf(model: StrokeModel): StrokeIndex {
+  const known = indexes.get(model.atoms);
+  if (known && known.bonds === model.bonds) return known.index;
+  const byId = new Map<number, { atom: StrokeAtom; order: number }>();
+  const squares = new Map<string, number[]>();
+  model.atoms.forEach((atom, order) => {
+    byId.set(atom.id, { atom, order });
+    const key = squareOf(atom.x, atom.y);
+    const square = squares.get(key);
+    if (square) square.push(order);
+    else squares.set(key, [order]);
+  });
+  const bonded = new Map<number, number[]>();
+  for (const b of model.bonds) {
+    (bonded.get(b.a) ?? bonded.set(b.a, []).get(b.a)!).push(b.b);
+    (bonded.get(b.b) ?? bonded.set(b.b, []).get(b.b)!).push(b.a);
+  }
+  const index = { byId, bonded, squares };
+  indexes.set(model.atoms, { bonds: model.bonds, index });
+  return index;
+}
+
+/** The first atom of the drawing, in its order, within `reach` of `p` and not `but`: as model.atoms.find would find it. */
+function atomNear(model: StrokeModel, index: StrokeIndex, p: Pt, reach: number, but: number): number | undefined {
+  const [i, j] = [Math.floor(p.x / GRID), Math.floor(p.y / GRID)];
+  const span = Math.ceil(reach / GRID);
+  let first: number | undefined;
+  for (let di = -span; di <= span; di++)
+    for (let dj = -span; dj <= span; dj++)
+      for (const order of index.squares.get(`${i + di} ${j + dj}`) ?? []) {
+        const a = model.atoms[order];
+        if (a.id !== but && Math.hypot(a.x - p.x, a.y - p.y) < reach && (first === undefined || order < first)) first = order;
+      }
+  return first === undefined ? undefined : model.atoms[first].id;
+}
 
 /** How near an atom the end of a bond has to come to close onto it. */
 export const JOIN_REACH = 0.4;
@@ -93,37 +148,42 @@ export function chainNodes(model: StrokeModel, s: Stroke): StrokeNode[] {
   if (!c) return s.nodes;
   const L = c.honeycomb.length;
   const nodes: StrokeNode[] = [];
-  const base = s.baseId === NEW_ATOM ? s.start : model.atoms.find((a) => a.id === s.baseId);
+  const index = indexOf(model);
+  const base = s.baseId === NEW_ATOM ? s.start : index.byId.get(s.baseId)?.atom;
   // where each placed atom is, by its path index: the base, then the nodes
   const placed: { at: Pt; ref: number }[] = base ? [{ at: base, ref: BASE }] : [];
   const near = (p: Pt) => placed.find((q) => Math.hypot(q.at.x - p.x, q.at.y - p.y) < 0.3 * L)?.ref;
-  const existing = (p: Pt) =>
-    model.atoms.find((a) => a.id !== s.baseId && Math.hypot(a.x - p.x, a.y - p.y) < 0.35 * L)?.id;
+  const existing = (p: Pt) => atomNear(model, index, p, 0.35 * L, s.baseId);
   // the drawing as it stands with the chain so far, atom by atom: what
   // each is bonded to - an atom already there by "m<id>", the chain's own
   // by "n<ref>" - to tell what ring taking a point as an atom closes
   const vertexOf = (ref: number): string =>
     ref === BASE ? (s.baseId === NEW_ATOM ? "base" : `m${s.baseId}`) : nodes[ref].atomId != null ? `m${nodes[ref].atomId}` : `n${ref}`;
-  const graph = new Map<string, Set<string>>();
+  // (the drawing's own bonds from its index; the chain's, as they are made)
+  const added = new Map<string, Set<string>>();
   const join = (u: string, v: string) => {
     if (u === v) return;
-    if (!graph.has(u)) graph.set(u, new Set());
-    if (!graph.has(v)) graph.set(v, new Set());
-    graph.get(u)!.add(v);
-    graph.get(v)!.add(u);
+    if (!added.has(u)) added.set(u, new Set());
+    if (!added.has(v)) added.set(v, new Set());
+    added.get(u)!.add(v);
+    added.get(v)!.add(u);
   };
-  for (const b of model.bonds) join(`m${b.a}`, `m${b.b}`);
+  const neighbours = (u: string): string[] => {
+    const own = u.startsWith("m") ? (index.bonded.get(Number(u.slice(1))) ?? []).map((id) => `m${id}`) : [];
+    const more = added.get(u);
+    return more ? [...own, ...more] : own;
+  };
   // (the ring a bond from `u` to `v` closes: the shortest way between
   // them, from `u` to `v`; none where there is no way, or where they are
   // bonded already - the bond is there)
   const closes = (u: string, v: string): string[] | null => {
-    if (u === v || graph.get(u)?.has(v)) return null;
+    if (u === v || neighbours(u).includes(v)) return null;
     const came = new Map<string, string>([[u, u]]);
     let edge = [u];
     while (edge.length) {
       const next: string[] = [];
       for (const x of edge)
-        for (const y of graph.get(x) ?? []) {
+        for (const y of neighbours(x)) {
           if (came.has(y)) continue;
           came.set(y, x);
           if (y === v) {
@@ -138,7 +198,7 @@ export function chainNodes(model: StrokeModel, s: Stroke): StrokeNode[] {
     return null;
   };
   const placeOf = (v: string): Pt | undefined =>
-    v === "base" ? base : v.startsWith("m") ? model.atoms.find((a) => `m${a.id}` === v) : nodes[Number(v.slice(1))];
+    v === "base" ? base : v.startsWith("m") ? index.byId.get(Number(v.slice(1)))?.atom : nodes[Number(v.slice(1))];
   // (a ring along the honeycomb: each of its atoms on a point of it, and
   // each of its bonds, the closing one too, between neighbours there)
   const alongHoneycomb = (ring: string[]) =>
@@ -195,11 +255,10 @@ function refOf(nodes: StrokeNode[], i: number): number {
 
 /** The atom a stroke is at: where it is, the one before it, and what it is bonded to. */
 function tipOf(model: StrokeModel, s: Stroke) {
-  const at = new Map(model.atoms.map((a) => [a.id, a]));
-  const bondedTo = (id: number) =>
-    model.bonds.flatMap((b) =>
-      b.a === id ? [b.b] : b.b === id ? [b.a] : [],
-    );
+  // (from the drawing's index, made as it changes: not a map of every atom at every frame)
+  const index = indexOf(model);
+  const at = { get: (id: number) => index.byId.get(id)?.atom };
+  const bondedTo = (id: number) => index.bonded.get(id) ?? [];
   const base = s.baseId === NEW_ATOM ? s.start : at.get(s.baseId);
   if (!base) return null;
   const n = s.nodes.length;

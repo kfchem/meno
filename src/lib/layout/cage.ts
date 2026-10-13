@@ -435,18 +435,38 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
  * through the plane of its three neighbours (`rightCentres`), and eased.
  */
 function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
-  // (found once for a molecule's ring system: it is asked for again and again)
-  const key = atoms.join(",");
-  const cached = solids.get(mol)?.get(key);
+  // (found once for a ring system: it is asked for again and again - and
+  // by what it is found from, not by the molecule object, since a drawing
+  // read back is perceived anew, its cage the same: tetrodotoxin's solid
+  // found anew for each of its read-backs was half its Clean-up)
+  const key = `${contentOf(mol)}|${atoms.join(",")}`;
+  const cached = solids.get(key);
   if (cached) return cached;
   const found = embedAnew(mol, atoms, index);
-  if (!solids.has(mol)) solids.set(mol, new Map());
-  solids.get(mol)!.set(key, found);
+  solids.set(key, found);
+  if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
   return found;
 }
 
-/** Each molecule's solids found so far, by their atoms. */
-const solids = new WeakMap<Molecule, Map<string, Vec3[]>>();
+/** The solids found so far, by what each is found from (`contentOf`) and its system's atoms; the oldest let go first. */
+const solids = new Map<string, Vec3[]>();
+
+/** How many solids are kept (`solids`). */
+const KEPT_SOLIDS = 64;
+
+/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration. */
+function contentOf(mol: Molecule): string {
+  let content = contents.get(mol);
+  if (content == null) {
+    const bond = (b: Molecule["bonds"][number]) => `${b.a}-${b.b}:${b.order}${b.stereo ? `:${b.stereo.refs.join(".")}${b.stereo.cis ? "c" : "t"}` : ""}`;
+    const centre = ([a, t]: [number, { neighbours: readonly number[]; volume: number }]) => `${a}:${t.neighbours.join(".")}:${t.volume}`;
+    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(",")].join("|");
+    contents.set(mol, content);
+  }
+  return content;
+}
+
+const contents = new WeakMap<Molecule, string>();
 
 function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
   const hop = hops(mol, atoms);
@@ -919,7 +939,9 @@ function textbook(
               const hints = exits(mol, atoms, X, index, bonds, pts, pageUp, fit, drawn, axialRings, uprights);
               // the rest of the cage above the ring, where it is looked for,
               // and room for what hangs from it - from the front of the ring
-              // rather than the back, where it would pass behind the cage
+              // rather than the back, where it would pass behind the cage;
+              // and, of views alike, the one that lies level (tetrodotoxin
+              // long, its guanidine ring beside the cage, not under it)
               const behind = [order[5], order[0], order[1]].reduce(
                 (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
                 0,
@@ -929,7 +951,8 @@ function textbook(
                 cost0 +
                 (restUp ? 0 : 0.5) +
                 exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
-                0.25 * behind;
+                0.25 * behind +
+                LEVEL_AXIS * axisTiltOf(pts);
               best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
             }
           }
@@ -1211,6 +1234,29 @@ function exits(
     hints.set(a, m);
   });
   return hints;
+}
+
+/** What a degree of a template view's long axis off level costs it (`textbook`, `axisTiltOf`). */
+const LEVEL_AXIS = 0.05;
+
+/** How far a drawing's long axis is from level, in degrees, scaled by how much longer than broad it is (as `layoutMetrics` measures it). */
+function axisTiltOf(pts: readonly Point[]): number {
+  const n = pts.length;
+  const cx = pts.reduce((s, p) => s + p.x, 0) / n;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    sxx += (p.x - cx) ** 2;
+    syy += (p.y - cy) ** 2;
+    sxy += (p.x - cx) * (p.y - cy);
+  }
+  const half = (sxx + syy) / 2;
+  const spread = Math.sqrt(Math.max(0, half * half - (sxx * syy - sxy * sxy)));
+  const long = half + spread;
+  const broad = Math.max(0, half - spread);
+  return long > 0 ? Math.abs((0.5 * Math.atan2(2 * sxy, sxx - syy) * 180) / Math.PI) * (1 - Math.sqrt(broad / long)) : 0;
 }
 
 /** How much a cage's bonds out run into it: an end on an atom or a bond, or crossing one. */

@@ -4,6 +4,7 @@ import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
 import { isMenoFile, readMenoFile } from "../../lib/doc/menoFile";
+import { useNotices } from "../notices";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
@@ -48,7 +49,8 @@ export function workspaceOfFile(bytes: Uint8Array): string | null {
   if (!isMenoFile(bytes)) return null;
   const file = readMenoFile(bytes);
   holdOutputsOf(file);
-  holdPdfsOf(file);
+  // (a PDF it keeps that cannot be held would be blank: said, by its name)
+  holdPdfsOf(file, (name, why) => useNotices.getState().show({ id: `pdf-not-held:${name}`, title: "A PDF could not be opened", text: `${name}, in this workspace: ${why}.` }));
   holdPicturesOf(file);
   return file.workspace;
 }

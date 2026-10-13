@@ -238,9 +238,9 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
-| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way - as conformers of one compound |
+| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
 
 The first five run a program; the last five work on a set's entries
@@ -401,7 +401,7 @@ once (*Several at once*).
 | Done | a tick, the accent | *2:03 · −42.10871 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
 | Stopped | a stop, grey | *Stopped after 0:31* |
-| Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it, changed since its run; its results stay as they are |
+| Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
 
 ### The log
 
@@ -854,7 +854,8 @@ Decided while building it, for the maintainer to confirm:
 
 - **RDKit's conformer search in a step is the one *3D structures* makes
   on the canvas** - ETKDG v3, then MMFF94, MMFF94s or UFF - with the same
-  options, run as a job: RDKit's own Python runs a script of the plugin's
+  options, starting from those chosen in Settings, *Molecules in 3D*
+  (2026-10-13), run as a job: RDKit's own Python runs a script of the plugin's
   on the molecule written into the job's folder, so that a long search
   goes on when Meno closes, as any job does. The stereo is kept as the
   entry's 3D structure has it.

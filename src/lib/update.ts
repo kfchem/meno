@@ -51,7 +51,10 @@ const ASK_AFTER_MS = 3_000;
 const FIRST_LOOK_MS = 20_000;
 const EVERY_MS = 6 * 60 * 60 * 1000;
 
-const CONSENT: ConsentRequest = {
+/** Where keeping up to date goes: GitHub, which hands a release's files out from release-assets, by redirect. */
+const UPDATE_HOSTS = ["github.com", "release-assets.githubusercontent.com"];
+
+export const UPDATE_CONSENT: ConsentRequest = {
   purpose: UPDATE_PURPOSE,
   title: "Keep Meno up to date?",
   detail:
@@ -59,8 +62,9 @@ const CONSENT: ConsentRequest = {
     "downloads it in the background (about 20 MB), and installs it when you quit. Every " +
     "connection is shown as it is made, and nothing goes out while Meno works offline. " +
     "You can take this back in Settings, under Network.",
-  // (GitHub hands a release's files out from release-assets, by redirect)
-  sources: ["github.com", "release-assets.githubusercontent.com"],
+  sources: UPDATE_HOSTS,
+  // (and the hosts the look may reach: those alone - src-tauri/src/net.rs)
+  hosts: UPDATE_HOSTS,
 };
 
 /** Whether Meno may look now: online, and allowed to. */
@@ -72,12 +76,12 @@ export function mayLook(): boolean {
 /** Looks for a newer Meno now, and downloads it - if it may. */
 export async function checkForUpdate(): Promise<void> {
   if (!isTauri() || !mayLook()) return;
-  useUpdate.setState(await invoke<UpdateState>("update_check"), true);
+  useUpdate.setState(await invoke<UpdateState>("update_check", { hosts: UPDATE_CONSENT.hosts }), true);
 }
 
 /** Turns keeping up to date on, asking as for any use of the network; it looks at once. */
 export function keepUpToDate(): Promise<boolean> {
-  return askToConnect(CONSENT);
+  return askToConnect(UPDATE_CONSENT);
 }
 
 /**
@@ -108,7 +112,7 @@ export function startUpdates(): () => void {
       const net = useNetwork.getState();
       if (net.offline || net.granted.includes(UPDATE_PURPOSE) || settings.updates.asked) return;
       settings.setUpdates({ asked: true });
-      void askToConnect(CONSENT);
+      void askToConnect(UPDATE_CONSENT);
     };
     let unguided: (() => void) | null = null;
     // (not over a guide being gone through: once it is closed)

@@ -41,4 +41,13 @@ describe("a label's other letters", () => {
     // (the carbons are drawn bare: nothing of theirs is a label)
     expect(reach.has(2)).toBe(false);
   });
+
+  it("reach where they did while the layout keeps them, and are measured again under other options or as they move", () => {
+    // (the same label, kept by a layout that did not lay its structure out again: not measured again)
+    expect(labelReach(layout, atoms, opts).get(1)).toBe(reach.get(1));
+    const larger = editorLayoutOptions(style, { minLinePx: 0, paddingPx: 4, fontPx: opts.fontPx * 2 });
+    expect(labelReach(layout, atoms, larger).get(1)!.x0).toBeLessThan(reach.get(1)!.x0);
+    const moved = { ...layout, texts: layout.texts.map((t) => ({ ...t, x: t.x + B })) };
+    expect(labelReach(moved, atoms, opts).get(1)!.x0).toBeCloseTo(reach.get(1)!.x0 + B);
+  });
 });
