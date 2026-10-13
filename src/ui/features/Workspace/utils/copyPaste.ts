@@ -170,6 +170,8 @@ export function recordText(part: Drawn): string {
 export const hasFlow = (part: Pick<Drawn, "flow">) => !!(part.flow?.sets.length || part.flow?.steps.length);
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** Whether an entry of a list a record holds is an object, as each must be to be read at all - not null, a list, a number, a string or true or false. */
+const isEntry = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v);
 /** A colour as Meno keeps one: #rrggbb. */
 export const isColour = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
@@ -240,17 +242,18 @@ export function readDrawn(data: unknown): Drawn | null {
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
   const bonds = r.bonds as Partial<Bond>[];
-  if (!atoms.every((a) => isNum(a.id) && isNum(a.x) && isNum(a.y) && typeof a.el === "string")) return null;
+  // (an atom or a bond that is no object - null, a number - reads no more than one whose fields do not)
+  if (!atoms.every((a) => isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && typeof a.el === "string")) return null;
   const ids = new Set(atoms.map((a) => a.id));
-  if (!bonds.every((b) => isNum(b.id) && ids.has(b.a) && ids.has(b.b) && [1, 2, 3].includes(b.order as number))) {
+  if (!bonds.every((b) => isEntry(b) && isNum(b.id) && ids.has(b.a) && ids.has(b.b) && [1, 2, 3].includes(b.order as number))) {
     return null;
   }
   // (arrows and pluses that do not read are left out, not the structure)
   const arrows = (Array.isArray(r.arrows) ? (r.arrows as Partial<Arrow>[]) : [])
-    .filter((a) => isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
+    .filter((a) => isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
     .map((a) => withArrowForm(a as Arrow));
   const pluses = (Array.isArray(r.pluses) ? (r.pluses as Partial<Plus>[]) : []).filter(
-    (p) => isNum(p.id) && isNum(p.x) && isNum(p.y),
+    (p) => isEntry(p) && isNum(p.id) && isNum(p.x) && isNum(p.y),
   ) as Plus[];
   // (words over an arrow that is not there are over none; in a shape that is not there, in none)
   const arrowIds = new Set(arrows.map((a) => a.id));
@@ -260,7 +263,7 @@ export function readDrawn(data: unknown): Drawn | null {
   });
   const shapeIds = new Set(shapes.filter((x) => isBox(x.kind)).map((x) => x.id));
   const captions = (Array.isArray(r.captions) ? (r.captions as Partial<Caption>[]) : []).flatMap((c): Caption[] => {
-    if (!isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
+    if (!isEntry(c) || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
     const from = wordsFromOf(c.from);
     return [
       {
@@ -324,6 +327,7 @@ export function readDrawn(data: unknown): Drawn | null {
     return null;
   };
   const pushes = (Array.isArray(r.pushes) ? (r.pushes as Partial<PushArrow>[]) : []).flatMap((p): PushArrow[] => {
+    if (!isEntry(p)) return [];
     const from = endOf(p.from);
     const to = endOf(p.to);
     if (!isNum(p.id) || !from || !to) return [];
@@ -501,10 +505,10 @@ export function readCarried3D(given: unknown): Carried3D | null {
   if (!m || !Array.isArray(m.atoms) || !Array.isArray(m.bonds) || !m.at) return null;
   const atoms = m.atoms as Partial<Carried3D["atoms"][number]>[];
   const n = atoms.length;
-  if (!n || !atoms.every((a) => typeof a.el === "string" && isNum(a.x) && isNum(a.y) && isNum(a.z))) return null;
+  if (!n || !atoms.every((a) => isEntry(a) && typeof a.el === "string" && isNum(a.x) && isNum(a.y) && isNum(a.z))) return null;
   const index = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
   const bonds = m.bonds as Partial<Carried3D["bonds"][number]>[];
-  if (!bonds.every((b) => index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
+  if (!bonds.every((b) => isEntry(b) && index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
   const at = m.at as Partial<Pt & { z: number }>;
   if (!isNum(at.x) || !isNum(at.y)) return null;
   // (what does not read is left out, not the molecule)
@@ -513,7 +517,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
   );
   const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
   const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
-    (x): x is Measure3D => isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
+    (x): x is Measure3D => isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
   );
   const turn = Array.isArray(m.turn) && m.turn.length === 4 && m.turn.every(isNum) ? (m.turn as Turn3D) : undefined;
   // what ties it to the drawing it was made from: the drawing's atom each
