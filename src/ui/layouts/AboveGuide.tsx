@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ABOVE_GUIDE_LAYER } from "../guide/layers";
 
@@ -12,7 +12,8 @@ import { ABOVE_GUIDE_LAYER } from "../guide/layers";
  */
 export default function AboveGuide({ over, shown, children }: { over: RefObject<HTMLElement | null>; shown: boolean; children: ReactNode }) {
   const [box, setBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
-  useLayoutEffect(() => {
+  // (after the commit: `over` is a parent of this, and its ref is set only once its children's layout effects have run)
+  useEffect(() => {
     const el = over.current;
     if (!el) return;
     const measure = () => {
