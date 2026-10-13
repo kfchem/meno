@@ -43,11 +43,15 @@ export default function RenderCard({
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
 
   const renderRef = useRef<HTMLButtonElement>(null);
+  // (the keys given to Render as it opens, once: not again each time the
+  // canvas round it is drawn, which took them from the option being set)
+  useEffect(() => {
+    renderRef.current?.focus();
+  }, []);
   // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
-    renderRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();

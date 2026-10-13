@@ -14,11 +14,15 @@ export default function OrdersCard({ onGive, onCancel }: { onGive: (smiles: stri
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
+  // (the keys given to the field as it opens, once: not again each time the
+  // canvas round it is drawn, which took them from wherever they had been put)
+  useEffect(() => {
+    field.current?.focus();
+  }, []);
   // (Escape lets it go while its tab is in front: in another tab it is that tab's, the card waiting)
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
-    field.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
     };

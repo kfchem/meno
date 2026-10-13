@@ -24,11 +24,15 @@ export default function Ask3D({
   onCancel: () => void;
 }) {
   const allRef = useRef<HTMLButtonElement>(null);
+  // (the keys given to All as it opens, once: not again each time the canvas
+  // round it is drawn, which took them from wherever they had been put)
+  useEffect(() => {
+    allRef.current?.focus();
+  }, []);
   // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
-    allRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
