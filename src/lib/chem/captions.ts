@@ -455,7 +455,11 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
           return st;
         }),
       ];
-    } else starts = words.map((m) => lineStart + (m.index ? wide(l, 0, m.index) : 0));
+    } else {
+      // (each word where the line set whole has it: the line's places found once, not the line up to each word measured anew)
+      const along = runsPlaces(runsOf(l, 0, l.text.length), fontSize, set);
+      starts = words.map((m) => lineStart + (m.index ? along[m.index] : 0));
+    }
     const xs: (number | undefined)[] = new Array(l.text.length + 1);
     words.forEach((m, k) => {
       const places = runsPlaces(runsOf(l, m.index!, m.index! + m[0].length), fontSize, set);
