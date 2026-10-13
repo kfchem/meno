@@ -1122,6 +1122,13 @@ path it is given:
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.
+- A sidecar's stdin is written to with its own lock, the table of
+  sidecars let go first (`write_stdin`), and off the commands' threads.
+  A worker that stops reading holds up only what is written to it until
+  it is killed, which fails the write; every other sidecar is written
+  to, started and stopped meanwhile (2026-10-13: the table was held
+  through the write, and one stuck worker, sent a file bigger than its
+  pipe holds, held up every plugin's).
 
 Adding a new worker or interpreter flag means extending these rules
 (`PYTHON_FLAGS`, the workers directory) together with the unit tests in

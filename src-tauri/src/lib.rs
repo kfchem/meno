@@ -5,7 +5,7 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Component, Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
@@ -528,7 +528,11 @@ fn pipe_logs<R: Read + Send + 'static>(app: &AppHandle, stream: R, ch: &'static 
 
 // Python sidecar: spawn process and handle IO
 
-type Procs = HashMap<String, (Child, Option<ChildStdin>)>;
+/// A sidecar's stdin, written to with its own lock held and never the
+/// table's: a worker that stops reading holds up what is written to it,
+/// and no other (`write_stdin`).
+type Stdin = Arc<Mutex<ChildStdin>>;
+type Procs = HashMap<String, (Child, Option<Stdin>)>;
 
 struct ProcState(Mutex<Procs>);
 
@@ -634,7 +638,7 @@ async fn ext_spawn_sidecar(
     let id = Uuid::new_v4().to_string();
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
-    let stdin = child.stdin.take();
+    let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
     // Register before the reader threads start so an immediate exit can be
     // reaped.
     state.lock().insert(id.clone(), (child, stdin));
@@ -678,21 +682,29 @@ async fn ext_spawn_sidecar(
     Ok(id)
 }
 
+/// Writes to a sidecar's stdin with the table let go first. A worker that
+/// stops reading - held, or stuck - with more asked of it than its pipe
+/// holds (a file sent to be read) holds the write up until it is killed,
+/// which closes the pipe and fails the write; while the write waits, every
+/// other sidecar is written to, started and stopped as ever. (The table was
+/// once held through the write, and one stuck worker held up them all.)
+fn write_stdin(state: &ProcState, id: &str, data: &str) -> Result<(), String> {
+    let stdin = match state.lock().get(id) {
+        Some((_child, Some(stdin))) => stdin.clone(),
+        Some(_) => return Err("no stdin".into()),
+        None => return Err("not found".into()),
+    };
+    let mut stdin = stdin.lock().unwrap_or_else(PoisonError::into_inner);
+    stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-async fn ext_stdin(id: String, data: String, state: State<'_, ProcState>) -> Result<(), String> {
-    if let Some((_child, optin)) = state.lock().get_mut(&id) {
-        if let Some(stdin) = optin {
-            stdin
-                .write_all(data.as_bytes())
-                .map_err(|e| e.to_string())?;
-            stdin.flush().map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err("no stdin".into())
-        }
-    } else {
-        Err("not found".into())
-    }
+async fn ext_stdin(app: AppHandle, id: String, data: String) -> Result<(), String> {
+    // (off the commands' threads: a write a stuck worker holds up waits on its own)
+    tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &data))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1301,6 +1313,30 @@ mod tests {
         // Meno's own workers are no plugin's
         assert!(fits("workers/w.py", &format!("uv/plugin-q/venv/{bin}")).is_ok());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_worker_that_stops_reading_holds_up_no_other() {
+        use std::time::{Duration, Instant};
+        let state = Arc::new(ProcState(Mutex::new(HashMap::new())));
+        // (a worker that never reads, asked more than its pipe holds)
+        let mut child = Command::new("sleep").arg("30").stdin(Stdio::piped()).spawn().expect("spawn sleep");
+        let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
+        state.lock().insert("held".into(), (child, stdin));
+        let other = Command::new("true").spawn().expect("spawn a trivial process");
+        state.lock().insert("other".into(), (other, None));
+        let s2 = state.clone();
+        let writer = std::thread::spawn(move || write_stdin(&s2, "held", &"x".repeat(1 << 20)));
+        std::thread::sleep(Duration::from_millis(300));
+        // while the write waits, the table is free: another reaped at once, and the held one killed
+        let t = Instant::now();
+        assert!(state.reap("other"));
+        assert!(state.reap("held"));
+        assert!(t.elapsed() < Duration::from_secs(5));
+        // (its pipe closed by the kill, the write fails rather than waits on)
+        assert!(writer.join().expect("the writer ends").is_err());
+        assert!(write_stdin(&state, "held", "x").is_err());
     }
 
     #[test]
