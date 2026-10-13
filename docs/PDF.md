@@ -105,9 +105,10 @@ stops being part of the work.
 - **Read where it lies**:
   - Zoomed into, the top page's text and figures come up, sharp at
     any zoom.
-  - The wheel or two fingers over the stack go to the next page and the
-    one before, the top page lifting off and going under (*Movement*,
-    below).
+  - Its pages are turned by the top page's corners, folding as the stack
+    is hovered, by the arrow keys over it, or by its menu, the top page
+    lifting off and going under (*Movement*, below). The wheel and two
+    fingers zoom and move the view over it, as over the rest of the page.
   - The right-click menu has *Spread pages*. The pages lift off the
     stack one after another and lie side by side on the page, in rows,
     to be read and compared at once. *Gather pages* puts them back.
@@ -153,23 +154,26 @@ stops being part of the work.
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
 - **Only what is in view is drawn**, nearest first, then the pages next
-  in the way the view is going. A tile no longer wanted is dropped, not
-  finished. Pages far out of view are let go, and drawn again when they
-  come back.
+  in the way the view is going. A tile no longer wanted when its turn
+  comes is dropped, never sent to PDFium; one sent is drawn to the end.
+  Pages far out of view are let go, and drawn again when they come back.
 
 ### Text
 
-- **A drag that starts on text selects text**, as in any reader: a
-  double-click selects a word, a triple-click a line. ⌘C copies it, and
-  the right-click menu has *Copy*.
+- **In the column, a drag that starts on text selects text**, as in any
+  reader: a double-click selects a word, a triple-click a line. On a
+  stack, a drag moves the view, and a long press on its words selects
+  from the word under it (*As built*, step 3). ⌘C copies it, and the
+  right-click menu has *Copy*.
 - **PDFium says where each letter is**, and Meno selects and marks by
   that, on the stack and in the column alike.
 
 ### Search
 
-- **⌘F** with the column or a PDF in front, or *Find in PDF…* in Meno's
-  menu, opens a field at the column's top. It has two choices beside it,
-  *This PDF* and *All PDFs*.
+- **⌘F** in a workspace holding a PDF, or *Find in PDF…* in the
+  right-click menu on empty space, opens a field at the column's top, on
+  the PDF it shows or else the one under the pointer. It has two choices
+  beside it, *This PDF* and *All PDFs*.
 - **What it finds**:
   - each place is marked on the pages, in the column and on the stacks;
   - the places are counted (*3 of 12*);
@@ -177,9 +181,10 @@ stops being part of the work.
     closes the field.
 - **With *All PDFs***, the places are listed under each PDF's name, and
   going to one shows that PDF.
-- **How letters are matched**: by PDFium's own search, without regard to
-  case. Whether a word broken across a line's end is found is measured in
-  the trial (step 0), and made so if PDFium does not find it.
+- **How letters are matched**: by Meno's own search, over the letters
+  PDFium reads, without regard to case. A line's end reads as a space,
+  and a word broken by a hyphen at a line's end is found whole (*The
+  trial*, below).
 
 ## Taking things out
 
@@ -379,8 +384,8 @@ together, in short eased transitions.
   Sans JP).
 - **Reached from Rust** through `pdfium-render` (MIT or Apache-2.0).
 - **What Meno asks of it**: a part of a page drawn at a scale, its text
-  with where each letter is, search, links, and what a page is made of
-  - paths, text and pictures - which stage 5 reads.
+  with where each letter is, links, and what a page is made of - paths,
+  text and pictures - which stage 5 reads. Meno searches the text itself.
 
 ### Where it runs
 
@@ -391,12 +396,14 @@ together, in short eased transitions.
   so on the page and in the column, with *Open again*; Meno, and the
   work not yet saved, go on. Chrome keeps PDFium apart for the same
   reason.
-- **It draws on threads of its own**, a page at a time, each part in a
-  way that can be stopped. A request no longer wanted is dropped.
-- **Pictures come back as they are drawn**: the colours of each pixel,
-  in the order a WebGL texture takes them (PDFium's
-  `FPDF_REVERSE_BYTE_ORDER`), with no image format in between. They go
-  to the window as bytes, not as text (Tauri's binary response).
+- **It answers one request at a time**, on one thread, in the order they
+  come. Parts to draw wait in the window, nearest first, three at most
+  sent at a time; one no longer wanted before it is sent is dropped.
+- **Pictures come back as PNGs**, previews, tiles and figures alike:
+  PDFium's pixels, in the order a WebGL texture takes them
+  (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
+  white. They go to the window as bytes, not as text (Tauri's binary
+  response), and are unpacked off its main thread.
 
 ### One canvas
 
@@ -576,6 +583,7 @@ Built:
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it - one that asks for a password among them, Meno giving none (*it could not be read*, with PDFium's reason). Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert says why, and none of the PDFs dropped with it is put down.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -671,7 +679,7 @@ Built:
   - The words selected are marked in Meno's light, the same on the stack and in the column.
   - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too.
   - Selecting words lets the drawing's selection go. Esc, or a click elsewhere, lets the words go.
-- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the Edit menu.
+- **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the right-click menu on empty space.
   - A field opens over the top of the column, holding the words selected, if any.
   - *This PDF* or *All PDFs* choose where to look, and the count shows as *3 of 12*.
   - Enter goes to the next place and Shift+Enter to the one before. Esc closes the field.
