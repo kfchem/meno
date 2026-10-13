@@ -335,7 +335,8 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bo
     let mut first: Option<(u64, PathBuf)> = None;
     for entry in fs::read_dir(root)?.flatten() {
         let other = entry.path();
-        if !other.is_dir() {
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
@@ -362,7 +363,21 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bo
 struct Program {
     child: std::process::Child,
     #[cfg(windows)]
-    job: windows_sys::Win32::Foundation::HANDLE,
+    job: JobObject,
+}
+
+/// A job object, closed when this goes - and with it whatever is still in it
+/// (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`): on every way out, never left open.
+#[cfg(windows)]
+struct JobObject(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for JobObject {
+    fn drop(&mut self) {
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
 }
 
 impl Program {
@@ -379,23 +394,10 @@ impl Program {
     /// (Windows asks nothing of a program without a window: it is made to stop at once.)
     #[cfg(windows)]
     fn stop(&mut self, _hard: bool) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job, 1);
-            }
+        unsafe {
+            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job.0, 1);
         }
         let _ = self.child.kill();
-    }
-}
-
-#[cfg(windows)]
-impl Drop for Program {
-    fn drop(&mut self) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::Foundation::CloseHandle(self.job);
-            }
-        }
     }
 }
 
@@ -423,22 +425,14 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    // (Windows: started held, put in its job object, then let go - so that
-    // nothing it starts at once is started outside the job, and stays when
-    // the job is stopped)
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        const CREATE_SUSPENDED: u32 = 0x0000_0004;
-        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
-    }
     #[cfg(unix)]
     let child = cmd.spawn()?;
+    // (Windows: started held, put in its job object, then let go - so that
+    // nothing it starts at once is started outside the job, and stays when
+    // the job is stopped; one that cannot be let go is ended, its job object
+    // closed with it)
     #[cfg(windows)]
-    let mut child = cmd.spawn()?;
-    #[cfg(windows)]
-    let job = job_object_for(&child);
+    let (mut child, job) = start_held(&mut cmd)?;
     #[cfg(windows)]
     if !let_go(child.id()) {
         let _ = child.kill();
@@ -483,30 +477,58 @@ fn let_go(pid: u32) -> bool {
     }
 }
 
+/// A program started held - with no window, nothing of it run yet - and
+/// put in a job object of its own. Where it cannot be put in one it is
+/// ended, never having run: what it started would outlive Stop and the
+/// runner.
+#[cfg(windows)]
+fn start_held(cmd: &mut Command) -> std::io::Result<(std::process::Child, JobObject)> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+    let mut child = cmd.spawn()?;
+    match job_object_for(&child) {
+        Ok(job) => Ok((child, job)),
+        Err(e) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(std::io::Error::other(format!("it could not be put in a job object of its own: {e}")))
+        }
+    }
+}
+
 /// A job object holding the program - and so what it starts - which takes
 /// them with it when it closes: when the runner goes, however it goes.
 #[cfg(windows)]
-fn job_object_for(child: &std::process::Child) -> windows_sys::Win32::Foundation::HANDLE {
+fn job_object_for(child: &std::process::Child) -> std::io::Result<JobObject> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     unsafe {
-        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if job.is_null() {
-            return job;
+        let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if handle.is_null() {
+            return Err(std::io::Error::last_os_error());
         }
+        // (closed on any way out from here)
+        let job = JobObject(handle);
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
         info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(
-            job,
+        if SetInformationJobObject(
+            job.0,
             JobObjectExtendedLimitInformation,
             &info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const core::ffi::c_void,
             std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-        AssignProcessToJobObject(job, child.as_raw_handle());
-        job
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        if AssignProcessToJobObject(job.0, child.as_raw_handle()) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(job)
     }
 }
 
@@ -1214,10 +1236,12 @@ pub fn work_files(dir: &Path) -> Vec<String> {
 /// with no console and nothing to say to Meno - so that it outlives it.
 fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     let mut cmd = Command::new(exe);
-    // (in the job's folder: never Meno's, which it would otherwise hold - on
+    // (in the jobs' folder: never Meno's, which it would otherwise hold - on
     // Windows a folder a process is in cannot be taken away, nor the drive
-    // it is on put away)
-    cmd.arg(JOB_FLAG).arg(dir).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // it is on put away - nor its own job's, which is taken away as soon as
+    // the job is over, while the runner may still be on its way out; the
+    // jobs' folder never is)
+    cmd.arg(JOB_FLAG).arg(dir).current_dir(dir.parent().unwrap_or(dir)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1830,22 +1854,50 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    /// A job's program is in its job object from its first instruction, and runs to its end once let go (Windows).
+    /// A job's program is in its job object before it has run at all - held,
+    /// it has written nothing - and runs to its end once let go (Windows).
     #[cfg(windows)]
     #[test]
     fn a_program_is_started_in_its_job_object_then_let_go() {
         let root = temp();
-        let dir = shell(&root, ECHO, 1);
-        let (cmd, flag) = shell_program();
-        let mut program = spawn_program(&dir, &cmd, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
-        assert!(!program.job.is_null());
+        let mark = root.join("ran.txt");
+        let (shell, flag) = shell_program();
+        let mut cmd = Command::new(&shell);
+        cmd.arg(flag).arg(format!("echo ran>\"{}\"", mark.display())).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let (mut child, job) = start_held(&mut cmd).unwrap();
         let mut inside = 0;
         unsafe {
             use std::os::windows::io::AsRawHandle;
-            windows_sys::Win32::System::JobObjects::IsProcessInJob(program.child.as_raw_handle() as _, program.job, &mut inside);
+            windows_sys::Win32::System::JobObjects::IsProcessInJob(child.as_raw_handle() as _, job.0, &mut inside);
         }
         assert_ne!(inside, 0);
+        // (held: nothing of it has run)
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!mark.exists());
+        assert!(let_go(child.id()));
+        assert!(child.wait().unwrap().success());
+        assert!(mark.exists());
+        // (and a job's program goes the same way)
+        let dir = shell(&root, ECHO, 1);
+        let mut program = spawn_program(&dir, &shell, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
         assert!(program.child.wait().unwrap().success());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// One taken away part way - its record gone, its spec left, made a moment
+    /// ago - reads as waiting: the queue passes over it, not waiting on it.
+    #[test]
+    fn a_job_taken_away_part_way_does_not_hold_the_queue() {
+        let root = temp();
+        let earlier = shell(&root, ECHO, 1);
+        std::thread::sleep(Duration::from_millis(5));
+        let mine = shell(&root, ECHO, 1);
+        let taken = root.join(format!("{TAKEN}4567"));
+        fs::rename(&earlier, &taken).unwrap();
+        let _ = fs::remove_file(taken.join(RECORD));
+        assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
+        let spec = read_spec(&mine).unwrap();
+        assert!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap());
         let _ = fs::remove_dir_all(root);
     }
 

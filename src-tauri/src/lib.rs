@@ -1366,6 +1366,8 @@ mod tests {
     #[test]
     fn a_worker_reads_and_answers_a_file_s_name_in_japanese_whatever_the_code_page() {
         let Some(python) = a_python() else {
+            // (on CI, where Python is there, its absence is a failure: a green run says this was run)
+            assert!(std::env::var_os("CI").is_none(), "no Python on CI: the UTF-8 worker test did not run");
             eprintln!("no Python here: not run");
             return;
         };
