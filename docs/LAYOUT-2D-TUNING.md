@@ -424,9 +424,9 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Aspartame** is not drawn as a peptide read left to right, and
   **vancomycin** is not the level backbone its reference is.
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
-- **Two rule tests skipped at two orders** (2026-10-13). Laid out in two of
-  its own orders (`OWN_ORDERS`), the engine fails two of its rule tests,
-  which pass at four:
+- **Three rule tests skipped** (2026-10-13). Laid out in two of its own
+  orders (`OWN_ORDERS`), the engine fails three of its rule tests. Two pass
+  at four:
   - adamantane with a gem-dimethyl cyclohexane fused to it
     (`cage.test.ts`, the axial methyl): adamantane's views, alike in
     themselves, leave the fused chair alike too, and both orders take one
@@ -436,6 +436,14 @@ and the held-out list takes new ones. What it showed, by kind:
     what hangs from them (tetrodotoxin broke).
   - macrocycles strung through benzene rings (`engine.test.ts`): main drew
     this one wrong in three of eight input orders too.
+
+  The third fails at four as well: Pd(PPh3)4's phenyls turned as a
+  propeller (`hapto.test.ts`). The order that turns them measures 56.8; the
+  one kept, 48.3, turns none, and two of its phenyls lie across Pd-P bonds.
+  The whole drawing's measure (`measureDrawing`) counts a ring turned on its
+  bond, or face-on to its metal, as drawn flat, where the benchmark counts
+  it in perspective; measured as the benchmark does, the turned order still
+  comes out worse (56.5).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
 - **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
