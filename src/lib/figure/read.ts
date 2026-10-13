@@ -280,7 +280,10 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
       // (two capitals as large, not on one line - two labels drawn over each other, two H's of atoms side by side - are two)
       const capital = (x: FigureLetter) => /^[A-IK-PR-Z]$/.test(x.c);
       if (!small && capital(l) && capital(last) && Math.abs(l.box[3] - last.box[3]) > 0.25 * big) return false;
-      return gap > -0.3 * big && gap < 0.3 * big && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
+      // (or as the PDF sets them, each letter's room: a 1's ink stands well inside its room, and small letters may be set apart)
+      const looseGap = last.loose && l.loose ? l.loose[0] - last.loose[2] : Infinity;
+      const near = (gap > -0.3 * big && gap < 0.3 * big) || (looseGap > -0.3 * big && looseGap < 0.15 * big);
+      return near && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
     });
     if (w) {
       w.letters.push(l);

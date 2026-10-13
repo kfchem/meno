@@ -874,6 +874,17 @@ describe("a figure's words", () => {
     expect(ws.map(labelText).sort()).toEqual(["CO2Me", "OH"]);
   });
 
+  it("joins letters set side by side as the PDF sets them, however far apart their ink: a 1's ink well inside its room", () => {
+    // (18F as RDKit's ACS 1996 mode writes it: the 1 and the 8 small, their ink 1.4 apart, their rooms 0.35)
+    const at = (c: string, box: Box, loose: Box, size: number): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size });
+    const ws = wordsOf([
+      at("1", [123.13, 91.89, 124.29, 95.03], [122.7, 91.56, 125.2, 96.06], 4.5),
+      at("8", [125.69, 91.87, 127.86, 95.11], [125.55, 91.56, 128.05, 96.06], 4.5),
+      at("F", [129.04, 92.65, 132.77, 98.03], [128.4, 92.25, 132.98, 99.75], 7.5),
+    ]);
+    expect(ws.map(labelText)).toEqual(["18F"]);
+  });
+
   it("reads a drawn label turned round, and HN before a group as NH", () => {
     // (its charge written last stays last: H3N+ as NH3+)
     expect(readDrawnLabel("H3N+", reads)).toEqual({ el: "N", charge: 1, read: true });

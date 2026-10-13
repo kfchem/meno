@@ -1033,7 +1033,9 @@ workspace holds.
   from two sides; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word - its letters side by side on one line: two capitals as large set
+  word - its letters side by side on one line (their ink near, or their
+  rooms as the PDF sets them: a 1's ink stands well inside its room, and
+  small letters may be set apart): two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
   are two - the word is its atom's label (at its element: an end outside it,
   much nearer its H than its element, is a carbon set close; and a label
