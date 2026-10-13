@@ -454,7 +454,11 @@ chain's NH). Where it - or its count, NH2's 2 after it and set lower -
 would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
-small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
+small branch (taxol's benzoate, clear of its C1 OH). Where none of those
+small moves clears it - a ring's NH, whose bond cannot turn, its H on
+another ring (vinblastine's indole), or an OH under a methyl's wedge
+(forskolin's C9) - the branches near it are turned and stretched as
+untangle turns them, the H counted as a label. The H is never moved
 under the symbol to make room, and no move that crosses bonds is taken.
 Nothing else is moved for it: the drawing is set first, its H's last.
 

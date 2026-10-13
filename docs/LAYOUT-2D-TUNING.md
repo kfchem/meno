@@ -269,6 +269,17 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
     out, the first being bonded to it). Through two benzene rings off a
     hub, a benzene came down on the hub's atom the run ends at. The run is
     now kept off both ends and looked for from each, the better kept.
+- **An H no small move clears** (2026-10-14). Three drawings read worse
+  to the eye than their score said: vinblastine's indole NH had its H on
+  the other half's benzene ring, forskolin's C9 OH sat under its C10
+  methyl's wedge, and XPhos Pd G3's NH2 ran into its P. The measure counts
+  a label's H a quarter of a crowding, and the last step that makes room
+  for H's moves only a bond or a small branch a little: a ring's NH has no
+  bond to turn. Where an H is still in the way after it, the branches are
+  now turned and stretched as untangle turns them, the H counted in full.
+  All three clear; the sheet reads them slightly worse (the H counted a
+  quarter, a bond stretched counted in full). Ouabain's C19 OH, its H on
+  C11's hashed bond with C1's OH on its other side, is not cleared.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two

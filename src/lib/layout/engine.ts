@@ -395,6 +395,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
+    // (and a label's H still in the way after that - an NH's H on a ring's
+    // bond, which no small move clears - the branches turned as untangle
+    // turns them, counting the H's)
+    const hBonds = [...mol.bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]).filter(([a]) => here.has(a));
+    const hInTheWay = (p: Grown) => new Set([...hydrogensBlocked(mol, piece, p, hBonds)].flatMap(([a, hits]) => [a, ...hits]));
+    if (hInTheWay(best.pos).size) best = { ...untangle(mol, piece, best.pos, scoreH(best.pos), scoreH, fixed, hInTheWay), mirrored: best.mirrored };
     // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
     const scoreFan = scorer(mol, piece, depth, measured, 1, undefined, true);
     const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
@@ -1438,6 +1444,7 @@ export function untangle(
   startScore: number,
   score: (pos: Grown) => number,
   fixed: (atoms: readonly number[]) => boolean = () => false,
+  inTheWay: (pos: Grown) => Set<number> = (p) => clashing(mol, piece, p),
 ): { pos: Grown; score: number } {
   let pos = start;
   let current = startScore;
@@ -1491,7 +1498,7 @@ export function untangle(
   const halved = halfPage(pos);
   let safe = { pos, score: current };
   for (let round = 0; round < 6; round++) {
-    const hit = clashing(mol, piece, pos);
+    const hit = inTheWay(pos);
     if (!hit.size) break;
     const onAtom = (o: number) =>
       piece.some((v) => v !== o && !mol.neighbours[o].includes(v) && dist(pos.get(v)!, pos.get(o)!) < 0.6);
@@ -1571,6 +1578,37 @@ function namesInTheWay(mol: Molecule, piece: number[], p: Grown): Map<number, nu
   return out;
 }
 
+/** What each label's H runs into, where the drawing sets it - another label, an atom or a bond - and each name's letters likewise: by the label's atom (`roomForHydrogens`). */
+function hydrogensBlocked(mol: Molecule, piece: number[], p: Grown, bonds: readonly [number, number][]): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  for (const a of piece) {
+    if (mol.el[a] === "C" || !(mol.hs[a] > 0) || !mol.neighbours[a].length) continue;
+    const at = p.get(a)!;
+    const off = hydrogenSpot(
+      mol.neighbours[a].map((b) => {
+        const v = sub(p.get(b)!, at);
+        const d = Math.hypot(v.x, v.y) || 1;
+        return { x: v.x / d, y: v.y / d };
+      }),
+    );
+    const h = { x: at.x + off.x, y: at.y + off.y };
+    const count = mol.hs[a] > 1 && off.x >= 0;
+    const hits: number[] = [];
+    for (const b of piece) {
+      if (b === a) continue;
+      if (hydrogenRunsInto(sub(p.get(b)!, h), mol.el[b] !== "C", count)) hits.push(b);
+    }
+    for (const [b, c] of bonds) {
+      if (b === a || c === a) continue;
+      if (toSegment(h, p.get(b)!, p.get(c)!) < 0.3) hits.push(b, c);
+    }
+    if (hits.length) out.set(a, [...new Set(hits)]);
+  }
+  // and each name's letters, likewise
+  for (const [a, hits] of namesInTheWay(mol, piece, p)) out.set(a, [...new Set([...(out.get(a) ?? []), ...hits])]);
+  return out;
+}
+
 /**
  * A label's H that runs into another label, an atom or a bond: the bond to
  * its atom turned a little, or drawn a little longer or shorter (an OH, an
@@ -1607,35 +1645,7 @@ export function roomForHydrogens(
     return count;
   };
   // what each label's H runs into, where the drawing sets it
-  const blocked = (p: Grown): Map<number, number[]> => {
-    const out = new Map<number, number[]>();
-    for (const a of piece) {
-      if (mol.el[a] === "C" || !(mol.hs[a] > 0) || !mol.neighbours[a].length) continue;
-      const at = p.get(a)!;
-      const off = hydrogenSpot(
-        mol.neighbours[a].map((b) => {
-          const v = sub(p.get(b)!, at);
-          const d = Math.hypot(v.x, v.y) || 1;
-          return { x: v.x / d, y: v.y / d };
-        }),
-      );
-      const h = { x: at.x + off.x, y: at.y + off.y };
-      const count = mol.hs[a] > 1 && off.x >= 0;
-      const hits: number[] = [];
-      for (const b of piece) {
-        if (b === a) continue;
-        if (hydrogenRunsInto(sub(p.get(b)!, h), mol.el[b] !== "C", count)) hits.push(b);
-      }
-      for (const [b, c] of bonds) {
-        if (b === a || c === a) continue;
-        if (toSegment(h, p.get(b)!, p.get(c)!) < 0.3) hits.push(b, c);
-      }
-      if (hits.length) out.set(a, [...new Set(hits)]);
-    }
-    // and each name's letters, likewise
-    for (const [a, hits] of namesInTheWay(mol, piece, p)) out.set(a, [...new Set([...(out.get(a) ?? []), ...hits])]);
-    return out;
-  };
+  const blocked = (p: Grown) => hydrogensBlocked(mol, piece, p, bonds);
   // the small moves of an atom, or of a branch hung from a bond - larger
   // for a name, whose letters reach further
   const nudges = (side: number[], from: number, to: number, wide = false): ((p: Grown) => void)[] => {

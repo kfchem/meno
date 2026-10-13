@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
 import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
-import { hydrogenSpot, layoutMetrics } from "./metrics";
+import { hydrogenRunsInto, hydrogenSpot, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
@@ -444,6 +444,38 @@ describe("layout2D", () => {
       expect(Math.hypot(h.at.x - x[a] - k * vx, h.at.y - y[a] - k * vy)).toBeGreaterThan(0.4);
     }
   });
+
+  it("clears a label's H that no small move clears, by turning a branch", () => {
+    // vinblastine's indole NH, its H on the ring of the other half;
+    // forskolin's C9 OH under its C10 methyl's wedge
+    for (const smiles of [
+      "CC[C@@]1(C[C@H]2C[C@@](C3=C(CCN(C2)C1)C4=CC=CC=C4N3)(C5=C(C=C6C(=C5)[C@]78CCN9[C@H]7[C@@](C=CC9)([C@H]([C@@]([C@@H]8N6C)(C(=O)OC)O)OC(=O)C)CC)OC)C(=O)OC)O",
+      "CC(=O)O[C@H]1[C@H]([C@@H]2[C@]([C@H](CCC2(C)C)O)([C@@]3([C@@]1(O[C@@](CC3=O)(C)C=C)C)O)C)O",
+    ]) {
+      const g = fromSmiles(smiles);
+      const { x, y } = layout2D(g);
+      const near = (a: number) => g.bonds.flatMap((b) => (b.a === a ? [b.b] : b.b === a ? [b.a] : []));
+      for (const [a, atom] of g.atoms.entries()) {
+        if (atom.el === "C" || !(atom.hs ?? 0)) continue;
+        const off = hydrogenSpot(near(a).map((b) => {
+          const d = Math.hypot(x[b] - x[a], y[b] - y[a]) || 1;
+          return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
+        }));
+        const h = { x: x[a] + off.x, y: y[a] + off.y };
+        for (const [b, other] of g.atoms.entries()) {
+          if (b !== a) expect(hydrogenRunsInto({ x: x[b] - h.x, y: y[b] - h.y }, other.el !== "C", (atom.hs ?? 0) > 1 && off.x >= 0), `${smiles.slice(0, 12)} ${a} H on ${b}`).toBe(false);
+        }
+        for (const b of g.bonds) {
+          if (b.a === a || b.b === a) continue;
+          const [p, q] = [{ x: x[b.a], y: y[b.a] }, { x: x[b.b], y: y[b.b] }];
+          const vx = q.x - p.x;
+          const vy = q.y - p.y;
+          const t = Math.max(0, Math.min(1, ((h.x - p.x) * vx + (h.y - p.y) * vy) / (vx * vx + vy * vy)));
+          expect(Math.hypot(h.x - p.x - t * vx, h.y - p.y - t * vy), `${smiles.slice(0, 12)} ${a} H on ${b.a}-${b.b}`).toBeGreaterThan(0.3);
+        }
+      }
+    }
+  }, 30_000);
 
   it("draws macrocycles strung through benzene rings as chains, never round", () => {
     // a benzene hub, a macrocycle through it and each of two more benzenes
