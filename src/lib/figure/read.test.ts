@@ -106,6 +106,17 @@ describe("a figure's shapes", () => {
     expect(s.wedges[0].base.x).toBeCloseTo(14, 1);
   });
 
+  it("finds a wedge's wide end in the middle of its cut, where it is cut slanting along the bond it meets", () => {
+    // (a wedge as a drawing's export cuts it along the next bond: its wide end's corners 2.4 points apart along it)
+    const s = shapesOf(figure([filled([111.23, 113.06], [111.82, 112.52], [98.87, 95.54], [97.41, 100.02])]));
+    expect(s.wedges).toHaveLength(1);
+    expect(s.wedges[0].base.x).toBeCloseTo(98.14, 1);
+    expect(s.wedges[0].base.y).toBeCloseTo(97.78, 1);
+    // (and the bond going on from there starts at the same atom)
+    const r = read(figure([filled([111.23, 113.06], [111.82, 112.52], [98.87, 95.54], [97.41, 100.02]), stroke([98.41, 98.23], [102.0, 87.18]), stroke([111.5, 112.8], [123.6, 111.2])]));
+    expect(r.atoms).toHaveLength(4);
+  });
+
   it("leaves out what is drawn in paper's colour", () => {
     const white = { ...filled([0, 0], [10, 0], [10, 10], [0, 10]), fill: "#ffffffff" };
     expect(shapesOf(figure([white])).blobs).toHaveLength(0);

@@ -153,7 +153,7 @@ export function narrowestBox(pts: readonly Point[]): { u: Point; mid: Point; lon
 /**
  * A filled shape read: a bar (a line drawn as a thin filled box), a wedge
  * (narrow at one end), or neither. How wide it is at each end is taken
- * from its points near that end, a tenth of its length in.
+ * where its edges cross a tenth of its length in from that end.
  */
 function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedge: Wedge } | null {
   if (pts.length < 3) return null;
@@ -163,20 +163,32 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   const a = (p: Point) => (p.x - mid.x) * u.x + (p.y - mid.y) * u.y;
   const b = (p: Point) => -(p.x - mid.x) * u.y + (p.y - mid.y) * u.x;
   const band = (sign: number) => pts.filter((p) => sign * a(p) >= long / 2 - Math.max(0.12 * long, 0.6 * short));
-  const across = (ps: Point[]) => {
-    const bs = ps.map(b);
-    return bs.length ? Math.max(...bs) - Math.min(...bs) : 0;
+  // (how wide it is a tenth of its length in from either end, where its edges cross there: an end cut
+  // slanting - a wedge's wide end cut along the bond it meets - has one corner nearer than the other)
+  const widthAt = (t: number) => {
+    const bs: number[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const q = pts[(i + 1) % pts.length];
+      const [ap, aq] = [a(p), a(q)];
+      if (ap === aq || (ap - t) * (aq - t) > 0) continue;
+      bs.push(b(p) + ((b(q) - b(p)) * (t - ap)) / (aq - ap));
+    }
+    return bs.length >= 2 ? Math.max(...bs) - Math.min(...bs) : 0;
   };
-  const [w0, w1] = [across(band(-1)), across(band(1))];
+  const [w0, w1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
   if (!curved && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
-    // (its tip the middle of its narrow end's points, its base's middle that of its wide end's outermost two)
-    const [narrow, wide] = w0 < w1 ? [band(-1), band(1)] : [band(1), band(-1)];
+    // (its tip the middle of its narrow end's points; its base the middle of its wide end's outermost two, of
+    // all its points that far along - so the middle of a wide end cut slanting)
+    const toWide = w0 < w1 ? 1 : -1;
+    const narrow = band(-toWide);
+    const wide = pts.filter((p) => toWide * a(p) >= 0);
     const tip = narrow.reduce((p, q) => ({ x: p.x + q.x / narrow.length, y: p.y + q.y / narrow.length }), { x: 0, y: 0 });
     const lo = wide.reduce((p, q) => (b(q) < b(p) ? q : p));
     const hi = wide.reduce((p, q) => (b(q) > b(p) ? q : p));
-    return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: Math.max(w0, w1), outline: pts } };
+    return { wedge: { tip, base: { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 }, w: b(hi) - b(lo), outline: pts } };
   }
   if (fill > 0.75 && long >= 2.5 * short) return { stroke: { a: at(-long / 2), b: at(long / 2), w: short, outline: pts } };
   return null;
