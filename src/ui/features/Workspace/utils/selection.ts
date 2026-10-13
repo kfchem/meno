@@ -61,6 +61,16 @@ export function molecules3dIn(molecules: readonly { id: number; at: Pt }[], kind
   return molecules.filter((m) => insidePolygon(m.at, points)).map((m) => m.id);
 }
 
+/**
+ * The words on the page a box or a lasso takes: those over no arrow, by
+ * where they stand, as a slide's "Select what is on it" takes them (words
+ * over an arrow go with the arrow). A box never took words before
+ * 2026-10-13, though Select all did.
+ */
+export function wordsIn(captions: readonly { id: number; x: number; y: number; arrow?: number }[], kind: "box" | "lasso", points: readonly Pt[]): number[] {
+  return molecules3dIn(captions.filter((c) => c.arrow == null).map((c) => ({ id: c.id, at: c })), kind, points);
+}
+
 /** Whether `q` lies in a box (its two corners) or within a lasso, as `molecules3dIn` takes a middle. */
 export function inPlace(q: Pt, kind: "box" | "lasso", points: readonly Pt[]): boolean {
   return molecules3dIn([{ id: 0, at: q }], kind, points).length > 0;

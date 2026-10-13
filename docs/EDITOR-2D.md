@@ -291,7 +291,9 @@ highlight's colour, under the drawing, and a small handle stands above it.
   one standing alone - an arrow pointing at something on a slide - as a
   shape is. A click selects one alone, Ctrl/⌘ and a click adds it or takes
   it out, and a box or a lasso takes an arrow wholly in it (each end and
-  each corner) and a "+" by its middle; Select All and a slide's *Select
+  each corner) and a "+" by its middle - and words on the page over no
+  arrow by where they stand (2026-10-13: a box never took them, though
+  Select All and a slide's did); Select All and a slide's *Select
   what is on it* take them as well. Selected, one is lit round, and goes
   with the selection when it is moved, turned, copied, cut, deleted,
   coloured (an arrow) or pasted, the words over an arrow with it. An
