@@ -1035,7 +1035,9 @@ workspace holds.
   where a bond points into a
   word - its letters side by side on one line (their ink near, or their
   rooms as the PDF sets them: a 1's ink stands well inside its room, and
-  small letters may be set apart): two capitals as large set
+  small letters may be set apart; two labels set touching, the first
+  ending in its charge - Cl- HN+ - are two, where the word reads as
+  nothing and its pieces do): two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
   are two - the word is its atom's label (at its element: an end outside it,
   much nearer its H than its element, is a carbon set close; and a label

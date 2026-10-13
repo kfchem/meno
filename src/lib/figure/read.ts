@@ -510,6 +510,18 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     : [];
   for (const l of fromShapes) for (const f of l.from) inLetters.add(f);
   const words = wordsOf([...drawn.letters, ...fromShapes]);
+  // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
+  // charge written before a capital, where both pieces read)
+  const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }));
+  const wordFrom = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (reads(labelText(w))) continue;
+    const k = w.letters.findIndex((l, j) => j > 0 && j < w.letters.length - 1 && sign(l) && /[A-Z]/.test(w.letters[j + 1].c));
+    if (k < 0) continue;
+    const [p, q] = [wordFrom(w.letters.slice(0, k + 1)), wordFrom(w.letters.slice(k + 1))];
+    if (reads(labelText(p)) && reads(labelText(q))) words.splice(i, 1, p, q);
+  }
   // (an H set right over or under an element's letter - an NH with its H stacked, as Meno sets one between two bonds - is
   // that label's: one word, NH, a bond to either part its atom's)
   for (let i = words.length - 1; i >= 0; i--) {
