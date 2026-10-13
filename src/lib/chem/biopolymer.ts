@@ -10,7 +10,8 @@ import type { PdbAtom, PdbHelix, PdbResidue, PdbStrand } from "./pdb";
 
 /**
  * A residue: its name, chain, sequence number and insertion code (which,
- * together, are the residue: ATOM, *Details*); whether a standard residue's
+ * together, are the residue: ATOM, *Details*) - the atoms listed one after
+ * another that share them (`sameResidue`); whether a standard residue's
  * ATOM records give it; and whether it is water named as a molecular
  * dynamics program names it (`mdWater`), which its name alone does not say.
  */
@@ -32,6 +33,20 @@ export type Biopolymer = {
 
 const keyOf = (chain: string, seq: number, iCode: string) => `${chain}|${seq}|${iCode}`;
 const keyOfRecord = (r: PdbResidue) => keyOf(r.chainID, r.seqNum, r.iCode);
+
+/**
+ * Whether an atom is of the residue of the atom listed before it (`before`):
+ * of the same chain, sequence number, insertion code and residue name. The
+ * format lists a residue's atoms together, its residues in order (ATOM,
+ * *Details*), so a residue is a run of atoms - not every atom in a file
+ * that shares its number. A file of more residues than the format numbers
+ * in four columns (ATOM, resSeq: 23-26), or of more atoms than the 99,999
+ * it numbers (MODEL, *Details*) - a molecular dynamics frame in its water -
+ * numbers them over again, or past the columns, and gives one number to
+ * residues far apart.
+ */
+export const sameResidue = (a: PdbAtom, before: PdbAtom | undefined): boolean =>
+  before !== undefined && a.chainID === before.chainID && a.resSeq === before.resSeq && a.iCode === before.iCode && a.resName === before.resName;
 
 /**
  * The residues from `init` to `end` - a helix's or a strand's, its first
@@ -56,16 +71,15 @@ function between(residues: readonly BioResidue[], at: Map<string, number>, init:
 export function biopolymerOf(atoms: readonly PdbAtom[], helices: readonly PdbHelix[], strands: readonly PdbStrand[]): Biopolymer | undefined {
   if (!atoms.some((a) => traceKind(a.name, a.element))) return undefined;
   const residues: BioResidue[] = [];
+  // (each residue by its chain, number and insertion code, as HELIX and SHEET records name it: the first so numbered)
   const at = new Map<string, number>();
-  const residueOf = atoms.map((a) => {
-    const key = keyOf(a.chainID, a.resSeq, a.iCode);
-    let i = at.get(key);
-    if (i === undefined) {
-      i = residues.length;
-      at.set(key, i);
+  const residueOf = atoms.map((a, k) => {
+    if (!sameResidue(a, atoms[k - 1])) {
+      const key = keyOf(a.chainID, a.resSeq, a.iCode);
+      if (!at.has(key)) at.set(key, residues.length);
       residues.push({ name: a.resName, chain: a.chainID, seq: a.resSeq, iCode: a.iCode, standard: a.record === "ATOM" });
-    } else if (a.record === "ATOM") residues[i].standard = true;
-    return i;
+    } else if (a.record === "ATOM") residues[residues.length - 1].standard = true;
+    return residues.length - 1;
   });
   // (water as a dynamics program names it: so only where its atoms are water's - and no standard residue, ATOM records or not)
   const members: PdbAtom[][] = residues.map(() => []);

@@ -129,6 +129,20 @@ describe("water, as dynamics programs name it", () => {
     expect(last(biopolymerOf([...base, ...h3], [], [])!.residues).water).toBeUndefined();
   });
 
+  it("is each water where a file past the format's 9,999 residues numbers them over again: a residue is its atoms listed together, not every atom of its number", () => {
+    // (a hundred waters in the chain's own chain A, numbered 0 to 49 and again 0 to 49: each number two waters far apart, some the chain's residues')
+    const wrapped = waters("SOL", "ATOM").map((a, i) => ({ ...a, chainID: "A", resSeq: Math.floor(i / 3) % 50 }));
+    const md = drawn([...base, ...wrapped]);
+    expect(md.bp.residues.filter((r) => r.name === "SOL")).toHaveLength(100);
+    expect(md.bp.residues.filter((r) => r.water)).toHaveLength(100);
+    expect(md.bp.residues.slice(0, 5).map((r) => [r.name, r.seq])).toEqual([1, 2, 3, 4, 5].map((k) => ["ALA", k]));
+    expect(md.count).toBe(drawn([...base, ...waters("HOH")]).count);
+    // (a helix's residues, as its record numbers them: the first residues so numbered)
+    const bp = biopolymerOf([...base, ...wrapped], [{ serNum: 1, helixID: "1", init: res(2), end: res(4), helixClass: 1 }], [])!;
+    expect(bp.structure.slice(0, 5)).toEqual([null, "helix", "helix", "helix", null]);
+    expect(bp.structure.slice(5).every((s) => s === null)).toBe(true);
+  });
+
   it("reads back from a copy as water", () => {
     const { bp } = drawn([...base, ...waters("WAT")]);
     expect(readBiopolymer(JSON.parse(JSON.stringify(bp)), base.length + 300)).toEqual(bp);

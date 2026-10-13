@@ -10,7 +10,7 @@ import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry, type PdbModel, type PdbUnreadableAtom } from "../chem/pdb";
-import { biopolymerOf, namedWater, type Biopolymer } from "../chem/biopolymer";
+import { biopolymerOf, namedWater, sameResidue, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -203,16 +203,16 @@ export function readStructures(kind: StructureKind, filename: string, content: s
  * The atoms of a model Meno shows: each in one place - where an atom is
  * given in more than one, the first alternate location its residue gives
  * (ATOM, *Details*: a residue's atoms in one conformation share their
- * indicator).
+ * indicator). A residue is a run of atoms listed one after another
+ * (`sameResidue`), not every atom in the file that shares its number.
  */
 function inOnePlace(atoms: readonly PdbAtom[]): PdbAtom[] {
-  const chosen = new Map<string, string>();
-  return atoms.filter((a) => {
+  let chosen = "";
+  return atoms.filter((a, i) => {
+    if (!sameResidue(a, atoms[i - 1])) chosen = "";
     if (!a.altLoc) return true;
-    const residue = `${a.chainID} ${a.resSeq} ${a.iCode} ${a.resName}`;
-    const first = chosen.get(residue);
-    if (first === undefined) chosen.set(residue, a.altLoc);
-    return (first ?? a.altLoc) === a.altLoc;
+    chosen ||= a.altLoc;
+    return chosen === a.altLoc;
   });
 }
 

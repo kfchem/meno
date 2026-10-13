@@ -715,6 +715,14 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
       docs/WORKSPACE.md, *Said over it*);
   - MODELs as one molecule's frames, where each holds the same atoms;
     else each model a molecule of its own;
+  - a residue as the atoms listed one after another with the same chain,
+    sequence number, insertion code and residue name: the format lists a
+    residue's atoms together, its residues in order (ATOM, *Details*).
+    Not every atom in the file of that number: the format numbers
+    residues in four columns (ATOM, resSeq: 23-26), and a file of more
+    than 9,999 of them, or of more than 99,999 atoms - a molecular
+    dynamics frame in its water - numbers them over again, or past the
+    columns. A HELIX or SHEET record's residue is the first so numbered;
   - where an atom is given in more than one place, its residue's first
     alternate location;
   - bonds from CONECT records, and - for pairs CONECT does not speak for

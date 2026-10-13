@@ -188,6 +188,18 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(m.atoms.map((a) => [a.el, a.x])).toEqual([["C", 0], ["O", 1.4], ["N", 9]]);
   });
 
+  it("takes a residue's alternate location from its own atoms, listed together - not from another residue of its number, as a file past the format's 9,999 residues numbers them over again", () => {
+    const text = [
+      het(1, "C", 0, 0, 0, { altLoc: "A", resSeq: 1 }),
+      het(2, "C", 0.3, 0, 0, { altLoc: "B", resSeq: 1 }),
+      het(3, "O", 1.4, 0, 0, { resSeq: 2 }),
+      // (numbered 1 over again, far off: its one place B)
+      het(4, "N", 9, 9, 9, { altLoc: "B", resSeq: 1 }),
+    ].join("\n");
+    const m = readStructures("pdb", "x.pdb", text).molecules3d![0];
+    expect(m.atoms.map((a) => [a.el, a.x])).toEqual([["C", 0], ["O", 1.4], ["N", 9]]);
+  });
+
   it("is one molecule's frames where its models hold the same atoms, else a molecule for each model", () => {
     const model = (n: number, atoms: string[]) => [`MODEL     ${String(n).padStart(4)}`, ...atoms, "ENDMDL"];
     const alike = [...model(1, [het(1, "C", 0, 0, 0), het(2, "O", 1.2, 0, 0)]), ...model(2, [het(1, "C", 0, 0, 0.5), het(2, "O", 1.2, 0, 0.5)])].join("\n");
