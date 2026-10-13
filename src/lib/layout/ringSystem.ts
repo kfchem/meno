@@ -20,6 +20,7 @@ import {
   dir,
   dist,
   len,
+  mirror,
   norm,
   scale,
   segmentsCross,
@@ -122,6 +123,7 @@ export function placeRingSystem(
     const t0 = squareStart(first.length);
     first.forEach((a, i) => pos.set(a, scale(dir(t0 - (i * 2 * Math.PI) / first.length), r)));
   }
+  dentForTrans(mol, first, pos);
   placedRing.add(rings.indexOf(first));
 
   // A bridged pair of rings has three bridges between its bridgeheads: the
@@ -173,6 +175,7 @@ export function placeRingSystem(
     });
     if (next < 0) break;
     placeRing(rings[next], pos, rings);
+    dentForTrans(mol, rings[next], pos);
     placedRing.add(next);
   }
   return pos;
@@ -202,6 +205,7 @@ export function extendRingSystem(mol: Molecule, sys: RingSystem, pos: Map<number
     });
     if (next < 0) break;
     placeRing(rings[next], pos, rings);
+    dentForTrans(mol, rings[next], pos);
     placed.add(next);
   }
 }
@@ -337,6 +341,60 @@ function ringOfBlocks(
 }
 
 /**
+ * The double bonds in a ring with a configuration given, each by its place
+ * in the ring (the bond from its atom there to the next) and whether it is
+ * cis or trans: taken against the ring atoms either side of it (a
+ * substituent is on the other side from its ring neighbour, so a
+ * configuration given against it is turned round).
+ */
+function ringDoubles(mol: Molecule, ring: readonly number[]): { i: number; cis: boolean }[] {
+  const n = ring.length;
+  const fixed: { i: number; cis: boolean }[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % n];
+    const bi = mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`);
+    const st = bi != null ? mol.bonds[bi].stereo : undefined;
+    if (!st || mol.bonds[bi!].order !== 2) continue;
+    const before = ring[(i - 1 + n) % n];
+    const after = ring[(i + 2) % n];
+    const onA = mol.neighbours[a].includes(st.refs[0]) && st.refs[0] !== b ? st.refs[0] : st.refs[1];
+    const onB = onA === st.refs[0] ? st.refs[1] : st.refs[0];
+    const cis = st.cis !== (onA !== before) !== (onB !== after);
+    fixed.push({ i, cis });
+  }
+  return fixed;
+}
+
+/**
+ * An eight-membered ring, drawn regular, with its trans double bonds drawn
+ * trans: in a regular polygon every double bond is cis, its ring neighbours
+ * both inside. Of each trans bond one end is dented in - reflected across
+ * the line between its two neighbours - and its own bond, or H, points out
+ * through the dent: the end in this ring alone (a ring fused there keeps
+ * its place), with less hanging from it, and away from another dent; never
+ * two atoms side by side, which would fold the ring over. (A ring of nine
+ * or more is a macrocycle, whose shapes have corners either way; a smaller
+ * one is never trans.)
+ */
+function dentForTrans(mol: Molecule, ring: readonly number[], pos: Map<number, Point>): void {
+  const n = ring.length;
+  if (n !== 8 || !ring.every((a) => pos.has(a))) return;
+  const dented: number[] = [];
+  const apart = (k: number) => Math.min(3, ...dented.map((d) => Math.min((k - d + n) % n, (d - k + n) % n)));
+  const outside = (k: number) => mol.neighbours[ring[k]].filter((v) => !ring.includes(v)).length;
+  for (const { i, cis } of ringDoubles(mol, ring)) {
+    if (cis) continue;
+    const ends = [i, (i + 1) % n]
+      .filter((k) => mol.ringsOf[ring[k]].length === 1 && apart(k) > 1)
+      .sort((p, q) => apart(q) - apart(p) || outside(p) - outside(q));
+    if (ends.length) dented.push(ends[0]);
+  }
+  const at = (j: number) => pos.get(ring[(j + n) % n])!;
+  for (const k of dented) pos.set(ring[k], mirror(at(k), at(k - 1), at(k + 1)));
+}
+
+/**
  * Which corner of the macrocycle's shape each of its atoms takes (as a map
  * from the atom's place in the ring to the shape's). A zigzag's corners
  * alternate: one points out, with room for what hangs there; the next points
@@ -404,23 +462,8 @@ function macrocycleFit(
       (shared.length === 3 ? pointIn : pointOut).push(i);
     }
   }
-  // a double bond in the ring keeps its cis or trans: taken against the
-  // ring atoms either side of it (a substituent is on the other side from
-  // its ring neighbour, so a configuration given against it is turned round)
-  const fixed: { i: number; cis: boolean }[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = ring[i];
-    const b = ring[(i + 1) % n];
-    const bi = mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`);
-    const st = bi != null ? mol.bonds[bi].stereo : undefined;
-    if (!st || mol.bonds[bi!].order !== 2) continue;
-    const before = ring[(i - 1 + n) % n];
-    const after = ring[(i + 2) % n];
-    const onA = mol.neighbours[a].includes(st.refs[0]) && st.refs[0] !== b ? st.refs[0] : st.refs[1];
-    const onB = onA === st.refs[0] ? st.refs[1] : st.refs[0];
-    const cis = st.cis !== (onA !== before) !== (onB !== after);
-    fixed.push({ i, cis });
-  }
+  // a double bond in the ring keeps its cis or trans
+  const fixed = ringDoubles(mol, ring);
   // A macrolide's lactone at the lower left, the ring numbered from its
   // carbonyl carbon counterclockwise (docs/LAYOUT-2D.md, section 4): among
   // fits that put the heavy groups outside as well, the one that does

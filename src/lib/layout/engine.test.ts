@@ -76,6 +76,35 @@ describe("layout2D", () => {
     }
   });
 
+  it("draws a double bond in an eight-membered ring trans as it is, its ring fused or not", () => {
+    // the one ring size whose regular polygon drew every double bond cis:
+    // (E)-cyclooctene came out as the (Z) - and was read back so
+    const drawnCis = (input: LayoutInput, a: number, b: number, ra: number, rb: number) => {
+      const { x, y } = layout2D(input);
+      const side = (r: number, from: number) => Math.sign((x[b] - x[a]) * (y[r] - y[from]) - (y[b] - y[a]) * (x[r] - x[from]));
+      return side(ra, a) === side(rb, b);
+    };
+    const cyclooctene = (cis: boolean) =>
+      carbons(8, ring(0, 8).map(([a, b], i) => [a, b, i === 0 ? 2 : 1]), [{ stereo: { refs: [7, 2], cis } }]);
+    for (const cis of [true, false]) expect(drawnCis(cyclooctene(cis), 0, 1, 7, 2)).toBe(cis);
+    // (E,E)-cycloocta-1,5-diene: both, each bond still 1 and nothing crowded
+    const cod = carbons(8, ring(0, 8).map(([a, b], i) => [a, b, i % 4 === 0 ? 2 : 1]), [
+      { stereo: { refs: [7, 2], cis: false } }, {}, {}, {},
+      { stereo: { refs: [3, 6], cis: false } },
+    ]);
+    expect(drawnCis(cod, 0, 1, 7, 2)).toBe(false);
+    expect(drawnCis(cod, 4, 5, 3, 6)).toBe(false);
+    for (const l of bondLengths(cod)) expect(l).toBeCloseTo(1, 6);
+    expect(measure(cod).overlaps).toBe(0);
+    // a benzo-fused (E)-cyclooctene: the eight-membered ring placed after the benzene
+    const benzo = carbons(
+      12,
+      [...ring(0, 6).map(([a, b], i): [number, number, number] => [a, b, i % 2 ? 1 : 2]), [5, 6], [6, 7], [7, 8, 2], [8, 9], [9, 10], [10, 11], [11, 0]],
+      [{}, {}, {}, {}, {}, {}, {}, {}, { stereo: { refs: [6, 9], cis: false } }],
+    );
+    expect(drawnCis(benzo, 7, 8, 6, 9)).toBe(false);
+  });
+
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line
     const bonds: [number, number, number?][] = Array.from({ length: 17 }, (_, i) => [i, i + 1, i === 8 ? 2 : 1]);

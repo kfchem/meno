@@ -51,6 +51,12 @@ they hang from.
   way out of a clash (section 5).
 - **Rings of three to eight**: regular polygons; a four-membered ring a
   square with its sides level and upright (a beta-lactam, an oxetane).
+  An eight-membered ring is the one of these that can hold a trans double
+  bond, which a regular octagon would draw cis: one end of that bond is
+  dented in, across the line between its neighbours, so the ring atoms
+  either side of it fall on opposite sides ((E)-cyclooctene). The end
+  dented is one in no other ring, with the less hanging from it, and never
+  beside another dent.
   Rings fused to each other share a side exactly; a ring fused on two
   sides or more at once (as in pyrene) takes the positions its neighbours
   already fix. Where those cannot make it regular - a five-membered ring
