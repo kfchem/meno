@@ -45,7 +45,9 @@ describe("a cage within a ring system", () => {
     const { x, y, depth } = layout2D(input);
     expect(depth.slice(0, 10).every((d) => d != null)).toBe(true);
     for (const { a, b } of input.bonds) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(0.6);
-  });
+    // (the whole engine on the fused adamantane: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 });
 
 describe("a six-membered ring drawn as a chair or a boat", () => {
@@ -148,7 +150,9 @@ describe("a six-membered ring fused on a bond to a cage", () => {
     const ring = mol.rings.find((r) => r.length === 6 && r.includes(0))!;
     expect(ring.every((a) => depth[a] != null)).toBe(true);
     expect(drawnAsChairOrBoat(ring.map((a) => ({ x: x[a], y: y[a] })))).toBe(true);
-  });
+    // (the whole engine on the cage with its chair: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("has a group axial to that chair drawn along the chair's upright", () => {
     // (one methyl of a gem pair on the fused ring is axial; drawn as the
@@ -178,7 +182,9 @@ describe("a six-membered ring fused on a bond to a cage", () => {
       });
       expect(upright).toHaveLength(1);
     }
-  });
+    // (the whole engine on the cage with its chair: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 });
 
 describe("a solid's configurations", () => {

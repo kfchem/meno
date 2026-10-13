@@ -169,7 +169,9 @@ describe("layout2D", () => {
     // and it is drawn so, as everywhere)
     const morphine = layout2D(input("CN1CC[C@]23[C@@H]4[C@H]1CC5=C2C(=C(C=C5)O)O[C@H]3[C@H](C=C4)O"));
     expect(morphine.solid.some(Boolean)).toBe(false);
-  });
+    // (the whole engine on tetrodotoxin's cage and morphine: about a second
+    // alone, a few times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("draws bilobalide's C4 with its bonds spread round it, its wedges read one way only", () => {
     // three five-membered rings round one carbon leave 36 degrees between
@@ -539,7 +541,10 @@ describe("layout2D", () => {
     const m = layoutMetrics({ x, y, edges: input.bonds.map(({ a, b }) => [a, b] as const), depth });
     expect(m.overlaps + m.crossings).toBe(0);
     expect(m.ringError).toBeLessThan(0.05);
-  });
+    // (the whole engine on a bridged system with a ring fused on its side:
+    // about a second alone, a few times that on a machine busy with the rest of
+    // the tests)
+  }, 30_000);
 
   it("draws a ring system from the face its angular groups are on, whichever hand it is", () => {
     // artemisinin: its angular methyl (18) on the ketal carbon (14) in
@@ -594,7 +599,9 @@ describe("layout2D", () => {
     const both = [...benzene, 12, 13, 18];
     expect(y[12]).toBeLessThan(mid(both, y) - 0.1);
     expect(mid(benzene, x)).toBeLessThan(mid([...Array(els.length).keys()], x));
-  });
+    // (the whole engine on each of the fused systems: about a second alone, a
+    // few times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("draws tryptophan as an amino acid, its indole N below", () => {
     // the NH2 (14) below the alpha carbon (10), the COOH (11) on its right
@@ -850,7 +857,9 @@ describe("a tert-butyl, and the other tridents", () => {
       const box = { x0: x[o] + (h.x - 0.35) * L, x1: x[o] + (h.x + 0.35) * L, y0: y[o] + (h.y - 0.35) * L, y1: y[o] + (h.y + 0.35) * L };
       for (const m of around(g, tb)) expect(segmentMeetsBox({ x: x[tb], y: y[tb] }, { x: x[m], y: y[m] }, box)).toBe(false);
     }
-  });
+    // (the whole engine on ginkgolide B: about a second alone, a few times that
+    // on a machine busy with the rest of the tests)
+  }, 30_000);
 });
 
 describe("a biaryl with something beside its bond on each ring", () => {
