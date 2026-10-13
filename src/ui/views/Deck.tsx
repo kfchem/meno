@@ -1,9 +1,10 @@
 import type { TabId, TabInstance } from "../../lib/core";
 import type { DocumentStore } from "../../lib/doc";
 import type { ViewEntry } from "../views/registry";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { DURATION } from "../theme/motion";
 import { ErrorBoundary, StoppedCard } from "../layouts/ErrorBoundary";
+import { chosen, layerOf, type Shown } from "./deckLayers";
 
 type Props = {
   order: TabId[];
@@ -26,22 +27,23 @@ export default function Deck({
   getDocument,
   renameTab,
 }: Props) {
-  // the tab just left, kept in view beneath the chosen one while it fades in
-  const [beneath, setBeneath] = useState<TabId | null>(null);
-  const was = useRef(activeId);
+  // the tab just left, kept in view beneath the chosen one while it fades in -
+  // put there as the choice is drawn: put there by an effect after it, it was
+  // hidden for the frame between, the page blank under the tab coming in
+  const [shown, setShown] = useState<Shown>({ active: activeId, beneath: null });
+  const now = chosen(shown, activeId);
+  if (now !== shown) setShown(now);
   useEffect(() => {
-    if (was.current === activeId) return;
-    const left = was.current;
-    was.current = activeId;
-    setBeneath(left);
-    const t = window.setTimeout(() => setBeneath(null), DURATION.quick * 1000 + 40);
+    if (now.beneath == null) return;
+    const t = window.setTimeout(() => setShown((s) => ({ ...s, beneath: null })), DURATION.quick * 1000 + 40);
     return () => window.clearTimeout(t);
-  }, [activeId]);
+  }, [now.active, now.beneath]);
   return (
     <div className="flex-1 w-full h-full relative">
       {order.map((id) => {
         const t = tabs[id];
         const active = activeId === id;
+        const layer = layerOf(id, now);
         const entry = resolveView(t.content.kind) as ViewEntry;
         return (
           // (each tab opaque, the window's own white: a view see-through in
@@ -50,9 +52,9 @@ export default function Deck({
           <div
             key={id}
             className={
-              active
+              layer === "active"
                 ? "absolute inset-0 flex z-10 bg-white meno-fade-in"
-                : id === beneath
+                : layer === "beneath"
                   ? "absolute inset-0 flex z-0 bg-white"
                   : "absolute inset-0 hidden"
             }
