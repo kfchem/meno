@@ -171,7 +171,7 @@ describe("a PDB file, read", () => {
     expect(entry.unreadable).toBe(2);
     expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([2]);
     // (the atom among them by its line, for the rest of Meno to say)
-    expect(entry.unreadableAtoms).toEqual([{ line: 5, what: "coordinates" }]);
+    expect(entry.unreadableAtoms).toEqual([{ line: 5, what: "coordinates", resName: "GLY" }]);
   });
 
   it("keeps each atom's record that does not read by its line, and what of it does not: where it is, or its element", () => {
@@ -190,12 +190,14 @@ describe("a PDB file, read", () => {
     );
     expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([1, 6]);
     expect(entry.unreadableAtoms).toEqual([
-      { line: 3, what: "coordinates" },
-      { line: 4, what: "coordinates" },
-      { line: 5, what: "element" },
-      { line: 6, what: "name" },
+      { line: 3, what: "coordinates", resName: "HOH" },
+      { line: 4, what: "coordinates", resName: "HOH" },
+      { line: 5, what: "element", resName: "GLY" },
+      { line: 6, what: "name", resName: "GLY" },
     ]);
     expect(entry.unreadable).toBe(4);
+    // (each its model's too)
+    expect(entry.models[0].unreadableAtoms).toEqual(entry.unreadableAtoms);
   });
 
   it("knows a line's record name by its first six columns", () => {

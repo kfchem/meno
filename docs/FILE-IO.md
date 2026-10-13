@@ -698,12 +698,21 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     deuterium and tritium, are hydrogen of mass 2 and 3, the mass number
     kept with the atom, as Meno's table holds elements, not isotopes
     (since 2026-10-13: before, such atoms were left out unsaid);
-  - a file in which an ATOM or HETATM record does not read - its
-    coordinates no numbers, or its element none Meno knows - is not
-    opened, the chemist told how many such records there are and the
-    first by its line and columns (since 2026-10-13: before, such atoms
-    were left out unsaid). An atom left out leaves another molecule - a
-    hydrogen short, a ring open - so the file is not read without it;
+  - an ATOM or HETATM record that does not read is never passed over
+    unsaid (since 2026-10-13: before, such atoms were left out without a
+    word):
+    - its coordinates no numbers: the file is damaged, and is not
+      opened, the chemist told how many such records there are and the
+      first by its line;
+    - its element none Meno knows (columns 77-78, or its name where they
+      are blank), in a residue named as water is - HOH, DOD, SOL, WAT,
+      TIP (`namedWater`, lib/chem/biopolymer) - a TIP4P or TIP5P water
+      model's massless site (MW, LP, EP, OM): no atom, and left out;
+    - its element none Meno knows, anywhere else - a wwPDB entry's
+      unknown atom (element X, residue UNX), an old file's name with
+      its element columns blank: the atom is left out and the molecule
+      says how many, *1 atom left out* (`atomsLeftOut`;
+      docs/WORKSPACE.md, *Said over it*);
   - MODELs as one molecule's frames, where each holds the same atoms;
     else each model a molecule of its own;
   - where an atom is given in more than one place, its residue's first

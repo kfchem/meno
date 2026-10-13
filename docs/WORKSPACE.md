@@ -1037,7 +1037,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   whose valence, its orders known, leaves room for some; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
-  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  side chains round a ligand, in a look with ribbons, among them); *1
+  atom left out*, *3 atoms left out* where its file has atoms whose
+  element does not read - a PDB entry's unknown atom (X, UNX) - and the
+  molecule leaves them out. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,

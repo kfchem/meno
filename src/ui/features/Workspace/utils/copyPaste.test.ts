@@ -171,6 +171,14 @@ describe("molecules in 3D on the clipboard", () => {
     expect(back?.molecules3d).toEqual([made]);
   });
 
+  it("keep how many atoms their file left out, where it is some", () => {
+    const back = (atomsLeftOut: unknown) => readRecord(recordText({ atoms: [], bonds: [], molecules3d: [{ ...water3d, atomsLeftOut } as typeof water3d] }))!.molecules3d![0].atomsLeftOut;
+    expect(back(2)).toBe(2);
+    expect(back(0)).toBeUndefined();
+    expect(back(1.5)).toBeUndefined();
+    expect(back("2")).toBeUndefined();
+  });
+
   it("lose a tie or labels that do not read, not the molecule", () => {
     const text = recordText({
       atoms: [],

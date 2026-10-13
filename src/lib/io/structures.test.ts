@@ -26,6 +26,9 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     const m = read.molecules3d![0];
     broken({ ...read, molecules3d: [{ ...m, bonds: [{ a1: 0, a2: 7, order: 1 }] }] }, /bond of a molecule in 3D joins no atoms/);
     broken({ ...read, molecules3d: [{ ...m, frames: [[0, 0, 0]] }] }, /frame of a molecule in 3D is not whole/);
+    broken({ ...read, molecules3d: [{ ...m, atomsLeftOut: 0 }] }, /says it leaves out atoms, but not how many/);
+    broken({ ...read, molecules3d: [{ ...m, atomsLeftOut: 1.5 }] }, /says it leaves out atoms, but not how many/);
+    expect(checkedStructures({ ...read, molecules3d: [{ ...m, atomsLeftOut: 2 }] }, "w.xyz").molecules3d![0].atomsLeftOut).toBe(2);
     broken({ ...read, pluses: [{ x: 1 }] }, /"\+" sign is not placed/);
     broken({ ...mol, records: [{ atoms: [mol.model.atoms[0].id] }, { atoms: [-9] }] }, /record of its drawing holds atoms it does not have/);
   });
@@ -52,20 +55,27 @@ describe("an SD file of records drawn flat, as Meno's own reader gives it", () =
 });
 
 /** A HETATM line, its fields in the format's columns (lib/chem/pdb). */
-function het(serial: number, el: string, x: number, y: number, z: number, more: { altLoc?: string; resSeq?: number } = {}): string {
+function het(
+  serial: number,
+  el: string,
+  x: number,
+  y: number,
+  z: number,
+  more: { altLoc?: string; resSeq?: number; name?: string; resName?: string; element?: string } = {},
+): string {
   const line = Array(80).fill(" ");
   const put = (from: number, s: string) => [...s].forEach((c, i) => (line[from - 1 + i] = c));
   put(1, "HETATM");
   put(7, String(serial).padStart(5));
-  put(14, el);
+  put(14, more.name ?? el);
   put(17, more.altLoc ?? " ");
-  put(18, "LIG");
+  put(18, more.resName ?? "LIG");
   put(22, "A");
   put(23, String(more.resSeq ?? 1).padStart(4));
   put(31, x.toFixed(3).padStart(8));
   put(39, y.toFixed(3).padStart(8));
   put(47, z.toFixed(3).padStart(8));
-  put(77, el.padStart(2));
+  put(77, (more.element ?? el).padStart(2));
   return line.join("");
 }
 const conect = (from: number, ...to: number[]) => "CONECT" + [from, ...to].map((n) => String(n).padStart(5)).join("");
@@ -174,16 +184,44 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(() => readStructures("pdb", "x.pdb", "REMARK   1\nEND\n")).toThrow(/No molecules found in x.pdb/);
   });
 
-  it("is not read where an atom's record does not read, saying how many and the first by its line: an atom left out would leave another molecule", () => {
+  it("is not read where an atom's coordinates do not read - the file damaged - saying how many and the first by its line", () => {
     const water = (z: number) => [het(1, "O", 0, 0, 0), het(2, "H", 0.957, 0, 0), het(3, "H", -0.24, 0.927, z), "END"].join("\n") + "\n";
     expect(readStructures("pdb", "w.pdb", water(0)).molecules3d![0].atoms).toHaveLength(3);
     expect(() => readStructures("pdb", "w.pdb", water(Number.NaN))).toThrow("w.pdb could not be read: the atom on line 3 does not read (its coordinates, columns 31-54).");
-    // (several: how many, and the first)
-    const two = ["REMARK   1", het(1, "O", Number.NaN, 0, 0), het(2, "H", 0.957, 0, 0), het(3, "QQ", 1, 1, 0)].join("\n");
-    expect(() => readStructures("pdb", "w.pdb", two)).toThrow("w.pdb could not be read: 2 of its atoms do not read, the first on line 2 (its coordinates, columns 31-54).");
-    expect(() => readStructures("pdb", "w.pdb", het(1, "QQ", 0, 0, 0))).toThrow("w.pdb could not be read: the atom on line 1 does not read (its element, columns 77-78).");
-    // (none reading: said by its line all the same)
-    expect(() => readStructures("pdb", "w.pdb", [het(1, "O", Number.NaN, 0, 0), het(2, "H", Number.NaN, 0, 0)].join("\n"))).toThrow(/2 of its atoms do not read, the first on line 1/);
+    // (several: how many, and the first - an atom of no element among them not counted)
+    const two = ["REMARK   1", het(1, "QQ", 1, 1, 0), het(2, "O", Number.NaN, 0, 0), het(3, "H", 0.957, 0, 0), het(4, "H", Number.NaN, 0, 0)].join("\n");
+    expect(() => readStructures("pdb", "w.pdb", two)).toThrow("w.pdb could not be read: 2 of its atoms do not read, the first on line 3 (its coordinates, columns 31-54).");
+    // (in a water too)
+    expect(() => readStructures("pdb", "w.pdb", het(1, "O", Number.NaN, 0, 0, { resName: "SOL" }))).toThrow(/the atom on line 1 does not read/);
+  });
+
+  it("leaves out an atom whose element does not read - a wwPDB entry's unknown atom - and says how many it leaves out", () => {
+    const text = [het(1, "C", 0, 0, 0), het(2, "O", 1.2, 0, 0), het(3, "X", 5, 5, 5, { resName: "UNX", resSeq: 2 }), het(4, "QQ", 9, 9, 9, { resName: "UNX", resSeq: 3 }), "END"].join("\n") + "\n";
+    const read = readStructures("pdb", "x.pdb", text);
+    const m = read.molecules3d![0];
+    expect(m.atoms.map((a) => a.el)).toEqual(["C", "O"]);
+    expect(m.atomsLeftOut).toBe(2);
+    expect(checkedStructures(read, "x.pdb")).toBe(read);
+    // (an old file's name, its element columns blank, reading as none: left out the same)
+    expect(readStructures("pdb", "x.pdb", [het(1, "C", 0, 0, 0), het(2, "C", 1.5, 0, 0, { name: "", element: "" })].join("\n")).molecules3d![0].atomsLeftOut).toBe(1);
+    // (all of them read: none said)
+    expect(readStructures("pdb", "x.pdb", [het(1, "C", 0, 0, 0), het(2, "O", 1.2, 0, 0)].join("\n")).molecules3d![0].atomsLeftOut).toBeUndefined();
+  });
+
+  it("leaves out a TIP4P or TIP5P water's massless site, no atom, without a word", () => {
+    const sol = (resSeq: number, dx: number) => [
+      het(4 * resSeq - 3, "O", dx, 0, 0, { name: "OW", resName: "SOL", resSeq }),
+      het(4 * resSeq - 2, "H", dx + 0.957, 0, 0, { name: "HW1", resName: "SOL", resSeq }),
+      het(4 * resSeq - 1, "H", dx - 0.24, 0.927, 0, { name: "HW2", resName: "SOL", resSeq }),
+      // (GROMACS's MW: its element columns blank, its name no element's)
+      het(4 * resSeq, "", dx + 0.1, 0.1, 0, { name: "MW", resName: "SOL", resSeq }),
+    ];
+    const m = readStructures("pdb", "tip4p.pdb", [...sol(1, 0), "END"].join("\n") + "\n").molecules3d![0];
+    expect(m.atoms.map((a) => a.el)).toEqual(["O", "H", "H"]);
+    expect(m.atomsLeftOut).toBeUndefined();
+    // (a site so named in a ligand's residue: an atom left out, and said)
+    const ligand = [het(1, "C", 0, 0, 0), het(2, "", 0.5, 0.5, 0, { name: "MW" })].join("\n");
+    expect(readStructures("pdb", "x.pdb", ligand).molecules3d![0].atomsLeftOut).toBe(1);
   });
 
   it("reads D and T, deuterium and tritium, as hydrogen, keeping their mass numbers", () => {

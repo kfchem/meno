@@ -9,8 +9,8 @@ import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText,
 import { energiesOf } from "../../utils/xyzEnergies";
 import { bondsByDistance } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
-import { readPdb, type PdbAtom, type PdbEntry, type PdbUnreadableAtom } from "../chem/pdb";
-import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
+import { readPdb, type PdbAtom, type PdbEntry, type PdbModel, type PdbUnreadableAtom } from "../chem/pdb";
+import { biopolymerOf, namedWater, type Biopolymer } from "../chem/biopolymer";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -34,6 +34,8 @@ export type FileMolecule3D = {
   biopolymer?: Biopolymer;
   /** Its bonds' orders "unknown": its file gives coordinates alone (an XYZ or PDB file). */
   bondOrders?: "unknown";
+  /** How many of its file's atoms it leaves out, their element not read - a PDB entry's unknown atom (X, UNX), say; in a frame, the most. */
+  atomsLeftOut?: number;
 };
 
 /**
@@ -96,30 +98,31 @@ function depthOf(m: Molecule): number {
 /** Why a file holds nothing to read, as the chemist is told. */
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
-/** What of an atom's record does not read, as the chemist is told it: the columns it is in. */
-const UNREADABLE: Record<PdbUnreadableAtom["what"], string> = {
-  coordinates: "its coordinates, columns 31-54",
-  element: "its element, columns 77-78",
-  name: "its element: columns 77-78 are blank, and its name, columns 13-16, gives none",
-};
-
 /**
- * Why a PDB file whose atoms do not all read is not opened, as the chemist
- * is told: how many, and the first, by its line and what of it does not
- * read. An atom left out would leave another molecule - a hydrogen short, a
- * ring open - not the file's, so the file is not read without it.
+ * Why a PDB file in which an atom's coordinates do not read is not opened,
+ * as the chemist is told: how many such atoms, and the first, by its line.
+ * The file is damaged: where the atom stands is not known.
  */
-function atomsUnreadable(name: string, atoms: readonly PdbUnreadableAtom[]): Error {
+function atomsUnplaced(name: string, atoms: readonly PdbUnreadableAtom[]): Error {
   const [first] = atoms;
   const which = atoms.length === 1 ? `the atom on line ${first.line} does not read` : `${atoms.length.toLocaleString("en")} of its atoms do not read, the first on line ${first.line}`;
-  return new Error(`${name} could not be read: ${which} (${UNREADABLE[first.what]}).`);
+  return new Error(`${name} could not be read: ${which} (its coordinates, columns 31-54).`);
 }
+
+/**
+ * How many of a model's atoms are left out, their element not read
+ * (columns 77-78, or the name where those are blank): every such atom but
+ * those in a water - a residue named as the dictionary or a dynamics
+ * program names water (lib/chem/biopolymer `namedWater`) - which are a
+ * TIP4P or TIP5P model's massless sites (MW, LP, EP, OM), no atoms.
+ */
+const leftOutOf = (m: PdbModel) => m.unreadableAtoms.filter((a) => a.what !== "coordinates" && !namedWater(a.resName)).length;
 
 /**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
  * with its arrow and "+" signs; an XYZ file's frames, one molecule's, in
  * 3D, each with its energy where the comment lines give one; a PDB file's
- * models, in 3D (`pdbMolecules`) - or, where an atom's record does not
+ * models, in 3D (`pdbMolecules`) - or, where an atom's coordinates do not
  * read, none, and the first such line said; a MOL or SD file's records, each a
  * drawing or - where the file says it is 3D, or its atoms spread in depth -
  * a molecule in 3D.
@@ -128,7 +131,9 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   const name = filename || "the file";
   if (kind === "pdb") {
     const entry = readPdb(content);
-    if (entry.unreadableAtoms.length) throw atomsUnreadable(name, entry.unreadableAtoms);
+    // (an atom whose element does not read is left out, and said: `pdbMolecules`)
+    const unplaced = entry.unreadableAtoms.filter((a) => a.what === "coordinates");
+    if (unplaced.length) throw atomsUnplaced(name, unplaced);
     const molecules3d = pdbMolecules(entry, filename);
     if (!molecules3d.length) throw noMolecules(name);
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
@@ -255,11 +260,13 @@ const parsedAtom = (a: PdbAtom): ParsedAtom => ({
  * each holds the same atoms (MODEL, *Details*: an ensemble's models are
  * alike); else each model a molecule of its own. All a model holds - its
  * chains, hetero groups, waters - is one molecule in 3D, as an XYZ file's
- * atoms are.
+ * atoms are; each saying how many atoms it leaves out (`leftOutOf`).
  */
 function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
-  const models = entry.models.map((m) => inOnePlace(m.atoms)).filter((atoms) => atoms.length);
-  if (!models.length) return [];
+  const read = entry.models.map((m) => ({ atoms: inOnePlace(m.atoms), leftOut: leftOutOf(m) })).filter((m) => m.atoms.length);
+  if (!read.length) return [];
+  const models = read.map((m) => m.atoms);
+  const said = (leftOut: number) => (leftOut ? { atomsLeftOut: leftOut } : {});
   const [first, ...rest] = models;
   const alike = rest.every((atoms) => atoms.length === first.length && atoms.every((a, i) => a.element === first[i].element));
   const named = filename ? { name: filename } : {};
@@ -278,10 +285,12 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         ...biopolymer(first),
         // (a PDB file gives no bond orders: CONECT records say which atoms are bonded, not how)
         bondOrders: "unknown" as const,
+        // (the most any of its models leaves out)
+        ...said(read.reduce((most, m) => Math.max(most, m.leftOut), 0)),
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const }));
+  return read.map(({ atoms, leftOut }) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const, ...said(leftOut) }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -319,6 +328,8 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
       throw bad("the energies of a molecule in 3D are not one for each of its frames");
     }
+    // (how many atoms it leaves out: some, or it says none)
+    if (m.atomsLeftOut != null && !(Number.isInteger(m.atomsLeftOut) && m.atomsLeftOut > 0)) throw bad("a molecule in 3D says it leaves out atoms, but not how many");
   }
   return s as StructureRead;
 }

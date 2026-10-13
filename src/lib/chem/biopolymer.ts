@@ -108,7 +108,7 @@ export function traceKind(name: string, element: string): "protein" | "nucleic" 
  */
 const MD_WATER = new Set(["SOL", "WAT", "TIP"]);
 
-/** Whether a residue's atoms are a water molecule's: one oxygen, and otherwise only hydrogens, two at most (a TIP4P or TIP5P model's massless sites have no element, and are not read: ./pdb). */
+/** Whether a residue's atoms are a water molecule's: one oxygen, and otherwise only hydrogens, two at most (a TIP4P or TIP5P model's massless sites have no element, and are not read: ./pdb, and lib/io/structures, which leaves them out unsaid). */
 function mdWater(atoms: readonly Pick<PdbAtom, "element">[]): boolean {
   let o = 0;
   let h = 0;
@@ -122,6 +122,9 @@ function mdWater(atoms: readonly Pick<PdbAtom, "element">[]): boolean {
 
 /** Water: by its residue name in the wwPDB's Chemical Component Dictionary (HOH, DOD), as the format's examples write it - or as a dynamics program names it, its atoms water's (`biopolymerOf`). */
 export const isWater = (r: Pick<BioResidue, "name" | "water">) => r.name === "HOH" || r.name === "DOD" || r.water === true;
+
+/** Whether a residue's name is water's, as the dictionary or a dynamics program names it (`isWater`, `MD_WATER`), whatever its atoms. */
+export const namedWater = (resName: string) => resName === "HOH" || resName === "DOD" || MD_WATER.has(resName);
 
 /** A biopolymer as it reads back from a copy or a saved workspace, for a molecule of `n` atoms; undefined where it does not read. */
 export function readBiopolymer(raw: unknown, n: number): Biopolymer | undefined {

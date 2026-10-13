@@ -54,9 +54,10 @@ export type PdbAtom = {
 /**
  * An ATOM or HETATM record that does not read: its line, numbered from 1,
  * and what of it does not - where it is (31-54), its element (77-78), or,
- * where those columns are blank, its element as its name gives it (13-16).
+ * where those columns are blank, its element as its name gives it (13-16) -
+ * and its residue's name (18-20).
  */
-export type PdbUnreadableAtom = { line: number; what: "coordinates" | "element" | "name" };
+export type PdbUnreadableAtom = { line: number; what: "coordinates" | "element" | "name"; resName: string };
 
 /** A model: the coordinates between a MODEL record and its ENDMDL - or, in an entry of one, all of them. */
 export type PdbModel = {
@@ -65,6 +66,8 @@ export type PdbModel = {
   atoms: PdbAtom[];
   /** Where its chains end, by TER records: how many of its atoms come before each. */
   chainEnds: number[];
+  /** Its ATOM and HETATM records that do not read (`PdbEntry.unreadableAtoms`), in order. */
+  unreadableAtoms: PdbUnreadableAtom[];
 };
 
 /** A residue, as a secondary structure record names one: its name, its chain, its sequence number and insertion code. */
@@ -123,7 +126,7 @@ export type PdbEntry = {
   unread: Record<string, number>;
   /** Lines that are no record the format names, or a record's that does not read. */
   unreadable: number;
-  /** The ATOM and HETATM records among them, in order: atoms the entry has, which are not in its models. */
+  /** The ATOM and HETATM records among them, in order - each its model's too: atoms the entry has, which are not among its models' atoms. */
   unreadableAtoms: PdbUnreadableAtom[];
 };
 
@@ -218,7 +221,7 @@ type Handler = (line: string, r: Reading) => void | "end";
 /** The model atoms go into: the one a MODEL record began, or - an entry of one model - the one there is. */
 function modelOf(r: Reading): PdbModel {
   if (r.model) return r.model;
-  const m: PdbModel = { serial: r.models.length + 1, atoms: [], chainEnds: [] };
+  const m: PdbModel = { serial: r.models.length + 1, atoms: [], chainEnds: [], unreadableAtoms: [] };
   r.models.push(m);
   r.model = m;
   return m;
@@ -233,10 +236,12 @@ const atomRecord =
     const z = real(line, 47, 54);
     const read = elementOf(line);
     if (x === undefined || y === undefined || z === undefined || !read) {
-      // (counted, and its line kept: an atom of the entry's that is in none of its models)
+      // (counted, and its line kept - with the entry and its model: an atom of theirs that is in none of the model's atoms)
       r.unreadable++;
       const what = x === undefined || y === undefined || z === undefined ? "coordinates" : text(line, 77, 78) ? "element" : "name";
-      r.unreadableAtoms.push({ line: r.at, what });
+      const unreadable: PdbUnreadableAtom = { line: r.at, what, resName: text(line, 18, 20) };
+      r.unreadableAtoms.push(unreadable);
+      modelOf(r).unreadableAtoms.push(unreadable);
       return;
     }
     const { element, isotope } = read;
@@ -275,7 +280,7 @@ const RECORDS: Record<string, Handler> = {
   TITLE: (line, r) => void r.titleParts.push(cols(line, 11, 80)),
   MODEL: (line, r) => {
     // (atoms before the first MODEL record, should there be any, are a model of their own)
-    const m: PdbModel = { serial: integer(line, 11, 14) ?? r.models.length + 1, atoms: [], chainEnds: [] };
+    const m: PdbModel = { serial: integer(line, 11, 14) ?? r.models.length + 1, atoms: [], chainEnds: [], unreadableAtoms: [] };
     r.models.push(m);
     r.model = m;
   },

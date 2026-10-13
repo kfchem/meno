@@ -3,7 +3,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown } from "./completeness";
+import { leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -835,7 +835,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
- * own, or a biopolymer's chains' where they are drawn as atoms.
+ * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
+ * its file's it leaves out, their element not read.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -846,6 +847,7 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(solid.hidesH[look] ? [HIDDEN_MARK] : []),
     ...(noHydrogensInFile(m, chainsDrawn) ? [NO_H_MARK] : []),
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
+    ...(m.atomsLeftOut ? [leftOutMark(m.atomsLeftOut)] : []),
   ];
 }
 

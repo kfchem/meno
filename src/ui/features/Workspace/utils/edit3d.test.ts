@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
-import { editedFrom, isResult, movingAtoms, placesOf, settable, stereoAfter, valueOf, withValue } from "./edit3d";
+import { editedCopy, editedFrom, isResult, movingAtoms, placesOf, settable, stereoAfter, valueOf, withValue } from "./edit3d";
 
 /** Butane, C1-C2-C3-C4, anti, with a hydrogen on C1 (4) and one on C4 (5); and a bonded list for ring tests. */
 const butane = (): Molecule3D => ({
@@ -111,6 +111,13 @@ describe("a molecule's frames, results and stereo labels as it is edited", () =>
     expect(editedFrom({ ...butane(), conformerSet: true, frames: [[], []], numbers: [3, 7, 9] }, 1)).toBe("conformer 7");
     expect(editedFrom({ ...butane(), frames: [[]] }, 1)).toBe("frame 2");
     expect(editedFrom({ ...butane(), name: "opt.log", energies: [-1] }, 0)).toBe("opt.log");
+  });
+
+  it("makes an edited copy that says nothing of the atoms its result's file left out", () => {
+    const m = { ...butane(), frames: [placesOf(butane(), 0)], atomsLeftOut: 2 };
+    const copy = editedCopy(m, 1, placesOf(m, 1), undefined, { x: 0, y: 0 });
+    expect(copy.atomsLeftOut).toBeUndefined();
+    expect(copy.edited).toEqual({ from: "frame 2" });
   });
 
   it("swaps R and S at a centre turned inside out, and E and Z at a double bond turned past square", () => {
