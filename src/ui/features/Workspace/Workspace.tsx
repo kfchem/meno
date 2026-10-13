@@ -1,4 +1,5 @@
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
@@ -792,12 +793,15 @@ function WorkspaceContent({
   }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
-  // (nor a card a menu opened - a colour's, a size's - left over it)
+  // (nor a card a menu opened - a colour's, a size's - left over it, nor a
+  // question asked over the canvas: a procedure's name, a ligand's bond orders)
   useEffect(() => {
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
     setSizeCard(null);
+    setNaming(null);
+    setGivingOrders(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -1259,6 +1263,12 @@ function WorkspaceContent({
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
+  useEffect(() => {
+    if (!talking) return;
+    setRendering(null);
+    setExporting(null);
+  }, [talking]);
 
   // Export: what is selected - its structures, arrows and words, its
   // molecules in 3D - as Meno writes it, or a plugin added that writes
@@ -2180,6 +2190,11 @@ export default function Workspace({
     "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string } } | null
   >(null);
   const styleOpen = panel === "style";
+  // (a talk begun shuts the panel: the talk has the whole of the window, not what is left beside it)
+  const talking = usePresentingWindow((s) => s.on);
+  useEffect(() => {
+    if (talking) setPanel(null);
+  }, [talking]);
   return (
     <EditorProvider tabId={tabId} document={document}>
       <div className="w-full h-full flex">
