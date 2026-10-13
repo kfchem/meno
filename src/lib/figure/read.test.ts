@@ -773,6 +773,30 @@ describe("a figure drawn in colour by another program", () => {
     const s = read(figure([stroke(c, c2, along(c2, o, 0.5)), red(along(c2, o, 0.5), along(c2, o, 0.85))], word("O", o)));
     expect(bondsOf(s)).toEqual(["C-C", "C-O"]);
   });
+
+  it("reads a double bond whose two lines change colour side by side, closer than two of their widths, as one double bond", () => {
+    // (a C=O as RDKit draws one by default on a large molecule: each line black to its middle and red on, 1.5 thick, the lines
+    // 2.6 apart - each line's colour changes by the other's)
+    const c: P = [60, 60];
+    const c2 = step(c, 30);
+    const o = step(c2, -30);
+    const [nx, ny] = [Math.cos((60 * Math.PI) / 180) * 2.6, -Math.sin((60 * Math.PI) / 180) * 2.6];
+    const off = (p: P): P => [p[0] + nx, p[1] + ny];
+    const thick = (colour: string, ...pts: P[]): FigurePath => ({ ...stroke(...pts), width: 1.5, stroke: colour });
+    const s = read(
+      figure(
+        [
+          thick("#000000ff", c, c2),
+          thick("#000000ff", c2, along(c2, o, 0.5)),
+          thick("#ff0000ff", along(c2, o, 0.5), along(c2, o, 0.85)),
+          thick("#000000ff", off(along(c2, o, 0.1)), off(along(c2, o, 0.5))),
+          thick("#ff0000ff", off(along(c2, o, 0.5)), off(along(c2, o, 0.85))),
+        ],
+        word("O", o),
+      ),
+    );
+    expect(bondsOf(s)).toEqual(["C-C", "C=O"]);
+  });
 });
 
 describe("a figure's words", () => {

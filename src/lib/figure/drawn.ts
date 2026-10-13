@@ -318,7 +318,12 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
         if (!ls || !lt) continue;
         const cos = ((s.b.x - s.a.x) * (t.b.x - t.a.x) + (s.b.y - s.a.y) * (t.b.y - t.a.y)) / (ls * lt);
         if (cos < Math.cos((3 * Math.PI) / 180)) continue;
-        const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w));
+        // (a line side by side with it - a double bond's other, its colours changing at the same place - is no other ending there)
+        const alongside = (o: Stroke) => {
+          const lo = dist(o.a, o.b);
+          return lo > 0 && Math.abs(((o.b.x - o.a.x) * (s.b.y - s.a.y) - (o.b.y - o.a.y) * (s.b.x - s.a.x)) / (lo * ls)) < Math.sin((3 * Math.PI) / 180);
+        };
+        const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o));
         if (others.length) continue;
         out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
         out.strokes.splice(j, 1);
