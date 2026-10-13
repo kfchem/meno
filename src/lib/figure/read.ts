@@ -641,19 +641,26 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       wordOf.set(e, piece === 0 ? k : words.length - made.length + piece);
     }
   }
-  // (a label with its hydrogens written - NH2, OH, SH - takes no more bonds than they leave it: the ends that come
-  // nearest its element, a stray one - a methyl's set close - a carbon of its own)
+  // (a label with its hydrogens written - NH2, OH, SH - takes no more bonds than they leave it, and an O alone two, a double
+  // bond's counted twice: the ends that come nearest its element, a stray one - a methyl's set close - a carbon of its own.
+  // An NH's bonds are counted as one each: a ring's, its charge drawn by it, may be double)
   words.forEach((w, k) => {
     const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w));
-    if (!m || (m[1] == null && m[3] == null) || !(m[2] in BONDS_LEFT)) return;
+    if (!m || !(m[2] in BONDS_LEFT)) return;
+    const bare = m[1] == null && m[3] == null;
+    if (bare && m[2] !== "O") return;
     const hs = (m[1] == null ? 0 : m[1] === "" ? 1 : Number.parseInt(m[1])) + (m[3] == null ? 0 : m[3] === "" ? 1 : Number.parseInt(m[3]));
     const room = BONDS_LEFT[m[2]] - hs;
     const at = ends.filter((e) => wordOf.get(e) === k);
-    if (room < 1 || at.length <= room) return;
+    const order = (e: End) => (bare ? drawnBonds[e.bond].order : 1);
+    if (room < 1 || at.reduce((t, e) => t + order(e), 0) <= room) return;
     const el = w.letters.find((l) => l.c === m[2][0]);
     const to = (e: End) => (el ? dist(centre(el.box), e.p) : fromBox(e.p, w.box));
-    const keep = new Set([...at].sort((p, q) => to(p) - to(q)).slice(0, room));
-    for (const e of at) if (!keep.has(e)) wordOf.delete(e);
+    let left = room;
+    for (const e of [...at].sort((p, q) => to(p) - to(q))) {
+      if (order(e) <= left) left -= order(e);
+      else wordOf.delete(e);
+    }
   });
   // (a lone H takes one bond: a wedge's or a hash's first, else the nearest)
   words.forEach((w, k) => {

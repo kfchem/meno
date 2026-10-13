@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
+import camphor from "./fixtures/camphor-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
 import monensin from "./fixtures/monensin-rsc.json";
 import junction from "./fixtures/monensin-nature-junction.json";
@@ -706,6 +707,14 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const s = read(figure([stroke(step(c, 180), c, step(c, -90)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("OH", o)));
     expect(bondsOf(s)).toContain("C-O up");
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
+  });
+
+  it("gives an O alone no more than two bonds, a double bond's counted twice: a methyl's end set close is a carbon", () => {
+    // (camphor as RDKit's ACS 1996 mode draws it: its bridgehead's methyl ends just under the ketone's O)
+    const r = readFigure(camphor as unknown as FigureDrawn);
+    const o = r.atoms.findIndex((a) => a.label === "O");
+    expect(r.bonds.filter((b) => b.a === o || b.b === o).map((b) => b.order)).toEqual([2]);
+    expect(r.atoms).toHaveLength(11);
   });
 });
 

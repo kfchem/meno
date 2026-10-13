@@ -1019,7 +1019,8 @@ workspace holds.
   word, the word is its atom's label (at its element: an end outside it,
   much nearer its H than its element, is a carbon set close; and a label
   with its hydrogens written - NH2, OH - takes no more bonds than they
-  leave it, the ends nearest its element; an H set right over or under an
+  leave it, and an O alone two, a double bond counted twice, the ends
+  nearest its element; an H set right over or under an
   N, O, S or P is that label's - an NH set between two bonds, its H stacked
   - and a bond cut back at the H, pointing on at the element, is the
   label's too), read as a label typed is read - an
