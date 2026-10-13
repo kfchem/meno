@@ -6,6 +6,7 @@
  * arrow its conditions, the rest where they stand. Everything stays in the
  * page's points, y down, as the figure was drawn.
  */
+import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 import { figureBond, readFigure, type FigureRead } from "./read";
 import type { GlyphShape } from "./glyphs";
@@ -811,8 +812,10 @@ export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;
-  const { arrows, used, usedLetters } = arrowsOf(shapes, drawn.letters, bond, lineWidth);
-  const signs = plusesOf(shapes, bond, used);
+  // (charges drawn in rings, kept from the arrows and the signs: the structure's - lib/figure/charges)
+  const free = withoutMarks(shapes, chargeMarks(shapes, bond));
+  const { arrows, used, usedLetters } = arrowsOf(free, drawn.letters, bond, lineWidth);
+  const signs = plusesOf(free, bond, used);
   for (const o of signs.taken) used.add(o);
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);

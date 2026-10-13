@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
 import { bondLength, labelText, readFigure, wordsOf } from "./read";
+import { readScheme } from "./scheme";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
 // A figure drawn as a drawing program draws one, in points from the page's
@@ -319,5 +320,48 @@ describe("a figure's words", () => {
     expect(readDrawnLabel("MeO2C", reads)).toEqual({ el: "CO2Me", read: true });
     expect(readDrawnLabel("BocHN", reads)).toEqual({ el: "NHBoc", read: true });
     expect(readDrawnLabel("Zz", reads).read).toBe(false);
+  });
+});
+
+describe("a figure's charges drawn in rings", () => {
+  /** A charge as Meno draws one: a ring of 40 small filled pieces, `r` across from its middle, a "+" or a "-" in it - or a "-" upright, its page turned. */
+  const charge = ([cx, cy]: P, sign: "+" | "-" | "|", r = 2.5): FigurePath[] => {
+    const pieces = Array.from({ length: 40 }, (_, k) => {
+      const t = (k / 40) * 2 * Math.PI;
+      const [x, y] = [cx + r * Math.cos(t), cy + r * Math.sin(t)];
+      return filled([x - 0.25, y - 0.25], [x + 0.25, y - 0.25], [x + 0.25, y + 0.25], [x - 0.25, y + 0.25]);
+    });
+    const level = stroke([cx - 1.5, cy], [cx + 1.5, cy]);
+    const upright = stroke([cx, cy - 1.5], [cx, cy + 1.5]);
+    return [...pieces, ...(sign === "+" ? [level, upright] : sign === "-" ? [level] : [upright])];
+  };
+  /** A nitro group's N and its O single-bonded, each with its charge drawn by its label. */
+  const nitro = (minus: "-" | "|") => {
+    const c: P = [60, 60];
+    const n = step(c, 0);
+    const o = step(n, -60);
+    return figure(
+      [stroke(c, along(c, n, 0.7)), stroke(along(n, o, 0.3), along(n, o, 0.7)), ...charge([n[0] + 3, n[1] - 7], "+"), ...charge([o[0] + 7.5, o[1] - 3], minus)],
+      [...word("N", n), ...word("O", o)],
+    );
+  };
+
+  it("reads a + and a - in rings by labels as theirs, and no bond", () => {
+    const s = read(nitro("-"));
+    expect(bondsOf(s)).toEqual(["C-N", "N-O"]);
+    expect(s.atoms.find((a) => a.el === "N")?.charge).toBe(1);
+    expect(s.atoms.find((a) => a.el === "O")?.charge).toBe(-1);
+  });
+
+  it("reads a - in a ring however its page is turned", () => {
+    const s = read(nitro("|"));
+    expect(bondsOf(s)).toEqual(["C-N", "N-O"]);
+    expect(s.atoms.find((a) => a.el === "O")?.charge).toBe(-1);
+  });
+
+  it("reads a + in a ring as no scheme's + sign", () => {
+    const s = readScheme(nitro("-"));
+    expect(s.pluses).toHaveLength(0);
+    expect(s.arrows).toHaveLength(0);
   });
 });

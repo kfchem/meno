@@ -8,6 +8,7 @@
  * the likeliest way, and said (`unsure`).
  */
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
+import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -23,6 +24,8 @@ export type ReadAtom = {
   /** Read as an element, with its charge, rather than a label as drawn: as a picture's reader gives it. */
   el?: string;
   charge?: number;
+  /** A charge drawn by it in a ring (lib/figure/charges), beside what its label says. */
+  marked?: number;
   box?: Box;
   unsure?: string[];
 };
@@ -393,10 +396,13 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
  * word near the rest but at no bond's end - an ion - as an atom alone.
  */
 export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes): FigureRead {
-  const shapes = given ?? shapesOf(drawn);
-  const bond = figureBond(shapes, drawn.letters);
+  const all = given ?? shapesOf(drawn);
+  const bond = figureBond(all, drawn.letters);
   const empty: FigureRead = { atoms: [], bonds: [], bond, left: { letters: [...drawn.letters] } };
   if (!bond) return empty;
+  // (a charge drawn in a ring by an atom - its ring and the strokes in it - is that atom's, and nothing else: lib/figure/charges)
+  const marks = chargeMarks(all, bond);
+  const shapes = withoutMarks(all, marks);
 
   // short strokes may be hashes; long ones bonds, side by side multiple -
   // and a short one between two labels a bond too, trimmed at both
@@ -583,6 +589,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       atoms.push({ x: c.x, y: c.y, ...labelOf(w), box: w.box });
     } else left.push(...w.letters);
   });
+  // (each charge drawn in a ring, the nearest atom's)
+  for (const m of marks) {
+    let best = -1;
+    for (let i = 0; i < atoms.length; i++) if (dist(atoms[i], m.at) < 1.2 * bond && (best < 0 || dist(atoms[i], m.at) < dist(atoms[best], m.at))) best = i;
+    if (best >= 0) atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + m.charge };
+  }
   return { atoms, bonds, bond, left: { letters: left } };
 }
 

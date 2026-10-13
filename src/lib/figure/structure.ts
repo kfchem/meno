@@ -66,7 +66,8 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     return first;
   });
   const els = labels.map((l) => l?.el ?? "C");
-  const charges = labels.map((l) => l?.charge ?? 0);
+  // (what its label says, and a charge drawn by it in a ring)
+  const charges = labels.map((l, i) => (l?.charge ?? 0) + (read.atoms[i].marked ?? 0));
   // (a ring drawn with its circle: its double bonds as the ring's atoms need them)
   const orders = read.bonds.some((b) => b.aromatic)
     ? kekuleOrders(
