@@ -107,6 +107,17 @@ const cutShort = (name: string, what = "it") =>
   new Error(`${name} could not be read: ${what} ends before the atoms and bonds it says it has. It may be cut short or damaged.`);
 
 /**
+ * Why a file whose atoms or bonds do not read as what they are is not read
+ * (`CtMolecule.damaged`, `why`): read anyway, an atom with no symbol was a
+ * carbon, "1.19D+01" was 1.19, and a bond to an atom its record has not
+ * joined the next record's.
+ */
+const damaged = (name: string, why: string, what = "it") => new Error(`${name} could not be read: ${what} has ${why}. It may be damaged.`);
+
+/** Why a file that says what Meno cannot read is not read without it (`CtMolecule.unread`, `why`). */
+const unread = (name: string, why: string, what = "it") => new Error(`${name} could not be read: ${what} ${why}.`);
+
+/**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
  * with its arrow and "+" signs; an XYZ file's frames, one molecule's, in
  * 3D, each with its energy where the comment lines give one; a PDB file's
@@ -123,7 +134,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
   }
   if (kind === "rxn") {
-    if (readRxnfile(content).cut) throw cutShort(name);
+    const reaction = readRxnfile(content);
+    if (reaction.cut) throw cutShort(name);
+    if (reaction.damaged) throw damaged(name, reaction.damaged);
+    if (reaction.unread) throw unread(name, reaction.unread);
     // RXN format: uses pre-computed layout with arrow
     const rxnLayout = buildEditorModelFromRXN(content);
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
@@ -137,8 +151,15 @@ export function readStructures(kind: StructureKind, filename: string, content: s
 
   // MOL, SDF, XYZ formats: parse molecules and convert to editor model
   const read = readMoleculesFromText(content, kind);
-  const cut = read.findIndex((m) => m.ct?.cut);
-  if (cut >= 0) throw cutShort(name, read.length > 1 ? `its record ${cut + 1}` : "it");
+  // (the first record cut short, damaged or saying what Meno cannot read,
+  // named among several: cut short said first, what it most likely is
+  // where it is both)
+  const bad = read.findIndex((m) => m.ct?.cut || m.ct?.damaged || m.ct?.unread);
+  if (bad >= 0) {
+    const what = read.length > 1 ? `its record ${bad + 1}` : "it";
+    const ct = read[bad].ct!;
+    throw ct.cut ? cutShort(name, what) : ct.damaged ? damaged(name, ct.damaged, what) : unread(name, ct.unread!, what);
+  }
   // (an XYZ file's first frame cut short is refused; its last of several -
   // a trajectory still being written - left out, the frames before it whole)
   if (kind === "xyz" && read[0]?.cut) throw cutShort(name, "its first frame");

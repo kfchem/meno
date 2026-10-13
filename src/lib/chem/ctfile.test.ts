@@ -190,6 +190,20 @@ describe("a V2000 molfile", () => {
     expect(mol.sgroups).toEqual([{ type: "SUP", index: 1, atoms: [2], bonds: [1], brackets: [], label: "Me" }]);
   });
 
+  it("reads a number only as the whole of its field - an E exponent's too - and marks a line that does not read damaged", () => {
+    const two = (second: string, bond = bondLine(1, 2, 1)) => readMolfile(["", "", "", counts(2, 1), atomLine(0, 0, "C"), second, bond, "M  END"].join("\n"))!;
+    expect(two("1.1900E+01  -2.5e-01    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0").atoms[1]).toMatchObject({ x: 11.9, y: -0.25 });
+    expect(two(atomLine(1.19, 0, "O")).damaged).toBeUndefined();
+    expect(two("  1.19D+01    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0").damaged).toBe("an atom whose place is not a number");
+    expect(two("    1.1900    0.0000").damaged).toBe("an atom with no symbol");
+    // (a bond to an atom it has not is not kept, nor its record read)
+    const far = two(atomLine(1.19, 0, "O"), bondLine(1, 4, 1));
+    expect([far.damaged, far.bonds]).toEqual(["a bond to an atom it does not have", []]);
+    // (a line that is no atom's where an atom's should be: the block ended - cut short, not damaged)
+    const short = readMolfile(["", "", "", counts(2, 0), atomLine(0, 0, "C"), "M  END"].join("\n"))!;
+    expect([short.cut, short.damaged]).toEqual([true, undefined]);
+  });
+
   it("skips what S  SKP says to, and keeps the chiral flag", () => {
     const mol = readMolfile(["", "", "", counts(1, 0, 0, 1), atomLine(0, 0, "C"), "S  SKP  1", "M  CHG  1   1   1", "M  END"].join("\n"))!;
     expect(mol.atoms[0].charge).toBeUndefined();

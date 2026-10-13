@@ -203,6 +203,63 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
     expect(() => readStructures("sdf", "two.sdf", two.slice(0, two.lastIndexOf("  1  2  1  0")))).toThrow(/two.sdf could not be read: its record 2 ends before/);
   });
 
+  /** A V2000 molfile of the atom and bond lines given, its counts line saying how many - or `counts`. */
+  const v2000 = (atoms: string[], bonds: string[], counts = [atoms.length, bonds.length]) =>
+    ["", "  Meno            2D", "", `${String(counts[0]).padStart(3)}${String(counts[1]).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`, ...atoms, ...bonds, "M  END"].join("\n") + "\n";
+  /** A V2000 atom line, its fields in the format's columns. */
+  const atom = (x: number, y: number, el: string) => `${x.toFixed(4).padStart(10)}${y.toFixed(4).padStart(10)}    0.0000 ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`;
+  /** A V3000 molfile of the atom and bond entries given. */
+  const v3000 = (atoms: string[], bonds: string[]) =>
+    ["", "  Meno            2D", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", `M  V30 COUNTS ${atoms.length} ${bonds.length} 0 0 0`, "M  V30 BEGIN ATOM", ...atoms.map((a) => `M  V30 ${a}`), "M  V30 END ATOM", "M  V30 BEGIN BOND", ...bonds.map((b) => `M  V30 ${b}`), "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n") + "\n";
+
+  it("refuses a record with a bond to an atom it has not, naming it - not read as a bond to another record's atom", () => {
+    // (read anyway, record 1's carbon, given a bond to its atom 4, was bonded to record 2's nitrogen; an atom 0, to the record before's)
+    const sd = (first: string, second: string) => `${v2000([atom(0, 0, "C"), atom(1.5, 0, "O")], [first])}$$$$\n${v2000([atom(5, 0, "N"), atom(6.5, 0, "S")], [second])}$$$$\n`;
+    expect(() => readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  1  2  1  0"))).toThrow("two.sdf could not be read: its record 1 has a bond to an atom it does not have. It may be damaged.");
+    expect(() => readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  0  1  1  0"))).toThrow("two.sdf could not be read: its record 2 has a bond to an atom it does not have.");
+    expect(() => readStructures("mol", "v3.mol", v3000(["1 C 0 0 0 0", "2 O 1.5 0 0 0"], ["1 1 1 4"]))).toThrow("v3.mol could not be read: it has a bond to an atom it does not have.");
+    // (and the same records whole read as before)
+    expect(readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  1  2  1  0")).model.bonds).toHaveLength(2);
+  });
+
+  it("refuses a benzene whose counts line gives an atom too few - its last atom's line taken for a bond - rather than fail on it", () => {
+    // (read anyway, an aromatic bond to the sixth atom it had not failed as its rings were made Kekulé)
+    const ring = [[0, 1.4], [1.212, 0.7], [1.212, -0.7], [0, -1.4], [-1.212, -0.7], [-1.212, 0.7]].map(([x, y]) => atom(x, y, "C"));
+    const bonds = [1, 2, 3, 4, 5, 6].map((k) => `${String(k).padStart(3)}${String((k % 6) + 1).padStart(3)}  4  0  0  0  0`);
+    expect(() => readStructures("mol", "b.mol", v2000(ring, bonds, [5, 6]))).toThrow(/^b.mol could not be read: /);
+    expect(readStructures("mol", "b.mol", v2000(ring, bonds)).model.bonds).toHaveLength(6);
+  });
+
+  it("refuses an atom with no symbol, rather than read it as carbon", () => {
+    expect(() => readStructures("mol", "n.mol", v2000([atom(0, 0, "O"), "    1.2990    0.7500    0.0000"], ["  1  2  1  0"]))).toThrow("n.mol could not be read: it has an atom with no symbol. It may be damaged.");
+    expect(() => readStructures("mol", "n.mol", v3000(["1 O 0 0 0 0", '2 "" 1.299 0.75 0 0'], ["1 1 1 2"]))).toThrow("n.mol could not be read: it has an atom with no symbol.");
+  });
+
+  it("refuses a place or another number that is not one - Fortran's D exponent, 0N - rather than read its first digits", () => {
+    // (read anyway, "1.19D+01" - 11.9 - was 1.19, and "0N" 0)
+    const o = (line: string) => v2000([atom(0, 0, "C"), line], ["  1  2  1  0"]);
+    expect(() => readStructures("mol", "d.mol", o("  1.19D+01    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0"))).toThrow("d.mol could not be read: it has an atom whose place is not a number. It may be damaged.");
+    expect(() => readStructures("mol", "d.mol", o("1.19D+01 0.0 0.0 O 0 0"))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", o("    1.1900    0.0000        0N O   0  0  0  0  0  0  0  0  0  0  0  0"))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", o("    1.1900    0.0000    0.0000 O   0 0N  0  0  0  0  0  0  0  0  0  0"))).toThrow(/it has an atom with a field that is not a number/);
+    expect(() => readStructures("mol", "d.mol", v2000([atom(0, 0, "C"), atom(1.19, 0, "O")], ["  1  2 1x  0  0  0  0"]))).toThrow(/it has a bond with a field that is not a number/);
+    expect(() => readStructures("mol", "d.mol", v3000(["1 C 0 0 0 0", "2 O 1.19D+01 0 0 0"], ["1 1 1 2"]))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", v3000(["1 C 0 0 0 0", "2 O 1.19 0 0 0"], ["1 1x 1 2"]))).toThrow(/it has a bond with a field that is not a number/);
+    // (an E exponent is a number's: read as one)
+    expect(readStructures("mol", "e.mol", o("1.1900E+00    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0")).model.atoms).toHaveLength(2);
+  });
+
+  it("refuses a mass difference on an element whose table mass Meno does not hold - W, U - rather than drop it; its mass given itself is read", () => {
+    // (read anyway, the tungsten and the uranium were of no isotope, saying nothing)
+    const heavy = (el: string, iso: string[] = []) =>
+      ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000", atom(0, 0, "C"), `    1.9000    0.0000    0.0000 ${el.padEnd(3)} 1  0  0  0  0  0  0  0  0  0  0  0`, "  1  2  1  0", ...iso, "M  END"].join("\n") + "\n";
+    expect(() => readStructures("mol", "w.mol", heavy("W"))).toThrow("w.mol could not be read: it gives W a mass difference, and Meno does not know the mass it is a difference from.");
+    expect(() => readStructures("mol", "u.mol", heavy("U"))).toThrow(/it gives U a mass difference/);
+    expect(readStructures("mol", "u.mol", heavy("U", ["M  ISO  1   2 235"])).model.atoms[1]).toMatchObject({ el: "U", isotope: 235 });
+    // (one whose table mass Meno holds: the isotope it means)
+    expect(readStructures("mol", "c.mol", heavy("C")).model.atoms[1]).toMatchObject({ el: "C", isotope: 13 });
+  });
+
   it("refuses an XYZ file whose first frame is cut short, and leaves out a trajectory's last frame, cut short as it is still written", () => {
     expect(() => readStructures("xyz", "w.xyz", WATER.split("\n").slice(0, 4).join("\n"))).toThrow(/w.xyz could not be read: its first frame ends before/);
     const frames = `${WATER}${WATER}${WATER.split("\n").slice(0, 3).join("\n")}`;

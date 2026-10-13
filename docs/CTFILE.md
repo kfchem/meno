@@ -57,6 +57,18 @@ is not read but refused, saying so: read anyway, its missing atoms stood
 at the origin as carbons. So is an Rxnfile with fewer molecules than its
 counts line gives (`CtMolecule.cut`, `CtReaction.cut`).
 
+So is one whose atoms or bonds do not read as what they are, saying what
+(`CtMolecule.damaged`): an atom with no symbol (read anyway, a carbon); a
+place, or another of an atom's or a bond's numbers, that is not a number
+as the format writes one - with an E exponent or not, but no other text:
+"1.19D+01" is not read as 1.19, nor "0N" as 0; a bond to an atom its
+table has not (read anyway, in an SD file, a bond to the next record's
+atom, or to the one before's for an atom 0). And so is one with a V2000
+mass difference on an element whose mass in the periodic table Meno does
+not hold - Tc, Pr to Lu, Hf to Ir, and from Po on - unless an M  ISO line
+gives that atom's mass itself, which is read for any element
+(`CtMolecule.unread`).
+
 ## Drawing
 
 | What | How | Why |
