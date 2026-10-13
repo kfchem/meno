@@ -450,7 +450,8 @@ When parts clash, in this order:
 None of these ends with bonds crossing that did not cross before, however
 much else a crossing would clear.
 
-And last, room for the H of every label: the drawing writes it beside the
+And last, the drawing turned to the page as it will be drawn, and room
+for the H of every label: the drawing writes it beside the
 symbol on the side the bonds leave free (OH, or HO where they leave to the
 right; under or over the symbol only between bonds on both sides, as in a
 chain's NH). Where it - or its count, NH2's 2 after it and set lower -

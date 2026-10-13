@@ -394,6 +394,11 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     best = { ...rejoin(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
     best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
+    // (turned to the page first, as it will be drawn: an OH writes its H on
+    // the side the page has it on, and room made for it the other way up
+    // is no room)
+    if (!fixed(piece)) squareUp(mol, piece, best.pos);
+    else standUp(mol, piece, best.pos);
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
     // (and a label's H still in the way after that - an NH's H on a ring's
     // bond, which no small move clears - the branches turned as untangle

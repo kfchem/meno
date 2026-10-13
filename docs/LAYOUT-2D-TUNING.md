@@ -288,8 +288,12 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   bond to turn. Where an H is still in the way after it, the branches are
   now turned and stretched as untangle turns them, the H counted in full.
   All three clear; the sheet reads them slightly worse (the H counted a
-  quarter, a bond stretched counted in full). Ouabain's C19 OH, its H on
-  C11's hashed bond with C1's OH on its other side, is not cleared.
+  quarter, a bond stretched counted in full). Room for H's is now made
+  with the drawing already turned to the page: an OH writes its H on the
+  side the page has it on, and room made the other way up was no room
+  (ginkgolide B, ingenol and bilobalide read a little better for it).
+  Ouabain's C19 OH, its H on C11 with C1's OH on its other side, is not
+  cleared: no turn of either branch reads better (see *Open*).
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -437,6 +441,11 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
+- **Ouabain's C19 OH** (2026-10-14): its H lies on C11, beside C11's
+  hashed OH, and turned the other way it runs into C1's OH. Main drew
+  C1's OH down to the left, leaving the CH2OH room; the molecule's own
+  order puts it up. Neither the H step's moves nor turning a branch as
+  untangle does reads better.
 - **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
   the perspective drawing read better than the flat one, and both faced
   the wrong way). Its whole solid now reads as given, its centres the
