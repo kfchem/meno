@@ -972,7 +972,8 @@ workspace holds.
     of the bonds at its ends, drawn as dots or thinner pieces);
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a bridge's, a
-    cage's back edge - is joined again, however short one of its pieces;
+    cage's back edge, a double bond's two lines - is joined again, however
+    short one of its pieces, and its pieces are never a hash's lines;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - a short dash between two labels, as between S and O in a sulfonyl, is

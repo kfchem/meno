@@ -464,7 +464,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return s;
     });
   const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && len(s) > 0.04 * bond), ...bits];
-  const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesOf(short, bond);
+  // (a line's piece, broken where another passes in front of it - a double bond's by a bridge - is no hash's line)
+  const brokenPiece = new Set(short.filter((s) => shapes.strokes.some((t) => t !== s && brokenAcross(s, t, shapes.strokes, bond))));
+  const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesOf(short.filter((s) => !brokenPiece.has(s)), bond);
   // letters drawn as shapes, where the figure has none written there: read from their shapes
   const inLetters = new Set<object>();
   const fromShapes = known.length
@@ -730,32 +732,35 @@ function joinedAcross(lines: readonly Stroke[], bond: number): Stroke[] {
   const out = [...lines];
   for (let i = 0; i < out.length; i++) {
     for (let j = i + 1; j < out.length; j++) {
-      const s = out[i];
-      const t = out[j];
-      const u = unit(s.a, s.b);
-      if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((4 * Math.PI) / 180)) continue;
-      if (Math.abs(cross(u, { x: t.a.x - s.a.x, y: t.a.y - s.a.y })) > 0.03 * bond) continue;
-      // (their nearest ends, and the gap between them)
-      const pairs: [Point, Point, Point, Point][] = [
-        [s.a, s.b, t.a, t.b],
-        [s.a, s.b, t.b, t.a],
-        [s.b, s.a, t.a, t.b],
-        [s.b, s.a, t.b, t.a],
-      ];
-      const [near0, far0, near1, far1] = pairs.reduce((p, q) => (dist(q[0], q[2]) < dist(p[0], p[2]) ? q : p));
-      const gap = dist(near0, near1);
-      if (gap < 0.05 * bond || gap > 0.4 * bond) continue;
-      // (it must lie between them, not past one: the far ends further apart than the near ones)
-      if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) continue;
-      const m = mid(near0, near1);
-      const crossed = out.some((o, k) => k !== i && k !== j && segmentsCross(o.a, o.b, near0, near1, m));
-      if (!crossed) continue;
-      out[i] = { a: far0, b: far1, w: Math.max(s.w, t.w) };
+      const whole = brokenAcross(out[i], out[j], out, bond);
+      if (!whole) continue;
+      out[i] = { ...whole, w: Math.max(out[i].w, out[j].w) };
       out.splice(j, 1);
       j = i;
     }
   }
   return out;
+}
+
+/** Two lines on one line, a little apart, a third of `all` crossing the gap: one line broken where another passes in front - its ends, or none. */
+function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number): { a: Point; b: Point } | null {
+  const u = unit(s.a, s.b);
+  if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((4 * Math.PI) / 180)) return null;
+  if (Math.abs(cross(u, { x: t.a.x - s.a.x, y: t.a.y - s.a.y })) > 0.03 * bond) return null;
+  // (their nearest ends, and the gap between them)
+  const pairs: [Point, Point, Point, Point][] = [
+    [s.a, s.b, t.a, t.b],
+    [s.a, s.b, t.b, t.a],
+    [s.b, s.a, t.a, t.b],
+    [s.b, s.a, t.b, t.a],
+  ];
+  const [near0, far0, near1, far1] = pairs.reduce((p, q) => (dist(q[0], q[2]) < dist(p[0], p[2]) ? q : p));
+  const gap = dist(near0, near1);
+  if (gap < 0.05 * bond || gap > 0.4 * bond) return null;
+  // (it must lie between them, not past one: the far ends further apart than the near ones)
+  if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) return null;
+  const m = mid(near0, near1);
+  return all.some((o) => o !== s && o !== t && segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
 }
 
 /** Whether a line passes across the gap between two points, near its middle. */
