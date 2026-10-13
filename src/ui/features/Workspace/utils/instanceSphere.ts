@@ -10,6 +10,13 @@ import * as THREE from "three";
  * half as large again as three.js's: what it is for - the ray tried
  * against it before the instances, the shadow fitted round it - only needs
  * it to hold them.
+ *
+ * It takes each instance's matrix to be a rotation times a scale (a
+ * translation besides), its columns at right angles, as every caller makes
+ * them (`compose`, `makeScale`): then the most it stretches anything is its
+ * longest column, which is what is read. A sheared matrix, or one scaled
+ * after it is turned, can stretch more than that, and its instance could
+ * stand partly outside the sphere.
  */
 export function boundInstances(mesh: THREE.InstancedMesh): void {
   const geometry = mesh.geometry;
