@@ -217,3 +217,15 @@ export function undoIntent(event: KeyLike): UndoIntent {
   if (key === "y" && !event.shiftKey) return "redo";
   return null;
 }
+
+/**
+ * Which of + and = a key gives, for letters raised (+) and lowered (=):
+ * by what it gives, wherever a keyboard has it - Shift and = for + on most,
+ * Shift and ; for + and Shift and - for = on a Japanese one - or, where a
+ * key is reported by its place alone, the = key and Shift for +.
+ */
+export function plusOrEquals(event: Pick<KeyLike, "key" | "shiftKey"> & { code?: string }): "+" | "=" | null {
+  if (event.key === "+" || (event.code === "Equal" && event.shiftKey)) return "+";
+  if (event.key === "=" || event.code === "Equal") return "=";
+  return null;
+}
