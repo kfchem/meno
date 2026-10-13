@@ -230,6 +230,8 @@ function flatTipped(given: Point[]): Wedge | null {
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */
 export function shapesOf(drawn: FigureDrawn): Shapes {
   const out: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
+  // (each filled shape read as a line or as a shape of no kind, and its corners)
+  const cornersOf = new Map<object, Point[]>();
   for (const path of drawn.paths) {
     const parts = partsOf(path.d);
     const filled = !blank(path.fill);
@@ -246,9 +248,14 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       for (const p of parts) {
         const pc = p.straight.some((s) => !s);
         const read = filledShape(p.pts, pc);
-        if (read && "stroke" in read) out.strokes.push({ ...read.stroke, ink });
-        else if (read && "wedge" in read) out.wedges.push({ ...read.wedge, ink });
-        else out.blobs.push({ pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc, ink });
+        if (read && "wedge" in read) {
+          out.wedges.push({ ...read.wedge, ink });
+          continue;
+        }
+        const made = read && "stroke" in read ? { ...read.stroke, ink } : { pts: p.pts, parts: [p.pts], box: boxOf(p.pts), curved: pc, ink };
+        if ("a" in made) out.strokes.push(made);
+        else out.blobs.push(made);
+        if (!pc) cornersOf.set(made, p.pts);
       }
       if (!stroked) continue;
     }
@@ -275,10 +282,11 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     const l = dist(w.tip, w.base);
     if (!l) return w;
     const u = { x: (w.base.x - w.tip.x) / l, y: (w.base.y - w.tip.y) / l };
-    for (let k = 0; k < out.blobs.length; k++) {
-      const b = out.blobs[k];
-      if (b.curved || b.parts.length !== 1 || (b.ink ?? "") === (w.ink ?? "")) continue;
-      const corners = b.pts.filter((p, i) => !b.pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+    // (read as a shape of no kind, or as a line where it is long and its ends near as wide)
+    for (const b of [...out.blobs, ...out.strokes]) {
+      const pts = cornersOf.get(b);
+      if (!pts || (b.ink ?? "") === (w.ink ?? "")) continue;
+      const corners = pts.filter((p, i) => !pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
       if (corners.length !== 4) continue;
       const near = corners.filter((p) => dist(p, w.base) <= 0.75 * w.w + 0.5);
       const far = corners.filter((p) => !near.includes(p));
@@ -287,7 +295,8 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       const on = (end.x - w.base.x) * u.x + (end.y - w.base.y) * u.y;
       const off = Math.abs((end.x - w.base.x) * u.y - (end.y - w.base.y) * u.x);
       if (on <= 0 || off > 0.2 * on || dist(far[0], far[1]) <= dist(near[0], near[1])) continue;
-      out.blobs.splice(k, 1);
+      out.blobs = out.blobs.filter((x) => x !== b);
+      out.strokes = out.strokes.filter((x) => x !== b);
       return { ...w, base: end, w: dist(far[0], far[1]), outline: [...(w.outline ?? []), ...corners] };
     }
     return w;

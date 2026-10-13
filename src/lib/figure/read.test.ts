@@ -9,6 +9,7 @@ import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
 import junction from "./fixtures/monensin-nature-junction.json";
 import fructose from "./fixtures/fructose-nature.json";
+import glucose from "./fixtures/glucose-rdkit.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
 import tetrodotoxinNature from "./fixtures/tetrodotoxin-nature.json";
 import tetrodotoxin from "./fixtures/tetrodotoxin-rsc.json";
@@ -737,6 +738,14 @@ describe("a figure drawn in colour by another program", () => {
     expect(r.atoms).toHaveLength(10);
     const oh = r.atoms.findIndex((a) => a.label === "OH" && a.x > 360 && a.y < 130);
     expect(r.bonds.filter((b) => b.a === oh || b.b === oh).map((b) => b.stereo)).toEqual(["up"]);
+  });
+
+  it("reads a long wedge in two colours as one, its coloured half near as wide at both ends as a filled line", () => {
+    // (D-glucose as RDKit draws it by default: the wedge to an HO long, its red half read alone as a filled line)
+    const r = readFigure(glucose as unknown as FigureDrawn);
+    expect(r.atoms).toHaveLength(12);
+    const ho = r.atoms.findIndex((a) => a.label === "HO" && a.x < 130 && a.y > 200);
+    expect(r.bonds.filter((b) => b.a === ho || b.b === ho).map((b) => b.stereo)).toEqual(["up"]);
   });
 
   it("reads a bond drawn in two colours, black to its middle and its atom's colour on, as one bond", () => {
