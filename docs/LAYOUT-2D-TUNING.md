@@ -205,6 +205,12 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   molecule gives cis or trans as given, one in a ring of seven atoms or
   fewer cis. Meno's SMILES reader keeps a double bond's cis or trans from
   its / and \ marks for that.
+- **A solid found once.** A cage's solid was found once for each
+  molecule object, but a drawing read back is perceived anew, and every
+  read-back found it again: half of tetrodotoxin's Clean-up. It is kept by
+  what it is found from now - the atoms, bonds and configurations
+  (2026-10-13) - and cages are drawn in about half the time, the
+  drawings the same.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -365,12 +371,24 @@ and the held-out list takes new ones. What it showed, by kind:
   stands a quarter turn from the usual drawing; and the OH in the middle
   of the cage reads O|H.
 - **The solids' rules still open** (the maintainer, 2026-10-12): quinine's
-  OH on C9, which is no ring atom, drawn straight down (asked in #269);
-  which of paeoniflorin's six-membered rings is to be the boat (asked in
-  #269). Fused chairs are drawn decalin style inside a solid, but no
+  OH on C9, which is no ring atom, drawn straight down (asked in #269).
+  Fused chairs are drawn decalin style inside a solid, but no
   molecule on either list has a solid with such a pair: strychnine and
   artemisinin are drawn flat as decided, sparteine and aconitine read
   better flat.
+- **Paeoniflorin's carbocycle as a boat** (the maintainer, after #269: the
+  leftmost ring of its cage, C1-C6, is to be drawn as the boat its
+  bridges fold it into). Its solid has that ring as a boat (bow and stern
+  C2 and C5) and its dioxane as a chair; the template draws the dioxane,
+  which reads best by every measure. Tried and not taken: the boat by the
+  template, seen from above, puts C7 in the middle of the drawing, and the
+  CH2OBz on it crosses the cage; the boat seen from its side, bow and
+  stern the ends and the bridges above, as norbornane is drawn, is the
+  reference's view, but an orthographic projection of it crowds C1, O9
+  and O10 together. The reference draws the back of the boat about twice
+  as wide as its front, which no projection gives: a template for a boat
+  seen from its side, with the rest built on it as on the chair's, is the
+  likely way.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.

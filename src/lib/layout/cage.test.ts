@@ -126,6 +126,23 @@ describe("a solid found from its bonds", () => {
     expect(angle(X, 5, 0, 1)).toBeCloseTo(120, -1);
     expect(angle(X, 0, 1, 2)).toBeCloseTo(120, -1);
   });
+
+  it("is found once for a molecule perceived anew, as a drawing read back is - and anew for its mirror image", () => {
+    const cocaine = "CN1[C@H]2CC[C@@H]1[C@H]([C@H](C2)OC(=O)c1ccccc1)C(=O)OC";
+    const solid = (smiles: string) => {
+      const mol = fromSmiles(smiles);
+      return solidOf(mol, mol.systems.find((x) => x.atoms.includes(1))!);
+    };
+    const once = solid(cocaine);
+    const again = solid(cocaine);
+    for (const [a, p] of once) expect(again.get(a)).toBe(p);
+    // (the other enantiomer: every centre turned, the solid its mirror image)
+    const mirror = solid(cocaine.replace(/@@|@/g, (m) => (m === "@" ? "@@" : "@")));
+    for (const [a, p] of once) expect(mirror.get(a)).not.toBe(p);
+    const [i, j, k, l] = [...once.keys()];
+    const volume = (X: Map<number, Vec3>) => dot(sub(X.get(j)!, X.get(i)!), cross(sub(X.get(k)!, X.get(i)!), sub(X.get(l)!, X.get(i)!)));
+    expect(Math.sign(volume(mirror))).toBe(-Math.sign(volume(once)));
+  });
 });
 
 describe("a six-membered ring fused on a bond to a cage", () => {
