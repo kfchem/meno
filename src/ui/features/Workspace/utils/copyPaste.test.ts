@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
 import { centredAt, clipItems, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
 import { kindOf } from "../../../../lib/io/kinds";
+import { deleteParts, emptyWorkspaceDocument } from "../document";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
@@ -25,6 +26,40 @@ describe("partToCopy", () => {
   it("with nothing selected, takes the structure under the pointer, or nothing", () => {
     expect(partToCopy(model, none, 3)!.atoms.map((a) => a.id)).toEqual([1, 2, 3]);
     expect(partToCopy(model, none, null)).toBeNull();
+  });
+
+  it("takes a large selection, and cuts it, in about the time its size says", () => {
+    // (a page of n chains of 28 atoms, all of it selected)
+    const page = (n: number): Model => {
+      const atoms = [];
+      const bonds = [];
+      for (let i = 1; i <= 28 * n; i++) {
+        atoms.push(atom(i, i % 28, Math.floor(i / 28)));
+        if (i % 28) bonds.push({ id: 100_000 + i, a: i, b: i + 1, order: 1 as const });
+      }
+      return { atoms, bonds };
+    };
+    const timed = (n: number) => {
+      const m = page(n);
+      const all = { atoms: new Set(m.atoms.map((a) => a.id)), bonds: new Set<number>() };
+      const started = performance.now();
+      const part = partToCopy({ ...m, arrows: [{ id: 1, x: 5, y: 1, angle: 0, length: 2 }] }, all, null)!;
+      const cut = deleteParts({ ...emptyWorkspaceDocument(), model: m }, all.atoms, []);
+      return { part, cut, ms: performance.now() - started };
+    };
+    // (once first, so that the tenth is not timed starting cold)
+    timed(100);
+    const tenth = timed(100);
+    const { part, cut, ms } = timed(1000);
+    expect(part.atoms).toHaveLength(28_000);
+    expect(part.bonds).toHaveLength(27_000);
+    expect(part.arrows).toHaveLength(1);
+    expect(cut.model.atoms).toHaveLength(0);
+    // (ten times the atoms in about ten times the time, where each looked up
+    // among them all took a hundred times - 2.7 s at 28 000 atoms: timed
+    // against a tenth of them, so that a machine busy with other work slows
+    // both alike)
+    expect(ms).toBeLessThan(25 * tenth.ms + 100);
   });
 });
 
