@@ -175,6 +175,13 @@ describe("a reaction scheme's arrows", () => {
     expect(near(s.arrows[0].tail, [115, 139])).toBe(true);
   });
 
+  it("takes a head filled and stroked as well - its path's edges drawn too - as the head alone, no bonds of its edges", () => {
+    const s = read(scheme([stroke([[60, 95], [134, 95]]), { ...head([140, 95], [1, 0]), stroke: "#000000ff", width: 0.6 }]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.figure.atoms).toHaveLength(8);
+    expect(s.figure.bonds).toHaveLength(6);
+  });
+
   it("takes an x as a cross only on the arrow's line and alone: one in the words over it is a word's", () => {
     const s = read(scheme([stroke([[60, 95], [134, 95]]), head([140, 95], [1, 0])], word("3 x 10 min", [75, 89])));
     expect(s.arrows[0].form).toEqual({});

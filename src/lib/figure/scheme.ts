@@ -40,8 +40,8 @@ type Line = { a: Point; b: Point; w: number; ink?: string; dash: boolean; of: ob
 /** A head's outline as it may be at a line's end: its points, whether it is drawn open (a chevron), and what it was drawn as. */
 type HeadShape = { pts: Point[]; open: boolean; of: object[] };
 
-/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, and what it was drawn as. */
-type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[] };
+/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, what it was drawn as, and - filled - its outline. */
+type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[]; outline?: Point[] };
 
 /** Points' hull, anticlockwise as the page's y goes down. */
 function hull(pts: readonly Point[]): Point[] {
@@ -149,7 +149,7 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     const wide = side === 0 ? (left + right) / length : Math.max(left, right) / length;
     if (wide < (side === 0 ? 0.33 : 0.15)) continue;
     const off = Math.abs(cs[i]) + Math.abs(ts[i]) * 0.1;
-    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off };
+    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off, ...(h.open ? {} : { outline: h.pts }) };
   }
   if (best) {
     const { off: _off, ...head } = best;
@@ -259,7 +259,7 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const way = sign === 1 ? u : { x: -u.x, y: -u.y };
   const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centreAt(-sign * long / 2));
   const line: Line = { a: tail, b: front.tip, w: width, ...(b.ink ? { ink: b.ink } : {}), dash: false, of: [b] };
-  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [] });
+  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [], outline: pts });
   return { lines: [line], path: [tail, front.tip], head: head(front), tailHead: back ? head(back) : null };
 }
 
@@ -474,8 +474,19 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     }
     if (marked) a.form = { ...a.form, kind: "noReaction" };
   }
-  // what the arrows were drawn with, all of it
+  // what the arrows were drawn with, all of it - and the strokes along a filled head's edges, where its path is stroked as well as filled
   for (const f of found) for (const l of f.lines) for (const o of l.of) used.add(o);
+  const outlines = found.flatMap((f) => [f.head.outline, f.tailHead?.outline]).filter((o): o is Point[] => !!o && o.length > 2);
+  const onEdge = (p: Point, poly: readonly Point[]) =>
+    poly.some((a, i) => {
+      const b = poly[(i + 1) % poly.length];
+      const l = dist(a, b);
+      if (!(l > 0)) return dist(p, a) < near;
+      const u = unit(a, b);
+      const t = Math.max(0, Math.min(l, dot(sub(p, a), u)));
+      return dist(p, along(a, u, t)) < near;
+    });
+  for (const s of shapes.strokes) if (!used.has(s) && len(s) < 1.2 * bond && outlines.some((o) => onEdge(s.a, o) && onEdge(s.b, o))) used.add(s);
   return { arrows, used, usedLetters };
 }
 
