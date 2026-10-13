@@ -57,6 +57,9 @@ SCHEMES = {
 }
 # an orbital's frontier names: how many below the HOMO and above the LUMO a list gives
 ORBITALS_EACH_SIDE = 10
+# a frequency smaller than this, either way, is a translation or a rotation - which some outputs list
+# among the vibrations (xTB's, at naught) - and no vibration (cm-1)
+FREQUENCY_LEAST = 1.0
 
 ELEMENTS = PeriodicTable().element
 
@@ -210,7 +213,8 @@ def orbitals(data):
 
 def vibrations(data, n):
     """The vibrations, as a list: each one's frequency (an imaginary one negative), its
-    symmetry and IR intensity where given; chosen, the molecule moves along its displacements."""
+    symmetry and IR intensity where given; chosen, the molecule moves along its displacements.
+    The translations and rotations an output lists with them, at a frequency of naught, are left out."""
     if not has(data, "vibfreqs"):
         return []
     freqs = [float(f) for f in data.vibfreqs]
@@ -227,11 +231,15 @@ def vibrations(data, n):
         columns.append({"label": "IR intensity", "unit": "km/mol", "digits": 1})
     rows = []
     for i, f in enumerate(freqs):
-        cells = [i + 1] + ([str(syms[i])] if syms is not None else []) + [f] + ([float(irs[i])] if irs is not None else [])
+        if abs(f) < FREQUENCY_LEAST:
+            continue
+        cells = [len(rows) + 1] + ([str(syms[i])] if syms is not None else []) + [f] + ([float(irs[i])] if irs is not None else [])
         row = {"cells": cells}
         if disps is not None and i < len(disps) and len(disps[i]) == n:
             row["move"] = [float(v) for xyz in disps[i] for v in xyz]
         rows.append(row)
+    if not rows:
+        return []
     return [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": columns, "rows": rows}]
 
 

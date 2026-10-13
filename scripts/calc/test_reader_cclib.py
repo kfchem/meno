@@ -18,6 +18,7 @@ the files are not there.
 import importlib.util
 import json
 import pathlib
+import types
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -164,6 +165,30 @@ class XTB(unittest.TestCase):
         # (cclib reads xTB's HOMO as many numbers: no orbitals are said rather than wrong ones)
         r = read(sample("XTB/dvb_opt.out"))["result"]
         self.assertIsNone(result(r, "orbitals"))
+
+
+class Vibrations(unittest.TestCase):
+    def test_translations_and_rotations_listed_at_naught_are_no_vibrations(self):
+        # (as an xTB output lists them: six at naught before the molecule's own, with intensities of their own; an imaginary one kept, negative)
+        data = types.SimpleNamespace(
+            vibfreqs=[-0.0, -0.0, 0.0, 0.0, 0.0, 0.0, -120.5, 1539.1, 3642.25],
+            vibirs=[38.18, 58.16, 32.15, 167.64, 70.04, 108.65, 4.0, 133.26, 6.78],
+            vibdisps=[[[0.0, 0.0, float(k)]] * 3 for k in range(9)],
+            vibsyms=None,
+        )
+        v = worker.vibrations(data, 3)[0]
+        self.assertEqual([row["cells"] for row in v["rows"]], [[1, -120.5, 4.0], [2, 1539.1, 133.26], [3, 3642.25, 6.78]])
+        # (each its own displacements)
+        self.assertEqual([row["move"][2] for row in v["rows"]], [6.0, 7.0, 8.0])
+        self.assertEqual(worker.vibrations(types.SimpleNamespace(vibfreqs=[0.0] * 6), 3), [])
+
+    def test_an_xtb_output_s_vibrations_are_the_molecule_s_own(self):
+        r = read(sample("XTB/dvb_ir.out"))["result"]
+        rows = result(r, "vibrations")["rows"]
+        # (divinylbenzene: 20 atoms, 3 x 20 - 6 vibrations, numbered from one)
+        self.assertEqual(len(rows), 54)
+        self.assertTrue(all(abs(row["cells"][1]) >= 1 for row in rows))
+        self.assertEqual([row["cells"][0] for row in rows], list(range(1, 55)))
 
 
 class EveryProgram(unittest.TestCase):
