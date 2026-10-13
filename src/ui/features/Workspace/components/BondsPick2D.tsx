@@ -6,6 +6,7 @@ import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -41,6 +42,8 @@ export default function BondsPick2D() {
   const remountKey = model.bonds.length;
   const PICK_THICKNESS_RATIO = 0.32;
 
+  // (the last press on a bond: a second soon after on the same one is a double-click's)
+  const lastBondPress = useRef<(BondPress & { count: number }) | null>(null);
   const clickState = useRef<{
     lastAt: number;
     count: number;
@@ -306,7 +309,11 @@ export default function BondsPick2D() {
         // Held still, the press selects the whole structure, the selection
         // spreading out from the bond as it is held (HoldProgress2D); a drag
         // from there moves it. A click or a drag before then is the bond's.
-        {
+        // (Not the second press of a double-click, as on an atom.)
+        const tPress = performance.now();
+        const count = pressOnBond(lastBondPress.current, { id: b.id, t: tPress }, DOUBLE_CLICK_MS);
+        lastBondPress.current = { id: b.id, t: tPress, count };
+        if (count === 1) {
           const ev0 = (e as any).nativeEvent ?? e;
           const sx = ev0.clientX;
           const sy = ev0.clientY;

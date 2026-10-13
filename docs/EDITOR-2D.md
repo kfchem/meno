@@ -211,7 +211,8 @@ atom dragged alone snaps as before, to the drawing's lengths and angles.
 
 **A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
 first press only: the second of a double-click held still waits to be
-dragged. It is counted while the button is held, so a click's label edit,
+dragged - on a bond as on an atom or empty space (until 2026-10-13 a
+bond's second press began one: `pressOnBond`). It is counted while the button is held, so a click's label edit,
 which waits for DOUBLE_CLICK_MS after the button comes up, is unaffected.
 As it is held, the selection's shade spreads out from the atom along the
 bonds, reaching the whole structure as it is selected; on empty space a
