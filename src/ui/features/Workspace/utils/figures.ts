@@ -29,11 +29,11 @@ import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
 import { picturePng } from "./pictures";
 
-/** A label as drawn read as one typed is: an element with its charge, or a group's name - or nothing. */
+/** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
 export const figureLabels: LabelReader = (label) => {
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
-  if (r.kind === "element") return { el: r.el, charge: r.charge };
+  if (r.kind === "element") return { el: r.el, charge: r.charge, ...(r.isotope ? { isotope: r.isotope } : {}) };
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
 };
@@ -188,6 +188,7 @@ function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, a
     r: 0.9,
     el: a.el,
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.isotope ? { isotope: a.isotope } : {}),
     seen: spot(read.atoms[i].x, read.atoms[i].y),
   }));
   const bonds: Bond[] = s.bonds.map((b, i) => ({

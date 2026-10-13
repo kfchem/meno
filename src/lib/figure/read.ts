@@ -256,19 +256,27 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
 
 /**
  * A word as a label is typed: a smaller letter set low a subscript's digit,
- * set high a charge - written as they are typed, NH2, N+, O- - so that
- * Meno reads it as it reads a label typed.
+ * set high a charge - written as they are typed, NH2, N+, O- - and digits
+ * set high before its first letter an isotope's mass number (13C), so that
+ * Meno reads it as it reads a label typed. A count set low before any
+ * letter is a letter's left out of the word (the H of an H3N, a box cut
+ * across it), and is left out with it: never a mass number.
  */
 export function labelText(w: Word): string {
   const main = w.letters.filter((l) => l.size >= 0.85 * w.size);
   const base = main.length ? main.map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b)[Math.floor(main.length / 2)] : 0;
+  let lead = true;
   return w.letters
     .map((l) => {
       const c = l.c === "−" || l.c === "–" ? "-" : l.c;
-      if (l.size >= 0.85 * w.size) return c;
+      if (l.size >= 0.85 * w.size) {
+        lead = false;
+        return c;
+      }
       const y = l.at?.[1] ?? l.box[3];
-      // (set high: a charge; set low, or as low: a count)
-      return y < base - 0.25 * w.size ? (c === "+" || c === "-" ? c : `^${c}`) : c;
+      // (set high: a charge, or a mass number; set low, or as low: a count - one before any letter, no one's here)
+      if (y < base - 0.25 * w.size) return c === "+" || c === "-" ? c : `^${c}`;
+      return lead && /\d/.test(c) ? "" : c;
     })
     .join("")
     .replace(/\^/g, "");

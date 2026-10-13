@@ -69,6 +69,25 @@ describe("a figure read as a structure for the page", () => {
     expect(o.seen!.y).toBeCloseTo(at.y, 3);
   });
 
+  it("reads a mass number set high before an element as its isotope, and a count set low before it as no one's", () => {
+    // (the end of a chain: 18F, its 18 smaller and set high; then H3N with its H cut off by the box - a 3 set low before the N)
+    const label = (digits: string, high: boolean, el: string, [x, y]: P): FigureLetter[] => [
+      ...[...digits].map((c, i): FigureLetter => {
+        const left = x - 3.4 - 4.2 * (digits.length - i);
+        const base = high ? y - 1 : y + 6;
+        return { c, box: [left, base - 5, left + 3.8, base], at: [left, base], size: 7 };
+      }),
+      ...letters(el, [x, y]),
+    ];
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const f = step(b, -30);
+    const iso = structureFrom({ paths: [stroke(a, b, [b[0] + (f[0] - b[0]) * 0.45, b[1] + (f[1] - b[1]) * 0.45])], letters: label("18", true, "F", f), pictures: [] }, SHA, 1) as Model;
+    expect(iso.atoms.find((x) => x.el === "F")?.isotope).toBe(18);
+    const cut = structureFrom({ paths: [stroke(a, b, [b[0] + (f[0] - b[0]) * 0.45, b[1] + (f[1] - b[1]) * 0.45])], letters: label("3", false, "N", f), pictures: [] }, SHA, 1) as Model;
+    expect(cut.atoms.find((x) => x.el === "N")?.isotope).toBeUndefined();
+  });
+
   it("says why there is nothing to read: no lines, or a picture", () => {
     expect(structureFrom({ paths: [], letters: [], pictures: [] }, SHA, 0)).toEqual({ none: "No structure is drawn there." });
     expect("none" in (structureFrom({ paths: [], letters: [], pictures: [[0, 0, 10, 10]] }, SHA, 0) as object)).toBe(true);

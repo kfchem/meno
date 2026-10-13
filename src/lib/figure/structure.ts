@@ -10,14 +10,14 @@ import { implicitHydrogens } from "../chem/molecule";
 import type { FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
-export type LabelReader = (label: string) => { el: string; charge?: number } | null;
+export type LabelReader = (label: string) => { el: string; charge?: number; isotope?: number } | null;
 
 /**
  * A label as drawn, read: as it is, or - drawn on its bond's left, read
  * from the bond outward - turned round (HO as OH, TBSO as OTBS, MeO2C as
  * CO2Me, H2N as NH2), or an HN before a group as NH (BocHN as NHBoc).
  */
-export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; read: boolean } {
+export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; isotope?: number; read: boolean } {
   const tries = [drawn, reversedLabel(drawn)];
   const hn = /^H(\d*)([A-Z][a-z]?)(?=[A-Z(]|$)/.exec(drawn);
   if (hn && hn[2] !== "H") tries.push(`${hn[2]}H${hn[1]}${drawn.slice(hn[0].length)}`);
@@ -28,7 +28,7 @@ export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string;
   return { el: drawn, read: false };
 }
 
-export type StructureAtom = { x: number; y: number; el: string; charge?: number; unsure?: string[] };
+export type StructureAtom = { x: number; y: number; el: string; charge?: number; isotope?: number; unsure?: string[] };
 export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; unsure?: string[] };
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
@@ -104,7 +104,8 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     } else if (els[i] === "C" && valence[i] > 4) {
       unsure.push("More bonds meet here than a carbon has.");
     }
-    return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(unsure.length ? { unsure } : {}) };
+    const isotope = label && "isotope" in label ? label.isotope : undefined;
+    return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(isotope ? { isotope } : {}), ...(unsure.length ? { unsure } : {}) };
   });
   // a hashed bond whose narrow end is not drawn: at the end that can be a
   // stereocentre - an atom of four bonds, its hydrogens counted, none of them

@@ -991,7 +991,9 @@ workspace holds.
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc). A subscript is a count, a superscript
-  a charge. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  a charge, and digits set high before the element its isotope's mass
+  number (13C, 18F, 2H); a count set low before any letter - the H of an
+  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H takes one
