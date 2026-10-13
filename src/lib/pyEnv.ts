@@ -5,7 +5,7 @@ import {
   BaseDirectory,
   mkdir,
 } from "@tauri-apps/plugin-fs";
-import { filesSources, pixiSources, uvSources } from "./plugins/setUpSources";
+import { filesSetUp, pixiSetUp, uvSetUp, type SetUpReach } from "./plugins/setUpSources";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
@@ -35,7 +35,8 @@ const pluginOf = (profile: PyProfile): PythonPlugin | undefined => PLUGINS.find(
 
 /** A plugin's files besides its environment (src-tauri/src/plugfiles.rs): the folder they are kept in, and those still to be downloaded, with their bytes. */
 type FilesState = { folder: string; missing: string[]; bytes: number };
-const filesOf = (plugin: PythonPlugin, fetch: boolean) => invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch });
+/** Where a plugin's files stand; or, given the hosts the consent to fetch them named - all the fetch may reach - fetched. */
+const filesOf = (plugin: PythonPlugin, hosts?: readonly string[]) => invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: !!hosts, hosts });
 
 /** How far each plugin's files have come as they download, by the plugin's id: a share, naught to one. */
 export const useDownloads = create<Record<string, number>>(() => ({}));
@@ -52,29 +53,29 @@ export function setUpFiles(plugin: Pick<PythonPlugin, "downloads"> | undefined, 
 
 /** The folder a plugin's files are kept in, given to its worker; none, where it downloads none. */
 export async function pluginFilesFolder(plugin: PythonPlugin): Promise<string | null> {
-  return setUpFiles(plugin).length ? (await filesOf(plugin, false)).folder : null;
+  return setUpFiles(plugin).length ? (await filesOf(plugin)).folder : null;
 }
 
 /** A size, for people: gigabytes to a tenth, else megabytes. */
 export const sizeOf = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
 
 /** What a plugin downloads besides its packages, as asking to set it up says it - each file, under its licence, and its size - and where from. */
-function besides(plugin: PythonPlugin | undefined): { need: string; sources: string[] } {
+function besides(plugin: PythonPlugin | undefined): { need: string } & SetUpReach {
   const files = setUpFiles(plugin);
-  if (!files.length) return { need: "", sources: [] };
+  if (!files.length) return { need: "", sources: [], hosts: [] };
   return {
     need: `; and it needs ${files.map((f) => `${f.name} (${f.licence} licence, ${sizeOf(f.bytes)})`).join(" and ")} beside them`,
-    sources: filesSources(files),
+    ...filesSetUp(files),
   };
 }
 
-/** A plugin's files fetched - the user having allowed it - how far they have come kept as they come. */
-async function fetchFiles(plugin: PythonPlugin): Promise<void> {
+/** A plugin's files fetched - the user having allowed it - from the hosts asking named, how far they have come kept as they come. */
+async function fetchFiles(plugin: PythonPlugin, hosts: readonly string[]): Promise<void> {
   const stop = await listen<{ plugin: string; done: number; total: number }>("plugin-files:progress", (e) => {
     if (e.payload.plugin === plugin.id && e.payload.total > 0) useDownloads.setState({ [plugin.id]: e.payload.done / e.payload.total });
   });
   try {
-    await filesOf(plugin, true);
+    await filesOf(plugin, hosts);
   } finally {
     stop();
     // (replaced, not merged: a merge would keep the plugin's share it leaves out)
@@ -210,7 +211,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     stamp.py !== info.pythonVersion;
   // (a plugin's files besides, each there whole)
   const files = setUpFiles(plugin);
-  const needFiles = !!plugin && files.length > 0 && (await filesOf(plugin, false)).missing.length > 0;
+  const needFiles = !!plugin && files.length > 0 && (await filesOf(plugin)).missing.length > 0;
   // (one the user was not told of as it was set up - a plugin that has come to need more since: asked again, even where it was allowed)
   const untold = files.some((f) => !stamp.files?.includes(f.sha256));
 
@@ -254,6 +255,8 @@ export async function ensurePyEnv(
     const plugin = pluginOf(profile)!;
     const download = pixiDownload(lockText, pixiPlatform(info.os, arch()));
     const mb = Math.round(download.bytes / 1e6 / 10) * 10;
+    // (where from, as said - and all the set-up may reach: net.rs)
+    const setUp = pixiSetUp(download.pypi, setUpFiles(plugin));
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: consentTitle(plugin),
@@ -264,12 +267,12 @@ export async function ensurePyEnv(
         (mb ? ` (about ${mb} MB)` : "") +
         `, in its data folder${extra.need}. ${downloads("pixi")}, ` +
         `every file checked against the fingerprint Meno carries for it:`,
-      sources: pixiSources(download.pypi, setUpFiles(plugin)),
+      ...setUp,
     });
     if (!allowed) {
       throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
     }
-    await invoke("py_env_setup_pixi", { payload: info });
+    await invoke("py_env_setup_pixi", { payload: { ...info, hosts: setUp.hosts } });
     await stampNow();
   } else if (needSetup) {
     // The first time, the user says whether it may download at all.
@@ -278,6 +281,7 @@ export async function ensurePyEnv(
       .filter((line) => /^[A-Za-z0-9_.-]+(==| @ )/.test(line)).length;
     const hashed = /^\s*--hash=/m.test(lockText);
     const plugin = pluginOf(profile);
+    const setUp = uvSetUp(lockText, setUpFiles(plugin));
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: plugin ? consentTitle(plugin) : `Download Python for ${PROFILE_USE[profile as keyof typeof PROFILE_USE]}?`,
@@ -297,7 +301,7 @@ export async function ensurePyEnv(
               "checked against the fingerprint Meno carries for it:"
             : "in its data folder, and needs nothing else. Astral's uv, fetched the first time it is needed, " +
               "downloads Python - once, and only where Meno has not fetched it before:"),
-      sources: uvSources(lockText, setUpFiles(plugin)),
+      ...setUp,
     });
     if (!allowed) {
       throw new Error(
@@ -305,7 +309,7 @@ export async function ensurePyEnv(
           " (Meno is offline, or the download was declined).",
       );
     }
-    await invoke("py_env_setup_uv", { payload: info });
+    await invoke("py_env_setup_uv", { payload: { ...info, hosts: setUp.hosts } });
     await stampNow();
   }
   if (needFiles) {
@@ -318,10 +322,11 @@ export async function ensurePyEnv(
       again: untold && !needSetup,
       detail: `The ${plugin.name} plugin needs${extra.need.replace(/^; and it needs/, "").replace(/ beside them$/, "")}, downloaded once into its data folder, checked against the fingerprint Meno carries for it:`,
       sources: extra.sources,
+      hosts: extra.hosts,
     });
     if (!allowed) throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
     if (untold && !needSetup) await stampNow();
-    await fetchFiles(plugin);
+    await fetchFiles(plugin, extra.hosts);
   }
 
   return venvPy as string;
