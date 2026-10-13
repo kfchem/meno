@@ -237,6 +237,44 @@ function unbreakable(para: string, at: number): { text: string; src: number[] }[
   return out;
 }
 
+/** Where a word too wide for its line may be broken, as a chemical name is: after a hyphen, a comma or a closing bracket, or before an opening one. */
+const BREAKS_AFTER = /[-\u2010,)\]}]/u;
+const BREAKS_BEFORE = /[([{]/u;
+
+/**
+ * Where to break a word - or a number and its unit, or a bullet and its
+ * first word - too wide for the `room` its line has (the maintainer,
+ * 2026-10-13): as late as its letters fit, at the space between a number
+ * and its unit, after a hyphen, a comma or a closing bracket, or before an
+ * opening one, where one falls in that much and after `keep` - else at the
+ * room's edge; never before its first letter. The place in its text, and
+ * whether the break is at a space, which goes.
+ */
+function breakIn(w: { text: string }, room: number, wide: (to: number) => number, keep: number): { at: number; space: boolean } {
+  // (the places between its letters - a letter of two code units one letter)
+  const ends: number[] = [];
+  for (let i = 0; i < w.text.length; ) {
+    i += w.text.codePointAt(i)! > 0xffff ? 2 : 1;
+    ends.push(i);
+  }
+  let lo = 0;
+  let hi = ends.length - 1;
+  // (as many letters as fit - one at least)
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (wide(ends[mid]) <= room) lo = mid;
+    else hi = mid - 1;
+  }
+  const fits = ends[lo];
+  for (let k = lo; k >= 0; k--) {
+    const at = ends[k];
+    if (at <= keep || at >= w.text.length) continue;
+    if (w.text[at] === " ") return { at, space: true };
+    if (BREAKS_AFTER.test(w.text[at - 1]) || BREAKS_BEFORE.test(w.text[at])) return { at, space: false };
+  }
+  return { at: fits, space: false };
+}
+
 /** A caption's lines as they are laid: as typed - or, given a `width`, each typed line broken into lines no wider than it - and each letter's style, by its place in the text. */
 function linesOf(text: string, fontSize: number, set: LabelSet, width: number | undefined, styles: readonly (WordsStyle | undefined)[]): Laid[] {
   const out: Laid[] = [];
@@ -260,9 +298,26 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
       first = false;
       line = null;
     };
+    const room = () => width! - level - (first ? 0 : hang);
+    const wide = (l: { text: string; src: readonly number[] }, to = l.text.length) => runsWidth(runsOf(l.text.slice(0, to), l.src.slice(0, to)), fontSize, set);
+    // (a line begun with a word - or a bullet and its word, kept together for `keep` letters - too wide for its room: broken, a line for each piece but the last, which the line goes on from)
+    const begin = (w: { text: string; src: number[] }, keep = 0) => {
+      let rest = { text: w.text, src: [...w.src] };
+      while (wraps && wide(rest) > room()) {
+        const cut = breakIn(rest, room(), (to) => wide(rest, to), keep);
+        // (a letter alone too wide: a line of its own, as it is)
+        if (cut.at >= rest.text.length) break;
+        line = { text: rest.text.slice(0, cut.at), src: rest.src.slice(0, cut.at) };
+        flush(false);
+        const from = cut.at + (cut.space ? 1 : 0);
+        rest = { text: rest.text.slice(from), src: rest.src.slice(from) };
+        keep = 0;
+      }
+      line = rest;
+    };
     for (const w of words) {
       if (!line) {
-        line = { text: w.text, src: [...w.src] };
+        begin(w);
         continue;
       }
       const was: { text: string; src: number[] } = line;
@@ -270,10 +325,11 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
       const next: { text: string; src: number[] } = { text: `${was.text} ${w.text}`, src: [...was.src, gap, ...w.src] };
       // (an item's bullet stays with its first word)
       const bulletAlone = item && first && was.src.length && was.src[was.src.length - 1] < at + item.head;
-      if (!wraps || bulletAlone || runsWidth(runsOf(next.text, next.src), fontSize, set) <= width! - level - (first ? 0 : hang)) line = next;
+      if (bulletAlone) begin(next, was.text.length + 1);
+      else if (!wraps || wide(next) <= room()) line = next;
       else {
         flush(false);
-        line = { text: w.text, src: [...w.src] };
+        begin(w);
       }
     }
     flush(true);
@@ -284,9 +340,11 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
 
 /**
  * A caption's lines: as typed - or, given a `width`, each typed line broken
- * at its spaces into lines no wider than it, as many words on each as fit
- * (a word wider than it alone on its line), a number never parted from the
- * unit after it.
+ * at its spaces into lines no wider than it, as many words on each as fit,
+ * a number never parted from the unit after it but where the two are wider
+ * than it; a word wider than it broken at its edge - after a hyphen, a
+ * comma or a closing bracket, or before an opening one, where one fits
+ * (breakIn).
  */
 export function captionLines(text: string, fontSize: number, set: LabelSet = ACS_LABEL_SET, width?: number): string[] {
   return linesOf(text, fontSize, set, width, []).map((l) => l.text);

@@ -874,9 +874,12 @@ All hover-based, as above.
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
     it, the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
-    each as fit, each line still centred, a word wider alone on its line, a
-    number or a range never parted from the unit after it (60 °C, 12 h,
-    2 equiv, 0–25 °C); a drag is one undo step. Written anew, they are
+    each as fit, each line still centred, a number or a range never parted
+    from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
+    are wider than the words are made; a word wider than that broken at
+    their edge - after a hyphen, a comma or a closing bracket, or before an
+    opening one, where one fits, as a chemical name is broken (the
+    maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align

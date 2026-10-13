@@ -65,18 +65,55 @@ describe("a caption made as wide as something", () => {
     for (const l of lines) expect(runsWidth(captionRuns(l), 1)).toBeLessThanOrEqual(12 + 1e-9);
     // (each line as full as it can be: the next word would not have fitted)
     for (let i = 0; i < lines.length - 1; i++) expect(runsWidth(captionRuns(`${lines[i]} ${lines[i + 1].split(" ")[0]}`), 1)).toBeGreaterThan(12);
-    // (a word wider than it alone on its line; a line typed kept a line of its own; none, as typed)
-    expect(captionLines("a conformationally b", 1, undefined, 2)).toEqual(["a", "conformationally", "b"]);
+    // (a line typed kept a line of its own; none, as typed)
     expect(captionLines("one two\nthree", 1, undefined, 100)).toEqual(["one two", "three"]);
     expect(captionLines("one two\nthree", 1)).toEqual(["one two", "three"]);
-    // (a number and the unit after it kept together)
-    for (const width of [3, 4, 5, 6, 7, 8]) {
+    // (a number and the unit after it kept together - where the two fit)
+    for (const width of [4, 5, 6, 7, 8]) {
       const lines = captionLines("K2CO3, DMF, 60 °C, 12 h, then 2 equiv of base", 1, undefined, width);
       expect(lines.some((l) => /(^|\s)60$/.test(l) || /(^|\s)12$/.test(l) || /(^|\s)2$/.test(l))).toBe(false);
     }
-    expect(captionLines("60 °C", 1, undefined, 0.5)).toEqual(["60 °C"]);
-    expect(captionLines("−78–0 °C, 1–2 h", 1, undefined, 0.5)).toEqual(["−78–0 °C,", "1–2 h"]);
-    expect(captionLines("aged 3 days", 1, undefined, 0.5)).toEqual(["aged", "3 days"]);
+    expect(captionLines("60 °C", 1, undefined, 3)).toEqual(["60 °C"]);
+    expect(captionLines("−78–0 °C, 1–2 h", 1, undefined, 4)).toEqual(["−78–0", "°C,", "1–2 h"]);
+    expect(captionLines("aged 3 days", 1, undefined, 3)).toEqual(["aged", "3 days"]);
+    // (but where the two are wider than it: parted at the space between them, not in a word)
+    expect(captionLines("60 °C", 1, undefined, 1.5)).toEqual(["60", "°C"]);
+    expect(captionLines("aged 3 days", 1, undefined, 2.5)).toEqual(["aged", "3", "days"]);
+  });
+
+  it("breaks a word wider than it at its edge - after a hyphen, a comma or a closing bracket, or before an opening one, where one fits (the maintainer, 2026-10-13)", () => {
+    const name = "2-amino-3-(4-hydroxyphenyl)propanoic acid";
+    expect(captionLines(name, 1, undefined, 7)).toEqual(["2-amino-3-(4-", "hydroxyphenyl)", "propanoic acid"]);
+    expect(captionLines(name, 1, undefined, 5).slice(0, 2)).toEqual(["2-amino-", "3-(4-"]);
+    for (const width of [2, 3, 5, 7]) {
+      const lines = captionLines(name, 1, undefined, width);
+      // (no letter lost or added: a word's pieces end to end, words a space apart)
+      expect(lines.join("").replace(/ /g, "")).toBe(name.replace(/ /g, ""));
+      for (const l of lines) expect(runsWidth(captionRuns(l), 1)).toBeLessThanOrEqual(width + 1e-9);
+    }
+    // (none to break at: at the edge, as much on each line as fits; the last piece goes on with the words after it)
+    const lines = captionLines("a conformationally b", 1, undefined, 2);
+    expect(lines[0]).toBe("a");
+    expect(lines[lines.length - 1].endsWith(" b")).toBe(true);
+    expect(lines.join("").replace(/ /g, "")).toBe("aconformationallyb");
+    for (const l of lines) expect(runsWidth(captionRuns(l), 1)).toBeLessThanOrEqual(2 + 1e-9);
+    expect(captionLines("x".repeat(20), 1, undefined, 3)).toEqual(["xxxxxx", "xxxxxx", "xxxxxx", "xx"]);
+    // (a letter alone wider than it: a line of its own, and no line left empty)
+    expect(captionLines("aged", 1, undefined, 0.5)).toEqual(["a", "g", "e", "d"]);
+    // (a list's bullet kept with the first piece of its word)
+    expect(captionLines("• Pneumonoultramicroscopic", 1, undefined, 4)[0].startsWith("• P")).toBe(true);
+  });
+
+  it("has a place for the caret at every letter of a word it broke, on the line it fell on", () => {
+    const text = "a conformationally b";
+    const places = captionPlaces(text, 0, 0, 1, undefined, 2);
+    expect(places.at).toHaveLength(text.length + 1);
+    expect(places.lines).toHaveLength(captionLines(text, 1, undefined, 2).length);
+    // (the word's letters on the lines after the first, in order down them)
+    const lines = places.at.slice(2, 18).map((p) => p.line);
+    expect(lines[0]).toBe(1);
+    expect(lines.every((l, i) => i === 0 || l >= lines[i - 1])).toBe(true);
+    expect(lines[lines.length - 1]).toBeGreaterThan(1);
   });
 
   it("reaches as wide as it was made, and as tall as its lines, each centred", () => {
