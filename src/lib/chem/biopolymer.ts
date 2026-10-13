@@ -8,8 +8,13 @@
  */
 import type { PdbAtom, PdbHelix, PdbResidue, PdbStrand } from "./pdb";
 
-/** A residue: its name, chain, sequence number and insertion code (which, together, are the residue: ATOM, *Details*); whether a standard residue's ATOM records give it. */
-export type BioResidue = { name: string; chain: string; seq: number; iCode: string; standard: boolean };
+/**
+ * A residue: its name, chain, sequence number and insertion code (which,
+ * together, are the residue: ATOM, *Details*); whether a standard residue's
+ * ATOM records give it; and whether it is water named as a molecular
+ * dynamics program names it (`mdWater`), which its name alone does not say.
+ */
+export type BioResidue = { name: string; chain: string; seq: number; iCode: string; standard: boolean; water?: true };
 
 /** A residue's secondary structure, where a record gives one. */
 export type Structure = "helix" | "strand";
@@ -62,6 +67,15 @@ export function biopolymerOf(atoms: readonly PdbAtom[], helices: readonly PdbHel
     } else if (a.record === "ATOM") residues[i].standard = true;
     return i;
   });
+  // (water as a dynamics program names it: so only where its atoms are water's - and no standard residue, ATOM records or not)
+  const members: PdbAtom[][] = residues.map(() => []);
+  atoms.forEach((a, i) => members[residueOf[i]].push(a));
+  residues.forEach((r, i) => {
+    if (MD_WATER.has(r.name) && mdWater(members[i])) {
+      r.water = true;
+      r.standard = false;
+    }
+  });
   const structure: (Structure | null)[] = residues.map(() => null);
   for (const h of helices) for (const i of between(residues, at, h.init, h.end)) structure[i] = "helix";
   for (const s of strands) for (const i of between(residues, at, s.init, s.end)) structure[i] = "strand";
@@ -79,8 +93,35 @@ export function traceKind(name: string, element: string): "protein" | "nucleic" 
   return null;
 }
 
-/** Water, by its residue name in the Chemical Component Dictionary as the format's examples write it. */
-export const isWater = (r: Pick<BioResidue, "name">) => r.name === "HOH" || r.name === "DOD";
+/**
+ * Water as molecular dynamics programs name it in the PDB files they write -
+ * the names their own documentation gives (docs/WORKSPACE.md, *Water*):
+ * GROMACS's SOL (its reference manual, *Topology file*; its
+ * share/top/residuetypes.dat), Amber's WAT (tleap, as its own tutorial
+ * shows it; residuetypes.dat), and CHARMM's TIP3 - read, as a PDB file's
+ * residue name is, from columns 18-20 as TIP, as CHARMM's TIP4 and TIP5
+ * are (CHARMM's io documentation; residuetypes.dat). SOL is also a
+ * component of the wwPDB's dictionary, L-sorbose: these are water only where
+ * a residue's atoms are water's (`mdWater`). Names that are components and
+ * no program's documented water (T3P, thymidine 3'-phosphate; SPC; T4P,
+ * T5P, OHH, T3H), or no program documents (H2O), are none.
+ */
+const MD_WATER = new Set(["SOL", "WAT", "TIP"]);
+
+/** Whether a residue's atoms are a water molecule's: one oxygen, and otherwise only hydrogens, two at most (a TIP4P or TIP5P model's massless sites have no element, and are not read: ./pdb). */
+function mdWater(atoms: readonly Pick<PdbAtom, "element">[]): boolean {
+  let o = 0;
+  let h = 0;
+  for (const a of atoms) {
+    if (a.element === "O") o++;
+    else if (a.element === "H" || a.element === "D") h++;
+    else return false;
+  }
+  return o === 1 && h <= 2;
+}
+
+/** Water: by its residue name in the wwPDB's Chemical Component Dictionary (HOH, DOD), as the format's examples write it - or as a dynamics program names it, its atoms water's (`biopolymerOf`). */
+export const isWater = (r: Pick<BioResidue, "name" | "water">) => r.name === "HOH" || r.name === "DOD" || r.water === true;
 
 /** A biopolymer as it reads back from a copy or a saved workspace, for a molecule of `n` atoms; undefined where it does not read. */
 export function readBiopolymer(raw: unknown, n: number): Biopolymer | undefined {
@@ -93,14 +134,21 @@ export function readBiopolymer(raw: unknown, n: number): Biopolymer | undefined 
   if (!residueOf.every((i) => Number.isInteger(i) && i >= 0 && i < residues.length)) return undefined;
   const fine = (x: unknown): x is BioResidue => {
     const v = x as Partial<BioResidue>;
-    return typeof v?.name === "string" && typeof v.chain === "string" && Number.isInteger(v.seq) && typeof v.iCode === "string" && typeof v.standard === "boolean";
+    return (
+      typeof v?.name === "string" &&
+      typeof v.chain === "string" &&
+      Number.isInteger(v.seq) &&
+      typeof v.iCode === "string" &&
+      typeof v.standard === "boolean" &&
+      (v.water === undefined || v.water === true)
+    );
   };
   if (!residues.every(fine)) return undefined;
   if (!structure.every((s) => s === null || s === "helix" || s === "strand")) return undefined;
   return {
     names: names as string[],
     residueOf: residueOf as number[],
-    residues: (residues as BioResidue[]).map(({ name, chain, seq, iCode, standard }) => ({ name, chain, seq, iCode, standard })),
+    residues: (residues as BioResidue[]).map(({ name, chain, seq, iCode, standard, water }) => ({ name, chain, seq, iCode, standard, ...(water ? { water } : {}) })),
     structure: structure as (Structure | null)[],
   };
 }

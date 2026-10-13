@@ -907,6 +907,27 @@ reading in Meno is.
   Space-filling every atom, so a double-click goes from the fold to the
   protein's surface and its pockets, and back. Going over, the ribbon
   shrinks to its line as the atoms grow, and back.
+- **Water.** Water is a residue named HOH or DOD, as the wwPDB's Chemical
+  Component Dictionary names water and heavy water - or one named as a
+  molecular dynamics program writes water in a PDB file, where its atoms
+  are a water's (one oxygen, otherwise at most two hydrogens; a TIP4P or
+  TIP5P model's massless sites have no element and are not read): SOL,
+  GROMACS's (its reference manual, *Topology file formats*:
+  https://manual.gromacs.org/current/reference-manual/topologies/topology-file-formats.html;
+  its `share/top/residuetypes.dat`); WAT, Amber's, as tleap writes it (its
+  tutorial *Adding Water and Ions with tleap*:
+  https://ambermd.org/tutorials/advanced/tutorial8/loop4.php;
+  `residuetypes.dat`); and TIP, CHARMM's TIP3 as a PDB file's residue
+  name (columns 18-20) reads it, and its TIP4 and TIP5 (CHARMM's *io*
+  documentation: https://academiccharmm.org/documentation/version/c48b2/io;
+  `residuetypes.dat`). The atoms are asked as well because SOL is also a
+  dictionary component, L-sorbose. Names that are components and no
+  program documents as water are never water: T3P (thymidine
+  3'-phosphate), SPC, T4P, T5P, OHH and T3H (all in
+  `residuetypes.dat`, all components: https://www.rcsb.org/ligand/T3P and
+  so on); nor H2O, which no program's documentation gives (the maintainer,
+  2026-10-13). A solvated frame of streptavidin (1STP in 3 778 waters)
+  draws the same 103 atoms with its water named HOH, SOL, WAT or TIP3.
 - **Pointing.** A ribbon lights its outline as a molecule's does; pointed
   at, a residue says its name, number and chain. A click on a ribbon
   chooses the residue's backbone atom, which can be measured.

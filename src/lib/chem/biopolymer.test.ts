@@ -82,3 +82,55 @@ describe("a PDB entry's chains", () => {
     expect(readBiopolymer({ ...bp, structure: bp.structure.map(() => "sheet") }, atoms.length)).toBeUndefined();
   });
 });
+
+describe("water, as dynamics programs name it", () => {
+  // the chain of five, with a ligand by residue 3 - and a hundred waters on a grid round it, each named as a program names it
+  const base = [...atoms.slice(0, 15), atom("C1", "C", "LIG", "A", 101, 3.8 * 3, 3, 0, "HETATM")];
+  const waters = (name: string, record: PdbAtom["record"] = "HETATM") =>
+    Array.from({ length: 100 }, (_, k) => {
+      const [x, y, z] = [(k % 10) * 3.1 - 8, Math.floor(k / 10) * 3.1 - 14, 6];
+      return [atom("OW", "O", name, "W", 300 + k, x, y, z, record), atom("HW1", "H", name, "W", 300 + k, x + 0.96, y, z, record), atom("HW2", "H", name, "W", 300 + k, x - 0.24, y + 0.93, z, record)];
+    }).flat();
+  const last = <T>(xs: readonly T[]) => xs[xs.length - 1];
+  const drawn = (all: PdbAtom[]) => {
+    const bp = biopolymerOf(all, [], [])!;
+    const hidden = ribbonAtoms(bp, all.map((a) => ({ el: a.element, x: a.x, y: a.y, z: a.z })));
+    return { bp, count: hidden.filter((h) => !h).length };
+  };
+
+  it("is water whether named HOH, or SOL, WAT or TIP3 as GROMACS, Amber and CHARMM write it - written as ATOM records or HETATM", () => {
+    const hoh = drawn([...base, ...waters("HOH")]);
+    // (the ligand, and residue 3's side chain about it: what is left drawn - named as no water, every water too)
+    expect(hoh.count).toBeLessThan(10);
+    expect(drawn([...base, ...waters("XWT")]).count).toBeGreaterThan(hoh.count + 290);
+    for (const [name, record] of [["SOL", "ATOM"], ["WAT", "HETATM"], ["TIP", "ATOM"]] as const) {
+      const md = drawn([...base, ...waters(name, record)]);
+      expect(md.count).toBe(hoh.count);
+      expect(last(md.bp.residues)).toMatchObject({ name, water: true, standard: false });
+    }
+  });
+
+  it("is not where a residue of the name is no water by its atoms - L-sorbose (SOL); nor ever a component named as no program's water, as thymidine 3'-phosphate (T3P)", () => {
+    const sorbose = [
+      ...["C1", "C2", "C3", "C4", "C5", "C6"].map((n, k) => atom(n, "C", "SOL", "B", 401, k * 1.5, 12, 0, "HETATM")),
+      ...["O1", "O2", "O3", "O4", "O5", "O6"].map((n, k) => atom(n, "O", "SOL", "B", 401, k * 1.5, 13.4, 0, "HETATM")),
+    ];
+    const t3p = [atom("P", "P", "T3P", "B", 402, 0, 20, 0, "HETATM"), atom("O1P", "O", "T3P", "B", 402, 1.5, 20, 0, "HETATM")];
+    const bp = biopolymerOf([...base, ...sorbose, ...t3p], [], [])!;
+    expect(bp.residues.find((r) => r.name === "SOL")!.water).toBeUndefined();
+    expect(bp.residues.find((r) => r.name === "T3P")!.water).toBeUndefined();
+    // (and so drawn: the sugar's twelve atoms and the phosphate's two)
+    const all = [...base, ...sorbose, ...t3p];
+    const hidden = ribbonAtoms(bp, all.map((a) => ({ el: a.element, x: a.x, y: a.y, z: a.z })));
+    expect([...hidden.slice(base.length)].every((h) => h === 0)).toBe(true);
+    // (a lone oxygen named SOL - a crystal water without its hydrogens - is water; one with three hydrogens is not)
+    expect(last(biopolymerOf([...base, atom("O", "O", "SOL", "W", 1, 0, -20)], [], [])!.residues).water).toBe(true);
+    const h3 = [atom("O", "O", "SOL", "W", 1, 0, -20), ...[1, 2, 3].map((k) => atom(`H${k}`, "H", "SOL", "W", 1, k, -20))];
+    expect(last(biopolymerOf([...base, ...h3], [], [])!.residues).water).toBeUndefined();
+  });
+
+  it("reads back from a copy as water", () => {
+    const { bp } = drawn([...base, ...waters("WAT")]);
+    expect(readBiopolymer(JSON.parse(JSON.stringify(bp)), base.length + 300)).toEqual(bp);
+  });
+});
