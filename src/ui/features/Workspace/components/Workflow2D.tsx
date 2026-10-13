@@ -10,6 +10,7 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import { clickedOpen } from "../workflow/cardOpen";
 import { countOf, type Frame } from "../workflow/entries";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -30,6 +31,7 @@ type Pt = { x: number; y: number };
 
 /** The least a set is sized to, each way. */
 const LEAST = 48 * PX;
+
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
  * its grey; the accent while it is drawn; the attention colour into a step
@@ -235,6 +237,8 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  // (the step a click last opened, and when: a double-click's second click leaves it open)
+  const opened = useRef<{ step: number; at: number } | null>(null);
   const wireDrag = useEditor((s) => s.wireDrag);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -454,7 +458,11 @@ export default function Workflow2D() {
     if (e.button !== 0) return;
     const open = () => {
       const s = store.getState();
-      s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+      const now = performance.now();
+      const next = clickedOpen(s.openStep, step.id, opened.current, now);
+      if (next === s.openStep) return;
+      if (next === step.id) opened.current = { step: step.id, at: now };
+      s.setWorkflowView({ openStep: next });
     };
     if (asSelected(e, { step: step.id }, open)) return;
     const start = worldOf(e.clientX, e.clientY);
@@ -463,9 +471,7 @@ export default function Workflow2D() {
       e,
       (p) => store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture),
       (moved) => {
-        if (moved) return;
-        const s = store.getState();
-        s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+        if (!moved) open();
       },
     );
   };

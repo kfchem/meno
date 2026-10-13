@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { DURATION, EASE, LEAVE } from "../../../theme/motion";
 import OptionsForm from "../../../options/OptionsForm";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { WorkflowStep } from "../store/types";
@@ -224,7 +226,17 @@ export default function StepCard(p: StepCardProps) {
             )}
           </div>
         )}
+        {/* (its options open and shut as a card does, never at a jump: the card grows and shrinks with them) */}
+        <AnimatePresence initial={false}>
         {p.open && !p.compact && (
+          <motion.div
+            key="options"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0, transition: LEAVE }}
+            transition={{ duration: DURATION.base, ease: EASE }}
+            style={{ overflow: "hidden" }}
+          >
           <div className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
             {p.kinds.length > 1 && (
               <div className="mb-3">
@@ -268,7 +280,9 @@ export default function StepCard(p: StepCardProps) {
               </div>
             )}
           </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
       <Port look={p.ports.take} label={`Into ${p.info.name}`} data={{ "data-take": String(p.step.id) }} onPointerDown={p.onTakeDown} style={{ left: 0, top: PORT_DOWN / PX }} />
       <Port look={p.ports.give} label={`Out of ${p.info.name}`} data={{ "data-give-step": String(p.step.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: PORT_DOWN / PX }} />
