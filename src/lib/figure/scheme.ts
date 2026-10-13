@@ -736,7 +736,7 @@ function wordsStretch(a: SchemeArrow): { a: Point; b: Point } {
 /**
  * The words of a scheme: its letters left over, set in lines and blocks -
  * none across an arrow's line; a "+" alone a sign; a block over or under
- * an arrow - within its longest stretch, not across it, near - that
+ * an arrow - alongside its longest stretch, not across it, near - that
  * arrow's; each written as Meno writes words typed (lib/text/smartWords
  * `writtenAsMeant`).
  */
@@ -773,6 +773,9 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
         { x: box[0], y: box[3] },
         { x: box[2], y: box[3] },
       ];
+      // (some of it alongside the stretch: not all of it before its tail or past its point, as a compound's number by it may be)
+      const ts = corners.map((p) => dot(sub(p, s.a), u));
+      if (Math.max(...ts) <= 0 || Math.min(...ts) >= l) return;
       const cs = corners.map((p) => cross(u, sub(p, s.a)));
       if (Math.min(...cs) < 0 && Math.max(...cs) > 0) return;
       const off = Math.min(...cs.map(Math.abs));

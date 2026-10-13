@@ -425,4 +425,11 @@ describe("a reaction scheme's signs and words", () => {
       ["rt, 3 d", 0],
     ]);
   });
+
+  it("takes no word set wholly before an arrow's tail for the arrow's: a compound's number under it, the arrow going on below", () => {
+    // (a long arrow standing upright, its tail at y 60; the number 10 points to its right, its foot 5 points short of the tail)
+    const s = read(scheme([stroke([[100, 60], [100, 194]]), head([100, 200], [0, 1])], [...word("2", [110, 55], "Helvetica-Bold"), ...word("NaH", [104, 132])]));
+    expect(s.words.find((w) => w.text === "2")!.arrow).toBeUndefined();
+    expect(s.words.find((w) => w.text === "NaH")!.arrow).toBe(0);
+  });
 });
