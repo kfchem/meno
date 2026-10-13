@@ -279,9 +279,30 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     ...shapes.strokes.filter((s) => !inDashes.has(s) && len(s) > 0.1 * bond).map((s): Line => ({ a: s.a, b: s.b, w: s.w, ...(s.ink ? { ink: s.ink } : {}), dash: !!s.dash, of: [s] })),
     ...dashed,
   ];
+  const near = Math.max(0.06 * bond, 2 * lineWidth);
+  // (whether a point lies on a shape's outline)
+  const onOutline = (p: Point, poly: readonly Point[]) =>
+    poly.some((a, i) => {
+      const b = poly[(i + 1) % poly.length];
+      const l = dist(a, b);
+      if (!(l > 0)) return dist(p, a) < near;
+      const v = unit(a, b);
+      return dist(p, along(a, v, Math.max(0, Math.min(l, dot(sub(p, a), v))))) < near;
+    });
+  // (a stereo bond's wedge: a line ends at its narrow end - its stereocentre's other bond - other than along it, as an arrow's own line under its
+  // head may, or along its own edge, as where a head is stroked as well as filled)
+  const atCentre = (x: Wedge) => {
+    const ax = unit(x.base, x.tip);
+    return shapes.strokes.some((s) =>
+      [
+        [s.a, s.b],
+        [s.b, s.a],
+      ].some(([p, q]) => dist(p, x.tip) < near && Math.abs(cross(ax, unit(q, p))) > Math.sin((20 * Math.PI) / 180) && !(x.outline && onOutline(q, x.outline))),
+    );
+  };
   // what may be a head: filled shapes no longer than a bond - a wedge's outline, a blob of one part - and chevrons of two strokes
   const filled: HeadShape[] = [
-    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x], axis: { base: x.base, tip: x.tip } })),
+    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond && !atCentre(x)).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x], axis: { base: x.base, tip: x.tip } })),
     ...shapes.blobs
       .filter((b: Blob) => b.parts.length === 1 && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 1.2 * bond && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) > 0.06 * bond)
       .map((b): HeadShape => {
@@ -313,7 +334,6 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   const heads = [...filled, ...chevrons];
   const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o));
   const taken = (l: Line) => l.of.some((o) => used.has(o));
-  const near = Math.max(0.06 * bond, 2 * lineWidth);
 
   // arrows drawn as one outline each
   const found: Found[] = [];
@@ -483,16 +503,7 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   // what the arrows were drawn with, all of it - and the strokes along a filled head's edges, where its path is stroked as well as filled
   for (const f of found) for (const l of f.lines) for (const o of l.of) used.add(o);
   const outlines = found.flatMap((f) => [f.head.outline, f.tailHead?.outline]).filter((o): o is Point[] => !!o && o.length > 2);
-  const onEdge = (p: Point, poly: readonly Point[]) =>
-    poly.some((a, i) => {
-      const b = poly[(i + 1) % poly.length];
-      const l = dist(a, b);
-      if (!(l > 0)) return dist(p, a) < near;
-      const u = unit(a, b);
-      const t = Math.max(0, Math.min(l, dot(sub(p, a), u)));
-      return dist(p, along(a, u, t)) < near;
-    });
-  for (const s of shapes.strokes) if (!used.has(s) && len(s) < 1.2 * bond && outlines.some((o) => onEdge(s.a, o) && onEdge(s.b, o))) used.add(s);
+  for (const s of shapes.strokes) if (!used.has(s) && len(s) < 1.2 * bond && outlines.some((o) => onOutline(s.a, o) && onOutline(s.b, o))) used.add(s);
   return { arrows, used, usedLetters };
 }
 

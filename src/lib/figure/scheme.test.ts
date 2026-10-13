@@ -219,6 +219,29 @@ describe("a reaction scheme's arrows", () => {
     expect(s.figure.bonds).toHaveLength(7);
     expect(s.figure.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
   });
+
+  it("takes no stereo wedge for an arrow's head: one going off its stereocentre straight at the arrow's tail is the structure's", () => {
+    // (a stereocentre's three bonds - its wedge drawn in perspective, one side square, its wide end
+    // 5.6 points short of the arrow's tail - read as a head at the tail before)
+    const s = read(
+      scheme([
+        stroke([[40, 95], [32.8, 82.5]]),
+        stroke([[40, 95], [32.8, 107.5]]),
+        filled([[40, 94.8], [40, 95.2], [54.4, 99.5], [54.4, 95]]),
+        stroke([[60, 95], [134, 95]]),
+        head([140, 95], [1, 0]),
+      ]),
+    );
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({});
+    expect(near(s.arrows[0].tail, [60, 95])).toBe(true);
+    expect(s.figure.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    // (a head is still one where it is stroked as well as filled - 8 long and 6 wide, a wedge's shape: its own edges ending at its point are no stereocentre's bonds)
+    const stroked = read(scheme([stroke([[60, 95], [132, 95]]), { ...filled([[140, 95], [132, 92], [132, 98]]), stroke: "#000000ff", width: 0.6 }]));
+    expect(stroked.arrows).toHaveLength(1);
+    expect(stroked.figure.atoms).toHaveLength(8);
+    expect(stroked.figure.bonds.filter((b) => b.stereo)).toEqual([]);
+  });
 });
 
 describe("a reaction scheme's signs and words", () => {
