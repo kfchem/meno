@@ -236,11 +236,14 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const width = median(middle.map((r) => r.c[1] - r.c[0]));
   if (width > 0.25 * bond) return null;
-  // (the line's middle along it, fitted: the box round the outline may lean a little off the line)
-  const n0 = middle.length;
-  const mt = middle.reduce((a, r) => a + r.t, 0) / n0;
-  const mc = middle.reduce((a, r) => a + (r.c[0] + r.c[1]) / 2, 0) / n0;
-  const slope = middle.reduce((a, r) => a + (r.t - mt) * ((r.c[0] + r.c[1]) / 2 - mc), 0) / Math.max(1e-9, middle.reduce((a, r) => a + (r.t - mt) ** 2, 0));
+  // (the line's middle along it, fitted: the box round the outline may lean a little off the line - fitted to the line's
+  // own rows, as wide as it, a short harpoon's half head reaching into the middle left out)
+  const shaft = rows.filter((r) => Math.abs(r.c[1] - r.c[0] - width) <= 0.25 * width);
+  const fit = shaft.length >= 4 ? shaft : middle;
+  const n0 = fit.length;
+  const mt = fit.reduce((a, r) => a + r.t, 0) / n0;
+  const mc = fit.reduce((a, r) => a + (r.c[0] + r.c[1]) / 2, 0) / n0;
+  const slope = fit.reduce((a, r) => a + (r.t - mt) * ((r.c[0] + r.c[1]) / 2 - mc), 0) / Math.max(1e-9, fit.reduce((a, r) => a + (r.t - mt) ** 2, 0));
   const centreAt = (t: number) => mc + slope * (t - mt);
   const hiAt = (t: number) => centreAt(t) + width / 2;
   const loAt = (t: number) => centreAt(t) - width / 2;

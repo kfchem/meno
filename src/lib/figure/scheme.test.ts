@@ -366,6 +366,13 @@ describe("a reaction scheme's arrows", () => {
     expect(s.arrows).toEqual([]);
   });
 
+  it("reads a short harpoon drawn as one outline with its tail on its line, the half head out of the fit", () => {
+    // (16 points long, its line 0.6 wide, its half head 6 long and 2.5 high: over a quarter of its length)
+    const s = read(scheme([filled([[60, 94.7], [70, 94.7], [70, 92.2], [76, 95.3], [60, 95.3]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(Math.abs(s.arrows[0].tail.y - 95)).toBeLessThan(0.15);
+  });
+
   it("reads a short arrow drawn as one outline, its head wide for its length", () => {
     // (26 points long, its head 7 wide: under four head widths long)
     const s = read(scheme([filled([[60, 94.7], [79, 94.7], [79, 91.5], [86, 95], [79, 98.5], [79, 95.3], [60, 95.3]])]));
