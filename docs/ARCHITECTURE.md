@@ -545,6 +545,11 @@ closes*).
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A runner asked to go** - SIGTERM, SIGINT or SIGHUP (macOS, Linux: a
+  logout, `kill`, Activity Monitor's *Quit*) - stops its program as *Stop*
+  does, writes the job stopped, and goes (`run_as_runner`): its program,
+  in a group of its own, is never left running with the job read as gone.
+  On Windows the job object takes it with the runner, however it goes.
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without

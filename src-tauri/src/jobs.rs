@@ -33,6 +33,7 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
 
@@ -197,8 +198,36 @@ pub fn current_record(dir: &Path) -> Option<JobRecord> {
     Some(gone)
 }
 
+/// Whether the job is to stop: asked to (its `stop` file), or its runner asked to go.
 fn stop_asked(dir: &Path) -> bool {
-    dir.join(STOP).exists()
+    GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
+}
+
+/// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
+/// SIGHUP - a logout, `kill`, Activity Monitor's Quit): it stops its job as
+/// a stop does, and goes.
+static GOING: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn asked_to_go(_: libc::c_int) {
+    GOING.store(true, Ordering::SeqCst);
+}
+
+/// The runner asked to go stops its program and says so, rather than
+/// going at once and leaving it running in its group of its own - its job
+/// read as gone, its turn free for the next. (On Windows the job object
+/// takes the program with the runner, however it goes.)
+#[cfg(unix)]
+fn listen_for_going() {
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = asked_to_go as extern "C" fn(libc::c_int) as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART;
+        libc::sigemptyset(&mut action.sa_mask);
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
+    }
 }
 
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
@@ -214,7 +243,15 @@ pub fn job_mode() -> Option<i32> {
         return None;
     }
     let dir = PathBuf::from(args.next()?);
-    Some(run_job(&dir))
+    Some(run_as_runner(&dir))
+}
+
+/// Run the job in `dir` as its runner does: as `run_job`, and asked to go,
+/// stopped as if asked to stop.
+pub fn run_as_runner(dir: &Path) -> i32 {
+    #[cfg(unix)]
+    listen_for_going();
+    run_job(dir)
 }
 
 /// Run the job in `dir`: wait for its turn, run its program, and write down how it ended.
@@ -330,7 +367,12 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
 fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<bool> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    queue.lock()?;
+    // (a wait cut short by a signal - the runner asked to go - waited again)
+    while let Err(e) = queue.lock() {
+        if e.kind() != std::io::ErrorKind::Interrupted {
+            return Err(e);
+        }
+    }
     let mut running = 0u32;
     let mut first: Option<(u64, PathBuf)> = None;
     for entry in fs::read_dir(root)?.flatten() {
@@ -1674,6 +1716,52 @@ mod tests {
             wait_for(|| unsafe { libc::kill(started, 0) } != 0);
         }
         let _ = fs::remove_dir_all(root);
+    }
+
+    /// This test binary, started again by
+    /// `a_runner_asked_to_go_stops_its_program_and_says_so`, runs one job as
+    /// `Meno --job <folder>` would, then exits. Started as a test, it does nothing.
+    #[cfg(unix)]
+    #[test]
+    fn runner_child() {
+        if let Some(dir) = std::env::var_os("MENO_TEST_RUN_JOB") {
+            std::process::exit(run_as_runner(Path::new(&dir)));
+        }
+    }
+
+    /// A runner asked to go (SIGTERM: a logout, `kill`, Activity Monitor's
+    /// Quit) stops its program, in its group of its own, and writes the job
+    /// stopped - never goes leaving it running, the job read as gone and its
+    /// turn free for the next.
+    #[cfg(unix)]
+    #[test]
+    fn a_runner_asked_to_go_stops_its_program_and_says_so() {
+        let root = temp();
+        let dir = shell(&root, "echo $$ > program.pid; exec sleep 30", 1);
+        let mut runner = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "jobs::tests::runner_child", "--test-threads=1"])
+            .env("MENO_TEST_RUN_JOB", &dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        wait_for(|| read_work_file(&dir, "program.pid").is_ok_and(|s| s.ends_with('\n')));
+        let program: libc::pid_t = read_work_file(&dir, "program.pid").unwrap().trim().parse().unwrap();
+        unsafe { libc::kill(runner.id() as libc::pid_t, libc::SIGTERM) };
+        let t = Instant::now();
+        let _ = runner.wait();
+        let took = t.elapsed();
+        while unsafe { libc::kill(program, 0) } == 0 && t.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let runs_on = unsafe { libc::kill(program, 0) } == 0;
+        let state = current_record(&dir).map(|r| r.state);
+        // (the test's own clean-up, whatever it found)
+        unsafe { libc::killpg(program, libc::SIGKILL) };
+        let _ = fs::remove_dir_all(&root);
+        assert!(!runs_on, "its program ({program}) runs on, its runner gone");
+        assert_eq!(state, Some(JobState::Stopped));
+        assert!(took < STOP_GRACE + Duration::from_secs(2), "it took {took:?} to go");
     }
 
     #[test]
