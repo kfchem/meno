@@ -67,7 +67,12 @@ export class TextBatch {
    */
   constructor(readonly font: string, readonly renderOrder: number, private readonly drawn: () => void = () => {}) {}
 
-  private readonly heard = () => this.drawn();
+  /** Those told as letters are set (`onSynced`). */
+  private readonly listeners = new Set<() => void>();
+  private readonly heard = () => {
+    this.drawn();
+    for (const l of [...this.listeners]) l();
+  };
 
   /** Whether `key` is drawn from `item` already. */
   has(key: string, item: object): boolean {
@@ -100,6 +105,8 @@ export class TextBatch {
         t.matrix.set(1, ITALIC_SLANT, 0, run.x, 0, 1, 0, run.y, 0, 0, 1, 0, 0, 0, 0, 1);
       } else t.position.set(run.x, run.y, 0);
       t.addEventListener("synccomplete" as never, this.heard);
+      // (its letters set now, not only as its chunk is drawn: a batch not shown - WholeTexts2D's next set, waiting to be shown once set - would never set them, and never be shown)
+      t.sync();
       chunk.addText(t);
       return t;
     });
@@ -151,12 +158,10 @@ export class TextBatch {
     return false;
   }
 
-  /** Each chunk's letters set: `heard` told (it may be told more than once). */
+  /** Letters set - a member's, or a chunk's packed: `heard` told (it may be told more than once), shown or not. */
   onSynced(heard: () => void): () => void {
-    for (const c of this.chunks) c.addEventListener("synccomplete" as never, heard);
-    return () => {
-      for (const c of this.chunks) c.removeEventListener("synccomplete" as never, heard);
-    };
+    this.listeners.add(heard);
+    return () => void this.listeners.delete(heard);
   }
 
   dispose(): void {
