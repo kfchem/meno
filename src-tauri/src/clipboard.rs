@@ -162,7 +162,7 @@ fn embed(items: &[ClipItem], entries: &mut Vec<(&'static str, Payload)>) {
             entries.splice(at..at, [("Embed Source", Payload::Bytes(source)), ("Object Descriptor", Payload::Bytes(descriptor))]);
             entries.retain(|(name, _)| !matches!(*name, "Art::GVML ClipFormat" | "PNG"));
         }
-        Err(e) => eprintln!("{e}"),
+        Err(e) => crate::logfile::logged!("{e}"),
     }
 }
 
