@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { setViewPanning, letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
@@ -131,6 +131,7 @@ export function PanZoom2D() {
         return;
       }
       dragging.current = false;
+        setViewPanning(false);
       maybe.current = {
         active: true,
         x: e.clientX,
@@ -147,6 +148,7 @@ export function PanZoom2D() {
         // If we enter extend mode, cancel any pending drag
         maybe.current.active = false;
         dragging.current = false;
+        setViewPanning(false);
         return;
       }
       // Skip pan while panHold is active
@@ -157,6 +159,7 @@ export function PanZoom2D() {
       if (store.getState().moveDrag.active) {
         maybe.current.active = false;
         dragging.current = false;
+        setViewPanning(false);
         return;
       }
       if (!dragging.current) {
@@ -168,6 +171,7 @@ export function PanZoom2D() {
         if (dist2 < THRESH2) return;
         // Engage dragging now
         dragging.current = true;
+        setViewPanning(true);
         try {
           dom.setPointerCapture(maybe.current.id ?? e.pointerId);
         } catch {}
@@ -200,6 +204,7 @@ export function PanZoom2D() {
         invalidate();
       }
       dragging.current = false;
+        setViewPanning(false);
       maybe.current.active = false;
       if (
         dblHold.current.active &&
@@ -396,6 +401,7 @@ export function PanZoom2D() {
     const unsub = store.subscribe((s) => {
       extendRef.current = s.extend.active;
       if (s.extend.active) dragging.current = false;
+        setViewPanning(false);
     });
     return () => unsub();
   }, [store]);

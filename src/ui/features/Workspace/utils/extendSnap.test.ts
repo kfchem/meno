@@ -51,5 +51,27 @@ describe("keeping bonds apart", () => {
     const p = { x: Math.cos((185 * Math.PI) / 180), y: Math.sin((185 * Math.PI) / 180) };
     expect(deg(snapBond({ x: 0, y: 0 }, n, p, 1).angle)).toBeCloseTo(150, 6);
   });
-});
 
+  it("keeps a bond swung round onto another at the atom from going to and fro", () => {
+    // a double bond's two ends at the atom: one bond at 0 degrees, the new bond swung round onto it
+    const tip = { x: 0, y: 0 };
+    const n = [{ x: 1, y: 0 }];
+    const at = (d: number) => ({ x: Math.cos((d * Math.PI) / 180), y: Math.sin((d * Math.PI) / 180) });
+    // the pointer wanders about 0 degrees, a few degrees either way
+    let held: number | undefined;
+    const sides: number[] = [];
+    for (const d of [20, 8, 3, -2, 4, -3, 2, -5, 6, -4]) {
+      const b = snapBond(tip, n, at(d), 1, held);
+      held = b.angle;
+      sides.push(Math.sign(Math.sin(b.angle)));
+    }
+    // (it goes to one side and stays there while the pointer is within the margin)
+    expect(new Set(sides).size).toBe(1);
+    // without memory it alternates
+    const loose = [3, -2, 4, -3].map((d) => Math.sign(Math.sin(snapBond(tip, n, at(d), 1).angle)));
+    expect(new Set(loose).size).toBe(2);
+    // far across, it does cross
+    const crossed = snapBond(tip, n, at(-50), 1, held);
+    expect(Math.sin(crossed.angle)).toBeLessThan(0);
+  });
+});

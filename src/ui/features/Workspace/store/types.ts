@@ -1012,6 +1012,8 @@ export type EditorState = {
   /** A shape put on the page, over the others; its id. */
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  /** A resize let go: back as it was at the press (Escape, or undo during it). */
+  dropShapeChange: (id: number, gesture: string) => void;
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
   /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
   styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
