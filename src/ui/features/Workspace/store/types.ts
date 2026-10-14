@@ -1517,7 +1517,10 @@ export type EditorState = {
    * (undefined). Changes sharing `coalesceKey` - a drag along a slider - are
    * one undo step.
    */
+  /** The workspace's drawing style set and its page converted with it, one step; with `coalesceKey`, a slider's ticks, each from the page as the drag began, coalesced. */
   setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => void;
+  /** A preset chosen in the Drawing style card: the style taken, its bond eased in from the old one, one step (../styleEase). */
+  easeDocumentStyle: (style: StyleChoice) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

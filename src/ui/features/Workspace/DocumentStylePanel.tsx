@@ -15,6 +15,7 @@ export default function DocumentStylePanel({
 }) {
   const style = useEditor((s) => s.docStyle);
   const setDocumentStyle = useEditor((s) => s.setDocumentStyle);
+  const easeDocumentStyle = useEditor((s) => s.easeDocumentStyle);
 
   return (
     <aside
@@ -42,7 +43,8 @@ export default function DocumentStylePanel({
             layout="narrow"
             choice={style}
             onChange={(next, setting) =>
-              setDocumentStyle(next, setting ? `style:${setting}` : undefined)
+              // (a slider's or a box's setting: converted as it goes; a preset: eased in)
+              setting ? setDocumentStyle(next, `style:${setting}`) : easeDocumentStyle(next)
             }
           />
         </div>

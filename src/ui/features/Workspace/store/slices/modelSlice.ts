@@ -1,3 +1,5 @@
+import { bondPtOf } from "../../restyle";
+import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
@@ -423,7 +425,9 @@ export const createModelSlice = (
     }));
   },
 
-  pasteModel: (next: Drawn) => {
+  pasteModel: (given: Drawn) => {
+    // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
+    const next = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
     const carried = next.molecules3d ?? [];
     const flow = next.flow ?? NO_PARTS;
     // (pictures pasted only where they are held: a copy carries them by what they are known by)

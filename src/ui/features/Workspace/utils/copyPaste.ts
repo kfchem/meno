@@ -19,7 +19,8 @@ import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../..
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
-import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import { restyled } from "../restyle";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -626,9 +627,10 @@ export function pastePlace(last: PastesAt | null, at: Pt): { place: Pt; pastes: 
 }
 
 /** `drawn` moved so that the middle of the box round it - its arrows and pluses too, and a workflow's sets and steps - is at `p`. */
-export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
+/** The points that bound what a copy carries - its atoms, arrows, words, pictures, frames - for its middle. */
+function boundingPoints(drawn: Drawn): Pt[] {
   const flow = drawn.flow ? partsBounds(drawn.flow) : null;
-  const points = [
+  return [
     ...drawn.atoms,
     ...(drawn.arrows ?? []).flatMap((a) => arrowPoints(a)),
     ...(drawn.pluses ?? []),
@@ -644,11 +646,69 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
       { x: b.x1, y: b.y1 },
     ]),
   ];
-  if (!points.length) return drawn;
+}
+
+/** The middle of what a copy carries (of the box round it), or null where it carries nothing. */
+function middleOf(drawn: Drawn): Pt | null {
+  const points = boundingPoints(drawn);
+  if (!points.length) return null;
   const xs = points.map((a) => a.x);
   const ys = points.map((a) => a.y);
-  const dx = p.x - (least(xs) + greatest(xs)) / 2;
-  const dy = p.y - (least(ys) + greatest(ys)) / 2;
+  return { x: (least(xs) + greatest(xs)) / 2, y: (least(ys) + greatest(ys)) / 2 };
+}
+
+/**
+ * What a copy carries, converted as a change of style converts a page
+ * (../restyle `restyled`) by k = the bond's printed length where it was
+ * copied over this workspace's, about its middle: its structures keep their
+ * size in units, so they print at this workspace's bond, and its words,
+ * shapes and pictures keep their size in pt (docs/WORKSPACE.md, *Drawing
+ * style*). As it is, where k is one.
+ */
+export function restyledDrawn(drawn: Drawn, k: number): Drawn {
+  const about = middleOf(drawn);
+  if (k === 1 || !about) return drawn;
+  const parts = restyled(
+    {
+      model: { atoms: drawn.atoms, bonds: drawn.bonds },
+      ...(drawn.arrows ? { arrows: drawn.arrows } : {}),
+      ...(drawn.pluses ? { pluses: drawn.pluses } : {}),
+      ...(drawn.captions ? { captions: drawn.captions } : {}),
+      ...(drawn.molecules3d ? { molecules3d: drawn.molecules3d as unknown as Molecule3D[] } : {}),
+      ...(drawn.pictures ? { pictures: drawn.pictures } : {}),
+      ...(drawn.pdfs ? { pdfs: drawn.pdfs } : {}),
+      ...(drawn.sheets ? { texts: drawn.sheets } : {}),
+      ...(drawn.slides ? { slides: drawn.slides } : {}),
+      ...(drawn.shapes ? { shapes: drawn.shapes } : {}),
+      ...(drawn.inks ? { inks: drawn.inks } : {}),
+      ...(drawn.flow ? { sets: drawn.flow.sets, steps: drawn.flow.steps } : {}),
+    },
+    k,
+    about,
+  );
+  return {
+    ...drawn,
+    atoms: parts.model!.atoms,
+    bonds: parts.model!.bonds,
+    ...(parts.arrows ? { arrows: parts.arrows } : {}),
+    ...(parts.pluses ? { pluses: parts.pluses } : {}),
+    ...(parts.captions ? { captions: parts.captions } : {}),
+    ...(parts.molecules3d ? { molecules3d: parts.molecules3d as unknown as Carried3D[] } : {}),
+    ...(parts.pictures ? { pictures: parts.pictures } : {}),
+    ...(parts.pdfs ? { pdfs: parts.pdfs } : {}),
+    ...(parts.texts ? { sheets: parts.texts } : {}),
+    ...(parts.slides ? { slides: parts.slides } : {}),
+    ...(parts.shapes ? { shapes: parts.shapes } : {}),
+    ...(parts.inks ? { inks: parts.inks } : {}),
+    ...(drawn.flow ? { flow: { ...drawn.flow, sets: parts.sets ?? drawn.flow.sets, steps: parts.steps ?? drawn.flow.steps } } : {}),
+  };
+}
+
+export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
+  const middle = middleOf(drawn);
+  if (!middle) return drawn;
+  const dx = p.x - middle.x;
+  const dy = p.y - middle.y;
   const moved = <T extends Pt>(t: T): T => ({ ...t, x: t.x + dx, y: t.y + dy });
   return {
     ...drawn,

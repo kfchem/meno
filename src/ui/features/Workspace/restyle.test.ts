@@ -115,7 +115,8 @@ describe("a change of drawing style", () => {
     expect(now.style).toEqual(RSC);
     expect(now.slides![0].w).toBeCloseTo(160 * k, 9);
     // (a document with no style yet is given one, its page as it was)
-    const bare = { ...was, style: undefined };
+    // (none can be had now - the style is always set - but a document read some other way is kept whole)
+    const bare = { ...was, style: undefined } as unknown as typeof was;
     expect(restyledDocument(bare, RSC).slides).toBe(was.slides);
   });
 
