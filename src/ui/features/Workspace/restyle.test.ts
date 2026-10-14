@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
-import { bondPtOf, restyled, restyledDocument } from "./restyle";
+import { pdfBounds, POINT, topSheet } from "../../../lib/pdf/layout";
+import { pdfsInRow } from "./document";
+import { bondPtOf, pointOfStyle, restyled, restyledDocument } from "./restyle";
 
 const ACS = { preset: "acs1996", changes: {} };
 const RSC = { preset: "rsc", changes: {} };
@@ -33,7 +35,7 @@ function page(): WorkspaceDocument {
     pluses: [{ id: 1, x: 20, y: -3 }],
     captions: [{ id: 1, x: 5, y: 8, text: "heat", width: 24, size: 12 }],
     texts: [{ id: 1, name: "run.log", text: "", at: { x: -40, y: -40 } }],
-    pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792]], x: 60, y: 0, page: 0, placed: [{ page: 0, x: 70, y: 5 }] }],
+    pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792]], x: 60, y: 0, page: 0, placed: [{ page: 0, x: 70, y: 5 }], point: POINT }],
     pictures: [{ id: 1, name: "p.png", sha256: "b".repeat(64), media: "image/png", px: [64, 48], x: -10, y: 30, w: 16, h: 12, turn: 0.2 }],
     slides: [{ id: 1, x: 0, y: 0, w: 160, h: 90 }],
     shapes: [{ id: 1, kind: "callout", x0: -5, y0: -5, x1: 5, y1: 5, tail: { x: 8, y: 9 }, weight: "thick" }],
@@ -75,6 +77,9 @@ describe("a change of drawing style", () => {
     expect(now.shapes![0]).toMatchObject({ x1: 5 * k, tail: { x: 8 * k, y: 9 * k }, weight: "thick" });
     expect(now.inks![0].strokes[0].points).toEqual([1 * k, 2 * k, 0.4, 3 * k, 4 * k, 0.6]);
     expect(now.pdfs![0]).toMatchObject({ x: 60 * k, placed: [{ page: 0, x: 70 * k, y: 5 * k }], pages: [[612, 792]] });
+    // (a PDF's page prints at its own size before and after: 612 pt wide)
+    expect(pt(topSheet(was.pdfs![0]).w, ACS)).toBeCloseTo(612, 9);
+    expect(pt(topSheet(now.pdfs![0]).w, RSC)).toBeCloseTo(612, 9);
     expect(now.texts![0].at).toEqual({ x: -40 * k, y: -40 * k });
     expect(now.steps![0]).toMatchObject({ x: 100 * k, y: 0 });
     // the ethane: its middle times k, its bond as long in units as before
@@ -118,6 +123,19 @@ describe("a change of drawing style", () => {
     // (none can be had now - the style is always set - but a document read some other way is kept whole)
     const bare = { ...was, style: undefined } as unknown as typeof was;
     expect(restyledDocument(bare, RSC).slides).toBe(was.slides);
+  });
+
+  it("lays a PDF put on the page at the workspace's point, and one kept from before at ACS 1996's", () => {
+    const [p] = pdfsInRow([{ name: "a.pdf", sha256: "c".repeat(64), pages: [[612, 792]] }], { x: 0, y: 0 }, pointOfStyle(RSC));
+    expect(p.point).toBeCloseTo(NOMINAL_BOND_LENGTH / bondPtOf(RSC), 12);
+    expect(topSheet(p).w).toBeCloseTo((612 * NOMINAL_BOND_LENGTH) / bondPtOf(RSC), 9);
+    const [q] = pdfsInRow([{ name: "a.pdf", sha256: "c".repeat(64), pages: [[612, 792]] }], { x: 0, y: 0 });
+    expect(q.point).toBeUndefined();
+    expect(topSheet(q).w).toBeCloseTo(612 * POINT, 12);
+    // (an icon at any point is the same share of its pages: its room scales with them)
+    const icon = pdfBounds({ ...p, x: 0, y: 0 });
+    const iconAcs = pdfBounds({ ...q, x: 0, y: 0 });
+    expect(icon.x1 - icon.x0).toBeCloseTo(((iconAcs.x1 - iconAcs.x0) * bondPtOf(ACS)) / bondPtOf(RSC), 9);
   });
 
   it("converts about a point: a copy's parts about their middle", () => {

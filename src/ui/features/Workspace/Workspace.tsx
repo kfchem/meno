@@ -148,6 +148,7 @@ import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
 import { FollowStyle } from "./components/FollowStyle";
+import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
 import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
@@ -324,14 +325,14 @@ function WorkspaceContent({
   );
   // (and PDFs and pictures opened, on its page where it is looked at: docs/PDF.md)
   useEffect(
-    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }).map(pdfRoom)))) : undefined),
+    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map(pdfRoom)))) : undefined),
     [ownTab, officeId, tabId, store],
   );
   useEffect(
     () =>
       ownTab && officeId == null
         ? setPictureTaker(tabId, (pictures) => {
-            const rooms = picturesInRow(pictures, { x: 0, y: 0 }).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
+            const rooms = picturesInRow(pictures, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
             void store.getState().addPictures(pictures, freeNear.current(rooms));
           })
         : undefined,

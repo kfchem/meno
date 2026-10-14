@@ -237,6 +237,8 @@ export type PdfItem = {
    * its pages were, 1 as wide as the column. Kept, not a step to undo.
    */
   reading?: PdfReading;
+  /** The page's units in one of its points, as it was laid: the workspace's (lib/pdf/layout `pointFor`), scaled with the page as its style changes (restyle); unset, ACS 1996's (`POINT`). */
+  point?: number;
 };
 
 /**
@@ -328,6 +330,8 @@ export type PdfBox = { id: number; page: number; box: [number, number, number, n
  */
 export type PictureFlight = {
   box: PdfBox;
+  /** The page's units in a point of the PDF it is cut out of (lib/pdf/layout `pointOf`). */
+  point: number;
   from: { left: number; top: number; k: number };
   grab: { x: number; y: number };
   start: number;
