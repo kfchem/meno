@@ -466,13 +466,90 @@ function Wait-MenoFront {
     return $false
 }
 
+# The windows of the system's own that may float over Meno and take input
+# meant for it: a password or authorization prompt, a notification, an
+# accessibility warning (2026-10-14: three clicks of a run landed on an
+# authorization prompt, left up on screen by something else).
+$script:SystemOwners = @("SecurityAgent", "UserNotificationCenter", "coreauthd", "universalAccessAuthWarn")
+
+function Find-SystemWindow {
+    <#
+      .SYNOPSIS
+      The first window of `$Windows (front to back, as [MacGui]::Windows()
+      lists them) that is the system's - by its owner, or set at layer 1000
+      or higher, over every app's - or $null. The Window Server's own small
+      marks (the recording dot, the cursor's) are no such window.
+    #>
+    param([AllowEmptyCollection()] [object[]] $Windows)
+    foreach ($w in $Windows) {
+        if ($script:SystemOwners -contains $w.Owner) { return $w }
+        if ($w.Layer -ge 1000 -and $w.Owner -ne "Window Server" -and $w.Width -ge 40 -and $w.Height -ge 40) { return $w }
+    }
+    return $null
+}
+
+function Find-WindowAt {
+    <#
+      .SYNOPSIS
+      The window in front at a point in global points, of `$Windows listed
+      front to back - the one a click there would land in - or $null. The
+      Window Server's own marks, and windows below the desktop's, are left
+      out.
+    #>
+    param([AllowEmptyCollection()] [object[]] $Windows, [double] $X, [double] $Y)
+    foreach ($w in $Windows) {
+        if ($w.Layer -lt 0 -or $w.Owner -eq "Window Server") { continue }
+        if ($X -ge $w.X -and $X -lt $w.X + $w.Width -and $Y -ge $w.Y -and $Y -lt $w.Y + $w.Height) { return $w }
+    }
+    return $null
+}
+
+# The windows on screen, listed again at most every 200 ms: every input asks,
+# and a list takes a few milliseconds.
+$script:ScreenWindows = $null
+$script:ScreenWindowsAt = [datetime]::MinValue
+
+function Get-ScreenWindows {
+    $now = [datetime]::UtcNow
+    if ($null -eq $script:ScreenWindows -or ($now - $script:ScreenWindowsAt).TotalMilliseconds -gt 200) {
+        $script:ScreenWindows = @([MacGui]::Windows())
+        $script:ScreenWindowsAt = $now
+    }
+    return , $script:ScreenWindows
+}
+
 function Assert-MenoFront {
+    <#
+      .SYNOPSIS
+      Stop before input that would not go to Meno: with another app in
+      front, with a window of the system's up anywhere on screen, or - given
+      the point a click, a drag or a wheel is sent at, in global points -
+      with that point on a window that is not Meno's.
+    #>
+    param($At)
     # Input goes to whichever app is in front and to whichever window is
     # under the pointer, not to Meno by name. If Meno has lost the front, the
     # next keystroke lands in some other app, so stop rather than send it.
-    if ([MacGui]::FrontmostPid() -eq $script:MenoPid) { return }
-    $front = [MacGui]::AppName([MacGui]::FrontmostPid())
-    throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
+    if ([MacGui]::FrontmostPid() -ne $script:MenoPid) {
+        $front = [MacGui]::AppName([MacGui]::FrontmostPid())
+        throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
+    }
+    # (a system window - a password prompt - can float over Meno with Meno
+    # still the app in front: a key or a click sent now could answer it)
+    $windows = Get-ScreenWindows
+    $system = Find-SystemWindow $windows
+    if ($system) {
+        throw ("A window of the system's is on screen - '$($system.Owner)', layer $($system.Layer), at ($([int]$system.X), $([int]$system.Y)), " +
+            "$([int]$system.Width)x$([int]$system.Height) pt - and input sent now could land in it. Stopping; nothing was sent. " +
+            "Leave it to whoever it is for, and run again once it is gone.")
+    }
+    if ($At) {
+        $top = Find-WindowAt $windows $At.X $At.Y
+        if (-not $top -or $top.Pid -ne $script:MenoPid) {
+            $whose = if ($top) { "'$($top.Owner)'" } else { "nothing" }
+            throw "The point ($([int]$At.X), $([int]$At.Y)) pt is not on Meno's window - $whose is there - so input sent at it would not go to Meno. Stopping; nothing was sent."
+        }
+    }
 }
 
 function Set-MenoWindow {
@@ -602,7 +679,7 @@ function Invoke-MenoClick {
         [ValidateSet("Shortcut", "Shift", "Alt")] [string[]] $Hold = @()
     )
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     Set-HeldKeys $Hold
     try { Invoke-MacClick $p $Count $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -662,7 +739,7 @@ function Invoke-MenoDrag {
     $a = ConvertTo-Screen $FromX $FromY
     $b = ConvertTo-Screen $ToX $ToY
     $path = Get-DragPath $FromX $FromY $Via $ToX $ToY $Steps
-    Assert-MenoFront
+    Assert-MenoFront -At $a
     Set-HeldKeys $Hold
     try { Invoke-MacDrag $a $b $path $StepMs $PressMs $Count $AtStep $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -759,7 +836,7 @@ function Invoke-MenoSwipe {
         [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10, [switch] $Held
     )
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     if (-not $Held) {
         [MacGui]::MoveTo($p.X, $p.Y)
         Start-Sleep -Milliseconds 60
@@ -782,7 +859,7 @@ function Invoke-MenoWheel {
     #>
     param([Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y, [int] $Notches = 1)
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     [MacGui]::MoveTo($p.X, $p.Y)
     Start-Sleep -Milliseconds 60
     [MacGui]::Scroll($p.X, $p.Y, $Notches * 100)
@@ -982,4 +1059,6 @@ function Wait-MenoSettled {
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
-    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled
+    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
+    # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
+    Find-SystemWindow, Find-WindowAt
