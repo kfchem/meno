@@ -142,7 +142,21 @@ A pinch let go while still zooming goes on zooming, as a drag let go goes on
 moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
-80 ms.
+80 ms. A Windows precision touchpad's pinch is Chromium's, and zooms so.
+
+On a touch screen one finger does what the left button does: from empty
+space it moves the view. A second finger come down while the first moves
+the view makes it a pinch: the view zooms as far as the two spread or
+close, about the point between them, and moves as that point moves, so
+what is under the fingers stays under them (`lib/input/pinch.ts`); let go
+while still zooming, it glides as a trackpad's pinch does. A second finger
+come down while the first does something else - moves an atom, draws a
+bond - is no press at all. A pen keeps writing as before. The canvas
+takes no pan or zoom of the system's own from a finger or a pen
+(`touch-action: none`), and no pinch zooms the page anywhere else
+(`touch-action: pan-x pan-y` on the page, `App.css`). Ctrl with the wheel
+or the keys does not zoom the WebView either: Tauri's `zoomHotkeysEnabled`,
+which Meno leaves off, sets WebView2's `IsZoomControlEnabled`.
 A drawing is laid out again as the view zooms only once the zoom has
 moved a hundredth from the one it was laid out at: the last of a wheel's
 zoom, in steps too small to see for most of a second, lays nothing out
