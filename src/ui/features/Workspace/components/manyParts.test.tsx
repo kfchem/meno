@@ -88,6 +88,32 @@ async function drawn(layer: ReactNode) {
 
 const N = 40;
 
+/** All of a layer's parts deleted and undone: all of them back, counted as they were, nothing shared thrown away. */
+async function deletedAndUndone(p: Awaited<ReturnType<typeof drawn>>, all: () => number, selectAll: () => void) {
+  let thrown = 0;
+  const count = () => thrown++;
+  SQUARE.addEventListener("dispose", count);
+  UNSEEN.addEventListener("dispose", count);
+  try {
+    const before = p.counts();
+    await p.change(() => {
+      selectAll();
+      p.st().deleteSelection();
+    });
+    await p.frames(20);
+    expect(all()).toBe(0);
+    expect(p.counts()).toMatchObject({ callbacks: 1, parts: 0, meshes: 0 });
+    await p.change(() => p.doc.undo());
+    await p.frames(20);
+    expect(all()).toBe(N);
+    expect(p.counts()).toEqual(before);
+    expect(thrown).toBe(0);
+  } finally {
+    SQUARE.removeEventListener("dispose", count);
+    UNSEEN.removeEventListener("dispose", count);
+  }
+}
+
 describe("many shapes on the page", () => {
   const page = async () => {
     const p = await drawn(<Shapes2D />);
@@ -132,25 +158,7 @@ describe("many shapes on the page", () => {
 
   it("all deleted and undone: all of them back, as they were, nothing shared thrown away", async () => {
     const p = await page();
-    let thrown = 0;
-    const count = () => thrown++;
-    SQUARE.addEventListener("dispose", count);
-    UNSEEN.addEventListener("dispose", count);
-    const before = p.counts();
-    await p.change(() => {
-      p.st().selectShapes(p.st().shapes.map((s) => s.id));
-      p.st().deleteSelection();
-    });
-    await p.frames(20);
-    expect(p.st().shapes).toHaveLength(0);
-    expect(p.counts()).toMatchObject({ callbacks: 1, parts: 0, meshes: 0 });
-    await p.change(() => p.doc.undo());
-    await p.frames(20);
-    expect(p.st().shapes).toHaveLength(N);
-    expect(p.counts()).toEqual(before);
-    expect(thrown).toBe(0);
-    SQUARE.removeEventListener("dispose", count);
-    UNSEEN.removeEventListener("dispose", count);
+    await deletedAndUndone(p, () => p.st().shapes.length, () => p.st().selectShapes(p.st().shapes.map((s) => s.id)));
   });
 });
 
@@ -186,6 +194,11 @@ describe("much writing by hand on the page", () => {
     await p.change(() => p.st().clearSel());
     await p.frames(20);
     expect(p.counts()).toMatchObject({ callbacks: 1, parts: 0, meshes: 2 * N });
+  });
+
+  it("all deleted and undone: all of them back, as they were, nothing shared thrown away", async () => {
+    const p = await page();
+    await deletedAndUndone(p, () => p.st().inks.length, () => p.st().selectInks(p.st().inks.map((k) => k.id)));
   });
 });
 
@@ -224,5 +237,10 @@ describe("many words on the page", () => {
     await p.change(() => p.st().clearSel());
     await p.frames(20);
     expect(p.counts()).toMatchObject({ callbacks: 1, parts: 0, meshes: N });
+  });
+
+  it("all deleted and undone: all of them back, as they were, nothing shared thrown away", async () => {
+    const p = await page();
+    await deletedAndUndone(p, () => p.st().captions.length, () => p.st().selectCaptions(p.st().captions.map((c) => c.id)));
   });
 });
