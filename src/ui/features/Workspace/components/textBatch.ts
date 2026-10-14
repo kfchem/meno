@@ -18,18 +18,18 @@ export const BATCH_MOST = 8192;
 
 type Held = { item: object; members: Text[]; chunk: BatchedText };
 
-/** How troika's batch reads a member's colour from its packed hex: as it is, linear - and a 256th short of white. */
+/** The line of troika's batch shader that unpacks a member's colour from its packed hex, which `PageBatch` replaces. */
 export const PACKED_COLOUR = "return mod(floor(vec3(v / 65536.0, v / 256.0, v)), 256.0) / 256.0;";
-/** The same hex read as sRGB, the page's colours' own space, and made linear as a colour drawn alone is. */
+/** Meno's: the hex unpacked as sRGB, the space of the page's colours, and made linear as a colour drawn alone is. */
 const SRGB_COLOUR =
   "vec3 c = mod(floor(vec3(v / 65536.0, v / 256.0, v)), 256.0) / 255.0; return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));";
 
 /**
- * troika's batch with its members' colours read as the page's colours are.
- * Its shader read a member's packed sRGB hex as linear, and the page's
- * output then made it sRGB again: #141414 came out #4f4f4f, grey. Its
- * colour reading rewritten (`PACKED_COLOUR` -> `SRGB_COLOUR`), what is drawn
- * is the colour asked for, to the byte, as a text drawn alone draws it.
+ * troika's batch with its members' colours unpacked as the page's colours
+ * are. Meno's colours are sRGB, and the page's output is made sRGB from
+ * linear, so its line that unpacks a member's colour is replaced
+ * (`PACKED_COLOUR` -> `SRGB_COLOUR`): what is drawn is the colour asked
+ * for, to the byte, as a text drawn alone draws it.
  */
 class PageBatch extends BatchedText {
   createDerivedMaterial(base: THREE.Material): THREE.Material {
@@ -139,8 +139,9 @@ export class TextBatch {
 
   /**
    * Whether any member's letters are still to be set. (Its members' alone: a
-   * chunk is a text with none of its own, whose own flag troika never
-   * clears - a label typed waited for it until its fallback, half a second.)
+   * chunk has no letters of its own to set, so its own flag says nothing of
+   * them - a label typed, asked by it, waited for its fallback, half a
+   * second.)
    */
   setting(): boolean {
     for (const t of this.members()) if (t._needsSync || t._isSyncing) return true;

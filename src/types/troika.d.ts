@@ -21,7 +21,7 @@ declare module "troika-three-text" {
     _needsSync?: boolean;
     _isSyncing?: boolean;
   }
-  /** Texts added to it drawn in one draw call, each by its own matrix, colour and opacity (troika's, experimental). */
+  /** Texts added to it drawn in one draw call, each by its own matrix, colour and opacity. */
   export class BatchedText extends Text {
     addText(text: Text): void;
     createDerivedMaterial(base: import("three").Material): import("three").Material;

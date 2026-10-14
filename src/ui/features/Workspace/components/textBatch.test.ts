@@ -47,9 +47,9 @@ describe("texts drawn as a batch", () => {
     expect(b.root.children.every((c) => c.renderOrder === 30)).toBe(true);
   });
 
-  it("reads a member's colour as the page's colours are read: troika's line it rewrites is there to be rewritten", () => {
-    // (troika's batch reads the packed sRGB hex as linear; ./textBatch's PageBatch rewrites that line - were troika
-    // to change it, colours would come out paler again, unseen: this says so first)
+  it("unpacks a member's colour as the page's colours are: the line of troika's shader it replaces is there to be replaced", () => {
+    // (./textBatch's PageBatch replaces the line that unpacks a member's colour with Meno's, which reads it as
+    // sRGB - were the line to change with troika, Meno's would no longer be put in: this says so first)
     const source = readFileSync(new URL("../../../../../node_modules/troika-three-text/src/BatchedText.js", import.meta.url), "utf8");
     expect(source).toContain(PACKED_COLOUR);
   });
