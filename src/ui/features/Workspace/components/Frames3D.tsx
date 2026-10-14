@@ -109,19 +109,24 @@ export function FramesChip({
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
   // slider, which go through the frames with the molecule in view)
-  const [reading, setReading] = useState(false);
-  const read = { onPointerEnter: () => setReading(true), onPointerLeave: () => setReading(false) };
+  // (a single geometry has no bars to open: its details are opened by a click on it, and shut as an opened chip is)
+  const [pinned, setPinned] = useState(false);
   const [pointed, setPointed] = useState<number | null>(null);
   // (opened by a click on it, and shut by another, a press anywhere else, or Escape)
   const [expanded, setExpanded] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const opened = expanded || pinned;
   useEffect(() => {
-    if (!expanded) return;
+    if (!opened) return;
+    const shut = () => {
+      setExpanded(false);
+      setPinned(false);
+    };
     const onPress = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setExpanded(false);
+      if (!root.current?.contains(e.target as Node)) shut();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setExpanded(false);
+      if (e.key === "Escape") shut();
     };
     window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("keydown", onKey, true);
@@ -129,7 +134,9 @@ export function FramesChip({
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [expanded]);
+  }, [opened]);
+  // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
+  const reading = opened;
   const lowest = energies ? Math.min(...energies) : 0;
   const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
   const highest = above ? Math.max(...above, 1e-9) : 1;
@@ -181,7 +188,7 @@ export function FramesChip({
     const t = window.setTimeout(() => setLingering(false), LINGER_MS);
     return () => window.clearTimeout(t);
   }, [open]);
-  const shown = !single || open || hovered || lingering;
+  const shown = !single || open || hovered || lingering || pinned;
   // what the calculation found of the molecule, and of the frame told
   const details: CardGroups = cardGroupsOf([...resultsOn(results, "molecule"), ...resultsOn(results, "frames")], (r) => {
     const v = r.on === "molecule" ? r.value : (r.values[told] ?? null);
@@ -216,10 +223,11 @@ export function FramesChip({
   return (
     <div
       ref={root}
-      className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${!single && !expanded ? "cursor-pointer" : ""}`}
+      className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && about) ? "cursor-pointer" : ""}`}
       style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
+        else if (single && about) setPinned((v) => !v);
       }}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => {
@@ -269,7 +277,7 @@ export function FramesChip({
                   />
                 )}
                 {about && !single && (
-                  <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray tabular-nums" {...read}>
+                  <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray tabular-nums">
                     {line(energies?.[told])}
                   </div>
                 )}
@@ -277,7 +285,6 @@ export function FramesChip({
             </div>
             <div
               ref={said}
-              {...read}
               className="w-max text-[11px] leading-[18px] text-gh-gray tabular-nums whitespace-nowrap"
               onClick={(e) => {
                 if (!expanded) return;
@@ -303,7 +310,6 @@ export function FramesChip({
               <div
                 className="grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out"
                 style={{ gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
-                {...read}
               >
                 <div className="overflow-hidden flex justify-center">
                   <div ref={detailed} className="w-max max-w-[20rem] px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
