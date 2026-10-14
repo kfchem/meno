@@ -263,8 +263,19 @@ export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
 
   let i = 0;
   while (i < lines.length) {
+    // (blank lines between frames, as some programs write them: passed over)
+    while (i < lines.length && !lines[i].trim()) i++;
+    if (i >= lines.length) break;
     const atomCount = parseInt(lines[i].trim(), 10);
-    if (!(atomCount > 0)) break;
+    if (!(atomCount > 0)) {
+      // (more after the frames that is no frame - a line between frames that is no count of atoms, text at the
+      // end: not read, and never without a word - a frame left out, as the molecule says over it)
+      if (lines.slice(i).some((line) => line.trim())) {
+        frames.push([]);
+        why?.push(`Line ${i + 1} of the XYZ file is not a count of atoms: "${lines[i].trim().slice(0, 40)}".`);
+      }
+      break;
+    }
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
     let damaged = atomLines.length < atomCount ? `The XYZ file ends before its atoms do: it says ${atomCount}, and gives ${atomLines.length}.` : undefined;
 

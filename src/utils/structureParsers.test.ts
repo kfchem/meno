@@ -33,7 +33,7 @@ describe("parseXYZ", () => {
     expect(parseXYZ("1\n\nQq 0 0 0")[0].atoms[0].el).toBe("Qq");
   });
 
-  it("stops at a line that gives no count of atoms", () => {
+  it("stops at a line that gives no count of atoms - what follows not read (a frame left out, said)", () => {
     const frame = "2\ncomment\nC 0 0 0\nC 1.54 0 0";
     expect(parseXYZ(`${frame}\n${frame}\nEND`)).toHaveLength(2);
   });
