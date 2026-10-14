@@ -153,6 +153,7 @@ export function recordText(part: Drawn): string {
   return JSON.stringify({
     format: RECORD,
     version: VERSION,
+    ...(part.bondPt ? { bondPt: part.bondPt } : {}),
     atoms: part.atoms,
     bonds: part.bonds,
     ...(part.pushes?.length ? { pushes: part.pushes } : {}),
@@ -206,7 +207,7 @@ export function readRecord(text: string): Drawn | null {
   } catch {
     return null;
   }
-  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown };
+  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown; bondPt?: unknown };
   if (r?.format !== RECORD || r.version !== VERSION) return null;
   const drawn = readDrawn(data);
   if (!drawn) return null;
@@ -217,7 +218,9 @@ export function readRecord(text: string): Drawn | null {
       ? [{ id: i + 1, name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }]
       : [],
   );
-  return { ...drawn, ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
+  // (the bond's printed length in the style it was copied in, where it says: a record without one pastes as it is)
+  const bondPt = isNum(r.bondPt) && r.bondPt > 0 ? r.bondPt : undefined;
+  return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
 
 /**

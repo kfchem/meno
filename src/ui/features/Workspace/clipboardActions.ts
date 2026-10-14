@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { styleOf } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
 import { chemMolblock } from "../../../lib/roles/molblock";
 import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
@@ -114,7 +113,9 @@ export function useClipboardActions(
   const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
     if (!taken || busy()) return false;
-    const p = taken.part;
+    const state0 = store.getState();
+    // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
+    const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt };
     try {
       const state = store.getState();
       // (the structure is copied, pictures or no: the drawing's and the
@@ -128,7 +129,7 @@ export function useClipboardActions(
         : await pictureItems(
             p,
             state,
-            styleOf(state.docStyle ?? useAppSettings.getState().drawingStyle),
+            styleOf(state.docStyle),
           ).catch((e: unknown) => {
             console.warn("the structure is copied without its pictures", e);
             return [];

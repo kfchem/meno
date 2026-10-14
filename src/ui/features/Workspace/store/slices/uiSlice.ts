@@ -120,7 +120,7 @@ export function createUiSlice(
       doc.edit("aromatic circles", (d) => ops.setAromaticEnabled(d, v));
     },
 
-    setDocumentStyle: (style: StyleChoice | undefined, coalesceKey?: string) => {
+    setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => {
       doc.edit("drawing style", (d) => ops.setDocumentStyle(d, style), {
         coalesceKey,
       });

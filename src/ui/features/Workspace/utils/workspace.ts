@@ -2,7 +2,7 @@
  * The workspace: everything on the canvas, as it is - the drawing, its
  * arrows and pluses, the molecules in 3D with their frames, energies, looks
  * and measurements, how each is turned and which frame it shows, a
- * workflow's sets, steps and wires, and the document's own drawing style -
+ * workflow's sets, steps and wires, and the workspace's drawing style -
  * so that it opens again just as it was saved - and the texts it holds,
  * and which its column showed, and the PDFs and pictures on its page. JSON,
  * versioned; a reader keeps what it reads and leaves out what it does not.
@@ -31,7 +31,7 @@ export const WORKSPACE_VERSION = 1;
 /** What a workspace file holds, read. */
 export type Workspace = {
   drawn: Drawn;
-  /** The document's own drawing style; unset, the application's. */
+  /** The workspace's drawing style; a file saved without one (a procedure's) opens in Settings'. */
   style?: StyleChoice;
   aromaticEnabled: boolean;
   aromaticRings: Record<string, boolean>;
@@ -52,8 +52,10 @@ export type SavedText = { name: string; sha256: string; text?: string; at?: { x:
 
 type Saved = Pick<
   EditorState,
-  "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "lists3d" | "docStyle" | "aromaticEnabled" | "aromaticRings"
+  "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "lists3d" | "aromaticEnabled" | "aromaticRings"
 > &
+  // (a procedure's file holds no style: opened, it is in Settings')
+  Partial<Pick<EditorState, "docStyle">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
   Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "stacksShown" | "fullModel" | "recordsShown">>;

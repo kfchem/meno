@@ -34,8 +34,8 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
 
 /**
  * The application's settings: Meno's as a whole (how the mouse and the
- * trackpad work the canvas), the drawing style every structure is drawn
- * in unless its document has its own, how molecules in 3D look and turn,
+ * trackpad work the canvas), the drawing style new workspaces are made in
+ * (each keeps its own after), how molecules in 3D look and turn,
  * what is pointed out on a structure, who reads and writes each kind
  * of file and how sharp a copied picture is, the calculations of a workflow and how its jobs run, the plugins, what the labels Meno reads stand for, and what Meno
  * may do on the network.
@@ -102,10 +102,11 @@ export default function SettingsPanel() {
               Drawing style
             </h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
-              How structures are drawn, on the canvas and in exported pictures.
-              Start from a journal's style and change what you like; a document
-              can also be given a style of its own from its canvas. Changes are
-              saved as you make them.
+              The style new workspaces are drawn in, on the canvas and in
+              exported pictures. Start from a journal's style and change what
+              you like. A workspace keeps the style it was made in; change it
+              from its canvas, with Drawing style in its menu. Changes are saved
+              as you make them.
             </p>
             <StyleEditor
               choice={drawingStyle}

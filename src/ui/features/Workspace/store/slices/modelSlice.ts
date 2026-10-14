@@ -1,3 +1,4 @@
+import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -347,7 +348,8 @@ export const createModelSlice = (
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
         },
-        ws.style,
+        // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
+        ws.style ?? useAppSettings.getState().drawingStyle,
       );
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
