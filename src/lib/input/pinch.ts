@@ -43,3 +43,17 @@ export function pinchedView(view: PageView, box: ScreenBox, step: { scale: numbe
     zoom,
   };
 }
+
+/** How soon after the first finger a second makes a pinch of it, whatever the first has begun, in ms. */
+export const PINCH_SOON_MS = 200;
+
+/**
+ * Whether a second finger come down makes a pinch of the first's press:
+ * where the first moves the view, or the second came soon after it
+ * (`PINCH_SOON_MS`), or the first has not yet gone as far as a bond's
+ * length on the screen (`bondPx`) from where it came down - whatever it
+ * came down on. Otherwise the first goes on with what it does.
+ */
+export function makesPinch(first: { at: Pt; t: number; now: Pt }, t: number, bondPx: number, panning: boolean): boolean {
+  return panning || t - first.t <= PINCH_SOON_MS || Math.hypot(first.now.x - first.at.x, first.now.y - first.at.y) < bondPx;
+}

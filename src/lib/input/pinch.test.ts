@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LEAST_SPREAD_PX, fingersStep, pageUnder, pinchedView, type PageView, type ScreenBox } from "./pinch";
+import { LEAST_SPREAD_PX, PINCH_SOON_MS, fingersStep, makesPinch, pageUnder, pinchedView, type PageView, type ScreenBox } from "./pinch";
 
 const box: ScreenBox = { left: 100, top: 50, width: 800, height: 600 };
 const view: PageView = { x: 10, y: -4, zoom: 20 };
@@ -57,5 +57,28 @@ describe("two fingers pinching", () => {
     expect(pinchedView(view, box, shut, 1, 300).zoom).toBe(20);
     expect(shut.scale).toBe(1);
     expect(fingersStep({ x: 0, y: 0 }, { x: LEAST_SPREAD_PX / 2, y: 0 }, { x: 0, y: 0 }, { x: 200, y: 0 }).scale).toBe(1);
+  });
+});
+
+describe("a second finger", () => {
+  const first = { at: { x: 100, y: 100 }, t: 1000, now: { x: 100, y: 100 } };
+  const bondPx = 36;
+
+  it("makes a pinch of a press it comes soon after, whatever the first came down on", () => {
+    expect(makesPinch(first, 1000 + PINCH_SOON_MS, bondPx, false)).toBe(true);
+    // (the first already gone further than a bond's length - drawing a bond - but only just begun)
+    expect(makesPinch({ ...first, now: { x: 200, y: 100 } }, 1000 + 50, bondPx, false)).toBe(true);
+  });
+
+  it("makes a pinch, however late, of a first finger not yet gone a bond's length", () => {
+    expect(makesPinch({ ...first, now: { x: 120, y: 110 } }, 1000 + 900, bondPx, false)).toBe(true);
+  });
+
+  it("makes a pinch of a first finger moving the view, however far and late", () => {
+    expect(makesPinch({ ...first, now: { x: 600, y: 100 } }, 5000, bondPx, true)).toBe(true);
+  });
+
+  it("is no pinch where the first has gone a bond's length, late, in something of its own", () => {
+    expect(makesPinch({ ...first, now: { x: 136, y: 100 } }, 1000 + PINCH_SOON_MS + 1, bondPx, false)).toBe(false);
   });
 });

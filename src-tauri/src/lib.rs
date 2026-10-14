@@ -21,6 +21,8 @@ mod logfile;
 mod pdf;
 mod net;
 mod opened;
+#[cfg(windows)]
+mod pinch;
 mod pixienv;
 mod plugfiles;
 mod present;
@@ -928,6 +930,9 @@ pub fn run() {
             // the installers updates left in the temporary folder (Windows)
             #[cfg(windows)]
             update::tidy_after_updates(app.handle());
+            // a pinch - a touchpad's, a touch screen's - the page's own (Windows)
+            #[cfg(windows)]
+            pinch::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

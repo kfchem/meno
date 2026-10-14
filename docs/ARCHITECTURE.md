@@ -87,6 +87,7 @@ src-tauri/
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
   src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
+  src/pinch.rs            Windows: WebView2's pinch let through to the page (EDITOR-2D.md, *Touch and pinch*)
   capabilities/           permission sets for the main window
   resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
