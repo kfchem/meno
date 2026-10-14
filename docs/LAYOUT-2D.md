@@ -34,7 +34,8 @@ another order. Where the rules below leave a tie, it is settled so:
   from the end with more bonds of its own still to place; a cage's solid,
   found from how far apart its bonds put its atoms, and the views of it,
   each worked out atom by atom and bond by bond in the order the
-  structure gives - its scatter starts and easing, a stereocentre's three
+  structure gives - its scatter starts and easing (a view's easing
+  pulls every bond at once), a stereocentre's three
   neighbours it is held by, which of two bonds out of an atom takes which
   corner of the tetrahedron.
 - **By trying each.** Rings tied in rank are each placed first, or next,
@@ -226,7 +227,11 @@ they hang from.
   bridge between two of them hanging from them however it must;
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
-  eased into place. A view that eases a double bond in a ring of seven
+  eased into place, every bond pulled at once and each atom moved by the
+  mean of its bonds' pulls, so that no bond is eased before another (bond
+  by bond, the order decided the drawing: paeoniflorin's boat came out
+  costing 7.68 in one order and 8.04 in another, over the 8 a textbook
+  view may cost, and was then drawn from below by projection). A view that eases a double bond in a ring of seven
   atoms or fewer trans, its neighbours round the ring either side of it,
   counts that as heavily as a bridge drawn so: tetrodotoxin's guanidine
   ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds

@@ -1542,6 +1542,10 @@ function drawOn(
   // the rest eased to bonds of one length, each held near where it was put
   const anchor = pts.map((p) => ({ ...p }));
   for (let it = 0; it < 400; it++) {
+    // (every bond pulled at once, from where the atoms are: no bond eased
+    // before another, so that the order they are listed in decides nothing;
+    // each atom moved by the mean of its bonds' pulls, which cannot overshoot)
+    const move = pts.map(() => ({ x: 0, y: 0, n: 0 }));
     for (const [a, b] of bonds) {
       const fa = fixed.has(a);
       const fb = fixed.has(b);
@@ -1552,14 +1556,21 @@ function drawOn(
       const f = (l - 1) / l;
       const share = fa || fb ? 0.5 : 0.25;
       if (!fa) {
-        pts[a].x += dx * f * share;
-        pts[a].y += dy * f * share;
+        move[a].x += dx * f * share;
+        move[a].y += dy * f * share;
+        move[a].n++;
       }
       if (!fb) {
-        pts[b].x -= dx * f * share;
-        pts[b].y -= dy * f * share;
+        move[b].x -= dx * f * share;
+        move[b].y -= dy * f * share;
+        move[b].n++;
       }
     }
+    pts.forEach((p, i) => {
+      if (!move[i].n) return;
+      p.x += move[i].x / move[i].n;
+      p.y += move[i].y / move[i].n;
+    });
     // (an upright bond kept upright - its far atom moved only up or down;
     // the rest held less and less, so that bonds that can all be one
     // length are)
