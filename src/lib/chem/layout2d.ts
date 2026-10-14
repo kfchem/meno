@@ -4450,8 +4450,31 @@ function expandBounds(
   };
 }
 
+/**
+ * What XML 1.0 does not allow in a document, at all (Characters, [2]): the
+ * control characters but tab, line feed and carriage return; U+FFFE and
+ * U+FFFF; and a surrogate with no other half. Written as they came - a
+ * NUL from a damaged file, an escape from a PDF's words - the SVG was no
+ * well-formed XML, and a picture of it was dropped from the clipboard.
+ */
+function xmlChars(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // (a surrogate with its other half: a character beyond the first plane, kept)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+      out += text[i] + text[++i];
+      continue;
+    }
+    const banned = (c < 0x20 && c !== 0x9 && c !== 0xa && c !== 0xd) || c === 0xfffe || c === 0xffff || (c >= 0xd800 && c <= 0xdfff);
+    out += banned ? "\uFFFD" : text[i];
+  }
+  return out;
+}
+
 function escapeXml(text: string): string {
-  return String(text)
+  // (what XML cannot hold, the replacement character in its place)
+  return xmlChars(String(text))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
