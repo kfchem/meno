@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { styleOf } from "../../../../lib/chem/style";
+import { labelPtOf } from "../restyle";
 import { sendToOffice } from "../../../../lib/ole";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { drawnOf } from "../fileActions";
 import { structurePicture } from "../picture";
 import { useEditorStore, type EditorStore } from "../store";
@@ -18,11 +18,12 @@ const SETTLE_MS = 250;
 const FIT_AFTER_MS = 300;
 
 /** Everything on the canvas, as a copy carries it: the drawing, and the molecules in 3D turned and shown as they are. */
-const contentOf = (s: EditorState) => ({ ...drawnOf(s), molecules3d: carriedOf(s) });
+// (its record with the bond's printed length of its style, as a copy's has)
+const contentOf = (s: EditorState) => ({ ...drawnOf(s), molecules3d: carriedOf(s), bondPt: styleOf(s.docStyle).bondLengthPt, labelPt: labelPtOf(s.docStyle) });
 
 /** What the document's picture is drawn from: its content and how it is drawn. */
 const pictureKeyOf = (s: EditorState) =>
-  [recordText(contentOf(s)), JSON.stringify(s.docStyle ?? null), s.aromaticEnabled, JSON.stringify(s.aromaticRings)].join("|");
+  [recordText(contentOf(s)), JSON.stringify(s.docStyle), s.aromaticEnabled, JSON.stringify(s.aromaticRings)].join("|");
 
 /**
  * A canvas opened from a document (on Windows, a double-click on the
@@ -70,7 +71,7 @@ export function linkToOffice(
       return;
     }
     shown = key;
-    const style = styleOf(s.docStyle ?? useAppSettings.getState().drawingStyle);
+    const style = styleOf(s.docStyle);
     structurePicture(contentOf(s), s, style)
       .then(({ record, emf }) => give(record, emf))
       .catch((e: unknown) => console.warn("the document did not take the structure", e));
@@ -80,6 +81,11 @@ export function linkToOffice(
       s.model === prev.model &&
       s.arrows === prev.arrows &&
       s.pluses === prev.pluses &&
+      s.captions === prev.captions &&
+      s.shapes === prev.shapes &&
+      s.inks === prev.inks &&
+      s.pushes === prev.pushes &&
+      s.ringFills === prev.ringFills &&
       s.molecules3d === prev.molecules3d &&
       s.turns3d === prev.turns3d &&
       s.frames3d === prev.frames3d &&

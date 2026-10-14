@@ -37,6 +37,18 @@ first time, and macOS will not open Meno until it is let through once
 key, whether or not the apps are code-signed, and code signing can be
 taken up, or dropped, at any release.
 
+## The workflows' actions, pinned
+
+Every action the workflows use (`.github/workflows/*.yml`) is pinned to a
+full commit, its version in a comment beside it -
+`uses: tauri-apps/tauri-action@<sha> # v0.6.2` - never a tag, which can be
+moved to other code: the release workflow hands tauri-action the updater's
+signing key. To take up a newer version, take its commit from the action's
+own repository - `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, and, where
+that names a tag object, `gh api repos/<owner>/<repo>/git/tags/<sha>` for the
+commit it is on - read what changed between the two, and put the commit and
+its version in every workflow that uses it, in a change of its own.
+
 ## Each release
 
 Builds carry PDFium's library (docs/PDF.md): `node scripts/fetch-pdfium.mjs`

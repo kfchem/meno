@@ -21,7 +21,7 @@
  * - Lit while the pointer is on its edge or its number.
  */
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import { useEditor, useEditorStore } from "../store";
@@ -36,7 +36,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf } from "../presenting/slides";
 
@@ -72,22 +72,28 @@ export default function Slides2D() {
   const presenting = useEditor((s) => s.presenting != null);
   const store = useEditorStore();
   const { camera, gl, invalidate } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
-  const px = 1 / zoom;
-  // (the number in the drawing's type, as a PDF's name is)
-  const { opts } = useDrawnLayout();
-  const font = useLabelFontUrl(opts.fontFamily ?? "Arial", false);
-  // how much they are seen: none while a talk is given, coming and going
-  const [seen, setSeen] = useState(presenting ? 0 : 1);
-  const seenRef = useRef(seen);
+  // (the number in the drawing's type, as a PDF's name is - the style's, so that a zoom draws none of this again: each
+  // part keeps its size on the screen frame by frame, `useScreenSize`)
+  const font = useLabelFontUrl(useStyleOptions().fontFamily ?? "Arial", false);
+  // how much they are seen: none while a talk is given, coming and going - eased on their materials frame by frame,
+  // as the view moves at a talk's start and end, and gone once unseen
+  const seen = useRef(presenting ? 0 : 1);
+  const [gone, setGone] = useState(presenting);
+  // each part's work at a frame - its size on the screen, how much it is seen - done here, in one of the canvas's frame
+  // callbacks, not one of its own each: with one each, a talk's end - the slides' parts all coming back at once - took
+  // 209 ms before its first frame on 200 slides
+  const parts = useMemo(() => new Set<PartFrame>(), []);
   useFrame((_, dt) => {
     const to = presenting ? 0 : 1;
-    const now = seenRef.current;
-    if (now === to) return;
-    const next = Math.abs(now - to) < 0.01 ? to : follow(now, to, Math.min(dt, 1 / 20), TAU.move);
-    seenRef.current = next;
-    setSeen(next);
-    invalidate();
+    const now = seen.current;
+    if (now !== to) {
+      const next = Math.abs(now - to) < 0.01 ? to : follow(now, to, Math.min(dt, 1 / 20), TAU.move);
+      seen.current = next;
+      if ((next === 0) !== gone) setGone(next === 0);
+      invalidate();
+    }
+    const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+    for (const part of parts) part(px, dt);
   });
   // a number being dragged onto another slide: where it is, and the slide it is over
   const [carried, setCarried] = useState<{ id: number; at: Pt; over: number | null } | null>(null);
@@ -139,52 +145,105 @@ export default function Slides2D() {
   };
 
   const joins = useMemo(() => slides.slice(1).map((s, i) => joinOf(slides[i], s)), [slides]);
-  if (!slides.length || seen <= 0) return null;
+  const joinSeen = useCallback(() => JOIN * seen.current, []);
+  const carriedSeen = useCallback(() => 0.85, []);
+  if (!slides.length || (gone && presenting)) return null;
   return (
-    <group position={[0, 0, Z]}>
-      {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} px={px} opacity={JOIN * seen} /> : null))}
-      {slides.map((s, i) => (
-        <SlideFrame
-          key={s.id}
-          s={s}
-          n={i + 1}
-          px={px}
-          seen={seen}
-          font={font}
-          selected={selSlides.has(s.id)}
-          lit={hovered === s.id || carried?.over === s.id}
-          toWorld={toWorld}
-          onCarry={startCarry}
-        />
-      ))}
-      {carried && (
-        <group position={[carried.at.x, carried.at.y, 0.01]}>
-          <SlideNumber n={slides.findIndex((x) => x.id === carried.id) + 1} px={px} font={font} opacity={0.85} />
-        </group>
-      )}
-    </group>
+    <PartFrames.Provider value={parts}>
+      <group position={[0, 0, Z]}>
+        {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} opacity={joinSeen} /> : null))}
+        {slides.map((s, i) => (
+          <SlideFrame
+            key={s.id}
+            s={s}
+            n={i + 1}
+            seen={seen}
+            font={font}
+            selected={selSlides.has(s.id)}
+            lit={hovered === s.id || carried?.over === s.id}
+            toWorld={toWorld}
+            onCarry={startCarry}
+          />
+        ))}
+        {carried && (
+          <group position={[carried.at.x, carried.at.y, 0.01]}>
+            <SlideNumber n={slides.findIndex((x) => x.id === carried.id) + 1} font={font} opacity={carriedSeen} />
+          </group>
+        )}
+      </group>
+    </PartFrames.Provider>
   );
 }
 
-/** A slide's number: a disc in Meno's colour, its figures in white, the same size on the screen at any zoom. */
-function SlideNumber({ n, px, font, opacity }: { n: number; px: number; font: string | null; opacity: number }) {
+/** A part's work at each frame, before it is drawn: given a pixel's size on the page, and the frame's time. */
+type PartFrame = (px: number, dt: number) => void;
+const PartFrames = createContext<Set<PartFrame> | null>(null);
+
+/** `work` done at each frame by the slides' one frame callback (Slides2D), as long as the part is there. */
+function usePartFrame(work: PartFrame): void {
+  const parts = useContext(PartFrames);
+  const latest = useRef(work);
+  latest.current = work;
+  useEffect(() => {
+    if (!parts) return;
+    const part: PartFrame = (px, dt) => latest.current(px, dt);
+    parts.add(part);
+    return () => void parts.delete(part);
+  }, [parts]);
+}
+
+/**
+ * A part kept the same size on the screen at any zoom: `place` called with
+ * a pixel's size on the page as it changes - before the frame is drawn, never
+ * by drawing anything again - and once more where `deps` change.
+ */
+function useScreenSize(place: (px: number) => void, deps: readonly unknown[]): void {
+  const at = useRef<{ px: number; deps: readonly unknown[] } | null>(null);
+  usePartFrame((px) => {
+    const was = at.current;
+    if (was && was.px === px && was.deps.length === deps.length && was.deps.every((d, i) => d === deps[i])) return;
+    at.current = { px, deps };
+    place(px);
+  });
+}
+
+/** A slide's number: a disc in Meno's colour, its figures in white, the same size on the screen at any zoom; as seen as `opacity` says, frame by frame. */
+function SlideNumber({ n, font, opacity }: { n: number; font: string | null; opacity: () => number }) {
+  const group = useRef<THREE.Group>(null);
+  const disc = useRef<THREE.MeshBasicMaterial>(null);
+  const figures = useRef<THREE.Mesh & { fillOpacity: number }>(null);
+  useScreenSize((px) => group.current?.scale.setScalar(px), []);
+  usePartFrame(() => {
+    const o = opacity();
+    if (disc.current) disc.current.opacity = o;
+    if (figures.current) figures.current.fillOpacity = o;
+  });
   return (
-    <group>
+    <group ref={group}>
       <mesh renderOrder={44}>
-        <circleGeometry args={[NUMBER_PX * px, 28]} />
-        <meshBasicMaterial color={COLORS.base} transparent opacity={opacity} depthTest={false} toneMapped={false} />
+        <circleGeometry args={[NUMBER_PX, 28]} />
+        <meshBasicMaterial ref={disc} color={COLORS.base} transparent opacity={opacity()} depthTest={false} toneMapped={false} />
       </mesh>
-      <Text font={font ?? undefined} fontSize={FIGURES_PX * px} anchorX="center" anchorY="middle" color="#ffffff" fillOpacity={opacity} renderOrder={45}>
+      <Text ref={figures} font={font ?? undefined} fontSize={FIGURES_PX} anchorX="center" anchorY="middle" color="#ffffff" fillOpacity={opacity()} renderOrder={45}>
         {String(n)}
       </Text>
     </group>
   );
 }
 
+/** A slide's four sides, `line` wide: each a rectangle's middle and its width and height, from the slide's middle - the top, the bottom, the right, the left. */
+function sidesOf(s: Pick<Slide, "w" | "h">, line: number): [number, number, number, number][] {
+  return [
+    [0, s.h / 2, s.w + line, line],
+    [0, -s.h / 2, s.w + line, line],
+    [s.w / 2, 0, line, s.h],
+    [-s.w / 2, 0, line, s.h],
+  ];
+}
+
 function SlideFrame({
   s,
   n,
-  px,
   seen,
   font,
   selected,
@@ -194,8 +253,7 @@ function SlideFrame({
 }: {
   s: Slide;
   n: number;
-  px: number;
-  seen: number;
+  seen: { readonly current: number };
   font: string | null;
   selected: boolean;
   lit: boolean;
@@ -207,23 +265,22 @@ function SlideFrame({
   // its line, lit while the pointer is on it, coming and going
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.base, transparent: true, opacity: REST, depthTest: false, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => material.dispose(), [material]);
-  useFrame((_, dt) => {
-    const to = (lit || selected ? LIT : REST) * seen;
+  // taken hold of by a press held on its edge: where, lit from there
+  const [held, setHeld] = useState<(Held & Pt) | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => invalidate(), [held, invalidate]);
+  usePartFrame((_, dt) => {
+    if (held && heldShows(held, performance.now())) {
+      setTick((t) => t + 1);
+      invalidate();
+    }
+    const to = (lit || selected ? LIT : REST) * seen.current;
     material.color.set(selected ? COLORS.highlight : COLORS.base);
     if (Math.abs(material.opacity - to) < 1e-3) {
       material.opacity = to;
       return;
     }
     material.opacity = follow(material.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-    invalidate();
-  });
-  // taken hold of by a press held on its edge: where, lit from there
-  const [held, setHeld] = useState<(Held & Pt) | null>(null);
-  const [, setTick] = useState(0);
-  useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
-    if (!held || !heldShows(held, performance.now())) return;
-    setTick((t) => t + 1);
     invalidate();
   });
 
@@ -304,34 +361,36 @@ function SlideFrame({
     if (store.getState().hoveredSlide === s.id) store.getState().setHoveredSlide(null);
   };
 
-  const line = LINE_PX * px;
-  const edge = 2 * EDGE_PX * px;
-  const sides: [number, number, number, number][] = [
-    [0, s.h / 2, s.w + line, line],
-    [0, -s.h / 2, s.w + line, line],
-    [s.w / 2, 0, line, s.h],
-    [-s.w / 2, 0, line, s.h],
-  ];
+  // its edge's line and the band along it a press takes, the same width on the screen at any zoom
+  const lines = useRef<(THREE.Mesh | null)[]>([]);
+  const bands = useRef<(THREE.Mesh | null)[]>([]);
+  useScreenSize(
+    (px) => {
+      const line = LINE_PX * px;
+      const edge = 2 * EDGE_PX * px;
+      sidesOf(s, line).forEach(([x, y, w, h], k) => {
+        lines.current[k]?.position.set(x, y, 0);
+        lines.current[k]?.scale.set(w, h, 1);
+        bands.current[k]?.position.set(x, y, 0);
+        bands.current[k]?.scale.set(k < 2 ? w + edge : edge, k < 2 ? edge : h + edge, 1);
+      });
+    },
+    [s.w, s.h],
+  );
+  const opacity = useCallback(() => seen.current, [seen]);
   const now = performance.now();
   return (
     <group position={[s.x, s.y, 0]}>
-      {sides.map(([x, y, w, h], k) => (
-        <mesh key={k} position={[x, y, 0]} scale={[w, h, 1]} material={material} renderOrder={40}>
+      {[0, 1, 2, 3].map((k) => (
+        <mesh key={k} ref={(m) => void (lines.current[k] = m)} material={material} renderOrder={40}>
           <planeGeometry args={[1, 1]} />
         </mesh>
       ))}
-      {/* (what a press takes: a band along each edge, the same width on the screen at any zoom) */}
-      {sides.map(([x, y, w, h], k) => (
-        <mesh
-          key={`edge-${k}`}
-          position={[x, y, 0]}
-          scale={[k < 2 ? w + edge : edge, k < 2 ? edge : h + edge, 1]}
-          onPointerOver={over}
-          onPointerOut={out}
-          onPointerDown={(e) => onDown(e, false)}
-        >
+      {/* (what a press takes - never drawn: a pointer finds it all the same) */}
+      {[0, 1, 2, 3].map((k) => (
+        <mesh key={`edge-${k}`} ref={(m) => void (bands.current[k] = m)} onPointerOver={over} onPointerOut={out} onPointerDown={(e) => onDown(e, false)}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          <meshBasicMaterial visible={false} transparent opacity={0} depthWrite={false} />
         </mesh>
       ))}
       <group
@@ -346,10 +405,10 @@ function SlideFrame({
         }}
         onPointerDown={(e) => onDown(e, true)}
       >
-        <SlideNumber n={n} px={px} font={font} opacity={seen} />
+        <SlideNumber n={n} font={font} opacity={opacity} />
       </group>
       {held && <HeldLight b={{ x0: -s.w / 2, x1: s.w / 2, y0: -s.h / 2, y1: s.h / 2 }} at={held} held={held} now={now} z={-0.001} />}
-      {selected && <Handles s={s} px={px} toWorld={toWorld} />}
+      {selected && <Handles s={s} toWorld={toWorld} />}
     </group>
   );
 }
@@ -359,9 +418,11 @@ function SlideFrame({
  * screen at any zoom: dragged, it makes the slide larger or smaller - its
  * proportions kept, the opposite corner where it was - as one step.
  */
-function Handles({ s, px, toWorld }: { s: Slide; px: number; toWorld: (cx: number, cy: number) => Pt }) {
+function Handles({ s, toWorld }: { s: Slide; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
-  const { gl } = useThree();
+  const { camera, gl } = useThree();
+  const handles = useRef<(THREE.Group | null)[]>([]);
+  useScreenSize((px) => handles.current.forEach((h) => h?.scale.setScalar(HANDLE_PX * px)), []);
   const corners = [
     { x: s.x - s.w / 2, y: s.y - s.h / 2 },
     { x: s.x + s.w / 2, y: s.y - s.h / 2 },
@@ -373,7 +434,7 @@ function Handles({ s, px, toWorld }: { s: Slide; px: number; toWorld: (cx: numbe
     const grabbed = corners[k];
     const len = Math.hypot(grabbed.x - fixed.x, grabbed.y - fixed.y);
     const dir = { x: (grabbed.x - fixed.x) / len, y: (grabbed.y - fixed.y) / len };
-    const least = (LEAST_PX * px * len) / Math.min(s.w, s.h);
+    const least = (LEAST_PX * len) / ((camera as THREE.OrthographicCamera).zoom || 1) / Math.min(s.w, s.h);
     const gesture = `scale-${performance.now()}`;
     store.getState().beginPanHold(ev.pointerId);
     // (as wide or as tall as something near, where it comes near: docs/PRESENTING.md, *Guides*)
@@ -402,8 +463,8 @@ function Handles({ s, px, toWorld }: { s: Slide; px: number; toWorld: (cx: numbe
       {corners.map((c, k) => (
         <group
           key={k}
+          ref={(g) => void (handles.current[k] = g)}
           position={[c.x - s.x, c.y - s.y, 0.003]}
-          scale={HANDLE_PX * px}
           onPointerOver={() => setCursor(gl.domElement, k % 2 === 0 ? "corner-up" : "corner-down")}
           onPointerOut={() => setCursor(gl.domElement, null)}
           onPointerDown={(e) => {
@@ -462,8 +523,8 @@ void main() {
 }
 `;
 
-/** The line from a slide to the next: dashed, the same on the screen at any zoom, with an arrowhead half way along that says which way the talk goes. */
-function Join({ from, to, px, opacity }: { from: Pt; to: Pt; px: number; opacity: number }) {
+/** The line from a slide to the next: dashed, the same on the screen at any zoom, with an arrowhead half way along that says which way the talk goes; as seen as `opacity` says, frame by frame. */
+function Join({ from, to, opacity }: { from: Pt; to: Pt; opacity: () => number }) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -487,28 +548,41 @@ function Join({ from, to, px, opacity }: { from: Pt; to: Pt; px: number; opacity
     [],
   );
   useEffect(() => () => material.dispose(), [material]);
-  // (a little apart from the frames at either end)
   const len = Math.hypot(to.x - from.x, to.y - from.y);
   const ux = (to.x - from.x) / len;
   const uy = (to.y - from.y) / len;
-  const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
-  material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
-  material.uniforms.uTo.value.set(to.x - ux * gap, to.y - uy * gap);
-  material.uniforms.uWidth.value = JOIN_PX * px;
-  material.uniforms.uPx.value = px;
-  material.uniforms.uOpacity.value = opacity;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const head = useRef<THREE.Mesh>(null);
+  const headMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  useScreenSize(
+    (px) => {
+      // (a little apart from the frames at either end)
+      const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
+      material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
+      material.uniforms.uTo.value.set(to.x - ux * gap, to.y - uy * gap);
+      material.uniforms.uWidth.value = JOIN_PX * px;
+      material.uniforms.uPx.value = px;
+      if (head.current) {
+        head.current.scale.setScalar(HEAD_PX * px);
+        head.current.visible = len > 6 * HEAD_PX * px;
+      }
+    },
+    [from.x, from.y, to.x, to.y, material],
+  );
+  usePartFrame(() => {
+    const o = opacity();
+    material.uniforms.uOpacity.value = o;
+    if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
+  });
   return (
     <group>
       <mesh material={material} renderOrder={38} frustumCulled={false}>
         <planeGeometry args={[1, 1]} />
       </mesh>
-      {len > 6 * HEAD_PX * px && (
-        <mesh position={[mid.x, mid.y, 0]} rotation={[0, 0, Math.atan2(uy, ux)]} scale={HEAD_PX * px} renderOrder={39}>
-          <circleGeometry args={[1, 3]} />
-          <meshBasicMaterial color={COLORS.base} transparent opacity={opacity * 1.4} depthTest={false} toneMapped={false} />
-        </mesh>
-      )}
+      <mesh ref={head} position={[mid.x, mid.y, 0]} rotation={[0, 0, Math.atan2(uy, ux)]} renderOrder={39}>
+        <circleGeometry args={[1, 3]} />
+        <meshBasicMaterial ref={headMaterial} color={COLORS.base} transparent opacity={opacity() * 1.4} depthTest={false} toneMapped={false} />
+      </mesh>
     </group>
   );
 }

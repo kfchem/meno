@@ -9,7 +9,8 @@
  *
  * What is rendering is the view's, kept for each workspace's store; a
  * render goes on if its workspace closes, and what it makes is then lost
- * - so a workspace closing stops its renders (`stopRenders`).
+ * - so a workspace closing stops its renders (`stopRenders`, as its tab
+ * closes: App's `closeTab`).
  */
 import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -61,6 +62,29 @@ export function rendersOf(store: EditorStore): UseBoundStore<StoreApi<Renders>> 
   let r = stores.get(store);
   if (!r) stores.set(store, (r = create<Renders>(() => ({ list: [] }))));
   return r;
+}
+
+/** Each workspace's closing, by its store (`stopRenders`): what its renders wait on cut short as it comes. */
+const closings = new WeakMap<EditorStore, AbortController>();
+
+function closingOf(store: EditorStore): AbortController {
+  let c = closings.get(store);
+  if (!c) closings.set(store, (c = new AbortController()));
+  return c;
+}
+
+/** `ms` waited, or less: until `closing` comes. */
+function waitFor(ms: number, closing: AbortSignal): Promise<void> {
+  return new Promise((go) => {
+    if (closing.aborted) return go();
+    const done = () => {
+      clearTimeout(t);
+      closing.removeEventListener("abort", done);
+      go();
+    };
+    const t = setTimeout(done, ms);
+    closing.addEventListener("abort", done);
+  });
 }
 
 /** The plugin that renders: the one chosen in Settings among those added, else the first added. */
@@ -144,13 +168,17 @@ export async function shownOf(store: EditorStore, ids: readonly number[]): Promi
  */
 export async function startRender(store: EditorStore, ids: readonly number[], ask: RenderAsk, options: OptionValues): Promise<void> {
   const renders = rendersOf(store);
+  const closing = closingOf(store).signal;
   const key = next++;
   const update = (patch: Partial<Rendering>) => renders.setState((s) => ({ list: s.list.map((r) => (r.key === key ? { ...r, ...patch } : r)) }));
   const fail = (why: string) => update({ state: "failed", why, line: undefined });
   const gone = () => !renders.getState().list.some((r) => r.key === key && !r.stopping);
+  // (taken away with its workspace, as it closed: `stopRenders`)
+  const taken = () => !renders.getState().list.some((r) => r.key === key);
   const plugin = renderer();
   if (!plugin) return;
   const shown = await shownOf(store, ids);
+  if (closing.aborted) return;
   const rendered = renderScene(shown, currentStyle3D(), ask);
   // (beside them, on the right: as large as they are drawn)
   const { page } = rendered;
@@ -181,15 +209,18 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   } catch (e) {
     return fail(message(e));
   }
+  // (its workspace closed as its job began: stopped at once)
+  if (taken()) return void stopJob(job).catch(() => {});
   update({ job, state: "waiting" });
   if (renders.getState().list.find((r) => r.key === key)?.stopping) void stopJob(job).catch(() => {});
 
-  // looked at until it ends: where it is, and how far, as its log says
+  // looked at until it ends - or its workspace closes: where it is, and how far, as its log says
   let from = 0;
   let log = "";
   let state;
   for (;;) {
-    await new Promise((go) => setTimeout(go, LOOK_MS));
+    await waitFor(LOOK_MS, closing);
+    if (taken()) return;
     const record = await jobOf(job).catch(() => null);
     if (!record) return fail("Its job is gone");
     for (let k = 0; k < 40; k++) {
@@ -203,11 +234,8 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     const lines = log.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     const said = [...lines].reverse().find((l) => !/^progress \d+\/\d+$/.test(l));
     const progress = progressOf(log);
-    if (!renders.getState().list.some((r) => r.key === key)) {
-      // (taken away while it ran: stopped, its files with it)
-      if (!finished(record.state)) await stopJob(job).catch(() => {});
-      return;
-    }
+    // (taken away while it was looked at: stopped with its workspace)
+    if (taken()) return;
     update({ state: record.state === "running" ? "running" : record.state === "waiting" ? "waiting" : "finishing", ...(progress ?? {}), ...(said ? { line: said } : {}) });
     if (finished(record.state)) {
       state = record.state;
@@ -238,6 +266,8 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...at };
     }
     if (!picture) return fail("What it made cannot be shown");
+    // (its workspace closed meanwhile: put on no page, and kept in its job's folder)
+    if (taken()) return;
     store.getState().putPicture(picture);
     renders.setState((s) => ({ list: s.list.filter((r) => r.key !== key) }));
     void removeJob(job).catch(() => {});
@@ -260,13 +290,18 @@ export function stopRender(store: EditorStore, key: number): void {
   renders.setState((s) => ({ list: s.list.map((x) => (x.key === key ? { ...x, stopping: true } : x)) }));
 }
 
-/** Every render of a workspace stopped: it is closing, and what they make would be lost. */
-export function stopRenders(store: EditorStore): void {
-  for (const r of rendersOf(store).getState().list) {
-    if (r.job && r.state !== "failed") void stopJob(r.job).catch(() => {});
-    if (r.job && r.state === "failed") void removeJob(r.job).catch(() => {});
-  }
-  rendersOf(store).setState({ list: [] });
+/**
+ * Every render of a workspace stopped: it is closing, and what they make
+ * would be lost. Their jobs are stopped as a step's are, their files kept
+ * (a failed one's taken away); none is looked at again, nothing goes on
+ * its page, and none begins after. Resolved once each job has been asked.
+ */
+export function stopRenders(store: EditorStore): Promise<void> {
+  closingOf(store).abort();
+  const renders = rendersOf(store);
+  const asked = renders.getState().list.flatMap((r) => (r.job ? [(r.state === "failed" ? removeJob(r.job) : stopJob(r.job)).catch(() => {})] : []));
+  renders.setState({ list: [] });
+  return Promise.all(asked).then(() => {});
 }
 
 /** What a render is called: after the molecule rendered, where it is one with a name. */

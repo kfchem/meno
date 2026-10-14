@@ -68,7 +68,7 @@ function alike(a: Float32Array, b: Float32Array): number {
 }
 
 /** A letter drawn as shapes: its outlines, the box round them, and the shapes they came from. */
-type Drawn = { parts: Point[][]; box: Box; from: object[] };
+type Drawn = { parts: Point[][]; box: Box; from: object[]; among?: string };
 
 /**
  * Shapes read as letters, joined as one letter where one lies within
@@ -109,15 +109,25 @@ const NEAR = 0.08;
 /**
  * Letters read from shapes drawn as letters: the figure's filled shapes
  * as tall as letters are beside its bonds (a fifth to a whole bond), their
- * holes and dots with them, and bars as thick as a letter's stem beside
+ * holes and dots with them - a word drawn as one shape, letter by letter - and bars as thick as a letter's stem beside
  * them - each matched against `known`, the shapes of the letters as a
  * typeface draws them. A shape no letter matches well is left out.
  */
 export function shapeLetters(shapes: Shapes, bond: number, known: readonly GlyphShape[], taken: ReadonlySet<object> = new Set()): ShapeLetter[] {
   if (!known.length) return [];
-  const sized = (b: Box) => b[3] - b[1] >= 0.18 * bond && b[3] - b[1] <= 1.1 * bond && b[2] - b[0] <= 1.1 * bond;
-  const outlines = shapes.blobs.filter((b) => !taken.has(b) && sized(b.box)).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
-  const glyphs = lettersDrawn(outlines);
+  const tall = (b: Box) => b[3] - b[1] >= 0.18 * bond && b[3] - b[1] <= 1.1 * bond;
+  const sized = (b: Box) => tall(b) && b[2] - b[0] <= 1.1 * bond;
+  // (a word drawn as one shape - its letters each an outline of one path, as some typesetters set a label: Boc, MeO - as tall as a
+  // letter however wide, its letters each sized on their own)
+  const word = new Set<object>(shapes.blobs.filter((b) => !taken.has(b) && !sized(b.box) && tall(b.box) && b.parts.length > 1));
+  const outlines = shapes.blobs.filter((b) => !taken.has(b) && (sized(b.box) || word.has(b))).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
+  const glyphs = lettersDrawn(outlines).filter((g) => !g.from.some((f) => word.has(f)) || sized(g.box));
+  // (a stem with a dot over it, drawn as one shape - an i or a j, however it leans: the nearer of the two)
+  for (const g of glyphs) {
+    if (g.parts.length !== 2) continue;
+    const [p, q] = g.parts.map(boxOf).sort((x, y) => y[3] - y[1] - (x[3] - x[1]));
+    if (p[2] - p[0] < 0.5 * (p[3] - p[1]) && dotOver(q, p)) g.among = "ij";
+  }
   // bars that are letters: a stem - an l, an I, a 1 - upright, as tall as a letter and thicker than a
   // bond's line, beside the letters or touching no bond; a minus, short and level, set high beside a letter
   const widths = shapes.strokes.map((s) => s.w).sort((a, b) => a - b);
@@ -133,15 +143,34 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
     if (!upright || s.w < 1.3 * line || !sized(b)) continue;
     if (besideOf(b) || free(s)) glyphs.push({ parts: [s.outline!], box: b, from: [s] });
   }
+  // (and a stem however thin with a dot just over it - an i, a j, set small and italic as the i of an iPr is - each of its own)
+  const dots = shapes.blobs.filter((d) => !taken.has(d) && !sized(d.box) && d.box[3] - d.box[1] < 0.18 * bond);
+  for (const s of bars) {
+    const b = boxOf(s.outline!);
+    // (upright, or leaning as an italic one does)
+    if (glyphs.some((g) => g.from.includes(s)) || Math.abs(s.a.x - s.b.x) >= 0.3 * Math.abs(s.a.y - s.b.y)) continue;
+    // (its ends meeting no line, and no line ending at its dot: a short bond with a joint's dot over its end is none)
+    const dot = free(s) ? dots.find((d) => dotOver(d.box, b) && !ends.some((p) => p !== s.a && p !== s.b && p.x >= d.box[0] - 0.08 * bond && p.x <= d.box[2] + 0.08 * bond && p.y >= d.box[1] - 0.08 * bond && p.y <= d.box[3] + 0.08 * bond)) : undefined;
+    if (!dot) continue;
+    const box: Box = [Math.min(b[0], dot.box[0]), dot.box[1], Math.max(b[2], dot.box[2]), b[3]];
+    if (box[3] - box[1] >= 0.18 * bond && box[3] - box[1] <= 1.1 * bond) glyphs.push({ parts: [s.outline!, ...dot.parts], box, from: [s, dot], among: "ij" });
+  }
   for (const s of bars) {
     const b = boxOf(s.outline!);
     const level = Math.abs(s.a.y - s.b.y) < 0.2 * Math.abs(s.a.x - s.b.x);
     if (!level || b[2] - b[0] > 0.45 * bond) continue;
-    const high = glyphs.some((g) => {
-      const h = g.box[3] - g.box[1];
-      const mid = (b[1] + b[3]) / 2;
-      return mid < g.box[1] + 0.45 * h && mid > g.box[1] - 0.4 * h && b[0] >= g.box[2] - 0.1 * h && b[0] - g.box[2] < 0.5 * h;
-    });
+    const mid = (b[1] + b[3]) / 2;
+    const high =
+      glyphs.some((g) => {
+        const h = g.box[3] - g.box[1];
+        return mid < g.box[1] + 0.45 * h && mid > g.box[1] - 0.4 * h && b[0] >= g.box[2] - 0.1 * h && b[0] - g.box[2] < 0.5 * h;
+      }) ||
+      // (or set high after a subscript's digit, by the letter before it: the - of a PF6-)
+      glyphs.some((g) => {
+        const h = g.box[3] - g.box[1];
+        const sub = glyphs.find((d) => d !== g && d.box[3] - d.box[1] < 0.85 * h && d.box[3] > g.box[3] - 0.1 * h && d.box[0] - g.box[2] < 0.3 * h && d.box[0] >= g.box[2] - 0.1 * h);
+        return !!sub && mid < g.box[1] + 0.35 * h && mid > g.box[1] - 0.4 * h && b[0] >= sub.box[2] - 0.1 * h && b[0] - sub.box[2] < 0.5 * h;
+      });
     if (high) glyphs.push({ parts: [s.outline!], box: b, from: [s] });
   }
   const tallest = glyphs.reduce((m, g) => Math.max(m, g.box[3] - g.box[1]), 0);
@@ -152,6 +181,7 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
     const h = g.box[3] - g.box[1];
     const aspect = w / Math.max(h, 1e-6);
     const scored = known
+      .filter((k) => !g.among || g.among.includes(k.c))
       .map((k) => {
         // (a sign or a bar as thin as a line has no shape to speak of: told by its proportions alone)
         const shape = alike(ink, k.ink);
@@ -160,7 +190,8 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
       })
       .sort((p, q) => q.score - p.score);
     const best = scored[0];
-    if (!best || best.score < 0.35) continue;
+    // (a stem with a dot over it is an i or a j by its shape alone, however it leans: the nearer of the two, taken surely)
+    if (!best || (best.score < 0.35 && !g.among)) continue;
     // its size from how tall the letter is in the typeface: an x as tall as an X would be twice its size
     const capital = h / Math.max(best.k.height, 0.2);
     const size = Math.min(capital, tallest * 1.2) / 0.72;
@@ -170,7 +201,7 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
       box: [...g.box],
       at: [g.box[0], foot],
       size,
-      sure: best.score,
+      sure: g.among ? Math.max(best.score, TAKEN) : best.score,
       alts: scored
         .slice(1)
         .filter((s) => s.score > best.score - NEAR)
@@ -178,6 +209,25 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
         .filter((c, i, all) => c !== best.k.c && all.indexOf(c) === i),
       from: g.from,
     });
+  }
+  // (a letter whose small form is its capital made smaller - c C, o O, s S, v V, w W, x X, z Z - is told by the capitals beside it on its
+  // line, of shapes of their own: as tall as they, a capital; well under, a small letter - the c of a Boc)
+  const alike2 = "cosvwxz";
+  for (const l of out) {
+    if (!alike2.includes(l.c.toLowerCase())) continue;
+    const h = l.box[3] - l.box[1];
+    const beside = out.filter((m) => {
+      const mh = m.box[3] - m.box[1];
+      return m !== l && /[A-Z]/.test(m.c) && !alike2.includes(m.c.toLowerCase()) && Math.abs(m.box[3] - l.box[3]) < 0.2 * mh && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 1.5 * mh;
+    });
+    if (!beside.length) continue;
+    const small = h < 0.85 * Math.max(...beside.map((m) => m.box[3] - m.box[1]));
+    const c = small ? l.c.toLowerCase() : l.c.toUpperCase();
+    if (c === l.c) continue;
+    const k = known.find((g) => g.c === c);
+    l.alts = [l.c, ...l.alts.filter((a) => a !== c)];
+    l.c = c;
+    if (k) l.size = Math.min(h / Math.max(k.height, 0.2), tallest * 1.2) / 0.72;
   }
   return out;
 }

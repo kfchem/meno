@@ -1,4 +1,5 @@
 import type { StoreApi } from "zustand";
+import { gestureStep } from "../../../../../lib/doc/document";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
@@ -36,9 +37,9 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       return piece && doc.getState().inks?.find((k) => k.id === piece.id)?.strokes.length !== piece.strokes.length ? piece.id : fresh;
     },
     eraseStrokes: (cuts: readonly { id: number; index: number }[], gesture?: string) =>
-      doc.edit("rub out", (d) => ops.removeInkStrokes(d, cuts), gesture ? { coalesceKey: `erase:${gesture}` } : undefined),
+      doc.edit("rub out", (d) => ops.removeInkStrokes(d, cuts), gesture ? gestureStep(`erase:${gesture}`) : undefined),
     colourInks: (ids: readonly number[], color: string | null, gesture?: string) =>
-      doc.edit("colour writing", (d) => ops.colourInks(d, ids, color), gesture ? { coalesceKey: `colour-inks:${gesture}` } : undefined),
+      doc.edit("colour writing", (d) => ops.colourInks(d, ids, color), gesture ? gestureStep(`colour-inks:${gesture}`) : undefined),
     writePdfStroke: (pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null) => {
       const before = doc.getState().pdfs?.find((p) => p.id === pdf)?.inks ?? [];
       if (!doc.edit("write", (d) => ops.addPdfInkStroke(d, pdf, page, look, stroke, join))) return null;
@@ -47,7 +48,7 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       return after.length > before.length ? after.length - 1 : (join ?? null);
     },
     erasePdfStrokes: (cuts: readonly { pdf: number; piece: number; index: number }[], gesture?: string) =>
-      doc.edit("rub out", (d) => ops.removePdfInkStrokes(d, cuts), gesture ? { coalesceKey: `erase:${gesture}` } : undefined),
+      doc.edit("rub out", (d) => ops.removePdfInkStrokes(d, cuts), gesture ? gestureStep(`erase:${gesture}`) : undefined),
     writeTalkStroke: (look: InkLook, stroke: InkStroke) => set((prev: EditorState) => ({ ...prev, talkInk: [...prev.talkInk, { look, stroke }] })),
     eraseTalkStrokes: (indices: readonly number[]) =>
       set((prev: EditorState) => {

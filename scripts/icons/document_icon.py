@@ -5,7 +5,7 @@
 The sources, in src-tauri/icons/document/, are Meno's own: a sheet with its
 corner folded, carrying Meno's mark (the app icon's arc and dot, as
 site/assets/favicon.svg draws it) - `meno-document.svg`, and
-`meno-document-small.svg`, bolder, for 16 to 24 pixels. Each size is drawn
+`meno-document-small.svg`, bolder, for 16 to 32 pixels. Each size is drawn
 by the Tauri CLI's own `tauri icon` (`--png`), the macOS icon put together
 by the system's `iconutil` (macOS only), and the Windows icon written
 here: an ICO whose images are PNGs, as Windows Vista and later read them.

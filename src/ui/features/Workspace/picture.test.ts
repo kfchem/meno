@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { writeClipboard } from "../../../lib/clipboard";
 import { withText } from "../../../lib/binary/png";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { ACS_1996 } from "../../../lib/chem/style";
+import { ACS_1996, inPoints } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
-import { pictureDpiFor, pictureItems, structureInPicture } from "./picture";
+import { pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
 import { ballSegmentsFor, tilesOf } from "./render3d";
 import type { Model } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
@@ -19,6 +19,8 @@ const model: Model = {
   ],
   bonds: [{ id: 3, a: 1, b: 2, order: 1, stereo: "none" }],
 };
+/** What a picture of `model` carries back: the structure, and the bond as long as ACS 1996 prints it and its labels as large, so that it is converted where pasted into another style. */
+const carried = { ...model, bondPt: ACS_1996.bondLengthPt, labelPt: inPoints(ACS_1996.fontSize, ACS_1996) };
 const aromatic = { aromaticEnabled: false, aromaticRings: {} };
 const PIXEL = Uint8Array.from(
   atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"),
@@ -29,9 +31,9 @@ describe("pictures of a structure", () => {
   it("are Office's clip format and an EMF (and a PNG where there is a page to draw it in), each carrying the structure", async () => {
     const items = await pictureItems(model, aromatic, ACS_1996);
     expect(items.map((i) => i.flavor)).toEqual(["gvml", "emf", "embed"]);
-    expect(await structureInPicture(items[0])).toEqual(model);
+    expect(await structureInPicture(items[0])).toEqual(carried);
     // the record, for the app to make an object for Office out of on Windows
-    expect(readRecord(items[2].text!)).toEqual(model);
+    expect(readRecord(items[2].text!)).toEqual(carried);
   });
 
   it("of molecules in 3D alone show them, and give them back - turned as they were - when pasted", async () => {
@@ -64,7 +66,7 @@ describe("pictures of a structure", () => {
     const items = await pictureItems(model, aromatic, ACS_1996);
     // only the picture: as Word or PowerPoint put it on the clipboard
     await writeClipboard([items[0]]);
-    expect(await structureOnClipboard()).toEqual(model);
+    expect(await structureOnClipboard()).toEqual(carried);
   });
 
   it("read the structure out of a PNG that carries it, and nothing out of one that does not", async () => {
@@ -118,6 +120,29 @@ describe("the resolution a copied picture is made at", () => {
     expect(dpi).toBeLessThan(1200);
     expect(1920 * 960 * (dpi / 96) ** 2).toBeLessThanOrEqual(48_000_000);
     expect(1920 * 960 * ((dpi + 1) / 96) ** 2).toBeGreaterThan(48_000_000);
+  });
+
+  it("is drawn at the drawing's own scale: its pixels whole, the view widened to them, not the drawing squeezed", () => {
+    // (Wiley's size of a drawing 278.888 by 145.26 CSS pixels, as createSVG writes it)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.4 -2.2 17.4305 9.07875" width="278.888" height="145.26" fill="none"><line x1="0" y1="0" x2="1" y2="0" /></svg>`;
+    const frame = rasterFrame(svg, 600);
+    expect(frame).toMatchObject({ width: 1744, height: 908, dpi: 600 });
+    const head = /<svg[^>]*>/.exec(frame.svg)![0];
+    expect(head).toContain(' width="1744" height="908"');
+    const view = / viewBox="([^"]+)"/.exec(head)![1].split(" ").map(Number);
+    // (as many pixels to the unit as at 600 dpi, across and down alike, from the same corner)
+    const perUnit = (278.888 / 17.4305) * (600 / 96);
+    expect(view.slice(0, 2)).toEqual([-0.4, -2.2]);
+    expect(1744 / view[2]).toBeCloseTo(perUnit, 9);
+    expect(908 / view[3]).toBeCloseTo(perUnit, 9);
+    // (what is left over, less than a pixel)
+    expect((view[2] - 17.4305) * perUnit).toBeLessThan(1);
+    expect((view[3] - 9.07875) * perUnit).toBeLessThan(1);
+    expect(frame.svg.endsWith("<line x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\" /></svg>")).toBe(true);
+    // (one so large it is made at a lower resolution, to fit)
+    const big = rasterFrame(svg.replace('width="278.888" height="145.26"', 'width="1920" height="960"'), 1200);
+    expect(big.dpi).toBe(pictureDpiFor(1920, 960, 1200));
+    expect(big.width).toBe(Math.ceil(1920 * (big.dpi / 96)));
   });
 });
 

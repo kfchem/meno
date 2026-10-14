@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { closeGuide, guideNotice, nextStep, NOTICED_MS, showGuide, showGuidesDue, shownStep, useGuide } from "./guides";
+import { closeGuide, guideNotice, keyOnGuide, nextStep, NOTICED_MS, showGuide, showGuidesDue, shownStep, useGuide } from "./guides";
 import { useAppSettings } from "../settings/appSettings";
 import { useReaders } from "../calc/workers";
 import { MANIFESTS } from "./known";
@@ -91,5 +91,27 @@ describe("a plugin's guide", () => {
     nextStep();
     vi.advanceTimersByTime(NOTICED_MS + 1);
     expect(useGuide.getState().open?.step).toBe(3);
+  });
+});
+
+// (the maintainer, 2026-10-13: Escape on the first-run guide does what Skip does)
+describe("Escape on a guide", () => {
+  beforeEach(() => {
+    useGuide.setState({ open: null });
+    plugins();
+  });
+
+  it("skips it, as Skip does: closed, and kept as shown", () => {
+    showGuide("getting-started");
+    expect(keyOnGuide("Escape", false)).toBe(true);
+    expect(useGuide.getState().open).toBeNull();
+    expect(useAppSettings.getState().plugins.guided).toContain("getting-started");
+  });
+
+  it("leaves it open where something else took that Escape, or for another key", () => {
+    showGuide("getting-started");
+    expect(keyOnGuide("Escape", true)).toBe(false);
+    expect(keyOnGuide("Enter", false)).toBe(false);
+    expect(useGuide.getState().open).not.toBeNull();
   });
 });

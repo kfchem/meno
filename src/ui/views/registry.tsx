@@ -9,6 +9,7 @@ import type {
   TabKind,
 } from "../../lib/core";
 import { Workspace } from "../../ui/features/Workspace";
+import { useAppSettings } from "../../lib/settings/appSettings";
 import {
   createWorkspaceDocument,
   type WorkspaceDocument,
@@ -55,7 +56,8 @@ export const viewRegistry: Record<TabKind, ViewEntry> = {
   },
   workspace: {
     kind: "workspace",
-    createDocument: (data) => createWorkspaceDocument(data),
+    // (in Settings' style as it is made, and kept: Settings' is for new workspaces only)
+    createDocument: (data) => createWorkspaceDocument(data, useAppSettings.getState().drawingStyle),
     Component: ({ tabId, content, active, document, renameTab }) => (
       <Workspace
         tabId={tabId}

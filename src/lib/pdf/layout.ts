@@ -1,13 +1,23 @@
 /**
  * Where a PDF's pages lie on the page (docs/PDF.md, *A PDF*, *On the
- * page*): at the size they are printed at, as the drawing is - a bond
- * 14.4 points long, as the ACS's style prints it, is a bond on the page -
- * stacked, the page on top over the others, or spread out in rows.
+ * page*): at the size they are printed at, as the drawing is - each at the
+ * point it was laid at (`point`), the workspace's own, a bond printed as its
+ * style prints it being a bond drawn - stacked, the page on top over the
+ * others, or spread out in rows.
  */
 import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 
-/** The page's units in a point: a bond printed 14.4 points long is a bond drawn. */
+/** The page's units in a point where a bond prints 14.4 points long, as ACS 1996's style prints it: what a PDF or a text laid before it kept its own is laid at. */
 export const POINT = NOMINAL_BOND_LENGTH / 14.4;
+
+/** The page's units in a point where a bond prints `bondPt` long: what a PDF or a text is laid at in a workspace of that style (docs/WORKSPACE.md, *Drawing style*). */
+export const pointFor = (bondPt: number): number => NOMINAL_BOND_LENGTH / bondPt;
+
+/** The point a PDF or a text is laid at: its own, or ACS 1996's where it keeps none. */
+export const pointOf = (p: { point?: number }): number => p.point ?? POINT;
+
+/** How much larger than at ACS 1996's point a PDF or a text is laid: what its icon, its name's room and the gaps between its pages are made by, with its pages. */
+export const scaleOf = (p: { point?: number }): number => pointOf(p) / POINT;
 
 /** A rectangle on the page: its middle, and its width and height. */
 export type Sheet = { x: number; y: number; w: number; h: number };
@@ -28,6 +38,8 @@ export type PdfPlace = {
   spread?: boolean;
   placed?: readonly PagePlace[];
   icon?: boolean;
+  /** The page's units in one of its points (`pointOf`). */
+  point?: number;
 };
 
 /**
@@ -45,7 +57,7 @@ export const ICON_HEIGHT = ICON_TO_NAME * ICON_NAME_PT * POINT;
 /** How wide an icon's name may be before it goes onto another line, in the page's units, as a file's under its icon. */
 export const ICON_NAME_WIDTH = 2 * ICON_HEIGHT;
 
-/** How much smaller than its printed size a PDF made an icon is drawn: its top page as tall as `ICON_HEIGHT`. */
+/** How much smaller than its printed size a PDF made an icon is drawn: its top page as tall as `ICON_HEIGHT` (at its point: the same share at any). */
 export function iconScale(p: PdfPlace): number {
   const [, h] = p.pages[p.page] ?? p.pages[0] ?? [612, 792];
   return ICON_HEIGHT / (h * POINT);
@@ -70,14 +82,16 @@ export function stackSheets(p: PdfPlace): Sheet[] {
   const [w, h] = p.pages[p.page] ?? p.pages[0] ?? [612, 792];
   const under = Math.min(UNDER_MOST, Math.max(0, p.pages.length - 1));
   const out: Sheet[] = [];
-  for (let k = under; k >= 1; k--) out.push({ x: p.x + k * UNDER_STEP, y: p.y - k * UNDER_STEP, w: w * POINT, h: h * POINT });
+  const step = UNDER_STEP * scaleOf(p);
+  const pt = pointOf(p);
+  for (let k = under; k >= 1; k--) out.push({ x: p.x + k * step, y: p.y - k * step, w: w * pt, h: h * pt });
   return out;
 }
 
 /** The top page's sheet, where it is stacked. */
 export function topSheet(p: PdfPlace): Sheet {
   const [w, h] = p.pages[p.page] ?? p.pages[0] ?? [612, 792];
-  return { x: p.x, y: p.y, w: w * POINT, h: h * POINT };
+  return { x: p.x, y: p.y, w: w * pointOf(p), h: h * pointOf(p) };
 }
 
 /** The gap between pages spread, in the page's units. */
@@ -104,16 +118,18 @@ export function rowSheets(p: PdfPlace): Sheet[] {
   const left = top.x - top.w / 2;
   let y = top.y + top.h / 2;
   const cols = spreadColumns(p.pages.length);
+  const pt = pointOf(p);
+  const gap = SPREAD_GAP * scaleOf(p);
   const out: Sheet[] = [];
   for (let i = 0; i < p.pages.length; i += cols) {
-    const row = p.pages.slice(i, i + cols).map(([w, h]) => ({ w: w * POINT, h: h * POINT }));
+    const row = p.pages.slice(i, i + cols).map(([w, h]) => ({ w: w * pt, h: h * pt }));
     const tall = Math.max(...row.map((r) => r.h));
     let x = left;
     for (const r of row) {
       out.push({ x: x + r.w / 2, y: y - r.h / 2, w: r.w, h: r.h });
-      x += r.w + SPREAD_GAP;
+      x += r.w + gap;
     }
-    y -= tall + SPREAD_GAP;
+    y -= tall + gap;
   }
   return out;
 }
@@ -151,7 +167,8 @@ export function pdfBounds(p: PdfPlace): { x0: number; y0: number; x1: number; y1
 export function pdfRoom(p: PdfPlace): { x0: number; y0: number; x1: number; y1: number } {
   const b = pdfBounds(p);
   if (!p.icon) return b;
-  return { x0: Math.min(b.x0, p.x - ICON_NAME_WIDTH / 2), x1: Math.max(b.x1, p.x + ICON_NAME_WIDTH / 2), y0: b.y0 - 3 * ICON_NAME_PT * POINT, y1: b.y1 };
+  const name = ICON_NAME_WIDTH * scaleOf(p);
+  return { x0: Math.min(b.x0, p.x - name / 2), x1: Math.max(b.x1, p.x + name / 2), y0: b.y0 - 3 * ICON_NAME_PT * pointOf(p), y1: b.y1 };
 }
 
 /** Whether a point of the page lies on a sheet. */

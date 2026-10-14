@@ -1,0 +1,8 @@
+{
+  "//": "The round trip's stages run the app's own code (draw.stage.ts, read.stage.ts), so they are typechecked with it, against the app's settings: drift there should break the build, not the audit.",
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["*.ts", "../../../src"]
+}

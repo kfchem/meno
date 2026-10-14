@@ -11,6 +11,7 @@
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
+import { middleOfPoints } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 
@@ -119,11 +120,7 @@ export function pathBetween(model: Model, from: number, to: number): Sel | null 
 
 /** The middle of the selected atoms: of the box round them. */
 export function middleOf(model: Model, atoms: ReadonlySet<number>): Pt | null {
-  const at = model.atoms.filter((a) => atoms.has(a.id));
-  if (!at.length) return null;
-  const xs = at.map((a) => a.x);
-  const ys = at.map((a) => a.y);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  return middleOfPoints(model.atoms.filter((a) => atoms.has(a.id)));
 }
 
 /**

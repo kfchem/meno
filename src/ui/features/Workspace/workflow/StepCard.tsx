@@ -159,6 +159,8 @@ export type StepCardProps = {
   onOptions: (values: OptionValues) => void;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
+  /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
+  onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
   onTakeDown: (e: ReactPointerEvent) => void;
   onGiveDown: (e: ReactPointerEvent) => void;
@@ -280,6 +282,11 @@ export default function StepCard(p: StepCardProps) {
                 </div>
               </div>
             )}
+            <div className="mt-3 flex justify-end">
+              <button onClick={p.onClose} className="h-6 rounded-md border border-gh-line bg-white px-2 text-[11px] text-gh-black hover:bg-gh-base">
+                Close
+              </button>
+            </div>
           </div>
         )}
       </div>

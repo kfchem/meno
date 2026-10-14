@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxOf, holds, isStandard, joinOf, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, viewOf, WIDE, zoomOf } from "./slides";
+import { boxOf, holds, isStandard, joinOf, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
 import { bandsAbout } from "./stage";
 import { presentIntent } from "../../../../lib/doc/shortcuts";
 
@@ -44,6 +44,15 @@ describe("slides on the page", () => {
     const v = viewOf({ x: 1, y: 2, zoom: 4 }, 800);
     expect(v).toEqual({ x: 1, y: 2, w: 200 });
     expect(zoomOf(v, 800)).toBe(4);
+  });
+
+  it("end a talk at the last one shown, in the middle of the canvas the talk found, as much of it as a slide made of the view", () => {
+    const s = { x: 10, y: 20, w: 160, h: 90 };
+    expect(talkEnd(s, 1600, 900)).toEqual({ x: 10, y: 20, zoom: OF_VIEW * 10 });
+    // (the column opening again over 400 pixels of a canvas 2000 wide: the slide fits the rest - the view going half the column as it opens)
+    expect(talkEnd(s, 2000, 900, 400)).toEqual({ x: 10, y: 20, zoom: OF_VIEW * 10 });
+    // (a canvas less wide than the slide: as wide as the canvas allows)
+    expect(talkEnd(s, 800, 900).zoom).toBeCloseTo(OF_VIEW * 5, 12);
   });
 
   it("are told in view: the one most nearly what is seen, or the nearest; none with none", () => {
@@ -108,5 +117,19 @@ describe("slides on the page", () => {
     ]);
     // (a slide larger than the canvas: no band)
     expect(bandsAbout({ left: -10, top: -10, width: 1200, height: 800 }, 1000, 600).every(([, , w, h]) => w * h === 0)).toBe(true);
+  });
+});
+
+describe("a slide laid for a talk below a Mac's notch", () => {
+  it("fits the screen below the band the notch keeps, in the middle of what is left - as slides software lays it", () => {
+    const s = { x: 0, y: 0, w: 32, h: 18 };
+    // (a 1710 by 1112 screen, its top 38 points the notch's: the slide as wide as the screen, 962 tall)
+    const f = slideFit(s, 1710, 1112, 38);
+    expect(f.zoom).toBeCloseTo(1710 / 32, 9);
+    // (its middle on the screen: halfway down what is left below the band)
+    const middleOnScreen = 1112 / 2 - (s.y - f.y) * f.zoom;
+    expect(middleOnScreen).toBeCloseTo(38 + (1112 - 38) / 2, 6);
+    // (none kept: as before)
+    expect(slideFit(s, 1710, 1112)).toEqual({ x: 0, y: 0, zoom: Math.min(1710 / 32, 1112 / 18) });
   });
 });
