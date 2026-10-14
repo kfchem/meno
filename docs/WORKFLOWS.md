@@ -327,7 +327,7 @@ frames chip opens to its slider:
   share kept as they were;
 - *Show log* and *Show files* once it has run.
 
-Another click on its title, Escape, or a press elsewhere closes it. The
+Another click on its title, its *Close*, or Escape closes it; a press elsewhere does not - the page is worked on (panned, scrolled, other cards) while its options stay open (2026-10-14). The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere

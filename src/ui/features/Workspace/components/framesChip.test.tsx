@@ -15,6 +15,17 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(slider(renderToString(<FramesChip count={60} frame={0} open onFrame={none} title="aspirin" />))).toBe(false);
   });
 
+  it("holds what the calculation found in the chip itself, shut - none over the molecule - until it is clicked open (the maintainer, 2026-10-14)", () => {
+    const results = [{ id: "dipole", on: "molecule" as const, group: "Properties", label: "Dipole moment", quantity: "dipole" as const, value: 1.85, rank: 2 }];
+    const html = renderToString(<FramesChip count={5} frame={2} open={false} onFrame={none} about="xtb" results={results} />);
+    // (in the chip, its row shut: no box above it)
+    expect(html).toContain("Dipole moment");
+    expect(html).not.toContain("bottom-full");
+    expect(html).toMatch(/grid-template-rows:\s*0fr;\s*opacity:\s*0/);
+    // (pointing at it alone opens nothing: open is the molecule's pointer, not a click)
+    expect(renderToString(<FramesChip count={5} frame={2} open onFrame={none} about="xtb" results={results} />)).not.toMatch(/grid-template-rows:\s*1fr/);
+  });
+
   it("says which of how many, and the record's title, shut", () => {
     const html = renderToString(<FramesChip count={60} frame={2} open={false} onFrame={none} title="aspirin" />);
     expect(html).toContain("3<!-- --> / <!-- -->60");
