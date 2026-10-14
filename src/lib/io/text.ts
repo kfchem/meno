@@ -8,9 +8,12 @@
 
 /**
  * Which way round UTF-16 with no byte order mark is written, where a file's
- * start says so: every other byte of it NUL - the high byte of a Latin
- * letter, a digit, a line's end - as no UTF-8 or Shift_JIS text has it.
- * Read as UTF-8, such a file was its letters with a NUL between each.
+ * start says so. No UTF-8 or Shift_JIS text holds a NUL; UTF-16 has one in
+ * the high byte of every Latin letter, digit and line's end - so a text in
+ * Japanese has some (a fifth of its high bytes, say), one in English half.
+ * Its NULs, at least two, lie nearly all on one side of each pair - and,
+ * read that way round, nearly all of it is letters a text holds (`plain`):
+ * bytes otherwise, which NULs among them do not make a text.
  */
 function utf16Unmarked(bytes: Uint8Array): "utf-16le" | "utf-16be" | null {
   const pairs = Math.min(bytes.length, 1024) >> 1;
@@ -21,9 +24,31 @@ function utf16Unmarked(bytes: Uint8Array): "utf-16le" | "utf-16be" | null {
     if (bytes[2 * i] === 0) even++;
     if (bytes[2 * i + 1] === 0) odd++;
   }
-  if (odd >= 0.4 * pairs && even <= 0.05 * pairs) return "utf-16le";
-  if (even >= 0.4 * pairs && odd <= 0.05 * pairs) return "utf-16be";
+  const nuls = even + odd;
+  if (nuls < 2) return null;
+  const read = (le: boolean) => {
+    let ok = 0;
+    for (let i = 0; i < pairs; i++) ok += plain(le ? bytes[2 * i] | (bytes[2 * i + 1] << 8) : (bytes[2 * i] << 8) | bytes[2 * i + 1]) ? 1 : 0;
+    return ok >= 0.9 * pairs;
+  };
+  if (odd >= 0.9 * nuls && read(true)) return "utf-16le";
+  if (even >= 0.9 * nuls && read(false)) return "utf-16be";
   return null;
+}
+
+/** Whether a UTF-16 unit is one a text holds: a tab or a line's end, Latin and Greek letters and their marks, punctuation and symbols, kana and kanji, the full-width forms - or half of a pair beyond them. */
+function plain(u: number): boolean {
+  return (
+    u === 0x09 || u === 0x0a || u === 0x0d ||
+    (u >= 0x20 && u <= 0x7e) ||
+    (u >= 0xa0 && u <= 0x52f) ||
+    (u >= 0x2000 && u <= 0x2bff) ||
+    (u >= 0x3000 && u <= 0x9fff) ||
+    (u >= 0xac00 && u <= 0xd7a3) ||
+    (u >= 0xd800 && u <= 0xdfff) ||
+    (u >= 0xf900 && u <= 0xfaff) ||
+    (u >= 0xfe30 && u <= 0xffef)
+  );
 }
 
 /** The text `bytes` hold - `part` where they are a file's start only, its last character perhaps cut. */
