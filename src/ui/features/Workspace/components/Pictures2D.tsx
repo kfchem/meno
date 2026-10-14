@@ -16,7 +16,7 @@
  * deleted with the rest of the selection (Selection2D, clipboardActions).
  */
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { PictureFrom, PictureItem } from "../store/types";
@@ -57,21 +57,18 @@ const UNREAD = "#eef0f2";
 /**
  * The shapes every picture draws with, made once and shared: a geometry each
  * was 9,000 pictures' 45,000 - 162,000 with them all selected - all of them
- * made and thrown away as the pictures came and went.
+ * made and thrown away as the pictures came and went. So too the colours of
+ * the selected ones' frames, the same for all.
  */
 const PLANE = new THREE.PlaneGeometry(1, 1);
 const SPOT_RING = new THREE.RingGeometry(0.82, 1, 48);
 const HANDLE_HIT_DISC = new THREE.CircleGeometry(HANDLE_HIT, 20);
 const HANDLE_DISC = new THREE.CircleGeometry(1, 20);
 const HANDLE_RING = new THREE.RingGeometry(0.68, 1, 20);
-const EDGE = new THREE.BufferGeometry().setFromPoints(
-  [
-    [-0.5, -0.5],
-    [0.5, -0.5],
-    [0.5, 0.5],
-    [-0.5, 0.5],
-  ].map(([x, y]) => new THREE.Vector3(x, y, 0)),
-);
+const EDGE_LINE = new THREE.LineBasicMaterial({ color: COLORS.highlight, depthTest: false, toneMapped: false, transparent: true });
+const HANDLE_HIT_FILL = new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0, depthWrite: false });
+const HANDLE_FILL = new THREE.MeshBasicMaterial({ color: "#ffffff", depthTest: false, toneMapped: false });
+const HANDLE_LINE = new THREE.MeshBasicMaterial({ color: COLORS.highlight, depthTest: false, toneMapped: false });
 
 type Pt = { x: number; y: number };
 
@@ -137,6 +134,12 @@ export default function Pictures2D() {
   const hovered = useEditor((s) => s.hoveredPicture);
   const store = useEditorStore();
   const { camera, gl, invalidate, size } = useThree();
+  // (each picture's work at each frame done from this one callback: one each made every mount and unmount cost as much as all of them)
+  const parts = useMemo(() => new Set<PartFrame>(), []);
+  useFrame((_, dt) => {
+    const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+    for (const part of parts) part(px, dt);
+  });
 
   // a picture just put on the page is brought into view, the view easing to it where it is not all in view
   const newest = useRef<number | null>(null);
@@ -164,46 +167,78 @@ export default function Pictures2D() {
     invalidate();
   }, [pictures, camera, size, invalidate, store]);
 
-  const toWorld = (cx: number, cy: number): Pt => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
-    return { x: p.x, y: p.y };
-  };
+  const toWorld = useCallback(
+    (cx: number, cy: number): Pt => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
+      return { x: p.x, y: p.y };
+    },
+    [gl, camera],
+  );
+
+  // (the selected ones' frames, but not one still landing, unseen till then)
+  const framed = useMemo(() => pictures.flatMap((p, i) => (selPictures.has(p.id) && p.id !== landing ? [{ p, z: Z + i * Z_STEP }] : [])), [pictures, selPictures, landing]);
 
   return (
-    <group>
-      {pictures.map((p, i) => (
-        // (one landing there, unseen till then, but decoded meanwhile)
-        <Picture key={p.id} p={p} z={Z + i * Z_STEP} selected={selPictures.has(p.id)} hovered={hovered === p.id} hidden={p.id === landing} toWorld={toWorld} />
-      ))}
-    </group>
+    <PartFrames.Provider value={parts}>
+      <group>
+        {pictures.map((p, i) => (
+          // (one landing there, unseen till then, but decoded meanwhile)
+          <Picture key={p.id} p={p} z={Z + i * Z_STEP} hovered={hovered === p.id} hidden={p.id === landing} toWorld={toWorld} />
+        ))}
+      </group>
+      {framed.length > 0 && <Frames framed={framed} toWorld={toWorld} />}
+    </PartFrames.Provider>
   );
 }
 
-function Picture({
+/** A part's work at each frame, before it is drawn: given a pixel's size on the page, and the frame's time. */
+type PartFrame = (px: number, dt: number) => void;
+const PartFrames = createContext<Set<PartFrame> | null>(null);
+
+/** `work` done at each frame by the pictures' one frame callback (Pictures2D), as long as the part is there. */
+function usePartFrame(work: PartFrame): void {
+  const parts = useContext(PartFrames);
+  const latest = useRef(work);
+  latest.current = work;
+  useEffect(() => {
+    if (!parts) return;
+    const part: PartFrame = (px, dt) => latest.current(px, dt);
+    parts.add(part);
+    return () => void parts.delete(part);
+  }, [parts]);
+}
+
+// (drawn again only as it changes: a pointer coming onto one picture leaves the other thousands as they were)
+const Picture = memo(function Picture({
   p,
   z,
-  selected,
   hovered,
   hidden,
   toWorld,
 }: {
   p: PictureItem;
   z: number;
-  selected: boolean;
   hovered: boolean;
   hidden: boolean;
   toWorld: (cx: number, cy: number) => Pt;
 }) {
   const store = useEditorStore();
-  const { camera, gl, invalidate } = useThree();
+  // (the canvas's state taken a part at a time: the whole of it would draw every picture again as any of it changed)
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
   const texture = useTexture(p, gl, invalidate);
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
-  const px = 1 / zoom;
-  // the light round it while the pointer is on it, coming and going
-  const lightMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
-  const lightRound = useRef<THREE.Group>(null);
-  useEffect(() => () => lightMaterial.dispose(), [lightMaterial]);
+  // the light round it while the pointer is on it, coming and going - there only as long as it is, as are the rings below
+  // (each part there for every picture was a part to take away as thousands were deleted, each taking longer for them all)
+  const [glowing, setGlowing] = useState(false);
+  if (hovered && !glowing) setGlowing(true);
+  const figures = useMemo(() => figuresIn(p), [p]);
+  const [ringed, setRinged] = useState(false);
+  usePartFrame(() => {
+    const now = performance.now();
+    const on = figures.some((f) => insideBox(spotOn(f.sha256, f.page, now), f.box));
+    if (on !== ringed) setRinged(on);
+  });
   // an atom lit in the drawing from a place in it: unlit as the pointer leaves it - or as it goes, under the pointer
   const lit = useRef(false);
   const unlight = () => {
@@ -212,24 +247,12 @@ function Picture({
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- (once, as it goes)
   useEffect(() => unlight, []);
-  useFrame((_, dt) => {
-    const m = lightMaterial;
-    const to = hovered ? LIT : 0;
-    // (not drawn at all while there is no light: four draws a picture, for nothing)
-    if (lightRound.current) lightRound.current.visible = m.opacity > 1e-3 || to > 0;
-    if (Math.abs(m.opacity - to) < 1e-3) {
-      m.opacity = to;
-      return;
-    }
-    m.opacity = follow(m.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-    invalidate();
-  });
   // taken hold of by a press held on it: where, in its own frame, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   const [, setTick] = useState(0);
   // (a frame for each change of it: let go, its light goes from the next one)
   useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
+  usePartFrame(() => {
     if (!held || !heldShows(held, performance.now())) return;
     setTick((t) => t + 1);
     invalidate();
@@ -305,21 +328,10 @@ function Picture({
     window.addEventListener("pointerup", onUp, true);
   };
 
-  const pad = LIT_PAD_PX * px;
   const now = performance.now();
   return (
     <group position={[p.x, p.y, z]} rotation={[0, 0, p.turn ?? 0]} visible={!hidden}>
-      {/* (round it, not under it: a light under a picture shows through it at so near a depth) */}
-      <group ref={lightRound} position={[0, 0, -Z_STEP / 2]}>
-        {[
-          [0, (p.h + pad) / 2, p.w + 2 * pad, pad],
-          [0, -(p.h + pad) / 2, p.w + 2 * pad, pad],
-          [(p.w + pad) / 2, 0, pad, p.h],
-          [-(p.w + pad) / 2, 0, pad, p.h],
-        ].map(([x, y, w, h], k) => (
-          <mesh key={k} position={[x, y, 0]} scale={[w, h, 1]} geometry={PLANE} material={lightMaterial} />
-        ))}
-      </group>
+      {glowing && <LightRound p={p} on={hovered} out={() => setGlowing(false)} />}
       <mesh
         scale={[p.w, p.h, 1]}
         onPointerOver={() => store.getState().setHoveredPicture(p.id)}
@@ -332,7 +344,7 @@ function Picture({
           const q = local(e.point);
           const st = store.getState();
           let atom: number | null = null;
-          for (const f of figuresIn(p)) {
+          for (const f of figures) {
             const x = f.box[0] + (q.x / p.w + 0.5) * (f.box[2] - f.box[0]);
             const y = f.box[1] + (0.5 - q.y / p.h) * (f.box[3] - f.box[1]);
             atom ??= atomAtSpot(st.model, f.sha256, f.page, x, y);
@@ -347,11 +359,45 @@ function Picture({
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
-      {figuresIn(p).map((f) => (
-        <SpotRing key={f.page ?? "own"} p={p} from={f} />
-      ))}
+      {ringed && figures.map((f) => <SpotRing key={f.page ?? "own"} p={p} from={f} />)}
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
-      {selected && <Frame p={p} px={px} toWorld={toWorld} />}
+    </group>
+  );
+});
+
+/** The light round a picture (Picture's), coming as it is `on` and going as it is not - `out` called once gone - its band the same width on the screen at any zoom. */
+function LightRound({ p, on, out }: { p: PictureItem; on: boolean; out: () => void }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
+  useEffect(() => () => material.dispose(), [material]);
+  const bars = useRef<(THREE.Mesh | null)[]>([]);
+  usePartFrame((px, dt) => {
+    const pad = LIT_PAD_PX * px;
+    const at = [
+      [0, (p.h + pad) / 2, p.w + 2 * pad, pad],
+      [0, -(p.h + pad) / 2, p.w + 2 * pad, pad],
+      [(p.w + pad) / 2, 0, pad, p.h],
+      [-(p.w + pad) / 2, 0, pad, p.h],
+    ];
+    bars.current.forEach((b, k) => {
+      b?.position.set(at[k][0], at[k][1], 0);
+      b?.scale.set(at[k][2], at[k][3], 1);
+    });
+    const to = on ? LIT : 0;
+    if (Math.abs(material.opacity - to) < 1e-3) {
+      material.opacity = to;
+      if (!on) out();
+      return;
+    }
+    material.opacity = follow(material.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
+    invalidate();
+  });
+  return (
+    // (round it, not under it: a light under a picture shows through it at so near a depth)
+    <group position={[0, 0, -Z_STEP / 2]}>
+      {[0, 1, 2, 3].map((k) => (
+        <mesh key={k} ref={(m) => void (bars.current[k] = m)} geometry={PLANE} material={material} />
+      ))}
     </group>
   );
 }
@@ -364,16 +410,18 @@ function Picture({
 /** Where a picture shows a figure an atom may have been read from: the box of the PDF's page it was cut out of, if it was, and itself, in its pixels (no page). */
 type FigureIn = { sha256: string; page?: number; box: PictureFrom["box"] };
 const figuresIn = (p: PictureItem): FigureIn[] => [...(p.from ? [p.from] : []), { sha256: p.sha256, box: [0, 0, p.px[0], p.px[1]] }];
+/** Whether the ring `s` is in the figure's `box`. */
+const insideBox = (s: { x: number; y: number } | null, [x0, y0, x1, y1]: FigureIn["box"]) => !!s && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
 
 function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
-  const { invalidate } = useThree();
+  const invalidate = useThree((s) => s.invalidate);
   const mesh = useRef<THREE.Mesh>(null!);
-  useFrame(() => {
+  usePartFrame(() => {
     const now = performance.now();
     const s = spotOn(from.sha256, from.page, now);
     const [x0, y0, x1, y1] = from.box;
-    const inside = s && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
-    mesh.current.visible = !!inside;
+    const inside = insideBox(s, from.box);
+    mesh.current.visible = inside;
     if (s && inside) {
       const k = p.w / (x1 - x0);
       mesh.current.position.set(((s.x - x0) / (x1 - x0) - 0.5) * p.w, (0.5 - (s.y - y0) / (y1 - y0)) * p.h, Z_STEP / 4);
@@ -390,29 +438,73 @@ function SpotRing({ p, from }: { p: PictureItem; from: FigureIn }) {
 }
 
 /**
- * A selected picture's frame, drawn in its own turned frame: its edge in
+ * The selected pictures' frames, drawn all together: each one's edge in
  * Meno's light and a handle at each corner, the same size on the screen at
- * any zoom. A handle dragged makes the picture larger or smaller - its
+ * any zoom. A handle dragged makes its picture larger or smaller - its
  * proportions kept, the opposite corner where it was - as one step; Escape
  * on the way lets it go, as large as it was.
+ *
+ * (A frame each, its handles each a part to point at, was some twenty parts
+ * a picture: thousands selected took seconds to come and to go.)
  */
-function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: number, cy: number) => Pt }) {
+function Frames({ framed, toWorld }: { framed: { p: PictureItem; z: number }[]; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
-  const { gl } = useThree();
-  const edge = EDGE;
-  const corners = cornersOf(p);
-  // (each handle by the corner it is at - lower left, lower right, upper right, upper left - and the one across from it)
-  const handles = [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ] as const;
-  const startScale = (k: number, ev: PointerEvent) => {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const invalidate = useThree((s) => s.invalidate);
+  // the edges, as one set of lines
+  const edges = useMemo(() => {
+    const at = new Float32Array(framed.length * 24);
+    framed.forEach(({ p, z }, i) => {
+      const c = cornersOf(p);
+      for (let k = 0; k < 4; k++) {
+        const a = c[k];
+        const b = c[(k + 1) % 4];
+        at.set([a.x, a.y, z, b.x, b.y, z], i * 24 + k * 6);
+      }
+    });
+    return new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(at, 3));
+  }, [framed]);
+  useEffect(() => () => void edges.dispose(), [edges]);
+  // the handles, each corner's an instance - what a press takes, never drawn; its white; its ring - room kept for more as more are selected
+  const room = 2 ** Math.ceil(Math.log2(Math.max(4, framed.length * 4)));
+  const hit = useRef<THREE.InstancedMesh>(null);
+  const fill = useRef<THREE.InstancedMesh>(null);
+  const ring = useRef<THREE.InstancedMesh>(null);
+  const laidAt = useRef(0);
+  const lay = useCallback(
+    (px: number) => {
+      const meshes = [hit.current, fill.current, ring.current];
+      const m = new THREE.Matrix4();
+      framed.forEach(({ p, z }, i) =>
+        cornersOf(p).forEach((c, k) => {
+          m.makeScale(HANDLE_PX * px, HANDLE_PX * px, 1).setPosition(c.x, c.y, z + 0.001);
+          for (const mesh of meshes) mesh?.setMatrixAt(i * 4 + k, m);
+        }),
+      );
+      for (const mesh of meshes) {
+        if (!mesh) continue;
+        mesh.count = framed.length * 4;
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingSphere();
+      }
+      laidAt.current = px;
+      invalidate();
+    },
+    [framed, invalidate],
+  );
+  // (laid before they are first drawn, and again as the zoom changes)
+  useLayoutEffect(() => lay(1 / ((camera as THREE.OrthographicCamera).zoom || 1)), [lay, room, camera]);
+  usePartFrame((px) => {
+    if (px !== laidAt.current) lay(px);
+  });
+  const startScale = (p: PictureItem, k: number, ev: PointerEvent) => {
+    const corners = cornersOf(p);
     const fixed = corners[(k + 2) % 4];
     const grabbed = corners[k];
     const len = Math.hypot(grabbed.x - fixed.x, grabbed.y - fixed.y);
     const dir = { x: (grabbed.x - fixed.x) / len, y: (grabbed.y - fixed.y) / len };
+    const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
     const least = (LEAST_PX * px * len) / Math.min(p.w, p.h);
     const gesture = `scale-${performance.now()}`;
     const st = store.getState();
@@ -455,40 +547,31 @@ function Frame({ p, px, toWorld }: { p: PictureItem; px: number; toWorld: (cx: n
     window.addEventListener("keydown", onKey, true);
   };
   // (the pointer a corner shows: down to the right or up to the right, as it points on the screen)
-  const cornerCursor = (k: number) => {
-    const c = corners[k];
+  const cornerCursor = (at: number | undefined) => {
+    if (at == null || !framed[at >> 2]) return null;
+    const { p } = framed[at >> 2];
+    const c = cornersOf(p)[at % 4];
     return (c.x - p.x) * (c.y - p.y) < 0 ? "corner-down" : "corner-up";
   };
   return (
     <group>
-      <lineLoop geometry={edge} scale={[p.w, p.h, 1]} renderOrder={39}>
-        <lineBasicMaterial color={COLORS.highlight} depthTest={false} toneMapped={false} transparent />
-      </lineLoop>
-      {handles.map(([i, j], k) => (
-        <group
-          key={k}
-          position={[(i * p.w) / 2, (j * p.h) / 2, 0.001]}
-          scale={HANDLE_PX * px}
-          onPointerOver={() => setCursor(gl.domElement, cornerCursor(k))}
-          onPointerOut={() => setCursor(gl.domElement, null)}
-          onPointerDown={(e) => {
-            if (e.nativeEvent.button !== 0) return;
-            e.stopPropagation();
-            startScale(k, e.nativeEvent);
-          }}
-        >
-          {/* (what a press takes - never drawn: a pointer finds it all the same) */}
-          <mesh geometry={HANDLE_HIT_DISC}>
-            <meshBasicMaterial visible={false} transparent opacity={0} depthWrite={false} />
-          </mesh>
-          <mesh renderOrder={41} geometry={HANDLE_DISC}>
-            <meshBasicMaterial color="#ffffff" depthTest={false} toneMapped={false} />
-          </mesh>
-          <mesh renderOrder={42} geometry={HANDLE_RING}>
-            <meshBasicMaterial color={COLORS.highlight} depthTest={false} toneMapped={false} />
-          </mesh>
-        </group>
-      ))}
+      <lineSegments geometry={edges} material={EDGE_LINE} renderOrder={39} frustumCulled={false} />
+      <instancedMesh
+        key={room}
+        ref={hit}
+        args={[HANDLE_HIT_DISC, HANDLE_HIT_FILL, room]}
+        frustumCulled={false}
+        onPointerOver={(e) => setCursor(gl.domElement, cornerCursor(e.instanceId))}
+        onPointerMove={(e) => setCursor(gl.domElement, cornerCursor(e.instanceId))}
+        onPointerOut={() => setCursor(gl.domElement, null)}
+        onPointerDown={(e) => {
+          if (e.nativeEvent.button !== 0 || e.instanceId == null || !framed[e.instanceId >> 2]) return;
+          e.stopPropagation();
+          startScale(framed[e.instanceId >> 2].p, e.instanceId % 4, e.nativeEvent);
+        }}
+      />
+      <instancedMesh key={`fill-${room}`} ref={fill} args={[HANDLE_DISC, HANDLE_FILL, room]} renderOrder={41} frustumCulled={false} />
+      <instancedMesh key={`ring-${room}`} ref={ring} args={[HANDLE_RING, HANDLE_LINE, room]} renderOrder={42} frustumCulled={false} />
     </group>
   );
 }
