@@ -789,7 +789,11 @@ molecules in 3D.
   they go over to the workspace's point (`pointPx`), so a PDF prints at its
   own size in any style and keeps it through a change.
 - **One undo step.** The style and the converted page go together, in one
-  edit ("drawing style"); a preset chosen is one step. A slider in the card
+  edit ("drawing style"). A preset chosen is one step and does not jump:
+  the new style is taken at once but its bond length eases from the old one
+  over `DURATION.move` (`EASE`), each frame converting from the page as it
+  was, coalesced, the preset itself set as the ease ends (the command
+  centre, 2026-10-14). A slider in the card
   converts live at every tick, always from the page as it was when the drag
   began (the starting style to the current one, never tick upon tick, so no
   error builds up), and the ticks coalesce into one step as it is let go.
