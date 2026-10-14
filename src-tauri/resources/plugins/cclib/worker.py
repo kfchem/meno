@@ -543,6 +543,8 @@ def op_read(m):
 
 # a Gaussian route line (it echoes its route section, each line begun by " #")
 GAUSSIAN_ROUTE = re.compile(r"^ #.*$", re.M)
+# ORCA's summary of a reaction path it followed
+ORCA_IRC = "IRC PATH SUMMARY"
 # a point on a Gaussian reaction path: "Point Number:  3          Path Number:   1"
 IRC_POINT = re.compile(r"Point Number:\s+(\d+)\s+Path Number:\s+(\d+)")
 
@@ -572,6 +574,10 @@ def path_said(data, text, frames):
         out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Relaxed scan", "value": f"{len(data.scanenergies)} points", "rank": 0})
     elif kind == "irc":
         out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": f"{frames} points", "rank": 0})
+    elif ORCA_IRC in (text or ""):
+        # (ORCA's reaction path, after its transition state's optimisation: its points are not among the geometries
+        # read - those are the optimisation's - and that is said; ORCA writes them to an XYZ file of their own)
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": "not read", "rank": 0})
     if excited_path(data, frames):
         out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
     return out
@@ -659,7 +665,8 @@ def job_kind(out):
     """What a job did, in words, by what was read of it: an optimisation (and frequencies), frequencies, or a
     single point."""
     vibrations = any(r.get("id") == "vibrations" for r in out.get("results") or [])
-    path = next((r["label"] for r in out.get("results") or [] if r.get("id") == "run.path"), None)
+    # (a scan or a reaction path read - not one said not read, after an optimisation that was)
+    path = next((r["label"] for r in out.get("results") or [] if r.get("id") == "run.path" and r.get("value") != "not read"), None)
     if path:
         return path
     if out.get("optimised") is not None:

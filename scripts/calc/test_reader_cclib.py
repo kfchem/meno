@@ -224,6 +224,10 @@ class Paths(unittest.TestCase):
         # (and a file's job is said so, not "Optimisation")
         self.assertEqual(worker.job_kind({"optimised": None, "results": said}), "Relaxed scan")
 
+    def test_orca_s_reaction_path_after_its_transition_state_said_not_read(self):
+        said = worker.path_said(types.SimpleNamespace(), "...\n                       IRC PATH SUMMARY              \n...", 7)
+        self.assertEqual([(r["label"], r["value"]) for r in said], [("Reaction path", "not read")])
+
     def test_an_excited_state_s_geometries_have_their_energies_unread(self):
         excited = types.SimpleNamespace(etenergies=[30000.0, 40000.0])
         self.assertTrue(worker.excited_path(excited, 5))
