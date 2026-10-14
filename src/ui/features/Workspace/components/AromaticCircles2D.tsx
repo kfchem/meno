@@ -12,7 +12,7 @@ import {
 import CapJoinLine from "./CapJoinLine";
 import { editorLayoutOptions } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { TAU, follow } from "../../../theme/motion";
 
 export default function AromaticCircles2D() {
@@ -21,7 +21,7 @@ export default function AromaticCircles2D() {
   const { toggleAromatic, toggleRing, aromaticEnabled, aromaticRings } =
     useEditor();
   // the rings' circles come with the rest of the drawing
-  const { atoms, bonds, opts, layout, zoom } = useDrawnLayout();
+  const { atoms, bonds, opts, layout } = useDrawnLayout();
   const [now, setNow] = useState(0);
   // each circle as last laid out, with how far it is in view; the preview's
   // last place, with how far it is in view
@@ -72,6 +72,10 @@ export default function AromaticCircles2D() {
     r: number;
   } | null>(null);
   const [hoverStart, setHoverStart] = useState<number | null>(null);
+  // (the view's zoom, while there is a circle or a preview to draw: their
+  // lines are as wide as a bond's on the screen - with none, a zoom draws
+  // nothing here again)
+  const zoom = useDrawnZoom((z) => (hoverCenter || circleSeen.current.size || ((layout as any).circles ?? []).length ? z : 0));
 
   // Every ring's circle, as it would be drawn turned on, to discover ring
   // centers even when enabled=false: the circles alone, not the drawing

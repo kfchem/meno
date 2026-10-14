@@ -304,7 +304,12 @@ What is left before the editor counts as finished, and in what order, is in
   `Labels2D`, previews, hover overlays, `PanZoom2D`, `FitToContent2D`, …).
   `DrawnLayoutProvider` lays the drawing out once - the model, with an atom
   being dragged or a bond being drawn out where the gesture has them - and
-  the drawing layers read that one layout (`useDrawnLayout`). The move and
+  the drawing layers read that one layout (`useDrawnLayout`), with the zoom
+  it was laid out at, which changes only as the layout does. The view's
+  zoom is read apart from it (`useDrawnZoom`), each layer taking only what
+  it needs of it - a line kept as wide as the screen's least, say - and
+  drawn again only as that changes: a zoom draws again what it changes, not
+  every layer at every frame of it. The move and
   extend previews only work out where the atom goes and publish it
   (`moveDrag.preview`, `extend.preview`); they draw nothing of the molecule
   themselves, so a gesture looks exactly as its result will. Model bonds
