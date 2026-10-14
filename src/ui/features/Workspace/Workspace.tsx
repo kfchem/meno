@@ -111,7 +111,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
-import { setSaver } from "../../../lib/doc/savers";
+import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
@@ -165,6 +165,7 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -513,7 +514,9 @@ function WorkspaceContent({
       setWorking3d("Drawing the formula…");
       setChemError(null);
       try {
-        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
+        // (laid out in the drawing's style, as Clean-up lays it out)
+        const style = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
@@ -843,14 +846,35 @@ function WorkspaceContent({
   const askUndo = useEditor((s) => s.askUndo);
   useEffect(() => {
     if (!active) return;
+    // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
+    const escape = () => {
+      if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    };
     const onKey = (e: KeyboardEvent) => {
+      // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)
       const intent = undoIntent(e);
-      if (!intent || !store.getState().holdUndo(intent)) return;
+      if (!intent) return;
+      const s = store.getState();
+      // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
+      // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
+      const words = wordsUnderWay(s);
+      if (words || gestureUnderWay(s)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!words) escape();
+        return;
+      }
+      if (!s.holdUndo(intent)) return;
       e.preventDefault();
       e.stopPropagation();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    // (a gesture lost - the window left, the pointer taken: let go, its flags with it)
+    const lost = letLostGesturesGo(window, () => store.getState(), escape);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      lost();
+    };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
@@ -1528,7 +1552,7 @@ function WorkspaceContent({
             }}
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles);
+              const drawn = await structureFromSmiles(smiles, style);
               const st = store.getState();
               const { at } = quickAdd;
               st.setQuickAdd(null);
@@ -2190,6 +2214,9 @@ function TabFiles({
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
+  const store = useEditorStore();
+  // (where its workspace is saved, read as a file is opened: the same file opened again brings this tab forward)
+  useEffect(() => (ownTab ? setSavedPathOf(tabId, () => store.getState().savedPath) : undefined), [ownTab, tabId, store]);
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {

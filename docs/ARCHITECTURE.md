@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
@@ -85,6 +86,7 @@ src-tauri/
   src/fonts.rs            the system's typefaces
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
+  src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
   capabilities/           permission sets for the main window
   resources/py/           the lock files of Meno's own Python profiles (the console's, workflows');
                           uv and pixi are not bundled but fetched the first time an environment
@@ -172,7 +174,8 @@ white - title bar, tabs and all - with no way back but quitting.
 Meno's notices are (`StoppedCard`): what stopped, that what it showed is
 kept, the error in grey beneath, and **Reload**, which makes the part again
 from nothing. Each logs the error with `console.error`, naming the part
-("Meno: the canvas stopped working.") and where in the tree it was.
+("Meno: the canvas stopped working.") and where in the tree it was - into
+Meno's log too (*Meno's log*).
 
 | Part | Where | Its card | Reload also |
 | --- | --- | --- | --- |
@@ -208,7 +211,10 @@ Nothing a part shows lives in the part, so a part made again shows the same:
   being typed, words being carried out of a PDF, Quick Add, a workflow
   menu and a PDF's menu asked for go with it; what is selected (words in
   a PDF and pictures too), how the molecules in 3D are turned and the
-  column stay.
+  column stay. A gesture lost while the canvas stays - the window left,
+  the pointer taken from it - is let go by its own Escape, and the flags
+  it leaves are cleared (`endGestures`, `letLostGesturesGo` in
+  store/gesture): a flag left set would take every undo after it.
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
@@ -217,6 +223,47 @@ the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
 `useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
 the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
 the document, and a save that fails says so under the canvas's card.
+
+## Meno's log
+
+A release started from the Finder or Explorer has no terminal, so what
+Meno says of itself is written to a file as well, `<app data>/logs/meno.log`
+(on a Mac in `~/Library/Application Support/com.kfchem.meno/logs/`, on
+Windows in `%APPDATA%\com.kfchem.meno\logs\`). Everything still goes where it
+went before, to stderr and the page's console.
+
+- **What goes in**: a line saying which Meno started (its version, the
+  system and the processor); the backend's own lines (`logfile::logged!`,
+  where `eprintln!` was) and a panic, with where it happened; and the
+  page's `console.error` and `console.warn`, and errors thrown and never
+  caught (`lib/log.ts`, set going by the first module `main.tsx` imports,
+  through `log_page`). Each line has the time in UTC and what it came
+  from: `meno`, `page error` or `page warn`.
+- **Nothing from documents, nor files' names**: a line says what went
+  wrong. Of an error it has the name and the stack's frames; the message
+  only of a `TypeError`, `ReferenceError` or `RangeError` - the engine's,
+  about the code that ran - and of that, what it quotes in double quotes
+  left out, as any other message may quote what was read (a file's text, a
+  SMILES, a name). Of words logged it has only Meno's own messages (`KNOWN`
+  in `lib/log.ts`, a tab's name in them left out), any others as `[text]`;
+  a number as it is; and of any other thing only what it is (`[Object]`,
+  `[Map]`). A message newly logged by Meno's code is added to `KNOWN`.
+- **Under 5 MB**: past that the log is begun again, the one before kept as
+  `meno.log.1`, one only. Where it cannot be moved there it is emptied,
+  and where it cannot be emptied either nothing more is written until Meno
+  starts again. The file is opened for each line and closed, its size read
+  from it each time, as another Meno - one Office started, on Windows - may
+  write to it too. The page sends at most 100 lines a minute; those past
+  that are counted, and the next line says how many were left out. A line
+  from the page is cut at 4000 bytes.
+- The log is begun before Tauri is built, in the data folder as the system
+  says it (its folder for apps' data, and Meno's identifier), so that a
+  panic as Meno starts is in it; where Tauri has the folder elsewhere it
+  carries on there. Lines from before either, in the first moments, are
+  kept, up to 200, and written once it is begun.
+- **Settings > General, *Open log folder*** shows the log in the Finder or
+  Explorer (`log_spot`: the log itself, or its folder, made first where
+  there is none yet), to send with a report. Meno shows no log of its own.
 
 ## How things move
 
@@ -246,6 +293,19 @@ moves together, in the same time and the same way.
   invalidates only while something moves (see *Frame loop*). The drawing
   itself goes from shape to shape in `DrawnLayout` (`utils/glide.ts`), and
   a fit goes there through `components/viewGoal.ts`.
+  A layer of many parts - shapes, writing by hand, words on the page - has
+  one frame callback for them all (`components/partFrames.ts`): a part has
+  work at each frame (`usePartFrame`) only while something of it moves - a
+  light coming and going, a press held (`HeldGlow`) - and none at rest. Its
+  parts are drawn again only as they change (`memo`), share what they draw
+  with where they can (`SQUARE`, `UNSEEN`; the selected shapes' handles in
+  one set of instances), and take a press by the box they give as it comes
+  (`boxRaycast`), at the zoom of the press, not by a plane made again as
+  the view zooms. What of them is sized on the screen - a light, a
+  handle, a caption's edge - is there only while it is shown, and drawn at
+  the zoom the drawing is taken up at (`useDrawnZoom`), so a part at rest
+  is not drawn again as the view zooms. `manyParts.test.tsx` counts what
+  they make.
 
 ## Pointers
 
@@ -1094,6 +1154,7 @@ the frames standing where renders will put what they make
 
 | Command | Called from | Purpose |
 | --- | --- | --- |
+| `log_page` | `lib/log.ts` | A line of the page's errors or warnings into Meno's log (`logfile.rs`), cut at 4000 bytes. |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
 | `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |

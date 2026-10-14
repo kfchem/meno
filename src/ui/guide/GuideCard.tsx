@@ -8,7 +8,7 @@ import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../lib/calc/workers";
 import { forThisSystem } from "../../lib/plugins/here";
 import type { GuidePlace } from "../../lib/plugins/guide";
-import { placeCard, type Box } from "./place";
+import { placeCard, waitsUnseen, type Box } from "./place";
 
 /**
  * A plugin's guide, a step at a time (lib/plugins/guides): a card in Meno's
@@ -27,7 +27,8 @@ export default function GuideCard() {
   const page = usePart(shown ? "page" : undefined);
   const cardRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 160 });
-  const isShown = shown != null;
+  // (a step about a workspace, while none is in front, waits out of sight)
+  const isShown = shown != null && !waitsUnseen(at, part, page);
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -57,7 +58,7 @@ export default function GuideCard() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {shown && (
+        {shown && isShown && (
           <motion.div
             key={shown.plugin.id}
             ref={cardRef}

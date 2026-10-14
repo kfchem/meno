@@ -28,6 +28,8 @@ public static class MacGui {
 
   public class WindowInfo {
     public uint Id; public int Pid; public int Layer; public string Owner;
+    // (its owner's executable's file name: not put into the user's language, as Owner is - "Mitteilungszentrale" in German, say)
+    public string Exe;
     public double X, Y, Width, Height;
     public bool Contains(double x, double y) { return x >= X && y >= Y && x < X + Width && y < Y + Height; }
   }
@@ -60,6 +62,9 @@ public static class MacGui {
   [DllImport(AX)] static extern IntPtr AXUIElementCreateApplication(int pid);
   [DllImport(AX)] static extern int AXUIElementCopyAttributeValue(IntPtr e, IntPtr attr, out IntPtr value);
   [DllImport(AX)] static extern int AXUIElementSetAttributeValue(IntPtr e, IntPtr attr, IntPtr value);
+  [DllImport(AX)] static extern IntPtr AXUIElementCreateSystemWide();
+  [DllImport(AX)] static extern int AXUIElementCopyElementAtPosition(IntPtr app, float x, float y, out IntPtr element);
+  [DllImport(AX)] static extern int AXUIElementGetPid(IntPtr element, out int pid);
   [DllImport(AX)] static extern IntPtr AXValueCreate(uint type, ref CGPoint p);
   [DllImport(AX)] static extern IntPtr AXValueCreate(uint type, ref CGSize s);
   [DllImport(AX)] [return: MarshalAs(UnmanagedType.I1)] static extern bool AXValueGetValue(IntPtr v, uint type, out CGPoint p);
@@ -116,6 +121,7 @@ public static class MacGui {
   // titles do not, and nothing here needs them.
   public static List<WindowInfo> Windows() {
     var list = new List<WindowInfo>();
+    var exes = new Dictionary<int, string>();
     IntPtr arr = CGWindowListCopyWindowInfo(OnScreenOnly | ExcludeDesktop, 0);
     if (arr == IntPtr.Zero) return list;
     try {
@@ -124,9 +130,11 @@ public static class MacGui {
         IntPtr d = CFArrayGetValueAtIndex(arr, i);
         CGRect r;
         if (!CGRectMakeWithDictionaryRepresentation(CFDictionaryGetValue(d, Str("kCGWindowBounds")), out r)) continue;
+        int pid = (int)Int(d, "kCGWindowOwnerPID");
+        if (!exes.ContainsKey(pid)) exes[pid] = ExeName(pid);
         list.Add(new WindowInfo {
-          Id = (uint)Int(d, "kCGWindowNumber"), Pid = (int)Int(d, "kCGWindowOwnerPID"),
-          Layer = (int)Int(d, "kCGWindowLayer"), Owner = Text(d, "kCGWindowOwnerName"),
+          Id = (uint)Int(d, "kCGWindowNumber"), Pid = pid,
+          Layer = (int)Int(d, "kCGWindowLayer"), Owner = Text(d, "kCGWindowOwnerName"), Exe = exes[pid],
           X = r.Origin.X, Y = r.Origin.Y, Width = r.Size.Width, Height = r.Size.Height });
       }
     } finally { CFRelease(arr); }
@@ -239,6 +247,38 @@ public static class MacGui {
     IntPtr s = Send(app, sel_registerName("localizedName"));
     IntPtr utf8 = s == IntPtr.Zero ? IntPtr.Zero : Send(s, sel_registerName("UTF8String"));
     return utf8 == IntPtr.Zero ? "pid " + pid : Marshal.PtrToStringUTF8(utf8);
+  }
+
+  // The file name of the executable a process runs - SecurityAgent,
+  // NotificationCenter - or "" where it is not to be had.
+  public static string ExeName(int pid) {
+    byte[] buf = new byte[4096];
+    if (proc_pidpath(pid, buf, (uint)buf.Length) <= 0) return "";
+    string path = System.Text.Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0));
+    return path.Substring(path.LastIndexOf('/') + 1);
+  }
+
+  // The process whose element a click at a point in global points would
+  // reach, as Accessibility tells it - through windows that let clicks go
+  // by, as Notification Center's empty one over the whole screen does - or
+  // -1 where it cannot tell.
+  public static int PidAt(double x, double y) {
+    IntPtr sys = AXUIElementCreateSystemWide();
+    if (sys == IntPtr.Zero) return -1;
+    try {
+      IntPtr el;
+      if (AXUIElementCopyElementAtPosition(sys, (float)x, (float)y, out el) != 0 || el == IntPtr.Zero) return -1;
+      try {
+        int pid;
+        return AXUIElementGetPid(el, out pid) == 0 ? pid : -1;
+      } finally { CFRelease(el); }
+    } finally { CFRelease(sys); }
+  }
+
+  // The process a process answers to - a web view's content process, the
+  // app it draws for.
+  public static int ResponsiblePid(int pid) {
+    try { return responsibility_get_pid_responsible_for_pid(pid); } catch (Exception) { return -1; }
   }
 
   // macOS grants Screen Recording and Accessibility not to this process but
@@ -466,13 +506,114 @@ function Wait-MenoFront {
     return $false
 }
 
+# The windows of the system's own that may float over Meno and take input
+# meant for it: a password or authorization prompt, a notification, an
+# accessibility warning (2026-10-14: three clicks of a run landed on an
+# authorization prompt, left up on screen by something else).
+# By their executables' names, which are not put into the user's language as
+# the windows' owners are.
+$script:SystemExes = @("SecurityAgent", "UserNotificationCenter", "coreauthd", "universalAccessAuthWarn")
+
+function Find-SystemWindow {
+    <#
+      .SYNOPSIS
+      The first window of `$Windows (front to back, as [MacGui]::Windows()
+      lists them) that is the system's - by its owner's executable, or set at
+      layer 1000 or higher, over every app's - or $null. The Window Server's
+      own small marks at the top layer (the recording dot, the pointer, which
+      it lists after a synthetic move), no larger than 64x64 pt, are no such
+      window.
+    #>
+    param([AllowEmptyCollection()] [object[]] $Windows)
+    foreach ($w in $Windows) {
+        if ($script:SystemExes -contains $w.Exe) { return $w }
+        $mark = $w.Owner -eq "Window Server" -and $w.Layer -eq 2147483630 -and $w.Width -le 64 -and $w.Height -le 64
+        if ($w.Layer -ge 1000 -and -not $mark) { return $w }
+    }
+    return $null
+}
+
+function Find-WindowAt {
+    <#
+      .SYNOPSIS
+      The window in front at a point in global points, of `$Windows listed
+      front to back - the one a click there would land in - or $null; where
+      Accessibility cannot say (`[MacGui]::PidAt`), what the guard goes by.
+      The Window Server's own marks, windows below the desktop's, and a host
+      over the whole screen above the apps' windows - Notification Center's,
+      empty, which clicks go through - are left out.
+    #>
+    param([AllowEmptyCollection()] [object[]] $Windows, [double] $X, [double] $Y)
+    foreach ($w in $Windows) {
+        if ($w.Layer -lt 0 -or $w.Owner -eq "Window Server") { continue }
+        if ($w.Layer -gt 0 -and $w.Layer -lt 1000 -and $w.X -le 0 -and $w.Y -le 0 -and $w.Width -ge 1000 -and $w.Height -ge 700) { continue }
+        if ($X -ge $w.X -and $X -lt $w.X + $w.Width -and $Y -ge $w.Y -and $Y -lt $w.Y + $w.Height) { return $w }
+    }
+    return $null
+}
+
+# The windows on screen, listed again at most every 200 ms: every input asks,
+# and a list takes a few milliseconds.
+$script:ScreenWindows = $null
+$script:ScreenWindowsAt = [datetime]::MinValue
+
+function Get-ScreenWindows {
+    param([switch] $Again)
+    $now = [datetime]::UtcNow
+    if ($Again -or $null -eq $script:ScreenWindows -or ($now - $script:ScreenWindowsAt).TotalMilliseconds -gt 200) {
+        $script:ScreenWindows = @([MacGui]::Windows())
+        $script:ScreenWindowsAt = $now
+    }
+    return , $script:ScreenWindows
+}
+
 function Assert-MenoFront {
+    <#
+      .SYNOPSIS
+      Stop before input that would not go to Meno: with another app in
+      front, with a window of the system's up anywhere on screen, or - given
+      the point a click, a drag or a wheel is sent at, in global points -
+      with that point on a window that is not Meno's.
+    #>
+    param($At)
     # Input goes to whichever app is in front and to whichever window is
     # under the pointer, not to Meno by name. If Meno has lost the front, the
     # next keystroke lands in some other app, so stop rather than send it.
-    if ([MacGui]::FrontmostPid() -eq $script:MenoPid) { return }
-    $front = [MacGui]::AppName([MacGui]::FrontmostPid())
-    throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
+    if ([MacGui]::FrontmostPid() -ne $script:MenoPid) {
+        $front = [MacGui]::AppName([MacGui]::FrontmostPid())
+        throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
+    }
+    # (a system window - a password prompt - can float over Meno with Meno
+    # still the app in front: a key or a click sent now could answer it)
+    $windows = Get-ScreenWindows
+    $system = Find-SystemWindow $windows
+    # (seen in a list up to 200 ms old: looked for again before stopping)
+    if ($system) {
+        $windows = Get-ScreenWindows -Again
+        $system = Find-SystemWindow $windows
+    }
+    if ($system) {
+        throw ("A window of the system's is on screen - '$($system.Owner)', layer $($system.Layer), at ($([int]$system.X), $([int]$system.Y)), " +
+            "$([int]$system.Width)x$([int]$system.Height) pt - and input sent now could land in it. Stopping; nothing was sent. " +
+            "Leave it to whoever it is for, and run again once it is gone.")
+    }
+    if ($At) {
+        # (as Accessibility sees the point - through a window clicks go by -
+        # Meno's, or a process drawing for it, a web view's; where it cannot
+        # tell, the window in front there)
+        $hit = [MacGui]::PidAt($At.X, $At.Y)
+        $ok = if ($hit -gt 0) { $hit -eq $script:MenoPid -or [MacGui]::ResponsiblePid($hit) -eq $script:MenoPid } else { $null }
+        if ($null -eq $ok) {
+            $top = Find-WindowAt $windows $At.X $At.Y
+            $ok = [bool]($top -and $top.Pid -eq $script:MenoPid)
+            $whose = if ($top) { "'$($top.Owner)'" } else { "nothing" }
+        } else {
+            $whose = "'$([MacGui]::AppName($hit))'"
+        }
+        if (-not $ok) {
+            throw "The point ($([int]$At.X), $([int]$At.Y)) pt is not on Meno's window - $whose is there - so input sent at it would not go to Meno. Stopping; nothing was sent."
+        }
+    }
 }
 
 function Set-MenoWindow {
@@ -495,6 +636,8 @@ function Set-MenoWindow {
     Get-WindowInfo | Out-Null
     [MacGui]::Activate($script:MenoPid) | Out-Null
     [MacGui]::Place($script:MenoPid, $script:Window, $Left, $Top, $Width, $Height)
+    # (the windows listed for the guard, as they were before it moved)
+    $script:ScreenWindows = $null
     Start-Sleep -Milliseconds 400
     $w = Get-WindowInfo
     if ([math]::Abs($w.Width - $Width) -ge 1 -or [math]::Abs($w.Height - $Height) -ge 1) {
@@ -602,7 +745,7 @@ function Invoke-MenoClick {
         [ValidateSet("Shortcut", "Shift", "Alt")] [string[]] $Hold = @()
     )
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     Set-HeldKeys $Hold
     try { Invoke-MacClick $p $Count $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -662,7 +805,7 @@ function Invoke-MenoDrag {
     $a = ConvertTo-Screen $FromX $FromY
     $b = ConvertTo-Screen $ToX $ToY
     $path = Get-DragPath $FromX $FromY $Via $ToX $ToY $Steps
-    Assert-MenoFront
+    Assert-MenoFront -At $a
     Set-HeldKeys $Hold
     try { Invoke-MacDrag $a $b $path $StepMs $PressMs $Count $AtStep $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -759,7 +902,7 @@ function Invoke-MenoSwipe {
         [int] $DX = 0, [int] $DY = 0, [int] $Steps = 10, [switch] $Held
     )
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     if (-not $Held) {
         [MacGui]::MoveTo($p.X, $p.Y)
         Start-Sleep -Milliseconds 60
@@ -782,7 +925,7 @@ function Invoke-MenoWheel {
     #>
     param([Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y, [int] $Notches = 1)
     $p = ConvertTo-Screen $X $Y
-    Assert-MenoFront
+    Assert-MenoFront -At $p
     [MacGui]::MoveTo($p.X, $p.Y)
     Start-Sleep -Milliseconds 60
     [MacGui]::Scroll($p.X, $p.Y, $Notches * 100)
@@ -982,4 +1125,6 @@ function Wait-MenoSettled {
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
-    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled
+    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
+    # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
+    Find-SystemWindow, Find-WindowAt

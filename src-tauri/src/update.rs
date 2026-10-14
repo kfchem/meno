@@ -186,7 +186,7 @@ pub fn install_on_exit(app: &AppHandle) {
     let restart = updates.restart.load(Ordering::SeqCst);
     // (on Windows the installer is started and this process ends here)
     if let Err(e) = update.restart_after_install(restart).install(bytes) {
-        eprintln!("the update could not be installed: {e}");
+        crate::logfile::logged!("the update could not be installed: {e}");
         return;
     }
     if restart {

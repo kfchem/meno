@@ -90,27 +90,33 @@ type Drawn = { a: Point; b: Point; order: 1 | 2 | 3; stereo?: "up" | "down" | "w
  * where the strokes are shortest. Equal throughout, its narrow end is not
  * told by the strokes.
  */
+// (a hash's first strokes, at its narrow end, may be dots: no way of their own - a small filled
+// shape not twice as long as wide; a line stroked has its path's way, however short, unless it is
+// next to nothing long - a dot drawn as a line's round ends)
+const dotOf = (s: Stroke, filled: ReadonlySet<Stroke>) => len(s) < (filled.has(s) ? 2 : 0.5) * s.w;
+
+/** Two short strokes side by side as a hash's are: one way (or one a dot), near, the step from one to the next across them. */
+function sideBySide(s: Stroke, t: Stroke, bond: number, filled: ReadonlySet<Stroke>): boolean {
+  const [sDot, tDot] = [dotOf(s, filled), dotOf(t, filled)];
+  if (sDot && tDot) return false;
+  const [line, other] = sDot ? [t, s] : [s, t];
+  const u = unit(line.a, line.b);
+  if (!(sDot || tDot) && Math.abs(cross(u, unit(other.a, other.b))) > Math.sin((12 * Math.PI) / 180)) return false;
+  const m = mid(s.a, s.b);
+  const n = mid(t.a, t.b);
+  const d = dist(m, n);
+  // (a twenty-fifth of a bond apart at the least - or, a long bond's many lines set close, two and a half lines' widths)
+  if (d > 0.4 * bond || d < Math.min(0.04 * bond, 2.5 * Math.max(s.w, t.w))) return false;
+  // (the step from one to the next is across them)
+  return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
+}
+
 function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): { hashes: Drawn[]; used: Set<Stroke>; groups: Stroke[][] } {
   const used = new Set<Stroke>();
   const hashes: Drawn[] = [];
   const groups: Stroke[][] = [];
-  // (a hash's first strokes, at its narrow end, may be dots: no way of their own - a small filled
-  // shape not twice as long as wide; a line stroked has its path's way, however short, unless it is
-  // next to nothing long - a dot drawn as a line's round ends)
-  const dot_ = (s: Stroke) => len(s) < (filled.has(s) ? 2 : 0.5) * s.w;
-  const near = (s: Stroke, t: Stroke) => {
-    if (dot_(s) && dot_(t)) return false;
-    const [line, other] = dot_(s) ? [t, s] : [s, t];
-    const u = unit(line.a, line.b);
-    if (!dot_(other) && Math.abs(cross(u, unit(other.a, other.b))) > Math.sin((12 * Math.PI) / 180)) return false;
-    const m = mid(s.a, s.b);
-    const n = mid(t.a, t.b);
-    const d = dist(m, n);
-    // (a twenty-fifth of a bond apart at the least - or, a long bond's many lines set close, two and a half lines' widths)
-    if (d > 0.4 * bond || d < Math.min(0.04 * bond, 2.5 * Math.max(s.w, t.w))) return false;
-    // (the step from one to the next is across them)
-    return Math.abs(dot(unit(m, n), u)) < Math.sin((35 * Math.PI) / 180);
-  };
+  const dot_ = (s: Stroke) => dotOf(s, filled);
+  const near = (s: Stroke, t: Stroke) => sideBySide(s, t, bond, filled);
   const left = new Set(short);
   // (each in turn - those a group let go again at the end, to group anew)
   const queue = [...short];
@@ -222,7 +228,20 @@ function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<S
       const middle = group[offs.indexOf([...offs].sort((p, q) => p - q)[1])];
       ends = [middle.a, middle.b];
     } else if (len(sorted[1]) < 0.85 * len(sorted[0])) {
-      ends = [sorted[0].a, sorted[0].b];
+      // (the longer line's ends, the second drawn inside it - but where the two end together at one end and the longer runs on alone
+      // past the other, to nothing, while the shorter ends there by other lines' ends, it ran on past its atom: that end is the
+      // shorter's, taken onto the longer)
+      const [l0, l1] = sorted;
+      const along = (p: Point) => dot(u, { x: p.x - l0.a.x, y: p.y - l0.a.y });
+      const on = (t: number): Point => ({ x: l0.a.x + u.x * t, y: l0.a.y + u.y * t });
+      const [s0, s1] = [along(l1.a), along(l1.b)].sort((p, q) => p - q);
+      const [e0, e1] = [along(l0.a), along(l0.b)].sort((p, q) => p - q);
+      const others = lines.filter((m) => !group.includes(m)).flatMap((m) => [m.a, m.b]);
+      const byOthers = (p: Point, r: number) => others.some((q) => dist(p, q) < r * bond);
+      const ranOn = (alone: Point, short: Point) => !byOthers(alone, 0.15) && byOthers(short, 0.25);
+      if (Math.abs(s1 - e1) < 0.1 * bond && s0 - e0 > 0.2 * bond && ranOn(on(e0), on(s0))) ends = [on(s0), on(e1)];
+      else if (Math.abs(s0 - e0) < 0.1 * bond && e1 - s1 > 0.2 * bond && ranOn(on(e1), on(s1))) ends = [on(e0), on(s1)];
+      else ends = [l0.a, l0.b];
     } else {
       // (the line through their middle, along the first)
       const o = (offs[0] + offs[1]) / 2;
@@ -290,8 +309,16 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
       // (two capitals as large, not on one line - two labels drawn over each other, two H's of atoms side by side - are two)
       const capital = (x: FigureLetter) => /^[A-IK-PR-Z]$/.test(x.c);
       if (!small && capital(l) && capital(last) && Math.abs(l.box[3] - last.box[3]) > 0.25 * big) return false;
+      // (nor a letter as large as the word's own whose line is not theirs: its baseline a tenth of a letter off theirs, however the
+      // word ends - a small count, an H set a little lower beside another)
+      const base = (x: FigureLetter) => x.at?.[1] ?? x.box[3];
+      const own = w.letters.filter((x) => x.size >= 0.85 * big);
+      if (l.size >= 0.85 * big && own.length && Math.abs(base(l) - base(own[own.length - 1])) > 0.1 * big) return false;
       // (or as the PDF sets them, each letter's room: a 1's ink stands well inside its room, and small letters may be set apart)
       const looseGap = last.loose && l.loose ? l.loose[0] - last.loose[2] : Infinity;
+      // (two letters as large set over each other, their rooms well into each other - two labels drawn on top of each other, two H's of
+      // atoms side by side - are two; a smaller letter set high or low may stand in its letter's room)
+      if (!small && looseGap < -0.15 * big) return false;
       const near = (gap > -0.3 * big && gap < 0.3 * big) || (looseGap > -0.3 * big && looseGap < 0.15 * big);
       return near && (overlap > 0.25 * Math.min(lh, w.box[3] - w.box[1]) || (setOff && overlap > 0));
     });
@@ -588,7 +615,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const stacked = (p: Point, out: Point) => words.some((w) => w.box[3] - w.box[1] > 1.15 * w.size && reaches(p, out, w.box, bond, 0.6));
   const atJoint = (s: Stroke, p: Point) => shapes.strokes.some((t) => t !== s && (dist(t.a, p) < 0.2 * bond || dist(t.b, p) < 0.2 * bond));
   const between = (s: Stroke) =>
-    (labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b))) ||
+    // (two different words: a line within one word's box is no bond between labels)
+    words.some((v, i) => reaches(s.a, unit(s.b, s.a), v.box, bond) && words.some((x, j) => j !== i && reaches(s.b, unit(s.a, s.b), x.box, bond))) ||
     (atJoint(s, s.a) && stacked(s.b, unit(s.a, s.b))) ||
     (atJoint(s, s.b) && stacked(s.a, unit(s.b, s.a)));
   // (short lines side by side, each from one label to another - N≡N+ - are a bond between them, double or triple, not a hash)
@@ -597,6 +625,11 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (betweenLabels[i]) for (const s of g) inHashes.delete(s);
   });
   const hashes = hashed.filter((_, i) => !betweenLabels[i]);
+  // (but a short line side by side with another that is no such line - a hash's widest stroke by an H set close, the hash
+  // too short to be told as one, two lines and the dots at its narrow end - is no bond between labels)
+  const filled = new Set(bits);
+  const dash = (s: Stroke) =>
+    between(s) && !short.some((t) => t !== s && !inHashes.has(t) && len(t) > 0.04 * bond && sideBySide(s, t, bond, filled) && !between(t));
   // (a short line running straight out of a label to nothing - a methyl's bond squeezed short and cut back at the label, an
   // N-methyl in a bridge - is a bond too)
   const tipsOf = shapes.strokes.flatMap((t) => [t.a, t.b].map((p) => ({ p, of: t })));
@@ -610,7 +643,23 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const meetings: { t: Stroke | null; q: Point }[] = [...shapes.strokes.flatMap((t) => [t.a, t.b].map((q) => ({ t, q }))), ...shapes.wedges.flatMap((w) => [w.tip, w.base].map((q) => ({ t: null, q })))];
   const framing = (s: Stroke) =>
     len(s) > 2.5 * bond && [s.a, s.b].every((p) => meetings.every(({ t, q }) => t === s || dist(p, q) >= 0.12 * bond || (t !== null && square(s, p, t, q))));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !framing(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
+  // (and a short line alongside a longer, within its stretch - a double bond's second line, the bond drawn short)
+  const inner = (s: Stroke) =>
+    len(s) > 0.15 * bond &&
+    shapes.strokes.some((t) => {
+      if (t === s || len(t) < 0.3 * bond || Math.abs(cross(unit(t.a, t.b), unit(s.a, s.b))) > Math.sin((8 * Math.PI) / 180)) return false;
+      const u = unit(t.a, t.b);
+      const off = Math.abs(cross(u, { x: mid(s.a, s.b).x - t.a.x, y: mid(s.a, s.b).y - t.a.y }));
+      const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
+      return off > 0.06 * bond && off < 0.4 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
+    });
+  // (and a line over three twentieths of a bond long, from a joint - another line's end at its own - into a label: a bond cut back at the
+  // label further than most)
+  const others = [...hashed.flatMap((h) => [h.a, h.b]), ...shapes.wedges.flatMap((w) => [w.tip, w.base])];
+  const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
+  const toLabel = (s: Stroke) =>
+    len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !framing(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
@@ -641,6 +690,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const [p, from] = end === "a" ? [d.a, d.b] : [d.b, d.a];
     const others = drawnBonds.filter((o) => o !== d).flatMap((o) => [o.a, o.b]);
     if (others.some((q) => dist(q, p) < 0.2 * bond)) return;
+    // (a double bond's end inside a label's box comes to the label, not to a bond's end by it - a P=O's to its P)
+    const pad = 0.08 * bond;
+    if (!d.stereo && words.some((w) => fromBox(p, [w.box[0] - pad, w.box[1] - pad, w.box[2] + pad, w.box[3] + pad]) === 0)) return;
     const way = unit(from, p);
     // (a hash's on along its way, a little under half a bond at most - a figure's bonds short to its labels make a bond
     // short; a double bond's, its middle line's end a little off its atom - its lines run past it, or stop short - within a
@@ -680,10 +732,24 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
     let best = -1;
     let bestD = Infinity;
+    // (a word it points away from, by it - its way only clipping the corner of the room round a label set close, an H under
+    // the N it goes to - only where no other takes it)
+    let away = -1;
+    let awayD = Infinity;
     // (not the word its bond comes out of - its other end in it - however near this end lies to its corner)
     const other = e.side === 0 ? d.b : d.a;
     words.forEach((w, k) => {
-      if (isNumber[k] || fromBox(other, w.box) === 0) return;
+      if (isNumber[k]) return;
+      // (both ends in it - a bond so short it lies within its label's box - the end nearer its element takes it)
+      if (fromBox(other, w.box) === 0) {
+        const els = w.letters.filter((l) => /[A-Z]/.test(l.c) && l.c !== "H");
+        if (!els.length || fromBox(e.p, w.box) > 0) return;
+        const to = (p: Point) => Math.min(...els.map((l) => dist(centre(l.box), p)));
+        if (to(e.p) >= to(other)) return;
+        // (and its other end comes to another label: a metal's)
+        const back = unit(e.p, other);
+        if (!words.some((v, j) => j !== k && reaches(other, back, v.box, bond))) return;
+      }
       const dd = fromBox(e.p, w.box);
       // (not at its hydrogen: a bond comes to a label's element - the O of an HO - and an end outside it, much nearer its H, is
       // another's - a methyl's set close)
@@ -697,12 +763,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
       // (a bond drawn short - under half a bond, cut back at a label stacked tall, an NH with its H over it - may stop farther off)
       const within = len({ a: d.a, b: d.b }) < 0.5 * bond ? 0.6 : 0.35;
-      if ((meeting.get(e)! === 0 || onCapital) && dd < bestD && reaches(e.p, out, w.box, bond, within)) {
-        best = k;
-        bestD = dd;
+      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, bond, within)) {
+        const q = { x: Math.min(Math.max(e.p.x, w.box[0]), w.box[2]), y: Math.min(Math.max(e.p.y, w.box[1]), w.box[3]) };
+        if (dd > 0 && dot(out, unit(e.p, q)) < 0) {
+          if (dd < awayD) [away, awayD] = [k, dd];
+        } else if (dd < bestD) [best, bestD] = [k, dd];
       }
     });
-    if (best >= 0) wordOf.set(e, best);
+    if (best >= 0 || away >= 0) wordOf.set(e, best >= 0 ? best : away);
   }
   // (two labels set side by side, read as one word that reads as nothing - H H - are each
   // their own, where their bonds come to different capitals of it, cut where both read)
@@ -736,6 +804,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a label with its hydrogens written - NH2, OH, SH - takes no more bonds than they leave it, and an O alone two, a double
   // bond's counted twice: the ends that come nearest its element, a stray one - a methyl's set close - a carbon of its own.
   // An NH's bonds are counted as one each: a ring's, its charge drawn by it, may be double)
+  const overFull = new Set<number>();
   words.forEach((w, k) => {
     const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w));
     if (!m || !(m[2] in BONDS_LEFT)) return;
@@ -749,9 +818,16 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const el = w.letters.find((l) => l.c === m[2][0]);
     const to = (e: End) => (el ? dist(centre(el.box), e.p) : fromBox(e.p, w.box));
     let left = room;
+    let kept = 0;
     for (const e of [...at].sort((p, q) => to(p) - to(q))) {
-      if (order(e) <= left) left -= order(e);
-      else wordOf.delete(e);
+      if (order(e) <= left) {
+        left -= order(e);
+        kept = to(e);
+      } else {
+        wordOf.delete(e);
+        // (one let go as near as those kept, all but: which is the label's is a guess, said)
+        if (to(e) < 1.2 * kept) overFull.add(k);
+      }
     }
   });
   // (a lone H takes one bond: a wedge's or a hash's first, else the nearest)
@@ -772,7 +848,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (k != null) {
       if (!atomOfWord.has(k)) {
         atomOfWord.set(k, atoms.length);
-        atoms.push({ x: 0, y: 0, ...labelOf(words[k]), box: words[k].box });
+        const read = labelOf(words[k]);
+        const said = overFull.has(k) ? ["More bonds come to it than it takes: those nearest its letter kept."] : [];
+        atoms.push({ x: 0, y: 0, ...read, ...(said.length || read.unsure ? { unsure: [...(read.unsure ?? []), ...said] } : {}), box: words[k].box });
       }
       atomOfEnd.set(e, atomOfWord.get(k)!);
     }

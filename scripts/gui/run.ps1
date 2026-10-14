@@ -292,6 +292,47 @@ function Read-ShotPixels {
     }
 }
 
+function Test-ShotDimmed($px) {
+    # (a question over the page: its white under App's bg-black/20, some 204 each - looked for near both lower corners of
+    # the window, where a fresh page has nothing drawn; the BMP's bytes blue first)
+    foreach ($x in @(40, ($px.Width - 40))) {
+        $y = $px.Height - 40
+        $row = if ($px.BottomUp) { $px.Height - 1 - $y } else { $y }
+        $i = $px.Offset + $row * $px.Stride + $x * $px.Step
+        foreach ($c in @($px.Bytes[$i], $px.Bytes[$i + 1], $px.Bytes[$i + 2])) { if ($c -lt 180 -or $c -gt 225) { return $false } }
+    }
+    return $true
+}
+
+function Close-MenoQuestion {
+    <#
+      .SYNOPSIS
+      A question Meno asks as it starts - keeping it up to date, on a fresh
+      profile - waited for, however long it takes to come, and answered no.
+
+      .DESCRIPTION
+      The window is shot every quarter second until the page is seen dimmed
+      under a question (Test-ShotDimmed), or `TimeoutSec` has passed; then
+      Escape answers it - "Not now", which fetches nothing - wherever its
+      button stands. A fixed wait clicked "Not now" before the question came
+      (it comes some 3 s after the start). Whether there was one.
+    #>
+    param([int] $TimeoutSec = 12)
+    $png = Join-Path ([System.IO.Path]::GetTempPath()) "meno-question-$PID.png"
+    $until = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $until) {
+        Save-MenoShot -Path $png | Out-Null
+        try { $px = Read-ShotPixels -Png $png } finally { Remove-Item $png -ErrorAction SilentlyContinue }
+        if (Test-ShotDimmed $px) {
+            Send-MenoKey Escape
+            Start-Sleep -Milliseconds 600
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
+}
+
 function Test-ShotHairline($px, [int] $x, [int] $y) {
     # (Meno's hairline grey, App.css --color-gh-line 209, 217, 224 - give or take; the BMP's bytes blue first)
     $row = if ($px.BottomUp) { $px.Height - 1 - $y } else { $y }

@@ -54,7 +54,16 @@ and in particular:
   - **Chains** (agreed 2026-10-03): three clicks on an atom draw a chain,
     and so does Quick Add's *Chain* from empty space - led by a drag, or,
     the last click (or the press on the icon) let go where it was, traced
-    with the button up until a click ends it; Escape lets it go. The third
+    with the button up until a click ends it; Escape lets it go, and so
+    does undo (Cmd/Ctrl+Z) while any gesture is under way - a chain, a
+    shape, an arrow, a stroke of ink, a drag, a box, a handle's resize, a
+    molecule in 3D turned or moved, a measurement's value set - undoing
+    nothing more (the maintainer, 2026-10-14; `gestureUnderWay`,
+    store/gesture). While a label or words on the page are typed, undo is
+    the words' own, as in a text field, and never the document's under
+    them (`wordsUnderWay`). A gesture lost - the window left, the pointer
+    taken from it - is let go the same way, and its flags with it, so that
+    no undo after it is taken for it (`letLostGesturesGo`). The third
     click takes back the bond the double-click drew. (Two clicks on empty
     space drew one until 2026-10-08, when the maintainer gave the
     double-click there to *Quick Add*, below; three did until 2026-10-10,
@@ -268,7 +277,18 @@ led by a drag from the icon or traced with the button up. *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
-wrong is said under the field. A double-click on an atom still draws one
+wrong is said under the field, in a few words about the SMILES itself - a
+formula written for it (each element once, a count after one; a SMILES
+for a halide of one atom then given - "a SMILES for it is
+Cl[Sn](Cl)(Cl)Cl" for SnCl4, a salt of groups 1 and 2 as ions,
+"[Mg+2].[Cl-].[Cl-]", where as many halogens as its charge), a
+ring left open (and which: "1 is opened and not closed"), a ( or [ not
+closed, a symbol that is no element, an element written without its
+brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
+an atom and an aromatic one), an H written as an atom ("H is left out of
+a SMILES"), an atom with more bonds than it can take (which, with its
+charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
+aromatic ring that cannot alternate. A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
@@ -571,7 +591,8 @@ All hover-based, as above.
      tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
      hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
-     FmBoc stay. iPr stays upright.
+     FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
+     italics as a group does: m-CPBA, p-TSA, n-hexane.
   5. What reads as nothing stays exactly as typed - no capital made.
   6. A reagent's or a ligand's name comes before a metal's formula (the
      maintainer, 2026-10-13), however many letters it makes capitals. No

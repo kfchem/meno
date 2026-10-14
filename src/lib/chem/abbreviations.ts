@@ -20,7 +20,7 @@ import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
 import { condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
-import { complexStructure, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
+import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
@@ -394,8 +394,20 @@ function carriedGroupOf(label: string): Abbreviation | undefined {
   };
 }
 
-/** A group put together by rule - a substituted aryl group, a group behind O, S or NH, an ester, an atom and the groups or halogens on it - or none. */
+/**
+ * A group put together by rule, as `groupBy` puts it together, kept: a
+ * complex's formula is tried part by part, and a long label's parts over
+ * and over (forgotten as the user's own change).
+ */
 function composedGroupOf(label: string): Abbreviation | undefined {
+  if (!GROUP_SEEN.has(label)) GROUP_SEEN.set(label, groupBy(label));
+  return GROUP_SEEN.get(label);
+}
+
+const GROUP_SEEN = new Map<string, Abbreviation | undefined>();
+
+/** A group put together by rule - a substituted aryl group, a group behind O, S or NH, an ester, an atom and the groups or halogens on it - or none. */
+function groupBy(label: string): Abbreviation | undefined {
   const aryl = substitutedAryl(label);
   if (aryl) return { label, smiles: aryl.smiles, name: aryl.name };
   const carried = carriedGroupOf(label);
@@ -453,6 +465,8 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
     for (const l of [a.label, ...(a.also ?? [])]) if (!BY_LABEL.has(l) && !custom.has(l)) custom.set(l, a);
   }
   COMPOSED_SEEN.clear();
+  GROUP_SEEN.clear();
+  forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
 }
@@ -722,10 +736,13 @@ export function unitRuns(units: readonly string[], italic: readonly boolean[] = 
       if (group[2]) push(group[2], true);
       return;
     }
-    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
-    if (REAGENT_NAMES.has(unit)) return push(unit);
-    // a group's own prefix: the t of t-Bu, the p of p-Ts
+    // a group's own prefix, or a reagent's: the t of t-Bu, the p of p-Ts, the m of m-CPBA
     const prefixed = /^(sec|tert|[nistomp])(-.+)$/.exec(unit);
+    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
+    if (REAGENT_NAMES.has(unit)) {
+      if (prefixed) push(prefixed[1], false, true);
+      return push(prefixed ? prefixed[2] : unit);
+    }
     if (prefixed) {
       push(prefixed[1], false, true);
       unit = prefixed[2];

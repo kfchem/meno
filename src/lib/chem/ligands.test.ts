@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "./acs";
 import { abbreviationOf, abbreviationStructure, labelRuns, labelUnits, reversedLabel } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { LIGANDS, ligandPicture, ligandStructure, structureFormula, type GroupStructure } from "./ligands";
+import { complexStructure, forgetComplexReadings, LIGANDS, ligandPicture, ligandStructure, structureFormula, type GroupStructure } from "./ligands";
 import { writeMolfile } from "./molWriter";
 
 const formula = structureFormula;
@@ -201,6 +201,34 @@ describe("complexes' formulas", () => {
     const clo4 = of("[Cu(MeCN)4]ClO4");
     const cl = clo4.atoms.findIndex((a) => a.el === "Cl");
     expect(clo4.bonds.filter((b) => b.a1 === cl || b.a2 === cl).map((b) => b.order).sort()).toEqual([1, 2, 2, 2]);
+  });
+
+  it("are read a text at a time once, however many writings of a label are read as it is typed, and counter-anions only after brackets", () => {
+    // (co2ch2 typed eight times was read in its writings for 1.6 s, each
+    // text again in each, and a counter-anion tried at every length of
+    // every part: each writing alone read its groups some 4500 times)
+    let reads = 0;
+    const groupOf = (label: string) => {
+      reads++;
+      const a = abbreviationOf(label);
+      return a && !a.kind ? abbreviationStructure(label) : null;
+    };
+    const writings = Array.from({ length: 64 }, (_, k) =>
+      Array.from({ length: 8 }, (_, j) => (j < 6 && (k >> j) & 1 ? "CO2CH2" : "Co2CH2")).join(""),
+    );
+    for (const w of writings) expect(complexStructure(w, groupOf)).toBeNull();
+    expect(reads).toBeLessThan(1500);
+    const first = reads;
+    for (const w of writings) complexStructure(w, groupOf);
+    expect(reads).toBe(first);
+    // (read again once the groups may have changed)
+    forgetComplexReadings();
+    complexStructure(writings[0], groupOf);
+    expect(reads).toBeGreaterThan(first);
+    // (a complex reads as it did, after its brackets its counter-anion)
+    expect(formula(complexStructure("[Rh(cod)2]BF4", groupOf)!)).toBe("C16H24BF4Rh");
+    expect(formula(complexStructure("Pd(OAc)2", groupOf)!)).toBe("C4H6O4Pd");
+    expect(complexStructure("PdBF4", groupOf)).toBeNull();
   });
 
   it("are no complex where any part is not known, or there is nothing but metal", () => {

@@ -3,6 +3,7 @@ import {
   unspecifiedDoubles,
   bondKind,
   buildAllPrimitives,
+  BOND_SEEN_LEAST,
   buildBondPrimitives,
   joinsAtAtoms,
   buildTextLabels,
@@ -117,6 +118,49 @@ describe("buildTextLabels", () => {
     // one side free: the hydrogens go there, on the same line
     expect(at(150, 270).stack).toBeUndefined();
     expect(at(150, 270).text).toBe("NH");
+    // two bonds nearly in a line, steep, on both sides: the line above and
+    // below on a bond, the row beside the symbol open - written there
+    // (tetrodotoxin's guanidine NH, its H on the bond from above)
+    for (const [a, b] of [
+      [115, 295],
+      [65, 245],
+    ]) {
+      const nh = at(a, b);
+      expect(nh.stack).toBeUndefined();
+      // (its H on the row, the two sides alike: after the symbol, always -
+      // not by how a near-naught sum of the bonds rounds)
+      expect(nh.text).toBe("NH");
+    }
+    // (nearly so, the row clearer by less than the band: stacked, as it always was)
+    expect(at(47, 227).stack).toBeDefined();
+  });
+
+  it("writes a three-bond label's H on the row's clearer side, never on a bond, where the row is clearer than the line above or below", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const v = (deg: number) => ({ x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180) });
+    const label = (el: string, charge: number, ...degs: number[]) => {
+      const atoms: Atom[] = [{ id: 1, x: 0, y: 0, el, charge }, ...degs.map((d, k) => ({ id: k + 2, ...v(d), el: "C" }))];
+      const [l] = buildTextLabels(
+        atoms,
+        opts(),
+        degs.map((_, k) => ({ a1: 0, a2: k + 1, order: 1 })),
+      );
+      return l;
+    };
+    // (a borate's BH- and an ammonium's NH+, a bond straight right: the H before the symbol, clear of it)
+    for (const [el, charge] of [
+      ["B", -1],
+      ["N", 1],
+    ] as const) {
+      const l = label(el, charge, 0, 120, 240);
+      expect(l.stack).toBeUndefined();
+      expect(l.text.startsWith("H"), l.text).toBe(true);
+    }
+    expect(label("N", 1, 5, 125, 245).text.startsWith("H")).toBe(true);
+    // (a bond straight left: the H after the symbol)
+    const b = label("B", -1, 180, 60, 300);
+    expect(b.stack).toBeUndefined();
+    expect(b.text.startsWith("BH"), b.text).toBe(true);
   });
 
   it("writes them on the side further from every bond where three spread evenly, a hair either way", () => {
@@ -1137,15 +1181,39 @@ describe("how far a bond stops short of a label", () => {
     expect(line.y2).toBeCloseTo(top + o.labelMarginPx!, 9);
   });
 
-  it("lets two labels share no more than nine tenths of the bond between them", () => {
+  it("keeps a third of the bond between two labels seen, however much of it they would take", () => {
     const o = opts();
-    // two wide labels on a short bond: neither may take its full clearance
+    // two wide labels on a short bond: neither may take its full clearance,
+    // and together they leave a third of it (BOND_SEEN_LEAST) - nine tenths
+    // of it was theirs before (the maintainer, 2026-10-14)
     const atoms: Atom[] = [
       { id: 1, x: 0, y: 0, el: "Br" },
       { id: 2, x: 0.6, y: 0, el: "Br" },
     ];
     const [line] = buildBondPrimitives(atoms, bond, o, ZOOM).lines;
-    expect(line.x2 - line.x1).toBeCloseTo(0.6 * 0.1, 9);
+    expect(line.x2 - line.x1).toBeCloseTo(0.6 * BOND_SEEN_LEAST, 9);
+    // (a share set lower than the rule is kept)
+    const [kept] = buildBondPrimitives(atoms, bond, opts({ labelShareMax: 0.4 }), ZOOM).lines;
+    expect(kept.x2 - kept.x1).toBeCloseTo(0.6 * 0.6, 9);
+  });
+
+  it("shows a wedge's width at its broad end however wide the label there", () => {
+    const o = opts();
+    // a wedge from a carbon to a wide label on a short bond: the label would
+    // take nearly all of it; a third is seen, and the broad end as wide as ever
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 0.6, y: 0, el: "Br" },
+    ];
+    const deg = new Map([
+      [0, 3],
+      [1, 1],
+    ]);
+    const { polys } = buildBondPrimitives(atoms, { a1: 0, a2: 1, order: 1, stereo: "up" }, o, ZOOM, deg);
+    const xs = polys[0].points.map((p) => p.x);
+    const ys = polys[0].points.map((p) => p.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(0.6 * BOND_SEEN_LEAST - 1e-9);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo((o.units ?? "px") === "world" ? o.wedgeWidthPx : o.wedgeWidthPx / ZOOM, 6);
   });
 
   it("follows the letters: closer to an O's round side than to an N's corner", () => {

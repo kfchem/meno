@@ -17,6 +17,7 @@ mod fonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
+mod logfile;
 mod pdf;
 mod net;
 mod opened;
@@ -801,7 +802,7 @@ fn drop_catch(app: AppHandle, x: f64, y: f64, width: f64, height: f64) -> bool {
         // hands drags to)
         let _ = app.run_on_main_thread(move || {
             if let Err(e) = drop::catch(area) {
-                eprintln!("drags cannot be taken from the page: {e}");
+                logfile::logged!("drags cannot be taken from the page: {e}");
             }
         });
         true
@@ -890,6 +891,8 @@ pub fn run() {
     if let Some(code) = registration_asked() {
         std::process::exit(code);
     }
+    // a panic into Meno's log too (logfile.rs)
+    logfile::catch_panics();
     #[allow(unused_mut)]
     let mut context = tauri::generate_context!();
     // A Meno Windows starts for Office opens unseen: it shows itself when a
@@ -902,6 +905,10 @@ pub fn run() {
         }
     }
     let version = context.package_info().version.to_string();
+    // Meno's log, in its data folder, begun before anything else is (logfile.rs)
+    if let Some(data) = logfile::data_dir_before(&context.config().identifier) {
+        logfile::start(&data.join("logs"), &version);
+    }
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
     // One Meno on Windows: a workspace file opened while it runs comes to
@@ -927,6 +934,10 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .setup(|app| {
+            // (and where Tauri has the data folder, should that be elsewhere)
+            if let Ok(data) = app.path().app_data_dir() {
+                logfile::start(&data.join("logs"), &app.package_info().version.to_string());
+            }
             net::start(app.handle());
             // a workspace file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
@@ -943,6 +954,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the page's errors and warnings, into Meno's log
+            logfile::log_page,
+            logfile::log_spot,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
             pdf::pdf_bytes,
@@ -957,6 +971,7 @@ pub fn run() {
             clipboard::clipboard_takes,
             clipboard::clipboard_file_names,
             clipboard::clipboard_file,
+            clipboard::open_workspaces_from,
             clipboard::drag_read,
             // drags the page cannot read, taken from the webview (Windows)
             drop_catch,
