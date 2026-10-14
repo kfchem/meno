@@ -147,6 +147,7 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
+import { FollowStyle } from "./components/FollowStyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
 import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
@@ -2109,6 +2110,7 @@ function WorkspaceContent({
         <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
+        <FollowStyle />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
