@@ -1413,6 +1413,12 @@ export type EditorState = {
    * and the column stay as they are.
    */
   letGo: () => void;
+  /**
+   * No gesture under way any more (store/gesture): the flags a gesture
+   * lost - the window left, the pointer taken - leaves, cleared. What is
+   * drawn, selected or being typed stays as it is.
+   */
+  endGestures: () => void;
   setMoveMode: (mode: "snap" | "free") => void;
   beginMoveDrag: (
     atomId: number,

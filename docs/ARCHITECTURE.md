@@ -203,7 +203,10 @@ Nothing a part shows lives in the part, so a part made again shows the same:
   being typed, words being carried out of a PDF, Quick Add, a workflow
   menu and a PDF's menu asked for go with it; what is selected (words in
   a PDF and pictures too), how the molecules in 3D are turned and the
-  column stay.
+  column stay. A gesture lost while the canvas stays - the window left,
+  the pointer taken from it - is let go by its own Escape, and the flags
+  it leaves are cleared (`endGestures`, `letLostGesturesGo` in
+  store/gesture): a flag left set would take every undo after it.
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas

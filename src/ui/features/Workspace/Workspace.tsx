@@ -164,7 +164,7 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
-import { gestureUnderWay } from "./store/gesture";
+import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -862,23 +862,35 @@ function WorkspaceContent({
   const askUndo = useEditor((s) => s.askUndo);
   useEffect(() => {
     if (!active) return;
+    // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
+    const escape = () => {
+      if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    };
     const onKey = (e: KeyboardEvent) => {
+      // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)
       const intent = undoIntent(e);
       if (!intent) return;
-      // (a gesture under way - a chain, a shape, a drag: undo lets it go as
-      // Escape does, by the gesture's own Escape, and undoes nothing more)
-      if (gestureUnderWay(store.getState())) {
+      const s = store.getState();
+      // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
+      // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
+      const words = wordsUnderWay(s);
+      if (words || gestureUnderWay(s)) {
         e.preventDefault();
         e.stopPropagation();
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+        if (!words) escape();
         return;
       }
-      if (!store.getState().holdUndo(intent)) return;
+      if (!s.holdUndo(intent)) return;
       e.preventDefault();
       e.stopPropagation();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    // (a gesture lost - the window left, the pointer taken: let go, its flags with it)
+    const lost = letLostGesturesGo(window, () => store.getState(), escape);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      lost();
+    };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
