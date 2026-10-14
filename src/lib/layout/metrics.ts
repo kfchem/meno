@@ -234,7 +234,8 @@ const deg = (r: number) => (r * 180) / Math.PI;
 
 function median(v: number[]): number {
   if (!v.length) return 1;
-  const s = [...v].sort((a, b) => a - b);
+  // (numbers sorted as numbers: the same order, without a call for each comparison)
+  const s = v.every(Number.isFinite) ? Float64Array.from(v).sort() : [...v].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
@@ -396,6 +397,20 @@ type Structure = {
   centresAt: number[][][];
   /** Each stereocentre at a fusion of rings with its H not drawn yet. */
   hiddenAt: boolean[];
+  /** In a complex, the rings of six or fewer drawn flat that an atom of something else may be hidden inside, each with its system. */
+  insideRings: { ring: number[]; system: number | undefined }[];
+  /** The atoms passed over there: an H, or one in perspective or bonded to one. */
+  passedInside: boolean[];
+  /** The largest system's rings of up to eight, fused and not bridged; none without a ring. */
+  fusedMain: number[][];
+  /** Each system's rings of up to eight, where it has two or more and no larger ring; else null. */
+  ownOf: (number[][] | null)[];
+  /**
+   * The atoms from left to right and the bonds by their boxes' left sides,
+   * as the last measure of the same structure had them: a layout measures
+   * one piece placed a little otherwise each time, nearly in order already.
+   */
+  sorted: { atoms: Int32Array | null; bonds: Int32Array | null };
 };
 
 /**
@@ -595,6 +610,22 @@ function readStructure(g: Geometry): Structure {
       !bridgedAt.has(a) &&
       ringsAt[a].every((r) => r.length >= 5 && r.length <= 8),
   );
+  const complex = (g.elements ?? []).some((e) => isMetal(e));
+  const insideRings = complex ? small.filter((q) => q.length <= 6).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
+  const passedInside = Array.from({ length: n }, (_, p) => isH(p) || (!!persp && (!!persp[p] || neighbours[p].some((q) => persp[q]))));
+  const main = live.length ? live.reduce((b, s) => (s.size > b.size ? s : b)) : null;
+  const fusedMain = main
+    ? rings.filter(
+        (r) =>
+          r.length <= 8 &&
+          r.every((a) => main.has(a)) &&
+          rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2),
+      )
+    : [];
+  const ownOf = live.map((sys) => {
+    const own = rings.filter((r) => r.length <= 8 && r.every((a) => sys.has(a)));
+    return own.length < 2 || rings.some((r) => r.length > 8 && r.every((a) => sys.has(a))) ? null : own;
+  });
   return {
     rings,
     measured,
@@ -616,7 +647,38 @@ function readStructure(g: Geometry): Structure {
     ringsAt,
     centresAt,
     hiddenAt,
+    insideRings,
+    passedInside,
+    fusedMain,
+    ownOf,
+    sorted: { atoms: null, bonds: null },
   };
+}
+
+/**
+ * The indices 0 to count - 1 by `key`, least first: sorted again from
+ * `from`, the order the last measure left them in - a drawing placed a
+ * little otherwise is nearly in order already - or, where that is far from
+ * the order now, afresh. (Between keys alike the order may differ from a
+ * sort afresh: the sweeps that use it take every pair within reach either
+ * way.)
+ */
+function sortedBy(from: Int32Array | null, count: number, key: ArrayLike<number>): Int32Array {
+  const out = from && from.length === count ? from : Int32Array.from({ length: count }, (_, i) => i);
+  let shifts = 0;
+  for (let i = 1; i < count; i++) {
+    const v = out[i];
+    const kv = key[v];
+    let j = i - 1;
+    while (j >= 0 && key[out[j]] > kv) {
+      out[j + 1] = out[j];
+      j--;
+      shifts++;
+    }
+    out[j + 1] = v;
+    if (shifts > 8 * count) return out.sort((p, q) => key[p] - key[q]);
+  }
+  return out;
 }
 
 export function layoutMetrics(g: Geometry): LayoutMetrics {
@@ -665,6 +727,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     ringsAt,
     centresAt,
     hiddenAt,
+    insideRings,
+    passedInside,
+    fusedMain,
+    ownOf,
+    sorted,
   } = structureOf(g);
   const lengths = measured.map(([a, b, per]) => Math.hypot(x[a] - x[b], y[a] - y[b]) / per);
   const L = median(lengths);
@@ -1528,13 +1595,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // eight, fused and not bridged, by their centres
   let ringOrder = 0;
   if (live.length) {
-    const main = live.reduce((b, s) => (s.size > b.size ? s : b));
-    const fused = rings.filter(
-      (r) =>
-        r.length <= 8 &&
-        r.every((a) => main.has(a)) &&
-        rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2),
-    );
+    const fused = fusedMain;
     if (fused.length >= 2) {
       const centres = fused.map((r) => ({
         x: r.reduce((sum, a) => sum + x[a], 0) / r.length,
@@ -1548,7 +1609,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         const rows: number[][] = [];
         ys.forEach((y0) => {
           const row = ys.map((v, i) => (Math.abs(v - y0) < 0.15 * L ? i : -1)).filter((i) => i >= 0);
-          if (!rows.some((r) => r.join() === row.join())) rows.push(row);
+          if (!rows.some((r) => r.length === row.length && r.every((v, k) => v === row[k]))) rows.push(row);
         });
         const longest = Math.max(...rows.map((r) => r.length));
         return rows.filter((r) => r.length === longest);
@@ -1588,9 +1649,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // and within a ring system, a benzene ring at the left, where reading
   // begins: indole's, quinoline's and coumarin's benzene rings, estradiol's
   // aromatic A ring, griseofulvin's and reserpine's
-  for (const sys of live) {
-    const own = rings.filter((r) => r.length <= 8 && r.every((a) => sys.has(a)));
-    if (own.length < 2 || rings.some((r) => r.length > 8 && r.every((a) => sys.has(a)))) continue;
+  for (const own of ownOf) {
+    if (!own) continue;
     // (six carbons each with a double bond in the rings - to its own ring
     // or a fused one, whichever way the Kekule structure was written:
     // berberine's A ring as PubChem writes it has two of its own)
@@ -1683,7 +1743,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // (the atoms from left to right, to pass over pairs far apart across -
   // every pair, where a place is not a number)
   const sweep = L > 0 && x.every(Number.isFinite) && y.every(Number.isFinite);
-  const byX = Array.from({ length: n }, (_, a) => a).sort((p, q) => x[p] - x[q]);
+  const byX = (sorted.atoms = sortedBy(sorted.atoms, n, x));
   let overlaps = 0;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n && !(sweep && x[byX[j]] - x[byX[i]] >= L); j++) {
@@ -1704,18 +1764,24 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // run across it - artemisinin's; nor what hangs from a ring in
   // perspective, set by it - Cp*'s methyls; nor a stereocentre's drawn H,
   // set by its own rule.)
-  const complex = (g.elements ?? []).some((e) => isMetal(e));
-  for (const r of complex ? small.filter((q) => q.length <= 6) : []) {
+  for (const { ring: r, system: own } of insideRings) {
     const xs = r.map((a) => x[a]);
     const ys = r.map((a) => y[a]);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const own = systemOf.get(r[0]);
-    for (let p = 0; p < n; p++) {
-      if (systemOf.get(p) === own || isH(p) || x[p] <= minX || x[p] >= maxX || y[p] <= minY || y[p] >= maxY) continue;
-      if (persp && (persp[p] || neighbours[p].some((q) => persp[q]))) continue;
+    // (only the atoms between the ring's left and right, from left to right, where every place is a number)
+    let first = 0;
+    for (let hi = sweep ? n : 0; first < hi; ) {
+      const mid = (first + hi) >> 1;
+      if (x[byX[mid]] <= minX) first = mid + 1;
+      else hi = mid;
+    }
+    for (let k = first; k < n; k++) {
+      const p = sweep ? byX[k] : k;
+      if (sweep && x[p] >= maxX) break;
+      if (x[p] <= minX || x[p] >= maxX || y[p] <= minY || y[p] >= maxY || passedInside[p] || systemOf.get(p) === own) continue;
       let inside = false;
       for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
         const [xi, yi, xj, yj] = [x[r[i]], y[r[i]], x[r[j]], y[r[j]]];
@@ -1739,7 +1805,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   });
   // (and the bonds by their boxes' left sides: a bond's box reaches no
   // further right than the widest box from its left side)
-  const bondsByX = Array.from({ length: E }, (_, e) => e).sort((p, q) => lox[p] - lox[q]);
+  const bondsByX = (sorted.bonds = sortedBy(sorted.bonds, E, lox));
   let widest = 0;
   for (let e = 0; e < E; e++) widest = Math.max(widest, hix[e] - lox[e]);
   let crossings = 0;
