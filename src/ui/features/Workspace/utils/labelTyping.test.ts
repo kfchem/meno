@@ -183,6 +183,10 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     for (const typed of ["hoz", "zpro", "zna"]) expect(kept(typed), typed).toBe(typed);
     // (nbz an N carrying a Bz - an atom and the group on it, by rule - not niobium and a Z)
     expect(kept("nbz")).toBe("NBz");
+    // (but a reagent's or a ligand's name the letters spell comes before an atom carrying a group: nbs is NBS, tfp TFP - the
+    // maintainer's ruling, 2026-10-13 - each written so as typed in capitals; an N carrying a group read where no name is spelt)
+    for (const [typed, label] of [["nbs", "NBS"], ["tfp", "TFP"], ["nmp", "NMP"], ["nmo", "NMO"], ["NBs", "NBs"], ["PTf", "PTf"], ["nboc", "NBoc"], ["nts", "NTs"]])
+      expect(kept(typed), typed).toBe(label);
   });
 
   it("reads a reagent's or a ligand's name before a metal's formula, from letters typed small (rule 6; the maintainer, 2026-10-13)", () => {

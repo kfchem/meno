@@ -50,6 +50,8 @@ export type Abbreviation = {
    * rather than a group: its structure is made, not read from `smiles`.
    */
   kind?: "ligand" | "complex" | "reagent";
+  /** An atom carrying a group, its other bonds the drawing's (NBoc, ONa): put together by rule, after a reagent's or a ligand's name. */
+  carrying?: boolean;
 };
 
 /** These groups, each a protecting, activating or leaving group (`role`). */
@@ -411,13 +413,13 @@ function carryingGroupOf(label: string): Abbreviation | undefined {
   const m = /^([A-Z][a-z]?)([A-Z].*)$/.exec(label);
   if (!m) return undefined;
   if ((m[1] === "O" || m[1] === "S") && ALKALI[m[2]]) {
-    return { label, smiles: `*[${m[1]}-].[${m[2]}+]`, name: `${ALKALI[m[2]]} ${m[1] === "O" ? "oxido" : "sulfido"}` };
+    return { label, smiles: `*[${m[1]}-].[${m[2]}+]`, name: `${ALKALI[m[2]]} ${m[1] === "O" ? "oxido" : "sulfido"}`, carrying: true };
   }
   if (!CARRYING[m[1]]) return undefined;
   const g = BY_LABEL.get(m[2]) ?? custom.get(m[2]);
   // (a group's name of two letters or more: Z, of one, only in a structure, as typed - NZ is no zinc)
   if (!g || g.kind || !g.smiles.startsWith("*") || g.label === "Cp" || m[2].length < 2 || CONTRACTED.includes(g)) return undefined;
-  return { label, smiles: `*${m[1]}(${g.smiles.slice(1)})`, name: `(${g.name.replace(/ \(.*\)$/, "")})${CARRYING[m[1]]}` };
+  return { label, smiles: `*${m[1]}(${g.smiles.slice(1)})`, name: `(${g.name.replace(/ \(.*\)$/, "")})${CARRYING[m[1]]}`, carrying: true };
 }
 
 /** A group put together by rule - a substituted aryl group, a group behind O, S or NH, an ester, an atom and the groups or halogens on it - or none. */
