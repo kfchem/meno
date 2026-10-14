@@ -396,3 +396,19 @@ describe("a label, written", () => {
     ]);
   });
 });
+
+describe("a long label", () => {
+  it("is told to be no abbreviation at once: not tried as a complex's formula at every length of every part", () => {
+    // (OTBS forty times took 32 s to draw, a chain of sixty CH2 15 s; with a metal's symbol in it, half a second)
+    for (const label of ["OTBS".repeat(40), "CH2".repeat(60), "OTBS".repeat(40) + "Pd", "Pd" + "CH2".repeat(60)]) {
+      const t = performance.now();
+      expect(abbreviationOf(label), label.slice(0, 12)).toBeUndefined();
+      expect(abbreviationStructure(label)).toBeNull();
+      expect(performance.now() - t, label.slice(0, 12)).toBeLessThan(2000);
+    }
+    // (a complex's formula still reads)
+    expect(abbreviationOf("Pd(PPh3)4")?.kind).toBe("complex");
+    expect(abbreviationStructure("RuCl2[(S)-BINAP][(S,S)-DPEN]")?.atoms.length).toBeGreaterThan(40);
+  });
+});
+
