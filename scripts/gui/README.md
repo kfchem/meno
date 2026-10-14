@@ -88,7 +88,7 @@ in front of every app's - and takes a web view's content process for the app
 it draws for; where Accessibility cannot say, the window in front there
 (`Find-WindowAt`, which leaves such a host out). Windows are matched by their
 owners' executables, not their names, which are in the user's language
-("通知センター"). The Window Server's own small marks at the top layer - the
+("Mitteilungszentrale" in German, say). The Window Server's own small marks at the top layer - the
 recording dot, the pointer - no larger than 64x64 pt, are no such window. The two checks have tests
 of their own, run by hand on a Mac with no app started:
 `pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1`.

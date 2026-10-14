@@ -20,9 +20,9 @@ $meno = Win "Meno" 0 40 40 1280 860 42
 # Center's empty window over the whole screen, in front of every app's)
 $menuBar = @(
     (Win "Window Server" 2147483630 1545 5 29 29),
-    (Win "コントロールセンター" 25 1224 0 40 39 1 "ControlCenter"),
+    (Win "Kontrollzentrum" 25 1224 0 40 39 1 "ControlCenter"),
     (Win "Window Server" 24 0 0 1710 39),
-    (Win "通知センター" 21 0 0 1710 1112 2 "NotificationCenter")
+    (Win "Mitteilungszentrale" 21 0 0 1710 1112 2 "NotificationCenter")
 )
 $prompt = Win "SecurityAgent" 1000 725 218 260 360
 
@@ -32,7 +32,7 @@ Check "an authorization prompt, by its owner" (Find-SystemWindow (@($menuBar) + 
 foreach ($o in "UserNotificationCenter", "coreauthd", "universalAccessAuthWarn") {
     Check "$o, at any layer" (Find-SystemWindow @((Win $o 3 900 40 300 80), $meno)).Owner $o
 }
-Check "by its executable, its owner's name in the user's language" (Find-SystemWindow @((Win "セキュリティエージェント" 1000 725 218 260 360 3 "SecurityAgent"), $meno)).Exe "SecurityAgent"
+Check "by its executable, its owner's name in the user's language" (Find-SystemWindow @((Win "Sicherheitsagent" 1000 725 218 260 360 3 "SecurityAgent"), $meno)).Exe "SecurityAgent"
 Check "but not Notification Center's empty window over the screen" ((Find-SystemWindow (@($menuBar) + $meno)) -eq $null) $true
 Check "any owner's at layer 1000 or more" (Find-SystemWindow @((Win "Something" 1500 100 100 200 200), $meno)).Owner "Something"
 Check "but not a small mark of the Window Server's own" ((Find-SystemWindow @((Win "Window Server" 2147483630 10 10 29 29))) -eq $null) $true

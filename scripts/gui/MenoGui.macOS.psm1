@@ -28,7 +28,7 @@ public static class MacGui {
 
   public class WindowInfo {
     public uint Id; public int Pid; public int Layer; public string Owner;
-    // (its owner's executable's file name: not put into the user's language, as Owner is - "通知センター")
+    // (its owner's executable's file name: not put into the user's language, as Owner is - "Mitteilungszentrale" in German, say)
     public string Exe;
     public double X, Y, Width, Height;
     public bool Contains(double x, double y) { return x >= X && y >= Y && x < X + Width && y < Y + Height; }
