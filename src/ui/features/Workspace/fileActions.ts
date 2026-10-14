@@ -529,6 +529,9 @@ export function useFileActions(nameTab?: (label: string) => void) {
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
 
+/** A workspace's Save, Save As and Export, and what went wrong with one (useFileActions). */
+export type FileActions = ReturnType<typeof useFileActions>;
+
 const NO_RECORDS: Record<number, number> = {};
 
 /** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */

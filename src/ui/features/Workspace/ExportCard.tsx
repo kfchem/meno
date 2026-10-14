@@ -5,6 +5,7 @@ import type { Holds } from "./fileActions";
 import { rememberable, valuesOf, type Known, type OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionsForm from "../../options/OptionsForm";
+import { useInFront } from "../../layouts/inFront";
 
 /**
  * Export, asked before the file's name (docs/FILE-IO.md, *Save and
@@ -55,8 +56,16 @@ export default function ExportCard({
   const ready = writer.takes !== "molecule" || given.length > 0;
 
   const exportRef = useRef<HTMLButtonElement>(null);
+  // (the keys given to Export as it opens, once: given again each time the
+  // canvas round it was drawn, they left a number field as it was typed in,
+  // and the next Enter exported)
   useEffect(() => {
     exportRef.current?.focus();
+  }, []);
+  // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
+  const inFront = useInFront();
+  useEffect(() => {
+    if (!inFront) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -64,7 +73,7 @@ export default function ExportCard({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, inFront]);
 
   const go = () => {
     if (!ready) return;
