@@ -111,7 +111,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
-import { setSaver } from "../../../lib/doc/savers";
+import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
@@ -2214,6 +2214,9 @@ function TabFiles({
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
+  const store = useEditorStore();
+  // (where its workspace is saved, read as a file is opened: the same file opened again brings this tab forward)
+  useEffect(() => (ownTab ? setSavedPathOf(tabId, () => store.getState().savedPath) : undefined), [ownTab, tabId, store]);
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {

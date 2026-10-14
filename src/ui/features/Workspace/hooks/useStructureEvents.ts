@@ -15,6 +15,7 @@ import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument 
 import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
 import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
+import { openWorkspacesFrom } from "../../../../lib/clipboard";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
@@ -441,7 +442,13 @@ export function useStructureEvents(
   };
 
   const dropAppend = async (drop: Dropped) => {
-    const { x, y, files } = drop;
+    const { x, y } = drop;
+    let { files } = drop;
+    // (a workspace file dragged from the Finder: opened by its path, to be saved back to it - where Meno is told it)
+    if (files.some((g) => isWorkspaceFile(g.name)) && (await openWorkspacesFrom("drag"))) {
+      files = files.filter((g) => !isWorkspaceFile(g.name));
+      if (!files.length) return;
+    }
     const reading = dropReading.current;
     dropReading.current = null;
     const dropped = files[0];
