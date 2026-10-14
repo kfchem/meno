@@ -144,8 +144,10 @@ function layoutInOrder(input: LayoutInput): Layout2D {
   // And the other way: one drawn flat with a fault, where a solid would do,
   // is drawn as the solid too, and that kept where it reads better.
   const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set() };
+  // (each ring system laid out once, however often the whole is drawn again)
+  const systems = new Map<string, SystemLayout>();
   for (;;) {
-    const { out, mol, solidToo } = laidOut(input, redo);
+    const { out, mol, solidToo } = laidOut(input, redo, systems);
     const wrong = [...misread(input, mol, out)].filter((i) => !redo.flat.has(i));
     if (wrong.length) {
       for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
@@ -155,7 +157,7 @@ function layoutInOrder(input: LayoutInput): Layout2D {
     let bestScore = drawingScore(input, mol, out);
     const chosen = mol.systems.flatMap((sys, i) => (!redo.flat.has(i) && !isCage(mol, sys) && out.solid.some((s, a) => s && mol.systemOf[a] === i) ? [i] : []));
     if (chosen.length) {
-      const flat = laidOut(input, { ...redo, flat: new Set([...redo.flat, ...chosen]) });
+      const flat = laidOut(input, { ...redo, flat: new Set([...redo.flat, ...chosen]) }, systems);
       const score = drawingScore(input, mol, flat.out);
       if (score < bestScore - 1e-9) [best, bestScore] = [flat.out, score];
     }
@@ -164,7 +166,7 @@ function layoutInOrder(input: LayoutInput): Layout2D {
     // not than a clean flat drawing, however the measure has them)
     const solids = solidToo.filter((i) => !redo.flat.has(i));
     if (solids.length && drawingFaults(input, mol, best) > 0) {
-      const solid = laidOut(input, { ...redo, solid: new Set(solids) });
+      const solid = laidOut(input, { ...redo, solid: new Set(solids) }, systems);
       const score = drawingScore(input, mol, solid.out);
       if (!misread(input, solid.mol, solid.out).size && score < bestScore - 1e-9) [best, bestScore] = [solid.out, score];
     }
@@ -238,7 +240,7 @@ const CAGE_VIEW_MARGIN = 3;
 /** The ring systems drawn again: without their view from the other side, flat, or as a solid where they would be flat. */
 type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number> };
 
-function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[] } {
+function laidOut(input: LayoutInput, redo: Redo, systems: Map<string, SystemLayout>): { out: Layout2D; mol: Molecule; solidToo: number[] } {
   const mol = perceive(input);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
@@ -290,7 +292,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   };
   mol.systems.forEach((sys, i) => {
     if (etaOf.has(i) || unitOf.has(i)) return setVariant(i, 0);
-    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i));
+    const how = `${i} ${redo.flat.has(i) ? "flat" : redo.solid.has(i) ? "solid" : "own"}`;
+    if (!systems.has(how)) systems.set(how, redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i)));
+    const laid = structuredClone(systems.get(how)!);
     if (laid.solidToo) solidToo.push(i);
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
@@ -341,6 +345,17 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const out = mol.neighbours[a].filter((b) => mol.systemOf[b] !== s);
     if (out.length === 2) swaps.push([a, out[0], out[1]]);
   }
+  // (a frame grown the same as another - a cage kept upright, which no
+  // frame turns - set right once: each copy handed out a drawing of its own)
+  const settled = new Map<(pos: Grown) => number, Map<string, { pos: Grown; score: number }>>();
+  const copy = (r: { pos: Grown; score: number }) => ({ pos: new Map([...r.pos].map(([a, p]) => [a, { ...p }])), score: r.score });
+  const once = (how: string, score: (pos: Grown) => number, pos: Grown, find: () => { pos: Grown; score: number }) => {
+    const seen = settled.get(score) ?? new Map<string, { pos: Grown; score: number }>();
+    settled.set(score, seen);
+    const key = `${how}|${[...pos].map(([a, p]) => `${a}:${p.x}:${p.y}`).join(" ")}`;
+    if (!seen.has(key)) seen.set(key, copy(find()));
+    return copy(seen.get(key)!);
+  };
   // a macrocycle's shape chosen for what hangs from it: each shape offered
   // tried, grown in every frame, and the best kept
   mol.systems.forEach((sys, i) => {
@@ -368,13 +383,16 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         })
         .sort((p, q) => p.score - q.score);
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
-        const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
+        const untangled = once("untangled", score, top.pos, () => {
+          const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
+          return untangle(mol, piece, better.pos, better.score, score, fixed);
+        });
         // (a cage's textbook view kept unless another reads clearly better:
         // camphor as it is always drawn, not the other way round - and a
         // system's views by the template over its projection likewise)
         const views = cageViews.get(i);
         const margin = views && !views[v].tied && (views.some((w) => w.projection) ? views[v].projection : v > 0) ? CAGE_VIEW_MARGIN : 0;
-        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + margin;
+        const s = untangled.score + margin;
         if (s < bestScore) {
           bestScore = s;
           best = v;
@@ -416,7 +434,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const improved = tried
       .slice(0, worth)
       .map((cand) => ({
-        ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, false, swapsHere),
+        ...once("improved", score, cand.pos, () => improve(mol, cand.pos, cand.score, flipsHere, sides, score, false, swapsHere)),
         mirrored: cand.mirrored,
       }))
       .sort((p, q) => p.score - q.score);
@@ -424,7 +442,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // a small piece
     for (const cand of improved.slice(0, piece.length <= 40 ? improved.length : 3)) {
       const deeper = {
-        ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
+        ...once("deeper", score, cand.pos, () => improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere)),
         mirrored: cand.mirrored,
       };
       if (deeper.score < best.score - 1e-9) best = deeper;

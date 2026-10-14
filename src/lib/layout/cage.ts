@@ -472,6 +472,30 @@ function contentOf(mol: Molecule): string {
 
 const contents = new WeakMap<Molecule, string>();
 
+/**
+ * A system's views, found once (`projectCage`, `tiedViews`,
+ * `templateViews`, `textbook`): a ring system is laid out again for each
+ * way the whole is drawn - flat, then as a solid - and its next best views
+ * are asked for one at a time, each finding them all (aconitine's core
+ * five times in each). Kept by what they are found from (`contentOf`), the
+ * system's atoms and how they were asked for; each handed out as a copy of
+ * its own.
+ */
+function viewsOnce<T>(how: string, mol: Molecule, sys: RingSystem, find: () => T): T {
+  const key = `${how}|${contentOf(mol)}|${sys.atoms.join(",")}`;
+  if (!viewsFound.has(key)) {
+    viewsFound.set(key, find());
+    if (viewsFound.size > KEPT_VIEWS) viewsFound.delete(viewsFound.keys().next().value!);
+  }
+  return structuredClone(viewsFound.get(key)) as T;
+}
+
+/** The views found so far (`viewsOnce`); the oldest let go first. */
+const viewsFound = new Map<string, unknown>();
+
+/** How many systems' views are kept (`viewsFound`): a few for each solid kept. */
+const KEPT_VIEWS = 4 * KEPT_SOLIDS;
+
 function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
   const hop = hops(mol, atoms);
   const T = targetsOf(mol, atoms, index, hop);
@@ -550,6 +574,10 @@ export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
 export function projectCage(mol: Molecule, sys: RingSystem): CageView;
 export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
 export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView | null {
+  return viewsOnce(`project|${rank}`, mol, sys, () => projectAnew(mol, sys, rank));
+}
+
+function projectAnew(mol: Molecule, sys: RingSystem, rank: number): CageView | null {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
   const bonds: [number, number][] = [];
@@ -717,6 +745,10 @@ export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView 
  * it. Empty where the cage is not drawn by the template.
  */
 export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
+  return viewsOnce("tied", mol, sys, () => tiedAnew(mol, sys));
+}
+
+function tiedAnew(mol: Molecule, sys: RingSystem): CageView[] {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
   const bonds: [number, number][] = [];
@@ -732,6 +764,10 @@ export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
 }
 
 export function templateViews(mol: Molecule, sys: RingSystem, count = 3): CageView[] {
+  return viewsOnce(`template|${count}`, mol, sys, () => templateAnew(mol, sys, count));
+}
+
+function templateAnew(mol: Molecule, sys: RingSystem, count: number): CageView[] {
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
   const bonds: [number, number][] = [];
@@ -974,8 +1010,39 @@ function textbook(
   tied?: CageView[],
 ): CageView | null {
   const atoms = sys.atoms;
+  // (every view of each hand, worked out once for all its ranks: the next
+  // best views are asked for one at a time)
+  const hands = viewsOnce("textbook", mol, sys, () => textbookViews(mol, sys, X, index, bonds));
+  if (!hands.length || rank >= hands[0].length) return null;
+  const found = [hands[0][rank], ...(hands[1] ? [hands[1][0]] : [])];
+  const view = (f: Found): Omit<CageView, "other"> => {
+    const pos = new Map<number, Point>();
+    const depth = new Map<number, number>();
+    atoms.forEach((a, i) => {
+      pos.set(a, f.pts[i]);
+      depth.set(a, f.depth[i]);
+    });
+    return { pos, depth, hints: f.hints, cost: f.cost };
+  };
+  // (and every view of either hand as good as the best, each with the
+  // other hand's best for its other side: two hands alike - an achiral
+  // cage, adamantane - and which came first went by the order of the atoms)
+  if (tied)
+    hands.forEach((fs, h) => {
+      const back = hands[1 - h]?.[0];
+      for (const f of fs) if (f.cost < hands[0][0].cost + 1e-6) tied.push({ ...view(f), other: back ? view(back) : undefined });
+    });
+  return { ...view(found[0]), other: found[1] ? view(found[1]) : undefined };
+}
+
+/** A view by the textbook's template, as `textbook` finds them. */
+type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
+
+/** Every view of a system by the textbook's template, of each hand, best first (`textbook`); none where it has no six-membered ring. */
+function textbookViews(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<number, number>, bonds: [number, number][]): Found[][] {
+  const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
-  if (!cycles.length) return null;
+  if (!cycles.length) return [];
   const kinds = [
     [1, -1],
     [-1, 1],
@@ -984,7 +1051,6 @@ function textbook(
   ];
   const at = (a: number) => X[index.get(a)!];
   const inSmallRings = ringDoubleBonds(mol, index);
-  type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
   // (the atoms of every six-membered ring the solid has as a chair or a
   // boat: a bond axial to one is drawn upright, the ring drawn by the
   // template or not)
@@ -1103,27 +1169,7 @@ function textbook(
       return !seen.has(k) && (seen.add(k), true);
     });
   };
-  const hands = [...best.values()].map(looks).sort((p, q) => p[0].cost - q[0].cost);
-  if (!hands.length || rank >= hands[0].length) return null;
-  const found = [hands[0][rank], ...(hands[1] ? [hands[1][0]] : [])];
-  const view = (f: Found): Omit<CageView, "other"> => {
-    const pos = new Map<number, Point>();
-    const depth = new Map<number, number>();
-    atoms.forEach((a, i) => {
-      pos.set(a, f.pts[i]);
-      depth.set(a, f.depth[i]);
-    });
-    return { pos, depth, hints: f.hints, cost: f.cost };
-  };
-  // (and every view of either hand as good as the best, each with the
-  // other hand's best for its other side: two hands alike - an achiral
-  // cage, adamantane - and which came first went by the order of the atoms)
-  if (tied)
-    hands.forEach((fs, h) => {
-      const back = hands[1 - h]?.[0];
-      for (const f of fs) if (f.cost < hands[0][0].cost + 1e-6) tied.push({ ...view(f), other: back ? view(back) : undefined });
-    });
-  return { ...view(found[0]), other: found[1] ? view(found[1]) : undefined };
+  return [...best.values()].map(looks).sort((p, q) => p[0].cost - q[0].cost);
 }
 
 /**
