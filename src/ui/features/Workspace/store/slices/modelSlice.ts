@@ -301,11 +301,15 @@ export const createModelSlice = (
 
   /**
    * The structure a tab opens with. That is where the document starts, not
-   * an edit made to it: nothing to undo, nothing unsaved.
+   * an edit made to it: nothing to undo, nothing unsaved. Meno's own record
+   * - an Office document's object opened again - brings its slides and its
+   * writing by hand with it, numbered from the first.
    */
-  openModel: (next: Model, scheme?: ImportedScheme) => {
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => {
+    const opened = ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme);
+    const withSlides = (next.slides ?? []).reduce((d, { id: _, ...s }) => ops.addSlide(d, s), opened);
     doc.reset(
-      ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme),
+      (next.inks ?? []).reduce((d, { id: _, ...k }) => ops.addInk(d, k), withSlides),
       "open structure",
     );
     get().forgetInteraction();

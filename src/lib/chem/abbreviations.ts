@@ -609,12 +609,20 @@ const ELEMENTS = new Set(TABLE.map((e) => e.symbol));
  * first - and "pin", for pinacolato - before element symbols.
  */
 let UNITS: string[] = [];
+/** The units by their first letter, each letter's longest first: what a label is read into at a letter, looked up by it. */
+let UNITS_AT = new Map<string, string[]>();
 /** The units labels are read into: the groups', the user's own among them. */
 function setUnits(): void {
   UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, "pin", "Phth"])]
     // (Bpin is B and pin, and so on the left pinB)
     .filter((u) => u.length > 1 && u !== "Bpin")
     .sort((x, y) => y.length - x.length);
+  UNITS_AT = new Map();
+  for (const u of UNITS) {
+    const at = UNITS_AT.get(u[0]);
+    if (at) at.push(u);
+    else UNITS_AT.set(u[0], [u]);
+  }
 }
 setUnits();
 
@@ -644,7 +652,7 @@ export function labelUnits(text: string): string[] {
       unit = text.slice(i, j + 1);
     } else {
       unit =
-        UNITS.find((u) => text.startsWith(u, i)) ??
+        UNITS_AT.get(text[i])?.find((u) => text.startsWith(u, i)) ??
         (ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? text.slice(i, i + 2) : text[i]);
     }
     i += unit.length;

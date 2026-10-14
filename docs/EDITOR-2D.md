@@ -235,7 +235,7 @@ whole workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide, a picture or a shape made
+thin line in Meno's attention colour (#cd4560) showing each. A slide, a picture or a shape made
 larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
@@ -774,8 +774,8 @@ All hover-based, as above.
   any other, from the system's chooser; the one given now is ringed.
   - **Colour sets** (the maintainer, 2026-10-11), in Settings, General,
     *Colours*, chosen as the drawing style's presets are; the one chosen is
-    the one in use (the card offers only it). Meno's - its base #317689,
-    its accent #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
+    the one in use (the card offers only it). Meno's - its base colour #317689,
+    its attention colour #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
     highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
     look right as they are, as colour makes a drawing look cheap easily -
     and Okabe and Ito's, told apart by those who see colours otherwise,
@@ -940,9 +940,12 @@ All hover-based, as above.
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
     it, the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
-    each as fit, each line still centred, a word wider alone on its line, a
-    number or a range never parted from the unit after it (60 °C, 12 h,
-    2 equiv, 0–25 °C); a drag is one undo step. Written anew, they are
+    each as fit, each line still centred, a number or a range never parted
+    from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
+    are wider than the words are made; a word wider than that broken at
+    their edge - after a hyphen, a comma or a closing bracket, or before an
+    opening one, where one fits, as a chemical name is broken (the
+    maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align

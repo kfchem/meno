@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
-import { centredAt, clipItems, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
+import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
 import { kindOf } from "../../../../lib/io/kinds";
 import { deleteParts, emptyWorkspaceDocument } from "../document";
 
@@ -262,6 +262,18 @@ describe("an arrow in a record", () => {
     const read = readRecord(record)!;
     expect(read.arrows![0]).toMatchObject({ kind: "retrosynthetic", heads: 2, dash: true, weight: "thin", corners: [{ along: 0.3, across: 1 }], color: "#c44848" });
     expect(read.arrows![1]).toEqual({ id: 2, x: 3, y: 5, angle: 0, length: 4 });
+  });
+});
+
+describe("a copy, in pictures", () => {
+  it("is drawn in them with a structure, molecules in 3D, or words, shapes, writing, arrows or \"+\" signs alone - not slides alone", () => {
+    const none = { atoms: [], bonds: [] };
+    expect(drawsPicture(none)).toBe(false);
+    expect(drawsPicture({ ...none, slides: [{ id: 1, x: 0, y: 0, w: 32, h: 18 }] } as never)).toBe(false);
+    expect(drawsPicture({ ...none, captions: [{ id: 1, x: 0, y: 0, text: "Title" }] })).toBe(true);
+    expect(drawsPicture({ ...none, shapes: [{ id: 1, kind: "rect", x0: 0, y0: 0, x1: 2, y1: 1 }] })).toBe(true);
+    expect(drawsPicture({ ...none, inks: [{ id: 1, pen: "pen", width: 1, strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] }] })).toBe(true);
+    expect(drawsPicture({ ...none, atoms: [{ id: 1, x: 0, y: 0, el: "C" }] as never })).toBe(true);
   });
 });
 

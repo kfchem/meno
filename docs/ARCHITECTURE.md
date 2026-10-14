@@ -317,7 +317,7 @@ what a drag there does, not what grabs it, and none is a hand:
 | Pointer | Where | The system's behind it |
 | --- | --- | --- |
 | `turn`, a ring with its arrowhead | over a molecule in 3D, which a drag turns | `grab` |
-| `turning`, the same in Meno's accent | while it turns | `grabbing` |
+| `turning`, the same in Meno's base colour (#317689) | while it turns | `grabbing` |
 | `move`, four arrowheads | over a molecule in 3D selected, which a drag moves, and while it moves | `move` |
 | `sideways`, a double arrowhead | a slider, and a chip's bars, dragged along | `ew-resize` |
 | `corner-down`, `corner-up`, a double arrowhead aslant | a selected picture's corner, which a drag makes larger or smaller, as the corner points on the screen | `nwse-resize`, `nesw-resize` |

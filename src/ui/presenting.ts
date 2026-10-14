@@ -23,28 +23,35 @@ export function setPresentingWindow(on: boolean): void {
 }
 
 /**
- * The window full screen for a talk, or back as it was: `on`, made full
- * screen where it was not, and told whether it was made so - so that only
- * a window the talk made full screen is put back. On a Mac, over the
- * screen where the window is - its menu bar and Dock hidden - as slides
- * software plays a talk, not in a space of its own, which the system slides
- * to and away from; elsewhere, the system's full screen (src-tauri
- * present.rs). Outside the app (a page in a browser), the page's own full
- * screen.
+ * What a window given over to a talk was given: whether it was made full
+ * screen - so that only one the talk made full screen is put back - and
+ * how far down from the screen's top a slide keeps clear of what the
+ * screen holds there, a Mac's notch, in pixels of the page.
  */
-export async function windowFullScreen(on: boolean): Promise<boolean> {
+export type Presented = { made: boolean; top: number };
+
+/**
+ * The window full screen for a talk, or back as it was: `on`, made full
+ * screen where it was not. On a Mac, the page given over to a window of the
+ * talk's own over the whole of the screen where it is - borderless, the
+ * menu bar and Dock hidden - as slides software plays a talk, not in a
+ * space of its own, which the system slides to and away from; elsewhere,
+ * the system's full screen (src-tauri present.rs). Outside the app (a page
+ * in a browser), the page's own full screen.
+ */
+export async function windowFullScreen(on: boolean): Promise<Presented> {
   try {
-    if (isTauri()) return await invoke<boolean>("present_window", { on });
-    if (typeof document === "undefined") return false;
+    if (isTauri()) return await invoke<Presented>("present_window", { on });
+    if (typeof document === "undefined") return { made: false, top: 0 };
     if (on) {
-      if (document.fullscreenElement || !document.documentElement.requestFullscreen) return false;
+      if (document.fullscreenElement || !document.documentElement.requestFullscreen) return { made: false, top: 0 };
       await document.documentElement.requestFullscreen();
-      return true;
+      return { made: true, top: 0 };
     }
     if (document.fullscreenElement) await document.exitFullscreen();
-    return true;
+    return { made: true, top: 0 };
   } catch {
     // (a window that cannot be made full screen gives the talk what it has)
-    return false;
+    return { made: false, top: 0 };
   }
 }

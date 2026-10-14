@@ -709,6 +709,39 @@ export function runsWidth(runs: readonly TextRun[], fontSize: number, set: Label
   return w;
 }
 
+/**
+ * How far in each place of `runs` set side by side lies - before each of
+ * their letters, by its place in their text, and at their end: what
+ * `runsWidth` measures of them cut there, in one pass, not a measure for
+ * each place.
+ */
+export function runsPlaces(runs: readonly TextRun[], fontSize: number, set: LabelSet = ACS_LABEL_SET): number[] {
+  const font = labelFont(set.fontFamily);
+  const out = [0];
+  // (the runs before, added up as runsWidth adds them, and the one cut, as runWidth adds its letters: the same sums, so the same numbers)
+  let done = 0;
+  for (const r of runs) {
+    const size = fontSize * (r.sub || r.sup || r.mark ? set.subscriptSize : 1);
+    let w = 0;
+    if (r.mark) {
+      w = size * MARK_WIDTH;
+      for (let k = 1; k < r.text.length; k++) out.push(done + w);
+    } else {
+      let k = 0;
+      for (const ch of r.text) {
+        if (k > 0) out.push(done + w);
+        // (cut between the halves of a letter of two code units: the first half, as runWidth reads it)
+        if (ch.length === 2) out.push(done + (w + font.advance(ch[0]) * size));
+        w += font.advance(ch) * size;
+        k += ch.length;
+      }
+    }
+    done += w;
+    if (r.text.length) out.push(done);
+  }
+  return out;
+}
+
 export function computeBounds(atoms: Atom[]): { min: Vec2; max: Vec2 } {
   let minX = Infinity,
     minY = Infinity,
