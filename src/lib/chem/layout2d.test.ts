@@ -3,6 +3,7 @@ import {
   unspecifiedDoubles,
   bondKind,
   buildAllPrimitives,
+  BOND_SEEN_LEAST,
   buildBondPrimitives,
   joinsAtAtoms,
   buildTextLabels,
@@ -1180,15 +1181,39 @@ describe("how far a bond stops short of a label", () => {
     expect(line.y2).toBeCloseTo(top + o.labelMarginPx!, 9);
   });
 
-  it("lets two labels share no more than nine tenths of the bond between them", () => {
+  it("keeps a third of the bond between two labels seen, however much of it they would take", () => {
     const o = opts();
-    // two wide labels on a short bond: neither may take its full clearance
+    // two wide labels on a short bond: neither may take its full clearance,
+    // and together they leave a third of it (BOND_SEEN_LEAST) - nine tenths
+    // of it was theirs before (the maintainer, 2026-10-14)
     const atoms: Atom[] = [
       { id: 1, x: 0, y: 0, el: "Br" },
       { id: 2, x: 0.6, y: 0, el: "Br" },
     ];
     const [line] = buildBondPrimitives(atoms, bond, o, ZOOM).lines;
-    expect(line.x2 - line.x1).toBeCloseTo(0.6 * 0.1, 9);
+    expect(line.x2 - line.x1).toBeCloseTo(0.6 * BOND_SEEN_LEAST, 9);
+    // (a share set lower than the rule is kept)
+    const [kept] = buildBondPrimitives(atoms, bond, opts({ labelShareMax: 0.4 }), ZOOM).lines;
+    expect(kept.x2 - kept.x1).toBeCloseTo(0.6 * 0.6, 9);
+  });
+
+  it("shows a wedge's width at its broad end however wide the label there", () => {
+    const o = opts();
+    // a wedge from a carbon to a wide label on a short bond: the label would
+    // take nearly all of it; a third is seen, and the broad end as wide as ever
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 0.6, y: 0, el: "Br" },
+    ];
+    const deg = new Map([
+      [0, 3],
+      [1, 1],
+    ]);
+    const { polys } = buildBondPrimitives(atoms, { a1: 0, a2: 1, order: 1, stereo: "up" }, o, ZOOM, deg);
+    const xs = polys[0].points.map((p) => p.x);
+    const ys = polys[0].points.map((p) => p.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(0.6 * BOND_SEEN_LEAST - 1e-9);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo((o.units ?? "px") === "world" ? o.wedgeWidthPx : o.wedgeWidthPx / ZOOM, 6);
   });
 
   it("follows the letters: closer to an O's round side than to an N's corner", () => {

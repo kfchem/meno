@@ -470,7 +470,11 @@ bond). Two names one over the other keep a line's space between them, a
 quarter of a bond: with less, taxol's AcO sat on its OBz.
 
 - Two labels share a bond's length: together they may take nine tenths of
-  it (`labelShareMax`), each giving up its share past that. Where one of
+  it (`labelShareMax`), each giving up its share past that - and, drawn,
+  never more than two thirds, whatever the labels: a third of a bond is
+  always seen, its end touching a label's letters or digits (13C's) where
+  it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
+  2026-10-14). Where one of
   them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
   long enough for the two to keep their margins, in the drawing's style -
   measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,

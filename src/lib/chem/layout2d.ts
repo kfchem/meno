@@ -2578,6 +2578,9 @@ export function labelTrims(
   };
 }
 
+/** The least share of a bond seen between the labels at its ends, however much of it they would take. */
+export const BOND_SEEN_LEAST = 1 / 3;
+
 export function buildBondPrimitives(
   atoms: Atom[],
   bond: Bond,
@@ -2621,6 +2624,15 @@ export function buildBondPrimitives(
   const room = trims.room;
   if (trimA + trimB > room) {
     const k = room / (trimA + trimB);
+    trimA *= k;
+    trimB *= k;
+  }
+  // And whatever the labels, a bond is seen for a third of its length at
+  // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  const seen = L0 * BOND_SEEN_LEAST;
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;
   }

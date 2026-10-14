@@ -54,7 +54,16 @@ and in particular:
   - **Chains** (agreed 2026-10-03): three clicks on an atom draw a chain,
     and so does Quick Add's *Chain* from empty space - led by a drag, or,
     the last click (or the press on the icon) let go where it was, traced
-    with the button up until a click ends it; Escape lets it go. The third
+    with the button up until a click ends it; Escape lets it go, and so
+    does undo (Cmd/Ctrl+Z) while any gesture is under way - a chain, a
+    shape, an arrow, a stroke of ink, a drag, a box, a handle's resize, a
+    molecule in 3D turned or moved, a measurement's value set - undoing
+    nothing more (the maintainer, 2026-10-14; `gestureUnderWay`,
+    store/gesture). While a label or words on the page are typed, undo is
+    the words' own, as in a text field, and never the document's under
+    them (`wordsUnderWay`). A gesture lost - the window left, the pointer
+    taken from it - is let go the same way, and its flags with it, so that
+    no undo after it is taken for it (`letLostGesturesGo`). The third
     click takes back the bond the double-click drew. (Two clicks on empty
     space drew one until 2026-10-08, when the maintainer gave the
     double-click there to *Quick Add*, below; three did until 2026-10-10,
