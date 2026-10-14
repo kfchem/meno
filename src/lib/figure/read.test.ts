@@ -994,3 +994,25 @@ describe("a figure's charges drawn in rings", () => {
     expect(s.arrows).toHaveLength(0);
   });
 });
+
+describe("a stereocentre whose configuration the figure does not show", () => {
+  const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
+  /** CH(OH)(Cl)CH3, its centre at (100, 100): the OH up, the Cl down right, the methyl down left - its bond to the Cl a wedge, or not. */
+  const drawn = (wedged: boolean, cl = "Cl") => {
+    const c: P = [100, 100];
+    const [o, x, me] = [step(c, 90), step(c, -30), step(c, 210)];
+    return figure([stroke(c, along(c, o, 0.7)), wedged ? wedge(c, along(c, x, 0.7)) : stroke(c, along(c, x, 0.7)), stroke(c, me)], [...word("OH", [o[0] + 3.4, o[1]]), ...word(cl, [x[0] + 3.4, x[1]])]);
+  };
+  const marked = (f: FigureDrawn) => read(f).atoms.filter((a) => a.unsure?.includes(NOT_DRAWN)).length;
+
+  it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
+    expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {
+    expect(marked(drawn(true))).toBe(0);
+    // (CH(OH)(CH3)2: its two methyls alike, no stereocentre)
+    const c: P = [100, 100];
+    expect(marked(figure([stroke(c, along(c, step(c, 90), 0.7)), stroke(c, step(c, -30)), stroke(c, step(c, 210))], word("OH", [step(c, 90)[0] + 3.4, step(c, 90)[1]])))).toBe(0);
+  });
+});

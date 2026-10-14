@@ -1102,6 +1102,11 @@ workspace holds.
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
   - a bond drawn twice over;
+  - a stereocentre whose configuration the figure does not show - no
+    wedge or hash narrow at it, as a cage drawn in perspective has none -
+    four groups about it each other than the rest, its hydrogens one at
+    most: none is read, and none guessed ("A stereocentre whose
+    configuration is not drawn: none is read.");
   - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -
