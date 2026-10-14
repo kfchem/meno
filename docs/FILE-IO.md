@@ -343,15 +343,23 @@ How these behave:
   all read it so:
   - as UTF-8;
   - as UTF-16 where a byte order mark says so, either way round, or
-    with no mark where every other byte of its start is NUL (the high
-    byte of Latin letters and digits);
+    with no mark where its start has NULs - which no UTF-8 or Shift_JIS
+    text has - nearly all on one side of each pair (the high byte of
+    Latin letters, digits and line ends: a text mostly in Japanese has
+    some, one in English half), and read that way round is nearly all
+    letters a text holds;
   - bytes that are not UTF-8, as Shift_JIS, which Windows in Japanese
     writes text in;
   - those that are not Shift_JIS either, as Windows-1252.
 
+  A file of no kind Meno reads is held as a text by Open as by a drop,
+  unless it is bytes (a NUL in its start, once read as above) or of a kind
+  Meno says it does not read yet: those are said so by both alike.
+
   A text is held with its lines ended "\n", however its file ended them.
   Text Meno puts on the clipboard on Windows has them ended "\r\n", as
-  Windows programs take it. Export writes a text beside its original as
+  Windows programs take it - copied through the menu or with the keys
+  (2026-10-14). Export writes a text beside its original as
   UTF-8, its lines ended "\n" and with no byte order mark, whatever its
   file was written in: Meno holds the text, not the bytes it was read from.
 - **Office's record is handed to the canvas as the record**, not under a
