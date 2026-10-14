@@ -439,7 +439,7 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number): 
  * its letters: the length most of its lines that meet another share (a
  * bond's line meets another's end, as a hash's strokes and a ring's inner
  * lines do not), longer than its letters are tall and no more than six
- * times as long as they would have a bond.
+ * times as long as its labels' letters would have a bond.
  */
 export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): number {
   // (another's end: a line's in a path of several meets the next's, though they share the point)
@@ -456,8 +456,12 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
   });
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
   const least = sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0;
-  // (and no longer than six bonds as long as its letters are set would have them: a page's rules, a graph's frame, are none)
-  const most = sizes.length ? 6 * BOND_PER_SIZE * sizes[Math.floor(sizes.length / 2)] : Infinity;
+  // (and no longer than six bonds as long as its labels are set would have them: a page's rules, a graph's frame, are none. The
+  // labels: capitals by a line's end - a caption's letters, set larger or smaller, at none - or, there being none, every letter)
+  const ends = [...shapes.strokes.flatMap((s) => [s.a, s.b]), ...shapes.wedges.flatMap((w) => [w.tip, w.base])];
+  const byEnd = letters.filter((l) => /[A-Z]/.test(l.c) && ends.some((p) => fromBox(p, l.box) < l.size));
+  const labelSizes = (byEnd.length ? byEnd : letters).map((l) => l.size).sort((a, b) => a - b);
+  const most = labelSizes.length ? 6 * BOND_PER_SIZE * labelSizes[Math.floor(labelSizes.length / 2)] : Infinity;
   // (lines meeting, every one of them square - a frame, a graph's axes - and no wedge: no structure is drawn, no bond; a cyclobutane
   // drawn alone, a square, is so too)
   if (joined.length && !angled.length && !shapes.wedges.length) return 0;
@@ -879,11 +883,18 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     });
   }
   // (a group's name set right over or under a heteroatom's label, no bond drawn to it - a MOM written over its imidazole's N - is
-  // bonded to that atom, where it has a bond to spare)
+  // bonded to that atom, where it has a bond to spare; standing alone on its line: one of a line's words - the Me of an R = Me - is the line's)
   const SPARE: Record<string, number> = { N: 3, P: 3, O: 2, S: 2 };
+  const onLineWith = (w: Word, k: number) =>
+    words.some((v, j) => {
+      if (j === k || atomOfWord.has(j)) return false;
+      const overlap = Math.min(w.box[3], v.box[3]) - Math.max(w.box[1], v.box[1]);
+      const gap = Math.max(v.box[0] - w.box[2], w.box[0] - v.box[2]);
+      return overlap > 0.5 * Math.min(w.box[3] - w.box[1], v.box[3] - v.box[1]) && gap < Math.max(w.size, v.size);
+    });
   words.forEach((w, k) => {
     const text = labelText(w);
-    if (atomOfWord.has(k) || ions.has(k) || isElementSymbolLike(text) || !reads(text)) return;
+    if (atomOfWord.has(k) || ions.has(k) || isElementSymbolLike(text) || !reads(text) || onLineWith(w, k)) return;
     const c = centre(w.box);
     const width = w.box[2] - w.box[0];
     const i = atoms.findIndex((a) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, labelText, readFigure, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
@@ -1021,6 +1021,17 @@ describe("a group's name stacked over an atom's label", () => {
     expect(bondedTo(ring("MOM", 3), "MOM")).toBeNull();
     expect(bondedTo(ring("Cl"), "Cl")).toBeNull();
   });
+
+  it("bonds no group's name that is one of its line's words: the Me of an R = Me over the N stays the line's", () => {
+    const f = ring("Me");
+    // (Me set from 6.8 left of the N's middle; R and = before it, a space apart)
+    const [n] = f.letters;
+    const x = (n.box[0] + n.box[2]) / 2;
+    const y = (n.box[1] + n.box[3]) / 2 - 10;
+    const lined: FigureDrawn = { ...f, letters: [...f.letters, ...word("R", [x - 25, y]), ...word("=", [x - 14.2, y])] };
+    expect(bondedTo(lined, "Me")).toBeNull();
+    expect(readFigure(lined, readsToo).left.letters.map((l) => l.c).join("")).toContain("Me");
+  });
 });
 
 describe("a frame, a graph's axes and a page's rules", () => {
@@ -1036,6 +1047,16 @@ describe("a frame, a graph's axes and a page's rules", () => {
     const numbers = [0, 1, 2, 3, 4].flatMap((k) => word(`${k}`, [60 + 25 * k, 168]));
     const r = readFigure(figure([...frame(60, 60, 160, 160), ...ticks], [...numbers, ...word("Yield", [40, 110])]));
     expect(r.atoms).toHaveLength(0);
+  });
+
+  it("measures a bond by its labels' letters, not a caption's: a chart's long lines beside a small structure, titled large, are none", () => {
+    // (a chain to an OH, and a chart's line of six long steps at angles, its title in 18-point letters)
+    const chain = [stroke([40, 120], step([40, 120], 30), step(step([40, 120], 30), -30), along(step(step([40, 120], 30), -30), step(step(step([40, 120], 30), -30), 30), 0.7))];
+    const oh = word("OH", step(step(step([40, 120], 30), -30), 30));
+    const chart = [stroke([100, 200], [196, 172], [292, 200], [388, 172], [484, 200], [580, 172], [676, 200])];
+    const title = Array.from("Conversion over time", (c, k): FigureLetter => ({ c, box: [120 + 12 * k, 100, 132 + 12 * k, 113], at: [120 + 12 * k, 113], size: 18 }));
+    const f = figure([...chain, ...chart], [...oh, ...title]);
+    expect(figureBond(shapesOf(f), f.letters)).toBeCloseTo(L, 0);
   });
 
   it("reads a structure drawn in a frame without the frame: its sides meet only each other, square", () => {

@@ -986,11 +986,14 @@ workspace holds.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall,
-  nor one more than six times as long as its letters would have a bond.
+  nor one more than six times as long as its labels' letters would have a
+  bond (the capitals by a line's end; a caption's letters, set larger or
+  smaller, are not taken, unless no letter lies by a line's end).
   Of the lines that meet, those meeting another other than square count,
   where any do: where every line meets the others square - a frame, a
   graph's axes - and no wedge is drawn, no structure is drawn, and none
-  is read.
+  is read. A cyclobutane drawn alone, a square, and a schematic box (rings
+  drawn edge-on as rectangles) are read as no structure so too.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
@@ -1075,7 +1078,8 @@ workspace holds.
   - and a bond cut back at the H, pointing on at the element, is the
   label's too; a group's name set right over or under an N, P, O or S's
   label with no bond drawn to it - a MOM written over its imidazole's N -
-  is bonded to that atom, where it has a bond to spare), read as a label typed is read - an
+  is bonded to that atom, where it has a bond to spare and the name stands
+  alone on its line: the Me of an R = Me is the line's), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last
