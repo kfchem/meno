@@ -268,7 +268,18 @@ led by a drag from the icon or traced with the button up. *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
-wrong is said under the field. A double-click on an atom still draws one
+wrong is said under the field, in a few words about the SMILES itself - a
+formula written for it (each element once, a count after one; a SMILES
+for a halide of one atom then given - "a SMILES for it is
+Cl[Sn](Cl)(Cl)Cl" for SnCl4, a salt of groups 1 and 2 as ions,
+"[Mg+2].[Cl-].[Cl-]", where as many halogens as its charge), a
+ring left open (and which: "1 is opened and not closed"), a ( or [ not
+closed, a symbol that is no element, an element written without its
+brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
+an atom and an aromatic one), an H written as an atom ("H is left out of
+a SMILES"), an atom with more bonds than it can take (which, with its
+charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
+aromatic ring that cannot alternate. A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
