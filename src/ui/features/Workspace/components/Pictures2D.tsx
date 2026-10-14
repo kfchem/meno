@@ -37,6 +37,7 @@ import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { spotMoving, spotOn } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Where pictures lie: under the drawing and its selection's shade, over the PDFs (Pdfs2D's -0.4); each put there later a little over the one before - far enough apart for the depth buffer to tell them apart. */
 const Z = -0.3;
@@ -155,7 +156,10 @@ export default function Pictures2D() {
     newest.current = top;
     if (!added.length) return;
     const pts = added.flatMap(cornersOf);
-    const b = { x0: Math.min(...pts.map((q) => q.x)), x1: Math.max(...pts.map((q) => q.x)), y0: Math.min(...pts.map((q) => q.y)), y1: Math.max(...pts.map((q) => q.y)) };
+    // (four corners each, more than a call takes as its arguments where thousands come at once: not spread)
+    const xs = pts.map((q) => q.x);
+    const ys = pts.map((q) => q.y);
+    const b = { x0: least(xs), x1: greatest(xs), y0: least(ys), y1: greatest(ys) };
     const cam = camera as THREE.OrthographicCamera;
     const a = pageAt(-1, -1, cam);
     const c = pageAt(1, 1, cam);
