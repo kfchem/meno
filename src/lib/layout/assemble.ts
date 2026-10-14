@@ -120,14 +120,8 @@ export function grow(
   };
 
   // a complex is grown from its metal, its ligands round it as the metal's
-  // slots have them (section 7) - the most-bonded metal, where there are
-  // several - where no ring runs through the metal (a chelate through a
-  // ferrocene, dppf's, is closed at the metal instead)
-  const open = (m: number) =>
-    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
-  const centre = piece
-    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
-    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
+  // slots have them (section 7)
+  const centre = metalCentre(mol, piece);
   const root = centre == null ? rootSystem(mol, piece) : -1;
   if (centre != null) {
     pos.set(centre, { x: 0, y: 0 });
@@ -253,6 +247,20 @@ export function grow(
 }
 
 /**
+ * The metal a complex is grown from, its ligands round it: the most-bonded
+ * metal, where there are several - where no ring runs through the metal (a
+ * chelate through a ferrocene, dppf's, is closed at the metal instead);
+ * undefined for a piece with none.
+ */
+function metalCentre(mol: Molecule, piece: number[]): number | undefined {
+  const open = (m: number) =>
+    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
+  return piece
+    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
+    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
+}
+
+/**
  * The ring system a piece is built round, its frame: the one nearest all
  * the rest of it (atorvastatin's pyrrole, not one of its phenyls), and of
  * those the largest; -1 for a piece with no ring.
@@ -287,13 +295,26 @@ export function rootSystem(mol: Molecule, piece: number[]): number {
  * The ways of setting a piece's frame down: turned by sixty degrees at a
  * time, and mirrored - and, for a frame of squares and no hexagons (a
  * penam), by thirty degrees at a time, the square's sides able to lie
- * level and upright either way round.
+ * level and upright either way round. So too for a frame of rings that
+ * lie on the lattice no way round - fives and sevens, proline's
+ * pyrrolidine - set on it only by its bonds out: turned by sixty degrees
+ * from where its ring's first atom was put, its bonds out lie at angles
+ * that atom decides, and proline's carboxyl, off that atom, never lay
+ * level. (Not where a metal sets the frame: a complex grown from its
+ * metal, or a frame with a metal in it - PdCl2(dppf)'s.)
  */
 export function framesFor(mol: Molecule, piece: number[]): Frame[] {
   const root = rootSystem(mol, piece);
   if (root < 0) return FRAMES;
-  const sizes = mol.systems[root].rings.map((r) => mol.rings[r].length);
-  if (!sizes.includes(4) || sizes.includes(6)) return FRAMES;
+  const sys = mol.systems[root];
+  const sizes = sys.rings.map((r) => mol.rings[r].length);
+  const squares = sizes.includes(4) && !sizes.includes(6);
+  // (a three lies on the lattice as a six does; an eight and a macrocycle are shaped on it)
+  const offLattice =
+    sizes.every((n) => n === 5 || n === 7) &&
+    metalCentre(mol, piece) == null &&
+    !sys.atoms.some((a) => isMetal(mol.el[a]) || mol.el[a] === "*");
+  if (!squares && !offLattice) return FRAMES;
   return [false, true].flatMap((mirrored) =>
     Array.from({ length: 12 }, (_, k) => ({ turn: (k * Math.PI) / 6, mirrored })),
   );
