@@ -124,7 +124,14 @@ export function readMenoFile(bytes: Uint8Array): MenoFile {
     data: (sha256) => {
       if (!known.has(sha256)) return null;
       const name = `files/${sha256}`;
-      if (where === undefined) where = entriesOf(bytes);
+      // (a directory that throws as it is read is one this does not read: the zip reader's, below)
+      if (where === undefined) {
+        try {
+          where = entriesOf(bytes);
+        } catch {
+          where = null;
+        }
+      }
       try {
         // (a directory this does not read - zip64, say - read as the zip reader reads it)
         if (!where) return unzipSync(bytes, { filter: (f) => f.name === name && f.originalSize <= MOST_FILE })[name] ?? null;
