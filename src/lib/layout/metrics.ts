@@ -715,12 +715,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   };
   let turn = 0;
   let best = offBy(0, true);
-  for (let i = -150; i < 150; i++) {
+  // (a bond is off the lattice by at most a degree more for a degree's
+  // turn, and so is the mean: the turns within what one is off by of the
+  // best so far, past it, are no better, and are passed over)
+  for (let i = -150, next = -150; i < 150; i++) {
+    if (i < next) continue;
     const e = offBy(i / 10, true);
     if (e < best - 1e-9) {
       best = e;
       turn = i / 10;
     }
+    next = i + 1 + Math.max(0, Math.floor((e - best) * 10 - 1e-6));
   }
   let tilt = Math.abs(turn);
   // A frame whose rings cannot all lie on the lattice together - two
@@ -1551,9 +1556,15 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((side(onA) === side(onB)) !== cis) wrongDoubles++;
   }
 
+  // (the atoms from left to right, to pass over pairs far apart across -
+  // every pair, where a place is not a number)
+  const sweep = L > 0 && x.every(Number.isFinite) && y.every(Number.isFinite);
+  const byX = Array.from({ length: n }, (_, a) => a).sort((p, q) => x[p] - x[q]);
   let overlaps = 0;
-  for (let a = 0; a < n; a++) {
-    for (let b = a + 1; b < n; b++) {
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n && !(sweep && x[byX[j]] - x[byX[i]] >= L); j++) {
+      const a = Math.min(byX[i], byX[j]);
+      const b = Math.max(byX[i], byX[j]);
       const dx = x[a] - x[b];
       const dy = y[a] - y[b];
       if (dx * dx + dy * dy >= 0.25 * L * L) continue;
@@ -1602,10 +1613,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     loy[e] = Math.min(y[a], y[b]);
     hiy[e] = Math.max(y[a], y[b]);
   });
+  // (and the bonds by their boxes' left sides: a bond's box reaches no
+  // further right than the widest box from its left side)
+  const bondsByX = Array.from({ length: E }, (_, e) => e).sort((p, q) => lox[p] - lox[q]);
+  let widest = 0;
+  for (let e = 0; e < E; e++) widest = Math.max(widest, hix[e] - lox[e]);
   let crossings = 0;
-  for (let i = 0; i < E; i++) {
-    const [a, b] = edges[i];
-    for (let j = i + 1; j < E; j++) {
+  for (let s = 0; s < E; s++) {
+    for (let t = s + 1; t < E && !(sweep && lox[bondsByX[t]] > hix[bondsByX[s]]); t++) {
+      const i = Math.min(bondsByX[s], bondsByX[t]);
+      const j = Math.max(bondsByX[s], bondsByX[t]);
+      const [a, b] = edges[i];
       if (lox[j] > hix[i] || hix[j] < lox[i] || loy[j] > hiy[i] || hiy[j] < loy[i]) continue;
       const [c, d] = edges[j];
       if (a === c || a === d || b === c || b === d) continue;
@@ -1620,8 +1638,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   for (let p = 0; p < n; p++) {
     const px = x[p];
     const py = y[p];
-    for (let e = 0; e < E; e++) {
-      if (px < lox[e] - near || px > hix[e] + near || py < loy[e] - near || py > hiy[e] + near) continue;
+    // (the first bond whose box can reach the atom, with a bond's length to spare)
+    let lo = 0;
+    for (let hi = sweep ? E : 0; lo < hi; ) {
+      const mid = (lo + hi) >> 1;
+      if (lox[bondsByX[mid]] < px - near - widest - L) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let s = lo; s < E; s++) {
+      const e = bondsByX[s];
+      if (sweep && px < lox[e] - near) break;
+      if (px > hix[e] + near || py < loy[e] - near || py > hiy[e] + near) continue;
       const [a, b] = edges[e];
       if (p === a || p === b) continue;
       if (pointToSegment(px, py, x[a], y[a], x[b], y[b]) >= near) continue;
