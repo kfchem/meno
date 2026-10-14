@@ -2,10 +2,12 @@
  * The page's errors and warnings into Meno's log (src-tauri/src/logfile.rs,
  * docs/ARCHITECTURE.md *Meno's log*): what goes to `console.error` and
  * `console.warn`, and what is thrown and never caught, each also where it
- * went before. A line says what went wrong, never what a document holds:
- * of an error its name, message and stack, words logged as they are, a
- * number or the like as it is - of anything else only what it is
- * (`[Object]`, `[Map]`), not its content.
+ * went before. A line says what went wrong, never what a document holds,
+ * nor a file's name: of an error its name and stack - its message only
+ * where it is the engine's about code (`CODE_ERRORS`), as a message may
+ * quote what was read; Meno's own messages (`KNOWN`), words logged that are
+ * none of them left out (`[text]`); a number or the like as it is; and of
+ * anything else only what it is (`[Object]`, `[Map]`), not its content.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
@@ -13,26 +15,60 @@ export type Level = "error" | "warn";
 
 /** The most lines sent in a minute: past that they are counted and said to be left out, so that one error over and over does not fill the log. */
 export const MOST_A_MINUTE = 100;
-/** The most characters taken of one thing logged. */
-const PART_MOST = 1000;
 /** The most lines of a stack taken. */
 const STACK_LINES = 12;
 
-const cut = (s: string, most = PART_MOST) => (s.length > most ? `${s.slice(0, most)}…` : s);
+/** A line of a stack that is a frame: where the code was, as engines write it. */
+const FRAME = /^\s*at \S|@(\S+:\d+(:\d+)?|\[native code\])\s*$/;
+
+/** The errors whose message is kept: the engine's, about the code that ran (x is undefined). Any other's may quote what was read - a file's text, a SMILES, a name - and is left out. */
+const CODE_ERRORS: ReadonlySet<string> = new Set(["TypeError", "ReferenceError", "RangeError"]);
+
+/**
+ * Meno's own messages, as its code logs them, each as the log keeps it:
+ * words logged that are none of these are left out, as they may name a
+ * file or quote a document. A message newly logged is added here.
+ */
+const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
+  // (ui/layouts/ErrorBoundary: the part that stopped - a tab by its name, a file's, left out)
+  [/^Meno: the (window|canvas|column) stopped working\.$/, (m) => m[0]],
+  [/^Meno: the tab "[\s\S]*" stopped working\.$/, () => 'Meno: the tab "…" stopped working.'],
+  // (hooks/useStructureEvents, clipboardActions, useOfficeLink, chem/fromSmiles)
+  [/^(initial payload|append) import failed$/, (m) => m[0]],
+  [/^the structure is copied without its pictures$/, (m) => m[0]],
+  [/^the document did not take the structure$/, (m) => m[0]],
+  [/^the SMILES is drawn as the plugin laid it out$/, (m) => m[0]],
+  // (installLog's own)
+  [/^not caught(, in a promise)?:$/, (m) => m[0]],
+  // (where in React's tree a part stopped: components' names, a line each)
+  [/^(\s*(at|in) [\w$.<>]+( \([^()\n]*\))?\s*)+$/, (m) => m[0].trim()],
+];
+
+const cut = (s: string, most: number) => (s.length > most ? `${s.slice(0, most)}…` : s);
 
 /** One thing logged, as the log has it. */
 function partOf(a: unknown): string {
   if (a instanceof Error) {
-    const head = `${a.name}: ${cut(a.message)}`;
-    // (a stack that begins with the error's name and message - as some
-    // engines write it - without them again)
-    const lines = (a.stack ?? "").split("\n").filter((l) => l.trim());
-    const stack = (lines[0]?.startsWith(`${a.name}:`) ? lines.slice(1) : lines).slice(0, STACK_LINES);
-    return [head, ...stack.map((l) => cut(l.trim(), 300))].join("\n");
+    // (of a message kept, what it quotes in double quotes left out: "foo" cannot be parsed as a URL)
+    const head = CODE_ERRORS.has(a.name) ? `${a.name}: ${cut(a.message.replace(/"[^"]*"/g, '"…"'), 300)}` : a.name;
+    // (a stack that begins with the error's name and message, as some engines
+    // write it, without them - a message of several lines whole - and then
+    // only its frames: at f (app.js:1:2), f@app.js:1:2)
+    let stack = a.stack ?? "";
+    const said = a.message ? `${a.name}: ${a.message}` : a.name;
+    if (stack.startsWith(said)) stack = stack.slice(said.length);
+    const frames = stack.split("\n").filter((l) => FRAME.test(l)).slice(0, STACK_LINES);
+    return [head, ...frames.map((l) => cut(l.trim(), 300))].join("\n");
   }
-  if (typeof a === "string") return cut(a);
+  if (typeof a === "string") {
+    for (const [pattern, kept] of KNOWN) {
+      const m = pattern.exec(a);
+      if (m) return kept(m);
+    }
+    return "[text]";
+  }
   if (a == null || typeof a === "number" || typeof a === "boolean" || typeof a === "bigint") return String(a);
-  if (typeof a === "symbol") return a.toString();
+  if (typeof a === "symbol") return "[Symbol]";
   if (typeof a === "function") return "[Function]";
   const name = Object.getPrototypeOf(a)?.constructor?.name;
   return `[${typeof name === "string" && name ? name : "Object"}]`;
