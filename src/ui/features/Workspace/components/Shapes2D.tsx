@@ -489,9 +489,21 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
       } else if (sides && guide) next = { ...next, ...guide.step(next, sides, m) };
       store.getState().updateShape(s.id, { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1, ...(next.tail ? { tail: next.tail } : {}) }, gesture);
     };
+    // Escape - or undo, which sends it - lets it go, as large as it was
+    const onKey = (k: KeyboardEvent) => {
+      if (k.key !== "Escape") return;
+      k.preventDefault();
+      k.stopPropagation();
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKey, true);
+      guide?.end();
+      scale?.end();
+      store.getState().dropShapeChange(s.id, gesture);
+    };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
       guide?.end();
       scale?.end();
       if (Math.hypot(u.clientX - from.x, u.clientY - from.y) < CLICK_PX) clicks.set(s.id, u.timeStamp);
@@ -502,6 +514,7 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
   const cursorAt = (i: number | undefined) => (i != null && all[i] ? cursorOf(all[i].handle) : null);
   return (

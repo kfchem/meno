@@ -166,6 +166,7 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
@@ -862,7 +863,7 @@ function WorkspaceContent({
       // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
       // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
       const words = wordsUnderWay(s);
-      if (words || gestureUnderWay(s)) {
+      if (words || gestureUnderWay(s) || viewPanning()) {
         e.preventDefault();
         e.stopPropagation();
         if (!words) escape();
