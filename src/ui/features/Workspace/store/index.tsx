@@ -25,6 +25,7 @@ import { createShapesSlice } from "./slices/shapesSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
+import { withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
 
@@ -38,7 +39,7 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
  * `model`, `arrows` and the aromatic flags from the store, while the document
  * is what actually holds them - which is how undo and redo reach the canvas.
  */
-function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>) {
+function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>, talkLooks: Readonly<Record<number, Look>> = NO_LOOKS) {
   return {
     // (of each stack of drawings, the record it shows: the canvas works on
     // that, the whole kept beside it for what keeps the document - utils/stacks)
@@ -55,7 +56,8 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     nextPlusId: doc.nextPlusId ?? 1,
     captions: doc.captions ?? NO_CAPTIONS,
     nextCaptionId: doc.nextCaptionId ?? 1,
-    molecules3d: doc.molecules3d ?? [],
+    // (each in the look a talk switched it to, while it is given)
+    molecules3d: withLooks(doc.molecules3d ?? [], talkLooks),
     sets: doc.sets ?? NO_SETS,
     steps: doc.steps ?? NO_STEPS,
     wires: doc.wires ?? NO_WIRES,
@@ -77,9 +79,14 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
  */
 function drawingHeld(sel: Sel, model: Pick<Model, "atoms" | "bonds">): Sel {
   if (!sel.atoms.size && !sel.bonds.size) return sel;
+  // (counted, not gathered: this runs at every frame of a move of what is selected)
+  let heldAtoms = 0;
+  let heldBonds = 0;
+  for (const a of model.atoms) if (sel.atoms.has(a.id)) heldAtoms++;
+  for (const b of model.bonds) if (sel.bonds.has(b.id)) heldBonds++;
+  if (heldAtoms === sel.atoms.size && heldBonds === sel.bonds.size) return sel;
   const atoms = new Set(model.atoms.map((a) => a.id));
   const bonds = new Set(model.bonds.map((b) => b.id));
-  if ([...sel.atoms].every((id) => atoms.has(id)) && [...sel.bonds].every((id) => bonds.has(id))) return sel;
   return { atoms: new Set([...sel.atoms].filter((id) => atoms.has(id))), bonds: new Set([...sel.bonds].filter((id) => bonds.has(id))) };
 }
 
@@ -112,6 +119,7 @@ const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
 const NO_RECORDS: Record<number, number> = {};
+const NO_LOOKS: Readonly<Record<number, Look>> = {};
 
 /**
  * Mirrors the document into the store and keeps doing so. Returns the
@@ -163,7 +171,7 @@ export function connectStoreToDocument(
   const sync = () =>
     store.setState((prev) => {
       const now = doc.getState();
-      const mirrored = mirrorOf(now, prev.recordsShown);
+      const mirrored = mirrorOf(now, prev.recordsShown, prev.talkLooks);
       // (a turn of several as one body undone or redone: their turns too)
       const turns = turnsAcross(doc, was, now);
       was = now;
@@ -258,6 +266,7 @@ export function createEditorStore(
     frames3d: {},
     stacksShown: {},
     recordsShown: NO_RECORDS,
+    talkLooks: NO_LOOKS,
     recordSwaps: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },

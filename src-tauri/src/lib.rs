@@ -5,7 +5,7 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Component, Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
@@ -17,6 +17,7 @@ mod fonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
+mod logfile;
 mod pdf;
 mod net;
 mod opened;
@@ -52,6 +53,11 @@ struct PyEnvInfo {
     /// What makes it: "uv" (or unsaid), or "pixi" - an environment that needs conda-forge.
     #[serde(default)]
     host: String,
+    /// The hosts setting it up may reach: those the consent to set it up
+    /// named (lib/plugins/setUpSources.ts; net.rs `begin`). Unsaid where
+    /// nothing is set up.
+    #[serde(default)]
+    hosts: Option<Vec<String>>,
 }
 
 /// Whether a lock file pins its packages by hash as well as by version.
@@ -406,13 +412,14 @@ async fn py_env_setup_uv(
 ) -> Result<(), String> {
     let env = validate_env_info(&payload)?;
     // uv downloads Python and the packages: a task of its own on the
-    // network, refused offline or unless its purpose has been allowed
+    // network, refused offline or unless its purpose has been allowed, and
+    // kept to the hosts its consent named
     let label = if payload.label.is_empty() {
         "Setting up Python".to_string()
     } else {
         payload.label.clone()
     };
-    let task = net.begin(&setup_purpose(&payload)?, &label)?;
+    let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
     let lock = resource_path(&app, &env.lock)?;
     let data = app_data_dir(&app)?;
     // (uv itself, the first time: under the same task, the same consent)
@@ -474,7 +481,8 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
         return Err("not a pixi environment".into());
     }
     let label = if payload.label.is_empty() { "Setting up Python".to_string() } else { payload.label.clone() };
-    let task = net.begin(&setup_purpose(&payload)?, &label)?;
+    // (kept to the hosts its consent named: pixi's releases, conda-forge, PyPI)
+    let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
     let data = app_data_dir(&app)?;
     let lock = resource_path(&app, &env.lock)?;
     let manifest_from = lock.with_file_name("pixi.toml");
@@ -520,15 +528,52 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
 fn pipe_logs<R: Read + Send + 'static>(app: &AppHandle, stream: R, ch: &'static str) {
     let app2 = app.clone();
     std::thread::spawn(move || {
-        for s in BufReader::new(stream).lines().map_while(Result::ok) {
+        each_line(stream, |s| {
             let _ = app2.emit(ch, s);
-        }
+        });
     });
+}
+
+/// Each line `stream` says, as text, until it ends: one not UTF-8 read as
+/// near as it can be, its stray bytes marked, and the reading going on -
+/// never ended by it, as `lines` ends - and its end, "\n" or "\r\n", taken
+/// off as `lines` takes it.
+fn each_line<R: Read>(stream: R, mut each: impl FnMut(String)) {
+    let mut reader = BufReader::new(stream);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {
+                if line.ends_with(b"\n") {
+                    line.pop();
+                    if line.ends_with(b"\r") {
+                        line.pop();
+                    }
+                }
+                each(String::from_utf8_lossy(&line).into_owned());
+            }
+        }
+    }
+}
+
+/// A Python Meno starts made to read and write UTF-8 - what comes to it and
+/// what it says, and the files it opens - whatever the system's code page.
+/// Windows' is its ANSI one otherwise (1252 on an English Windows, 932 on a
+/// Japanese one): a request naming a file in Japanese stopped a worker on
+/// the one, and came back garbled on the other.
+fn python_in_utf8(cmd: &mut Command) {
+    cmd.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8");
 }
 
 // Python sidecar: spawn process and handle IO
 
-type Procs = HashMap<String, (Child, Option<ChildStdin>)>;
+/// A sidecar's stdin, written to with its own lock held and never the
+/// table's: a worker that stops reading holds up what is written to it,
+/// and no other (`write_stdin`).
+type Stdin = Arc<Mutex<ChildStdin>>;
+type Procs = HashMap<String, (Child, Option<Stdin>)>;
 
 struct ProcState(Mutex<Procs>);
 
@@ -608,6 +653,7 @@ async fn ext_spawn_sidecar(
     let mut cmd = Command::new(&entry);
     cmd.args(&payload.args).current_dir(cwd);
     no_window(&mut cmd);
+    python_in_utf8(&mut cmd);
     // a pixi environment's worker, activated as the environment was made to be
     if root.file_name().and_then(|n| n.to_str()) == Some("pixi") {
         let dir = entry.parent().and_then(|p| p.canonicalize().ok()).and_then(|p| pixienv::env_dir_of(&p, &root));
@@ -634,7 +680,7 @@ async fn ext_spawn_sidecar(
     let id = Uuid::new_v4().to_string();
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
-    let stdin = child.stdin.take();
+    let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
     // Register before the reader threads start so an immediate exit can be
     // reaped.
     state.lock().insert(id.clone(), (child, stdin));
@@ -645,12 +691,10 @@ async fn ext_spawn_sidecar(
         let app2 = app.clone();
         let id2 = id.clone();
         std::thread::spawn(move || {
-            for s in BufReader::new(stdout).lines().map_while(Result::ok) {
-                let _ = app2.emit(
-                    "ext:stdout",
-                    serde_json::json!({"id": id2, "line": s}).to_string(),
-                );
-            }
+            // (a line not UTF-8 read as near as it can be: never taken for the worker's end)
+            each_line(stdout, |s| {
+                let _ = app2.emit("ext:stdout", serde_json::json!({"id": id2, "line": s}).to_string());
+            });
             if app2.state::<ProcState>().reap(&id2) {
                 let _ = app2.emit("ext:exit", serde_json::json!({"id": id2}).to_string());
             }
@@ -666,33 +710,38 @@ async fn ext_spawn_sidecar(
         let app2 = app.clone();
         let id2 = id.clone();
         std::thread::spawn(move || {
-            for s in BufReader::new(stderr).lines().map_while(Result::ok) {
-                let _ = app2.emit(
-                    "ext:stderr",
-                    serde_json::json!({"id": id2, "line": s}).to_string(),
-                );
-            }
+            each_line(stderr, |s| {
+                let _ = app2.emit("ext:stderr", serde_json::json!({"id": id2, "line": s}).to_string());
+            });
         });
     }
 
     Ok(id)
 }
 
+/// Writes to a sidecar's stdin with the table let go first. A worker that
+/// stops reading - held, or stuck - with more asked of it than its pipe
+/// holds (a file sent to be read) holds the write up until it is killed,
+/// which closes the pipe and fails the write; while the write waits, every
+/// other sidecar is written to, started and stopped as ever. (The table was
+/// once held through the write, and one stuck worker held up them all.)
+fn write_stdin(state: &ProcState, id: &str, data: &str) -> Result<(), String> {
+    let stdin = match state.lock().get(id) {
+        Some((_child, Some(stdin))) => stdin.clone(),
+        Some(_) => return Err("no stdin".into()),
+        None => return Err("not found".into()),
+    };
+    let mut stdin = stdin.lock().unwrap_or_else(PoisonError::into_inner);
+    stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-async fn ext_stdin(id: String, data: String, state: State<'_, ProcState>) -> Result<(), String> {
-    if let Some((_child, optin)) = state.lock().get_mut(&id) {
-        if let Some(stdin) = optin {
-            stdin
-                .write_all(data.as_bytes())
-                .map_err(|e| e.to_string())?;
-            stdin.flush().map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err("no stdin".into())
-        }
-    } else {
-        Err("not found".into())
-    }
+async fn ext_stdin(app: AppHandle, id: String, data: String) -> Result<(), String> {
+    // (off the commands' threads: a write a stuck worker holds up waits on its own)
+    tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &data))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -753,7 +802,7 @@ fn drop_catch(app: AppHandle, x: f64, y: f64, width: f64, height: f64) -> bool {
         // hands drags to)
         let _ = app.run_on_main_thread(move || {
             if let Err(e) = drop::catch(area) {
-                eprintln!("drags cannot be taken from the page: {e}");
+                logfile::logged!("drags cannot be taken from the page: {e}");
             }
         });
         true
@@ -842,6 +891,8 @@ pub fn run() {
     if let Some(code) = registration_asked() {
         std::process::exit(code);
     }
+    // a panic into Meno's log too (logfile.rs)
+    logfile::catch_panics();
     #[allow(unused_mut)]
     let mut context = tauri::generate_context!();
     // A Meno Windows starts for Office opens unseen: it shows itself when a
@@ -854,6 +905,10 @@ pub fn run() {
         }
     }
     let version = context.package_info().version.to_string();
+    // Meno's log, in its data folder, begun before anything else is (logfile.rs)
+    if let Some(data) = logfile::data_dir_before(&context.config().identifier) {
+        logfile::start(&data.join("logs"), &version);
+    }
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
     // One Meno on Windows: a workspace file opened while it runs comes to
@@ -879,6 +934,10 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .setup(|app| {
+            // (and where Tauri has the data folder, should that be elsewhere)
+            if let Ok(data) = app.path().app_data_dir() {
+                logfile::start(&data.join("logs"), &app.package_info().version.to_string());
+            }
             net::start(app.handle());
             // a workspace file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
@@ -895,6 +954,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the page's errors and warnings, into Meno's log
+            logfile::log_page,
+            logfile::log_spot,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
             pdf::pdf_bytes,
@@ -909,6 +971,7 @@ pub fn run() {
             clipboard::clipboard_takes,
             clipboard::clipboard_file_names,
             clipboard::clipboard_file,
+            clipboard::open_workspaces_from,
             clipboard::drag_read,
             // drags the page cannot read, taken from the webview (Windows)
             drop_catch,
@@ -1051,6 +1114,7 @@ mod tests {
             purpose: "python-env:console".into(),
             label: String::new(),
             host: String::new(),
+            hosts: None,
         }
     }
 
@@ -1303,6 +1367,30 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_worker_that_stops_reading_holds_up_no_other() {
+        use std::time::{Duration, Instant};
+        let state = Arc::new(ProcState(Mutex::new(HashMap::new())));
+        // (a worker that never reads, asked more than its pipe holds)
+        let mut child = Command::new("sleep").arg("30").stdin(Stdio::piped()).spawn().expect("spawn sleep");
+        let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
+        state.lock().insert("held".into(), (child, stdin));
+        let other = Command::new("true").spawn().expect("spawn a trivial process");
+        state.lock().insert("other".into(), (other, None));
+        let s2 = state.clone();
+        let writer = std::thread::spawn(move || write_stdin(&s2, "held", &"x".repeat(1 << 20)));
+        std::thread::sleep(Duration::from_millis(300));
+        // while the write waits, the table is free: another reaped at once, and the held one killed
+        let t = Instant::now();
+        assert!(state.reap("other"));
+        assert!(state.reap("held"));
+        assert!(t.elapsed() < Duration::from_secs(5));
+        // (its pipe closed by the kill, the write fails rather than waits on)
+        assert!(writer.join().expect("the writer ends").is_err());
+        assert!(write_stdin(&state, "held", "x").is_err());
+    }
+
     #[test]
     fn reap_removes_and_reports_once() {
         let state = ProcState(Mutex::new(HashMap::new()));
@@ -1316,5 +1404,64 @@ mod tests {
         assert!(state.reap("a"));
         assert!(!state.reap("a"));
         assert!(state.lock().is_empty());
+    }
+
+    #[test]
+    fn reads_every_line_a_program_says_utf_8_or_not() {
+        // (a line in another code page between two in UTF-8, and Windows' line ends)
+        let said: &[u8] = b"first \xe5\x8c\x96\r\nsecond \xe9t\xe9\r\nthird\nno end";
+        let mut lines = Vec::new();
+        each_line(said, |l| lines.push(l));
+        assert_eq!(lines, ["first \u{5316}", "second \u{fffd}t\u{fffd}", "third", "no end"]);
+    }
+
+    /// A Python here to run a worker with: `python3`, or `python` (Windows).
+    fn a_python() -> Option<&'static str> {
+        ["python3", "python"]
+            .into_iter()
+            .find(|p| Command::new(p).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()))
+    }
+
+    #[test]
+    fn a_worker_reads_and_answers_a_file_s_name_in_japanese_whatever_the_code_page() {
+        let Some(python) = a_python() else {
+            // (on CI, where Python is there, its absence is a failure: a green run says this was run)
+            assert!(std::env::var_os("CI").is_none(), "no Python on CI: the UTF-8 worker test did not run");
+            eprintln!("no Python here: not run");
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("meno-utf8-worker-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        // (a worker as Meno's are: a request a line, read as text, and an answer a line)
+        let worker = dir.join("worker.py");
+        fs::write(
+            &worker,
+            "import json, sys\nfor line in sys.stdin:\n    asked = json.loads(line)\n    print(json.dumps({\"name\": asked[\"name\"], \"letters\": len(asked[\"name\"])}, ensure_ascii=False), flush=True)\n",
+        )
+        .unwrap();
+        let name = "\u{5316}\u{5408}\u{7269}1.log";
+        let run = |utf8: bool| {
+            let mut cmd = Command::new(python);
+            cmd.arg(&worker).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+            // (the code page an English Windows reads and writes in - as it is there, forced here)
+            cmd.env("PYTHONIOENCODING", "cp1252").env("PYTHONUTF8", "0");
+            if utf8 {
+                python_in_utf8(&mut cmd);
+            }
+            let mut child = cmd.spawn().unwrap();
+            let mut stdin = child.stdin.take().unwrap();
+            stdin.write_all(format!("{}\n", serde_json::json!({ "name": name })).as_bytes()).unwrap();
+            drop(stdin);
+            let mut answers = Vec::new();
+            each_line(child.stdout.take().unwrap(), |l| answers.push(l));
+            let _ = child.wait();
+            answers
+        };
+        // (in cp1252 the request cannot be read: the worker stops, saying nothing)
+        assert!(run(false).is_empty());
+        let answers = run(true);
+        let answer: serde_json::Value = serde_json::from_str(&answers[0]).unwrap();
+        assert_eq!(answer, serde_json::json!({ "name": name, "letters": 8 }));
+        let _ = fs::remove_dir_all(&dir);
     }
 }

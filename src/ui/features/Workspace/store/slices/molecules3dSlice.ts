@@ -3,7 +3,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
-import { chosenPath, lookOf, solidOf, bondsAt, reachOverFrames } from "../../utils/molecule3d";
+import { chosenPath, lookOf, solidOf, bondsAt, reachOverFrames, withLooks } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
 import { currentStyle3D } from "../../style3d";
@@ -253,6 +253,20 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => {
       doc.edit(label, (d) => ops.changeMolecule3d(d, id, change));
     },
+    switchTalkLook3d: (id: number) =>
+      set((prev) => {
+        const kept = doc.getState().molecules3d ?? [];
+        const m = kept.find((x) => x.id === id);
+        if (!m) return prev;
+        const shown = prev.talkLooks[id] ?? lookOf(m);
+        const talkLooks = { ...prev.talkLooks };
+        const other = shown === "primary" ? "secondary" : "primary";
+        if (other === lookOf(m)) delete talkLooks[id];
+        else talkLooks[id] = other;
+        return { ...prev, talkLooks, molecules3d: withLooks(kept, talkLooks) };
+      }),
+    endTalkLooks: () =>
+      set((prev) => (Object.keys(prev.talkLooks).length ? { ...prev, talkLooks: {}, molecules3d: doc.getState().molecules3d ?? [] } : prev)),
     switchLook3d: (id: number) => {
       const { molecules3d, sel3d } = get();
       const m = molecules3d.find((x) => x.id === id);

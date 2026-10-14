@@ -4,9 +4,10 @@
  * aromatic atoms, branches, ring closures and bond symbols, and "*" for an
  * atom of any kind - enough for the groups Meno's abbreviations stand for
  * (./abbreviations), written by hand. A tetrahedral centre's @ or @@ is
- * kept, as the configuration Meno's layout engine takes; other stereo
- * marks are read past. An atom class is kept: a ligand's (./ligands) marks
- * the atoms that bind a metal.
+ * kept, as the configuration Meno's layout engine takes, and a double
+ * bond's cis or trans, as its neighbours' directional bonds (/ and \) say
+ * it; other stereo marks are read past. An atom class is kept: a ligand's
+ * (./ligands) marks the atoms that bind a metal.
  */
 
 export type SmilesAtom = {
@@ -27,8 +28,13 @@ export type SmilesAtom = {
  * sign of the volume the first three span, seen from the centre.
  */
 export type Configuration = { neighbours: number[]; volume: 1 | -1 };
-/** A bond by atom index; order 4 is aromatic. */
-export type SmilesBond = { a1: number; a2: number; order: number };
+/**
+ * A bond by atom index; order 4 is aromatic. A double bond with a
+ * directional bond (/ or \) on each end has its cis or trans: an atom
+ * bonded to each end (`refs`, the first to `a1`), and whether the two are
+ * on the same side.
+ */
+export type SmilesBond = { a1: number; a2: number; order: number; cisTrans?: { refs: [number, number]; cis: boolean } };
 export type Smiles = { atoms: SmilesAtom[]; bonds: SmilesBond[] };
 
 const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
@@ -40,7 +46,7 @@ export function readSmiles(text: string): Smiles {
   const atoms: SmilesAtom[] = [];
   const bonds: SmilesBond[] = [];
   const stack: number[] = [];
-  const rings = new Map<number, { atom: number; order: number | null; slot: number }>();
+  const rings = new Map<number, { atom: number; order: number | null; slot: number; dir: string | null }>();
   // each atom's neighbours in the order OpenSMILES reads a centre's by: the
   // atom before it, its own H, its ring closures as their digits come, then
   // the atoms after it; and the centres, @ or @@
@@ -48,6 +54,10 @@ export function readSmiles(text: string): Smiles {
   const chiral = new Map<number, string>();
   let prev = -1;
   let pending: number | null = null;
+  // (a directional bond's mark, / or \, and each such bond as written: from
+  // the atom before it to the atom after)
+  let pendingDir: string | null = null;
+  const directed: { from: number; to: number; up: boolean }[] = [];
   let i = 0;
   const connect = (a: number, mark = "") => {
     around[a] = prev >= 0 ? [prev] : [];
@@ -57,8 +67,10 @@ export function readSmiles(text: string): Smiles {
       const both = atoms[prev].aromatic && atoms[a].aromatic;
       bonds.push({ a1: prev, a2: a, order: pending ?? (both ? 4 : 1) });
       around[prev].push(a);
+      if (pendingDir) directed.push({ from: prev, to: a, up: pendingDir === "/" });
     }
     pending = null;
+    pendingDir = null;
     prev = a;
   };
   while (i < text.length) {
@@ -81,6 +93,7 @@ export function readSmiles(text: string): Smiles {
     }
     if (c in BOND_ORDER) {
       pending = BOND_ORDER[c];
+      if (c === "/" || c === "\\") pendingDir = c;
       i++;
       continue;
     }
@@ -93,11 +106,17 @@ export function readSmiles(text: string): Smiles {
         bonds.push({ a1: open.atom, a2: prev, order: pending ?? open.order ?? (both ? 4 : 1) });
         around[open.atom][open.slot] = prev;
         around[prev].push(open.atom);
+        // (a ring bond's direction as written where its mark is: at its
+        // closing digit, from this atom to the one that opened it; at its
+        // opening one, from that atom to this)
+        if (pendingDir) directed.push({ from: prev, to: open.atom, up: pendingDir === "/" });
+        else if (open.dir) directed.push({ from: open.atom, to: prev, up: open.dir === "/" });
         rings.delete(n);
       } else {
-        rings.set(n, { atom: prev, order: pending, slot: around[prev].push(-2) - 1 });
+        rings.set(n, { atom: prev, order: pending, slot: around[prev].push(-2) - 1, dir: pendingDir });
       }
       pending = null;
+      pendingDir = null;
       continue;
     }
     if (c === "*") {
@@ -134,6 +153,21 @@ export function readSmiles(text: string): Smiles {
   for (const [at, mark] of chiral) {
     const tetra = configuration(around[at], mark);
     if (tetra) atoms[at].tetra = tetra;
+  }
+  // A double bond's cis or trans (OpenSMILES): a directional bond on each
+  // end; a neighbour written before its end with "/" lies below it, one
+  // written after it above, "\\" the other way; the two the same side, cis
+  // (F/C=C/F trans, F/C=C\\F cis)
+  const side = (end: number, other: number) => {
+    const d = directed.find((b) => (b.from === end && b.to !== other) || (b.to === end && b.from !== other));
+    if (!d) return null;
+    const n = d.from === end ? d.to : d.from;
+    return { n, above: d.from === end ? d.up : !d.up };
+  };
+  for (const b of bonds) {
+    if (b.order !== 2) continue;
+    const [p, q] = [side(b.a1, b.a2), side(b.a2, b.a1)];
+    if (p && q) b.cisTrans = { refs: [p.n, q.n], cis: p.above === q.above };
   }
   return { atoms, bonds };
 }

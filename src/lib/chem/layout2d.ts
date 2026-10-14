@@ -13,7 +13,8 @@ import {
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
-import { namesLaid } from "../layout/names";
+import { greatest, least, pushAll } from "./lists";
+import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
 
@@ -210,13 +211,19 @@ export type Under = { points: Vec2[]; color: string };
 /**
  * A shape on the page as a picture draws it, under everything of the
  * drawing (lib/chem/shapes): its fill, and its line - whole or in dashes,
- * each `width` wide in the layout's units, its corners mitred.
+ * each `width` wide in the layout's units, its corners mitred. Where it
+ * curves - an ellipse, a rounded corner - and its line is whole, the line
+ * is that curve (`curve`: cubic Bezier segments end to end, closed where it
+ * began, as EMF's PolyBezier takes them), and so is the fill's edge
+ * (`fill.curve`, its `points` the same edge in fine steps for a picture
+ * that fills polygons): smooth however far the picture is enlarged.
  */
 /** Writing by hand as a picture draws it: each stroke's outline, filled in its colour - a marker's see-through (`opacity`) and under the drawing, a pen's over everything (`over`). */
 export type InkMark = { points: Vec2[]; color: string; opacity?: number; over: boolean };
 export type ShapeMark = {
-  fill?: { points: Vec2[]; color: string };
+  fill?: { points: Vec2[]; color: string; curve?: Vec2[] };
   lines: { points: Vec2[]; closed: boolean; width: number; color: string }[];
+  curve?: { points: Vec2[]; width: number; color: string };
 };
 /** Where a line of the drawing runs into another's end, and which way it leaves that point. */
 export type Meet = { at: Vec2; dir: Vec2 };
@@ -589,7 +596,17 @@ export type Layout = {
   zoom: number;
   /** How far each bond's drawing reaches off its own line, by the bonds' order. */
   reach: BondReach[];
+  /**
+   * The bonds between two labels that would take more of them than their
+   * room (`labelTrims`), by their atoms' ids, and how long each would have
+   * to be for the two to fit: what Clean-up draws one to a terminal atom as
+   * (Workspace/chem/engineLayout).
+   */
+  crowded?: Crowded[];
 };
+
+/** A bond between two labels too short for them: its atoms' ids, and the length they fit in. */
+export type Crowded = { atoms: [number, number]; need: number };
 
 /**
  * How far a bond's drawing reaches either side of its own line, at each end,
@@ -690,6 +707,39 @@ export function runsWidth(runs: readonly TextRun[], fontSize: number, set: Label
     w += r.mark ? size * MARK_WIDTH : runWidth(font, r.text, size);
   }
   return w;
+}
+
+/**
+ * How far in each place of `runs` set side by side lies - before each of
+ * their letters, by its place in their text, and at their end: what
+ * `runsWidth` measures of them cut there, in one pass, not a measure for
+ * each place.
+ */
+export function runsPlaces(runs: readonly TextRun[], fontSize: number, set: LabelSet = ACS_LABEL_SET): number[] {
+  const font = labelFont(set.fontFamily);
+  const out = [0];
+  // (the runs before, added up as runsWidth adds them, and the one cut, as runWidth adds its letters: the same sums, so the same numbers)
+  let done = 0;
+  for (const r of runs) {
+    const size = fontSize * (r.sub || r.sup || r.mark ? set.subscriptSize : 1);
+    let w = 0;
+    if (r.mark) {
+      w = size * MARK_WIDTH;
+      for (let k = 1; k < r.text.length; k++) out.push(done + w);
+    } else {
+      let k = 0;
+      for (const ch of r.text) {
+        if (k > 0) out.push(done + w);
+        // (cut between the halves of a letter of two code units: the first half, as runWidth reads it)
+        if (ch.length === 2) out.push(done + (w + font.advance(ch[0]) * size));
+        w += font.advance(ch) * size;
+        k += ch.length;
+      }
+    }
+    done += w;
+    if (r.text.length) out.push(done);
+  }
+  return out;
 }
 
 export function computeBounds(atoms: Atom[]): { min: Vec2; max: Vec2 } {
@@ -1805,9 +1855,23 @@ function buildWedgeTriangle(
   const points = [...base.points, tipR, tipL];
   // (a base another shape in perspective meets is kept square: see buildBoldBar)
   const soften = [...base.soften.map((v) => v && !squareBase), true, true];
-  return {
-    points: round ? roundPolyCorners(points, tipHalf, soften) : points,
-  };
+  if (!round) return { points };
+  // Rounding a broad end's corner draws it in a little - the more, the more
+  // the wedge tapers: the corners rounded at its full width are set out
+  // across the bond by as much, so that it is as broad as the style says.
+  const across = vperp(dir);
+  const off = (q: Vec2) => vdot(vsub(q, p1), across);
+  const outer = points.map((q, i) => i < base.points.length && soften[i] && Math.abs(Math.abs(off(q)) - baseHalfWorld) <= 1e-6 * baseHalfWorld);
+  let shaped = points;
+  for (let k = 0; k < 3 && outer.some(Boolean); k++) {
+    const rounded = roundPolyCorners(shaped, tipHalf, soften);
+    const short = (side: 1 | -1) => baseHalfWorld - rounded.reduce((m, q) => Math.max(m, side * off(q)), -Infinity);
+    const left = short(1);
+    const right = short(-1);
+    if (Math.abs(left) < 1e-9 * baseHalfWorld && Math.abs(right) < 1e-9 * baseHalfWorld) break;
+    shaped = shaped.map((q, i) => (outer[i] ? vadd(q, vscale(across, off(q) >= 0 ? left : -right)) : q));
+  }
+  return { points: roundPolyCorners(shaped, tipHalf, soften) };
 }
 
 /**
@@ -2417,7 +2481,14 @@ export function buildTextLabels(
     // and above it when they fall - on the side further from every bond, so
     // that three bonds evenly spread, one of them straight down (a borate's
     // BH), keep the line clear of it; where neither is, as the bonds lean.
-    if (leftward.has(i) && rightward.has(i)) {
+    // (and only where the line above or below is clearer of the bonds
+    // than the row beside the symbol: two bonds nearly in a line, steep -
+    // tetrodotoxin's guanidine NH - leave the sides open and the line
+    // above or below on a bond)
+    // (lib/layout/names `rowClearer`, as the engine reckons where the H goes)
+    const dirs = (ways.get(i) ?? []).map((w) => w.dir);
+    const onRow = leftward.has(i) && rightward.has(i) && rowClearer(dirs);
+    if (leftward.has(i) && rightward.has(i) && !onRow) {
       const rise = Math.max(...(ways.get(i) ?? []).map((w) => w.dir.y));
       const fall = Math.max(...(ways.get(i) ?? []).map((w) => -w.dir.y));
       const stack = rise < fall - 1e-6 ? "above" : fall < rise - 1e-6 ? "below" : toward.y >= 0 ? "below" : "above";
@@ -2439,9 +2510,12 @@ export function buildTextLabels(
     // go where its formula is written with them - first for oxygen and the
     // halogens and their groups, H2O, H2S, HCl, H3O+; after the symbol for
     // the rest, NH3, CH4, PH3.
-    const neighboursRight = bonded.has(i)
+    let neighboursRight = bonded.has(i)
       ? toward.x > Math.hypot(toward.x, toward.y) * band
       : HYDROGENS_FIRST.has(a.el);
+    // (on the row because it is clearer than the line above or below: on its
+    // clearer side - NH, or HN - and, the two alike, after the symbol)
+    if (onRow) neighboursRight = clearRowSide(dirs) === "before";
     // (the charge after all of it where the H follow the symbol: NH3+; after
     // the symbol where they come first: H3N+)
     const runs = neighboursRight
@@ -2493,6 +2567,53 @@ function degreeMap(bonds: Bond[]): Map<number, number> {
   return m;
 }
 
+/**
+ * How far a bond stops short of the labels at its ends - `a` at its first
+ * atom's, `b` at its second's - and the most of it two labels may take
+ * (`room`, labelShareMax of it): what drawing it goes by, and what Clean-up
+ * draws a bond long enough for (Workspace/chem/engineLayout). A label keeps
+ * the bond its margin beyond the furthest its letters reach along it. How
+ * far that is depends on which way the bond leaves and on the letters
+ * themselves - a bond comes closer to the round side of an O than to the
+ * corner of an N - but not on how wide the bond is there, so a wedge's
+ * broad end stops where a line would.
+ */
+export function labelTrims(
+  atoms: Atom[],
+  bond: Bond,
+  opts: LayoutOptions,
+  zoom: number,
+  deg?: Map<number, number>,
+  labelShapes?: Map<number, Vec2[][]>,
+  doubleSides?: Map<Bond, number | undefined>,
+): { a: number; b: number; room: number } {
+  const units = opts.units ?? "px";
+  const fontWorld = toWorld(opts.fontPx, zoom, units);
+  const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16;
+  const p = atoms[bond.a1];
+  const q = atoms[bond.a2];
+  const L0 = Math.hypot(q.x - p.x, q.y - p.y);
+  const dir = L0 > 1e-9 ? { x: (q.x - p.x) / L0, y: (q.y - p.y) / L0 } : { x: 1, y: 0 };
+  const n = vperp(dir);
+  const across = bondReach(bond, opts, zoom, deg, doubleSides);
+  /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
+  const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
+    if (!showsLabel(at, opts)) return 0;
+    const hulls =
+      (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
+      labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
+    return labelClearance(hulls, towards, margin, { n, lo, hi });
+  };
+  return {
+    a: reach(bond.a1, p, dir, -across.right1, across.left1),
+    b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
+    room: L0 * (opts.labelShareMax ?? 0.9),
+  };
+}
+
+/** The least share of a bond seen between the labels at its ends, however much of it they would take. */
+export const BOND_SEEN_LEAST = 1 / 3;
+
 export function buildBondPrimitives(
   atoms: Atom[],
   bond: Bond,
@@ -2517,18 +2638,7 @@ export function buildBondPrimitives(
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
   const minPx = Math.max(0.5, opts.minLinePx ?? 1);
   if (!(lwPx >= minPx)) lwPx = minPx;
-  // Stop a bond short of a label so the two do not overlap: the label margin
-  // beyond the furthest the label's letters reach along the bond. How far
-  // that is depends on which way the bond leaves and on the letters
-  // themselves - a bond comes closer to the round side of an O than to the
-  // corner of an N - but not on how wide the bond is there, so a wedge's
-  // broad end stops where a line would.
   const hasLabel = (at: Atom) => showsLabel(at, opts);
-  const fontWorld = toWorld(opts.fontPx, zoom, units);
-  const margin =
-    opts.labelMarginPx != null
-      ? toWorld(opts.labelMarginPx, zoom, units)
-      : fontWorld * 0.16;
   const lineHalf = pxToWorld(lwPx * 0.5, zoom);
   // how wide a bold bond is, and a wedge at its broad end, either side of its line
   const boldHalf =
@@ -2539,29 +2649,23 @@ export function buildBondPrimitives(
   const dir0 = vsub(p2o, p1o);
   const L0 = vlen(dir0);
   const dir = L0 > 1e-9 ? vscale(dir0, 1 / L0) : { x: 1, y: 0 };
-  // how far the bond's ink reaches either side of its line at each end
-  const across = bondReach(bond, opts, zoom, deg, doubleSides);
-  const n = vperp(dir);
-  /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
-  const labelReach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
-    if (!hasLabel(at)) return 0;
-    const el = at.el;
-    const hulls =
-      (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
-      labelHulls(
-        { x: 0, y: 0, text: el, fontPx: opts.fontPx, runs: [{ text: el }] },
-        fontWorld,
-        labelSetOf(opts),
-      );
-    return labelClearance(hulls, towards, margin, { n, lo, hi });
-  };
   // Labels at both ends may not take more than nine tenths of the bond
   // between them; if they would, each gives up its share.
-  let trimA = labelReach(bond.a1, a, dir, -across.right1, across.left1);
-  let trimB = labelReach(bond.a2, c, vscale(dir, -1), -across.right2, across.left2);
-  const room = L0 * (opts.labelShareMax ?? 0.9);
+  const trims = labelTrims(atoms, bond, opts, zoom, deg, labelShapes, doubleSides);
+  let trimA = trims.a;
+  let trimB = trims.b;
+  const room = trims.room;
   if (trimA + trimB > room) {
     const k = room / (trimA + trimB);
+    trimA *= k;
+    trimB *= k;
+  }
+  // And whatever the labels, a bond is seen for a third of its length at
+  // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  const seen = L0 * BOND_SEEN_LEAST;
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;
   }
@@ -3310,6 +3414,7 @@ export function buildAllPrimitives(
   circles: Circle[];
   fills: Circle[];
   reach: BondReach[];
+  crowded: Crowded[];
 } {
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
@@ -3431,8 +3536,20 @@ export function buildAllPrimitives(
   // the rings' circles, and the bonds they stand in for - in the colour of
   // the ring's bonds where they are all given one
   const ringed = ringCircles(atoms, bonds, opts, adjBonds);
+  // (a ring's bonds found from its own atoms' bonds - not every bond tried
+  // again for every circle)
+  const indexOfId = ringed.circles.length ? new Map(atoms.map((a, i) => [a.id, i])) : null;
+  const ringBonds = (key: string): Bond[] => {
+    const ids = new Set(key.split("-").map(Number));
+    const out: Bond[] = [];
+    for (const id of ids) {
+      const i = indexOfId!.get(id);
+      for (const b of i == null ? [] : (adjBonds.get(i) ?? [])) if (b.a1 === i && ids.has(atoms[b.a2].id)) out.push(b);
+    }
+    return out;
+  };
   for (const c of ringed.circles) {
-    const color = c.key ? sameColor(bonds.filter((b) => c.key!.split("-").includes(String(atoms[b.a1].id)) && c.key!.split("-").includes(String(atoms[b.a2].id)))) : undefined;
+    const color = c.key ? sameColor(ringBonds(c.key)) : undefined;
     circles.push(color ? { ...c, color } : c);
   }
   const aromaticEdges = ringed.edges;
@@ -3468,6 +3585,7 @@ export function buildAllPrimitives(
   const freeEnds: (Vec2 & { color?: string })[] = [];
   const bends: (Bend & { color?: string })[] = [];
   const reach: BondReach[] = [];
+  const crowded: Crowded[] = [];
   for (const b of bonds) {
     const u = atoms[b.a1].id,
       v = atoms[b.a2].id;
@@ -3489,6 +3607,14 @@ export function buildAllPrimitives(
       doubleSides
     );
     reach.push(bondReach(beff, opts, zoom, deg, doubleSides));
+    // (two labels wanting more of it than their room: said, for Clean-up)
+    if (b.a1 !== b.a2 && showsLabel(atoms[b.a1], opts) && showsLabel(atoms[b.a2], opts)) {
+      const t = labelTrims(atoms, beff, opts, zoom, deg, labelShapes, doubleSides);
+      if (t.room > 0 && t.a + t.b > t.room) {
+        const L = Math.hypot(atoms[b.a2].x - atoms[b.a1].x, atoms[b.a2].y - atoms[b.a1].y);
+        crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
+      }
+    }
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
     lines.push(...behind.lines.map(tint));
@@ -3499,7 +3625,7 @@ export function buildAllPrimitives(
   }
   // a ring in perspective: where its bold edges and wedges meet, the outer
   // corner filled to a point
-  polys.push(...perspectiveCorners(atoms, bonds, opts, zoom, deg, rWorld));
+  pushAll(polys, perspectiveCorners(atoms, bonds, opts, zoom, deg, rWorld));
   // Every end and corner the joins at atoms have not already seen to:
   // rounded all, or squared all. Two lines of neighbouring double bonds run
   // on to the same point, but a point is all they share, so the corner they
@@ -3522,7 +3648,7 @@ export function buildAllPrimitives(
       polys.push(...mitreJoinPolys(g.at, g.dirs, rWorld).map((p) => ({ ...p, ...colored(g.color) })));
     }
   }
-  return { lines, polys, circles, fills, reach };
+  return { lines, polys, circles, fills, reach, crowded };
 }
 
 /** The colour every one of `bonds` is drawn in, where they all have the same; none, else. */
@@ -3993,8 +4119,8 @@ function structureNotes(atoms: Atom[], notes: { atoms: number[]; text: string }[
     const ys = n.atoms.map((i) => atoms[i].y);
     const bond = typicalBond(atoms, n.atoms);
     return {
-      x: (Math.min(...xs) + Math.max(...xs)) / 2,
-      y: Math.min(...ys) - bond * 0.6 - font,
+      x: (least(xs) + greatest(xs)) / 2,
+      y: least(ys) - bond * 0.6 - font,
       text: n.text,
       fontPx: opts.fontPx,
       runs: [{ text: n.text }],
@@ -4086,7 +4212,7 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
     const ys = [...members].map((i) => atoms[i].y);
     if (mark.type === "DAT") {
       const text = [...(mark.field?.data ?? []), mark.field?.units ?? ""].filter(Boolean).join(" ");
-      if (text) note({ x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...ys) - L * (0.6 + 0.35 * dataRow++) - font * 0.5 }, text);
+      if (text) note({ x: (least(xs) + greatest(xs)) / 2, y: least(ys) - L * (0.6 + 0.35 * dataRow++) - font * 0.5 }, text);
       continue;
     }
     if (mark.type === "MUL" || mark.type === "SUP") continue;
@@ -4106,10 +4232,10 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
     }
     if (!brackets.length) {
       const pad = L * 0.4 + font * 0.5;
-      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const half = (Math.max(...ys) - Math.min(...ys)) / 2 + pad;
-      brackets.push({ c: { x: Math.min(...xs) - pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: 1, y: 0 }, half });
-      brackets.push({ c: { x: Math.max(...xs) + pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: -1, y: 0 }, half });
+      const cy = (least(ys) + greatest(ys)) / 2;
+      const half = (greatest(ys) - least(ys)) / 2 + pad;
+      brackets.push({ c: { x: least(xs) - pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: 1, y: 0 }, half });
+      brackets.push({ c: { x: greatest(xs) + pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: -1, y: 0 }, half });
     }
     const tick = L * 0.1;
     for (const k of brackets) {
@@ -4157,9 +4283,10 @@ export function layoutMolecule(
   const prim = buildAllPrimitives(atoms, bonds, opts, zoom, labels);
   // what is said about bonds, atoms and whole structures (IUPAC GR-11)
   const groups = centresLabelled(atoms, bonds);
-  prim.lines.push(...centreStrokes(atoms, bonds, opts, zoom));
+  // (each list put on as it is, not spread into one call: one may be as long as the drawing's atoms - lib/chem/lists)
+  pushAll(prim.lines, centreStrokes(atoms, bonds, opts, zoom));
   const sgroups = sgroupDrawing(atoms, bonds, opts, zoom);
-  prim.lines.push(...sgroups.lines);
+  pushAll(prim.lines, sgroups.lines);
   const texts = [
     ...sgroups.texts,
     ...labels,
@@ -4172,9 +4299,9 @@ export function layoutMolecule(
   const units = opts.units ?? "px";
   const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
   const marks = labelMarks(texts, toWorld(opts.fontPx, zoom, opts.units), labelSetOf(opts), pxToWorld(lwPx, zoom), lwPx);
-  prim.lines.push(...marks.lines);
-  prim.polys.push(...marks.polys);
-  prim.fills.push(...marks.fills);
+  pushAll(prim.lines, marks.lines);
+  pushAll(prim.polys, marks.polys);
+  pushAll(prim.fills, marks.fills);
   // behind it all, the rings' fills and the parts' highlights
   const under = underOf(atoms, bonds, labels, opts, zoom);
   // A label hangs off its atom, so the drawing is wider than the atoms are:
@@ -4203,21 +4330,39 @@ export function layoutMolecule(
     bounds,
     zoom,
     reach: prim.reach,
+    ...(prim.crowded.length ? { crowded: prim.crowded } : {}),
   };
 }
 
 /** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
 const HIGHLIGHT_REACH = 0.4;
 
+/** What finding rings by their keys looks up: the atoms' indices by id, and each atom's bonds by their indices - made once, for every ring. */
+type RingLookup = { index: Map<number, number>; bondsAt: Map<number, number[]> };
+
+function ringLookup(atoms: readonly Atom[], bonds: readonly Bond[]): RingLookup {
+  const bondsAt = new Map<number, number[]>();
+  bonds.forEach((b, k) => {
+    for (const i of b.a1 === b.a2 ? [b.a1] : [b.a1, b.a2]) {
+      const here = bondsAt.get(i);
+      if (here) here.push(k);
+      else bondsAt.set(i, [k]);
+    }
+  });
+  return { index: new Map(atoms.map((a, i) => [a.id, i])), bondsAt };
+}
+
 /** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
-export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
+export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string, lookup: RingLookup = ringLookup(atoms, bonds)): number[] | null {
   const ids = key.split("-").map(Number);
-  const index = new Map(atoms.map((a, i) => [a.id, i]));
-  const ring = ids.map((id) => index.get(id));
+  const ring = ids.map((id) => lookup.index.get(id));
   if (ring.length < 3 || ring.some((i) => i == null)) return null;
   const inRing = new Set(ring as number[]);
+  // (the bonds at its atoms, each once - from its first atom - in the
+  // drawing's order, as the whole list would give them)
+  const among = [...inRing].flatMap((i) => (lookup.bondsAt.get(i) ?? []).filter((k) => bonds[k].a1 === i)).sort((p, q) => p - q);
   const next = new Map<number, number[]>();
-  for (const b of bonds) {
+  for (const b of among.map((k) => bonds[k])) {
     if (b.endpoints?.length || !inRing.has(b.a1) || !inRing.has(b.a2) || b.a1 === b.a2) continue;
     next.set(b.a1, [...(next.get(b.a1) ?? []), b.a2]);
     next.set(b.a2, [...(next.get(b.a2) ?? []), b.a1]);
@@ -4277,8 +4422,11 @@ function roundedBox(left: number, bottom: number, right: number, top: number, r:
  */
 function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
   const out: Under[] = [];
-  for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
-    const ring = ringOfKey(atoms, bonds, key);
+  const fills = Object.entries(opts.ringFills ?? {});
+  // (looked up in once for every ring, not made again for each)
+  const lookup = fills.length ? ringLookup(atoms, bonds) : null;
+  for (const [key, color] of fills) {
+    const ring = ringOfKey(atoms, bonds, key, lookup!);
     // (in the colour given, exactly - the maintainer, 2026-10-11)
     if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color });
   }
@@ -4347,8 +4495,31 @@ function expandBounds(
   };
 }
 
+/**
+ * What XML 1.0 does not allow in a document, at all (Characters, [2]): the
+ * control characters but tab, line feed and carriage return; U+FFFE and
+ * U+FFFF; and a surrogate with no other half. Written as they came - a
+ * NUL from a damaged file, an escape from a PDF's words - the SVG was no
+ * well-formed XML, and a picture of it was dropped from the clipboard.
+ */
+function xmlChars(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // (a surrogate with its other half: a character beyond the first plane, kept)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+      out += text[i] + text[++i];
+      continue;
+    }
+    const banned = (c < 0x20 && c !== 0x9 && c !== 0xa && c !== 0xd) || c === 0xfffe || c === 0xffff || (c >= 0xd800 && c <= 0xdfff);
+    out += banned ? "\uFFFD" : text[i];
+  }
+  return out;
+}
+
 function escapeXml(text: string): string {
-  return String(text)
+  // (what XML cannot hold, the replacement character in its place)
+  return xmlChars(String(text))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -4357,13 +4528,15 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The CSS font stack for a typeface: itself, its nearest stand-in, then
- * IBM Plex Sans JP for what it lacks - as the canvas draws it.
+ * The CSS font stack for a typeface: itself, its nearest stand-ins, then
+ * IBM Plex Sans JP for what it lacks - as the canvas draws it. IBM Plex
+ * Sans, which Meno carries but a picture's reader seldom has, stands in as
+ * Arial or Helvetica there, the nearest most have.
  */
 export function fontStack(family: string): string {
   const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name);
   const standIn =
-    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : [];
+    family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : family === "IBM Plex Sans" ? ["Arial", "Helvetica"] : [];
   return [family, ...standIn, "IBM Plex Sans JP", "sans-serif"]
     .map((name, i, all) => (i === all.length - 1 ? name : quote(name)))
     .join(", ");
@@ -4412,8 +4585,14 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
     ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
   // under it all: the shapes on the page, each filled, its line over its fill
+  const curvePath = (pts: readonly Vec2[]) => {
+    let d = `M${pts[0].x} ${-pts[0].y}`;
+    for (let i = 1; i + 2 < pts.length; i += 3) d += `C${pts[i].x} ${-pts[i].y} ${pts[i + 1].x} ${-pts[i + 1].y} ${pts[i + 2].x} ${-pts[i + 2].y}`;
+    return d + "Z";
+  };
   for (const m of layout.shapes ?? []) {
-    if (m.fill) s += `<path d="${toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
+    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${svgColor(m.curve.color)}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     for (const l of m.lines) {
       const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
       s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;

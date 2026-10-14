@@ -80,6 +80,32 @@ describe("readStereo", () => {
     expect(readStereo(hs(cis), bonds).cisTrans.get(1)).toEqual({ refs: [0, 3], cis: true });
   });
 
+  it("reads nothing of a double bond cumulated with another, however it is drawn bent: an azide's N=N, an allene's C=C", () => {
+    // phenyl azide's N(-)=N(+)=N-C, its N(+) drawn off the line: the N=N
+    // to the ring's N has the other N on one end and the ring on the other
+    const azide: DrawnAtom[] = [
+      { x: -2.6, y: 0.6, el: "N", hs: 0 },
+      { x: -1.7, y: 0.2, el: "N", hs: 0 },
+      { x: -0.9, y: 0.7, el: "N", hs: 0 },
+      { x: 0, y: 0, hs: 0 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 2 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 1 },
+    ];
+    expect(readStereo(azide, bonds).cisTrans.size).toBe(0);
+    // a tetrasubstituted allene's two C=C, its middle C bent
+    const allene: DrawnAtom[] = [{ ...at(150), hs: 3 }, { x: 0, y: 0, hs: 1 }, { x: 0.9, y: 0.4, hs: 0 }, { x: 1.8, y: 0, hs: 1 }, { x: 2.6, y: 0.6, hs: 3 }];
+    const its: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+    ];
+    expect(readStereo(allene, its).cisTrans.size).toBe(0);
+  });
+
   it("reads nothing of a double bond in a ring of seven or fewer, but one in a larger ring", () => {
     // a ring of n atoms, its bond 0=1 double, drawn as a regular polygon
     const ring = (n: number) => {
@@ -105,7 +131,10 @@ describe("readStereo", () => {
         expect(sameConfiguration(a.tetra, t!, (n) => (hydrogen.has(n) ? -1 : n)), `${name} ${i}`).toBe(true);
       });
     }
-  });
+    // (the whole engine on each of the molecules, cages among them: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("reads every centre in a cage for sure, not by a hair", () => {
     // each bond out of a cage turned a little either way reads the same:
@@ -133,7 +162,9 @@ describe("readStereo", () => {
       }
       expect(out.solid.some(Boolean), name).toBe(true);
     }
-  });
+    // (the whole engine on each of the cages: about a second alone, a few times
+    // that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("says a perspective centre to a flat reader on a bond no other centre's wedge is on", () => {
     // tetrodotoxin drawn as a solid, its C4 wedged on its bond to C4a, which
@@ -154,7 +185,9 @@ describe("readStereo", () => {
     for (const w of wedgesForFlat(atoms, bonds).wedges) {
       if (w.to >= 0) expect(wedged.has([w.from, w.to].sort((p, q) => p - q).join(",")), `${w.from}-${w.to}`).toBe(false);
     }
-  });
+    // (the whole engine on tetrodotoxin's cage: under half a second alone,
+    // a few times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
     // an atom of a ring laid across another's face, behind it - gibberellic

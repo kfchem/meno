@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import { valueText } from "../../../../lib/calc/results";
 import { knownOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
@@ -298,11 +299,11 @@ export function clock(ms: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
-/** An energy in hartrees as a card says it: −42.10871 Eh. */
-export const hartrees = (e: number) => `${e < 0 ? "−" : ""}${Math.abs(e).toFixed(5)} Eh`;
+/** An energy in hartrees as a card says it, as everywhere Meno writes one: −42.108710 Eh. */
+export const hartrees = (e: number) => valueText(e, { quantity: "energy" });
 
-/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, or how many came out of how many. */
+/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many. */
 export function doneSaid(worked: readonly Worked[], total: number, took: number): string {
-  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · ${hartrees(worked[0].energy)}`;
+  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
   return `${clock(took)} · ${worked.length} of ${total}`;
 }

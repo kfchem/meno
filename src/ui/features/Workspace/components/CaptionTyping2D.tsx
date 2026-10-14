@@ -13,8 +13,9 @@
  * selects on - the click or the drag that opened them counted among those.
  * Enter keeps them, Shift+Enter starts another line - in a list, its next
  * item - Escape lets them go, and a press elsewhere keeps them too.
- * Ctrl/Cmd+B and +I set what is selected bold or in italics, Ctrl/Cmd+Shift+=
- * raised and Ctrl/Cmd+= lowered; Ctrl/Cmd+Shift+> and < make the words a
+ * Ctrl/Cmd+B and +I set what is selected bold or in italics, Ctrl/Cmd and +
+ * raised and Ctrl/Cmd and = lowered (wherever a keyboard has + and =);
+ * Ctrl/Cmd+Shift+> and < make the words a
  * size larger or smaller; Tab and Shift+Tab take a list's items in and out
  * a level (docs/EDITOR-2D.md, *Text*). A box given a width keeps its
  * top as it grows. What is typed is written as it is
@@ -33,7 +34,7 @@ import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
-import { IS_MAC } from "../../../../lib/doc/shortcuts";
+import { IS_MAC, plusOrEquals } from "../../../../lib/doc/shortcuts";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { COLORS } from "../../../theme/colors";
@@ -44,7 +45,7 @@ import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
 import { wordsRoom } from "../../../../lib/chem/shapes";
 import { SHAPE_PAD } from "../document";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { arrowsBeside, useWordsWriting } from "./drawnArrows";
 import { WholeTexts2D } from "./Labels2D";
 import { usePressAmong, useWriting, writingMarks, measured, type WritingDrawn } from "./writing";
@@ -106,7 +107,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     return sh ? wordsRoom(sh, SHAPE_PAD) : null;
   }, [inShape, shapes]);
   const cam = camera as THREE.OrthographicCamera;
-  const zoom = cam.zoom || 1;
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const px = 1 / zoom;
   const margin = MARGIN * fs;
 
@@ -217,9 +219,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   keyed.current = (e: KeyboardEvent): boolean => {
     const mod = IS_MAC ? e.metaKey : e.ctrlKey;
     const k = e.key;
-    // (+ wherever a keyboard has it - Shift and = on most, its own key on others - and = likewise)
-    const plus = k === "+" || (e.code === "Equal" && e.shiftKey);
-    const equals = !plus && (k === "=" || e.code === "Equal");
+    // (+ and =, wherever a keyboard has them: lib/doc/shortcuts plusOrEquals)
+    const plus = plusOrEquals(e) === "+";
+    const equals = plusOrEquals(e) === "=";
     if (mod && !e.altKey && k.toLowerCase() === "b") ed.toggle("bold");
     else if (mod && !e.altKey && k.toLowerCase() === "i") ed.toggle("italic");
     else if (mod && !e.altKey && plus) ed.toggle("sup");

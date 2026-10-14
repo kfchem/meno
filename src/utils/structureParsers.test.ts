@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bondsByDistance, parseSDF, parseXYZ } from "./structureParsers";
+import { atomsTogether, bondedPairs, bondsByDistance, bondRadii, parseSDF, parseXYZ } from "./structureParsers";
+import samplePdbText from "../samples/cholesterol.pdb?raw";
+import { readStructures } from "../lib/io/structures";
 import sampleXyz from "../samples/cholesterol.xyz?raw";
 
 describe("parseXYZ", () => {
@@ -15,6 +17,41 @@ describe("parseXYZ", () => {
     const frames = parseXYZ(`${frame}\n${frame}`);
     expect(frames).toHaveLength(2);
     expect(frames[1].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
+  });
+
+  it("reads an element in any case, or as its atomic number - so its bonds are found by its own radius", () => {
+    // (C-Cl 1.75 A: bonded; Cl-Cl 3.2 A apart, which a radius not known - 1.5 A each - would bond)
+    for (const [c, cl] of [["C", "CL"], ["c", "cl"], ["6", "17"]]) {
+      const [m] = parseXYZ(`3\n\n${c} 0 0 0\n${cl} 1.75 0 0\n${cl} -1.45 0 0`);
+      expect(m.atoms.map((a) => a.el)).toEqual(["C", "Cl", "Cl"]);
+      expect(m.bonds).toEqual([
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ]);
+    }
+    // (what is neither is left as it is)
+    expect(parseXYZ("1\n\nQq 0 0 0")[0].atoms[0].el).toBe("Qq");
+  });
+
+  it("stops at a line that gives no count of atoms - what follows not read (a frame left out, said)", () => {
+    const frame = "2\ncomment\nC 0 0 0\nC 1.54 0 0";
+    expect(parseXYZ(`${frame}\n${frame}\nEND`)).toHaveLength(2);
+  });
+});
+
+describe("parseXYZ, on a file as it may be left", () => {
+  const frame = (z: string) => `2\nE = -1.0\nC 0 0 0\nC 1.54 0 ${z}`;
+
+  it("leaves out a frame the file ends in the middle of, but for the first", () => {
+    expect(parseXYZ(`${frame("0")}\n${frame("0")}\n2\nE = -1.0\nC 0 0 0`)).toHaveLength(2);
+    expect(() => parseXYZ("3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("The XYZ file could not be read: its first frame ends before its atoms do (it says 3, and gives 2).");
+  });
+
+  it("reads no place that is not a number - Fortran's D exponent, nan, infinity, a missing one - and says which line", () => {
+    expect(parseXYZ(frame("1.5e-1"))[0].atoms[1].z).toBe(0.15);
+    expect(() => parseXYZ(frame("1.19D-01"))).toThrow('The XYZ file could not be read: line 4 gives C a place that is not a number: "1.19D-01".');
+    for (const z of ["nan", "Infinity", "0x10"]) expect(() => parseXYZ(frame(z))).toThrow(/could not be read: line 4 .* not a number/);
+    expect(() => parseXYZ("2\nc\nC 0 0 0\nC 1.54 0")).toThrow('The XYZ file could not be read: line 4 gives C a place that is not a number: "".');
   });
 });
 
@@ -169,3 +206,50 @@ describe("parseSDF", () => {
     ]);
   });
 });
+
+describe("bonds by distance, at their edges", () => {
+  it("bonds H2 (0.741 A, beyond its radii's tenth over), and no bond of cholesterol's that its radii's tenth over does not", () => {
+    expect(bondsByDistance([{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.741, y: 0, z: 0 }])).toEqual([{ a1: 0, a2: 1, order: 1 }]);
+    // (cholesterol from its XYZ and its PDB: the same bonds as the radii's tenth over gives, worked out pair by pair here)
+    for (const kind of ["xyz", "pdb"] as const) {
+      const atoms = readStructures(kind, `c.${kind}`, kind === "xyz" ? sampleXyz : samplePdbText).molecules3d![0].atoms;
+      const r = bondRadii(atoms.map((a) => a.el));
+      const tenth: string[] = [];
+      for (let m = 0; m < atoms.length; m++)
+        for (let n = m + 1; n < atoms.length; n++) {
+          const d = Math.hypot(atoms[m].x - atoms[n].x, atoms[m].y - atoms[n].y, atoms[m].z - atoms[n].z);
+          if (d < (r[m] + r[n]) * 1.1) tenth.push(`${m} ${n}`);
+        }
+      expect(bondsByDistance(atoms).map((b) => `${b.a1} ${b.a2}`)).toEqual(tenth);
+    }
+  });
+
+  it("finds no bond between atoms in one place - two thousand of them in a damaged file, each pair tried once at most - and counts them", () => {
+    const together = Array.from({ length: 2000 }, () => ({ el: "C", x: 0, y: 0, z: 0 }));
+    expect(bondsByDistance(together)).toEqual([]);
+    // (how many times their places are read, four hundred of them: six for
+    // each pair tried - all in one cube, every pair is - and a few for each
+    // atom's cube; counted, not timed, so that a busy machine fails nothing)
+    const n = 400;
+    const seen = counted(new Float64Array(3 * n));
+    expect(bondedPairs(seen.list, bondRadii(together.slice(0, n).map((a) => a.el)))).toEqual([]);
+    expect(seen.reads()).toBeLessThanOrEqual((6 * n * (n - 1)) / 2 + 12 * n);
+    expect(atomsTogether(together.flatMap((a) => [a.x, a.y, a.z]))).toBe(1999);
+    // (none in one place in a molecule; two 0.05 A apart are)
+    expect(atomsTogether([0, 0, 0, 1.54, 0, 0, 3, 0, 0])).toBe(0);
+    expect(atomsTogether([0, 0, 0, 0.05, 0, 0, 3, 0, 0])).toBe(1);
+  });
+});
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T extends ArrayLike<number>>(xs: T): { list: T; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      const v = Reflect.get(target, key);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+  return { list, reads: () => n };
+}

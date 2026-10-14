@@ -1,9 +1,11 @@
 import type { TabKind } from "../../lib/core";
-import { cataloguedKinds, kindOf, kinds, textKinds, type Kind } from "../../lib/io/kinds";
+import { cataloguedKinds, kindOf, kinds, MARK_REACH, textKinds, type Kind } from "../../lib/io/kinds";
+import { opensAsText } from "../features/Workspace/utils/io";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
 import { isMenoFile, readMenoFile } from "../../lib/doc/menoFile";
+import { useNotices } from "../notices";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
@@ -48,7 +50,8 @@ export function workspaceOfFile(bytes: Uint8Array): string | null {
   if (!isMenoFile(bytes)) return null;
   const file = readMenoFile(bytes);
   holdOutputsOf(file);
-  holdPdfsOf(file);
+  // (a PDF it keeps that cannot be held would be blank: said, by its name)
+  holdPdfsOf(file, (name, why) => useNotices.getState().show({ id: `pdf-not-held:${name}`, title: "A PDF could not be opened", text: `${name}, in this workspace: ${why}.` }));
   holdPicturesOf(file);
   return file.workspace;
 }
@@ -63,6 +66,8 @@ export function workspaceOfFile(bytes: Uint8Array): string | null {
  */
 export function openedAs(name: string, text: string, path?: string, kind: Kind | null = kindOf(name, text)): Opened {
   if (kind) return { kind: "workspace", label: name, data: { filename: name, payload: text, kind: kind.id, ...(path ? { path } : {}) } };
+  // (not a text - bytes, or a kind Meno says it does not read yet: read as a drop reads it, and said so as it says it - utils/io `opensAsText`)
+  if (!opensAsText(name, text.slice(0, MARK_REACH))) return { kind: "workspace", label: name, data: { filename: name, payload: text, ...(path ? { path } : {}) } };
   return openedTexts([{ name, text, ...(path ? { path } : {}) }]);
 }
 

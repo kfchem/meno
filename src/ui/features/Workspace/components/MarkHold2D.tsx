@@ -18,7 +18,7 @@ import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import type { MarkOf } from "../document";
 import { useEditorStore, useEditor } from "../store";
 import { pageAt } from "../utils/page";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 
 type Pt = { x: number; y: number };
 
@@ -135,8 +135,9 @@ export function MarkHold({ of, at, halfW, halfH, from, em }: { of: MarkOf; at: P
  * or where a hand put it.
  */
 export function ChargeHolds2D() {
-  const { atoms, layout, opts, zoom } = useDrawnLayout();
-  const labelZoom = opts.units === "px" ? zoom : null;
+  const { atoms, layout, opts } = useDrawnLayout();
+  // (the view's zoom only where labels are sized on the screen: in the drawing's own units, a zoom leaves them as they are)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const holds = useMemo(() => {
     const set = labelSetOf(opts);
     const out: { id: number; at: Pt; halfW: number; halfH: number; from: Pt; em: number }[] = [];

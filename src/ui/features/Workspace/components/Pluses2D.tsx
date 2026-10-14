@@ -11,7 +11,7 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
 import { carriedWithMore } from "../utils/selectionScheme";
 import { useDrawingStyle } from "../useDrawingStyle";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 
 /**
  * The "+" signs of a reaction scheme, as the drawing style draws them, in
@@ -29,7 +29,7 @@ export default function Pluses2D() {
   const endPanHold = useEditor((s) => s.endPanHold);
   const setHoveredPlus = useEditor((s) => s.setHoveredPlus);
   const style = useDrawingStyle();
-  const { opts, zoom } = useDrawnLayout();
+  const { opts } = useDrawnLayout();
   const { camera, gl } = useThree();
   const canvas = gl.domElement as HTMLCanvasElement;
   const toWorld = (cx: number, cy: number) => {
@@ -45,13 +45,14 @@ export default function Pluses2D() {
   const dragRef = useRef<{ id: number; offx: number; offy: number; gesture: string } | null>(null);
 
   // one shape for every "+", about its middle
+  const measures = useMemo(() => plusMeasures(style, NOMINAL_BOND_LENGTH), [style]);
+  // no thinner on the screen than a bond is kept (ReactionArrow2D): a zoom
+  // changes it only once the view is out far enough for that
+  const thickness = useDrawnZoom((z) => Math.max(measures.thickness, Math.max(0.5, opts.minLinePx ?? 1) / Math.max(z, 1e-6)));
   const geometry = useMemo(() => {
-    const m = plusMeasures(style, NOMINAL_BOND_LENGTH);
-    // no thinner on the screen than a bond is kept (ReactionArrow2D)
-    const least = Math.max(0.5, opts.minLinePx ?? 1) / Math.max(zoom, 1e-6);
-    const outline = plusOutline({ x: 0, y: 0 }, { ...m, thickness: Math.max(m.thickness, least) });
+    const outline = plusOutline({ x: 0, y: 0 }, { ...measures, thickness });
     return new THREE.ShapeGeometry(new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y))));
-  }, [style, opts.minLinePx, zoom]);
+  }, [measures, thickness]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const fill = opts.bondColor ?? "black";
 

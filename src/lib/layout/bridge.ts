@@ -9,7 +9,7 @@
  */
 import { affineFit, solidOf, turnedConfigurations } from "./cage";
 import { add, dir, dist, segmentsCross, sub, type Point } from "./geometry";
-import type { Molecule, RingSystem } from "./perceive";
+import { orderOf, type Molecule, type RingSystem } from "./perceive";
 import { placeRingSystem } from "./ringSystem";
 
 export type Bridged = {
@@ -161,6 +161,7 @@ function layPath(
       return { x: ps.reduce((s, p) => s + p.x, 0) / ps.length, y: ps.reduce((s, p) => s + p.y, 0) / ps.length };
     });
   let best: { at: Point[]; cost: number } | null = null;
+  const ids = [path.from, ...path.atoms, path.to];
   const judge = (at: Point[], bonus = 0) => {
     let cost = bonus;
     const chain = [P, ...at, Q];
@@ -180,6 +181,16 @@ function layPath(
     for (const [a, o] of others) {
       if (a === path.from || a === path.to || !mol.neighbours[a].some((b) => !inSystem.has(b))) continue;
       if (inside(o, chain)) cost += 15;
+    }
+    // (a double bond on it cis, as in the ring it closes: its neighbours
+    // along the bridge on one side of it - huperzine A's C=C, drawn as a
+    // zigzag, read trans)
+    for (let i = 1; i + 2 < chain.length; i++) {
+      const [u, v] = [ids[i], ids[i + 1]];
+      if (orderOf(mol, u, v) !== 2) continue;
+      const [a, b, c, d] = [chain[i - 1], chain[i], chain[i + 1], chain[i + 2]];
+      const side = (p: Point) => Math.sign((c.x - b.x) * (p.y - b.y) - (c.y - b.y) * (p.x - b.x));
+      if (side(a) !== side(d)) cost += 20;
     }
     // bonds it passes over, and atoms it passes through
     for (let i = 0; i + 1 < chain.length; i++) {

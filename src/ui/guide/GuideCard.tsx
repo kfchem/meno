@@ -1,3 +1,4 @@
+import { GUIDE_LAYER } from "./layers";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
@@ -7,7 +8,7 @@ import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../lib/calc/workers";
 import { forThisSystem } from "../../lib/plugins/here";
 import type { GuidePlace } from "../../lib/plugins/guide";
-import { placeCard, type Box } from "./place";
+import { placeCard, waitsUnseen, type Box } from "./place";
 
 /**
  * A plugin's guide, a step at a time (lib/plugins/guides): a card in Meno's
@@ -26,7 +27,8 @@ export default function GuideCard() {
   const page = usePart(shown ? "page" : undefined);
   const cardRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 160 });
-  const isShown = shown != null;
+  // (a step about a workspace, while none is in front, waits out of sight)
+  const isShown = shown != null && !waitsUnseen(at, part, page);
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -46,8 +48,8 @@ export default function GuideCard() {
           <motion.div
             key="ring"
             aria-hidden
-            className="fixed z-[90] pointer-events-none rounded-lg"
-            style={{ boxShadow: "0 0 0 2px var(--color-accel-base), 0 0 0 6px rgb(49 118 137 / 0.15)" }}
+            className="fixed pointer-events-none rounded-lg"
+            style={{ zIndex: GUIDE_LAYER, boxShadow: "0 0 0 2px var(--color-accel-base), 0 0 0 6px rgb(49 118 137 / 0.15)" }}
             initial={{ opacity: 0, left: part.left - 4, top: part.top - 4, width: part.width + 8, height: part.height + 8 }}
             animate={{ opacity: 1, left: part.left - 4, top: part.top - 4, width: part.width + 8, height: part.height + 8 }}
             exit={FADE.exit}
@@ -56,15 +58,15 @@ export default function GuideCard() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {shown && (
+        {shown && isShown && (
           <motion.div
             key={shown.plugin.id}
             ref={cardRef}
             role="dialog"
             aria-label={shown.plugin.name}
             aria-describedby="guide-text"
-            className="fixed z-[90] rounded-lg border border-gh-line bg-white p-4 text-sm text-gh-black shadow-lg"
-            style={{ width }}
+            className="fixed rounded-lg border border-gh-line bg-white p-4 text-sm text-gh-black shadow-lg"
+            style={{ zIndex: GUIDE_LAYER, width }}
             initial={{ opacity: 0, left: where.left, top: where.top + 4 }}
             animate={{ opacity: 1, left: where.left, top: where.top }}
             exit={FADE.exit}

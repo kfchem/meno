@@ -20,6 +20,7 @@
  * multiple of four, which PowerPoint's reader is strict about.
  */
 import { labelFont } from "./labelFonts";
+import { greatest, least } from "./lists";
 import {
   BALL_SHADE,
   circlePoints,
@@ -34,8 +35,13 @@ import {
 
 /** Logical units to the pixel: coordinates are whole numbers, so they are kept fine. */
 const S = 20;
-/** The reference device: 96 pixels to the inch. */
-const DEVICE = { px: [1920, 1080], mm: [508, 286], um: [508000, 285750] } as const;
+/**
+ * The reference device: 96 pixels to the inch, and so in its whole
+ * millimetres on both axes - 1440 pixels are 381 mm, where 1080 would be
+ * 285.75, written 286, and a reader going by millimetres drew the picture
+ * 0.09% short.
+ */
+const DEVICE = { px: [1920, 1440], mm: [508, 381], um: [508000, 381000] } as const;
 
 const EMR = {
   HEADER: 1,
@@ -249,13 +255,14 @@ export function layoutEmf(
     return h;
   };
   const points = (pts: { x: number; y: number }[]) => pts.map((p) => [X(p.x), Y(p.y)] as const);
+  // (by a loop, not spread into one call: a long outline overran the stack)
   const bounds = (pts: readonly (readonly [number, number])[], v: DataView) => {
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
-    v.setInt32(0, Math.min(...xs), true);
-    v.setInt32(4, Math.min(...ys), true);
-    v.setInt32(8, Math.max(...xs), true);
-    v.setInt32(12, Math.max(...ys), true);
+    v.setInt32(0, least(xs), true);
+    v.setInt32(4, least(ys), true);
+    v.setInt32(8, greatest(xs), true);
+    v.setInt32(12, greatest(ys), true);
   };
   const poly = (type: number, pts: readonly (readonly [number, number])[]) =>
     w.add(type, 20 + 8 * pts.length, (v) => {
@@ -387,6 +394,17 @@ export function layoutEmf(
         const id = penFor(l.width * zoom, colorRef(l.color));
         drawLines(id, points(l.closed ? [...l.points, l.points[0], l.points[1]] : l.points));
       }
+    }
+    // (a curved line - an ellipse, a rounded corner - as the Bezier curves it is, smooth however far the picture is enlarged)
+    if (m.curve && m.curve.points.length >= 4) {
+      select(NULL_BRUSH);
+      const id = penFor(m.curve.width * zoom, colorRef(m.curve.color));
+      const pts = points(m.curve.points);
+      w.plus(PLUS.DRAW_BEZIERS, id, 4 + 8 * pts.length, (v) => {
+        v.setUint32(0, pts.length, true);
+        plusPoints(v, 4, pts);
+      });
+      poly(EMR.POLYBEZIER, pts);
     }
   }
   // writing by hand, filled: a marker's see-through for EMF+ - GDI, which

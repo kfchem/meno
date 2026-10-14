@@ -148,11 +148,15 @@ function boxOutline(s: ShapeGeometry, pointPx: number): Vec2[] {
   side("top");
   arc({ x: x0 + r, y: y1 - r }, r, 0.5 * Math.PI, Math.PI, out);
   side("left");
-  // (no point twice over: a square corner's arc is its corner alone)
-  return out.filter((p, i) => {
+  // (no point twice over: a square corner's arc is its corner alone - and
+  // one point kept of a box too small to tell its corners apart, whose
+  // bounds were else no numbers, taking every other part of a picture's
+  // with them)
+  const kept = out.filter((p, i) => {
     const q = out[(i + out.length - 1) % out.length];
     return Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
   });
+  return kept.length ? kept : out.slice(0, 1);
 }
 
 /** The line a shape follows - closed round a box; a line's, from end to end - in page units. */
@@ -209,6 +213,79 @@ export function strokePieces(s: ShapeGeometry, pointPx: number): { points: Vec2[
 /** The area a box fills - its edge, round it; none for a line. */
 export function fillOutline(s: ShapeGeometry, pointPx: number): Vec2[] | null {
   return isBox(s.kind) ? boxOutline(s, pointPx) : null;
+}
+
+/** Points along an arc of an ellipse about `c` - from angle `a` to `b`, a quarter turn at most - as a cubic Bezier segment's two controls and end, the start being where the arc begins. */
+function arcBezier(c: Vec2, rx: number, ry: number, a: number, b: number): Vec2[] {
+  const k = (4 / 3) * Math.tan((b - a) / 4);
+  const p0 = { x: c.x + rx * Math.cos(a), y: c.y + ry * Math.sin(a) };
+  const p3 = { x: c.x + rx * Math.cos(b), y: c.y + ry * Math.sin(b) };
+  return [
+    { x: p0.x - k * rx * Math.sin(a), y: p0.y + k * ry * Math.cos(a) },
+    { x: p3.x + k * rx * Math.sin(b), y: p3.y - k * ry * Math.cos(b) },
+    p3,
+  ];
+}
+
+/**
+ * A box's edge as the curve it is, for pictures - cubic Bezier segments
+ * end to end, the start then three points for each, closed where it began
+ * - where it has curves: an ellipse, and a rounded rectangle's or a
+ * callout's corners; its straight stretches and a callout's tail are
+ * segments as straight as lines. It begins at a smooth point (an ellipse's
+ * bottom, the middle of the lower left corner) so that a line drawn round
+ * it meets itself with no seam. None for a line, a rectangle, or a box too
+ * small to round: their edges are straight.
+ */
+export function outlineCurve(s: ShapeGeometry, pointPx: number): Vec2[] | null {
+  if (!isBox(s.kind) || s.kind === "rect") return null;
+  const { x0, y0, x1, y1 } = s;
+  if (s.kind === "ellipse") {
+    const c = middleOf(s);
+    const rx = (x1 - x0) / 2;
+    const ry = (y1 - y0) / 2;
+    const out: Vec2[] = [{ x: c.x, y: y0 }];
+    for (let q = 0; q < 4; q++) out.push(...arcBezier(c, rx, ry, -Math.PI / 2 + (q * Math.PI) / 2, (q * Math.PI) / 2));
+    return out;
+  }
+  const r = cornerRadius(s, pointPx);
+  if (r <= 0) return null;
+  const tail = tailOf(s, r, pointPx);
+  const bl = { x: x0 + r, y: y0 + r };
+  const out: Vec2[] = [{ x: bl.x + r * Math.cos(1.25 * Math.PI), y: bl.y + r * Math.sin(1.25 * Math.PI) }];
+  const lineTo = (q: Vec2) => {
+    const p = out[out.length - 1];
+    if (Math.hypot(q.x - p.x, q.y - p.y) < 1e-12) return;
+    out.push({ x: p.x + (q.x - p.x) / 3, y: p.y + (q.y - p.y) / 3 }, { x: p.x + (2 * (q.x - p.x)) / 3, y: p.y + (2 * (q.y - p.y)) / 3 }, q);
+  };
+  const side = (which: Side, to: Vec2) => {
+    if (tail?.side === which) for (const p of tail.points) lineTo(p);
+    lineTo(to);
+  };
+  out.push(...arcBezier(bl, r, r, 1.25 * Math.PI, 1.5 * Math.PI));
+  side("bottom", { x: x1 - r, y: y0 });
+  out.push(...arcBezier({ x: x1 - r, y: y0 + r }, r, r, 1.5 * Math.PI, 2 * Math.PI));
+  side("right", { x: x1, y: y1 - r });
+  out.push(...arcBezier({ x: x1 - r, y: y1 - r }, r, r, 0, 0.5 * Math.PI));
+  side("top", { x: x0 + r, y: y1 });
+  out.push(...arcBezier({ x: x0 + r, y: y1 - r }, r, r, 0.5 * Math.PI, Math.PI));
+  side("left", { x: x0, y: y0 + r });
+  out.push(...arcBezier(bl, r, r, Math.PI, 1.25 * Math.PI));
+  return out;
+}
+
+/** A curve (`outlineCurve`'s points) as points along it, `steps` to each segment - an area to fill where a picture fills polygons. */
+export function flattenedCurve(curve: readonly Vec2[], steps = 24): Vec2[] {
+  const out: Vec2[] = curve.length ? [curve[0]] : [];
+  for (let i = 1; i + 2 < curve.length; i += 3) {
+    const [a, b, c, d] = [curve[i - 1], curve[i], curve[i + 1], curve[i + 2]];
+    for (let k = 1; k <= steps; k++) {
+      const u = k / steps;
+      const w = [(1 - u) ** 3, 3 * (1 - u) ** 2 * u, 3 * (1 - u) * u * u, u ** 3];
+      out.push({ x: w[0] * a.x + w[1] * b.x + w[2] * c.x + w[3] * d.x, y: w[0] * a.y + w[1] * b.y + w[2] * c.y + w[3] * d.y });
+    }
+  }
+  return out;
 }
 
 /** How far a mitred corner may stand off its line, in half widths, before it is cut. */

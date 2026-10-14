@@ -155,8 +155,15 @@ export type SgroupMark = {
   componentNumber?: number;
   /** The group it is within, by id. */
   parent?: number;
-  /** A data Sgroup's field and data. */
-  field?: { name: string; data: string[]; units?: string; type?: string };
+  /**
+   * A data Sgroup's field and data, and what its file says besides, kept to
+   * be written back: its units or format, its type (F, N or T), a V3000
+   * FIELDINFO that gives neither (as read), how it is
+   * displayed (V2000's M  SDD, V3000's FIELDDISP, as the file writes it - not
+   * followed in the drawing) and its query's type and operator
+   * (lib/chem/ctfile `CtSgroup.field`).
+   */
+  field?: { name: string; data: string[]; units?: string; type?: string; info?: string; display?: string; queryType?: string; queryOp?: string };
 };
 
 /**
@@ -203,7 +210,11 @@ export type ParsedBond = { a1: number; a2: number; order: number; stereoCode?: n
  * A molecule as a file gives it. A CTfile's carries all the file said
  * besides (lib/chem/ctfile), its atoms and bonds in the same order.
  */
-export type Molecule = { atoms: ParsedAtom[]; bonds: ParsedBond[]; ct?: CtMolecule };
+export type Molecule = {
+  atoms: ParsedAtom[];
+  bonds: ParsedBond[];
+  ct?: CtMolecule;
+};
 
 /**
  * Valences used to work out how many hydrogens an atom carries, for the

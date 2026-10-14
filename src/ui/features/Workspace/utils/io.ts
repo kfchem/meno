@@ -1,15 +1,17 @@
 import type { EditorModel } from "../../../../utils/importers";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
 import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
-import { bondsByDistance } from "../../../../utils/structureParsers";
+import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
+import { useNotices } from "../../../notices";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -77,8 +79,41 @@ export async function processFileContent(
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
   // a structure's file: what it holds, as its reader gives it, checked -
-  // its several records drawn flat a stack of drawings
-  return stackedRead(await readStructureFile(filename, content, kind));
+  // its several records drawn flat a stack of drawings - and the records
+  // of it left out, said in the corner
+  const read = await readStructureFile(filename, content, kind);
+  if (read.recordsLeftOut?.length) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: recordsLeftOutSaid(name, read.recordsLeftOut) });
+  return stackedRead(read);
+}
+
+/** What is said of the records of file `name` left out as it was read (lib/io/structures `recordsLeftOut`): each by its number and why - five at most, then how many more. */
+export function recordsLeftOutSaid(name: string, left: readonly { record: number; why: string }[]): string {
+  const said = left.slice(0, 5).map((r) => `Record ${r.record} ${r.why}.`);
+  const more = left.length > 5 ? [`${left.length - 5} more ${left.length - 5 === 1 ? "is" : "are"} left out as well.`] : [];
+  return [...said, ...more, `The other records of ${name} opened.`].join(" ");
+}
+
+/**
+ * Where a file a tab was opened with goes once it is read, and how: on a
+ * canvas nothing is drawn on, in the document's place, its middle at the
+ * origin; on one drawn on as it was read - a paste, a bond, while a large
+ * file took its seconds - added to the right of what is there, its middle
+ * level with that, rather than in its place, which took what was drawn
+ * away, saying nothing.
+ */
+export function openedPlace(
+  blank: boolean,
+  there: readonly { x: number; y: number }[],
+  read: Pick<ProcessedFileResult, "centroid"> & { model: { atoms: readonly { x: number; y: number }[] } },
+): { add: boolean; dx: number; dy: number } {
+  const atoms = read.model.atoms;
+  if (blank) return { add: false, dx: -read.centroid.x, dy: -read.centroid.y };
+  if (!there.length || !atoms.length) return { add: true, dx: -read.centroid.x, dy: -read.centroid.y };
+  return {
+    add: true,
+    dx: Math.max(...there.map((a) => a.x)) + 2 * NOMINAL_BOND_LENGTH - Math.min(...atoms.map((a) => a.x)),
+    dy: there.reduce((t, a) => t + a.y, 0) / there.length - read.centroid.y,
+  };
 }
 
 /**
@@ -160,34 +195,47 @@ function inRow(ms: Omit<Molecule3D, "id" | "at">[]): Carried3D[] {
 
 /**
  * A calculation's output, as its readers read it (`readers`, each its id
- * and version), as an opened file's molecules: one molecule in 3D, its
- * atoms where the first geometry puts them and its bonds found as an XYZ
- * file's are, the rest of its geometries its frames; their energies, and
- * what the calculation says of it; showing its last geometry, an
- * optimisation's end.
+ * and version), as an opened file's molecules: one molecule in 3D - or,
+ * of a file that holds several jobs (Gaussian's Link1, ORCA's $new_job),
+ * one for each job, side by side, in order. Each has its atoms where its
+ * first geometry puts them and its bonds found as an XYZ file's are, the
+ * rest of its geometries its frames; their energies, and what the
+ * calculation says of it; showing its last geometry, an optimisation's
+ * end. A job's geometries, energies and populations are its own: nothing
+ * of one job is put with another's.
  */
 export function calcResult(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): ProcessedFileResult {
-  const n = out.atoms.length;
-  const [f0, ...rest] = out.frames.filter((f) => f.length === 3 * n);
-  if (!n || !f0) throw new Error(`No molecule found in ${filename || "the file"}.`);
+  const jobs = Array.isArray(out.jobs) && out.jobs.length > 1 ? out.jobs : [out];
+  const molecules3d = jobs.flatMap((job) => {
+    const m = jobMolecule(job, readers, filename, source);
+    return m ? [m] : [];
+  });
+  if (!molecules3d.length) throw new Error(`No molecule found in ${filename || "the file"}.`);
+  return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
+}
+
+/** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
+function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
+  const n = out.atoms?.length ?? 0;
+  const [f0, ...rest] = (out.frames ?? []).filter((f) => f.length === 3 * n);
+  if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
+  // (atoms in one place with another: said over it)
+  const together = atomsTogether(f0);
   const frames = rest.map((f) => [...f]);
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
+  const calc = calcOf(out, readers, source);
+  const name = filename && calc.job ? `${filename}, job ${calc.job.number}` : filename;
   return {
-    model: { atoms: [], bonds: [] },
-    centroid: { x: 0, y: 0 },
-    molecules3d: [
-      {
-        atoms: first.atoms,
-        bonds: first.bonds,
-        bondsFrom: "distance" as const,
-        bondOrders: "unknown" as const,
-        ...(frames.length ? { frames, frame: frames.length } : {}),
-        ...(energies ? { energies } : {}),
-        ...(filename ? { name: filename } : {}),
-        calc: calcOf(out, readers, source),
-      },
-    ],
+    atoms: first.atoms,
+    bonds: first.bonds,
+    bondsFrom: "distance" as const,
+    bondOrders: "unknown" as const,
+    ...(frames.length ? { frames, frame: frames.length } : {}),
+    ...(energies ? { energies } : {}),
+    ...(name ? { name } : {}),
+    ...(together ? { together } : {}),
+    calc,
   };
 }

@@ -29,7 +29,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { labelKey, labelReading } from "../utils/labelTyping";
 import { LabelWords } from "../utils/labelWords";
 import { pageAt } from "../utils/page";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { WholeTexts2D } from "./Labels2D";
 import { pageField } from "./pageField";
 import { overWhite } from "./selectionShade";
@@ -136,7 +136,8 @@ function Typing({ session }: { session: Session }) {
   const fs = opts.fontPx;
   const set = useMemo(() => labelSetOf(opts), [opts]);
   const cam = camera as THREE.OrthographicCamera;
-  const zoom = cam.zoom || 1;
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const px = 1 / zoom;
 
   // the label as it is drawn: what the IME has so far in place of what it replaces

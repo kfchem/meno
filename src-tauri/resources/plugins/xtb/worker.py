@@ -31,10 +31,20 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
 - an optimisation's path in `xtbopt.log`, Xmol frames whose comment line
   holds the total energy and the gradient norm; `.xtboptok` where it
   converged, `NOT_CONVERGED` where it did not;
-- the total energy, the HOMO-LUMO gap, the dipole and the partial charges,
-  and a frequency job's frequencies, reduced masses and IR intensities,
-  from `xtbout.json`; the thermochemistry from the THERMODYNAMIC summary
-  and the H(T), T*S and G(T) table it prints.
+- the total energy, the HOMO-LUMO gap and the partial charges, and a
+  frequency job's frequencies, reduced masses and IR intensities, from
+  `xtbout.json`; the dipole moment from the property printout xtb ends
+  with (GFN2-xTB's "molecular dipole:", its "full" row; GFN1-xTB's "dipole
+  moment from electron density": the total in debye), which is of the
+  geometry it ended on - after an optimisation the dump's dipole is the
+  starting geometry's - and from the dump where it printed none; the
+  dipole is taken about the origin of the coordinates xtb was given, so a
+  charged molecule's is taken again about its centre of mass (an ion's
+  dipole depends on where it is taken about), from the geometry it is of
+  and its atoms' masses - an isotope's own, the rest the standard atomic
+  weights; the
+  thermochemistry from the THERMODYNAMIC summary and the H(T), T*S and
+  G(T) table it prints.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -74,9 +84,44 @@ STEPS = {"optimise", "energy", "frequencies"}
 
 # debye in an atomic unit of dipole
 DEBYE_PER_AU = 2.541746473
+# the bohr, in angstroms (CODATA 2018)
+BOHR = 0.529177210903
+# the standard atomic weights (IUPAC CIAAW, conventional values; an element with
+# none, the mass number of its longest-lived isotope), H to Rn - the elements xtb
+# has parameters for: for a charged molecule's centre of mass
+MASSES = {
+    "H": 1.008, "He": 4.002602, "Li": 6.94, "Be": 9.0121831, "B": 10.81, "C": 12.011, "N": 14.007, "O": 15.999,
+    "F": 18.998403162, "Ne": 20.1797, "Na": 22.98976928, "Mg": 24.305, "Al": 26.9815384, "Si": 28.085,
+    "P": 30.973761998, "S": 32.06, "Cl": 35.45, "Ar": 39.95, "K": 39.0983, "Ca": 40.078, "Sc": 44.955907,
+    "Ti": 47.867, "V": 50.9415, "Cr": 51.9961, "Mn": 54.938043, "Fe": 55.845, "Co": 58.933194, "Ni": 58.6934,
+    "Cu": 63.546, "Zn": 65.38, "Ga": 69.723, "Ge": 72.63, "As": 74.921595, "Se": 78.971, "Br": 79.904,
+    "Kr": 83.798, "Rb": 85.4678, "Sr": 87.62, "Y": 88.905838, "Zr": 91.224, "Nb": 92.90637, "Mo": 95.95,
+    "Tc": 98.0, "Ru": 101.07, "Rh": 102.90549, "Pd": 106.42, "Ag": 107.8682, "Cd": 112.414, "In": 114.818,
+    "Sn": 118.71, "Sb": 121.76, "Te": 127.6, "I": 126.90447, "Xe": 131.293, "Cs": 132.90545196, "Ba": 137.327,
+    "La": 138.90547, "Ce": 140.116, "Pr": 140.90766, "Nd": 144.242, "Pm": 145.0, "Sm": 150.36, "Eu": 151.964,
+    "Gd": 157.25, "Tb": 158.925354, "Dy": 162.5, "Ho": 164.930329, "Er": 167.259, "Tm": 168.934219,
+    "Yb": 173.045, "Lu": 174.9668, "Hf": 178.486, "Ta": 180.94788, "W": 183.84, "Re": 186.207, "Os": 190.23,
+    "Ir": 192.217, "Pt": 195.084, "Au": 196.96657, "Hg": 200.592, "Tl": 204.38, "Pb": 207.2, "Bi": 208.9804,
+    "Po": 209.0, "At": 210.0, "Rn": 222.0,
+}
+# what a charged molecule's dipole is called: said, as it is taken about a point of Meno's choosing
+ABOUT_CENTRE = "Dipole moment about the centre of mass"
 # a frequency smaller than this, either way, is a translation or a rotation projected out (cm-1)
 FREQUENCY_LEAST = 1.0
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
+# the dipole as the property printout has it - x, y and z in atomic units,
+# then the total in debye: GFN2-xTB's under "molecular dipole:" and its
+# heading, the "q only" row, then the "full" row; GFN1-xTB's under "dipole
+# moment from electron density (au)" and its heading, x, y, z and "total
+# (Debye):" on one row
+PRINTED_DIPOLES = (
+    re.compile(
+        r"molecular dipole:[^\n]*\n[^\n]*\n[^\n]*q only:[^\n]*\n\s*full:\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")"
+    ),
+    re.compile(
+        r"dipole moment from electron density \(au\)[^\n]*\n[^\n]*\n\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+total \(Debye\):\s+(" + FLOAT + r")"
+    ),
+)
 
 
 class Refused(Exception):
@@ -242,8 +287,65 @@ def floats(v, n=None):
     return [float(x) for x in v]
 
 
-def results_of(dump, n):
-    """The dump's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
+def masses_of(entry):
+    """Each atom's mass, for the centre of mass: an isotope's own - the mass
+    Meno gives with the entry (NIST's, as ORCA's "M =" is given it), or else
+    its mass number, which is within a tenth of a dalton of it - and the standard
+    atomic weight of the rest; none where an element has none here."""
+    out = []
+    for a in entry.get("atoms") or []:
+        iso, mass = a.get("isotope"), a.get("mass")
+        if iso:
+            if not isinstance(mass, bool) and isinstance(mass, (int, float)) and math.isfinite(mass) and mass > 0:
+                out.append(float(mass))
+                continue
+            if not isinstance(iso, bool) and isinstance(iso, (int, float)) and iso == int(iso) and iso > 0:
+                out.append(float(iso))
+                continue
+        el = str(a.get("el", "")).strip()
+        if el not in MASSES:
+            return None
+        out.append(MASSES[el])
+    return out
+
+
+def centre_of_mass(masses, xyz):
+    """Where a molecule's centre of mass is, in angstroms, from its atoms' masses; none where they are not known."""
+    if not masses or not xyz or len(xyz) != 3 * len(masses):
+        return None
+    total = sum(masses)
+    return [sum(m * xyz[3 * i + k] for i, m in enumerate(masses)) / total for k in range(3)]
+
+
+def dipole_of(dump, log, charge=0, masses=None, start=None, end=None):
+    """The dipole moment, in debye, and whether it was taken about the
+    centre of mass: the one xtb printed last - of the geometry it ended on,
+    `end` - or, where it printed none, the dump's, of the one it began with,
+    `start`. Neutral, its total as xtb has it. Charged, taken again about
+    the centre of mass of the geometry it is of: xtb takes it about the
+    origin of the coordinates, and an ion's dipole moves with that - none
+    where the centre cannot be found. None where xtb says no dipole."""
+    printed = [m for p in PRINTED_DIPOLES for m in p.finditer(log or "")]
+    if printed:
+        m = max(printed, key=lambda m: m.start())
+        total, vector, at = number(m.group(4)), [number(m.group(k)) for k in (1, 2, 3)], end
+    else:
+        vector = floats(dump.get("dipole / a.u."), 3)
+        if vector is None:
+            return None
+        total, at = math.sqrt(sum(v * v for v in vector)) * DEBYE_PER_AU, start
+    if not charge:
+        return (total, False) if total is not None else None
+    centre = centre_of_mass(masses, at)
+    if centre is None or None in vector:
+        return None
+    # (taken about the centre instead of the origin: less the charge there - in atomic units, the centre in bohr)
+    moved = [v - charge * c / BOHR for v, c in zip(vector, centre)]
+    return math.sqrt(sum(v * v for v in moved)) * DEBYE_PER_AU, True
+
+
+def results_of(dump, n, log="", charge=0, masses=None, start=None, end=None):
+    """The job's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
     out = []
     gap = dump.get("HOMO-LUMO gap / eV")
     # (none where there is no HOMO: a molecule with no electrons xtb counts - Na+ in GFN2-xTB - for which it gives the LUMO's energy as the gap)
@@ -251,11 +353,12 @@ def results_of(dump, n):
     occupied = not isinstance(electrons, (int, float)) or electrons > 0
     if isinstance(gap, (int, float)) and math.isfinite(gap) and occupied:
         out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": float(gap), "unit": "eV", "digits": 2})
-    dipole = floats(dump.get("dipole / a.u."), 3)
+    dipole = dipole_of(dump, log, charge, masses, start, end)
     if dipole is not None:
+        value, about = dipole
         out.append({
-            "id": "dipole", "on": "molecule", "group": "Properties", "label": "Dipole moment",
-            "value": math.sqrt(sum(v * v for v in dipole)) * DEBYE_PER_AU, "quantity": "dipole", "rank": 2,
+            "id": "dipole", "on": "molecule", "group": "Properties", "label": ABOUT_CENTRE if about else "Dipole moment",
+            "value": value, "quantity": "dipole", "rank": 2,
         })
     charges = floats(dump.get("partial charges"), n)
     if charges is not None:
@@ -361,7 +464,8 @@ def output_of(step, entry, options, files, log):
         optimised = True
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
     version = str(dump.get("xtb version") or VERSION).split()[0]
-    results = results_of(dump, n)
+    charge = whole(entry.get("charge", 0), "The charge")
+    results = results_of(dump, n, log, charge, masses_of(entry), start, frames[-1])
     if step == "frequencies":
         results += thermo_of(log)
     solvent = options.get("solvent", "none")
@@ -370,7 +474,7 @@ def output_of(step, entry, options, files, log):
         "program": "xtb",
         "version": version,
         "method": method + (f" (ALPB, {solvent})" if solvent != "none" else "") if method else None,
-        "charge": whole(entry.get("charge", 0), "The charge"),
+        "charge": charge,
         "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
         "atoms": elements,
         "frames": frames,

@@ -14,6 +14,9 @@
  * the stereochemistry the old one said.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
+import { chemistry } from "../../../../lib/chem/molecule";
+import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import type { CisTrans } from "../../../../lib/layout/perceive";
@@ -21,6 +24,8 @@ import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, orientFor } from "./drawing";
+import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -131,10 +136,12 @@ export function layoutJob(part: Model): LayoutJob {
  * - its middle kept - but laid out afresh, at the drawing's own bond length;
  * its wedges, and only those, the ones the engine draws; each H the engine
  * draws the centre's own, where it had one, and new where not; the rest of
- * its H taken away. Throws, changing nothing, if the new drawing would not
- * say the stereochemistry the old one said.
+ * its H taken away. Given the drawing's `style`, a bond from a label to one
+ * at a terminal atom is drawn long enough for the two (roomForLabels).
+ * Throws, changing nothing, if the new drawing would not say the
+ * stereochemistry the old one said.
  */
-export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: Layout2D): Relayout {
+export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: Layout2D, style?: DrawingStyle): Relayout {
   const { input, ids } = job;
   const n = input.atoms.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
@@ -210,7 +217,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       continue;
     }
     const bond = model.bonds.find((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
-    if (bond) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
+    // (a wedge on a single bond only: one put on a double or triple bond - at an atom with too many bonds, say - is no wedge)
+    if (bond && bond.order === 1) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
   }
   // a ring in perspective (face-on to a metal, or turned on its bond): its
   // near edges bold, a bond toward the viewer a wedge narrow at its far
@@ -243,10 +251,62 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     return [];
   });
   const change: Relayout = { atoms, bonds, added, removed };
+  if (style) roomForLabels(part, change, style);
   if (!saysTheSame(part, change)) {
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
   return change;
+}
+
+/**
+ * A bond from a label to a label at a terminal atom - O-3H, Mg-Br - drawn
+ * long enough for the two to keep their margins: where they would take
+ * more of it than their room (lib/chem/layout2d `labelTrims`, as drawing it
+ * goes by), the terminal atom set out along it until they fit. The engine
+ * lays out bonds of one length, knowing nothing of a style's labels; this is
+ * Clean-up's, never done to a bond as drawn. Its way out stays as it was,
+ * and so does what any centre says.
+ */
+function roomForLabels(part: Model, change: Relayout, style: DrawingStyle): void {
+  // (none drawn out unless a label at a terminal atom has a label beside it: most structures have none)
+  const opts = editorLayoutOptions(style, { minLinePx: 0 });
+  const labelled = new Set(part.atoms.filter((a) => showsLabel({ el: a.el, ...chemistry(a) }, opts)).map((a) => a.id));
+  const ends = degrees(part.bonds);
+  if (!part.bonds.some((b) => labelled.has(b.a) && labelled.has(b.b) && (ends.get(b.a) === 1 || ends.get(b.b) === 1))) return;
+  const after = relayout({ ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) }, change).model;
+  const crowded = drawnAs(after, style).crowded;
+  if (!crowded?.length) return;
+  const degree = degrees(after.bonds);
+  const at = new Map(after.atoms.map((a) => [a.id, a]));
+  const placed = new Map(change.atoms.map((a, i) => [a.id, i]));
+  for (const { atoms: [p, q], need } of crowded) {
+    const end = degree.get(q) === 1 ? q : degree.get(p) === 1 ? p : null;
+    const k = end != null ? placed.get(end) : undefined;
+    if (end == null || k == null) continue;
+    const from = at.get(end === q ? p : q)!;
+    const to = at.get(end)!;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length < 1e-9 || need <= length) continue;
+    // (a hair over, so that the two are seen to fit, not to share what is left)
+    const s = (need * (1 + 1e-6)) / length;
+    change.atoms[k] = { ...change.atoms[k], x: from.x + (to.x - from.x) * s, y: from.y + (to.y - from.y) * s };
+  }
+}
+
+/** `m` laid out as the canvas draws it in `style`: its labels where they are drawn, and the bonds they crowd. */
+function drawnAs(m: Model, style: DrawingStyle) {
+  const atoms = m.atoms.map((a) => ({
+    id: a.id,
+    x: a.x,
+    y: a.y,
+    el: a.el,
+    ...chemistry(a),
+    ...(a.z != null ? { z: a.z } : {}),
+    ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+  }));
+  const bonds = layoutBonds(m.bonds, new Map(m.atoms.map((a, i) => [a.id, i])));
+  // (at the style's own size on the page, as a picture of it is made)
+  return layoutMolecule(atoms, bonds, editorLayoutOptions(style, { minLinePx: 0 }), (style.bondLengthPt * 96) / 72 / NOMINAL_BOND_LENGTH);
 }
 
 /** Whether `part`, changed as `change` has it, shows the stereochemistry it shows now. */
@@ -303,5 +363,5 @@ function stereoOf(m: Model) {
 
 /** The first id no atom or bond of `model` has. */
 export function nextFree(model: Model): number {
-  return Math.max(0, ...model.atoms.map((a) => a.id), ...model.bonds.map((b) => b.id)) + 1;
+  return Math.max(0, greatest(model.atoms.map((a) => a.id)), greatest(model.bonds.map((b) => b.id))) + 1;
 }

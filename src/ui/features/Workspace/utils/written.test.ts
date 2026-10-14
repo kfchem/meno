@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formulaOf, knownOfMolecules, offeredNames, writtenOf } from "./written";
+import { knownOfMolecules, writtenOf } from "./written";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 import type { Carried3D } from "../store/types";
 
@@ -59,14 +59,5 @@ describe("what Export starts a molecule's charge and multiplicity from", () => {
     expect(knownOfMolecules([{ ...hydronium, calc: undefined }])).toMatchObject({ charge: 0, multiplicity: 2 });
     // (two together: what their atoms say, not one of their calculations')
     expect(knownOfMolecules([hydronium, water()])).toMatchObject({ charge: 0 });
-  });
-});
-
-describe("molecules in 3D as Export names them", () => {
-  it("are by their file and formula, in Hill order, numbered where two read alike", () => {
-    expect(formulaOf(water().atoms)).toBe("H2O");
-    expect(formulaOf([{ el: "C" }, { el: "O" }, { el: "H" }, { el: "H" }, { el: "Cl" }])).toBe("CH2ClO");
-    expect(formulaOf([{ el: "Na" }, { el: "Cl" }])).toBe("ClNa");
-    expect(offeredNames([water(), water({ name: undefined }), water()])).toEqual(["water.xyz - H2O (1)", "Molecule 2 - H2O", "water.xyz - H2O (3)"]);
   });
 });

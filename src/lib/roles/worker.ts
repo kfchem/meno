@@ -11,8 +11,8 @@ import type { ChemClient } from "./client";
  * The worker of the plugin that fills a role (lib/plugins/roles,
  * docs/PLUGINS.md): the plugin chosen for the role where it is used - else
  * the first that fills it - set up the first time a role it fills is
- * needed, asking before it downloads, and started once, then kept for the
- * session: the one process the plugin has (lib/plugins/process). One the
+ * needed, asking before it downloads, and started, then kept while it is
+ * used: the one process the plugin has (lib/plugins/process). One the
  * chemist took away in Settings, Plugins is not set up again of itself:
  * the role says to add it.
  */
@@ -102,7 +102,8 @@ async function start(plugin: PythonPlugin): Promise<ChemClient> {
   if (takenAway(plugin) && !(await pyEnvReady(plugin.profile))) {
     throw new TakenAway(`${plugin.name} was taken away: add it in Settings, Plugins.`);
   }
-  useChem.setState({ state: "setting-up", plugin: plugin.name, id: plugin.id });
+  // (said to be setting up only where there is something to set up: one set up already is starting at once)
+  if (!(await pyEnvReady(plugin.profile))) useChem.setState({ state: "setting-up", plugin: plugin.name, id: plugin.id });
   await ensurePyEnv(plugin.profile);
   useChem.setState({ state: "starting", plugin: plugin.name });
   const worker = await workerOf(plugin);

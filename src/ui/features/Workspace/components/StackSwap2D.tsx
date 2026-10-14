@@ -105,7 +105,7 @@ export default function StackSwap2D() {
 
 /** One record as it goes or comes, or ready to: drawn in a layout of its own, about its middle. */
 function RecordGoing({ going, model }: { going: Going; model: Model }) {
-  const { opts, zoom } = useDrawnLayout();
+  const { opts, laidAt } = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
   // (as it is - and once it goes, as it was as it began to go: what it is drawn from all the way)
   const kept = useRef<Model | null>(null);
@@ -122,8 +122,9 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
     const drawn = part.atoms.map((a) => layoutAtomOf(a));
     const index = new Map(drawn.map((a, i) => [a.id, i]));
     const laid = layoutBonds(part.bonds, index);
-    return { atoms: drawn, bonds: laid, opts, layout: layoutMolecule(drawn, laid, opts, zoom), zoom };
-  }, [part, opts, zoom]);
+    // (at the zoom the drawing is laid out at, as it is)
+    return { atoms: drawn, bonds: laid, opts, layout: layoutMolecule(drawn, laid, opts, laidAt), laidAt };
+  }, [part, opts, laidAt]);
   const middle = useMemo(() => {
     const xs = value.atoms.map((a) => a.x);
     const ys = value.atoms.map((a) => a.y);

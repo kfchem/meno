@@ -5,8 +5,8 @@ import { stageOf } from "./stage";
  * What a talk is given on, over the canvas (docs/PRESENTING.md): while one
  * is given, a surface over everything takes the pointer - the canvas's part
  * of the talk (Presenter) says what a press, a drag or the wheel does there
- * - the page about the slide shown lies under a veil of the page's own
- * white, the screen can be made black or white, and the slide's number
+ * - everything about the slide shown is black, as slides software has it,
+ * the screen can be made black or white, and the slide's number
  * shows a moment as it comes. Always there, and nothing - letting the
  * pointer through - while no talk is given.
  */
@@ -42,7 +42,7 @@ export default function PresentLayer() {
             ref={(el) => {
               stage.bands[i] = el;
             }}
-            className="absolute bg-white"
+            className="absolute bg-black"
             style={{ left: 0, top: 0, width: 0, height: 0 }}
           />
         ))}
