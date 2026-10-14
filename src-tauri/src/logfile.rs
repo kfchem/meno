@@ -7,8 +7,12 @@
 //! kept under 5 MB: past that it is begun again, the one before kept as
 //! meno.log.1, one only. It holds what Meno logged before it, and nothing
 //! from documents.
+//!
+//! The file is opened for each line and closed again, and its size read
+//! from it each time, as another Meno - one Office started, on Windows -
+//! may be writing to it too.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -23,9 +27,9 @@ const PAGE_MOST: usize = 4000;
 
 struct Log {
     path: PathBuf,
-    file: Option<File>,
-    size: u64,
     most: u64,
+    /// Set where the log could be neither begun again nor emptied: nothing more written until Meno starts again.
+    stopped: bool,
 }
 
 struct State {
@@ -45,24 +49,42 @@ fn state() -> MutexGuard<'static, State> {
     STATE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Meno's data folder as the system says it before Tauri is built - its
+/// folder for apps' data, and Meno's identifier in it, where Tauri puts it
+/// too (`app_data_dir`) - so that the log is begun before anything else
+/// is; none where the system does not say.
+pub fn data_dir_before(identifier: &str) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"));
+    #[cfg(windows)]
+    let base = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+    base.filter(|b| b.is_absolute()).map(|b| b.join(identifier))
+}
+
 /// The log begun - or carried on - in `dir`, a line saying which Meno this
-/// is first, then the lines kept from before.
+/// is first, then the lines kept from before; nothing where it is kept
+/// there already.
 pub fn start(dir: &Path, version: &str) {
     let path = dir.join("meno.log");
-    let opened = fs::create_dir_all(dir).and_then(|_| open(&path));
     let mut state = state();
-    match opened {
-        Ok(file) => {
-            let size = file.metadata().map(|m| m.len()).unwrap_or(0);
-            let mut log = Log { path, file: Some(file), size, most: MOST };
-            log.write(&stamped("meno", &format!("Meno {version} ({} {}) started", std::env::consts::OS, std::env::consts::ARCH)));
-            for line in std::mem::take(&mut state.early) {
-                log.write(&line);
-            }
-            state.log = Some(log);
-        }
-        Err(e) => eprintln!("the log cannot be kept at {}: {e}", path.display()),
+    if state.log.as_ref().is_some_and(|log| log.path == path) {
+        return;
     }
+    if let Err(e) = fs::create_dir_all(dir).and_then(|_| open(&path).map(drop)) {
+        eprintln!("the log cannot be kept at {}: {e}", path.display());
+        return;
+    }
+    let mut log = Log { path, most: MOST, stopped: false };
+    log.write(&stamped("meno", &format!("Meno {version} ({} {}) started", std::env::consts::OS, std::env::consts::ARCH)));
+    for line in std::mem::take(&mut state.early) {
+        log.write(&line);
+    }
+    state.log = Some(log);
 }
 
 /// A line from `source` - "meno", "page error", "page warn" - to stderr as
@@ -92,40 +114,50 @@ pub fn catch_panics() {
     }));
 }
 
-/// The page's errors and warnings (`lib/log.ts`), each cut to `PAGE_MOST`.
-#[tauri::command]
+/// The page's errors and warnings (`lib/log.ts`), each cut to `PAGE_MOST`;
+/// off the main thread, as it writes a file.
+#[tauri::command(async)]
 pub fn log_page(level: String, text: String) {
     let source = if level == "error" { "page error" } else { "page warn" };
     line(source, cut(&text, PAGE_MOST));
 }
 
-fn open(path: &Path) -> std::io::Result<File> {
+fn open(path: &Path) -> std::io::Result<fs::File> {
     OpenOptions::new().create(true).append(true).open(path)
 }
 
 impl Log {
     fn write(&mut self, line: &str) {
-        let n = line.len() as u64;
-        if self.size > 0 && self.size + n > self.most {
-            self.begin_again();
+        if self.stopped {
+            return;
         }
-        if let Some(file) = self.file.as_mut() {
-            if file.write_all(line.as_bytes()).is_ok() {
-                self.size += n;
+        let n = line.len() as u64;
+        let size = fs::metadata(&self.path).map_or(0, |m| m.len());
+        if size > 0 && size + n > self.most {
+            self.begin_again();
+            if self.stopped {
+                return;
             }
+        }
+        // (opened for this line alone, and closed again)
+        if let Ok(mut file) = open(&self.path) {
+            let _ = file.write_all(line.as_bytes());
         }
     }
 
     /// The log begun again, the one before kept as meno.log.1 in place of
-    /// the one before that.
+    /// the one before that; where it cannot be moved there, emptied; where
+    /// it cannot be emptied either, written no more.
     fn begin_again(&mut self) {
-        // (closed first: an open file is not renamed on Windows)
-        self.file = None;
         let before = self.path.with_extension("log.1");
         let _ = fs::remove_file(&before);
-        let _ = fs::rename(&self.path, &before);
-        self.file = open(&self.path).ok();
-        self.size = self.file.as_ref().and_then(|f| f.metadata().ok()).map_or(0, |m| m.len());
+        if fs::rename(&self.path, &before).is_ok() {
+            return;
+        }
+        let emptied = OpenOptions::new().write(true).open(&self.path).and_then(|f| f.set_len(0));
+        if emptied.is_err() {
+            self.stopped = true;
+        }
     }
 }
 
@@ -178,6 +210,12 @@ fn cut(text: &str, most: usize) -> &str {
 mod tests {
     use super::*;
 
+    fn folder() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("meno-log-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn times_are_written_as_utc_dates() {
         assert_eq!(utc(0), "1970-01-01 00:00:00Z");
@@ -204,11 +242,17 @@ mod tests {
     }
 
     #[test]
+    fn the_data_folder_before_tauri_is_meno_s_own() {
+        let dir = data_dir_before("com.kfchem.meno").unwrap();
+        assert!(dir.is_absolute());
+        assert!(dir.ends_with("com.kfchem.meno"));
+    }
+
+    #[test]
     fn the_log_is_begun_again_past_its_size_the_one_before_kept() {
-        let dir = std::env::temp_dir().join(format!("meno-log-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = folder();
         let path = dir.join("meno.log");
-        let mut log = Log { file: Some(open(&path).unwrap()), path: path.clone(), size: 0, most: 100 };
+        let mut log = Log { path: path.clone(), most: 100, stopped: false };
         let line = format!("{}\n", "a".repeat(39)); // (40 bytes)
         log.write(&line);
         log.write(&line);
@@ -223,6 +267,42 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "b".repeat(40));
         assert_eq!(fs::read_to_string(dir.join("meno.log.1")).unwrap().len(), 80);
         assert!(!dir.join("meno.log.2").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn its_size_is_the_files_whoever_wrote_it() {
+        let dir = folder();
+        let path = dir.join("meno.log");
+        let mut log = Log { path: path.clone(), most: 100, stopped: false };
+        log.write(&"a".repeat(40));
+        // (another Meno writes to it meanwhile)
+        open(&path).unwrap().write_all("c".repeat(50).as_bytes()).unwrap();
+        log.write(&"b".repeat(40));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "b".repeat(40));
+        assert_eq!(fs::read_to_string(dir.join("meno.log.1")).unwrap().len(), 90);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_log_that_cannot_be_moved_is_emptied_and_one_that_cannot_be_emptied_is_written_no_more() {
+        let dir = folder();
+        let path = dir.join("meno.log");
+        // (meno.log.1 a folder with something in it: neither taken away nor written over)
+        fs::create_dir_all(dir.join("meno.log.1")).unwrap();
+        fs::write(dir.join("meno.log.1").join("x"), "x").unwrap();
+        let mut log = Log { path: path.clone(), most: 100, stopped: false };
+        log.write(&"a".repeat(80));
+        log.write(&"b".repeat(40));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "b".repeat(40));
+        assert!(!log.stopped);
+        // (meno.log a folder too: neither moved nor emptied)
+        fs::remove_file(&path).unwrap();
+        fs::create_dir_all(path.join("y")).unwrap();
+        let mut log = Log { path: path.clone(), most: 1, stopped: false };
+        log.write("c");
+        assert!(log.stopped);
         fs::remove_dir_all(&dir).unwrap();
     }
 

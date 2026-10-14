@@ -905,6 +905,10 @@ pub fn run() {
         }
     }
     let version = context.package_info().version.to_string();
+    // Meno's log, in its data folder, begun before anything else is (logfile.rs)
+    if let Some(data) = logfile::data_dir_before(&context.config().identifier) {
+        logfile::start(&data.join("logs"), &version);
+    }
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
     // One Meno on Windows: a workspace file opened while it runs comes to
@@ -930,7 +934,7 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .setup(|app| {
-            // Meno's log, in its data folder (logfile.rs)
+            // (and where Tauri has the data folder, should that be elsewhere)
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
             }

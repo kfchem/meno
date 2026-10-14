@@ -233,18 +233,31 @@ went before, to stderr and the page's console.
   system and the processor); the backend's own lines (`logfile::logged!`,
   where `eprintln!` was) and a panic, with where it happened; and the
   page's `console.error` and `console.warn`, and errors thrown and never
-  caught (`lib/log.ts`, through `log_page`). Each line has the time in UTC
-  and what it came from: `meno`, `page error` or `page warn`.
-- **Nothing from documents**: a line says what went wrong. Of an error it
-  has the name, message and stack, words as they were logged, a number; of
-  any other thing only what it is (`[Object]`, `[Map]`). Code that logs
-  names what failed, never what a document holds.
+  caught (`lib/log.ts`, set going by the first module `main.tsx` imports,
+  through `log_page`). Each line has the time in UTC and what it came
+  from: `meno`, `page error` or `page warn`.
+- **Nothing from documents, nor files' names**: a line says what went
+  wrong. Of an error it has the name and the stack's frames; the message
+  only of a `TypeError`, `ReferenceError` or `RangeError` - the engine's,
+  about the code that ran - and of that, what it quotes in double quotes
+  left out, as any other message may quote what was read (a file's text, a
+  SMILES, a name). Of words logged it has only Meno's own messages (`KNOWN`
+  in `lib/log.ts`, a tab's name in them left out), any others as `[text]`;
+  a number as it is; and of any other thing only what it is (`[Object]`,
+  `[Map]`). A message newly logged by Meno's code is added to `KNOWN`.
 - **Under 5 MB**: past that the log is begun again, the one before kept as
-  `meno.log.1`, one only. The page sends at most 100 lines a minute; those
-  past that are counted, and the next line says how many were left out. A
-  line from the page is cut at 4000 bytes.
-- Lines from before the log's folder is known, in the first moments after
-  Meno starts, are kept, up to 200, and written once it is.
+  `meno.log.1`, one only. Where it cannot be moved there it is emptied,
+  and where it cannot be emptied either nothing more is written until Meno
+  starts again. The file is opened for each line and closed, its size read
+  from it each time, as another Meno - one Office started, on Windows - may
+  write to it too. The page sends at most 100 lines a minute; those past
+  that are counted, and the next line says how many were left out. A line
+  from the page is cut at 4000 bytes.
+- The log is begun before Tauri is built, in the data folder as the system
+  says it (its folder for apps' data, and Meno's identifier), so that a
+  panic as Meno starts is in it; where Tauri has the folder elsewhere it
+  carries on there. Lines from before either, in the first moments, are
+  kept, up to 200, and written once it is begun.
 - Meno shows no log of its own yet: the file is found in its folder.
 
 ## How things move
