@@ -162,7 +162,9 @@ What is put together from them is read by rule, not listed:
   =O on the atom before it or the chain's next atom - =O tried first,
   whichever leaves every atom at a valence it has (C 4, N 3, O 2; S 2, 4
   or 6; P 3 or 5); what parentheses hold, with its count, hangs on the
-  atom before them. CO and CH2 are none, nor anything with a charge; Cp is
+  atom before them - an O or an S alone in them an =O, as one unbracketed
+  may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
+  unbracketed (N(iPr)2). CO and CH2 are none, nor anything with a charge; Cp is
   in none. A reagent this reads as the same molecule leaves the
   dictionary: (COCl)2, oxalyl chloride, is read so now.
 
@@ -280,6 +282,12 @@ Read by rule, besides, as whole molecules:
   below the second row P(V), S(IV) and S(VI), Cl(I) to Cl(VII) too, and in
   it no more than four bonds (no NO3⁻ so). A group in parentheses is one
   part, as counted: NaBH(OAc)3, and Pb(OAc)4 as a molecule;
+- an ion written alone, a counter-ion set beside a complex or a salt: an
+  anion with its charge last, read as one is in a salt (PF6-, BF4-,
+  SbF6-, AlCl4-, ClO4-); a group bound by an O or an S with the charge
+  there (OTf-, OAc-); any of these in parentheses, counted, an element's
+  own ion too ((Cl-)2, two chlorides; Cl- alone is read as an element
+  with its charge is);
 - an adduct of known parts, a middle dot between them, each counted:
   BF3·OEt2, CeCl3·7H2O, EDC·HCl;
 - a Buchwald precatalyst named by its phosphine and generation - XPhos Pd
