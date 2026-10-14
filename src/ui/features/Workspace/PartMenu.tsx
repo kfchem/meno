@@ -688,7 +688,7 @@ export default function PartMenu({
             { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
             ...pushFrom,
             ...colour,
-          ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined, press: undefined } : i)),
+          ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -701,9 +701,10 @@ export default function PartMenu({
           ...stackItem,
         ];
   const row = items.filter((i) => i.icon && !i.compact);
-  const row2 = more ? items.filter((i) => i.icon && i.compact) : [];
+  const compact = items.filter((i) => i.icon && i.compact);
+  const row2 = more ? compact : [];
   const list = items.filter((i) => !i.icon);
-  const height = (row.length ? ROW + 9 : 0) + (row2.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
+  const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -836,7 +837,19 @@ export default function PartMenu({
         <button
           key={item.name}
           role="menuitem"
-          onClick={run(item)}
+          // (one begun by its press is not begun again by its click - but by a key, it is)
+          onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
+          onPointerDown={
+            item.press
+              ? (e) => {
+                  if (e.button !== 0) return;
+                  // (a drag from it, let go where it is put down: begun at once, the menu gone)
+                  e.preventDefault();
+                  onClose();
+                  item.press!(e);
+                }
+              : undefined
+          }
           className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none"
         >
           <span>{item.name}</span>
