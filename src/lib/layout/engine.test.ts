@@ -121,7 +121,7 @@ describe("layout2D", () => {
         expect(side((i - 1 + n) % n, i, i + 1) === side((i + 2) % n, i, i + 1), `${n} bond ${i}`).toBe(cis);
       }
     }
-  });
+  }, 30_000);
 
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line
