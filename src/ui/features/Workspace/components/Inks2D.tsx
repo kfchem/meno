@@ -11,8 +11,8 @@
  * pointer is pressed, not the writing.
  */
 import * as THREE from "three";
-import { useEffect, useMemo, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { Ink, InkLook } from "../store/types";
 import { COLORS } from "../../../theme/colors";
@@ -26,9 +26,10 @@ import { strokesGeometry } from "./inkGeometry";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
-import { HeldLight } from "./HeldLight";
-import { heldShows, type Held } from "./held";
+import { HeldGlow } from "./HeldLight";
+import { type Held } from "./held";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
 const Z_PEN = 0.3;
@@ -57,7 +58,7 @@ function StrokesLook({ look, strokes, pointPx, ink, extra = 0, color, opacity }:
   useEffect(() => () => geometry.dispose(), [geometry]);
   const o = opacity ?? (marker ? MARKER_OPACITY : 1);
   return (
-    <mesh geometry={geometry} frustumCulled={false} raycast={() => {}}>
+    <mesh geometry={geometry} frustumCulled={false} raycast={NO_RAYCAST}>
       <meshBasicMaterial color={color ?? inkColour(look, ink, own)} transparent={o < 1} opacity={o} depthWrite={o >= 1} toneMapped={false} side={THREE.DoubleSide} />
     </mesh>
   );
@@ -72,27 +73,35 @@ export default function Inks2D() {
   const { opts } = useDrawnLayout();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const ink = opts.bondColor ?? "#000000";
-  const { camera, gl } = useThree();
-  const toWorld = (cx: number, cy: number): Pt => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
-    return { x: p.x, y: p.y };
-  };
+  const camera = useThree((st) => st.camera);
+  const gl = useThree((st) => st.gl);
+  // (each piece's work at each frame done from this one callback: partFrames)
+  const parts = usePartFrames();
+  const toWorld = useCallback(
+    (cx: number, cy: number): Pt => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
+      return { x: p.x, y: p.y };
+    },
+    [gl, camera],
+  );
   return (
-    <group>
-      {inks.map((k, i) => (
-        <InkItem key={k.id} k={k} z={(k.pen === "marker" ? Z_MARKER : Z_PEN) + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selInks.has(k.id)} hovered={hovered === k.id} toWorld={toWorld} />
-      ))}
-      {/* (a pen's writing over the slide while a talk is given, over everything) */}
-      {talkInk.map((k, i) => (
-        <TalkStroke key={`talk${i}`} k={k} z={Z_TALK + i * Z_STEP} pointPx={pointPx} ink={ink} />
-      ))}
-      {draft && (
-        <group position={[0, 0, (draft.look.pen === "marker" ? Z_MARKER : Z_PEN) + inks.length * Z_STEP]}>
-          <StrokesLook look={draft.look} strokes={[draft.stroke]} pointPx={pointPx} ink={ink} />
-        </group>
-      )}
-    </group>
+    <PartFramesProvider value={parts}>
+      <group>
+        {inks.map((k, i) => (
+          <InkItem key={k.id} k={k} z={(k.pen === "marker" ? Z_MARKER : Z_PEN) + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selInks.has(k.id)} hovered={hovered === k.id} toWorld={toWorld} />
+        ))}
+        {/* (a pen's writing over the slide while a talk is given, over everything) */}
+        {talkInk.map((k, i) => (
+          <TalkStroke key={`talk${i}`} k={k} z={Z_TALK + i * Z_STEP} pointPx={pointPx} ink={ink} />
+        ))}
+        {draft && (
+          <group position={[0, 0, (draft.look.pen === "marker" ? Z_MARKER : Z_PEN) + inks.length * Z_STEP]}>
+            <StrokesLook look={draft.look} strokes={[draft.stroke]} pointPx={pointPx} ink={ink} />
+          </group>
+        )}
+      </group>
+    </PartFramesProvider>
   );
 }
 
@@ -106,38 +115,28 @@ function TalkStroke({ k, z, pointPx, ink }: { k: { look: InkLook; stroke: InkStr
   );
 }
 
-function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z: number; pointPx: number; ink: string; selected: boolean; hovered: boolean; toWorld: (cx: number, cy: number) => Pt }) {
+// (drawn again only as it changes: a pointer coming onto one piece leaves the other thousands as they were)
+const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z: number; pointPx: number; ink: string; selected: boolean; hovered: boolean; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
-  const { camera, invalidate } = useThree();
-  const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  // (the canvas's state taken a part at a time: the whole of it would draw every piece again as any of it changed)
+  const camera = useThree((st) => st.camera);
+  const invalidate = useThree((st) => st.invalidate);
   const width = inkWidth(k, pointPx);
-  // the light round its strokes, under the pointer or selected, coming and going
-  const [light, setLight] = useState(0);
-  useFrame((_, dt) => {
-    const to = selected ? CHOSEN : hovered ? LIT : 0;
-    if (Math.abs(light - to) < 1e-3) {
-      if (light !== to) setLight(to);
-      return;
-    }
-    setLight(follow(light, to, Math.min(dt, 1 / 20), TAU.quick));
-    invalidate();
-  });
+  // the light round its strokes, under the pointer or selected - there only as long as it is
+  const [glowing, setGlowing] = useState(false);
+  if ((hovered || selected) && !glowing) setGlowing(true);
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
-  const [, setTick] = useState(0);
   useEffect(() => invalidate(), [held, invalidate]);
-  useFrame(() => {
-    if (!held || !heldShows(held, performance.now())) return;
-    setTick((t) => t + 1);
-    invalidate();
-  });
-  const b = strokesBounds(k.strokes, width / 2 + EDGE_PX * px) ?? { x0: 0, y0: 0, x1: 0, y1: 0 };
+  // (round its strokes; as far again as a press may miss by, at the zoom of the press - boxRaycast)
+  const b = useMemo(() => strokesBounds(k.strokes, width / 2) ?? { x0: 0, y0: 0, x1: 0, y1: 0 }, [k.strokes, width]);
   const m = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
-  const slack = EDGE_PX * px;
+  const raycast = useMemo(() => boxRaycast(camera, () => b, EDGE_PX), [camera, b]);
+  const slack = EDGE_PX * pixelNow(camera);
   const drawingHas = () => {
     const st = store.getState();
     return st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d != null || st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null || st.hoveredMark != null || st.hoveredSlide != null || st.inkMode != null;
   };
-  const hit = (p: Pt) => k.strokes.some((s) => strokeHit(s, p, slack, width));
+  const hit = (p: Pt) => k.strokes.some((s) => strokeHit(s, p, EDGE_PX * pixelNow(camera), width));
   const onMove = (e: { point: THREE.Vector3; stopPropagation: () => void }) => {
     const st = store.getState();
     if (!drawingHas() && hit({ x: e.point.x, y: e.point.y })) {
@@ -208,24 +207,49 @@ function InkItem({ k, z, pointPx, ink, selected, hovered, toWorld }: { k: Ink; z
     window.addEventListener("pointermove", onMoveDrag);
     window.addEventListener("pointerup", onUp, true);
   };
-  const now = performance.now();
   return (
     <group position={[0, 0, z]}>
-      {light > 0.005 && (
+      {glowing && (
         <group position={[0, 0, -Z_STEP / 4]}>
-          <StrokesLook look={k} strokes={k.strokes} pointPx={pointPx} ink={ink} extra={2 * LIT_PX * px} color={COLORS.highlight} opacity={light} />
+          <LightRound k={k} pointPx={pointPx} to={selected ? CHOSEN : hovered ? LIT : 0} gone={() => setGlowing(false)} />
         </group>
       )}
       <StrokesLook look={k} strokes={k.strokes} pointPx={pointPx} ink={ink} />
-      <mesh position={[m.x, m.y, Z_STEP / 2]} scale={[b.x1 - b.x0, b.y1 - b.y0, 1]} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
-      {held && heldShows(held, now) && (
+      <mesh args={[SQUARE, UNSEEN]} position={[0, 0, Z_STEP / 2]} raycast={raycast} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown} />
+      {held && (
         <group position={[m.x, m.y, 0]}>
-          <HeldLight b={{ x0: b.x0 - m.x, x1: b.x1 - m.x, y0: b.y0 - m.y, y1: b.y1 - m.y }} at={held} held={held} now={now} z={Z_STEP / 3} />
+          <HeldGlow held={held} b={{ x0: b.x0 - slack - m.x, x1: b.x1 + slack - m.x, y0: b.y0 - slack - m.y, y1: b.y1 + slack - m.y }} at={held} z={Z_STEP / 3} gone={() => setHeld(null)} />
         </group>
       )}
     </group>
   );
+});
+
+/**
+ * The light round a piece's strokes: coming as it is lit (`to`) and going
+ * as it is not - `gone` told once gone - as far round them on the screen at
+ * any zoom, made again as the view zooms while it is there.
+ */
+function LightRound({ k, pointPx, to, gone }: { k: Ink; pointPx: number; to: number; gone: () => void }) {
+  const camera = useThree((st) => st.camera);
+  const invalidate = useThree((st) => st.invalidate);
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);
+  useEffect(() => () => material.dispose(), [material]);
+  const [px, setPx] = useState(() => pixelNow(camera));
+  const width = inkWidth(k, pointPx) + 2 * LIT_PX * px;
+  const marker = k.pen === "marker";
+  const geometry = useMemo(() => strokesGeometry(k.strokes, width, !marker), [k.strokes, width, marker]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  usePartFrame((pxNow, dt) => {
+    // (a hundredth of a zoom's change makes nothing again)
+    if (Math.abs(pxNow / px - 1) > 0.01) setPx(pxNow);
+    if (Math.abs(material.opacity - to) < 1e-3) {
+      material.opacity = to;
+      if (to === 0) gone();
+      return;
+    }
+    material.opacity = follow(material.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
+    invalidate();
+  });
+  return <mesh geometry={geometry} material={material} frustumCulled={false} raycast={NO_RAYCAST} />;
 }

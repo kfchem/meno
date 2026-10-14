@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useThree } from "@react-three/fiber";
 import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
 import { selectedOf } from "../store/slices/selectionSlice";
@@ -15,11 +15,12 @@ import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { arrowsBeside } from "./drawnArrows";
-import { heldShows, type Held } from "./held";
-import { HeldLight } from "./HeldLight";
+import { type Held } from "./held";
+import { HeldGlow } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
 import { SELECTION_SHADE } from "./selectionShade";
 import { setCursor } from "../../../theme/cursors";
+import { NO_RAYCAST, PartFramesProvider, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 type Pt = { x: number; y: number };
 
@@ -34,6 +35,9 @@ const NARROWEST_EMS = 2;
 
 /** The selection's shade, as a colour to go over to from the page's white. */
 const SHADE_COLOR = new THREE.Color(SELECTION_SHADE);
+/** A caption's edges, as they are held and as they are seen: the same for all. */
+const EDGE_HELD = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+const EDGE_SEEN = new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0.7, depthTest: false, depthWrite: false, toneMapped: false });
 
 /** A caption as it is set about its middle, and the room it takes. */
 type Laid = { c: Caption; fs: number } & CaptionSet;
@@ -61,21 +65,28 @@ export default function Captions2D() {
   // (words carried out of a PDF, settling where they were let go: these, once they have)
   const landing = useEditor((s) => s.pdfWords?.landing ?? null);
   const selCaptions = useEditor((s) => s.selCaptions);
+  // (the one under the pointer, asked here once rather than by each)
+  const hovered = useEditor((s) => s.hoveredCaption);
   const { opts } = useDrawnLayout();
   const set = useMemo(() => labelSetOf(opts), [opts]);
+  // (each caption's work at each frame done from this one callback: partFrames)
+  const parts = usePartFrames();
   return (
-    <group>
-      {captions
-        .filter((c) => c.id !== hidden && c.id !== landing)
-        .map((c) => (
-          <CaptionWords key={c.id} c={c} set={set} selected={selCaptions.has(c.id)} />
-        ))}
-    </group>
+    <PartFramesProvider value={parts}>
+      <group>
+        {captions
+          .filter((c) => c.id !== hidden && c.id !== landing)
+          .map((c) => (
+            <CaptionWords key={c.id} c={c} set={set} selected={selCaptions.has(c.id)} hovered={hovered === c.id} />
+          ))}
+      </group>
+    </PartFramesProvider>
   );
 }
 
 /** One caption: its words - each set drawn whole, about its middle - and where it is taken hold of. */
-function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selected: boolean }) {
+// (drawn again only as it changes: a pointer coming onto one caption leaves the others as they were)
+const CaptionWords = memo(function CaptionWords({ c, set, selected, hovered }: { c: Caption; set: LabelSet; selected: boolean; hovered: boolean }) {
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
   // (at its own size, or the labels'; its letters as they were marked)
@@ -86,28 +97,28 @@ function CaptionWords({ c, set, selected }: { c: Caption; set: LabelSet; selecte
   return (
     <group position={[c.x, c.y, 0]}>
       <WholeTexts2D texts={laid.items} fadeIn={fadeIn} onDrawn={() => store.getState().captionShown(c.id)} />
-      <CaptionHold laid={laid} selected={selected} />
+      <CaptionHold laid={laid} selected={selected} hovered={hovered} />
     </group>
   );
-}
+});
 
 /** Where a caption is taken hold of: the room round its words, lit while the pointer is on it, shaded while it is selected. */
-function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
+function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolean; hovered: boolean }) {
   const { c, halfW, halfH, fs } = laid;
   const store = useEditorStore();
-  const hovered = useEditor((s) => s.hoveredCaption === c.id);
   const { opts } = useDrawnLayout();
-  const { camera, gl, invalidate } = useThree();
+  // (the canvas's state taken a part at a time: the whole of it would draw every caption again as any of it changed)
+  const camera = useThree((st) => st.camera);
+  const gl = useThree((st) => st.gl);
+  const invalidate = useThree((st) => st.invalidate);
   const margin = MARGIN * fs;
-  const light = useRef<THREE.MeshBasicMaterial>(null);
-  const shade = useRef<THREE.MeshBasicMaterial>(null);
-  // (shaded as a structure is, under the drawing: the page's white going over to the shade - opaque, so behind the bonds)
-  const shaded = useRef(0);
+  // its light and its shade - there only as long as either is
+  const [glowing, setGlowing] = useState(false);
+  if ((hovered || selected) && !glowing) setGlowing(true);
   // (its edges stay shown while one is dragged, the pointer off it)
   const [resizing, setResizing] = useState(false);
   // taken hold of by a press held on it: where, from its middle, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
-  const [, setTick] = useState(0);
   useEffect(() => invalidate(), [held, invalidate]);
   // gone from under the pointer without the pointer leaving it - its words
   // written in its place: no longer under it
@@ -120,32 +131,6 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
     },
     [store, c.id, gl],
   );
-  useFrame((_, dt) => {
-    if (held && heldShows(held, performance.now())) {
-      setTick((t) => t + 1);
-      invalidate();
-    }
-    const step = (m: THREE.MeshBasicMaterial | null, to: number) => {
-      if (!m) return;
-      if (Math.abs(m.opacity - to) < 1e-3) {
-        m.opacity = to;
-        return;
-      }
-      m.opacity = follow(m.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-      invalidate();
-    };
-    step(light.current, hovered ? LIT : 0);
-    const m = shade.current;
-    if (!m) return;
-    const to = selected ? 1 : 0;
-    if (Math.abs(shaded.current - to) < 1e-3) shaded.current = to;
-    else {
-      shaded.current = follow(shaded.current, to, Math.min(dt, 1 / 20), TAU.quick);
-      invalidate();
-    }
-    m.color.set("#ffffff").lerp(SHADE_COLOR, shaded.current);
-    m.visible = shaded.current > 1e-3;
-  });
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
     const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
@@ -293,7 +278,6 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
     window.addEventListener("pointerup", onUp, true);
   };
 
-  const now = performance.now();
   const box = { x0: -(halfW + margin), x1: halfW + margin, y0: -(halfH + margin), y1: halfH + margin };
   return (
     <group
@@ -310,16 +294,10 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
       }}
       onPointerDown={onDown}
     >
-      {/* (the selection's shade, under the words and the drawing) */}
-      <mesh position={[0, 0, -0.05]}>
-        <planeGeometry args={[box.x1 - box.x0, box.y1 - box.y0]} />
-        <meshBasicMaterial ref={shade} color="#ffffff" visible={false} toneMapped={false} />
-      </mesh>
-      <mesh renderOrder={5}>
-        <planeGeometry args={[box.x1 - box.x0, box.y1 - box.y0]} />
-        <meshBasicMaterial ref={light} color={COLORS.highlight} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
-      {held && heldShows(held, now) && <HeldLight b={box} at={held} held={held} now={now} z={0.005} />}
+      {/* (what a press takes: the room round its words, never drawn) */}
+      <mesh args={[SQUARE, UNSEEN]} scale={[box.x1 - box.x0, box.y1 - box.y0, 1]} />
+      {glowing && <LitAndShaded w={box.x1 - box.x0} h={box.y1 - box.y0} lit={hovered} shaded={selected} gone={() => setGlowing(false)} />}
+      {held && <HeldGlow held={held} b={box} at={held} z={0.005} gone={() => setHeld(null)} />}
       {/* (words in a shape are as wide as it is: made wider with it) */}
       {(hovered || resizing) && c.shape == null && (
         <>
@@ -332,6 +310,53 @@ function CaptionHold({ laid, selected }: { laid: Laid; selected: boolean }) {
 }
 
 /**
+ * The light behind a caption under the pointer (`lit`) and the selection's
+ * shade under it while it is selected (`shaded`): each coming and going,
+ * `gone` told once neither shows.
+ */
+function LitAndShaded({ w, h, lit, shaded, gone }: { w: number; h: number; lit: boolean; shaded: boolean; gone: () => void }) {
+  const invalidate = useThree((st) => st.invalidate);
+  const light = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false }), []);
+  // (shaded as a structure is, under the drawing: the page's white going over to the shade - opaque, so behind the bonds)
+  const shade = useMemo(() => new THREE.MeshBasicMaterial({ color: "#ffffff", visible: false, toneMapped: false }), []);
+  useEffect(
+    () => () => {
+      light.dispose();
+      shade.dispose();
+    },
+    [light, shade],
+  );
+  const shadedBy = useRef(0);
+  usePartFrame((_, dt) => {
+    const d = Math.min(dt, 1 / 20);
+    const to = lit ? LIT : 0;
+    let moving = false;
+    if (Math.abs(light.opacity - to) < 1e-3) light.opacity = to;
+    else {
+      light.opacity = follow(light.opacity, to, d, TAU.quick);
+      moving = true;
+    }
+    const k = shaded ? 1 : 0;
+    if (Math.abs(shadedBy.current - k) < 1e-3) shadedBy.current = k;
+    else {
+      shadedBy.current = follow(shadedBy.current, k, d, TAU.quick);
+      moving = true;
+    }
+    shade.color.set("#ffffff").lerp(SHADE_COLOR, shadedBy.current);
+    shade.visible = shadedBy.current > 1e-3;
+    if (moving) invalidate();
+    else if (!lit && !shaded) gone();
+  });
+  return (
+    <>
+      {/* (the selection's shade, under the words and the drawing) */}
+      <mesh args={[SQUARE, shade]} position={[0, 0, -0.05]} scale={[w, h, 1]} raycast={NO_RAYCAST} />
+      <mesh args={[SQUARE, light]} renderOrder={5} scale={[w, h, 1]} raycast={NO_RAYCAST} />
+    </>
+  );
+}
+
+/**
  * A caption's edge, lit with it: dragged sideways - Meno's own pointer for
  * it - the caption made as wide as from its other edge to the pointer, its
  * words broken into lines at it, as one step.
@@ -340,7 +365,8 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
   const { c, halfW, halfH } = laid;
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
-  const { camera, gl } = useThree();
+  const camera = useThree((st) => st.camera);
+  const gl = useThree((st) => st.gl);
   const px = 1 / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6);
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
@@ -392,14 +418,8 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
       }}
     >
       {/* (held a little wider than it is seen) */}
-      <mesh renderOrder={6} scale={[EDGE_HOLD_PX * px, tall, 1]}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
-      <mesh renderOrder={6} scale={[EDGE_PX * px, tall * 0.6, 1]}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial color={COLORS.highlight} transparent opacity={0.7} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
+      <mesh args={[SQUARE, EDGE_HELD]} renderOrder={6} scale={[EDGE_HOLD_PX * px, tall, 1]} />
+      <mesh args={[SQUARE, EDGE_SEEN]} renderOrder={6} scale={[EDGE_PX * px, tall * 0.6, 1]} />
     </group>
   );
 }

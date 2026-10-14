@@ -239,6 +239,15 @@ moves together, in the same time and the same way.
   invalidates only while something moves (see *Frame loop*). The drawing
   itself goes from shape to shape in `DrawnLayout` (`utils/glide.ts`), and
   a fit goes there through `components/viewGoal.ts`.
+  A layer of many parts - shapes, writing by hand, words on the page - has
+  one frame callback for them all (`components/partFrames.ts`): a part has
+  work at each frame (`usePartFrame`) only while something of it moves - a
+  light coming and going, a press held (`HeldGlow`) - and none at rest. Its
+  parts are drawn again only as they change (`memo`), share what they draw
+  with where they can (`SQUARE`, `UNSEEN`; the selected shapes' handles in
+  one set of instances), and take a press by the box they give as it comes
+  (`boxRaycast`), at the zoom of the press, not by a plane made again as
+  the view zooms. `manyParts.test.tsx` counts what they make.
 
 ## Pointers
 
