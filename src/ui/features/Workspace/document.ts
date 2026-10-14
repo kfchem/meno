@@ -64,6 +64,13 @@ export type WorkspaceDocument = {
    * new workspaces only - and changed from its canvas (docs/WORKSPACE.md,
    * *Drawing style*). Saving to a MOL or SD file keeps the structure only.
    */
+  /**
+   * Which page this is, where it was opened from a file: a new one each time,
+   * kept through its edits and its changes of style - so that the view
+   * follows a change of style on one page (components/FollowStyle), not the
+   * going over to another. Never saved.
+   */
+  pageId?: number;
   style: StyleChoice;
   /**
    * The atoms *Expand abbreviation* drew out last, which the Clean-up
@@ -110,6 +117,10 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
 }
 
 /** An empty workspace in `style` - by default Meno's own, for a document that is only worked on, never shown. */
+let pages = 0;
+/** A page's id, new (`pageId`). */
+export const newPageId = (): number => ++pages;
+
 export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE): WorkspaceDocument {
   return {
     style,

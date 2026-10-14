@@ -167,6 +167,28 @@ describe("a change of drawing style", () => {
     expect(ws.texts[0].point).toBe(0.3);
   });
 
+  it("keeps a text's point through a save and an open, and an opened file is a page of its own", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    doc.edit("page", (d) => ({ ...d, style: RSC }));
+    store.getState().addTexts([{ name: "run.log", text: "E = -1.0" }], { x: 0, y: 0 });
+    const laid = doc.getState().texts![0].point;
+    expect(laid).toBeCloseTo(pointOfStyle(RSC), 12);
+    const ws = readWorkspace(workspaceText(store.getState(), new Set(), ["c".repeat(64)]))!;
+    const again = createWorkspaceDocument();
+    const reopened = createEditorStore(again);
+    connectStoreToDocument(reopened, again);
+    const before = reopened.getState().pageId;
+    reopened.getState().openWorkspace({ ...ws, texts: ws.texts.map((t) => ({ ...t, text: "E = -1.0" })) });
+    expect(again.getState().texts![0].point).toBe(laid);
+    expect(again.getState().style).toEqual(RSC);
+    const first = reopened.getState().pageId;
+    expect(first).not.toBe(before);
+    reopened.getState().openWorkspace({ ...ws, texts: [] });
+    expect(reopened.getState().pageId).not.toBe(first);
+  });
+
   it("converts about a point: a copy's parts about their middle", () => {
     const about = { x: 100, y: 50 };
     const now = restyled({ pluses: [{ id: 1, x: 110, y: 50 }] }, 2, about);

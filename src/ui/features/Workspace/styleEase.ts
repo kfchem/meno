@@ -37,11 +37,21 @@ export function easeStyle(doc: DocumentStore<WorkspaceDocument>, to: StyleChoice
   const t0 = performance.now();
   let stopped = false;
   going.set(doc, { stop: () => (stopped = true) });
+  // (the document as the last frame left it: anything else since - an undo, a slider, an edit - and the ease gives way)
+  let last: WorkspaceDocument | null = null;
   const tick = () => {
     if (stopped) return;
+    const now = doc.getState();
+    if (last && now !== last) {
+      going.delete(doc);
+      // (an edit over the ease's own style: the style taken as chosen, from the page as it is - an undo has taken the style back, and is left so)
+      if (now.style === last.style) doc.edit("drawing style", (d) => restyledDocument(d, to));
+      return;
+    }
     const t = Math.min(1, (performance.now() - t0) / (DURATION.move * 1000));
     // (from the page as it was each time: the last frame is the change made at once)
     doc.edit("drawing style", () => restyledDocument(start, t < 1 ? withBond(to, from + (pt - from) * easeInOut(t)) : to), step);
+    last = doc.getState();
     if (t < 1) frame(tick);
     else going.delete(doc);
   };

@@ -1241,6 +1241,8 @@ export type EditorState = {
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle: StyleChoice;
+  /** Which page the document is (document.ts `pageId`): unset until one is opened from a file. */
+  pageId?: number;
   labelEdit: {
     active: boolean;
     atomId: number | null;

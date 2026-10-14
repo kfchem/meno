@@ -44,6 +44,45 @@ describe("a preset taken without a jump", () => {
     expect(d.getState()).toEqual(start);
   });
 
+  it("gives way to an undo during it: the undo stands, the style back as it was", () => {
+    const d = doc();
+    const start = d.getState();
+    const depth = d.history().undoDepth;
+    let clock = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+    const frames: (() => void)[] = [];
+    easeStyle(d, RSC, (go) => frames.push(go));
+    clock += 48;
+    frames.shift()!();
+    d.undo();
+    while (frames.length) {
+      clock += 16;
+      frames.shift()!();
+    }
+    expect(d.getState()).toEqual(start);
+    expect(d.history().undoDepth).toBe(depth);
+  });
+
+  it("gives way to another edit during it: that edit kept, the style taken as chosen", () => {
+    const d = doc();
+    let clock = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+    const frames: (() => void)[] = [];
+    easeStyle(d, RSC, (go) => frames.push(go));
+    clock += 48;
+    frames.shift()!();
+    d.edit("add +", (w) => ({ ...w, pluses: [...w.pluses, { id: 9, x: 1, y: 1 }] }));
+    while (frames.length) {
+      clock += 16;
+      frames.shift()!();
+    }
+    const now = d.getState();
+    expect(now.style).toEqual(RSC);
+    expect(now.pluses.some((p) => p.id === 9)).toBe(true);
+    // (the page as the change at once leaves it: the slide as wide in print)
+    expect(now.slides![0].w).toBeCloseTo(160 * (14.4 / 12.2), 9);
+  });
+
   it("is taken at once where the bond prints as long, or the document had no style", () => {
     const d = doc();
     const frames: (() => void)[] = [];

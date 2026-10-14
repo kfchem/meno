@@ -16,6 +16,9 @@ import { setViewGoal, viewGoalOf } from "./viewGoal";
 
 export function FollowStyle() {
   const style = useEditor((s) => s.docStyle);
+  // (another page - a file opened in the tab, or that undone - is not this one re-laid: the view goes with it as it is)
+  const pageId = useEditor((s) => s.pageId);
+  const page = useRef(pageId);
   const bondPt = useMemo(() => (style ? bondPtOf(style) : null), [style]);
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
@@ -24,7 +27,9 @@ export function FollowStyle() {
   useLayoutEffect(() => {
     const before = was.current;
     was.current = bondPt;
-    if (before == null || bondPt == null || before === bondPt) return;
+    const samePage = page.current === pageId;
+    page.current = pageId;
+    if (!samePage || before == null || bondPt == null || before === bondPt) return;
     const k = before / bondPt;
     const cam = camera as THREE.OrthographicCamera;
     cam.position.x *= k;
@@ -34,6 +39,6 @@ export function FollowStyle() {
     const goal = viewGoalOf(cam);
     if (goal) setViewGoal(cam, { zoom: goal.zoom / k, x: goal.x * k, y: goal.y * k });
     invalidate();
-  }, [bondPt, camera, invalidate]);
+  }, [bondPt, pageId, camera, invalidate]);
   return null;
 }

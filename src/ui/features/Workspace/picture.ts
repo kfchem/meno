@@ -66,7 +66,8 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
-  const record = recordText(part);
+  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
+  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
   const drawing = seenDrawing(part);
   const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;

@@ -220,7 +220,7 @@ export function useClipboardActions(
         if (!p) return;
         try {
           const png = await picturePng(p);
-          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
+          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
         } catch (e) {
           onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
         }
