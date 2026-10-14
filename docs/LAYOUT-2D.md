@@ -11,6 +11,19 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
+Clean-up gives one drawing, the best it finds, and the same drawing
+whatever order the atoms come in (the maintainer, 2026-10-14). Every
+choice on the way is made by the structure, or by trying each way at that
+point and keeping the best; which atom, bond or ring happens to be listed
+first never decides it. Laying a molecule out in several orders and
+keeping the best is no answer: the result still depends on the orders
+tried. `npm run layout-order` lists the molecules still drawn otherwise in
+another order. The benchmark's measure reads a drawing the same way
+however its atoms are listed: in a bridged system it reads every ring as
+small as one of its smallest set, not the set alone - quinuclidine has
+three six-membered cycles, and which two make the set goes by the order
+of the atoms.
+
 ## What a good drawing is
 
 A structure drawing is read, not looked at. A chemist should take in its
@@ -97,12 +110,20 @@ they hang from.
 - **Rings of rings**: a macrocycle that is rings strung together and
   nothing else - a porphyrin's pyrroles, a cyclodextrin's glucoses, each
   linked to the next by an atom or two - is set round a circle, each ring
-  it runs through regular and outside it. One with chains between its
+  it runs through regular and outside it, the macrocycle running along the
+  side of each that carries fewer groups where two are as long (the
+  groups on that side face into the circle: a cyclodextrin's CH2OHs
+  inside, its secondary OHs out). One with chains between its
   rings (vancomycin's peptide) is a chain like any other macrocycle:
   where several run through the same ring, that ring is drawn first and
   each macrocycle is a zigzag from ring to ring, turning as a hexagon
   does where it runs through one, so that the ring comes out regular,
-  and kept clear of where the rest of that ring will fall.
+  and kept clear of where the rest of that ring will fall, and of the
+  two atoms it runs between - looked for from each of them, the better
+  kept. Any macrocycle passing a ring by two ways round as long runs
+  along the outer side, whose atoms are in fewer of the system's other
+  rings: rifampicin's ansa chain along its naphthalene's free edge, not
+  across the junction into the next ring.
 - **Bridged systems**: where a ring is fused on a side as well - morphine,
   artemisinin, taxol - the system is drawn flat: the smaller ring of a
   bridged pair regular, the larger arcing round it with the bridge inside
@@ -111,7 +132,10 @@ they hang from.
   and regular as though the bridge were not there, and the bridge is a
   path of bonds across the face of a ring, in front of it or behind it as
   the molecule has it, the bond behind broken where they cross -
-  artemisinin's peroxide inside its seven-membered ring. Which side is the
+  artemisinin's peroxide inside its seven-membered ring. The rings drawn
+  flat are looked for among every simple cycle of the system as long as
+  its longest ring, not the smallest set's alone, which holds one of
+  rings as long by the order of the atoms. Which side is the
   one that shows its stereocentres as given, where the bridge's bonds into
   the flat rings show them: a solid found from how far apart the bonds put
   the atoms can have a ring fusion the wrong way, and morphine's 5-epimer
@@ -152,7 +176,10 @@ they hang from.
   bridge between two of them hanging from them however it must;
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
-  eased into place. Adamantane is then a chair with its three axial bonds
+  eased into place. A view that eases a double bond in a ring of seven
+  atoms or fewer trans, its neighbours round the ring either side of it,
+  counts that as heavily as a bridge drawn so: tetrodotoxin's guanidine
+  ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there. Bonds out of the ring follow it - an equatorial
@@ -202,7 +229,12 @@ they hang from.
   its guanidine ring fused to it - the cage is drawn so and the rings
   fused to it flat onto it, the cage's atoms bonded to them showing their
   configuration by a wedge; the cage seen from each of its best few sides,
-  the one that leaves the rest room taken (ibogaine). Of these and the flat
+  the one that leaves the rest room taken (ibogaine). Where several of its
+  sides are as good by the system alone - adamantane is alike from all of
+  them, seen from either hand - each of those is tried with what hangs from
+  it too, none favoured: which came first went by the order of the atoms,
+  and a gem-dimethyl on a ring fused to adamantane had room from some of
+  them only. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -
@@ -303,8 +335,10 @@ a five-membered one) is set with its long axis level.
 
 Among the ways of setting the frame square - six turns, and their mirror
 images; twelve for a frame of squares and no hexagons, whose sides can
-lie level either way round - the drawing takes the one that reads best
-(section 4).
+lie level either way round, and for a frame of five- and seven-membered
+rings, which lies on the lattice no way round and is set on it only by
+its bonds out (proline's carboxyl level, its ring symmetric about it) -
+the drawing takes the one that reads best (section 4).
 
 ## 4. Reading order
 

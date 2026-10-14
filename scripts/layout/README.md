@@ -98,7 +98,7 @@ before, not a record of how particular molecules are drawn.
 | angles | how far angles at chain atoms are from ideal: 120°, or 180° across a triple bond, between two double bonds or between two phosphate crosses; a bond joining a cross to a zigzag may give way to 150° |
 | rings | how far rings of up to eight are from regular polygons |
 | macrocycle angles | how far the angles round a ring of nine or more are from a zigzag's 120° - a macrocycle drawn as a round polygon is far off; a ring that runs through other rings (a porphyrin's) is a ring of rings, and not counted |
-| substituents | how far a ring atom's other bonds are from splitting the room outside the ring evenly: an H at a ring fusion drawn straight out, not aslant |
+| substituents | how far a ring atom's other bonds are from splitting the room outside the ring evenly: an H at a ring fusion drawn straight out, not aslant. In a bridged system the room outside is read against every ring as small as one of its smallest set - all three of quinuclidine's six-membered cycles, of which the set holds two by the order of the atoms |
 | wedges on rings | wedges and hashes on ring bonds, where they read badly |
 
 **Orientation** - the drawing square to the page, and read left to right:
