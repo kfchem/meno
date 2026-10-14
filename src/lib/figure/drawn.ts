@@ -196,7 +196,8 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   const [w0, w1] = m1 >= m0 ? [n0, m1] : [m0, n1];
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
-  if (!curved && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
+  // (all but convex: a letter of straight lines alone - an F, wide at one end - is not, a wedge of however many corners is)
+  if (!curved && (corners.length <= 6 || Math.abs(area(pts)) >= 0.85 * Math.abs(area(hull(corners)))) && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
     // (its tip the middle of its narrow end's points; its base the middle of its wide end's outermost two, of
     // all its points that far along - so the middle of a wide end cut slanting)
     const toWide = w0 < w1 ? 1 : -1;

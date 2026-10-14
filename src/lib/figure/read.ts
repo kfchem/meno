@@ -851,7 +851,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (an H right by an atom's label - set under an N - is that label's, never an ion; an element's ion set close is still one)
   const labels = atoms.flatMap((a) => (a.box ? [a.box] : []));
   const byLabel = (w: Word) => /^H\d*[+-]/.test(labelText(w)) && labels.some((b) => fromBox(centre(w.box), b) < 0.6 * bond);
-  const charged = (w: Word) => /^[A-Z][A-Za-z0-9]*[+-]$/.test(labelText(w)) || (/^[A-Z][A-Za-z0-9]*$/.test(labelText(w)) && marks.some((m) => fromBox(m.at, w.box) < m.r + 0.3 * bond));
+  // (or several, counted: (Cl-)2)
+  const charged = (w: Word) =>
+    /^[A-Z][A-Za-z0-9]*[+-]$/.test(labelText(w)) || /^\([A-Z][A-Za-z0-9]*[+-]\)\d$/.test(labelText(w)) || (/^[A-Z][A-Za-z0-9]*$/.test(labelText(w)) && marks.some((m) => fromBox(m.at, w.box) < m.r + 0.3 * bond));
   // (measured by bonds - or, all of them drawn short to labels, by the labels' letters: a bond is drawn half as long again as they are set)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const ionBy = ION_BY * Math.max(bond, sizes.length ? BOND_PER_SIZE * sizes[Math.floor(sizes.length / 2)] : 0);

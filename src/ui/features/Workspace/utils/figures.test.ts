@@ -353,6 +353,20 @@ function sulfone(): FigureDrawn {
     pictures: [],
   };
 }
+/** Letters as outlines in a row from a baseline point, each a path of its own: each run its text, size, how far raised (up, points) and how far its letters lean (an italic's). */
+function outlinedRun(runs: [string, number, number, number][], at: P): FigurePath[] {
+  let x = at[0];
+  const out: FigurePath[] = [];
+  for (const [text, size, up, lean] of runs) {
+    for (const c of text) {
+      const base = at[1] - up;
+      const parts = glyphParts(c, x, base, size).map((q) => q.map((p) => ({ ...p, x: p.x + lean * (base - p.y) })));
+      out.push({ fill: "#000000ff", stroke: null, width: 0, d: parts.flatMap((q) => [...q.map((p, i): PathStep => [i ? (p.curve ? "C" : "L") : "M", p.x, p.y]), ["Z"] as PathStep]) });
+      x += ((PLEX.charToGlyph(c).advanceWidth ?? 0) / PLEX.unitsPerEm) * size;
+    }
+  }
+  return out;
+}
 const elementsOf = (r: FigureResult | Unread) => ("none" in r ? [] : r.model.atoms.map((a) => a.el).sort());
 const quarterTurned = (f: FigureDrawn): FigureDrawn => ({ ...f, paths: f.paths.map((p) => ({ ...p, d: p.d.map((q): PathStep => (q[0] === "Z" ? q : [q[0], 300 - q[2], q[1]])) })) });
 
@@ -426,6 +440,31 @@ describe("a figure whose labels are outlines", () => {
     const r = figureFrom(f, SHA, 0, KNOWN);
     expect("none" in r ? null : r.scheme?.arrows?.length).toBe(1);
     expect(elementsOf(r).filter((e) => e === "N")).toEqual(["N"]);
+  });
+
+  it("reads a label with its i set small and italic, its stem thin and leaning, as one: C(O)NiPr2", () => {
+    const at: P = step([100, 100], 0);
+    const f: FigureDrawn = {
+      paths: [...ring([100, 100], 120), cut([100, 100], at, 0, 2), ...outlinedRun([["C(O)N", 10, 0, 0], ["i", 7, 4, 0.2], ["Pr", 10, 0, 0], ["2", 7, -2, 0]], [at[0] + 1, at[1] + 3.6])],
+      letters: [],
+      pictures: [],
+    };
+    expect(elementsOf(figureFrom(f, SHA, 0, KNOWN))).toContain("C(O)NiPr2");
+  });
+
+  it("reads counter-ions by a complex as ions: a - set high after a subscript, PF6-; ions counted in parentheses, (Cl-)2", () => {
+    const f: FigureDrawn = {
+      paths: [
+        ...ring([100, 100], 120),
+        ...outlinedRun([["PF", 10, 0, 0], ["6", 7, -2, 0], ["-", 7, 4, 0]], [128, 112]),
+        ...outlinedRun([["(Cl", 10, 0, 0], ["-", 7, 4, 0], [")", 10, 0, 0], ["2", 7, -2, 0]], [128, 128]),
+      ],
+      letters: [],
+      pictures: [],
+    };
+    const els = elementsOf(figureFrom(f, SHA, 0, KNOWN));
+    expect(els).toContain("PF6-");
+    expect(els).toContain("(Cl-)2");
   });
 
   it("takes outlines of straight lines alone - an N - for letters to read, and a filled wedge for none", () => {

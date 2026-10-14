@@ -1056,7 +1056,13 @@ workspace holds.
   line: as tall as they, a capital; well under, small. A letter that could
   be another (l or I, O or 0) is read as the one that makes its label
   read; one that matched weakly is marked ("Its letters are drawn as
-  shapes: read as "Cl"."). A letter read surely from its shape is no
+  shapes: read as "Cl"."). A stem with a dot just over it, however thin
+  and however it leans (an italic i set small, as the i of an iPr is), is
+  an i or a j, the nearer of the two. A minus set high after a subscript's
+  digit is told by the letter before it (the - of a PF6-). A filled shape
+  of straight lines with many corners and far from convex - an F, wide at
+  one end - is no wedge: a wedge of more than six corners is all but
+  convex. A letter read surely from its shape is no
   arrow's head, however like one an S or an N of one part is. A figure is
   taken to draw its letters so where it has a shape filled in several
   parts, or curved, or with many corners (an N, an H, of straight lines
@@ -1105,7 +1111,8 @@ workspace holds.
   bond: its wedge's, where it has one. A word with a charge - written,
   or drawn in a ring beside it - by the structure, at no bond's end and
   not an H by another atom's label (an element's ion set close by one is
-  still an ion), is an ion (Na+, Br-), and several set in a
+  still an ion), is an ion (Na+, Br-, PF6-), as is one in parentheses,
+  counted ((Cl-)2), and several set in a
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
