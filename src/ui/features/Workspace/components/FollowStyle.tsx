@@ -12,7 +12,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { bondPtOf } from "../restyle";
-import { setViewGoal, viewGoalOf } from "./viewGoal";
+import { setViewGoal, setViewRelaid, viewGoalOf } from "./viewGoal";
 
 export function FollowStyle() {
   const style = useEditor((s) => s.docStyle);
@@ -38,6 +38,8 @@ export function FollowStyle() {
     cam.updateProjectionMatrix();
     const goal = viewGoalOf(cam);
     if (goal) setViewGoal(cam, { zoom: goal.zoom / k, x: goal.x * k, y: goal.y * k });
+    // (PanZoom2D takes the view up from here, not from where it had it)
+    setViewRelaid(cam);
     invalidate();
   }, [bondPt, pageId, camera, invalidate]);
   return null;

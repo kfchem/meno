@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, tookViewRelaid, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
@@ -416,7 +416,8 @@ export function PanZoom2D() {
       drivenBefore.current = true;
       return;
     }
-    if (drivenBefore.current) {
+    // (likewise once the page is laid again at another scale, the view moved with it: FollowStyle)
+    if (drivenBefore.current || tookViewRelaid(camera)) {
       drivenBefore.current = false;
       pos.current.set(cam.position.x, cam.position.y);
       vel.current.set(0, 0);
