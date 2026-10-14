@@ -76,6 +76,17 @@ class WhyUnreadable(unittest.TestCase):
         self.assertIn("its 1st atom, C, has 5 bonds, more than it can take", self.said("C(C)(C)(C)(C)C"))
         self.assertIn("its 2nd atom, O, has 3 bonds", self.said("OO=O"))
 
+    def test_says_a_formula_is_one_and_what_a_smiles_writes(self):
+        self.assertIn("it reads like a formula; as a SMILES it is Cl[Sn](Cl)(Cl)Cl", self.said("SnCl4"))
+        self.assertIn("as a SMILES it is ClC(Cl)(Cl)Cl", self.said("CCl4"))
+        self.assertIn("as a SMILES it is Cl[Al](Cl)Cl", self.said("AlCl3"))
+        self.assertIn("as a SMILES it is FB(F)F", self.said("BF3"))
+        for formula in ("C6H6", "H2O", "Fe2O3", "CO2"):
+            self.assertIn("it reads like a formula; a SMILES writes the atoms and how they are bonded", self.said(formula))
+        # (an element twice, or no count past one: as a SMILES still)
+        self.assertIn("a ring is left open: 2 is opened and not closed", self.said("CC2"))
+        self.assertIn("Na is written in brackets: [Na]", self.said("NaCl"))
+
     def test_says_what_is_no_element_and_what_wants_brackets(self):
         self.assertIn("Xx is not an element", self.said("[Xx]"))
         self.assertIn("h is not an element", self.said("hello"))

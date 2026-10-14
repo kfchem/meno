@@ -115,14 +115,48 @@ def with_charge(atom):
     return atom.GetSymbol() + ("" if q == 0 else ("" if abs(q) == 1 else str(abs(q))) + ("+" if q > 0 else "-"))
 
 
+# A text written as a formula - SnCl4, C6H6, H2O: element symbols, each once,
+# a count after one of them at least.
+FORMULA = re.compile(r"(?:[A-Z][a-z]?\d*)+")
+HALOGENS = {"F", "Cl", "Br", "I"}
+
+
+def as_formula(text):
+    """The elements of a text that reads like a formula, with their counts,
+    in order - or None."""
+    if not FORMULA.fullmatch(text):
+        return None
+    parts = [(name, int(n) if n else 1) for name, n in re.findall(r"([A-Z][a-z]?)(\d*)", text)]
+    names = [name for name, _ in parts]
+    if len(set(names)) != len(names) or not all(is_element(name) for name in names):
+        return None
+    return parts if max(n for _, n in parts) >= 2 else None
+
+
+def formula_said(parts):
+    """What a SMILES for a formula is like: a halide's own - SnCl4 as
+    Cl[Sn](Cl)(Cl)Cl, each halogen bonded to the one atom - or an example."""
+    if len(parts) == 2 and parts[0][1] == 1 and parts[0][0] != "H" and parts[1][0] in HALOGENS:
+        (centre, _), (x, n) = parts
+        atom = centre if centre in ORGANIC else f"[{centre}]"
+        smiles = x + atom + f"({x})" * (n - 2) + x
+        if Chem.MolFromSmiles(smiles) is not None:
+            return f"it reads like a formula; as a SMILES it is {smiles}"
+    return "it reads like a formula; a SMILES writes the atoms and how they are bonded, as CCO for ethanol"
+
+
 def why_unreadable(smiles):
     """Why a SMILES cannot be read, in a few plain words about the SMILES
-    itself - a ring left open, a parenthesis or bracket not closed, a symbol
-    that is no element or wants brackets, an atom with more bonds than it can
-    take - or None where none of these says it."""
+    itself - a formula written for it, a ring left open, a parenthesis or
+    bracket not closed, a symbol that is no element or wants brackets, an
+    atom with more bonds than it can take - or None where none of these says
+    it."""
     s = smiles.strip()
     if not s:
         return "it is empty"
+    formula = as_formula(s)
+    if formula:
+        return formula_said(formula)
     depth = 0
     rings = {}
     atoms = []  # (where each atom is written, as it is written), in order

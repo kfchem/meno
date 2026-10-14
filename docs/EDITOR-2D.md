@@ -257,6 +257,8 @@ field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
 wrong is said under the field, in a few words about the SMILES itself - a
+formula written for it (each element once, a count after one; a halide's
+SMILES then given: "as a SMILES it is Cl[Sn](Cl)(Cl)Cl" for SnCl4), a
 ring left open (and which: "1 is opened and not closed"), a ( or [ not
 closed, a symbol that is no element, an element written without its
 brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
