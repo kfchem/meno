@@ -763,7 +763,7 @@ molecules in 3D.
   | On the page | Kept in units | How it converts |
   |---|---|---|
   | A structure in 2D: atoms joined by bonds, a stack's records as one | atoms' x, y | its middle (of its box) times k; its atoms keep their offsets from it, so it keeps its size in units and its bonds print at the new length. Bonds, abbreviations, brackets, ring circles and electron arrows go with its atoms |
-  | A molecule in 3D | `at`, `turn` | bodies - molecules whose seen spheres touch, or that share a turned-together height - move by their middle times k, keeping their offsets, heights and turns; a molecule keeps its size in units (1.5 Å is a drawn bond in every style) |
+  | A molecule in 3D | `at`, `turn` | bodies - molecules whose spheres (each its look's reach, about its place and height) touch or overlap, turned together or not - move by their middle times k, keeping their offsets, heights and turns; a molecule keeps its size in units (1.5 Å is a drawn bond in every style) |
   | A reaction arrow | x, y, length, corners' `across` | times k; its heads, weight and stroke are the style's as it is drawn |
   | A "+" | x, y | times k; its size is the style's |
   | Words | x, y, `width` | times k; their size in pt is kept |
@@ -840,7 +840,9 @@ molecules in 3D.
   style)` (document.ts) converts by k = `bondPtOf(doc.style)` /
   `bondPtOf(style)`; the store's action keeps the document as a slider's
   drag began and converts from it at each tick (C).
-- **Tested by** a change and back giving the same page (to 1e-9); every
+- **Tested by** a change and back giving the same page (to 1e-9, where no
+  molecules in 3D came to touch on the way: those then go back as one body;
+  undo, a snapshot, is exact all the same); every
   page object's box in pt kept, and every structure's middle in pt kept and
   its size in units; undo exact; a slider's ticks converting from the
   start; a paste across styles; bodies in 3D kept together; page objects
