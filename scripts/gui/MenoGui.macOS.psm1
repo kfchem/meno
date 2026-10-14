@@ -520,12 +520,15 @@ function Find-SystemWindow {
       The first window of `$Windows (front to back, as [MacGui]::Windows()
       lists them) that is the system's - by its owner's executable, or set at
       layer 1000 or higher, over every app's - or $null. The Window Server's
-      own small marks (the recording dot, the cursor's) are no such window.
+      own small marks at the top layer (the recording dot, the pointer, which
+      it lists after a synthetic move), no larger than 64x64 pt, are no such
+      window.
     #>
     param([AllowEmptyCollection()] [object[]] $Windows)
     foreach ($w in $Windows) {
         if ($script:SystemExes -contains $w.Exe) { return $w }
-        if ($w.Layer -ge 1000 -and $w.Owner -ne "Window Server" -and $w.Width -ge 40 -and $w.Height -ge 40) { return $w }
+        $mark = $w.Owner -eq "Window Server" -and $w.Layer -eq 2147483630 -and $w.Width -le 64 -and $w.Height -le 64
+        if ($w.Layer -ge 1000 -and -not $mark) { return $w }
     }
     return $null
 }

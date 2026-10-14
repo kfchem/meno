@@ -36,6 +36,11 @@ Check "by its executable, its owner's name in the user's language" (Find-SystemW
 Check "but not Notification Center's empty window over the screen" ((Find-SystemWindow (@($menuBar) + $meno)) -eq $null) $true
 Check "any owner's at layer 1000 or more" (Find-SystemWindow @((Win "Something" 1500 100 100 200 200), $meno)).Owner "Something"
 Check "but not a small mark of the Window Server's own" ((Find-SystemWindow @((Win "Window Server" 2147483630 10 10 29 29))) -eq $null) $true
+# (the pointer, as the Window Server lists it after a synthetic move)
+Check "nor the pointer" ((Find-SystemWindow @((Win "Window Server" 2147483630 702 431 23 22), $meno)) -eq $null) $true
+Check "but a mark of another owner's at that layer" (Find-SystemWindow @((Win "Something" 2147483630 702 431 23 22), $meno)).Owner "Something"
+Check "and one of the Window Server's larger than 64x64" (Find-SystemWindow @((Win "Window Server" 2147483630 0 0 1710 1112), $meno)).Owner "Window Server"
+Check "and one of the Window Server's at another layer of 1000 or more" (Find-SystemWindow @((Win "Window Server" 1500 10 10 29 29), $meno)).Owner "Window Server"
 Check "nothing listed: none" ((Find-SystemWindow @()) -eq $null) $true
 
 Write-Host "the window a point is on"
