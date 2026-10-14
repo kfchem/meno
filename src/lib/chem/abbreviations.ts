@@ -50,6 +50,8 @@ export type Abbreviation = {
    * rather than a group: its structure is made, not read from `smiles`.
    */
   kind?: "ligand" | "complex" | "reagent";
+  /** An atom carrying a group, its other bonds the drawing's (NBoc, ONa): put together by rule, after a reagent's or a ligand's name. */
+  carrying?: boolean;
 };
 
 /** These groups, each a protecting, activating or leaving group (`role`). */
@@ -394,6 +396,32 @@ function carriedGroupOf(label: string): Abbreviation | undefined {
   };
 }
 
+/** Atoms that take more than one bond and may carry one group besides, their other bonds the drawing's: each one's name as a diyl. */
+const CARRYING: Record<string, string> = { N: "azanediyl", P: "phosphanediyl" };
+/** The alkali metals, bound to an O or an S as ions (as NaOMe's sodium is: ./condensed). */
+const ALKALI: Record<string, string> = { Li: "lithium", Na: "sodium", K: "potassium", Rb: "rubidium", Cs: "caesium" };
+
+/**
+ * An atom that takes more than one bond, written with one group it
+ * carries, its other bonds the drawing's - an N in a ring with its
+ * protecting group (NBoc, NMOM, NTs, NMe), a P; or an O or an S with
+ * an alkali metal on it, bound as an ion as NaOMe's is (ONa, OK, SLi). As
+ * drawn on a bond's left (BocN, MOMN, NaO) it is read turned round, as
+ * any label is. None for any other label.
+ */
+function carryingGroupOf(label: string): Abbreviation | undefined {
+  const m = /^([A-Z][a-z]?)([A-Z].*)$/.exec(label);
+  if (!m) return undefined;
+  if ((m[1] === "O" || m[1] === "S") && ALKALI[m[2]]) {
+    return { label, smiles: `*[${m[1]}-].[${m[2]}+]`, name: `${ALKALI[m[2]]} ${m[1] === "O" ? "oxido" : "sulfido"}`, carrying: true };
+  }
+  if (!CARRYING[m[1]]) return undefined;
+  const g = BY_LABEL.get(m[2]) ?? custom.get(m[2]);
+  // (a group's name of two letters or more: Z, of one, only in a structure, as typed - NZ is no zinc)
+  if (!g || g.kind || !g.smiles.startsWith("*") || g.label === "Cp" || m[2].length < 2 || CONTRACTED.includes(g)) return undefined;
+  return { label, smiles: `*${m[1]}(${g.smiles.slice(1)})`, name: `(${g.name.replace(/ \(.*\)$/, "")})${CARRYING[m[1]]}`, carrying: true };
+}
+
 /**
  * A group put together by rule, as `groupBy` puts it together, kept: a
  * complex's formula is tried part by part, and a long label's parts over
@@ -412,6 +440,8 @@ function groupBy(label: string): Abbreviation | undefined {
   if (aryl) return { label, smiles: aryl.smiles, name: aryl.name };
   const carried = carriedGroupOf(label);
   if (carried) return carried;
+  const carrying = carryingGroupOf(label);
+  if (carrying) return carrying;
   const halided = halidedGroupOf(label);
   if (halided) return halided;
   for (const c of COMPOSED) {

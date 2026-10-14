@@ -415,6 +415,28 @@ describe("a label, written", () => {
   });
 });
 
+describe("an atom with a group on it, its other bonds the drawing's", () => {
+  it("reads an N or a P written with one group as that atom carrying it - NBoc, NMOM, NTs, NMe - and turned round as drawn on the left", () => {
+    expect(abbreviationOf("NBoc")?.smiles).toBe("*N(C(=O)OC(C)(C)C)");
+    expect(abbreviationOf("NMOM")?.smiles).toBe("*N(COC)");
+    expect(abbreviationOf("NMe")?.smiles).toBe("*N(C)");
+    expect(abbreviationOf("NTs")).toBeDefined();
+    expect(reversedLabel("BocN")).toBe("NBoc");
+    expect(reversedLabel("MOMN")).toBe("NMOM");
+  });
+
+  it("reads an O or an S with an alkali metal on it as an ion pair, as NaOMe's is: ONa, OK", () => {
+    expect(abbreviationOf("ONa")?.smiles).toBe("*[O-].[Na+]");
+    expect(abbreviationOf("OK")?.smiles).toBe("*[O-].[K+]");
+    expect(reversedLabel("NaO")).toBe("ONa");
+  });
+
+  it("reads none with a group's name of one letter, nor what a name already is: NZ, BArF", () => {
+    expect(abbreviationOf("NZ")).toBeUndefined();
+    expect(abbreviationOf("BArF")?.smiles ?? "").not.toMatch(/^\*B\(/);
+  });
+});
+
 describe("a long label", () => {
   it("is told to be no abbreviation at once: not tried as a complex's formula at every length of every part", () => {
     // (OTBS forty times took 32 s to draw, a chain of sixty CH2 15 s; with a metal's symbol in it, half a second)
