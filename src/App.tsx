@@ -14,6 +14,7 @@ import {
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
 import { openable, openedAs, openedTexts, textsOf, workspaceOfFile, type Opened } from "./ui/views/openFile";
+import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
 import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
@@ -24,7 +25,7 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { saverOf } from "./lib/doc/savers";
+import { saverOf, tabHolding } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
@@ -33,6 +34,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { MENO_KINDS } from "./lib/io/kinds";
+import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
@@ -190,6 +192,7 @@ export default function App() {
   const letGoOf = (id: string): Promise<void> => {
     const held = documentsRef.current.get(id);
     documentsRef.current.delete(id);
+    forgetFiles(id);
     const store = held?.kind === "workspace" ? madeStoreOf(held.doc as DocumentStore<WorkspaceDocument>) : undefined;
     return store ? stopRenders(store) : Promise.resolve();
   };
@@ -218,10 +221,10 @@ export default function App() {
   // Something opened - a file, a structure from a document - in a tab of its
   // own: in place of the tab in front, if that is a blank canvas. False when
   // there is no room for another canvas.
-  const openTab = (opened: Opened): boolean => {
+  const openTab = (opened: Opened, inPlace = true): boolean => {
     const s = stateRef.current;
     const front = s.activeId ? s.tabsById[s.activeId] : undefined;
-    const blank = isBlankTab(front) ? front.meta.id : undefined;
+    const blank = inPlace && isBlankTab(front) ? front.meta.id : undefined;
     if (!canOpenKind(s, opened.kind, blank)) {
       setNotice(TOO_MANY_CANVASES);
       return false;
@@ -259,9 +262,47 @@ export default function App() {
     return true;
   };
 
+  // The workspace tab last in front - a tab's own, not a document's: where
+  // files opened go while something else is in front (Settings, say).
+  const lastWorkspace = useRef<string | null>(null);
+  const frontTab = state.activeId ? state.tabsById[state.activeId] : undefined;
+  const frontWorkspace = frontTab?.content.kind === "workspace" && officeIdOf(frontTab) == null ? frontTab.meta.id : null;
+  useEffect(() => {
+    if (frontWorkspace) lastWorkspace.current = frontWorkspace;
+  }, [frontWorkspace]);
+  // Structures' files and calculations' outputs opened: added to the
+  // workspace in front, as a drop on its canvas adds them - only a
+  // workspace file opens a tab of its own (the maintainer, 2026-10-13).
+  // With none in front, to the one last in front, brought forward; with
+  // none at all, to a canvas opened for them (ui/views/files).
+  const openStructureFiles = (files: OpenedFile[], into: string | null) => {
+    const s = stateRef.current;
+    // (a workspace tab's own - not a document's - there still: it takes them as soon as it can, opened just now or not)
+    const own = (tab: string | null): tab is string => {
+      const t = tab ? s.tabsById[tab] : undefined;
+      return t?.content.kind === "workspace" && officeIdOf(t) == null;
+    };
+    let id = own(into) ? into : null;
+    const last = lastWorkspace.current;
+    if (!id && own(last)) {
+      act({ type: "SELECT_TAB", id: last });
+      id = last;
+    }
+    if (!id) {
+      if (!canOpenKind(s, "workspace")) {
+        setNotice(TOO_MANY_CANVASES);
+        return;
+      }
+      const tab = viewRegistry.workspace.create("Workspace");
+      act({ type: "ADD_TAB", tab });
+      id = tab.meta.id;
+    }
+    giveFiles(id, files);
+  };
+
   // Open (Ctrl/Cmd+O, or the menu): files picked in the system's dialog,
-  // each in a tab, by what it is (openFile) - text in the workspace in
-  // front. Tauri's dialog gives each file's path, which goes with it;
+  // by what each is (openFile) - a workspace file in a tab of its own,
+  // anything else into the workspace in front. Tauri's dialog gives each file's path, which goes with it;
   // outside Tauri - the browser dev server - the page's own picker stands
   // in, and gives none.
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -278,10 +319,15 @@ export default function App() {
   };
   // Files opened by their paths - picked in Open's dialog, or opened from
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
-  // - each in a tab, by what it is.
+  // - by what each is.
   const openPaths = async (paths: readonly string[]) => {
-    const into = stateRef.current.activeId;
+    // (where what is not a workspace file goes: the workspace in front as
+    // Open was pressed - not the tab of a workspace file opened with it,
+    // which opens as it was saved, untouched: the maintainer, 2026-10-13)
+    const front = stateRef.current.activeId;
+    const workspaces: { name: string; workspace: string; path: string }[] = [];
     const texts: OpenedText[] = [];
+    const structures: OpenedFile[] = [];
     const pdfs: OpenedPdf[] = [];
     const pictures: PictureToAdd[] = [];
     for (const path of paths) {
@@ -311,22 +357,35 @@ export default function App() {
         // (a workspace file: its workspace, and the outputs it keeps held)
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
-          openWorkspaceTab(name, workspace, path);
+          workspaces.push({ name, workspace, path });
           continue;
         }
-        const text = new TextDecoder().decode(bytes);
+        const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
         const opened = openedAs(name, text, path, await kindOfFile(name, text));
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
-        else openTab(opened);
+        else structures.push({ name, bytes, path });
       } catch (e) {
         setNotice(`${name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (texts.length) openTexts(texts, into);
-    if (pdfs.length) openPdfs(pdfs, into);
-    if (pictures.length) openPictures(pictures, into);
+    // (a workspace file in a tab of its own - in place of a blank one in
+    // front only where nothing else opened is to go there - and that one
+    // brought back in front, to take the rest)
+    const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
+    // (one already open in a tab - by where it is saved - brought forward, not opened again: two tabs on one file overwrite each other)
+    const tabs = () => Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path }));
+    for (const w of workspaces) {
+      const held = tabHolding(w.path, tabs());
+      if (held) act({ type: "SELECT_TAB", id: held });
+      else openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    }
+    if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
+    if (texts.length) openTexts(texts, front);
+    if (pdfs.length) openPdfs(pdfs, front);
+    if (pictures.length) openPictures(pictures, front);
+    if (structures.length) openStructureFiles(structures, front);
   };
   // Closing with unsaved changes: the tabs that hold them, and whether
   // each can be saved (lib/doc/savers).
@@ -359,35 +418,39 @@ export default function App() {
     else void getCurrentWindow().destroy();
   };
   const openFiles = async (files: File[]) => {
-    const into = stateRef.current.activeId;
     const texts: OpenedText[] = [];
+    const structures: OpenedFile[] = [];
     for (const f of files) {
       try {
-        const workspace = workspaceOfFile(new Uint8Array(await f.arrayBuffer()));
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
           openWorkspaceTab(f.name, workspace);
           continue;
         }
-        const text = await f.text();
+        const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
         const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
-        else openTab(opened);
+        else structures.push({ name: f.name, bytes });
       } catch (e) {
         // (as Open through the dialog says it: a file that does not read - a workspace cut short - said so, not dropped unseen)
         setNotice(`${f.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (texts.length) openTexts(texts, into);
+    // (the tab in front now, as for Open's own)
+    const front = stateRef.current.activeId;
+    if (texts.length) openTexts(texts, front);
+    if (structures.length) openStructureFiles(structures, front);
   };
   // A workspace file's workspace in a tab of its own - where it opens: one
   // that does not - saved by a newer Meno, say - is said so, and leaves no
   // empty tab named after it.
-  const openWorkspaceTab = (name: string, workspace: string, path?: string) => {
+  const openWorkspaceTab = (name: string, workspace: string, path?: string, inPlace = true) => {
     const problem = workspaceProblem(workspace);
     if (problem) setNotice(`${name} could not be read: ${problem}.`);
-    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace));
+    else openTab(openedAs(name, workspace, path, MENO_KINDS.workspace), inPlace);
   };
   // (the key listened for once; what it does is this render's)
   const pickRef = useRef(pickFiles);

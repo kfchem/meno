@@ -170,7 +170,7 @@ def gaussian_input(name, molecule, options):
     electrons = sum(NUMBER.get(a.get("el"), 0) for a in atoms) - charge
     if electrons < 0 or multiplicity - 1 > electrons or (electrons - (multiplicity - 1)) % 2:
         raise Refused(
-            f"a charge of {charge} and a spin multiplicity of {multiplicity} cannot be: "
+            f"a charge of {str(charge).replace('-', '\u2212')} and a spin multiplicity of {multiplicity} cannot be: "
             f"the molecule would have {electrons} electrons"
         )
 

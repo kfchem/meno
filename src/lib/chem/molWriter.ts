@@ -2,8 +2,9 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
+import type { AbbreviationStructure, AtomChem, BondChem, SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
+import { greatest, least } from "./lists";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number };
@@ -108,9 +109,11 @@ const v30Number = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
 /**
  * A string as a V3000 entry has it: in double quotes where it holds a
  * blank, a quote, a double quote, "=", "(" or ")", a double quote in it
- * doubled ("CTfile Formats", the general syntax of entries).
+ * doubled ("CTfile Formats", the general syntax of entries) - and where it
+ * ends in "-", which at the end of a line continues it on the next: Nu-,
+ * OTf-, +/- written bare at an entry's end read back as "NuEND" and the like.
  */
-const v30String = (t: string) => (/[\s'"=()]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t);
+const v30String = (t: string) => (/[\s'"=()]/.test(t) || t.endsWith("-") ? `"${t.replace(/"/g, '""')}"` : t);
 /** A V3000 molfile's fourth line: a counts line of no atoms, and the version. */
 const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 
@@ -137,7 +140,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   const bonds = model.bonds.map((b) => ({ ...b }));
   const sups: Sup[] = [];
   const aliases = new Map<number, string>();
-  let nextId = Math.max(0, ...model.atoms.map((a) => a.id)) + 1;
+  let nextId = Math.max(0, greatest(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
     // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)
@@ -196,7 +199,7 @@ type Group = {
   componentNumber?: number;
   /** Its parent, by its place in the list. */
   parent?: number;
-  field?: { name: string; data: string[]; units?: string; type?: string };
+  field?: SgroupMark["field"];
 };
 
 /**
@@ -238,6 +241,12 @@ function groupsOf(model: WriterModel, sups: Sup[]): Group[] {
   return out;
 }
 
+/** How many symbols a V2000 M  ALS line holds, how wide an M  SDT line's field name and units are, and how much data an SCD/SED run holds ("CTfile Formats", the properties block). */
+const ALS_MOST = 16;
+const SDT_NAME = 30;
+const SDT_UNITS = 20;
+const SED_MOST = 200;
+
 /** The types whose brackets are drawn, and so written. */
 const BRACKETED = new Set(["SRU", "COP", "MON", "MER", "CRO", "MOD", "GRA", "COM", "MIX", "FOR", "ANY", "GEN"]);
 
@@ -266,7 +275,7 @@ function bracketsOf(model: WriterModel, g: Group, scale: number): { x1: number; 
     const xs = ats.map((a) => a.x);
     const ys = ats.map((a) => a.y);
     const pad = NOMINAL_BOND_LENGTH * 0.5;
-    const [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
+    const [x0, x1, y0, y1] = [least(xs) - pad, greatest(xs) + pad, least(ys) - pad, greatest(ys) + pad];
     out.push({ x1: x0 * scale, y1: y0 * scale, x2: x0 * scale, y2: y1 * scale });
     out.push({ x1: x1 * scale, y1: y0 * scale, x2: x1 * scale, y2: y1 * scale });
   }
@@ -309,7 +318,8 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
   );
   model.atoms.forEach((a, i) => {
     if (!a.list) return;
-    const symbols = a.list.symbols.slice(0, 16);
+    // (sixteen at most, the line's: past them, V3000 - `needsV3000`)
+    const symbols = a.list.symbols.slice(0, ALS_MOST);
     lines.push(`M  ALS ${i3(i + 1)}${i3(symbols.length)} ${a.list.not ? "T" : "F"} ${symbols.map((s) => s.padEnd(4)).join("")}`);
   });
   // a label that is no element nor any abbreviation: an alias, its text on the next line
@@ -361,7 +371,13 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
         }
       }
       if (g.type === "DAT" && g.field) {
-        lines.push(`M  SDT ${i3(n)} ${g.field.name.padEnd(30).slice(0, 30)}${(g.field.type ?? "T").slice(0, 1)}${(g.field.units ?? "").padEnd(20).slice(0, 20)}`);
+        // its name, type, units and query, in their columns - a name of 30
+        // characters at most, units of 20: longer, V3000 (`needsV3000`) -
+        // and its display as the file had it
+        const f = g.field;
+        const query = f.queryType || f.queryOp ? `${(f.queryType ?? "").padEnd(2).slice(0, 2)}${f.queryOp ?? ""}` : "";
+        lines.push(`M  SDT ${i3(n)} ${f.name.padEnd(SDT_NAME).slice(0, SDT_NAME)}${(f.type ?? "T").slice(0, 1)}${(f.units ?? "").padEnd(SDT_UNITS).slice(0, SDT_UNITS)}${query}`);
+        if (f.display) lines.push(`M  SDD ${i3(n)} ${f.display}`);
         for (const d of g.field.data) {
           // 69 characters a line: SCD for all but the last, SED for that
           for (let j = 0; j + 69 < d.length; j += 69) lines.push(`M  SCD ${i3(n)} ${d.slice(j, j + 69)}`);
@@ -539,7 +555,16 @@ function ctabV3000(given: WriterModel): string[] {
           brackets.map((b) => ` BRKXYZ=(9 ${v30Number(b.x1)} ${v30Number(b.y1)} 0 ${v30Number(b.x2)} ${v30Number(b.y2)} 0 0 0 0)`).join("") +
           (g.paren ? " BRKTYP=PAREN" : "") +
           (g.expanded ? " ESTATE=E" : "") +
-          (g.field ? ` FIELDNAME=${v30String(g.field.name)}${g.field.data.map((d) => ` FIELDDATA=${v30String(d)}`).join("")}` : ""),
+          (g.field
+            ? ` FIELDNAME=${v30String(g.field.name)}` +
+              // (its type and units as V3000's FIELDINFO, <type><units/format> - or, where
+              // a file gave one that reads as neither, that, as it was; its display and query as V2000's)
+              (fieldInfoOf(g.field) ? ` FIELDINFO=${v30String(fieldInfoOf(g.field)!)}` : "") +
+              (g.field.display ? ` FIELDDISP=${v30String(g.field.display)}` : "") +
+              (g.field.queryType ? ` QUERYTYPE=${v30String(g.field.queryType)}` : "") +
+              (g.field.queryOp ? ` QUERYOP=${v30String(g.field.queryOp)}` : "") +
+              g.field.data.map((d) => ` FIELDDATA=${v30String(d)}`).join("")
+            : ""),
       );
     });
     lines.push("M  V30 END SGROUP");
@@ -569,9 +594,9 @@ export function writeMolfile(
     : writeV2000(model, title);
 }
 
-/** A title as a header's line: one line, of no more than 80 characters. */
+/** A title as a header's line: one line, of no more than 80 characters - cut between characters, never in one (an emoji's two halves). */
 function titleLine(title: string | undefined): string {
-  return (title ?? "").replace(/[\r\n]+/g, " ").slice(0, 80);
+  return Array.from((title ?? "").replace(/[\r\n]+/g, " ")).slice(0, 80).join("");
 }
 
 /**
@@ -579,20 +604,28 @@ function titleLine(title: string | undefined): string {
  * labels written out: what is wider than V2000's fixed fields - past 999
  * atoms, bonds or Sgroups, or mapping numbers (three columns each), or a
  * coordinate past xxxxx.xxxx ("CTfile Formats", automatic V3000 output:
- * long fields); a coordination or a hydrogen bond, and whether the one is
- * drawn as a plain line (V2000's bond types stop at 8); racemic and
- * relative stereo groups, a stereo bond's group and a haptic bond's
- * endpoints.
+ * long fields), an atom list past the sixteen symbols an M  ALS line
+ * holds, a data Sgroup's field name past its 30 columns, its units past
+ * their 20 or data past the 200 characters V2000's hold; a coordination or
+ * a hydrogen bond, and whether the one is drawn as a plain line (V2000's
+ * bond types stop at 8); racemic and relative stereo groups, a stereo
+ * bond's group and a haptic bond's endpoints.
  */
 export function needsV3000(given: WriterModel): boolean {
   // (as written: a label's atoms - a complex's coordination bonds - among them)
   const { model, sups } = prepared(given);
   const scale = MOL_BOND_LENGTH / NOMINAL_BOND_LENGTH;
+  const groups = groupsOf(model, sups);
   return (
     model.atoms.length > 999 ||
     model.bonds.length > 999 ||
     model.atoms.some((a) => (a.map ?? 0) > 999 || !fitsF10(a.x * scale) || !fitsF10(a.y * scale)) ||
-    groupsOf(model, sups).length > 999 ||
+    groups.length > 999 ||
+    model.atoms.some((a) => (a.list?.symbols.length ?? 0) > ALS_MOST) ||
+    // (a data Sgroup's long field name, units or data: V3000 holds its type as well, in FIELDINFO)
+    groups.some(
+      (g) => g.field && (g.field.name.length > SDT_NAME || (g.field.units ?? "").length > SDT_UNITS || g.field.data.some((d) => d.length > SED_MOST)),
+    ) ||
     model.bonds.some((b) => ((b.dative || b.coordination) && b.order === 1) || b.hydrogen || b.stereoGroup || b.endpoints?.length) ||
     // (V2000 has only the chiral flag: no racemic nor relative groups)
     model.atoms.some((a) => a.stereoGroup && a.stereoGroup.kind !== "abs")
@@ -747,3 +780,18 @@ export function writeSdf(
 ): string {
   return writeMolfile(model, options) + "$$$$\n";
 }
+
+/**
+ * A data field's V3000 FIELDINFO: a file's own, where it gave one that read
+ * as no type and units (`info`); else its type and units as
+ * <type><units/format>, the type as V2000's two places hold it (CTfile
+ * Formats, chapter 2, the V3000 Sgroup fields) - none for plain text with no
+ * units.
+ */
+export function fieldInfoOf(field: { type?: string; units?: string; info?: string }): string | null {
+  if (field.info) return field.info;
+  const type = field.type ?? "T";
+  if (type === "T" && !field.units) return null;
+  return field.units ? `${type} ${field.units}` : type;
+}
+

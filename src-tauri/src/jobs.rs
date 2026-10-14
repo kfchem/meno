@@ -227,6 +227,24 @@ fn stop_asked(dir: &Path) -> bool {
     dir.join(STOP).exists()
 }
 
+/// Sleeps `long` in slices of `WAIT_STEP` at most, waking as soon as a
+/// slice ends with a stop asked: a job far back in the queue, asleep for
+/// seconds between its looks, stops as quickly as one near its head.
+/// (Only its own folder is looked at, with no lock.)
+fn sleep_watching(dir: &Path, long: Duration) {
+    let until = Instant::now() + long;
+    loop {
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return;
+        }
+        std::thread::sleep(left.min(WAIT_STEP));
+        if stop_asked(dir) {
+            return;
+        }
+    }
+}
+
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
@@ -299,8 +317,17 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
-            Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
-            Ok(Turn::Behind) => std::thread::sleep(WAIT_STEP),
+            Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            Ok(Turn::Behind(ahead)) => {
+                // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
+                let near = if near_head(ahead, spec.slots) {
+                    at_head.get_or_insert_with(Instant::now).elapsed()
+                } else {
+                    at_head = None;
+                    Duration::ZERO
+                };
+                sleep_watching(dir, behind_step(ahead, spec.slots, near))
+            }
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
                 return 1;
@@ -375,13 +402,52 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
 }
 
 /// A waiting job's turn, as it looks: taken; next - the first waiting, its
-/// turn to come as one running ends; or behind others waiting.
+/// turn to come as one running ends; or behind others waiting, so many of
+/// them before it.
 #[derive(Debug, PartialEq)]
 enum Turn {
     Taken,
     Next,
-    Behind,
+    Behind(u32),
 }
+
+/// Whether a job `ahead` places back in a queue running `slots` at once is
+/// near enough its head to look as the head does: its turn may come with
+/// the next to end, or the one after. (Only the head takes a turn; so where
+/// jobs end quickly, the one behind it is the head within moments.)
+fn near_head(ahead: u32, slots: u32) -> bool {
+    ahead < 2 * slots.max(1)
+}
+
+/// How long a waiting job sleeps behind `ahead` others waiting before it,
+/// its queue running `slots` at once: as the head of the queue does near
+/// it (`near_head`; `at_head` how long it has been there, `step_at`); at
+/// `WAIT_STEP` among the next few (`NEAR_EACH` a slot, and `NEAR_MORE`);
+/// further back, `PLACE_STEP` more for each place beyond, shared among the
+/// slots - never longer than the queue takes to come so far, a job a third
+/// of a second at the quickest - up to `BEHIND_MOST`. A queue of hundreds, each
+/// runner looking at every job's folder under one lock every step, kept
+/// that lock all but always held, and its head waiting on it: 150 jobs of
+/// 0.06 s took 130 s to run one after another. (Timed from its first look,
+/// not from when it came near the head, the head's quick step was long
+/// over by then: the next started a quarter of a second after one ended.)
+fn behind_step(ahead: u32, slots: u32, at_head: Duration) -> Duration {
+    if near_head(ahead, slots) {
+        return step_at(at_head, WAIT_STEP);
+    }
+    let slots = slots.max(1);
+    let near = NEAR_EACH * slots + NEAR_MORE;
+    if ahead < near {
+        return WAIT_STEP;
+    }
+    (PLACE_STEP * (ahead - near + 1) / slots).min(BEHIND_MOST)
+}
+
+/// The places behind the head of the queue that look at the step of old, for each slot and besides; and the longest one further back sleeps.
+const NEAR_EACH: u32 = 4;
+const NEAR_MORE: u32 = 4;
+const BEHIND_MOST: Duration = Duration::from_secs(10);
+const PLACE_STEP: Duration = Duration::from_millis(300);
 
 /// Whether it is this job's turn - the first waiting, with fewer running
 /// than it allows - and, where it is, the job recorded running. Asked by one
@@ -392,9 +458,17 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     queue.lock()?;
     let mut running = 0u32;
     let mut first: Option<(u64, PathBuf)> = None;
+    // (those waiting before it: asked for before it, or at once and by name)
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
     for entry in fs::read_dir(root)?.flatten() {
         let other = entry.path();
-        if !other.is_dir() {
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
+        if read_record(&other).is_some_and(|r| r.state.finished()) {
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
@@ -402,6 +476,9 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             JobState::Running => running += 1,
             JobState::Waiting => {
                 let key = (record.created, other);
+                if key < mine_key && key.1.file_name() != dir.file_name() {
+                    ahead += 1;
+                }
                 if first.as_ref().is_none_or(|f| key < *f) {
                     first = Some(key);
                 }
@@ -411,7 +488,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     }
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
-        return Ok(Turn::Behind);
+        return Ok(Turn::Behind(ahead));
     }
     if running >= spec.slots.max(1) {
         return Ok(Turn::Next);
@@ -424,7 +501,21 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
 struct Program {
     child: std::process::Child,
     #[cfg(windows)]
-    job: windows_sys::Win32::Foundation::HANDLE,
+    job: JobObject,
+}
+
+/// A job object, closed when this goes - and with it whatever is still in it
+/// (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`): on every way out, never left open.
+#[cfg(windows)]
+struct JobObject(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for JobObject {
+    fn drop(&mut self) {
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
 }
 
 impl Program {
@@ -441,23 +532,10 @@ impl Program {
     /// (Windows asks nothing of a program without a window: it is made to stop at once.)
     #[cfg(windows)]
     fn stop(&mut self, _hard: bool) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job, 1);
-            }
+        unsafe {
+            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job.0, 1);
         }
         let _ = self.child.kill();
-    }
-}
-
-#[cfg(windows)]
-impl Drop for Program {
-    fn drop(&mut self) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::Foundation::CloseHandle(self.job);
-            }
-        }
     }
 }
 
@@ -472,6 +550,8 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         Some(name) => Stdio::from(File::open(work_file(dir, name).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?)?),
     };
     let mut cmd = Command::new(program);
+    // (a Python run reads and writes UTF-8, whatever the system's code page - where its spec says nothing else)
+    crate::python_in_utf8(&mut cmd);
     cmd.args(args)
         .envs(env)
         .current_dir(dir.join(WORK))
@@ -483,44 +563,110 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    #[cfg(unix)]
     let child = cmd.spawn()?;
+    // (Windows: started held, put in its job object, then let go - so that
+    // nothing it starts at once is started outside the job, and stays when
+    // the job is stopped; one that cannot be let go is ended, its job object
+    // closed with it)
+    #[cfg(windows)]
+    let (mut child, job) = start_held(&mut cmd)?;
+    #[cfg(windows)]
+    if !let_go(child.id()) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(std::io::Error::other("it could not be let go once started"));
+    }
     Ok(Program {
         #[cfg(windows)]
-        job: job_object_for(&child),
+        job,
         child,
     })
+}
+
+/// A process started held (CREATE_SUSPENDED) let go: each of its threads
+/// resumed. Whether one was.
+#[cfg(windows)]
+fn let_go(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32};
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+    unsafe {
+        let threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if threads == INVALID_HANDLE_VALUE || threads.is_null() {
+            return false;
+        }
+        let mut entry: THREADENTRY32 = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+        let mut resumed = false;
+        let mut more = Thread32First(threads, &mut entry) != 0;
+        while more {
+            if entry.th32OwnerProcessID == pid {
+                let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
+                if !thread.is_null() {
+                    resumed |= ResumeThread(thread) != u32::MAX;
+                    CloseHandle(thread);
+                }
+            }
+            more = Thread32Next(threads, &mut entry) != 0;
+        }
+        CloseHandle(threads);
+        resumed
+    }
+}
+
+/// A program started held - with no window, nothing of it run yet - and
+/// put in a job object of its own. Where it cannot be put in one it is
+/// ended, never having run: what it started would outlive Stop and the
+/// runner.
+#[cfg(windows)]
+fn start_held(cmd: &mut Command) -> std::io::Result<(std::process::Child, JobObject)> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+    let mut child = cmd.spawn()?;
+    match job_object_for(&child) {
+        Ok(job) => Ok((child, job)),
+        Err(e) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(std::io::Error::other(format!("it could not be put in a job object of its own: {e}")))
+        }
+    }
 }
 
 /// A job object holding the program - and so what it starts - which takes
 /// them with it when it closes: when the runner goes, however it goes.
 #[cfg(windows)]
-fn job_object_for(child: &std::process::Child) -> windows_sys::Win32::Foundation::HANDLE {
+fn job_object_for(child: &std::process::Child) -> std::io::Result<JobObject> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     unsafe {
-        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if job.is_null() {
-            return job;
+        let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if handle.is_null() {
+            return Err(std::io::Error::last_os_error());
         }
+        // (closed on any way out from here)
+        let job = JobObject(handle);
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
         info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(
-            job,
+        if SetInformationJobObject(
+            job.0,
             JobObjectExtendedLimitInformation,
             &info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const core::ffi::c_void,
             std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-        AssignProcessToJobObject(job, child.as_raw_handle());
-        job
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        if AssignProcessToJobObject(job.0, child.as_raw_handle()) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(job)
     }
 }
 
@@ -593,8 +739,10 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
+    // (never a shell, by its name's stem: `cmd.exe` and `bash.exe` as `cmd` and `bash`)
     let single = Path::new(name).file_name().and_then(|n| n.to_str()) == Some(name);
-    if !single || !inside_name(name) || NEVER.contains(&name.to_ascii_lowercase().as_str()) {
+    let never = |n: &str| Path::new(n).file_stem().and_then(|s| s.to_str()).is_some_and(|s| NEVER.contains(&s.to_ascii_lowercase().as_str()));
+    if !single || !inside_name(name) || never(name) {
         return Err(format!("not a program a job runs: {name}"));
     }
     let manifest = fs::read_to_string(plugin_dir.join("manifest.json")).map_err(|e| format!("{id}'s manifest: {e}"))?;
@@ -749,10 +897,12 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
     let mut child = cmd.spawn().ok()?;
     let mut out = child.stdout.take()?;
     // (what it prints read apart, so that a full pipe never holds it)
+    // (and read as near as it can be where it is not UTF-8: a banner in the
+    // system's code page lost the version with it)
     let reader = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = out.read_to_string(&mut text);
-        text
+        let mut bytes = Vec::new();
+        let _ = out.read_to_end(&mut bytes);
+        String::from_utf8_lossy(&bytes).into_owned()
     });
     let start = std::time::Instant::now();
     let ended = loop {
@@ -1328,7 +1478,12 @@ fn files_within(base: &Path, deepest: usize, most: usize) -> Vec<String> {
 /// with no console and nothing to say to Meno - so that it outlives it.
 fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     let mut cmd = Command::new(exe);
-    cmd.arg(JOB_FLAG).arg(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // (in the jobs' folder: never Meno's, which it would otherwise hold - on
+    // Windows a folder a process is in cannot be taken away, nor the drive
+    // it is on put away - nor its own job's, which is taken away as soon as
+    // the job is over, while the runner may still be on its way out; the
+    // jobs' folder never is)
+    cmd.arg(JOB_FLAG).arg(dir).current_dir(dir.parent().unwrap_or(dir)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1667,6 +1822,10 @@ pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
         .flatten()
         .filter_map(|e| {
             let id = e.file_name().to_str()?.to_string();
+            // (one being taken away, or left of one: no job)
+            if id.starts_with(TAKEN) {
+                return None;
+            }
             listed(&id, &e.path())
         })
         .collect();
@@ -1709,6 +1868,21 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// What a job's folder taken away is named first: no job's id.
+const TAKEN: &str = ".taken-";
+
+/// A finished job's folder taken away: moved out of the jobs' way first,
+/// under a name no job has - so that one a program still holds a file in
+/// (Windows) is never left half there, a job no longer whole - then
+/// removed. Where it could not be moved, it is left as it was; what could
+/// not be removed goes the next time finished jobs are cleared.
+fn take_away(dir: &Path) -> std::io::Result<()> {
+    let taken = dir.with_file_name(format!("{TAKEN}{}", uuid::Uuid::new_v4().simple()));
+    fs::rename(dir, &taken)?;
+    let _ = fs::remove_dir_all(&taken);
+    Ok(())
+}
+
 /// A finished job's folder taken away; one waiting or running is not.
 #[tauri::command]
 pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
@@ -1716,21 +1890,28 @@ pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
     if !current_record(&dir).is_some_and(|r| r.state.finished()) {
         return Err(format!("job {id} has not finished: stop it first"));
     }
-    fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+    take_away(&dir).map_err(|e| format!("job {id}'s files could not be taken away: {e}"))
+}
+
+/// Every finished job's folder in `root` taken away - and what was left of
+/// those taken away before: how many.
+fn clear_finished(root: &Path) -> Result<u32, String> {
+    let mut cleared = 0;
+    for e in fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
+        let dir = e.path();
+        if e.file_name().to_string_lossy().starts_with(TAKEN) {
+            let _ = fs::remove_dir_all(&dir);
+        } else if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
+            cleared += 1;
+        }
+    }
+    Ok(cleared)
 }
 
 /// Every finished job's folder taken away: how many.
 #[tauri::command]
 pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
-    let root = jobs_root(&app)?;
-    let mut cleared = 0;
-    for e in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
-        let dir = e.path();
-        if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && fs::remove_dir_all(&dir).is_ok() {
-            cleared += 1;
-        }
-    }
-    Ok(cleared)
+    clear_finished(&jobs_root(&app)?)
 }
 
 #[cfg(test)]
@@ -1810,7 +1991,7 @@ mod tests {
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
@@ -1818,6 +1999,52 @@ mod tests {
         assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
         drop(held);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_asleep_far_back_in_the_queue_wakes_to_a_stop_within_a_step() {
+        let dir = temp();
+        let asleep = Instant::now();
+        let stop = {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(150));
+                ask_stop(&dir).unwrap();
+            })
+        };
+        sleep_watching(&dir, BEHIND_MOST);
+        stop.join().unwrap();
+        assert!(asleep.elapsed() < Duration::from_millis(150) + WAIT_STEP + Duration::from_millis(250), "{:?}", asleep.elapsed());
+        // (asked nothing, it sleeps all it was to)
+        let dir = temp();
+        let asleep = Instant::now();
+        sleep_watching(&dir, Duration::from_millis(900));
+        assert!(asleep.elapsed() >= Duration::from_millis(900));
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_looks_for_its_turn_seldom_and_one_near_its_head_often() {
+        // (one slot: the two next after the head look as the head does, quickly while new there; the next few at the old step; each further back a step more, up to ten seconds)
+        assert_eq!(behind_step(0, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::from_secs(60)), WAIT_STEP);
+        assert_eq!(behind_step(2, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(7, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(10, 1, Duration::ZERO), PLACE_STEP * 3);
+        assert_eq!(behind_step(500, 1, Duration::ZERO), BEHIND_MOST);
+        // (four slots: the eight next after the head might each take one as they come free; further back, the steps shared)
+        assert_eq!(behind_step(7, 4, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(8, 4, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(28, 4, Duration::ZERO), PLACE_STEP * 9 / 4);
+        // (never asleep past its turn: the queue takes at least a third of a second a job, a slot, to come to it)
+        for slots in [1u32, 2, 4, 8] {
+            for ahead in 0..2000u32 {
+                assert!(behind_step(ahead, slots, Duration::from_secs(60)).as_secs_f64() <= f64::from(ahead.saturating_sub(slots - 1).max(1)) / 3.0 / f64::from(slots) + WAIT_STEP.as_secs_f64(), "{slots} {ahead}");
+            }
+        }
+        // (a thousand waiting look some 150 times a second together, where at one step each they looked 2,500)
+        let looks: f64 = (0..1000).map(|k| 1.0 / behind_step(k, 1, Duration::from_secs(60)).as_secs_f64()).sum();
+        assert!(looks < 160.0, "{looks}");
     }
 
     fn wait_for(what: impl Fn() -> bool) {
@@ -2171,6 +2398,80 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn takes_finished_jobs_away_out_of_the_way_first_and_what_was_left_of_others() {
+        let root = temp();
+        let done = shell(&root, ECHO, 1);
+        write_record(&done, &JobRecord { ended: Some(3), code: Some(0), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        let failed = shell(&root, ECHO, 1);
+        write_record(&failed, &JobRecord { ended: Some(3), code: Some(1), ..JobRecord::new(JobState::Failed, 1) }).unwrap();
+        // (waiting: its runner starting - not taken)
+        let waiting = shell(&root, ECHO, 1);
+        // (left of one taken away before, a file in it held then)
+        let left = root.join(format!("{TAKEN}0123"));
+        fs::create_dir_all(left.join("work")).unwrap();
+        fs::write(left.join(SPEC), fs::read(waiting.join(SPEC)).unwrap()).unwrap();
+        assert_eq!(clear_finished(&root).unwrap(), 2);
+        assert!(!done.exists() && !failed.exists() && !left.exists());
+        assert!(waiting.exists());
+        // (and one alone, by the same way: nothing of it left under its id)
+        let one = shell(&root, ECHO, 1);
+        write_record(&one, &JobRecord { ended: Some(3), ..JobRecord::new(JobState::Stopped, 1) }).unwrap();
+        take_away(&one).unwrap();
+        assert!(!one.exists());
+        let names: Vec<String> = fs::read_dir(&root).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().all(|n| !n.starts_with(TAKEN)), "{names:?}");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job's program is in its job object before it has run at all - held,
+    /// it has written nothing - and runs to its end once let go (Windows).
+    #[cfg(windows)]
+    #[test]
+    fn a_program_is_started_in_its_job_object_then_let_go() {
+        let root = temp();
+        let mark = root.join("ran.txt");
+        let (sh, flag) = shell_program();
+        let mut cmd = Command::new(&sh);
+        // (written by a name in its folder: no quoting for cmd to read otherwise)
+        cmd.current_dir(&root).arg(flag).arg("echo ran>ran.txt").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let (mut child, job) = start_held(&mut cmd).unwrap();
+        let mut inside = 0;
+        unsafe {
+            use std::os::windows::io::AsRawHandle;
+            windows_sys::Win32::System::JobObjects::IsProcessInJob(child.as_raw_handle() as _, job.0, &mut inside);
+        }
+        assert_ne!(inside, 0);
+        // (held: nothing of it has run)
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!mark.exists());
+        assert!(let_go(child.id()));
+        assert!(child.wait().unwrap().success());
+        assert!(mark.exists());
+        // (and a job's program goes the same way)
+        let dir = shell(&root, ECHO, 1);
+        let mut program = spawn_program(&dir, &sh, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
+        assert!(program.child.wait().unwrap().success());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// One taken away part way - its record gone, its spec left, made a moment
+    /// ago - reads as waiting: the queue passes over it, not waiting on it.
+    #[test]
+    fn a_job_taken_away_part_way_does_not_hold_the_queue() {
+        let root = temp();
+        let earlier = shell(&root, ECHO, 1);
+        std::thread::sleep(Duration::from_millis(5));
+        let mine = shell(&root, ECHO, 1);
+        let taken = root.join(format!("{TAKEN}4567"));
+        fs::rename(&earlier, &taken).unwrap();
+        let _ = fs::remove_file(taken.join(RECORD));
+        assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
+        let spec = read_spec(&mine).unwrap();
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
+        let _ = fs::remove_dir_all(root);
+    }
+
     /// A plugin's folder naming `programs`, and Meno's data folder with its uv environment holding `files`.
     fn plugin(programs: &str, files: &[&str]) -> (PathBuf, PathBuf) {
         let base = temp();
@@ -2190,7 +2491,7 @@ mod tests {
     #[test]
     fn runs_only_a_program_its_plugin_names_from_the_plugin_s_environment() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
-        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("other")]);
+        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash", "bash.exe", "CMD.EXE"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("bash.exe"), &exe("CMD.EXE"), &exe("other")]);
         let found = plugin_program(&data, &dir, "demo", "xtb", &["in.xyz".into(), "--opt".into()]).unwrap();
         assert!(found.program.ends_with(exe("xtb")));
         assert!(found.activation.is_none());
@@ -2199,6 +2500,9 @@ mod tests {
         assert!(plugin_program(&data, &dir, "demo", "other", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "named", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "bash", &[]).is_err());
+        // (a shell by its stem, with its extension: as Windows finds `cmd.exe`)
+        assert!(plugin_program(&data, &dir, "demo", "bash.exe", &[]).unwrap_err().contains("not a program a job runs"));
+        assert!(plugin_program(&data, &dir, "demo", "CMD.EXE", &[]).unwrap_err().contains("not a program a job runs"));
         assert!(plugin_program(&data, &dir, "demo", "../xtb", &[]).is_err());
         assert!(plugin_program(&data, &dir, "../demo", "xtb", &[]).is_err());
         // named, but not in its environment

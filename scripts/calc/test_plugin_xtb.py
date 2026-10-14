@@ -12,6 +12,7 @@ short, written after its examples, and no output of a real run is kept.
 
 import importlib.util
 import json
+import math
 import pathlib
 import unittest
 
@@ -205,6 +206,64 @@ class Collect(unittest.TestCase):
         bare = ask("collect", step="energy", entries=[ETHYNE], options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
         dipole = next(r for r in bare["results"] if r["id"] == "dipole")
         self.assertAlmostEqual(dipole["value"], 0.8935147 * 2.541746473)
+
+    def test_a_charged_molecule_s_dipole_is_taken_about_its_centre_of_mass(self):
+        # (H3O+, an energy, its dipole printed about the origin of the coordinates given: moved 6 angstroms along x,
+        # xtb's moves by the charge times the shift - the same molecule's dipole about its centre of mass the same)
+        def hydronium(dx):
+            atoms = [("O", 0.0, 0.0, 0.12), ("H", 0.0, 0.94, -0.16), ("H", 0.814, -0.47, -0.16), ("H", -0.814, -0.47, -0.16)]
+            return {"name": "hydronium", "charge": 1, "multiplicity": 1, "bonds": [],
+                    "atoms": [{"el": e, "x": x + dx, "y": y, "z": z} for e, x, y, z in atoms]}
+
+        def printout(x):
+            return f"""
+molecular dipole:
+                 x           y           z       tot (Debye)
+ q only:        0.000       0.000      -0.468
+   full:       {x:.3f}       0.000      -0.664       {math.hypot(x, 0.664) * 2.541746473:.3f}
+molecular quadrupole (traceless):
+"""
+
+        def dipole(dx, x):
+            out = ask("collect", step="energy", entries=[hydronium(dx)], options={}, files={"xtbout.json": json.dumps({"total energy": -5.07})},
+                      log=printout(x), ended="done")["outputs"][0]
+            return next(r for r in out["results"] if r["id"] == "dipole")
+
+        here, there = dipole(0.0, 0.0), dipole(6.0, 6.0 / 0.529177210903)
+        self.assertEqual(here["label"], "Dipole moment about the centre of mass")
+        self.assertAlmostEqual(here["value"], there["value"], places=3)
+        # (the centre of mass on z: O 15.999, H 1.008 - taken about it, the dipole less the charge there)
+        centre = (15.999 * 0.12 - 3 * 1.008 * 0.16) / (15.999 + 3 * 1.008)
+        self.assertAlmostEqual(here["value"], abs(-0.664 - centre / 0.529177210903) * 2.541746473, places=4)
+        # (where it printed none: the dump's, of the geometry it began with)
+        bare = ask("collect", step="energy", entries=[hydronium(6.0)], options={}, ended="done", log="",
+                   files={"xtbout.json": json.dumps({"total energy": -5.07, "dipole / a.u.": [6.0 / 0.529177210903, 0.0, -0.664]})})
+        self.assertAlmostEqual(next(r for r in bare["outputs"][0]["results"] if r["id"] == "dipole")["value"], here["value"], places=4)
+
+    def test_an_isotope_s_own_mass_places_the_centre(self):
+        # (D3O+: each D's mass as Meno gives it with the entry - NIST's - or, where it gives none, its mass number)
+        def deuteronium(mass):
+            atoms = [("O", 0.0, 0.0, 0.12), ("H", 0.0, 0.94, -0.16), ("H", 0.814, -0.47, -0.16), ("H", -0.814, -0.47, -0.16)]
+            return {"name": "deuteronium", "charge": 1, "multiplicity": 1, "bonds": [],
+                    "atoms": [{"el": e, "x": x, "y": y, "z": z, **({"isotope": 2, **({"mass": mass} if mass else {})} if e == "H" else {})}
+                              for e, x, y, z in atoms]}
+
+        def dipole(entry):
+            out = ask("collect", step="energy", entries=[entry], options={}, ended="done", log="",
+                      files={"xtbout.json": json.dumps({"total energy": -5.07, "dipole / a.u.": [0.0, 0.0, -0.664]})})
+            return next(r for r in out["outputs"][0]["results"] if r["id"] == "dipole")["value"]
+
+        centre = (15.999 * 0.12 - 3 * 2.01410177812 * 0.16) / (15.999 + 3 * 2.01410177812)
+        self.assertAlmostEqual(dipole(deuteronium(2.01410177812)), abs(-0.664 - centre / 0.529177210903) * 2.541746473, places=6)
+        # (its mass number: within a few thousandths of a debye; natural hydrogen's weight would be some 0.2 D off)
+        self.assertAlmostEqual(dipole(deuteronium(None)), dipole(deuteronium(2.01410177812)), places=2)
+        natural = (15.999 * 0.12 - 3 * 1.008 * 0.16) / (15.999 + 3 * 1.008)
+        self.assertGreater(abs(dipole(deuteronium(2.01410177812)) - abs(-0.664 - natural / 0.529177210903) * 2.541746473), 0.15)
+
+    def test_a_neutral_molecule_s_dipole_is_xtb_s_as_it_printed_it(self):
+        out = ask("collect", step="energy", entries=[ETHYNE], options={}, files={"xtbout.json": json.dumps({"total energy": -5.07})},
+                  log=PRINTOUT, ended="done")["outputs"][0]
+        self.assertEqual(next(r for r in out["results"] if r["id"] == "dipole")["label"], "Dipole moment")
 
     def test_says_why_a_job_failed(self):
         log = "\n########\n[ERROR] Program stopped due to fatal error\n-2- Some atoms in the start geometry are *very* close\n-1- Found *very* short distance of  0.000E+00 for O1-H2\n########\n"

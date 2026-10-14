@@ -18,9 +18,9 @@
  */
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
-import { condensedStructure } from "./condensed";
+import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
-import { complexStructure, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
+import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
@@ -50,6 +50,8 @@ export type Abbreviation = {
    * rather than a group: its structure is made, not read from `smiles`.
    */
   kind?: "ligand" | "complex" | "reagent";
+  /** An atom carrying a group, its other bonds the drawing's (NBoc, ONa): put together by rule, after a reagent's or a ligand's name. */
+  carrying?: boolean;
 };
 
 /** These groups, each a protecting, activating or leaving group (`role`). */
@@ -301,7 +303,54 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return condensedStructure(label, groupLabels(), groupStructure);
+  return ionStructure(label) ?? condensedStructure(label, groupLabels(), groupStructure);
+}
+
+/**
+ * An ion written as one, a counter-ion set beside a complex or a salt: an
+ * anion as one is read in a salt, its charge written (PF6-, BF4-, SbF6-,
+ * AlCl4-, ClO4-: ./condensed); a group bound by an O or an S with the
+ * charge there (OTf-, OAc-) - and any of these in parentheses, counted, an
+ * element's own ion too ((Cl-)2: two; Cl- alone is read as an element is).
+ * Null for any other label.
+ */
+function ionStructure(label: string): (GroupStructure & { name: string }) | null {
+  const counted = /^\((.+)\)(\d+)$/.exec(label);
+  if (counted) {
+    const n = Number(counted[2]);
+    const one = n >= 2 && n <= 6 ? oneIon(counted[1], true) : null;
+    if (!one) return null;
+    const atoms: GroupStructure["atoms"] = [];
+    const bonds: GroupStructure["bonds"] = [];
+    for (let k = 0; k < n; k++) {
+      const at = atoms.length;
+      atoms.push(...one.atoms.map((a) => ({ ...a })));
+      bonds.push(...one.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })));
+    }
+    return { atoms, bonds, attach: [], name: `${n} ${counted[1]}` };
+  }
+  const one = oneIon(label, false);
+  return one && { ...one, attach: [], name: label };
+}
+
+/** One ion, as `ionStructure` reads its label - an element alone only where `element` (counted: one alone is read as an element is) - or null. */
+function oneIon(label: string, element: boolean): GroupStructure | null {
+  const m = /^(.+?)([+\-\u2212])$/.exec(label);
+  if (!m) return null;
+  const sign = m[2] === "+" ? "+" : "-";
+  if (ELEMENTS.has(m[1])) return element ? wholeOf(`[${m[1]}${sign}]`) : null;
+  if (sign === "-") {
+    const anion = anionStructure(label, groupLabels(), groupStructure);
+    if (anion) return anion;
+  }
+  const g = abbreviationOf(m[1]);
+  const first = g && !g.kind && /^\*([OS])(?![a-z])/.exec(g.smiles);
+  return first ? wholeOf(`[${first[1]}${sign}]${g.smiles.slice(2)}`) : null;
+}
+
+/** A whole molecule's structure from its SMILES: attached by none. */
+function wholeOf(smiles: string): GroupStructure {
+  return { ...smilesGroup(smiles), attach: [] };
 }
 
 /** What a label stands for as a whole molecule - a ligand on its own, a complex, a reagent - or null for a group. */
@@ -394,12 +443,52 @@ function carriedGroupOf(label: string): Abbreviation | undefined {
   };
 }
 
-/** A group put together by rule - a substituted aryl group, a group behind O, S or NH, an ester, an atom and the groups or halogens on it - or none. */
+/** Atoms that take more than one bond and may carry one group besides, their other bonds the drawing's: each one's name as a diyl. */
+const CARRYING: Record<string, string> = { N: "azanediyl", P: "phosphanediyl" };
+/** The alkali metals, bound to an O or an S as ions (as NaOMe's sodium is: ./condensed). */
+const ALKALI: Record<string, string> = { Li: "lithium", Na: "sodium", K: "potassium", Rb: "rubidium", Cs: "caesium" };
+
+/**
+ * An atom that takes more than one bond, written with one group it
+ * carries, its other bonds the drawing's - an N in a ring with its
+ * protecting group (NBoc, NMOM, NTs, NMe), a P; or an O or an S with
+ * an alkali metal on it, bound as an ion as NaOMe's is (ONa, OK, SLi). As
+ * drawn on a bond's left (BocN, MOMN, NaO) it is read turned round, as
+ * any label is. None for any other label.
+ */
+function carryingGroupOf(label: string): Abbreviation | undefined {
+  const m = /^([A-Z][a-z]?)([A-Z].*)$/.exec(label);
+  if (!m) return undefined;
+  if ((m[1] === "O" || m[1] === "S") && ALKALI[m[2]]) {
+    return { label, smiles: `*[${m[1]}-].[${m[2]}+]`, name: `${ALKALI[m[2]]} ${m[1] === "O" ? "oxido" : "sulfido"}`, carrying: true };
+  }
+  if (!CARRYING[m[1]]) return undefined;
+  const g = BY_LABEL.get(m[2]) ?? custom.get(m[2]);
+  // (a group's name of two letters or more: Z, of one, only in a structure, as typed - NZ is no zinc)
+  if (!g || g.kind || !g.smiles.startsWith("*") || g.label === "Cp" || m[2].length < 2 || CONTRACTED.includes(g)) return undefined;
+  return { label, smiles: `*${m[1]}(${g.smiles.slice(1)})`, name: `(${g.name.replace(/ \(.*\)$/, "")})${CARRYING[m[1]]}`, carrying: true };
+}
+
+/**
+ * A group put together by rule, as `groupBy` puts it together, kept: a
+ * complex's formula is tried part by part, and a long label's parts over
+ * and over (forgotten as the user's own change).
+ */
 function composedGroupOf(label: string): Abbreviation | undefined {
+  if (!GROUP_SEEN.has(label)) GROUP_SEEN.set(label, groupBy(label));
+  return GROUP_SEEN.get(label);
+}
+
+const GROUP_SEEN = new Map<string, Abbreviation | undefined>();
+
+/** A group put together by rule - a substituted aryl group, a group behind O, S or NH, an ester, an atom and the groups or halogens on it - or none. */
+function groupBy(label: string): Abbreviation | undefined {
   const aryl = substitutedAryl(label);
   if (aryl) return { label, smiles: aryl.smiles, name: aryl.name };
   const carried = carriedGroupOf(label);
   if (carried) return carried;
+  const carrying = carryingGroupOf(label);
+  if (carrying) return carrying;
   const halided = halidedGroupOf(label);
   if (halided) return halided;
   for (const c of COMPOSED) {
@@ -453,6 +542,8 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
     for (const l of [a.label, ...(a.also ?? [])]) if (!BY_LABEL.has(l) && !custom.has(l)) custom.set(l, a);
   }
   COMPOSED_SEEN.clear();
+  GROUP_SEEN.clear();
+  forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
 }
@@ -595,12 +686,20 @@ const ELEMENTS = new Set(TABLE.map((e) => e.symbol));
  * first - and "pin", for pinacolato - before element symbols.
  */
 let UNITS: string[] = [];
+/** The units by their first letter, each letter's longest first: what a label is read into at a letter, looked up by it. */
+let UNITS_AT = new Map<string, string[]>();
 /** The units labels are read into: the groups', the user's own among them. */
 function setUnits(): void {
   UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, "pin", "Phth"])]
     // (Bpin is B and pin, and so on the left pinB)
     .filter((u) => u.length > 1 && u !== "Bpin")
     .sort((x, y) => y.length - x.length);
+  UNITS_AT = new Map();
+  for (const u of UNITS) {
+    const at = UNITS_AT.get(u[0]);
+    if (at) at.push(u);
+    else UNITS_AT.set(u[0], [u]);
+  }
 }
 setUnits();
 
@@ -630,7 +729,7 @@ export function labelUnits(text: string): string[] {
       unit = text.slice(i, j + 1);
     } else {
       unit =
-        UNITS.find((u) => text.startsWith(u, i)) ??
+        UNITS_AT.get(text[i])?.find((u) => text.startsWith(u, i)) ??
         (ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? text.slice(i, i + 2) : text[i]);
     }
     i += unit.length;
@@ -722,10 +821,13 @@ export function unitRuns(units: readonly string[], italic: readonly boolean[] = 
       if (group[2]) push(group[2], true);
       return;
     }
-    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
-    if (REAGENT_NAMES.has(unit)) return push(unit);
-    // a group's own prefix: the t of t-Bu, the p of p-Ts
+    // a group's own prefix, or a reagent's: the t of t-Bu, the p of p-Ts, the m of m-CPBA
     const prefixed = /^(sec|tert|[nistomp])(-.+)$/.exec(unit);
+    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
+    if (REAGENT_NAMES.has(unit)) {
+      if (prefixed) push(prefixed[1], false, true);
+      return push(prefixed ? prefixed[2] : unit);
+    }
     if (prefixed) {
       push(prefixed[1], false, true);
       unit = prefixed[2];

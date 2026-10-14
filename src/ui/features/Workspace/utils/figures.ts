@@ -9,8 +9,8 @@
  * on the page: beside what it was read from, clear of what lies there.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { uprightOf, type Box, type FigureDrawn } from "../../../../lib/figure/drawn";
-import type { FigureRead } from "../../../../lib/figure/read";
+import { shapesOf, uprightOf, type Box, type FigureDrawn } from "../../../../lib/figure/drawn";
+import { figureBond, type FigureRead } from "../../../../lib/figure/read";
 import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
 import { cornerAt } from "../../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -22,17 +22,34 @@ import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
-import type { GlyphShape } from "../../../../lib/figure/glyphs";
+import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
 import { picturePng } from "./pictures";
 
-/** A label as drawn read as one typed is: an element with its charge, or a group's name - or nothing. */
+/** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
+/**
+ * Whether a label written alone is a whole molecule: a reagent or a complex
+ * Meno reads it as (H2O, HCl, NaCl, MeOH), or an element whose hydrogens and
+ * charge leave it nothing to bond (I-, Na+, OH-, NH3).
+ */
+export function wholeLabel(label: string): boolean {
+  const r = labelReading(label);
+  if (!r) return false;
+  if (r.whole) return true;
+  const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?([+-]*\d*[+-]*)$/.exec(label);
+  if (!r.element || !m || m[2] !== r.element) return false;
+  const read = readLabel(label, isElementSymbol);
+  const hs = (s: string | undefined) => (s == null ? 0 : s === "" ? 1 : Number.parseInt(s));
+  return read.kind === "element" && implicitHydrogens(read.el, 0, read.charge ?? 0) === hs(m[1]) + hs(m[3]);
+}
+
 export const figureLabels: LabelReader = (label) => {
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
-  if (r.kind === "element") return { el: r.el, charge: r.charge };
+  if (r.kind === "element") return { el: r.el, charge: r.charge, ...(r.isotope ? { isotope: r.isotope } : {}) };
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
 };
@@ -57,6 +74,32 @@ export function readMarks(model: Model): { atoms: Map<number, string>; bonds: Ma
   for (const a of model.atoms) if (a.unsure && a.unsure.as === atomAs(a, model.bonds)) atoms.set(a.id, a.unsure.said.join(" "));
   for (const b of model.bonds) if (b.unsure && b.unsure.as === bondAs(b)) bonds.set(b.id, b.unsure.said.join(" "));
   return { atoms, bonds };
+}
+
+/**
+ * The quarter a figure is turned by, its words all outlines: a quarter
+ * either way, as a page set sideways is, where its outlines read better
+ * as letters so - surely, by how sure - than as they lie; naught where
+ * neither does. (Never upside down: turned half round, an H, an O, an N
+ * read as themselves still, and a C as a D.)
+ */
+function quarterOfOutlines(drawn: FigureDrawn, known: readonly GlyphShape[]): number {
+  const read = [0, 1, 3].map((q) => {
+    const turned = q ? uprightOf(drawn, q).drawn : drawn;
+    const shapes = shapesOf(turned);
+    return { q, sure: shapeLetters(shapes, figureBond(shapes, []), known).filter(sureEnough).reduce((t, l) => t + l.sure, 0) };
+  });
+  const best = read.reduce((p, r) => (r.sure > p.sure ? r : p));
+  return best.q;
+}
+
+/**
+ * Whether a figure may draw its letters as shapes, to be read against the
+ * system's letters: a path filled in several parts, or curved, or with many
+ * corners - an N, an H, drawn of straight lines alone.
+ */
+export function lettersAsShapes(drawn: FigureDrawn): boolean {
+  return drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C") || p.d.filter((s) => s[0] === "L").length >= 6));
 }
 
 /** Why a figure gave no structure: what to say. */
@@ -124,11 +167,11 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
  * layout).
  */
 export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
-  // (a figure set sideways - its words reading down the page, or up it - read turned upright, each atom tied back to where it lies on the page)
-  const { drawn, back } = uprightOf(given);
-  // (letters drawn as shapes - filled paths of several parts, or curved - read against the system's letters)
-  const shaped = drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C")));
-  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, known ?? (shaped ? systemGlyphs() : []));
+  const glyphs = known ?? (lettersAsShapes(given) ? systemGlyphs() : []);
+  // (a figure set sideways - its words reading down the page, or up it - read turned upright, each atom tied back to where it lies on the page;
+  // one whose words are all outlines, no letter written to tell, turned the way most of them read as letters)
+  const { drawn, back } = uprightOf(given, given.letters.length || !glyphs.length ? undefined : quarterOfOutlines(given, glyphs));
+  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel);
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
@@ -187,6 +230,8 @@ function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, a
     r: 0.9,
     el: a.el,
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     seen: spot(read.atoms[i].x, read.atoms[i].y),
   }));
   const bonds: Bond[] = s.bonds.map((b, i) => ({

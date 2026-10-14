@@ -226,8 +226,9 @@ describe("what a step that ran jobs says", () => {
     expect(clock(42_000)).toBe("0:42");
     expect(clock(723_000)).toBe("12:03");
     expect(clock(3_723_000)).toBe("1:02:03");
-    expect(hartrees(-42.108712)).toBe("−42.10871 Eh");
-    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · −5.07054 Eh");
+    expect(hartrees(-42.108712)).toBe("−42.108712 Eh");
+    expect(hartrees(-0.0000001)).toBe("0.000000 Eh");
+    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · E −5.070540 Eh");
     expect(doneSaid([WATER, WATER], 3, 65_000)).toBe("1:05 · 2 of 3");
   });
 });
