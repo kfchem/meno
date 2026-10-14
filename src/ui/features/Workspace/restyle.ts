@@ -11,6 +11,7 @@
  * so prints as before.
  */
 import { styleOf, type StyleChoice } from "../../../lib/chem/style";
+import { POINT, pointFor, pointOf } from "../../../lib/pdf/layout";
 import type { WorkspaceDocument } from "./document";
 import type { Model, PictureItem, WorkflowSet } from "./store/types";
 import { restyled3d } from "./utils/restyle3d";
@@ -27,6 +28,11 @@ export type Restylable = Partial<
 /** How long a style prints a bond, in pt. */
 export function bondPtOf(style: StyleChoice): number {
   return styleOf(style).bondLengthPt;
+}
+
+/** The page's units in a point in a workspace of `style`: what a PDF or a text put on its page is laid at (lib/pdf/layout `pointFor`); ACS 1996's where it has none yet. */
+export function pointOfStyle(style: StyleChoice | undefined): number {
+  return style ? pointFor(bondPtOf(style)) : POINT;
 }
 
 /**
@@ -55,7 +61,14 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
   if (parts.captions) out.captions = parts.captions.map((c) => ({ ...c, x: x(c.x), y: y(c.y), ...(c.width != null ? { width: c.width * k } : {}) }));
   if (parts.texts) out.texts = parts.texts.map((t) => (t.at ? { ...t, at: { x: x(t.at.x), y: y(t.at.y) } } : t));
   if (parts.pdfs)
-    out.pdfs = parts.pdfs.map((p) => ({ ...p, x: x(p.x), y: y(p.y), ...(p.placed ? { placed: p.placed.map((q) => ({ ...q, x: x(q.x), y: y(q.y) })) } : {}) }));
+    out.pdfs = parts.pdfs.map((p) => ({
+      ...p,
+      x: x(p.x),
+      y: y(p.y),
+      // (its pages laid at a point k times larger in units: printed as before)
+      point: pointOf(p) * k,
+      ...(p.placed ? { placed: p.placed.map((q) => ({ ...q, x: x(q.x), y: y(q.y) })) } : {}),
+    }));
   if (parts.pictures) out.pictures = parts.pictures.map((p) => ({ ...p, x: x(p.x), y: y(p.y), w: p.w * k, h: p.h * k }));
   if (parts.slides) out.slides = parts.slides.map((s) => ({ ...s, x: x(s.x), y: y(s.y), w: s.w * k, h: s.h * k }));
   if (parts.shapes)
