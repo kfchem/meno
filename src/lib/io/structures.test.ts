@@ -238,14 +238,19 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
     expect(readStructures("sdf", "c.sdf", sampleSdf.replace(/\r?\n/g, "\r\n")).model.atoms.length).toBeGreaterThan(20);
   });
 
-  it("names the record of an SD file that is cut short", () => {
+  it("opens the records of an SD file before one cut short, naming it as left out (the maintainer, 2026-10-14)", () => {
     const record = (title: string) =>
       [title, "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
         "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
         "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
         "  1  2  1  0", "M  END", "$$$$"].join("\n");
     const two = `${record("one")}\n${record("two")}`;
-    expect(() => readStructures("sdf", "two.sdf", two.slice(0, two.lastIndexOf("  1  2  1  0")))).toThrow(/two.sdf could not be read: its record 2 ends before/);
+    const read = readStructures("sdf", "two.sdf", two.slice(0, two.lastIndexOf("  1  2  1  0")));
+    expect(read.model.atoms.map((a) => a.el)).toEqual(["C", "O"]);
+    expect(read.recordsLeftOut).toEqual([{ record: 2, why: "ends before the atoms and bonds it says it has" }]);
+    expect(checkedStructures(read, "two.sdf")).toBe(read);
+    // (its only record cut short: refused, as ever)
+    expect(() => readStructures("mol", "one.mol", record("one").slice(0, record("one").lastIndexOf("  1  2  1  0")))).toThrow(/one.mol could not be read: it ends before/);
   });
 
   /** A V2000 molfile of the atom and bond lines given, its counts line saying how many - or `counts`. */
@@ -257,11 +262,15 @@ describe("a structure's file cut short or damaged, as Meno's own reader gives it
   const v3000 = (atoms: string[], bonds: string[]) =>
     ["", "  Meno            2D", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", `M  V30 COUNTS ${atoms.length} ${bonds.length} 0 0 0`, "M  V30 BEGIN ATOM", ...atoms.map((a) => `M  V30 ${a}`), "M  V30 END ATOM", "M  V30 BEGIN BOND", ...bonds.map((b) => `M  V30 ${b}`), "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n") + "\n";
 
-  it("refuses a record with a bond to an atom it has not, naming it - not read as a bond to another record's atom", () => {
+  it("leaves out a record with a bond to an atom it has not, naming it - not read as a bond to another record's atom - and refuses a file of no record that reads", () => {
     // (read anyway, record 1's carbon, given a bond to its atom 4, was bonded to record 2's nitrogen; an atom 0, to the record before's)
     const sd = (first: string, second: string) => `${v2000([atom(0, 0, "C"), atom(1.5, 0, "O")], [first])}$$$$\n${v2000([atom(5, 0, "N"), atom(6.5, 0, "S")], [second])}$$$$\n`;
-    expect(() => readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  1  2  1  0"))).toThrow("two.sdf could not be read: its record 1 has a bond to an atom it does not have. It may be damaged.");
-    expect(() => readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  0  1  1  0"))).toThrow("two.sdf could not be read: its record 2 has a bond to an atom it does not have.");
+    const first = readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  1  2  1  0"));
+    expect(first.model.atoms.map((a) => a.el)).toEqual(["N", "S"]);
+    expect(first.recordsLeftOut).toEqual([{ record: 1, why: "has a bond to an atom it does not have" }]);
+    expect(readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  0  1  1  0")).recordsLeftOut).toEqual([{ record: 2, why: "has a bond to an atom it does not have" }]);
+    // (none reads: refused, its first record named)
+    expect(() => readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  0  1  1  0"))).toThrow("two.sdf could not be read: its record 1 has a bond to an atom it does not have. It may be damaged.");
     expect(() => readStructures("mol", "v3.mol", v3000(["1 C 0 0 0 0", "2 O 1.5 0 0 0"], ["1 1 1 4"]))).toThrow("v3.mol could not be read: it has a bond to an atom it does not have.");
     // (and the same records whole read as before)
     expect(readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  1  2  1  0")).model.bonds).toHaveLength(2);

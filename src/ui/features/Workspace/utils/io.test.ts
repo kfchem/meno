@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, xyzComments } from "./io";
+import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
+import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
@@ -211,6 +212,26 @@ describe("a file a tab was opened with, once read", () => {
     expect(add).toBe(true);
     expect(4 + dx).toBeGreaterThan(2);
     expect(3 + dy).toBeCloseTo(1, 9);
+  });
+});
+
+describe("an SD file with records that do not read", () => {
+  it("opens the others, and says in a notice which were left out and why", async () => {
+    const record = (el: string, bond: string) =>
+      ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+        `    0.0000    0.0000    0.0000 ${el}   0  0  0  0  0  0  0  0  0  0  0  0`,
+        "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0", bond, "M  END", "$$$$"].join("\n");
+    const r = await processFileContent("three.sdf", [record("C", "  1  2  1  0"), record("N", "  1  4  1  0"), record("S", "  1  2  1  0")].join("\n") + "\n");
+    expect(r.model.atoms.map((a) => a.el)).toEqual(["C", "O", "S", "O"]);
+    expect(useNotices.getState().notices).toMatchObject([{ title: "Part of the file left out", text: "Record 2 has a bond to an atom it does not have. The other records of three.sdf opened." }]);
+    for (const n of useNotices.getState().notices) useNotices.getState().dismiss(n.id);
+  });
+
+  it("names five of those left out at most, then how many more", () => {
+    const left = Array.from({ length: 7 }, (_, i) => ({ record: i + 2, why: "ends before the atoms and bonds it says it has" }));
+    expect(recordsLeftOutSaid("b.sdf", left)).toBe(
+      "Record 2 ends before the atoms and bonds it says it has. Record 3 ends before the atoms and bonds it says it has. Record 4 ends before the atoms and bonds it says it has. Record 5 ends before the atoms and bonds it says it has. Record 6 ends before the atoms and bonds it says it has. 2 more are left out as well. The other records of b.sdf opened.",
+    );
   });
 });
 

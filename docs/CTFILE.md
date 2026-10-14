@@ -79,6 +79,12 @@ not hold - Tc, Pr to Lu, Hf to Ir, and from Po on - unless an M  ISO line
 gives that atom's mass itself, which is read for any element
 (`CtMolecule.unread`).
 
+Of an SD file's several records, one refused so is left out, and the
+others are opened; a notice names each left out, by its number and why,
+as a trajectory's frames left out are said (the maintainer, 2026-10-14:
+`recordsLeftOut`, `lib/io/structures.ts`). A file whose only record is
+refused, or none of whose records reads, is refused, naming the first.
+
 An Sgroup that names an atom or a bond its table has not - in V2000's
 SAL, SPA, SBL or SAP, or V3000's lists - keeps those it has, and a V2000
 property line that counts more entries than it holds is read for those it

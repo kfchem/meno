@@ -56,6 +56,12 @@ export type StructureRead = {
   molecules3d?: FileMolecule3D[];
   /** A file's several records drawn flat - an SD file's: each one's atoms in the drawing, by id, and its title where it gives one. */
   records?: { atoms: number[]; title?: string }[];
+  /**
+   * The records of an SD file left out as it was read - cut short, damaged,
+   * or saying what Meno cannot read - each by its number among them, from
+   * 1, and why: said, never left out silently (the maintainer, 2026-10-14).
+   */
+  recordsLeftOut?: { record: number; why: string }[];
 };
 
 /**
@@ -120,6 +126,10 @@ const damaged = (name: string, why: string, what = "it") => new Error(`${name} c
 
 /** Why a file that says what Meno cannot read is not read without it (`CtMolecule.unread`, `why`). */
 const unread = (name: string, why: string, what = "it") => new Error(`${name} could not be read: ${what} ${why}.`);
+
+/** Why a record does not read - cut short, damaged, saying what Meno cannot read - as its file's refusal says it; none, where it reads. */
+const recordProblem = (m: Molecule): string | null =>
+  m.ct?.cut ? "ends before the atoms and bonds it says it has" : m.ct?.damaged ? `has ${m.ct.damaged}` : (m.ct?.unread ?? null);
 
 /**
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
@@ -190,27 +200,32 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   // MOL and SD files: their records, each a drawing or a molecule in 3D
   const molecules = readMoleculesFromText(content, kind);
-  // (the first record cut short, damaged or saying what Meno cannot read,
-  // named among several: cut short said first, what it most likely is
-  // where it is both)
-  const bad = molecules.findIndex((m) => m.ct?.cut || m.ct?.damaged || m.ct?.unread);
-  if (bad >= 0) {
-    const what = molecules.length > 1 ? `its record ${bad + 1}` : "it";
-    const ct = molecules[bad].ct!;
+  // (a record cut short, damaged or saying what Meno cannot read: of
+  // several, left out, the others opened and those left out named - their
+  // number and why - as a trajectory's frames left out are said (the
+  // maintainer, 2026-10-14); refused where it is the file's only record,
+  // or none reads - cut short said first, what it most likely is where it
+  // is both)
+  const problems = molecules.map(recordProblem);
+  const good = molecules.flatMap((_, i) => (problems[i] ? [] : [i]));
+  if (!good.length && problems[0]) {
+    const what = molecules.length > 1 ? "its record 1" : "it";
+    const ct = molecules[0].ct!;
     throw ct.cut ? cutShort(name, what) : ct.damaged ? damaged(name, ct.damaged, what) : unread(name, ct.unread!, what);
   }
+  const recordsLeftOut = problems.flatMap((why, i) => (why ? [{ record: i + 1, why }] : []));
+  const leftOut = recordsLeftOut.length ? { recordsLeftOut } : {};
   const said = saysThreeD(content);
-  const inDepth = (m: Molecule, i: number) => m.atoms.length > 0 && (said[i] || depthOf(m) > 0.1);
-  const molecules3d = molecules
-    .filter(inDepth)
-    .map((m) => {
-      // (and its record's title, its first line, where it gives one)
-      const title = m.ct?.name.trim();
-      return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}) };
-    });
-  const flat = molecules.filter((m, i) => !inDepth(m, i));
+  const inDepth = (i: number) => molecules[i].atoms.length > 0 && (said[i] || depthOf(molecules[i]) > 0.1);
+  const molecules3d = good.filter(inDepth).map((i) => {
+    const m = molecules[i];
+    // (and its record's title, its first line, where it gives one)
+    const title = m.ct?.name.trim();
+    return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}) };
+  });
+  const flat = good.filter((i) => !inDepth(i)).map((i) => molecules[i]);
   if (molecules3d.length && !flat.some((m) => m.atoms.length)) {
-    return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
+    return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d, ...leftOut };
   }
   const { model, centroid, records } = moleculesToEditorModel(flat);
   // The MOL parser returns an empty molecule rather than nothing for
@@ -218,7 +233,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   if (!model.atoms.length) throw noMolecules(name);
   // (several records with atoms: each one's atoms and title, for a stack of them)
   const held = records.filter((r) => r.atoms.length);
-  return { model, centroid, ...(held.length > 1 ? { records: held } : {}), ...(molecules3d.length ? { molecules3d } : {}) };
+  return { model, centroid, ...(held.length > 1 ? { records: held } : {}), ...(molecules3d.length ? { molecules3d } : {}), ...leftOut };
 }
 
 /**
@@ -343,6 +358,10 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (!(m.frames ?? []).every((f) => Array.isArray(f) && f.length === 3 * n && f.every(finite))) throw bad("a frame of a molecule in 3D is not whole");
     if (m.framesLeftOut != null && !(Number.isInteger(m.framesLeftOut) && m.framesLeftOut > 0)) throw bad("a molecule in 3D's frames left out are no count");
     if (m.together != null && !(Number.isInteger(m.together) && m.together > 0)) throw bad("a molecule in 3D's atoms in one place are no count");
+  }
+  const left = (s as { recordsLeftOut?: unknown }).recordsLeftOut;
+  if (left != null && !(Array.isArray(left) && left.every((r) => Number.isInteger(r?.record) && r.record > 0 && typeof r.why === "string"))) {
+    throw bad("what it says of the records left out is not a list of them");
   }
   return s as StructureRead;
 }

@@ -11,6 +11,7 @@ import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
+import { useNotices } from "../../../notices";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -78,8 +79,18 @@ export async function processFileContent(
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
   // a structure's file: what it holds, as its reader gives it, checked -
-  // its several records drawn flat a stack of drawings
-  return stackedRead(await readStructureFile(filename, content, kind));
+  // its several records drawn flat a stack of drawings - and the records
+  // of it left out, said in the corner
+  const read = await readStructureFile(filename, content, kind);
+  if (read.recordsLeftOut?.length) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: recordsLeftOutSaid(name, read.recordsLeftOut) });
+  return stackedRead(read);
+}
+
+/** What is said of the records of file `name` left out as it was read (lib/io/structures `recordsLeftOut`): each by its number and why - five at most, then how many more. */
+export function recordsLeftOutSaid(name: string, left: readonly { record: number; why: string }[]): string {
+  const said = left.slice(0, 5).map((r) => `Record ${r.record} ${r.why}.`);
+  const more = left.length > 5 ? [`${left.length - 5} more ${left.length - 5 === 1 ? "is" : "are"} left out as well.`] : [];
+  return [...said, ...more, `The other records of ${name} opened.`].join(" ");
 }
 
 /**
