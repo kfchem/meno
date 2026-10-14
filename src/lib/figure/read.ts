@@ -399,11 +399,26 @@ function bitsLeft(short: readonly Stroke[], inHashes: ReadonlySet<Stroke>, lines
 }
 
 /**
+ * Whether a word goes on as a line of text past it, rightward or leftward:
+ * another word on its baseline beyond it, a space and a comma off at most,
+ * that reads as no label - the line of a caption, "3aa, R = H, 73%", whose
+ * sign between two of its words is no bond, as it is where the line goes on
+ * past both (a row of labels, HO-P-O-P, is a chain).
+ */
+function lineGoesOn(w: Word, words: readonly Word[], right: boolean, reads: (label: string) => boolean): boolean {
+  return words.some((v) => {
+    if (v === w || Math.abs(v.box[3] - w.box[3]) > 0.3 * w.size || reads(labelText(v))) return false;
+    const gap = right ? v.box[0] - w.box[2] : w.box[0] - v.box[2];
+    return gap > -0.1 * w.size && gap < 1.2 * w.size;
+  });
+}
+
+/**
  * Bonds between two labels drawn so close that little of them is left - a
  * sulfonyl's S=O: a bit between two words, each on its other side, is a
  * bond between them; two bits side by side, a double one.
  */
-function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number): Drawn[] {
+function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number, reads: (label: string) => boolean): Drawn[] {
   const found = new Map<string, { a: Point; b: Point; n: number }>();
   for (const s of bits) {
     const c = mid(s.a, s.b);
@@ -415,6 +430,9 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number): 
     for (let i = 0; i < near.length && !pair; i++)
       for (let j = i + 1; j < near.length && !pair; j++) if (dot(unit(c, near[i].c), unit(c, near[j].c)) < -0.5) pair = [near[i], near[j]];
     if (!pair) continue;
+    // (a sign between two words of a line of text is none: lineGoesOn)
+    const [l, r] = pair[0].c.x < pair[1].c.x ? pair : [pair[1], pair[0]];
+    if (Math.abs(unit(l.c, r.c).x) >= 0.9 && lineGoesOn(words[l.k], words, false, reads) && lineGoesOn(words[r.k], words, true, reads)) continue;
     const [p, q] = pair[0].k < pair[1].k ? pair : [pair[1], pair[0]];
     const key = `${p.k}:${q.k}`;
     const u = unit(p.c, q.c);
@@ -547,8 +565,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // short of it)
   const stacked = (p: Point, out: Point) => words.some((w) => w.box[3] - w.box[1] > 1.15 * w.size && reaches(p, out, w.box, bond, 0.6));
   const atJoint = (s: Stroke, p: Point) => shapes.strokes.some((t) => t !== s && (dist(t.a, p) < 0.2 * bond || dist(t.b, p) < 0.2 * bond));
+  // (but a sign between two words of a line of text - a caption's "3aa, R = H, 73%" - is none: lineGoesOn)
+  const textAt = (p: Point, out: Point) => {
+    const w = words.find((v) => reaches(p, out, v.box, bond));
+    return !!w && Math.abs(out.x) >= 0.9 && lineGoesOn(w, words, out.x > 0, reads);
+  };
+  const inText = (s: Stroke) => textAt(s.a, unit(s.b, s.a)) && textAt(s.b, unit(s.a, s.b));
   const between = (s: Stroke) =>
-    (labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b))) ||
+    (labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && !inText(s)) ||
     (atJoint(s, s.a) && stacked(s.b, unit(s.a, s.b))) ||
     (atJoint(s, s.b) && stacked(s.a, unit(s.b, s.a)));
   // (short lines side by side, each from one label to another - N≡N+ - are a bond between them, double or triple, not a hash)
@@ -565,9 +589,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     return !!from && !words.some((w) => w !== from && fromBox(q, w.box) < 0.3 * bond) && !tipsOf.some((t) => t.of !== s && dist(t.p, q) < 0.2 * bond);
   };
   const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
+  // (a short line between two words of a line of text - a caption's = - is its sign, however long a bond's line it might be)
+  const textSign = (s: Stroke) => len(s) < 0.6 * bond && labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && inText(s);
+  // (and a line more than six bonds long is none - a table's rule, a graph's axis, a frame round a part of the figure: a bond is drawn at
+  // about its length, stretched in a large ring to five at most, and an arrow's line is the arrow's)
+  const ruled = (s: Stroke) => len(s) > 6 * bond;
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
-  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
+  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
   const whole = joined.filter((s) => !loose.includes(s));
   const used = loose.filter((s) => !joined.includes(s));
@@ -585,7 +614,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       .filter((w) => dist(w.tip, w.base) > 0.3 * bond || (dist(w.tip, w.base) > 0.1 * bond && labelled(w.base, unit(w.tip, w.base))))
       .map((w: Wedge): Drawn => ({ a: w.tip, b: w.base, order: 1, stereo: "up" })),
     ...shapes.curves.map((c) => wavy(c, bond)).filter((d): d is Drawn => !!d),
-    ...dashes(bitsLeft(short, inHashes, [...lines, ...used]).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond),
+    ...dashes(bitsLeft(short, inHashes, [...lines, ...used]).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond, (l) => reads(l)),
   ];
 
   // bonds' ends where they meet; an end alone, its bond pointing into a word, the word's

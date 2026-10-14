@@ -994,3 +994,41 @@ describe("a figure's charges drawn in rings", () => {
     expect(s.arrows).toHaveLength(0);
   });
 });
+
+describe("lines that are no bonds", () => {
+  /** A ring of six whole bonds from a point, to give the figure its bond length. */
+  const ring = (from: P): FigurePath[] => {
+    const pts: P[] = [from];
+    for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
+    return pts.map((p, k) => stroke(p, pts[(k + 1) % 6]));
+  };
+  const bar = (x0: number, x1: number, y: number) => filled([x0, y - 0.3], [x1, y - 0.3], [x1, y + 0.3], [x0, y + 0.3]);
+  const labelledBonds = (r: ReturnType<typeof readFigure>) => r.bonds.filter((b) => r.atoms[b.a].label || r.atoms[b.b].label).length;
+
+  it("reads the = of a line of text - a caption's 3aa, R = H, 73% - as no bond between its words, its bars long or short", () => {
+    // (its words a space apart, as a caption sets them)
+    const caption = (y: number) => [...word("3aa,", [57, y]), ...word("R", [90, y]), ...word("H,", [104, y]), ...word("73%,", [124, y])];
+    const f = figure(
+      [...ring([60, 60]), bar(94.5, 99.5, 148.5), bar(94.5, 99.5, 151.5), bar(95.5, 98.5, 168.5), bar(95.5, 98.5, 171.5)],
+      [...caption(150), ...caption(170)],
+    );
+    const r = readFigure(f, (l) => readDrawnLabel(l, reads).read);
+    expect(r.bonds).toHaveLength(6);
+    expect(labelledBonds(r)).toBe(0);
+  });
+
+  it("keeps the bonds of a row of labels set on one line - HO-S-O-S-OH - a chain, not a line of text", () => {
+    const y = 150;
+    const f = figure(
+      [...ring([60, 60]), stroke([61.2, y], [67.6, y]), stroke([76.4, y], [83.6, y]), stroke([92.4, y], [99.6, y]), stroke([108.4, y], [117.6, y])],
+      [...word("HO", [50, y]), ...word("S", [72, y]), ...word("O", [88, y]), ...word("S", [104, y]), ...word("OH", [122, y])],
+    );
+    expect(labelledBonds(readFigure(f, (l) => readDrawnLabel(l, reads).read))).toBe(4);
+  });
+
+  it("reads a line more than six bonds long - a table's rule, a graph's axis - as no bond", () => {
+    const r = readFigure(figure([...ring([60, 60]), stroke([20, 150], [20 + 10 * L, 150])]));
+    expect(r.atoms).toHaveLength(6);
+    expect(r.bonds).toHaveLength(6);
+  });
+});
