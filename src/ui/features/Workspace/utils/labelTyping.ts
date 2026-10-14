@@ -12,6 +12,7 @@
  */
 
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
+import { reagentOf } from "../../../../lib/chem/reagents";
 import type { Reading } from "../../../../lib/chem/smartLabel";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 
@@ -34,9 +35,10 @@ export function labelKey(e: KeyLike): string | null {
  * What a label reads as (lib/chem/smartLabel `Reading`): an element - with
  * its H, its charge, its mass number - or a charge alone, an Rgroup, or
  * what the abbreviations read - Meno's, the user's own, those put together
- * by rule - part of a structure; a reagent or a complex, a whole molecule.
- * A group named as an element is - Ac, Pr, Ts, Fm, At - is the group (the
- * maintainer, 2026-10-10).
+ * by rule - part of a structure; a reagent or a complex, a whole molecule,
+ * by a reagent's name where the reagents list it (TBME, CPME) - not by a
+ * formula read by rule (HOAc, H2Zn, PdCl2). A group named as an element is - Ac,
+ * Pr, Ts, Fm, At - is the group (the maintainer, 2026-10-10).
  */
 export function labelReading(label: string): Reading {
   if (!label) return null;
@@ -46,6 +48,7 @@ export function labelReading(label: string): Reading {
   if (read.kind !== "text") return { whole: false, ...(read.kind === "element" ? { element: read.el } : {}) };
   if (/^R\d+$/.test(label)) return { whole: false };
   if (!named) return null;
+  if (named.kind === "reagent" && reagentOf(label.trim())) return { whole: true, named: true };
   return { whole: named.kind === "reagent" || named.kind === "complex" };
 }
 

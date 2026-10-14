@@ -562,10 +562,33 @@ All hover-based, as above.
      it is drawn on the left, comes before any other reading of them (the
      maintainer, 2026-10-12): ho is HO, kept OH, not holmium; mes is MeS,
      kept SMe, not mesityl - Mes typed so is mesityl. A charge typed last
-     stays last: ho- and HO- are OH-, h3n+ NH3+.
-  4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
-     iPr stays.
+     stays last: ho- and HO- are OH-, h3n+ NH3+. HN typed before a group is
+     NH and the group even where the letters as written read as a whole
+     molecule too: HNiPr and hnipr are NHiPr, not a complex of nickel - a
+     label on a structure stands for part of one.
+  4. A prefix set in italics - n, s, t, sec, tert, o, m, p - gets its
+     hyphen, at a label's start or after an atom, however it was typed:
+     tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
+     hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
+     element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
+     FmBoc stay. iPr stays upright.
   5. What reads as nothing stays exactly as typed - no capital made.
+  6. A reagent's or a ligand's name comes before a metal's formula (the
+     maintainer, 2026-10-13), however many letters it makes capitals. No
+     metal's symbol is read from letters typed small across the name of a
+     group, a reagent or a ligand the same letters spell: tbscl is TBSCl,
+     not terbium's; tmscl TMSCl and tmsotf TMSOTf, not thulium's; tipscl
+     TIPSCl; lah LAH, not LaH; cdi CDI; tbme TBME. Nor holmium's from ho
+     before a group, as rule 3 reads ho: hoac is HOAc, hotf HOTf, homs
+     HOMs, hocl HOCl. Nor two elements' symbols of a letter each from a
+     group's name of two letters typed small: phi is PhI, phio PhIO,
+     phi(oac)2 PhI(OAc)2 - not P and H. Of reagents' names and formulas, a
+     name Meno knows comes first: cpme is CPME, not CpMe. Where no name is
+     spelt, a metal's formula is read as ever: h2zn is H2Zn, pdcl2
+     PdCl2, cocl2 CoCl2, zni2 ZnI2, cp2zrhcl Cp2ZrHCl; and one typed as it
+     is written is that - HoCl3, TbMe. A group's name of one letter, Z (Cbz), is read from z
+     only as part of a structure - co2z is CO2Z, nhz NHZ - never into a
+     metal's formula: nbz stays nbz.
 
   As it is typed, only its letters' case changes, as they are read so far
   - the same letters in the same places, the caret where it was; rules 3
