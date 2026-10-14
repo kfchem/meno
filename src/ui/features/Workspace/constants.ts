@@ -49,3 +49,11 @@ export const FREE_MS = 700;
 // Atom picking hit radius (instanced circle used for raycasting)
 // Must match the hover ring radius for exact visual parity.
 export const ATOM_PICK_RADIUS_RATIO = ATOM_HOVER_RING_RADIUS_RATIO;
+
+/**
+ * How much slower a chain's guide moves than it did (the maintainer,
+ * 2026-10-15: "a little more nyu-nyu-nyu, a little slower"): 1 is as it was;
+ * the honeycomb's opening, its folding and its following of the chain's end
+ * all take this much longer. The one number to tune.
+ */
+export const CHAIN_EASE = 1.3;
