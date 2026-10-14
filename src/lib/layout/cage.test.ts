@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { axialOut, cageCore, drawnAsChairOrBoat, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
+import { axialOut, cageCore, drawnAsChairOrBoat, isCage, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
 import { layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
+import { fromSmiles } from "./testdata/fromSmiles";
+import { shuffled, SHUFFLE_SEEDS } from "./testdata/shuffled";
 
 /** Carbons joined by the bonds given. */
 const carbons = (n: number, bonds: [number, number, number?][]): LayoutInput => ({
@@ -28,6 +30,22 @@ describe("a cage within a ring system", () => {
     expect(cageCore(cage, cage.systems[0])).toBeNull();
     const naphthalene = perceive(carbons(10, [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [4, 6], [6, 7], [7, 8], [8, 9], [9, 5]]));
     expect(cageCore(naphthalene, naphthalene.systems[0])).toBeNull();
+  });
+
+  it("is read the same whichever smallest set of rings the system was given - paeoniflorin's six-membered ring one of three, ibogaine's isoquinuclidine two of three", () => {
+    const read = (smiles: string) => {
+      const g = fromSmiles(smiles);
+      return [g, ...SHUFFLE_SEEDS.map((seed) => shuffled(g, seed))].map((h) => {
+        const mol = perceive(h);
+        const sys = mol.systems.reduce((b, s) => (s.atoms.length > b.atoms.length ? s : b));
+        const core = cageCore(mol, sys);
+        return `${isCage(mol, sys)} ${core ? core.atoms.map((a) => mol.el[a]).sort().join("") : "-"}`;
+      });
+    };
+    const paeoniflorin = "C[C@]12C[C@@]3([C@@H]4C[C@]1([C@@]4([C@H](O2)O3)COC(=O)C5=CC=CC=C5)O[C@H]6[C@@H]([C@H]([C@@H]([C@H](O6)CO)O)O)O)O";
+    expect(new Set(read(paeoniflorin))).toEqual(new Set(["false -"]));
+    const ibogaine = "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC";
+    expect(new Set(read(ibogaine))).toEqual(new Set(["false CCCCCCCN"]));
   });
 
   it("is drawn flat where the whole lies flat without a fault", () => {

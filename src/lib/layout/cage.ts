@@ -23,6 +23,7 @@ import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 import { byStructure } from "./ranks";
+import { ringsAlike } from "./rings";
 
 export type Vec3 = [number, number, number];
 
@@ -866,13 +867,13 @@ export function shownByShape(mol: Molecule, atoms: readonly number[], pos: (a: n
  * drawn as a chair or a boat (`shownByShape`), or in a ring of the system
  * bridged across another (sharing three atoms or more with it), whose
  * atoms the cage drawn in perspective fixes - the way each bond goes from
- * them says which way round they are.
+ * them says which way round they are. Bridged so in every smallest set of
+ * the system's rings (`smallestSets`), not only the one it was given.
  */
 export function shownBySolid(mol: Molecule, sys: RingSystem, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
   const out = shownByShape(mol, atoms, pos);
-  const rings = sys.rings.map((r) => mol.rings[r]);
-  const bridged = rings.filter((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
-  for (const a of atoms) if (mol.tetra.has(a) && bridged.some((r) => r.includes(a))) out.add(a);
+  const bridged = smallestSets(mol, sys).map((rings) => rings.filter((r) => rings.some((q) => q !== r && shares3(q, r))));
+  for (const a of atoms) if (mol.tetra.has(a) && bridged.every((set) => set.some((r) => r.includes(a)))) out.add(a);
   return out;
 }
 
@@ -1786,17 +1787,101 @@ function outward(
  * atom in two rings or more (cubane). A system with a ring fused on a side
  * as well (morphine's benzene ring, artemisinin's cyclohexane) is drawn
  * flat, its bridge across it.
+ *
+ * Read from every smallest set of its rings (`smallestSets`), not only the
+ * one the system was given, which of several as small going by the order
+ * of the atoms: a cage only where each of them reads as one - a set that
+ * has a ring fused on a side shows the system is not all bridged.
  */
 export function isCage(mol: Molecule, sys: RingSystem): boolean {
   if (sys.rings.length < 2 || sys.atoms.length > 16) return false;
   // (rings through a metal - a chelate, a diene bound to it - or round a
   // star are no cage: they are drawn flat, or face-on to their metal)
   if (sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]))) return false;
-  const rings = sys.rings.map((i) => mol.rings[i]);
-  if (rings.some((r) => r.length > 8)) return false;
+  if (sys.rings.some((r) => mol.rings[r].length > 8)) return false;
+  return smallestSets(mol, sys).every((rings) => allBridged(sys.atoms, rings));
+}
+
+/** Rings all bridged, each sharing three atoms or more with another, or a polyhedron, every atom in two rings or more. */
+function allBridged(atoms: readonly number[], rings: readonly (readonly number[])[]): boolean {
   const bridged = rings.every((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
-  const polyhedron = sys.atoms.every((a) => rings.filter((r) => r.includes(a)).length >= 2);
-  return bridged || polyhedron;
+  return bridged || atoms.every((a) => rings.filter((r) => r.includes(a)).length >= 2);
+}
+
+/** At most this many smallest sets read for one system: one with more is read by its own set. */
+const MOST_SETS = 64;
+const setsOf = new WeakMap<RingSystem, number[][][]>();
+
+/**
+ * Every smallest set of a ring system's rings, each as its rings' atoms:
+ * the system's own (`Molecule.rings`) and each other as small - where
+ * several sets are as small, which one the system was given goes by the
+ * order of its atoms: quinuclidine has three six-membered cycles and any
+ * two are a smallest set; paeoniflorin's six-membered ring is one of three.
+ * Each other set takes, length by length, as many of the cycles that size
+ * no sum of shorter rings gives (`ringsAlike`) as the system's own set has,
+ * where they are independent of the shorter rings and of one another. A
+ * ring of nine atoms or more is kept as the system has it: no cage has one.
+ */
+function smallestSets(mol: Molecule, sys: RingSystem): number[][][] {
+  const known = setsOf.get(sys);
+  if (known) return known;
+  const own = sys.rings.map((i) => mol.rings[i]);
+  const small = own.filter((r) => r.length <= 8);
+  const alike = small.length ? ringsAlike(small, mol.neighbours) : [];
+  let sets: number[][][] = [own];
+  if (alike.length > small.length) {
+    // (each cycle as the set of its bonds, over GF(2))
+    const bondOf = new Map<string, number>();
+    const vectorOf = (r: readonly number[]) => {
+      let v = 0n;
+      r.forEach((a, k) => {
+        const b = r[(k + 1) % r.length];
+        const key = a < b ? `${a},${b}` : `${b},${a}`;
+        if (!bondOf.has(key)) bondOf.set(key, bondOf.size);
+        v ^= 1n << BigInt(bondOf.get(key)!);
+      });
+      return v;
+    };
+    const rank = (vs: readonly bigint[]) => {
+      const basis: bigint[] = [];
+      for (let v of vs) {
+        for (const b of basis) if ((v ^ b) < v) v ^= b;
+        if (!v) continue;
+        basis.push(v);
+        basis.sort((p, q) => (p > q ? -1 : p < q ? 1 : 0));
+      }
+      return basis.length;
+    };
+    const choose = <T,>(items: readonly T[], m: number): T[][] =>
+      m === 0 ? [[]] : items.flatMap((x, k) => choose(items.slice(k + 1), m - 1).map((rest) => [x, ...rest]));
+    const binomial = (k: number, m: number) => {
+      let c = 1;
+      for (let j = 0; j < m; j++) c = (c * (k - j)) / (j + 1);
+      return c;
+    };
+    const lengths = [...new Set(small.map((r) => r.length))].sort((p, q) => p - q);
+    const options: number[][][][] = [];
+    let count = 1;
+    for (const length of lengths) {
+      const shorter = small.filter((r) => r.length < length).map(vectorOf);
+      const wanted = small.filter((r) => r.length === length).length;
+      const cycles = alike.filter((r) => r.length === length);
+      if (binomial(cycles.length, wanted) > 4 * MOST_SETS) {
+        count = Infinity;
+        break;
+      }
+      const ways = choose(cycles, wanted).filter((pick) => rank([...shorter, ...pick.map(vectorOf)]) === shorter.length + wanted);
+      options.push(ways);
+      count *= ways.length;
+    }
+    if (count > 1 && count <= MOST_SETS) {
+      const large = own.filter((r) => r.length > 8);
+      sets = options.reduce<number[][][]>((acc, ways) => acc.flatMap((set) => ways.map((pick) => [...set, ...pick])), [[]]).map((set) => [...set, ...large]);
+    }
+  }
+  setsOf.set(sys, sets);
+  return sets;
 }
 
 const dotV = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -1818,27 +1903,58 @@ const normalise = (a: Vec3): Vec3 => {
  * isoquinuclidine, fused to its indole by a seven-membered ring;
  * tetrodotoxin's cage, its guanidine ring fused to it). The largest such
  * set of rings, where it is a cage on its own; else none.
+ *
+ * Where the system has more than one smallest set of rings (`smallestSets`),
+ * its cage is the atoms every set has in its cage - all the system's, in a
+ * set that reads the whole as one - and the system's own rings within
+ * them: ibogaine's seven-membered ring shares three atoms with one of the
+ * isoquinuclidine's three six-membered cycles and is fused on a side of
+ * the other two, so it is no part of the cage whichever two the system
+ * was given.
  */
 export function cageCore(mol: Molecule, sys: RingSystem): RingSystem | null {
-  const rings = sys.rings;
-  const shares3 = (i: number, j: number) => mol.rings[i].filter((a) => mol.rings[j].includes(a)).length >= 3;
-  const seen = new Set<number>();
-  let best: number[] = [];
+  const sets = smallestSets(mol, sys);
+  if (sets.length === 1) {
+    const best = largestGroup(sys.rings, (i, j) => shares3(mol.rings[i], mol.rings[j]));
+    if (best.length < 2 || best.length === sys.rings.length) return null;
+    const core: RingSystem = { rings: best, atoms: [...new Set(best.flatMap((i) => mol.rings[i]))] };
+    return isCage(mol, core) ? core : null;
+  }
+  const cages: number[][] = [];
+  for (const rings of sets) {
+    const best = largestGroup(rings, shares3);
+    if (best.length < 2) return null;
+    const atoms = [...new Set(best.flat())];
+    const metal = atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]));
+    if (metal || atoms.length > 16 || best.some((r) => r.length > 8) || !allBridged(atoms, best)) return null;
+    cages.push(atoms);
+  }
+  const inside = new Set(cages[0].filter((a) => cages.every((c) => c.includes(a))));
+  const rings = sys.rings.filter((i) => mol.rings[i].every((a) => inside.has(a)));
+  if (rings.length < 2 || rings.length === sys.rings.length) return null;
+  const core: RingSystem = { rings, atoms: [...new Set(rings.flatMap((i) => mol.rings[i]))] };
+  return isCage(mol, core) ? core : null;
+}
+
+const shares3 = (p: readonly number[], q: readonly number[]) => p.filter((a) => q.includes(a)).length >= 3;
+
+/** The largest group of rings joined each to another by `joined`, the first of the largest in the order given. */
+function largestGroup<T>(rings: readonly T[], joined: (p: T, q: T) => boolean): T[] {
+  const seen = new Set<T>();
+  let best: T[] = [];
   for (const start of rings) {
     if (seen.has(start)) continue;
     const group = [start];
     seen.add(start);
     for (let k = 0; k < group.length; k++)
       for (const j of rings) {
-        if (seen.has(j) || !shares3(group[k], j)) continue;
+        if (seen.has(j) || !joined(group[k], j)) continue;
         seen.add(j);
         group.push(j);
       }
     if (group.length > best.length) best = group;
   }
-  if (best.length < 2 || best.length === rings.length) return null;
-  const core: RingSystem = { rings: best, atoms: [...new Set(best.flatMap((i) => mol.rings[i]))] };
-  return isCage(mol, core) ? core : null;
+  return best;
 }
 
 /**

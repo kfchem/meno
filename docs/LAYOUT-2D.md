@@ -60,7 +60,14 @@ The benchmark's measure reads a drawing the same way
 however its atoms are listed: in a bridged system it reads every ring as
 small as one of its smallest set, not the set alone - quinuclidine has
 three six-membered cycles, and which two make the set goes by the order
-of the atoms.
+of the atoms. So too does Clean-up read whether a ring system is a cage,
+and which part of it is its cage: from every smallest set of its rings,
+not the one it was given. It is a cage only where each set reads it as
+one (paeoniflorin's six-membered ring is one of three, and in one set
+all its rings are bridged, in the others not), and its cage is the atoms
+every set has in it (ibogaine's isoquinuclidine: its seven-membered ring
+shares three atoms with one of the cage's three six-membered cycles, and
+is fused on a side of the other two).
 
 ## What a good drawing is
 

@@ -62,7 +62,6 @@ export const NOT_YET_ORDER_FREE: ReadonlySet<string> = new Set([
   "Gibberellic acid",
   "Ingenol",
   "Phorbol",
-  "Paeoniflorin",
   "Bilobalide",
   "Menthol",
   "Lovastatin",
