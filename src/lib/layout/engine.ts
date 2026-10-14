@@ -72,7 +72,9 @@ export function layout2D(input: LayoutInput): Layout2D {
   // the same - aconitine's ring A a chair or a boat by that order, once.
   // In more than one of its own orders, the drawing that reads best kept:
   // the layout's choices between equals were made on such orders, and one
-  // order alone draws some molecules worse than another does)
+  // order alone draws some molecules worse than another does - but the
+  // next only where the drawing so far leaves something to win, which
+  // the first order alone decides)
   // (and kept by the molecule written in its own order: the same molecule
   // again - a label's group drawn out at every relayout, a drawing read
   // back - however its atoms come, laid out once)
@@ -98,6 +100,13 @@ export function layout2D(input: LayoutInput): Layout2D {
   for (let way = 0; way < OWN_ORDERS; way++) {
     const to = way ? walkOrder(input, ranks, way) : to0;
     const own = reordered(input, to);
+    // (another order only where it is one: a molecule with one end atom -
+    // strychnine's O - is walked the same from either end)
+    // (and only where the drawing so far leaves something to win: a fault
+    // a reader cannot miss costs more than a point, and a drawing with
+    // none that costs under one - its long axis ten degrees off level - no
+    // other order of the molecules on either benchmark list drew better)
+    if (way && (bestScore < ANOTHER_ORDER_WORTH || JSON.stringify(own) === key)) break;
     const laid = layoutInOrder(own);
     // (measured in that order too, the same whatever order the atoms came
     // in: the measure reads some things by atom order - which of rings as
@@ -128,6 +137,9 @@ const LAID_OUT_KEPT = 64;
 
 /** How many of the molecule's own orders it is laid out in, the best drawing kept (`layout2D`, `canonicalOrder`): 1, 2 or 4. */
 const OWN_ORDERS = 2;
+
+/** The score a drawing must reach for `layout2D` to lay the molecule out in its next own order too, to look for a better one. */
+const ANOTHER_ORDER_WORTH = 1;
 
 function layoutInOrder(input: LayoutInput): Layout2D {
   // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system
