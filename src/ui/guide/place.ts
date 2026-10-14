@@ -6,6 +6,8 @@
  * the page, out of the way of where the chemist is to work.
  */
 
+import type { GuidePlace } from "../../lib/plugins/guide";
+
 export type Box = { left: number; top: number; width: number; height: number };
 export type CardPlace = {
   left: number;
@@ -54,4 +56,13 @@ export function placeCard(part: Box | null, page: Box, card: { width: number; he
     return { left: clamp(middleX - card.width / 2, EDGE, maxLeft), top: under ? below : clamp(part.top - GAP - card.height, EDGE, maxTop) };
   }
   return { left, top, notch: { side: toRight ? "left" : "right", at: clamp(middleY - top, NOTCH_IN, card.height - NOTCH_IN) } };
+}
+
+/**
+ * Whether the card waits out of sight: its step points at a part of the
+ * window and neither that part nor any page is seen - Settings, say, the tab
+ * in front. Such a step is about a workspace, and comes back with one.
+ */
+export function waitsUnseen(at: GuidePlace | undefined, part: Box | null, page: Box | null): boolean {
+  return at != null && !part && !page;
 }

@@ -255,16 +255,17 @@ Taken on 2026-10-03:
   - held as a style, as the 2D drawing's is, so that it can be set the
     same way later.
   - Since 2026-10-04 it is set in Settings, under Molecules in 3D, as
-    the drawing style is: a preset - Meno (the viewer's look), Glossy or
-    Space-filling - and what was changed from it, each change marked and
-    taken back alone or all at once. The settings are how molecules are
-    drawn unless one has a look of its own, ball size, bond thickness and
-    colour, the surface, the two lights, and how a molecule turns and
-    coasts when let go. A molecule beside them shows the look and can be
+    the drawing style is: a preset - Ball and stick (the viewer's look;
+    named Meno until 2026-10-10), Glossy or Space-filling - and what was
+    changed from it, each change marked and taken back alone or all at
+    once. The settings are how molecules are drawn unless one has a look
+    of its own, ball size, bond thickness and colour, the surface, the two
+    lights, and how a molecule turns and coasts when let go. A molecule
+    beside them shows the look and can be
     turned, to try the turning. The canvas, the selection's handle, a fit
     and the pictures for other programs all take the look from there. A
-    document of its own look, as a drawing can have its own style, is not
-    there yet.
+    workspace of its own look, as a workspace has its own drawing style, is
+    not there yet.
   - Since 2026-10-10 it is two looks, a primary and a secondary, each a
     style chosen from a list: *Styles in 3D* below.
 
@@ -327,22 +328,30 @@ Taken while stage 1 was built, on 2026-10-03:
   shows are not undone, save a turn by the selection's handle. They are kept by a copy and by the workspace file,
   so that what is pasted or opened looks as it did.
 - **Saving.**
-  - `.meno` is JSON (`meno-workspace`, version 1).
-  - An SD file holds each 3D molecule as a record in 3D beside the
-    drawing.
-  - With 3D molecules on the canvas, Save offers only what keeps them: a
-    workspace or an SD file.
+  - `.meno` is a zip (since 2026-10-06, #158: docs/FILE-IO.md, *The
+    workspace file*). Its `workspace.json` is the JSON `.meno` was at
+    first (`meno-workspace`, version 1); the outputs, texts, PDFs and
+    pictures it keeps are files beside it (`lib/doc/menoFile.ts`).
+  - Save and Save As write `.meno`, and nothing else (since 2026-10-06,
+    #151; before, with 3D molecules on the canvas, Save offered a
+    workspace or an SD file). Other kinds are written by *Export…*, on
+    the selection's menu: MOL, SDF, RXN, PDB and SVG, by Meno
+    (`lib/io/writers.ts`), and, for molecules in 3D, what the plugins
+    added write. An SD file holds each 3D molecule as a record in 3D
+    beside the drawing, in the frame shown or every frame a record; a PDB
+    file holds the molecules in 3D alone.
 - **Calculation readers** (the maintainer): reading what calculation
   programs write is to be plugins, added and removed online. Meno itself
   reads geometry. The one reader so far, energies on an XYZ file's comment
-  lines (CREST, xtb, ORCA), lives apart in `lib/calc`, and what it finds
-  is plain data on the molecule.
+  lines (CREST, xtb, ORCA), lives apart (`src/utils/xyzEnergies.ts`), and
+  what it finds is plain data on the molecule.
 
 Taken on 2026-10-04:
 
 - **The structure canvas is the workspace** (named Workspace from 2026-10-10), and everything else is to be
   reached from it. The New Tab page is gone: Meno starts on a canvas, "+"
-  makes another, and Open puts a file in a tab of its own. The New… menu
+  makes another, and Open puts a file in a tab of its own (until
+  2026-10-13: Open adds to the workspace in front, below). The New… menu
   goes too, later: the text editor, the Python console and the workflow
   builder are to be reached from the canvas. (Done 2026-10-10: "+" opens
   a workspace and nothing else, and the Python console was removed.)
@@ -397,7 +406,9 @@ Taken on 2026-10-07:
   - since 2026-10-09 it lies over the canvas's right side, the view
     following it, and the PDFs read there are named among its texts
     (docs/PDF.md, step 2).
-  The small previews on the page, decided on 2026-10-04, are not made yet.
+  The small previews on the page, decided on 2026-10-04, are made: each
+  text has a sheet on the page with its first lines and its name under it,
+  coming as an icon (docs/PDF.md, *A text*).
 
 Taken on 2026-10-10 (menus and gestures):
 
@@ -406,7 +417,7 @@ Taken on 2026-10-10 (menus and gestures):
   and *3D structures* went with the menu. Save is a button in the title
   bar, by Settings (and Ctrl/Cmd+S); Export is the selection's; a SMILES
   is drawn from Quick Add; Open…, Save As…, New text and what concerns the
-  view - fitting, R and S, the texts, the drawing style - and *Run all*
+  view - fitting, R/S and E/Z, the texts, the drawing style - and *Run all*
   are on the right-click menu on empty space, with their keys.
 - **Quick Add opens at once.** The chain from empty space is one of its
   icons, so a double-click need not wait to see whether a third click
@@ -414,16 +425,34 @@ Taken on 2026-10-10 (menus and gestures):
 - **A double-click on the canvas shuts the column** beside it: the work
   comes back to the canvas (docs/PDF.md, *One canvas*).
 
+Taken on 2026-10-13:
+
+- **Open adds to the workspace in front.** A structure's file, a
+  calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
+  workspace in front, as a drop on its canvas adds it: in free space near
+  the middle of the view, one step to undo, an SD file as a stack. Free
+  space is clear of all on the page and of a workflow's sets and steps'
+  cards - a structure put down in a set's frame would be taken as what the
+  set holds - its own labels and "+" signs counted. Only a `.meno` opens a
+  tab of its own, untouched: opened with other files at once, it opens
+  beside the workspace in front, which takes the rest (the maintainer,
+  2026-10-13). A file that cannot be read says so in the workspace, and no
+  tab is made; where a plugin could read it, adding the plugin reads it
+  again there. With no workspace in front, the one last in front is
+  brought forward; with none, a canvas is opened for it.
+
 ## Stage 2, as built
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo drawn without a configuration is ringed on
-  the drawing while Meno asks what to make: every stereoisomer it gives,
-  one, or none for now. Each is made as a conformer set (RDKit's ETKDG,
-  then MMFF94) and comes onto the page as a molecule in 3D, its frames the
-  conformers, lowest first. Of two enantiomers, one is made as the other's
-  mirror image, so the two have the same conformers and shares.
+  everything selected (Select all first, for everything drawn). Stereo
+  drawn without a configuration is ringed on the drawing while Meno asks
+  what to make: every stereoisomer it gives, one, or none for now. Each is
+  made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
+  chosen - UFF where MMFF has no parameters for the molecule) and comes
+  onto the page as a molecule in 3D, its frames the conformers, lowest
+  first. Of two enantiomers, one is made as the other's mirror image, so
+  the two have the same conformers and shares.
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest
@@ -482,10 +511,11 @@ read and attached to its molecule. Agreed with the maintainer on
 - **A reader is a plugin.** Each runs as a worker in a Python environment
   of its own, as RDKit does: set up from a lock that Meno carries, every
   package pinned by its hash, and only when asked for, with the network's
-  consent. Readers are added and removed in Settings, *Calculation
-  readers*; opening a file that no installed reader reads says which
-  would. Which readers there are is Meno's own list for now. A list
-  fetched online needs a way to trust it (signing), and comes later.
+  consent. Readers are added and removed in Settings, *Plugins*, and which
+  reads a kind that several read is chosen in *Files*; opening a file that
+  no reader added reads says which would. Which readers there are is
+  Meno's own list for now. A list fetched online needs a way to trust it
+  (signing), and comes later.
 - **The first reader is cclib** (BSD-3), which reads ORCA, Gaussian, xTB
   and others. It is installed into its plugin's environment as a
   library. Meno does not copy its code, and a reader Meno writes itself is
@@ -548,18 +578,37 @@ Each result says what it belongs to, and Meno puts it there:
 | A list | vibrations, orbitals, NBO's interactions | from the molecule's menu, under the molecule |
 
 - **A value says what quantity it is,** in Meno's unit for it - an energy
-  in hartrees, a charge in e, a wavenumber in cm⁻¹ (an imaginary one
+  in hartrees, a charge in e, a spin population in e (signed, as a charge
+  is), a wavenumber in cm⁻¹ (an imaginary one
   negative), a length in ångströms, a dipole in debye, a number, a text -
   and Meno writes it, the same way whichever plugin gave it. Any other
   gives its unit, and is written with it.
+- **A charged molecule's dipole is taken about its centre of mass**
+  (2026-10-14). An ion's dipole depends on the point it is taken about -
+  H3O+ moved 6 Å from the origin its program took it about reads 28.9 D
+  there, 2.1 D about itself - and programs take it about different points
+  (the origin of the coordinates, the centre of nuclear charge, the centre
+  of mass). So the plugin takes it again about the centre of mass of the
+  geometry it is of, and calls it *Dipole moment about the centre of
+  mass* wherever it is shown. A neutral molecule's is the program's own.
 - **A list's row can point at atoms, a frame or a motion.** Pointed at,
   its atoms are marked; chosen, its frame is shown, or the molecule moves
   in it. Vibrations are a list whose rows move the molecule - no arrows
-  and no spectrum. These are what Meno can do with a row, and more come
+  and no spectrum. Its columns are those the output holds: the reduced
+  masses, IR intensities and Raman activities where it gives them, and
+  no empty column where it does not (2026-10-14). These are what Meno can do with a row, and more come
   as Meno learns them: a surface, for an orbital's row.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
-  after what the calculation was and its energy.
+  after what the calculation was and its energy. One ranked 0 - how the
+  run went, "Run ended with an error" - is said however long the line
+  (2026-10-13). So is what geometries that are no optimisation's are -
+  "Relaxed scan · 5 points" (a rigid one "Scan"), "Reaction path · 21 points" (a Gaussian
+  reaction path's points in the order of its coordinate, as its summary
+  lists them) - none of them called optimised; and "Excited state ·
+  energies not read" where an excited state was optimised, whose energies
+  at each geometry are not the ground state's that the output also gives
+  (2026-10-14).
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
@@ -587,7 +636,9 @@ with that data written by hand.
 ### In order
 
 1. **3a.** The reader plugins: the worker, the environment, Settings'
-   *Calculation readers* with the choice where they overlap, and cclib's.
+   *Calculation readers* with the choice where they overlap, and cclib's
+   (since then, the readers are in Settings' *Plugins* and the choice in
+   *Files*).
    Geometries, an optimisation's steps, energies, and what the chip says.
 2. **3b.** Vibrations.
 3. **3c.** Results in the general form: what the calculation was in
@@ -603,11 +654,12 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
 2026-10-05.
 
 - **Readers.** cclib (1.9rc1) is the first. Settings, *Calculation
-  readers*, adds it - asking first for the network - and takes it away
-  again, its environment and its record with it. A kind of output is told
-  by what its file starts with. Where readers overlap, every one added
-  reads the output and each one's results are kept, its own; the one
-  chosen for that kind gives the geometries and what the calculation was.
+  readers* (now *Plugins*, the choice where readers overlap in *Files*),
+  adds it - asking first for the network - and takes it away again, its
+  environment and its record with it. A kind of output is told by what its
+  file starts with. Where readers overlap, every one added reads the
+  output and each one's results are kept, its own; the one chosen for that
+  kind gives the geometries and what the calculation was.
 - **Opening an output.** It opens on a canvas tab of its own, its last
   geometry shown, an optimisation's steps as its frames. With no reader
   added that reads it, Meno says which to add; an output with no geometry
@@ -701,6 +753,123 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 2. **3d-2.** Grids, promises, surfaces, the value's slider, the colours in
    Settings, and cube files.
 3. **3d-3.** The PySCF plugin.
+
+## Drawing style
+
+Planned on 2026-10-14 from the maintainer's decision, to be built in one
+pull request (`agent/style-one-per-workspace`): L8 the change of style and
+what it converts, hunter C the style's place and its card, hunter A the
+molecules in 3D.
+
+- **One style to a workspace.** The page's unit is the bond. A bond is 1.8
+  units (`NOMINAL_BOND_LENGTH`) in every style, and the style says how long
+  it prints (`bondLengthPt`), so a point is 1.8 / `bondLengthPt` units
+  (`pointPx`): 0.125 in ACS 1996's 14.4 pt, more in a style of shorter
+  bonds. Every structure in a workspace is drawn in its one style; no
+  structure has a style of its own.
+- **Fixed as the workspace is made.** A new workspace takes the style
+  Settings has then, and keeps it; Settings' style is for new workspaces
+  only. The fallback that let a workspace without a style follow Settings
+  as it changed (`docStyle ?? drawingStyle`) goes: `style` is always set,
+  in the document, the store and the saved file.
+- **A change of style is one command,** from the canvas's Drawing style
+  card. It sets the style and converts the page with it, so that every
+  object on the page keeps its printed size and its place, and only the
+  structures grow or shrink. With k = old bond pt / new bond pt:
+
+  | On the page | Kept in units | How it converts |
+  |---|---|---|
+  | A structure in 2D: atoms joined by bonds, a stack's records as one | atoms' x, y | its middle (of its box) times k; its atoms keep their offsets from it, so it keeps its size in units and its bonds print at the new length. Bonds, abbreviations, brackets, ring circles and electron arrows go with its atoms |
+  | A molecule in 3D | `at`, `turn` | bodies - molecules whose spheres (each its look's reach, about its place and height) touch or overlap, turned together or not - move by their middle times k, keeping their offsets, heights and turns; a molecule keeps its size in units (1.5 Å is a drawn bond in every style) |
+  | A reaction arrow | x, y, length, corners' `across` | times k; its heads, weight and stroke are the style's as it is drawn |
+  | A "+" | x, y | times k; its size is the style's |
+  | Words | x, y, `width` | times k; their size in pt is kept - words given none, at the old style's labels' size, keep that as their own where the new style's labels differ |
+  | A slide, a picture | x, y, w, h | times k; a picture's turn is kept |
+  | A PDF | x, y; its own pages' places; `point` | times k, and the point its pages are laid at times k (below); ink on its pages is in its own points and kept |
+  | A text's sheet on the page | `at`; `point` | times k, and its point times k |
+  | A shape | x0, y0, x1, y1, a callout's tail | times k; its weight in pt is kept |
+  | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
+  | A workflow step | x, y | times k |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A print frame (later) | its frame | times k |
+
+  What is given in points - words' sizes, shapes' weights, ink widths, a
+  PDF's page sizes - is kept as it is: drawn at the new point, it prints
+  as before. A structure's labels and lines are the style's own.
+- **The page holds still on the screen.** The view follows every change of
+  the bond's printed length - the command, its undo, its redo: the camera's
+  place times k and its zoom divided by k. Slides, words and pictures stay
+  where they are on the screen while the structures grow or shrink about
+  their middles.
+- **PDFs and texts at their own point.** A PDF's pages and a text's sheet
+  were drawn at ACS 1996's point in every style (`POINT`, 1.8 / 14.4). Each
+  now keeps the point it was laid at (`point`, units in a point: lib/pdf/layout
+  `pointOf`): one put on the page takes the workspace's (`pointFor`), and a
+  change of style multiplies it by k with the rest of the page, so a PDF
+  prints at its own size in any style and keeps it through a change. Its
+  icon, its name's room, the gaps between its pages and what is carried out
+  of it (a picture, words) are laid at it too. A PDF or a text from before
+  keeps none and stays at `POINT`, as large as it was.
+- **One undo step.** The style and the converted page go together, in one
+  edit ("drawing style"). A preset chosen is one step and does not jump:
+  the new style is taken at once but its bond length eases from the old one
+  over `DURATION.move` (`EASE`), each frame converting from the page as it
+  was, coalesced, the preset itself set as the ease ends (the command
+  centre, 2026-10-14). A slider in the card
+  converts live at every tick, always from the page as it was when the drag
+  began (the starting style to the current one, never tick upon tick, so no
+  error builds up), and the ticks coalesce into one step as it is let go.
+  Slides and words stay still while the structures change, with no jump on
+  release; undo gives the page back exactly as it was.
+- **Pasted from a workspace in another style.** A copy's record
+  (`meno-structure`, still version 1) carries its style's bond in pt.
+  Pasted where that differs, what it carries converts as above by k = its
+  bond pt / this workspace's, about its middle, before it is put down: its
+  structures keep their size in units, so they print at this workspace's
+  bond, and words, shapes and pictures with them keep their size in pt. A
+  record without it pastes as it is.
+- **Structures can come closer.** In a style of longer bonds, the middles
+  of structures come closer in units while the structures keep their size,
+  so structures drawn close together may overlap after a change. Meno does
+  not push them apart, which would be a jump; the chemist can, or undo.
+- **Exports.** `exportPxPerWorld(style)` stays the style's bond at 96 px to
+  the inch over 1.8. A unit prints `bondLengthPt` / 1.8 pt, so page objects
+  export at their sizes in pt and structures at the style's bond: after a
+  change, a slide or a picture exports as large as before, its structures
+  at the new bond.
+- **Office re-edit.** A structure placed in Word or PowerPoint keeps its
+  record, now with its style. Opened from the document again, it opens in
+  that style - not Settings' - so its picture comes back as it was. A
+  record without a style opens in Settings' style, fixed into it then.
+- **Files from before** (pre-alpha: no shims, the break noted).
+  - A workspace saved without a style takes Settings' style as it is
+    opened, kept from then on, without marking the tab changed. It looks
+    different from when it was drawn if Settings has changed since.
+  - A PDF or a text's sheet laid before keeps ACS 1996's point, so in a
+    workspace of another style it prints as large as it did - not at its
+    own size - until the style is changed and back, or it is laid again.
+  - Copies made before carry no style and paste unconverted.
+- **Magnified display, later.** A per-object display state (100% being true
+  size, an "n%" mark, Back to 100%): a transform after the layout in 2D and
+  after `solidOf` in 3D that never enters the document's units, Å readouts
+  or writers. A change of style keeps each object's magnification: the
+  conversion moves an object's middle and leaves its factor alone.
+- **The functions.** `restyle.ts` (L8): `bondPtOf(style: StyleChoice)`, and
+  `restyled(parts, k, about = { x: 0, y: 0 })`, which converts whatever
+  page parts it is given - a whole document or a copy's parts, the fields
+  of `WorkspaceDocument` that are there - and gives them back unchanged
+  where k is 1. Molecules in 3D go through A's
+  `restyled3d(molecules, k, about)`, called from it. `setDocumentStyle(doc,
+  style)` (document.ts) converts by k = `bondPtOf(doc.style)` /
+  `bondPtOf(style)`; the store's action keeps the document as a slider's
+  drag began and converts from it at each tick (C).
+- **Tested by** a change and back giving the same page (to 1e-9, where no
+  molecules in 3D came to touch on the way: those then go back as one body;
+  undo, a snapshot, is exact all the same); every
+  page object's box in pt kept, and every structure's middle in pt kept and
+  its size in units; undo exact; a slider's ticks converting from the
+  start; a paste across styles; bodies in 3D kept together; page objects
+  exporting at the same size.
 
 ## Styles in 3D
 

@@ -50,6 +50,26 @@ describe("a reader's worker, asked", () => {
     await expect(refused).rejects.toThrow(/no atoms/);
   });
 
+  it("gives up at once on an answer that is not JSON - a number that is not one in it - and hears the next", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWorker();
+      const settled: number[] = [];
+      const client = new ReaderClient("cclib", w.transport, 120_000, undefined, { sent: () => {}, settled: (id) => settled.push(id), overdue: () => {} });
+      const reading = client.read("gaussian", "x.log", "text");
+      const next = client.read("gaussian", "y.log", "text");
+      w.say('{"id": 1, "ok": true, "result": {"energies": [NaN]}}');
+      await expect(reading).rejects.toThrow("cclib answered in a form Meno cannot read");
+      expect(settled).toEqual([1]);
+      // (a line its library printed is still no answer)
+      w.say("{ a line a library printed");
+      w.say({ id: 2, ok: true, result: { atoms: ["H"], frames: [[0, 0, 0]] } });
+      expect(await next).toEqual({ atoms: ["H"], frames: [[0, 0, 0]] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("says why, when it cannot read a file, or stops before it has", async () => {
     const w = fakeWorker();
     const client = new ReaderClient("cclib", w.transport);

@@ -35,6 +35,14 @@ describe("what a plugin is given of an entry", () => {
     // (11 electrons with the charge, one of them unpaired, on the radical)
     expect([e.charge, e.multiplicity, e.name]).toEqual([-1, 2, "water"]);
   });
+
+  it("gives an isotope its mass (NIST), where one is measured - none, where none is", () => {
+    const heavy = pluginEntry({ ...WATER, atoms: WATER.atoms.map((a, i) => (i === 1 ? { ...a, isotope: 2 } : i === 2 ? { ...a, isotope: 99 } : a)) });
+    expect(heavy.atoms[1]).toEqual({ el: "H", x: 0, y: 0.76, z: 0.59, isotope: 2, mass: 2.01410177812 });
+    expect(heavy.atoms[2].isotope).toBe(99);
+    expect(heavy.atoms[2].mass).toBeUndefined();
+    expect(heavy.atoms[0].mass).toBeUndefined();
+  });
 });
 
 describe("the jobs a plugin prepares", () => {
@@ -219,8 +227,9 @@ describe("what a step that ran jobs says", () => {
     expect(clock(42_000)).toBe("0:42");
     expect(clock(723_000)).toBe("12:03");
     expect(clock(3_723_000)).toBe("1:02:03");
-    expect(hartrees(-42.108712)).toBe("−42.10871 Eh");
-    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · −5.07054 Eh");
+    expect(hartrees(-42.108712)).toBe("−42.108712 Eh");
+    expect(hartrees(-0.0000001)).toBe("0.000000 Eh");
+    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · E −5.070540 Eh");
     expect(doneSaid([WATER, WATER], 3, 65_000)).toBe("1:05 · 2 of 3");
   });
 });

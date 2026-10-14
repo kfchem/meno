@@ -47,7 +47,19 @@ export type ReaderOutput = {
   results?: unknown[];
   /** What a structure's file holds - its drawing, and its molecules in 3D - where the reader read one (lib/io/structures); checked as the page takes it. */
   structures?: StructureRead;
+  /** Of a file that holds several jobs one after another - Gaussian's Link1, ORCA's $new_job - which this is, and what it did. */
+  job?: Job | null;
+  /**
+   * The jobs of a file that holds several, in order, each an output of its
+   * own, said by `job`: each opens as a molecule of its own, its geometries,
+   * energies and populations its own. The output's own fields are then its
+   * last job's.
+   */
+  jobs?: ReaderOutput[] | null;
 };
+
+/** A job's place among those its file holds, from 1, and what it did, in words: "Optimisation", "Single point". */
+export type Job = { number: number; of: number; kind?: string | null };
 
 /**
  * What a molecule keeps of the calculation it was read from, besides its
@@ -65,6 +77,8 @@ export type CalcInfo = {
   multiplicity?: number;
   optimised?: boolean;
   results?: Result[];
+  /** Of an output that holds several jobs, the job it is: its place among them, and what it did. */
+  job?: { number: number; of: number; kind?: string };
   /** The output it was read from: its name, kind and SHA-256, and where it was - what a promise is asked for again from (./asks). */
   source?: CalcSource;
   /**
@@ -86,6 +100,17 @@ export type CalcSource = { name: string; sha256: string; kind?: string; path?: s
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const text = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+/** A job as an output or a file says it: its place among as many as its file holds, and what it did; otherwise none. */
+export function jobOf(v: unknown): CalcInfo["job"] | undefined {
+  const j = v as { number?: unknown; of?: unknown; kind?: unknown } | null | undefined;
+  if (!j || !Number.isInteger(j.number) || !Number.isInteger(j.of)) return undefined;
+  const number = j.number as number;
+  const of = j.of as number;
+  if (number < 1 || of < 2 || number > of) return undefined;
+  const kind = text(j.kind)?.slice(0, 60);
+  return { number, of, ...(kind ? { kind } : {}) };
+}
 
 /** The geometries an output gives for its atoms: those of as many numbers as its atoms have coordinates. */
 export function framesOf(out: ReaderOutput): number {
@@ -110,6 +135,7 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
     ...(Number.isInteger(out.multiplicity) && out.multiplicity! > 0 ? { multiplicity: out.multiplicity! } : {}),
     ...(typeof out.optimised === "boolean" ? { optimised: out.optimised } : {}),
     ...(results.length ? { results } : {}),
+    ...(jobOf(out.job) ? { job: jobOf(out.job) } : {}),
     ...(source
       ? { source: { name: source.name, sha256: source.sha256, ...(source.kind ? { kind: source.kind } : {}), ...(source.path ? { path: source.path } : {}) } }
       : {}),
@@ -152,6 +178,7 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
       charge: isNum(c.charge) ? c.charge : null,
       multiplicity: isNum(c.multiplicity) ? c.multiplicity : null,
       optimised: typeof c.optimised === "boolean" ? c.optimised : null,
+      job: jobOf(c.job),
       atoms: new Array(atoms).fill(""),
       frames: new Array(frames).fill(new Array(3 * atoms).fill(0)),
       results,
@@ -169,18 +196,21 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
 
 /**
  * What the calculation was, in a line: "ORCA 6.0.1 · B3LYP/def2-SVP ·
- * charge 0, singlet". What the output does not say is left out.
+ * charge 0, singlet" - and, of a file of several jobs, which job and what
+ * it did: "Gaussian 16 · job 1 of 2, optimisation · HF/STO-3G · ...".
+ * What the output does not say is left out.
  */
 export function calcLine(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
+  const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
   const method = [c.method, c.basis].filter(Boolean).join("/");
   const state = [
-    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${c.charge}` : null,
+    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
   ]
     .filter(Boolean)
     .join(", ");
-  return [program, method, state].filter(Boolean).join(" · ");
+  return [program, job, method, state].filter(Boolean).join(" · ");
 }
 
 /** A multiplicity by name, as a chemist says it: singlet, doublet, ...; past a sextet, by number. */

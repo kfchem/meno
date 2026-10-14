@@ -37,6 +37,22 @@ export function viewDriven(camera: THREE.Camera): boolean {
 }
 
 /**
+ * Cameras moved by the page being laid again at another scale - a change of
+ * the drawing style, its undo, its redo (FollowStyle) - for PanZoom2D to
+ * take up from where they are now at its next frame, as after a talk,
+ * rather than set back where it had them.
+ */
+const relaid = new WeakSet<THREE.Camera>();
+
+export function setViewRelaid(camera: THREE.Camera): void {
+  relaid.add(camera);
+}
+
+export function tookViewRelaid(camera: THREE.Camera): boolean {
+  return relaid.delete(camera);
+}
+
+/**
  * Cameras under whose resting pointer something has moved other than the
  * view - a molecule turning on after it was let go, or let go after a
  * gesture that kept the pointer's moves to itself - for PanZoom2D to find
@@ -71,3 +87,14 @@ export function setPressMovedUnder(camera: THREE.Camera, moved: boolean): void {
 export function pressMovedUnder(camera: THREE.Camera): boolean {
   return pressesMovedUnder.has(camera);
 }
+
+/**
+ * Whether the view is being panned by a press dragged over empty space:
+ * undo then does nothing - there is nothing of the pan to undo - as for any
+ * gesture under way (store/gesture), and never takes the step before it.
+ */
+let panning = false;
+export const setViewPanning = (on: boolean): void => {
+  panning = on;
+};
+export const viewPanning = (): boolean => panning;

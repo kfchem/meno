@@ -216,12 +216,18 @@ impl Drawn {
 
 /// A request answered: its JSON, and its bytes.
 /// Why PDFium could not open a PDF, in words: one locked with a password
-/// said so plainly, as Meno asks for none, and one locked another way.
+/// said so plainly, as Meno asks for none, one locked another way, and one
+/// damaged past mending - cut short, or no PDF at all. Anything else is said
+/// plainly too, its error to the log, not to the person.
 fn unreadable(e: PdfiumError) -> String {
     match e {
         PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => "it is locked with a password".into(),
         PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::SecurityError) => "it is locked in a way Meno cannot open".into(),
-        e => format!("it could not be read ({e})"),
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError) => "it is damaged, or is not a PDF".into(),
+        e => {
+            eprintln!("a PDF not opened: {e:?}");
+            "Meno could not open it".into()
+        }
     }
 }
 
@@ -753,7 +759,10 @@ mod tests {
         let locked = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError));
         assert_eq!(locked, "it is locked with a password");
         let broken = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError));
-        assert!(broken.starts_with("it could not be read ("), "{broken}");
+        assert_eq!(broken, "it is damaged, or is not a PDF");
+        // (no error's name for the person: a PDF cut short reads as damaged, anything else as not opened)
+        let other = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FileError));
+        assert_eq!(other, "Meno could not open it");
     }
 
     #[test]

@@ -22,10 +22,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-/// Purposes that need no asking: the user's own code, run by the user.
-/// Only these may begin a task that reaches any host.
-const IMPLICIT: &[&str] = &["python-code"];
-
 /// The most hosts a task's consent may name.
 const MOST_HOSTS: usize = 64;
 
@@ -64,13 +60,13 @@ struct Inner {
 #[serde(rename_all = "camelCase")]
 pub struct Task {
     pub id: String,
-    /// What it is for, as consent is given: "python-env:console".
+    /// What it is for, as consent is given: "python-env:plugin-rdkit".
     pub purpose: String,
-    /// What it is, in words: "Setting up Python for the console".
+    /// What it is, in words: "Setting up RDKit".
     pub label: String,
     /// The hosts it may reach: those its consent named, each exact
-    /// (`pypi.org`) or a leading dot for any host under one (`.hf.co`).
-    /// None, any host - the user's own code alone (`IMPLICIT`).
+    /// (`pypi.org`) or a leading dot for any host under one (`.hf.co`) -
+    /// always some: no purpose goes out without asking, to any host.
     pub hosts: Option<Vec<String>>,
     pub started: u64,
     pub ended: Option<u64>,
@@ -137,19 +133,19 @@ impl Net {
     /// The proxy's port - or, should it not be up, 0: a connection there is
     /// refused at once, so a child pointed at it reaches nothing rather than
     /// going out on its own.
-    fn proxy_port(&self) -> u16 {
+    pub(crate) fn proxy_port(&self) -> u16 {
         self.0.port.get().copied().unwrap_or(0)
     }
 
+    /// Whether the user has allowed `purpose`: every one is asked for.
     fn allowed(&self, purpose: &str) -> bool {
-        IMPLICIT.contains(&purpose) || self.0.granted.lock().unwrap().contains(purpose)
+        self.0.granted.lock().unwrap().contains(purpose)
     }
 
     /// Begins a task that may use the network, to reach `hosts` alone - the
     /// hosts its consent named (`host_named`). Refused in offline mode, when
     /// its purpose has not been allowed, or when it names no hosts, or a
-    /// pattern that is not a host's: only the user's own code (`IMPLICIT`)
-    /// may name none, and reach any host.
+    /// pattern that is not a host's.
     pub fn begin(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
         if self.offline() {
             return Err(format!("{label}: Meno is offline"));
@@ -158,14 +154,13 @@ impl Net {
             return Err(format!("{label}: not allowed to use the network"));
         }
         match &hosts {
-            None if !IMPLICIT.contains(&purpose) => return Err(format!("{label}: its consent named no hosts")),
+            None => return Err(format!("{label}: its consent named no hosts")),
             Some(h) if h.is_empty() || h.len() > MOST_HOSTS => return Err(format!("{label}: its consent named no hosts, or too many")),
             Some(h) => {
                 if let Some(bad) = h.iter().find(|p| !pattern_ok(p)) {
                     return Err(format!("{label}: not a host: {bad}"));
                 }
             }
-            None => {}
         }
         let task = Task {
             id: uuid::Uuid::new_v4().to_string(),
@@ -340,24 +335,18 @@ fn point_at_proxy(cmd: &mut Command, proxy: &str) {
     }
 }
 
-impl Net {
-    /// Points a child that may not use the network - the chemistry worker,
-    /// or the console while Meno is offline - at the proxy with no task's
-    /// token: whatever it reaches for is refused, and goes on the record.
-    pub fn route_nowhere(&self, cmd: &mut Command) {
-        point_at_proxy(cmd, &format!("http://127.0.0.1:{}", self.proxy_port()));
-    }
+/// Points a child at the proxy on `port` with no task's token
+/// (`Net::route_nowhere`): what a job is given, as its runner checks it.
+pub fn route_nowhere_at(cmd: &mut Command, port: u16) {
+    point_at_proxy(cmd, &format!("http://127.0.0.1:{port}"));
+}
 
-    /// Routes a Python sidecar: the console's, the user's own code, as a task
-    /// for as long as it runs, when Meno may go out; anything else - another
-    /// worker, or the console while Meno is offline - nowhere.
-    pub fn route_sidecar(&self, cmd: &mut Command, console: bool) -> Option<TaskHandle> {
-        let task = console.then(|| self.begin("python-code", "Python run in the console", None).ok()).flatten();
-        match &task {
-            Some(task) => task.route(cmd),
-            None => self.route_nowhere(cmd),
-        }
-        task
+impl Net {
+    /// Points a child that may not use the network - a plugin's worker, or
+    /// a job - at the proxy with no task's token: whatever it reaches for is
+    /// refused, and goes on the record.
+    pub fn route_nowhere(&self, cmd: &mut Command) {
+        route_nowhere_at(cmd, self.proxy_port());
     }
 
     /// Binds the proxy's port on the loopback address, and knows it from
@@ -771,20 +760,30 @@ mod tests {
     #[test]
     fn begins_a_task_only_when_allowed_and_online() {
         let net = Net::default();
-        assert!(net.begin("python-env:console", "Setting up", named(&["pypi.org"])).is_err());
-        net.0.granted.lock().unwrap().insert("python-env:console".into());
-        let task = net.begin("python-env:console", "Setting up", named(&["pypi.org"])).unwrap();
+        assert!(net.begin("python-env:plugin-rdkit", "Setting up", named(&["pypi.org"])).is_err());
+        net.0.granted.lock().unwrap().insert("python-env:plugin-rdkit".into());
+        let task = net.begin("python-env:plugin-rdkit", "Setting up", named(&["pypi.org"])).unwrap();
         assert_eq!(net.0.tasks.lock().unwrap().len(), 1);
         task.finish(true);
         assert!(net.0.tasks.lock().unwrap().is_empty());
-        // the user's own code needs no asking; offline, nothing goes
-        assert!(net.begin("python-code", "Python", None).is_ok());
+        // offline, nothing goes, even what was allowed
         net.0.offline.store(true, Ordering::SeqCst);
-        assert!(net.begin("python-code", "Python", None).is_err());
+        assert!(net.begin("python-env:plugin-rdkit", "Setting up", named(&["pypi.org"])).is_err());
     }
 
     #[test]
-    fn begins_a_task_that_names_no_hosts_for_the_users_own_code_alone() {
+    fn needs_asking_for_every_purpose() {
+        // (the console's code, which once needed none, went with the console)
+        let net = Net::default();
+        for purpose in ["python-code", "ccd", "app-update", "python-env:plugin-rdkit", ""] {
+            assert!(!net.allowed(purpose), "{purpose}");
+            assert!(net.begin(purpose, "Testing", named(&["pypi.org"])).is_err(), "{purpose}");
+            assert!(net.begin(purpose, "Testing", None).is_err(), "{purpose}");
+        }
+    }
+
+    #[test]
+    fn begins_no_task_that_names_no_hosts() {
         let net = Net::default();
         net.0.granted.lock().unwrap().insert("python-env:console".into());
         // a set-up must name the hosts its consent named
@@ -800,12 +799,6 @@ mod tests {
         let held = net.0.tasks.lock().unwrap().values().next().unwrap().hosts.clone();
         assert_eq!(held, named(&["pypi.org", ".hf.co", "127.0.0.1"]));
         task.finish(true);
-        // the user's own code reaches any host
-        let own = net.begin("python-code", "Python", None).unwrap();
-        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.refuses("example.com", 443).is_none() && t.refuses("pypi.org", 443).is_none()));
-        // (over HTTPS alone, as everything else)
-        assert!(net.0.tasks.lock().unwrap().values().all(|t| t.refuses("example.com", 80) == Some("not the port HTTPS takes")));
-        own.finish(true);
     }
 
     #[test]
@@ -985,14 +978,9 @@ mod tests {
             let task = net.begin("python-env:test", "Testing", named(&["127.0.0.1"])).unwrap();
             let (_, status) = ask(port, to, Some(&task.token)).await;
             assert_eq!(status, "HTTP/1.1 403 Forbidden");
-            task.finish(true);
-
-            // the user's own code: any host, over HTTPS alone - the echo's port is not HTTPS's
-            let own = net.begin("python-code", "Python", None).unwrap();
-            let (_, status) = ask(port, to, Some(&own.token)).await;
-            assert_eq!(status, "HTTP/1.1 403 Forbidden");
             let why: Vec<Option<String>> = net.0.recent.lock().unwrap().iter().filter(|c| c.outcome == "blocked").map(|c| c.reason.clone()).collect();
-            assert_eq!(why[2..], [Some("not a port its consent named".to_string()), Some("not the port HTTPS takes".to_string())]);
+            assert_eq!(why[2..], [Some("not a port its consent named".to_string())]);
+            task.finish(true);
         });
     }
 
@@ -1047,7 +1035,8 @@ mod tests {
         let mut nowhere = Command::new("true");
         net.route_nowhere(&mut nowhere);
         assert_eq!(proxy_of(&nowhere).as_deref(), Some("http://127.0.0.1:0"));
-        let task = net.begin("python-code", "Python", None).unwrap();
+        net.0.granted.lock().unwrap().insert("python-env:test".into());
+        let task = net.begin("python-env:test", "Testing", named(&["pypi.org"])).unwrap();
         let mut routed = Command::new("true");
         task.route(&mut routed);
         assert!(proxy_of(&routed).unwrap().ends_with("@127.0.0.1:0"));
@@ -1061,26 +1050,6 @@ mod tests {
         let mut cmd = Command::new("true");
         net.route_nowhere(&mut cmd);
         assert_eq!(proxy_of(&cmd), Some(format!("http://127.0.0.1:{port}")));
-    }
-
-    #[test]
-    fn routes_the_console_nowhere_while_offline() {
-        let net = Net::default();
-        let _ = net.0.port.set(4567);
-        let mut online = Command::new("true");
-        let task = net.route_sidecar(&mut online, true);
-        assert!(task.is_some());
-        assert!(proxy_of(&online).unwrap().starts_with("http://meno:"));
-        drop(task);
-
-        net.0.offline.store(true, Ordering::SeqCst);
-        let mut offline = Command::new("true");
-        assert!(net.route_sidecar(&mut offline, true).is_none());
-        assert_eq!(proxy_of(&offline).as_deref(), Some("http://127.0.0.1:4567"));
-        // and a worker that runs no one's code, either way
-        let mut worker = Command::new("true");
-        assert!(net.route_sidecar(&mut worker, false).is_none());
-        assert_eq!(proxy_of(&worker).as_deref(), Some("http://127.0.0.1:4567"));
     }
 
     #[test]
@@ -1099,8 +1068,8 @@ mod tests {
         assert!(offline.offline());
         assert!(offline.allowed("app-update") && offline.allowed("python-env:chem"));
         assert!(!offline.allowed("Not A Purpose!"));
-        // offline, not even the user's own code goes out
-        assert!(offline.begin("python-code", "Python", None).is_err());
+        // offline, not even what was allowed goes out
+        assert!(offline.begin("app-update", "Updating", named(&["github.com"])).is_err());
 
         // missing or unreadable: the defaults, as the window takes them
         for text in [None, Some("not json"), Some(r#"{"network":{"offline":"yes"}}"#)] {
@@ -1114,7 +1083,7 @@ mod tests {
             net.load_settings(&path);
             assert!(!net.offline(), "{text:?}");
             assert!(!net.allowed("app-update"), "{text:?}");
-            assert!(net.begin("python-code", "Python", None).is_ok(), "{text:?}");
+            assert!(net.begin("app-update", "Updating", named(&["github.com"])).is_err(), "{text:?}");
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1123,7 +1092,8 @@ mod tests {
     fn routes_a_child_through_the_proxy_with_its_token() {
         let net = Net::default();
         let _ = net.0.port.set(4567);
-        let task = net.begin("python-code", "Python", None).unwrap();
+        net.0.granted.lock().unwrap().insert("python-env:test".into());
+        let task = net.begin("python-env:test", "Testing", named(&["pypi.org"])).unwrap();
         let mut cmd = Command::new("true");
         task.route(&mut cmd);
         // by name, whatever its case: on Windows HTTPS_PROXY and

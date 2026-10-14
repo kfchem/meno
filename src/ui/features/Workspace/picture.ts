@@ -28,7 +28,7 @@ import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
 import { currentStyle3D } from "./style3d";
-import type { DrawingStyle } from "../../../lib/chem/style";
+import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout } from "./fileActions";
 import type { Drawn, EditorState } from "./store/types";
@@ -45,13 +45,21 @@ const MOST_PIXELS = 48_000_000;
 /** The resolution copied pictures are made at, as Settings says. */
 const pictureDpi = () => useAppSettings.getState().pictures.dpi;
 
+/** The longest side of a canvas a picture is drawn on, in pixels. */
+const MOST_SIDE = 32_767;
+
 /**
  * The resolution a picture `width` by `height` CSS pixels is made at:
- * `dpi`, or lower where that would come to more than `MOST_PIXELS`.
+ * `dpi`, or lower where that would come to more than `MOST_PIXELS`, or a
+ * side longer than `MOST_SIDE` - a line of words thousands of letters long,
+ * kept at full resolution, was a canvas too wide to draw, and its PNG was
+ * left off the clipboard.
  */
 export function pictureDpiFor(width: number, height: number, dpi: number): number {
   const area = Math.max(width, 1) * Math.max(height, 1) * (dpi / 96) ** 2;
-  return area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const byArea = area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const bySide = Math.floor((MOST_SIDE * 96) / Math.max(width, height, 1));
+  return Math.max(1, Math.min(byArea, bySide));
 }
 
 const utf8 = new TextEncoder();
@@ -66,7 +74,8 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
-  const record = recordText(part);
+  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
+  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
   const drawing = seenDrawing(part);
   const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
@@ -116,7 +125,7 @@ export async function structureInPicture(item: ClipItem): Promise<Drawn | null> 
   if (item.flavor === "png") return fromPng(item.bytes);
   if (item.flavor === "object") return fromObject(item.bytes);
   if (item.flavor !== "gvml") return null;
-  for (const { name, data } of await gvmlImages(item.bytes)) {
+  for (const { name, data } of gvmlImages(item.bytes)) {
     const found = /\.emf$/i.test(name) ? fromEmf(data) : /\.png$/i.test(name) ? fromPng(data) : null;
     if (found) return found;
   }
@@ -153,10 +162,40 @@ function fromPng(png: Uint8Array): Drawn | null {
 }
 
 /**
+ * An SVG of layout2d's `createSVG` made ready to be drawn at `wantedDpi` -
+ * or lower where it is large (`pictureDpiFor`): its size whole pixels at
+ * that resolution, and its view widened to match, so that the drawing is
+ * drawn at its own scale exactly, the part of a pixel left over blank on
+ * the right and below. Drawn from the size it said, a browser takes an
+ * image's size in whole pixels (WebKit: 278.9 as 278) and the drawing was
+ * squeezed to them - its bonds a little short, and not alike across and down.
+ */
+export function rasterFrame(svg: string, wantedDpi: number): { svg: string; width: number; height: number; dpi: number } {
+  const head = /<svg\b[^>]*>/.exec(svg)?.[0] ?? "";
+  const attr = (name: string) => Number(new RegExp(` ${name}="([^"]+)"`).exec(head)?.[1]);
+  const width = attr("width");
+  const height = attr("height");
+  const view = / viewBox="([^"]+)"/.exec(head)?.[1].trim().split(/\s+/).map(Number) ?? [];
+  const dpi = pictureDpiFor(width > 0 ? width : 1, height > 0 ? height : 1, wantedDpi);
+  const scale = dpi / 96;
+  const W = Math.max(1, Math.ceil((width > 0 ? width : 1) * scale));
+  const H = Math.max(1, Math.ceil((height > 0 ? height : 1) * scale));
+  if (!(width > 0 && height > 0) || view.length !== 4 || !view.every(Number.isFinite) || !(view[2] > 0)) return { svg, width: W, height: H, dpi };
+  // (pixels to the view's unit, at that resolution: kept, the view made as much larger as the whole pixels are)
+  const perUnit = (width / view[2]) * scale;
+  const fitted = head
+    .replace(/ width="[^"]+"/, ` width="${W}"`)
+    .replace(/ height="[^"]+"/, ` height="${H}"`)
+    .replace(/ viewBox="[^"]+"/, ` viewBox="${view[0]} ${view[1]} ${W / perUnit} ${H / perUnit}"`);
+  return { svg: svg.replace(head, fitted), width: W, height: H, dpi };
+}
+
+/**
  * An SVG drawn at `dpi` - its pixels CSS pixels, 96 to the inch - or lower
- * where it is large (`pictureDpiFor`): as a PNG, and - `dib` asked for - as
- * a DIB for Windows' bitmap-only programs, and the resolution it was drawn
- * at; null where there is no page to draw it in.
+ * where it is large (`pictureDpiFor`), at its own scale (`rasterFrame`): as
+ * a PNG, and - `dib` asked for - as a DIB for Windows' bitmap-only programs,
+ * and the resolution it was drawn at; null where there is no page to draw
+ * it in.
  */
 async function rasterized(
   svg: string,
@@ -164,16 +203,16 @@ async function rasterized(
   dib: boolean,
 ): Promise<{ png: Uint8Array; dib: Uint8Array | null; dpi: number } | null> {
   if (typeof document === "undefined") return null;
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  const frame = rasterFrame(svg, wantedDpi);
+  const dpi = frame.dpi;
+  const url = URL.createObjectURL(new Blob([frame.svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
-    const dpi = pictureDpiFor(img.naturalWidth, img.naturalHeight, wantedDpi);
-    const scale = dpi / 96;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.ceil(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.ceil(img.naturalHeight * scale));
+    canvas.width = frame.width;
+    canvas.height = frame.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);

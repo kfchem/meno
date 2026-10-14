@@ -48,6 +48,15 @@ describe("layoutEmf", () => {
     expect(frame).toBe(Math.round((widthPt / 72) * 2540));
   });
 
+  it("says its reference device is 96 pixels to the inch, across and down, in millimetres as in micrometres", () => {
+    const v = new DataView(emf.buffer);
+    const [px, py, mmx, mmy, umx, umy] = [72, 76, 80, 84, 100, 104].map((at) => v.getInt32(at, true));
+    expect(px / (mmx / 25.4)).toBe(96);
+    expect(py / (mmy / 25.4)).toBe(96);
+    expect(px / (umx / 25_400)).toBe(96);
+    expect(py / (umy / 25_400)).toBe(96);
+  });
+
   it("carries what it is given in a comment, and draws lines, the wedge and the label", () => {
     expect(emfComments(emf).map((c) => new TextDecoder().decode(c))).toEqual(["MENO{}"]);
     expect(types).toContain(4); // polyline
@@ -265,15 +274,15 @@ describe("measurements in a picture", () => {
     measures: [{ id: 1, atoms: [1, 2] }],
   };
   const { layout, opts } = drawingLayout({ ...model, molecules3d: [water3d] }, aromatic, ACS_1996);
-  const text = "1.52 Å";
+  const text = "1.520 Å";
 
   it("are taken in, over the molecules: dashes, the value, and room for it", () => {
     expect(layout.measures).toHaveLength(1);
     const m = layout.measures![0];
     expect(m.text).toBe(text);
     expect(m.lines.length).toBeGreaterThan(3);
-    // (written about where the two atoms meet - beside it, where it would cover a hydrogen's ball - the molecule placed at x 6)
-    expect(Math.abs(m.label.x - 6)).toBeLessThan(1);
+    // (written about where the two atoms meet - beside it, where it would cover a hydrogen's ball - the molecule placed at x 6; "1.520 Å" is a little wider than it was)
+    expect(Math.abs(m.label.x - 6)).toBeLessThan(1.5);
     expect(layout.bounds.max.x).toBeGreaterThan(m.label.x);
   });
 

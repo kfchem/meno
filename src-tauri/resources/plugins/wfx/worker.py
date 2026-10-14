@@ -228,7 +228,7 @@ def read_wfx(text):
     if model:
         out["method"] = model[:80]
     if virial is not None:
-        out["results"].append({"id": "virial", "on": "molecule", "group": "Wavefunction", "label": "Virial ratio (-V/T)", "value": virial, "quantity": "number", "digits": 6})
+        out["results"].append({"id": "virial", "on": "molecule", "group": "Wavefunction", "label": "Virial ratio (\u2212V/T)", "value": virial, "quantity": "number", "digits": 6})
     orbitals = orbitals_of(found)
     if orbitals:
         out["results"].append(orbitals)

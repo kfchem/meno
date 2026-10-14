@@ -24,7 +24,10 @@
 //!
 //! A job runs only a program a plugin names (its manifest's `steps`, each
 //! with the `programs` it needs), from that plugin's environment - Python
-//! only with a script of the plugin's - and reaches no network.
+//! only with a script of the plugin's - and reaches no network. Its runner
+//! asks the same again of what its folder says (`spec_allowed`), and takes
+//! only a folder in Meno's data folder's `jobs`: anything can write a
+//! `job.json`, and start Meno's executable with it.
 
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
@@ -253,6 +256,24 @@ fn listen_for_going() {
     }
 }
 
+/// Sleeps `long` in slices of `WAIT_STEP` at most, waking as soon as a
+/// slice ends with a stop asked: a job far back in the queue, asleep for
+/// seconds between its looks, stops as quickly as one near its head.
+/// (Only its own folder is looked at, with no lock.)
+fn sleep_watching(dir: &Path, long: Duration) {
+    let until = Instant::now() + long;
+    loop {
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return;
+        }
+        std::thread::sleep(left.min(WAIT_STEP));
+        if stop_asked(dir) {
+            return;
+        }
+    }
+}
+
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
@@ -260,25 +281,41 @@ pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
 
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
 /// run, and what the runner ends with. None where it was started as Meno.
+/// A folder that is not a job of Meno's is not run, and nothing is written.
 pub fn job_mode() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);
     if args.next()? != JOB_FLAG {
         return None;
     }
     let dir = PathBuf::from(args.next()?);
-    Some(run_as_runner(&dir))
+    let (Some(data), Some(plugins)) = (data_dir_here(), plugins_here()) else { return Some(1) };
+    // (asked to go, a runner stops its program as if asked to stop)
+    #[cfg(unix)]
+    listen_for_going();
+    Some(runner(&data, &plugins, &dir))
 }
 
-/// Run the job in `dir` as its runner does: as `run_job`, and asked to go,
-/// stopped as if asked to stop.
+/// Run the job in `dir` as its runner does, what it is to run taken as it is
+/// (a test's own jobs): asked to go, stopped as if asked to stop.
+#[cfg(test)]
 pub fn run_as_runner(dir: &Path) -> i32 {
     #[cfg(unix)]
     listen_for_going();
-    run_job(dir)
+    run_job(dir, &|_| Ok(()))
 }
 
-/// Run the job in `dir`: wait for its turn, run its program, and write down how it ended.
-pub fn run_job(dir: &Path) -> i32 {
+/// What a job's runner does with the folder it was given, Meno's data folder
+/// being `data` and its plugins in `plugins`: the job run, where it is one
+/// of Meno's (`runner_folder`) and runs what Meno would have it run (`spec_allowed`).
+fn runner(data: &Path, plugins: &Path, dir: &Path) -> i32 {
+    let Ok(dir) = runner_folder(data, dir) else { return 1 };
+    // (checked before its program runs: its work folder holds what was written for it, and nothing else yet)
+    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir)))
+}
+
+/// Run the job in `dir`: wait for its turn, run its program, and write down
+/// how it ended - where what it is to run is `allowed`; else it fails, saying why.
+pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> i32 {
     // (held until the runner goes: while it is held, the job is not gone)
     let Ok(lock) = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)) else { return 1 };
     // (another runner has it - or, for a moment, one looking whether it is there)
@@ -296,6 +333,12 @@ pub fn run_job(dir: &Path) -> i32 {
         let _ = write_record(dir, &record);
         return 1;
     };
+    // (checked as it was read: what runs is what was checked)
+    if let Err(why) = allowed(&spec) {
+        let record = JobRecord { ended: Some(now_ms()), why: Some(format!("Meno does not run it: {why}")), ..JobRecord::new(JobState::Failed, spec.created) };
+        let _ = write_record(dir, &record);
+        return 1;
+    }
     let base = JobRecord::new(JobState::Waiting, spec.created);
     let end = |state: JobState, started: Option<u64>, code: Option<i32>, why: Option<String>| {
         let _ = write_record(dir, &JobRecord { state, started, ended: Some(now_ms()), code, why, ..base.clone() });
@@ -320,8 +363,17 @@ pub fn run_job(dir: &Path) -> i32 {
         }
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
-            Ok(Turn::Next) => std::thread::sleep(step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
-            Ok(Turn::Behind) => std::thread::sleep(WAIT_STEP),
+            Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            Ok(Turn::Behind(ahead)) => {
+                // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
+                let near = if near_head(ahead, spec.slots) {
+                    at_head.get_or_insert_with(Instant::now).elapsed()
+                } else {
+                    at_head = None;
+                    Duration::ZERO
+                };
+                sleep_watching(dir, behind_step(ahead, spec.slots, near))
+            }
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
                 return 1;
@@ -415,13 +467,52 @@ fn waits_no_more(unsure: &mut u32, there: bool, record: Option<&JobRecord>) -> b
 }
 
 /// A waiting job's turn, as it looks: taken; next - the first waiting, its
-/// turn to come as one running ends; or behind others waiting.
+/// turn to come as one running ends; or behind others waiting, so many of
+/// them before it.
 #[derive(Debug, PartialEq)]
 enum Turn {
     Taken,
     Next,
-    Behind,
+    Behind(u32),
 }
+
+/// Whether a job `ahead` places back in a queue running `slots` at once is
+/// near enough its head to look as the head does: its turn may come with
+/// the next to end, or the one after. (Only the head takes a turn; so where
+/// jobs end quickly, the one behind it is the head within moments.)
+fn near_head(ahead: u32, slots: u32) -> bool {
+    ahead < 2 * slots.max(1)
+}
+
+/// How long a waiting job sleeps behind `ahead` others waiting before it,
+/// its queue running `slots` at once: as the head of the queue does near
+/// it (`near_head`; `at_head` how long it has been there, `step_at`); at
+/// `WAIT_STEP` among the next few (`NEAR_EACH` a slot, and `NEAR_MORE`);
+/// further back, `PLACE_STEP` more for each place beyond, shared among the
+/// slots - never longer than the queue takes to come so far, a job a third
+/// of a second at the quickest - up to `BEHIND_MOST`. A queue of hundreds, each
+/// runner looking at every job's folder under one lock every step, kept
+/// that lock all but always held, and its head waiting on it: 150 jobs of
+/// 0.06 s took 130 s to run one after another. (Timed from its first look,
+/// not from when it came near the head, the head's quick step was long
+/// over by then: the next started a quarter of a second after one ended.)
+fn behind_step(ahead: u32, slots: u32, at_head: Duration) -> Duration {
+    if near_head(ahead, slots) {
+        return step_at(at_head, WAIT_STEP);
+    }
+    let slots = slots.max(1);
+    let near = NEAR_EACH * slots + NEAR_MORE;
+    if ahead < near {
+        return WAIT_STEP;
+    }
+    (PLACE_STEP * (ahead - near + 1) / slots).min(BEHIND_MOST)
+}
+
+/// The places behind the head of the queue that look at the step of old, for each slot and besides; and the longest one further back sleeps.
+const NEAR_EACH: u32 = 4;
+const NEAR_MORE: u32 = 4;
+const BEHIND_MOST: Duration = Duration::from_secs(10);
+const PLACE_STEP: Duration = Duration::from_millis(300);
 
 /// Whether it is this job's turn - the first waiting, with fewer running
 /// than it allows - and, where it is, the job recorded running. Asked by one
@@ -439,9 +530,17 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     }
     let mut running = 0u32;
     let mut first: Option<(u64, PathBuf)> = None;
+    // (those waiting before it: asked for before it, or at once and by name)
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
     for entry in fs::read_dir(root)?.flatten() {
         let other = entry.path();
-        if !other.is_dir() {
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
+        if read_record(&other).is_some_and(|r| r.state.finished()) {
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
@@ -449,6 +548,9 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             JobState::Running => running += 1,
             JobState::Waiting => {
                 let key = (record.created, other);
+                if key < mine_key && key.1.file_name() != dir.file_name() {
+                    ahead += 1;
+                }
                 if first.as_ref().is_none_or(|f| key < *f) {
                     first = Some(key);
                 }
@@ -458,7 +560,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     }
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
-        return Ok(Turn::Behind);
+        return Ok(Turn::Behind(ahead));
     }
     if running >= spec.slots.max(1) {
         return Ok(Turn::Next);
@@ -471,7 +573,21 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
 struct Program {
     child: std::process::Child,
     #[cfg(windows)]
-    job: windows_sys::Win32::Foundation::HANDLE,
+    job: JobObject,
+}
+
+/// A job object, closed when this goes - and with it whatever is still in it
+/// (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`): on every way out, never left open.
+#[cfg(windows)]
+struct JobObject(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for JobObject {
+    fn drop(&mut self) {
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
 }
 
 impl Program {
@@ -488,23 +604,10 @@ impl Program {
     /// (Windows asks nothing of a program without a window: it is made to stop at once.)
     #[cfg(windows)]
     fn stop(&mut self, _hard: bool) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job, 1);
-            }
+        unsafe {
+            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job.0, 1);
         }
         let _ = self.child.kill();
-    }
-}
-
-#[cfg(windows)]
-impl Drop for Program {
-    fn drop(&mut self) {
-        if !self.job.is_null() {
-            unsafe {
-                windows_sys::Win32::Foundation::CloseHandle(self.job);
-            }
-        }
     }
 }
 
@@ -515,10 +618,12 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
     let log = OpenOptions::new().create(true).append(true).open(dir.join(log))?;
     let input = match stdin {
         None => Stdio::null(),
-        Some(name) if inside_name(name) => Stdio::from(File::open(dir.join(WORK).join(name))?),
-        Some(name) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a file in its folder: {name}"))),
+        // (as a file of the job's is read: by a path of no link, inside its work folder)
+        Some(name) => Stdio::from(File::open(work_file(dir, name).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?)?),
     };
     let mut cmd = Command::new(program);
+    // (a Python run reads and writes UTF-8, whatever the system's code page - where its spec says nothing else)
+    crate::python_in_utf8(&mut cmd);
     cmd.args(args)
         .envs(env)
         .current_dir(dir.join(WORK))
@@ -530,44 +635,110 @@ fn spawn_program(dir: &Path, program: &str, args: &[String], env: &BTreeMap<Stri
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    #[cfg(unix)]
     let child = cmd.spawn()?;
+    // (Windows: started held, put in its job object, then let go - so that
+    // nothing it starts at once is started outside the job, and stays when
+    // the job is stopped; one that cannot be let go is ended, its job object
+    // closed with it)
+    #[cfg(windows)]
+    let (mut child, job) = start_held(&mut cmd)?;
+    #[cfg(windows)]
+    if !let_go(child.id()) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(std::io::Error::other("it could not be let go once started"));
+    }
     Ok(Program {
         #[cfg(windows)]
-        job: job_object_for(&child),
+        job,
         child,
     })
+}
+
+/// A process started held (CREATE_SUSPENDED) let go: each of its threads
+/// resumed. Whether one was.
+#[cfg(windows)]
+fn let_go(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32};
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+    unsafe {
+        let threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if threads == INVALID_HANDLE_VALUE || threads.is_null() {
+            return false;
+        }
+        let mut entry: THREADENTRY32 = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+        let mut resumed = false;
+        let mut more = Thread32First(threads, &mut entry) != 0;
+        while more {
+            if entry.th32OwnerProcessID == pid {
+                let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
+                if !thread.is_null() {
+                    resumed |= ResumeThread(thread) != u32::MAX;
+                    CloseHandle(thread);
+                }
+            }
+            more = Thread32Next(threads, &mut entry) != 0;
+        }
+        CloseHandle(threads);
+        resumed
+    }
+}
+
+/// A program started held - with no window, nothing of it run yet - and
+/// put in a job object of its own. Where it cannot be put in one it is
+/// ended, never having run: what it started would outlive Stop and the
+/// runner.
+#[cfg(windows)]
+fn start_held(cmd: &mut Command) -> std::io::Result<(std::process::Child, JobObject)> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+    let mut child = cmd.spawn()?;
+    match job_object_for(&child) {
+        Ok(job) => Ok((child, job)),
+        Err(e) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(std::io::Error::other(format!("it could not be put in a job object of its own: {e}")))
+        }
+    }
 }
 
 /// A job object holding the program - and so what it starts - which takes
 /// them with it when it closes: when the runner goes, however it goes.
 #[cfg(windows)]
-fn job_object_for(child: &std::process::Child) -> windows_sys::Win32::Foundation::HANDLE {
+fn job_object_for(child: &std::process::Child) -> std::io::Result<JobObject> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     unsafe {
-        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if job.is_null() {
-            return job;
+        let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if handle.is_null() {
+            return Err(std::io::Error::last_os_error());
         }
+        // (closed on any way out from here)
+        let job = JobObject(handle);
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
         info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(
-            job,
+        if SetInformationJobObject(
+            job.0,
             JobObjectExtendedLimitInformation,
             &info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const core::ffi::c_void,
             std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-        AssignProcessToJobObject(job, child.as_raw_handle());
-        job
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        if AssignProcessToJobObject(job.0, child.as_raw_handle()) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(job)
     }
 }
 
@@ -581,6 +752,28 @@ fn plugin_id(id: &str) -> bool {
 /// Whether `name` is a path inside a folder: relative, and never above it.
 pub fn inside_name(name: &str) -> bool {
     !name.is_empty() && Path::new(name).components().all(|c| matches!(c, Component::Normal(_)))
+}
+
+/// Whether the arguments `args` of a program installed separately - or of
+/// one beside it - name no file but those written for its job (`written`),
+/// or one of them by its name without its extension, as ORCA's orca_2mkl
+/// takes `input` for `input.gbw`. Besides those, an argument may be an
+/// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
+pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
+    let option = |a: &str| {
+        let name = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).unwrap_or_default();
+        name.starts_with(|c: char| c.is_ascii_alphabetic()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    };
+    let number = |a: &str| {
+        let digits = a.strip_prefix('-').unwrap_or(a);
+        let (whole, part) = digits.split_once('.').unwrap_or((digits, "0"));
+        !whole.is_empty() && !part.is_empty() && whole.chars().chain(part.chars()).all(|c| c.is_ascii_digit())
+    };
+    let file = |a: &str| inside_name(a) && written.iter().any(|w| w == a || Path::new(w).with_extension("") == Path::new(a));
+    match args.iter().find(|a| !(option(a) || number(a) || file(a))) {
+        Some(a) => Err(format!("{a} is not a file written for it")),
+        None => Ok(()),
+    }
 }
 
 /// The programs a plugin's manifest names: those its steps need, and its
@@ -618,8 +811,10 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
+    // (never a shell, by its name's stem: `cmd.exe` and `bash.exe` as `cmd` and `bash`)
     let single = Path::new(name).file_name().and_then(|n| n.to_str()) == Some(name);
-    if !single || !inside_name(name) || NEVER.contains(&name.to_ascii_lowercase().as_str()) {
+    let never = |n: &str| Path::new(n).file_stem().and_then(|s| s.to_str()).is_some_and(|s| NEVER.contains(&s.to_ascii_lowercase().as_str()));
+    if !single || !inside_name(name) || never(name) {
         return Err(format!("not a program a job runs: {name}"));
     }
     let manifest = fs::read_to_string(plugin_dir.join("manifest.json")).map_err(|e| format!("{id}'s manifest: {e}"))?;
@@ -781,12 +976,13 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
     let mut out = child.stdout.take()?;
     // (what it prints read apart, so that a full pipe never holds it - and
     // waited for no longer than the program: a child it left holding the
-    // pipe would hold the read for good)
+    // pipe would hold the read for good; read as near as it can be where it is
+    // not UTF-8: a banner in the system's code page lost the version with it)
     let (said, heard) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = out.read_to_string(&mut text);
-        let _ = said.send(text);
+        let mut bytes = Vec::new();
+        let _ = out.read_to_end(&mut bytes);
+        let _ = said.send(String::from_utf8_lossy(&bytes).into_owned());
     });
     let start = std::time::Instant::now();
     let ended = loop {
@@ -823,7 +1019,6 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
     }
     v
 }
-
 
 /// Where a usual place starts, as Meno has it: the home folder, and the
 /// folder programs are installed in (Windows' Program Files).
@@ -1190,6 +1385,22 @@ fn manifest_of(plugin_dir: &Path, id: &str) -> Result<serde_json::Value, String>
 /// chemist located it (`located`) or where the system finds programs, with
 /// what it is given. None, where the manifest declares no such program.
 pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Option<&str>) -> Result<Option<Found>, String> {
+    let Some(decl) = installed_decl(plugin_dir, id, name)? else {
+        return Ok(None);
+    };
+    let path_var = std::env::var_os("PATH");
+    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
+    // (one too old for Meno: said, not run)
+    if let Some(why) = chosen.why {
+        return Err(why);
+    }
+    installed_at(&decl, PathBuf::from(chosen.path), path_var.as_deref()).map(Some)
+}
+
+/// The program `name` of plugin `id` installed separately, as its manifest
+/// declares it, where one of its steps names it. None, where the manifest
+/// declares no such program.
+fn installed_decl(plugin_dir: &Path, id: &str, name: &str) -> Result<Option<Installed>, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
     }
@@ -1200,17 +1411,16 @@ pub fn installed_program(plugin_dir: &Path, id: &str, name: &str, located: Optio
     if !programs_named(&manifest).iter().any(|p| p == name) {
         return Err(format!("{id} names no program {name}"));
     }
-    let path_var = std::env::var_os("PATH");
-    let chosen = installed_choice(&decl, located, path_var.as_deref(), &Bases::here(), false, &version_of).ok_or_else(|| format!("{name} is not found"))?;
-    // (one too old for Meno: said, not run)
-    if let Some(why) = chosen.why {
-        return Err(why);
-    }
-    let program = PathBuf::from(chosen.path);
-    let env = installed_env(&decl, &program, path_var.as_deref())?;
+    Ok(Some(decl))
+}
+
+/// A program installed separately, at `program`: what it is given, and
+/// where the programs beside it would be.
+fn installed_at(decl: &Installed, program: PathBuf, path_var: Option<&std::ffi::OsStr>) -> Result<Found, String> {
+    let env = installed_env(decl, &program, path_var)?;
     let folder = program.parent().map(Path::to_path_buf).unwrap_or_default();
     let beside = decl.beside.iter().map(|(n, f)| (n.clone(), folder.join(f))).collect();
-    Ok(Some(Found { program, activation: None, env, beside }))
+    Ok(Found { program, activation: None, env, beside })
 }
 
 // --- a job's folder ----------------------------------------------------------
@@ -1263,31 +1473,98 @@ pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
     (String::from_utf8_lossy(&buf[..end]).into_owned(), from + end as u64)
 }
 
-/// A file a job wrote in its work folder, as text.
-pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
+/// How large a file of a job's Meno reads at most (`read_work_file`): one
+/// larger it says it will not read, by its size.
+const WORK_FILE_MOST: u64 = 256 * 1024 * 1024;
+
+/// A job's file `name` in its work folder, where it is one of its own: by
+/// a path of no link - a link its program left there, to a file of the
+/// chemist's anywhere, is not followed - a file inside that folder.
+fn work_file(dir: &Path, name: &str) -> Result<PathBuf, String> {
     if !inside_name(name) {
         return Err(format!("not a file of the job's: {name}"));
     }
-    let bytes = fs::read(dir.join(WORK).join(name)).map_err(|e| format!("{name}: {e}"))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    let work = dir.join(WORK);
+    let mut at = work.clone();
+    for part in Path::new(name).components() {
+        at.push(part);
+        let meta = fs::symlink_metadata(&at).map_err(|e| format!("{name}: {e}"))?;
+        if meta.file_type().is_symlink() {
+            return Err(format!("not a file of the job's: {name} is a link"));
+        }
+    }
+    let inside = match (at.canonicalize(), work.canonicalize()) {
+        (Ok(file), Ok(work)) => file.starts_with(work) && file.is_file(),
+        _ => false,
+    };
+    if !inside {
+        return Err(format!("not a file of the job's: {name}"));
+    }
+    Ok(at)
 }
+
+/// A file a job wrote in its work folder, as text: a file of its own
+/// (`work_file`), of no more than 256 MB.
+pub fn read_work_file(dir: &Path, name: &str) -> Result<String, String> {
+    read_work_file_within(dir, name, WORK_FILE_MOST)
+}
+
+/// `read_work_file`, of a file of no more than `most` bytes.
+fn read_work_file_within(dir: &Path, name: &str, most: u64) -> Result<String, String> {
+    let at = work_file(dir, name)?;
+    let too_large = |size: u64| format!("{name} is too large to read: {} MB, past {} MB", size.div_ceil(1 << 20), most >> 20);
+    let file = File::open(&at).map_err(|e| format!("{name}: {e}"))?;
+    let size = file.metadata().map_err(|e| format!("{name}: {e}"))?.len();
+    if size > most {
+        return Err(too_large(size));
+    }
+    // (read no further than allowed, should it have grown since)
+    let mut bytes = Vec::with_capacity(size as usize);
+    file.take(most + 1).read_to_end(&mut bytes).map_err(|e| format!("{name}: {e}"))?;
+    if bytes.len() as u64 > most {
+        return Err(too_large(bytes.len() as u64));
+    }
+    // (as it is where it is text, as it is: copied only where it is not)
+    Ok(String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
+}
+
+/// How deep in a job's work folder its files are looked for, and how many files and folders are looked at most.
+const WORK_DEEPEST: usize = 32;
+const WORK_MOST: usize = 10_000;
 
 /// The files in a job's work folder, by their paths inside it.
 pub fn work_files(dir: &Path) -> Vec<String> {
-    fn walk(base: &Path, at: &Path, out: &mut Vec<String>) {
+    files_within(&dir.join(WORK), WORK_DEEPEST, WORK_MOST)
+}
+
+/// The files in `base`, by their paths inside it: no link followed, nor
+/// listed - a link to a folder above it would never end - at most `deepest`
+/// folders down, and no more than `most` files and folders looked at - a
+/// program making folders by the thousand is not walked for good.
+fn files_within(base: &Path, deepest: usize, most: usize) -> Vec<String> {
+    fn walk(base: &Path, at: &Path, left: usize, most: usize, seen: &mut usize, out: &mut Vec<String>) {
         let Ok(entries) = fs::read_dir(at) else { return };
         for e in entries.flatten() {
+            if *seen >= most {
+                return;
+            }
+            *seen += 1;
+            // (what it is itself, as `symlink_metadata` says: a link is neither)
+            let Ok(kind) = e.file_type() else { continue };
             let p = e.path();
-            if p.is_dir() {
-                walk(base, &p, out);
-            } else if let Ok(rel) = p.strip_prefix(base) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
+            if kind.is_dir() {
+                if left > 0 {
+                    walk(base, &p, left - 1, most, seen, out);
+                }
+            } else if kind.is_file() {
+                if let Ok(rel) = p.strip_prefix(base) {
+                    out.push(rel.to_string_lossy().replace('\\', "/"));
+                }
             }
         }
     }
-    let base = dir.join(WORK);
     let mut out = Vec::new();
-    walk(&base, &base, &mut out);
+    walk(base, base, deepest, most, &mut 0, &mut out);
     out.sort();
     out
 }
@@ -1296,7 +1573,12 @@ pub fn work_files(dir: &Path) -> Vec<String> {
 /// with no console and nothing to say to Meno - so that it outlives it.
 fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     let mut cmd = Command::new(exe);
-    cmd.arg(JOB_FLAG).arg(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // (in the jobs' folder: never Meno's, which it would otherwise hold - on
+    // Windows a folder a process is in cannot be taken away, nor the drive
+    // it is on put away - nor its own job's, which is taken away as soon as
+    // the job is over, while the runner may still be on its way out; the
+    // jobs' folder never is)
+    cmd.arg(JOB_FLAG).arg(dir).current_dir(dir.parent().unwrap_or(dir)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1317,6 +1599,172 @@ fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+// --- what a job's runner takes -----------------------------------------------
+
+/// What a job's program is given: its environment's activation - or,
+/// installed separately, its folders and variables - a network that refuses
+/// it (the proxy on `port`, with no task's: while Meno is open, it says so),
+/// and the cores it may use.
+fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, String> {
+    let mut given = Command::new(&found.program);
+    if let Some(activation) = &found.activation {
+        pixienv::activate(&mut given, activation);
+    }
+    given.envs(found.env.iter().map(|(k, v)| (k, v)));
+    crate::net::route_nowhere_at(&mut given, port);
+    if let Some(cores) = cores {
+        for key in THREADS {
+            given.env(key, cores.clamp(1, 1024).to_string());
+        }
+    }
+    given
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
+        .collect()
+}
+
+/// The proxy's port a job was pointed at, as `given_env` points it: none, where it was not.
+fn proxy_port_of(env: &BTreeMap<String, String>) -> Option<u16> {
+    let (_, proxy) = env.iter().find(|(k, _)| k.eq_ignore_ascii_case("HTTPS_PROXY"))?;
+    let port = proxy.strip_prefix("http://127.0.0.1:")?;
+    port.bytes().all(|b| b.is_ascii_digit()).then_some(port)?.parse().ok()
+}
+
+/// The program a job's spec names, found again as `job_start` found it: one
+/// its plugin declares installed separately, at the path the spec gives - a
+/// copy of it by its file's name, as where the chemist located it is taken -
+/// or else one in the plugin's environment, at that path and no other.
+fn found_again(data: &Path, plugin_dir: &Path, spec: &JobSpec) -> Result<Found, String> {
+    let program = Path::new(&spec.program);
+    if let Some(decl) = installed_decl(plugin_dir, &spec.plugin, &spec.name)? {
+        let copy = installed_found(&decl, Some(&spec.program), None, &Bases::default(), true);
+        if copy.first().map(PathBuf::as_path) != Some(program) {
+            return Err(format!("{} is not {}", spec.program, spec.name));
+        }
+        return installed_at(&decl, program.to_path_buf(), std::env::var_os("PATH").as_deref());
+    }
+    let found = plugin_program(data, plugin_dir, &spec.plugin, &spec.name, &spec.args)?;
+    if found.program != program {
+        return Err(format!("{} is not {}'s {}", spec.program, spec.plugin, spec.name));
+    }
+    Ok(found)
+}
+
+/// Whether a job's runner may run what `spec` says (`job.json`, which
+/// anything could have written): only what `job_start` makes - a program
+/// its plugin names, from the plugin's environment or installed separately,
+/// those beside it it declares, and given what `job_start` gives, nothing
+/// else; one installed separately, and those beside it, naming no file but
+/// those in its work folder as it was made (`written`) - Meno's data folder
+/// `data`, and the plugins it carries in `plugins`.
+pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String]) -> Result<(), String> {
+    if !plugin_id(&spec.plugin) {
+        return Err(format!("not a plugin: {}", spec.plugin));
+    }
+    let plugin_dir = plugins.join(&spec.plugin);
+    let found = found_again(data, &plugin_dir, spec)?;
+    if installed_decl(&plugin_dir, &spec.plugin, &spec.name)?.is_some() {
+        names_only_written(&spec.args, written)?;
+        spec.then.iter().try_for_each(|t| names_only_written(&t.args, written))?;
+    }
+    let asked: Vec<ThenAsk> = spec.then.iter().map(|t| ThenAsk { program: t.name.clone(), args: t.args.clone() }).collect();
+    if then_of(&found, &spec.name, &asked)? != spec.then {
+        return Err(format!("not the programs beside {}", spec.name));
+    }
+    let port = proxy_port_of(&spec.env).ok_or("not pointed at Meno's network")?;
+    let cores = spec.env.get(THREADS[0]).and_then(|c| c.parse().ok());
+    if given_env(&found, port, cores) != spec.env {
+        return Err(format!("{} given what Meno does not give it", spec.name));
+    }
+    Ok(())
+}
+
+/// A job's folder as its runner takes it (`--job <folder>`): one in `data`'s
+/// `jobs`, by an id Meno gives - links and `..` followed first, so that
+/// neither leads out - and holding what it is to run. Where it is there.
+pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
+    let refused = || format!("not a job of Meno's: {}", dir.display());
+    let jobs = data.join("jobs");
+    let root = jobs.canonicalize().map_err(|_| refused())?;
+    let real = dir.canonicalize().map_err(|_| refused())?;
+    let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if real.parent() != Some(root.as_path()) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
+        return Err(refused());
+    }
+    // (the folder checked, and no other found again by its name: on Windows,
+    // as Meno names it - a canonical path, `\\?\C:\...`, is one programs may not take as their folder)
+    Ok(plain(real))
+}
+
+/// A canonical path as programs take it: on Windows, a drive's (`\\?\C:\x`)
+/// without its `\\?\` where that leads to the same place; any other as it is.
+fn plain(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        if let Some(rest) = text.strip_prefix(r"\\?\").filter(|r| r.as_bytes().get(1) == Some(&b':')) {
+            let short = PathBuf::from(rest);
+            if short.canonicalize().is_ok_and(|c| c == path) {
+                return short;
+            }
+        }
+    }
+    path
+}
+
+/// Meno's identifier (tauri.conf.json), which names its data folder.
+const IDENTIFIER: &str = "com.kfchem.meno";
+
+/// Meno's data folder as Tauri finds it (`app_data_dir`: the system's
+/// folder for applications' data, then Meno's identifier) - for a job's
+/// runner, which has no window to ask.
+fn data_dir_here() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let base = roaming_app_data();
+    #[cfg(unix)]
+    let base = {
+        let home = std::env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute());
+        if cfg!(target_os = "macos") {
+            home.map(|h| h.join("Library").join("Application Support"))
+        } else {
+            let xdg = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).filter(|p| p.is_absolute());
+            xdg.or_else(|| home.map(|h| h.join(".local").join("share")))
+        }
+    };
+    base.map(|b| b.join(IDENTIFIER))
+}
+
+/// The user's roaming application data folder (Windows' known folder, as Tauri reads it).
+#[cfg(windows)]
+fn roaming_app_data() -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath};
+    unsafe {
+        let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
+        let ok = SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, std::ptr::null_mut(), &mut path) == 0;
+        let found = (ok && !path.is_null()).then(|| {
+            let len = (0..).take_while(|&i| *path.add(i) != 0).count();
+            PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
+        });
+        // (given back however it went)
+        windows::Win32::System::Com::CoTaskMemFree(Some(path as *const core::ffi::c_void));
+        found
+    }
+}
+
+/// The plugins Meno carries, where Tauri finds its resources - for a job's runner, as for its data folder.
+fn plugins_here() -> Option<PathBuf> {
+    let info = tauri::PackageInfo {
+        name: "Meno".into(),
+        version: env!("CARGO_PKG_VERSION").parse().ok()?,
+        authors: env!("CARGO_PKG_AUTHORS"),
+        description: env!("CARGO_PKG_DESCRIPTION"),
+        crate_name: env!("CARGO_PKG_NAME"),
+    };
+    let resources = tauri::utils::platform::resource_dir(&info, &tauri::Env::default()).ok()?;
+    Some(resources.join("resources").join("plugins"))
+}
+
 // --- Meno's commands ---------------------------------------------------------
 
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1325,9 +1773,14 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(root)
 }
 
+/// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
+fn job_id_ok(id: &str) -> bool {
+    uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+}
+
 /// A job's folder, by its id - which is only ever one Meno made.
 fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    let ok = uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id);
+    let ok = job_id_ok(id);
     let dir = jobs_root(app)?.join(id);
     if !ok || !dir.join(SPEC).is_file() {
         return Err(format!("no job {id}"));
@@ -1388,29 +1841,16 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
             .map_err(|e| e.to_string())??
     };
     let found = match installed {
-        Some(found) => found,
+        Some(found) => {
+            // (a program installed separately, and those beside it, given the job's own files alone - none of the chemist's elsewhere)
+            let written: Vec<String> = payload.files.iter().map(|f| f.name.clone()).collect();
+            names_only_written(&payload.args, &written)?;
+            payload.then.iter().try_for_each(|t| names_only_written(&t.args, &written))?;
+            found
+        }
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };
     let then = then_of(&found, &payload.program, &payload.then)?;
-
-    // what it is given: its environment's activation - or, installed
-    // separately, its folders and variables - a network that refuses it
-    // (and, while Meno is open, says so), the cores it may use
-    let mut given = Command::new(&found.program);
-    if let Some(activation) = &found.activation {
-        pixienv::activate(&mut given, activation);
-    }
-    given.envs(found.env.iter().map(|(k, v)| (k, v)));
-    net.route_nowhere(&mut given);
-    if let Some(cores) = payload.cores {
-        for key in THREADS {
-            given.env(key, cores.clamp(1, 1024).to_string());
-        }
-    }
-    let env = given
-        .get_envs()
-        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
-        .collect();
 
     let spec = JobSpec {
         plugin: payload.plugin.clone(),
@@ -1418,7 +1858,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         program: found.program.to_string_lossy().into_owned(),
         args: payload.args,
         stdin: payload.stdin,
-        env,
+        env: given_env(&found, net.proxy_port(), payload.cores),
         slots: payload.slots.unwrap_or(1).clamp(1, 64),
         created: now_ms(),
         then,
@@ -1484,6 +1924,10 @@ pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
         .flatten()
         .filter_map(|e| {
             let id = e.file_name().to_str()?.to_string();
+            // (one being taken away, or left of one: no job)
+            if id.starts_with(TAKEN) {
+                return None;
+            }
             listed(&id, &e.path())
         })
         .collect();
@@ -1526,6 +1970,21 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// What a job's folder taken away is named first: no job's id.
+const TAKEN: &str = ".taken-";
+
+/// A finished job's folder taken away: moved out of the jobs' way first,
+/// under a name no job has - so that one a program still holds a file in
+/// (Windows) is never left half there, a job no longer whole - then
+/// removed. Where it could not be moved, it is left as it was; what could
+/// not be removed goes the next time finished jobs are cleared.
+fn take_away(dir: &Path) -> std::io::Result<()> {
+    let taken = dir.with_file_name(format!("{TAKEN}{}", uuid::Uuid::new_v4().simple()));
+    fs::rename(dir, &taken)?;
+    let _ = fs::remove_dir_all(&taken);
+    Ok(())
+}
+
 /// A finished job's folder taken away; one waiting or running is not.
 #[tauri::command]
 pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
@@ -1533,21 +1992,28 @@ pub async fn job_remove(app: AppHandle, id: String) -> Result<(), String> {
     if !current_record(&dir).is_some_and(|r| r.state.finished()) {
         return Err(format!("job {id} has not finished: stop it first"));
     }
-    fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+    take_away(&dir).map_err(|e| format!("job {id}'s files could not be taken away: {e}"))
+}
+
+/// Every finished job's folder in `root` taken away - and what was left of
+/// those taken away before: how many.
+fn clear_finished(root: &Path) -> Result<u32, String> {
+    let mut cleared = 0;
+    for e in fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
+        let dir = e.path();
+        if e.file_name().to_string_lossy().starts_with(TAKEN) {
+            let _ = fs::remove_dir_all(&dir);
+        } else if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
+            cleared += 1;
+        }
+    }
+    Ok(cleared)
 }
 
 /// Every finished job's folder taken away: how many.
 #[tauri::command]
 pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
-    let root = jobs_root(&app)?;
-    let mut cleared = 0;
-    for e in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
-        let dir = e.path();
-        if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && fs::remove_dir_all(&dir).is_ok() {
-            cleared += 1;
-        }
-    }
-    Ok(cleared)
+    clear_finished(&jobs_root(&app)?)
 }
 
 #[cfg(test)]
@@ -1599,6 +2065,11 @@ mod tests {
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
     }
 
+    /// A job run as its runner runs one, what it is to run taken as it is.
+    fn run_job(dir: &Path) -> i32 {
+        super::run_job(dir, &|_| Ok(()))
+    }
+
     #[test]
     fn a_waiting_job_is_next_at_the_head_of_the_queue_and_behind_after_it() {
         let root = temp();
@@ -1622,7 +2093,7 @@ mod tests {
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
         assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
@@ -1630,6 +2101,52 @@ mod tests {
         assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
         drop(held);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_asleep_far_back_in_the_queue_wakes_to_a_stop_within_a_step() {
+        let dir = temp();
+        let asleep = Instant::now();
+        let stop = {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(150));
+                ask_stop(&dir).unwrap();
+            })
+        };
+        sleep_watching(&dir, BEHIND_MOST);
+        stop.join().unwrap();
+        assert!(asleep.elapsed() < Duration::from_millis(150) + WAIT_STEP + Duration::from_millis(250), "{:?}", asleep.elapsed());
+        // (asked nothing, it sleeps all it was to)
+        let dir = temp();
+        let asleep = Instant::now();
+        sleep_watching(&dir, Duration::from_millis(900));
+        assert!(asleep.elapsed() >= Duration::from_millis(900));
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_looks_for_its_turn_seldom_and_one_near_its_head_often() {
+        // (one slot: the two next after the head look as the head does, quickly while new there; the next few at the old step; each further back a step more, up to ten seconds)
+        assert_eq!(behind_step(0, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(1, 1, Duration::from_secs(60)), WAIT_STEP);
+        assert_eq!(behind_step(2, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(7, 1, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(10, 1, Duration::ZERO), PLACE_STEP * 3);
+        assert_eq!(behind_step(500, 1, Duration::ZERO), BEHIND_MOST);
+        // (four slots: the eight next after the head might each take one as they come free; further back, the steps shared)
+        assert_eq!(behind_step(7, 4, Duration::ZERO), QUICK_STEP);
+        assert_eq!(behind_step(8, 4, Duration::ZERO), WAIT_STEP);
+        assert_eq!(behind_step(28, 4, Duration::ZERO), PLACE_STEP * 9 / 4);
+        // (never asleep past its turn: the queue takes at least a third of a second a job, a slot, to come to it)
+        for slots in [1u32, 2, 4, 8] {
+            for ahead in 0..2000u32 {
+                assert!(behind_step(ahead, slots, Duration::from_secs(60)).as_secs_f64() <= f64::from(ahead.saturating_sub(slots - 1).max(1)) / 3.0 / f64::from(slots) + WAIT_STEP.as_secs_f64(), "{slots} {ahead}");
+            }
+        }
+        // (a thousand waiting look some 150 times a second together, where at one step each they looked 2,500)
+        let looks: f64 = (0..1000).map(|k| 1.0 / behind_step(k, 1, Duration::from_secs(60)).as_secs_f64()).sum();
+        assert!(looks < 160.0, "{looks}");
     }
 
     fn wait_for(what: impl Fn() -> bool) {
@@ -1773,7 +2290,23 @@ mod tests {
         run_job(&away);
         let r = current_record(&away).unwrap();
         assert_eq!(r.state, JobState::Failed);
-        assert!(r.why.unwrap().contains("not a file in its folder"));
+        assert!(r.why.unwrap().contains("not a file of the job's"));
+
+        // (nor one through a link in its folder, to a file of the chemist's anywhere)
+        #[cfg(unix)]
+        {
+            let linked = shell(&root, READS, 1);
+            let outside = root.join("outside.txt");
+            fs::write(&outside, "the chemist's").unwrap();
+            std::os::unix::fs::symlink(&outside, linked.join(WORK).join("link.txt")).unwrap();
+            let spec = JobSpec { stdin: Some("link.txt".into()), ..read_spec(&linked).unwrap() };
+            fs::write(linked.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+            run_job(&linked);
+            let r = current_record(&linked).unwrap();
+            assert_eq!(r.state, JobState::Failed);
+            assert!(r.why.unwrap().contains("is a link"));
+            assert!(!read_log(&linked, 0, LOG_MOST).0.contains("the chemist's"));
+        }
         let _ = fs::remove_dir_all(root);
     }
 
@@ -1996,6 +2529,57 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn lists_a_job_s_files_without_following_links_however_they_loop() {
+        use std::os::unix::fs::symlink;
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let work = dir.join(WORK);
+        for sub in ["x", "y"] {
+            fs::create_dir_all(work.join(sub)).unwrap();
+        }
+        fs::write(work.join("x").join("real.txt"), "").unwrap();
+        // a link to its own folder; two folders linking to each other; two links to each other; a link to a file
+        symlink(&work, work.join("self")).unwrap();
+        symlink(work.join("y"), work.join("x").join("to-y")).unwrap();
+        symlink(work.join("x"), work.join("y").join("to-x")).unwrap();
+        symlink(work.join("b"), work.join("a")).unwrap();
+        symlink(work.join("a"), work.join("b")).unwrap();
+        symlink(work.join("input.txt"), work.join("also.txt")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let dir = dir.clone();
+            std::thread::spawn(move || tx.send(work_files(&dir)));
+        }
+        let listed = rx.recv_timeout(Duration::from_secs(10)).expect("listed in finite time");
+        assert_eq!(listed, vec!["input.txt", "x/real.txt"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn lists_a_job_s_files_only_so_deep_and_so_many() {
+        let base = temp();
+        let folders = [base.clone(), base.join("a"), base.join("a").join("b"), base.join("a").join("b").join("c")];
+        for (i, at) in folders.iter().enumerate() {
+            fs::create_dir_all(at).unwrap();
+            fs::write(at.join(format!("f{i}")), "").unwrap();
+        }
+        assert_eq!(files_within(&base, WORK_DEEPEST, WORK_MOST), ["a/b/c/f3", "a/b/f2", "a/f1", "f0"]);
+        assert_eq!(files_within(&base, 1, WORK_MOST), ["a/f1", "f0"]);
+        assert_eq!(files_within(&base, 0, WORK_MOST), ["f0"]);
+        assert!(files_within(&base, WORK_DEEPEST, 2).len() <= 1);
+        let _ = fs::remove_dir_all(base);
+        // (folders counted too: fifty folders of a file each, ten looked at - five folders and their files, in whatever order they come)
+        let many = temp();
+        for i in 0..50 {
+            fs::create_dir_all(many.join(format!("d{i}"))).unwrap();
+            fs::write(many.join(format!("d{i}")).join("f"), "").unwrap();
+        }
+        assert_eq!(files_within(&many, WORK_DEEPEST, 10).len(), 5);
+        let _ = fs::remove_dir_all(many);
+    }
+
     #[test]
     fn keeps_a_job_s_files_inside_its_folder() {
         assert!(inside_name("input.inp"));
@@ -2008,6 +2592,80 @@ mod tests {
         assert!(read_work_file(&dir, "../job.json").is_err());
         let spec = read_spec(&dir).unwrap();
         assert!(make_job(&root, &spec, &[JobFile { name: "../x".into(), text: String::new() }]).is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn takes_finished_jobs_away_out_of_the_way_first_and_what_was_left_of_others() {
+        let root = temp();
+        let done = shell(&root, ECHO, 1);
+        write_record(&done, &JobRecord { ended: Some(3), code: Some(0), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        let failed = shell(&root, ECHO, 1);
+        write_record(&failed, &JobRecord { ended: Some(3), code: Some(1), ..JobRecord::new(JobState::Failed, 1) }).unwrap();
+        // (waiting: its runner starting - not taken)
+        let waiting = shell(&root, ECHO, 1);
+        // (left of one taken away before, a file in it held then)
+        let left = root.join(format!("{TAKEN}0123"));
+        fs::create_dir_all(left.join("work")).unwrap();
+        fs::write(left.join(SPEC), fs::read(waiting.join(SPEC)).unwrap()).unwrap();
+        assert_eq!(clear_finished(&root).unwrap(), 2);
+        assert!(!done.exists() && !failed.exists() && !left.exists());
+        assert!(waiting.exists());
+        // (and one alone, by the same way: nothing of it left under its id)
+        let one = shell(&root, ECHO, 1);
+        write_record(&one, &JobRecord { ended: Some(3), ..JobRecord::new(JobState::Stopped, 1) }).unwrap();
+        take_away(&one).unwrap();
+        assert!(!one.exists());
+        let names: Vec<String> = fs::read_dir(&root).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().all(|n| !n.starts_with(TAKEN)), "{names:?}");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job's program is in its job object before it has run at all - held,
+    /// it has written nothing - and runs to its end once let go (Windows).
+    #[cfg(windows)]
+    #[test]
+    fn a_program_is_started_in_its_job_object_then_let_go() {
+        let root = temp();
+        let mark = root.join("ran.txt");
+        let (sh, flag) = shell_program();
+        let mut cmd = Command::new(&sh);
+        // (written by a name in its folder: no quoting for cmd to read otherwise)
+        cmd.current_dir(&root).arg(flag).arg("echo ran>ran.txt").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let (mut child, job) = start_held(&mut cmd).unwrap();
+        let mut inside = 0;
+        unsafe {
+            use std::os::windows::io::AsRawHandle;
+            windows_sys::Win32::System::JobObjects::IsProcessInJob(child.as_raw_handle() as _, job.0, &mut inside);
+        }
+        assert_ne!(inside, 0);
+        // (held: nothing of it has run)
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!mark.exists());
+        assert!(let_go(child.id()));
+        assert!(child.wait().unwrap().success());
+        assert!(mark.exists());
+        // (and a job's program goes the same way)
+        let dir = shell(&root, ECHO, 1);
+        let mut program = spawn_program(&dir, &sh, &[flag.into(), "ping -n 2 127.0.0.1 >nul".into()], &BTreeMap::new(), None, LOG).unwrap();
+        assert!(program.child.wait().unwrap().success());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// One taken away part way - its record gone, its spec left, made a moment
+    /// ago - reads as waiting: the queue passes over it, not waiting on it.
+    #[test]
+    fn a_job_taken_away_part_way_does_not_hold_the_queue() {
+        let root = temp();
+        let earlier = shell(&root, ECHO, 1);
+        std::thread::sleep(Duration::from_millis(5));
+        let mine = shell(&root, ECHO, 1);
+        let taken = root.join(format!("{TAKEN}4567"));
+        fs::rename(&earlier, &taken).unwrap();
+        let _ = fs::remove_file(taken.join(RECORD));
+        assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
+        let spec = read_spec(&mine).unwrap();
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -2030,7 +2688,7 @@ mod tests {
     #[test]
     fn runs_only_a_program_its_plugin_names_from_the_plugin_s_environment() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
-        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("other")]);
+        let (data, dir) = plugin(r#"["xtb", "crest", {"name": "named"}, "bash", "bash.exe", "CMD.EXE"]"#, &[&exe("xtb"), &exe("crest"), &exe("named"), &exe("bash"), &exe("bash.exe"), &exe("CMD.EXE"), &exe("other")]);
         let found = plugin_program(&data, &dir, "demo", "xtb", &["in.xyz".into(), "--opt".into()]).unwrap();
         assert!(found.program.ends_with(exe("xtb")));
         assert!(found.activation.is_none());
@@ -2039,6 +2697,9 @@ mod tests {
         assert!(plugin_program(&data, &dir, "demo", "other", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "named", &[]).is_err());
         assert!(plugin_program(&data, &dir, "demo", "bash", &[]).is_err());
+        // (a shell by its stem, with its extension: as Windows finds `cmd.exe`)
+        assert!(plugin_program(&data, &dir, "demo", "bash.exe", &[]).unwrap_err().contains("not a program a job runs"));
+        assert!(plugin_program(&data, &dir, "demo", "CMD.EXE", &[]).unwrap_err().contains("not a program a job runs"));
         assert!(plugin_program(&data, &dir, "demo", "../xtb", &[]).is_err());
         assert!(plugin_program(&data, &dir, "../demo", "xtb", &[]).is_err());
         // named, but not in its environment
@@ -2046,6 +2707,192 @@ mod tests {
         assert!(plugin_program(&empty, &dir2, "demo", "xtb", &[]).unwrap_err().contains("not in"));
         let _ = fs::remove_dir_all(data.parent().unwrap());
         let _ = fs::remove_dir_all(empty.parent().unwrap());
+    }
+
+    /// A job's spec as `job_start` makes it, for what was found.
+    fn spec_for(plugin: &str, name: &str, found: &Found, args: &[&str]) -> JobSpec {
+        JobSpec {
+            plugin: plugin.into(),
+            name: name.into(),
+            program: found.program.to_string_lossy().into_owned(),
+            args: args.iter().map(|a| a.to_string()).collect(),
+            stdin: None,
+            env: given_env(found, 4567, Some(2)),
+            slots: 1,
+            created: now_ms(),
+            then: vec![],
+        }
+    }
+
+    #[test]
+    fn a_runner_takes_only_a_folder_in_meno_s_jobs_folder() {
+        let base = temp();
+        let data = base.join("data");
+        let jobs = data.join("jobs");
+        // (no jobs' folder yet: nothing is one)
+        let elsewhere = shell(&base.join("elsewhere"), ECHO, 1);
+        assert!(runner_folder(&data, &elsewhere).is_err());
+        let (id, dir) = make_job(&jobs, &read_spec(&elsewhere).unwrap(), &[]).unwrap();
+        // (the folder checked, canonical: on Windows, as programs take it)
+        let checked = plain(jobs.canonicalize().unwrap().join(&id));
+        assert_eq!(runner_folder(&data, &dir), Ok(checked.clone()));
+        assert_eq!(runner_folder(&data, &dir.join(WORK).join("..")), Ok(checked.clone()));
+        #[cfg(windows)]
+        assert!(!checked.to_string_lossy().starts_with(r"\\?\"));
+        // outside it, by its path or by `..`; inside one; not by an id Meno gives; holding nothing to run
+        let up = jobs.join(&id).join("..").join("..").join("..").join("elsewhere").join(elsewhere.file_name().unwrap());
+        let inside = make_job(&dir.join(WORK), &read_spec(&dir).unwrap(), &[]).unwrap().1;
+        let named = jobs.join("not-an-id");
+        fs::create_dir_all(&named).unwrap();
+        fs::copy(dir.join(SPEC), named.join(SPEC)).unwrap();
+        let empty = jobs.join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&empty).unwrap();
+        for bad in [&elsewhere, &up, &inside, &named, &empty, &jobs, &jobs.join(SPEC)] {
+            assert!(runner_folder(&data, bad).is_err(), "{}", bad.display());
+        }
+        // a link in it to a folder outside
+        #[cfg(unix)]
+        {
+            let link = jobs.join(uuid::Uuid::new_v4().to_string());
+            std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
+            assert!(runner_folder(&data, &link).is_err());
+        }
+        // and the runner, refusing one, writes nothing and ends saying so
+        let empty_plugins = base.join("plugins");
+        assert_eq!(runner(&data, &empty_plugins, &elsewhere), 1);
+        assert!(!elsewhere.join(RECORD).exists() && !elsewhere.join(RUNNER_LOCK).exists() && !elsewhere.join(LOG).exists());
+        assert!(!base.join("elsewhere").join(QUEUE_LOCK).exists());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_runs_only_what_job_start_would_have_it_run() {
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let (data, dir) = plugin(r#"["xtb"]"#, &[&exe("xtb"), &exe("other")]);
+        let plugins = dir.parent().unwrap().to_path_buf();
+        let found = plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap();
+        let good = spec_for("demo", "xtb", &found, &["in.xyz"]);
+        assert_eq!(spec_allowed(&data, &plugins, &good, &[]), Ok(()));
+        // a program its plugin does not name; another file under a name it names; another plugin's
+        let other = Found { program: found.program.with_file_name(exe("other")), ..plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap() };
+        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[]), &[]).unwrap_err().contains("names no program other"));
+        let (program, _) = shell_program();
+        let elsewhere = JobSpec { program, ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &elsewhere, &[]).is_err());
+        for plugin in ["../demo", "absent"] {
+            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }, &[]).is_err(), "{plugin}");
+        }
+        // given what Meno does not give: code loaded into it, a network of its own, no proxy, programs after it
+        let with = |k: &str, v: &str| {
+            let mut env = good.env.clone();
+            env.insert(k.into(), v.into());
+            JobSpec { env, ..good.clone() }
+        };
+        for (k, v) in [("DYLD_INSERT_LIBRARIES", "/tmp/x.dylib"), ("LD_PRELOAD", "/tmp/x.so"), ("PYTHONPATH", "/tmp"), ("HTTPS_PROXY", "http://example.org:8080"), ("OMP_NUM_THREADS", "lots")] {
+            assert!(spec_allowed(&data, &plugins, &with(k, v), &[]).is_err(), "{k}");
+        }
+        let unrouted = JobSpec { env: BTreeMap::new(), ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &unrouted, &[]).unwrap_err().contains("not pointed at Meno's network"));
+        let then = JobSpec { then: vec![Then { name: "sh".into(), program: shell_program().0, args: vec![] }], ..good.clone() };
+        assert!(spec_allowed(&data, &plugins, &then, &[]).is_err());
+
+        // and run by the runner: refused, failing, saying why, nothing run; allowed, run
+        let jobs = data.join("jobs");
+        let refused = make_job(&jobs, &with("LD_PRELOAD", "/tmp/x.so"), &[]).unwrap().1;
+        assert_eq!(runner(&data, &plugins, &refused), 1);
+        let r = current_record(&refused).unwrap();
+        assert_eq!((r.state, r.started), (JobState::Failed, None));
+        assert!(r.why.unwrap().contains("Meno does not run it"));
+        assert!(!refused.join(LOG).exists());
+        #[cfg(unix)]
+        {
+            fs::write(&found.program, "#!/bin/sh\necho ran\n").unwrap();
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&found.program, fs::Permissions::from_mode(0o755)).unwrap();
+            let ran = make_job(&jobs, &good, &[]).unwrap().1;
+            assert_eq!(runner(&data, &plugins, &ran), 0);
+            assert_eq!(current_record(&ran).unwrap().state, JobState::Done);
+            assert_eq!(read_log(&ran, 0, LOG_MOST).0, "ran\n");
+        }
+        let _ = fs::remove_dir_all(data.parent().unwrap());
+    }
+
+    #[test]
+    fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
+        let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
+        let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
+        // ORCA, orca_2mkl, Multiwfn, Gaussian, as their plugins ask
+        assert_eq!(ok(&["input.inp"]), Ok(()));
+        assert_eq!(ok(&["input", "-molden"]), Ok(()));
+        assert_eq!(ok(&["wavefunction.molden", "-nt", "4", "-silent"]), Ok(()));
+        assert_eq!(ok(&[]), Ok(()));
+        assert_eq!(ok(&["--chrg", "-1", "0.5"]), Ok(()));
+        for bad in ["/etc/hosts", "../input.inp", "./input.inp", "other.inp", "molden", "--in=input.inp", "-", "--", "-1x", ".5", "1.", ""] {
+            assert!(ok(&[bad]).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_runner_runs_a_program_installed_separately_only_as_its_plugin_declares_it() {
+        let base = temp();
+        let plugins = base.join("plugins");
+        let plugin = plugins.join("demo");
+        fs::create_dir_all(&plugin).unwrap();
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let manifest = serde_json::json!({
+            "id": "demo",
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
+        });
+        fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
+        let orca = program_file(&base.join("orca_6"), &exe("orca"));
+        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
+        let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        let data = base.join("data");
+        let written = vec!["input.inp".to_string()];
+        assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));
+        // a file of another name where it was located; one beside it it does not declare
+        let other = program_file(&base.join("orca_6"), &exe("orcb"));
+        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }, &written).is_err());
+        let mut beside = good.clone();
+        beside.then[0].program = other.to_string_lossy().into_owned();
+        assert!(spec_allowed(&data, &plugins, &beside, &written).is_err());
+        // what its declaration does not give it
+        let mut env = good.env.clone();
+        env.insert("GAUSS_EXEDIR".into(), base.to_string_lossy().into_owned());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }, &written).is_err());
+        // a file not written for it, by its arguments or those of one beside it
+        for arg in ["/etc/hosts", "../other/input.inp", "other.inp", "--input=/etc/hosts", "-o/etc/hosts", "C:\\x.inp"] {
+            let args = JobSpec { args: vec![arg.into()], ..good.clone() };
+            assert!(spec_allowed(&data, &plugins, &args, &written).unwrap_err().contains("is not a file written for it"), "{arg}");
+            let mut then = good.clone();
+            then.then[0].args = vec![arg.into()];
+            assert!(spec_allowed(&data, &plugins, &then, &written).is_err(), "{arg}");
+        }
+        assert!(spec_allowed(&data, &plugins, &good, &[]).is_err());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_finds_meno_s_data_folder_by_meno_s_identifier() {
+        let conf: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap()).unwrap();
+        assert_eq!(conf["identifier"], IDENTIFIER);
+        assert_eq!(conf["productName"], "Meno");
+        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(IDENTIFIER)));
+        assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
+    }
+
+    #[test]
+    fn reads_the_port_a_job_was_pointed_at() {
+        let env = |v: &str| BTreeMap::from([("HTTPS_PROXY".to_string(), v.to_string())]);
+        assert_eq!(proxy_port_of(&env("http://127.0.0.1:4567")), Some(4567));
+        assert_eq!(proxy_port_of(&env("http://127.0.0.1:0")), Some(0));
+        for bad in ["http://meno:t@127.0.0.1:4567", "http://127.0.0.1:+1", "http://127.0.0.1:70000", "http://10.0.0.1:80", ""] {
+            assert_eq!(proxy_port_of(&env(bad)), None, "{bad}");
+        }
+        assert_eq!(proxy_port_of(&BTreeMap::new()), None);
     }
 
     #[test]
@@ -2372,4 +3219,40 @@ mod tests {
         names.sort_by(|a, b| natural(a, b));
         assert_eq!(names, vec!["Blender 4.5", "Blender 5.2", "Blender 5.10", "Blender 10.0"]);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn reads_no_file_through_a_link_a_job_left() {
+        let dir = std::env::temp_dir().join(format!("meno-read-{}", uuid::Uuid::new_v4()));
+        let work = dir.join(WORK);
+        fs::create_dir_all(work.join("sub")).unwrap();
+        fs::write(work.join("out.txt"), "mine").unwrap();
+        fs::write(work.join("sub/deep.txt"), "deep").unwrap();
+        let outside = dir.join("outside.txt");
+        fs::write(&outside, "the chemist's").unwrap();
+        std::os::unix::fs::symlink(&outside, work.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&dir, work.join("up")).unwrap();
+        assert_eq!(read_work_file(&dir, "out.txt").unwrap(), "mine");
+        assert_eq!(read_work_file(&dir, "sub/deep.txt").unwrap(), "deep");
+        assert!(read_work_file(&dir, "link.txt").is_err());
+        assert!(read_work_file(&dir, "up/outside.txt").is_err());
+        assert!(read_work_file(&dir, "../outside.txt").is_err());
+        assert!(read_work_file(&dir, "sub").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_no_file_of_a_job_s_past_its_size() {
+        let dir = std::env::temp_dir().join(format!("meno-read-{}", uuid::Uuid::new_v4()));
+        let work = dir.join(WORK);
+        fs::create_dir_all(&work).unwrap();
+        fs::write(work.join("small.txt"), "a".repeat(1 << 20)).unwrap();
+        fs::write(work.join("large.txt"), "a".repeat((1 << 20) + 1)).unwrap();
+        fs::write(work.join("odd.txt"), b"caf\xe9").unwrap();
+        assert_eq!(read_work_file_within(&dir, "small.txt", 1 << 20).unwrap().len(), 1 << 20);
+        assert_eq!(read_work_file_within(&dir, "large.txt", 1 << 20), Err("large.txt is too large to read: 2 MB, past 1 MB".into()));
+        assert_eq!(read_work_file(&dir, "odd.txt").unwrap(), "caf\u{fffd}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
 }

@@ -16,6 +16,7 @@ import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
 import { byStructure, type StructureValues } from "../utils/byStructure";
+import { greatest } from "../../../../lib/chem/lists";
 
 /** How many bonds each atom has, as the drawing counts them to say which end of a wedge is narrow. */
 export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, number> {
@@ -108,7 +109,7 @@ export function forFlatReaders(model: Model): WriterModel {
   const flat = wedgesForFlat(atoms, bonds);
   if (!flat.wedges.length) return model;
   const ids = model.atoms.map((a) => a.id);
-  let next = Math.max(0, ...ids, ...model.bonds.map((b) => b.id)) + 1;
+  let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;
   const outAtoms = [...model.atoms];
   const outBonds: Bond[] = [...model.bonds];
   const hydrogen = new Map<number, number>();

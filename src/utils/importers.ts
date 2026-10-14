@@ -25,6 +25,7 @@ import {
 import { readRxnfile } from "../lib/chem/ctfile";
 import { ARROW_LENGTH_BONDS } from "../lib/chem/reactionScheme";
 import { ELEMENTS } from "../lib/chem/elements";
+import { pushAll } from "../lib/chem/lists";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), and where it is. */
 export type EditorAtom = AtomChem & {
@@ -383,6 +384,10 @@ function markSgroups(
                 data: g.field.data,
                 ...(g.field.units ? { units: g.field.units } : {}),
                 ...(g.field.type ? { type: g.field.type } : {}),
+                ...(g.field.info ? { info: g.field.info } : {}),
+                ...(g.field.display ? { display: g.field.display } : {}),
+                ...(g.field.queryType ? { queryType: g.field.queryType } : {}),
+                ...(g.field.queryOp ? { queryOp: g.field.queryOp } : {}),
               },
             }
           : {}),
@@ -597,8 +602,9 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     const theirBonds = bonds.splice(bonds.length - m.bonds.length);
     contractAbbreviations(mine, theirBonds, m, (i) => base + i);
     idCounter = markSgroups(mine, theirBonds, m, (i) => base + i, (i) => base + m.atoms.length + i, idCounter);
-    atoms.push(...mine);
-    bonds.push(...theirBonds);
+    // (not spread into one call: a record of 50 000 atoms is more than a worker's stack takes - lib/chem/lists)
+    pushAll(atoms, mine);
+    pushAll(bonds, theirBonds);
     const title = m.ct?.name.trim();
     records.push({ atoms: mine.map((a) => a.id), ...(title ? { title } : {}) });
   }

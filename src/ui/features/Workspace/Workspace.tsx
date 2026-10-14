@@ -1,4 +1,6 @@
+import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
@@ -41,7 +43,7 @@ import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
-import ExportCard, { type Offered3D } from "./ExportCard";
+import ExportCard from "./ExportCard";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
@@ -50,8 +52,10 @@ import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
 import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
+import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
 import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
@@ -59,7 +63,7 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { knownOf, pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
-import { offeredNames, writtenOf } from "./utils/written";
+import { writtenOf } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
@@ -106,10 +110,11 @@ import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
-import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } from "./fileActions";
-import { setSaver } from "../../../lib/doc/savers";
+import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
+import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
@@ -146,6 +151,8 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
+import { FollowStyle } from "./components/FollowStyle";
+import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
 import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
@@ -163,6 +170,8 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { viewPanning } from "./components/viewGoal";
+import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -181,7 +190,10 @@ import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
 import { isBox, wordsRoom } from "../../../lib/chem/shapes";
-import { SHAPE_PAD } from "./document";
+import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
+import { freePlace, pageBoxes } from "./utils/freePlace";
+import { sheetRoom } from "./utils/textSheets";
+import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
@@ -196,7 +208,7 @@ function WorkspaceContent({
   initialPath,
   officeId,
   ownTab,
-  nameTab,
+  files,
   styleOpen,
   toggleStyle,
   openArrowStyle,
@@ -215,11 +227,8 @@ function WorkspaceContent({
   officeId?: number;
   /** Whether the canvas is a tab's own, which offers the app's menu its commands. */
   ownTab: boolean;
-  /**
-   * Names the canvas's tab after the file it is saved as. (One opened from
-   * a document keeps that document's name.)
-   */
-  nameTab?: (label: string) => void;
+  /** Save As and Export, and what went wrong with one: the tab's (TabFiles). */
+  files: FileActions;
   /** Whether the drawing-style panel is open beside the canvas. */
   styleOpen: boolean;
   toggleStyle: () => void;
@@ -232,8 +241,6 @@ function WorkspaceContent({
 }) {
   const fitNonce = useEditor((s) => s.fitNonce);
   const requestFit = useEditor((s) => s.requestFit);
-  // (a canvas opened from a document keeps that document's name)
-  const named = officeId == null ? nameTab : undefined;
 
   // the column over the canvas's right side, and the layer the page's HTML goes in, cut off where it begins
   const cover = useEditor((s) => s.cover);
@@ -255,28 +262,36 @@ function WorkspaceContent({
     handleMouseDownCapture,
     clientToWorld,
     pasteTarget,
+    viewMiddle,
   } = useStructureEvents(initialPayload, initialFilename, officeId == null, initialKind, initialPath);
   pdfTarget.current = pasteTarget;
+  // (where what is opened onto the page goes, of what it takes up about the
+  // point it is put at: in free space near the middle of the view, clear of
+  // all that is there - as files opened go, utils/freePlace)
+  const freeNear = useRef<(rooms: readonly { x0: number; y0: number; x1: number; y1: number }[]) => { x: number; y: number }>(() => ({ x: 0, y: 0 }));
+  freeNear.current = (rooms) => {
+    const st = store.getState();
+    const middle = viewMiddle();
+    if (!rooms.length) return middle;
+    const foot = { x0: Math.min(...rooms.map((r) => r.x0)), y0: Math.min(...rooms.map((r) => r.y0)), x1: Math.max(...rooms.map((r) => r.x1)), y1: Math.max(...rooms.map((r) => r.y1)) };
+    return freePlace(pageBoxes(st, styleOf(st.docStyle)), foot, middle, NOMINAL_BOND_LENGTH);
+  };
+  // (how files opened are put on the page: as a drop puts them, in free space near the middle of the view - this render's)
+  const openedFiles = useRef<(files: OpenedFile[]) => Promise<void>>(async () => {});
+  openedFiles.current = async (opened) => {
+    // (opened onto a page with nothing on it: Save suggests the first file's name beside it, as for a file opened on a canvas of its own)
+    const blank = isBlankDocument(store.getState().writing());
+    for (const [i, f] of opened.entries()) {
+      const put = () => openFilesAt([new File([f.bytes as BlobPart], f.name)], viewMiddle(), () => void put(), { path: f.path, free: true });
+      if ((await put()) && blank && i === 0) store.getState().markOpenedOver(f.path ?? f.name);
+    }
+  };
   useOfficeLink(officeId);
 
   const onCreated = useCanvasSetup(camRef, domRef);
 
-  // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(named);
-  const { save, saveAs } = files;
-  // (a tab's own canvas can be saved as its tab is closed)
-  useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
-  useEffect(() => {
-    if (!active) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      const intent = saveIntent(e);
-      if (!intent) return;
-      e.preventDefault();
-      void (intent === "save" ? save() : saveAs());
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, save, saveAs]);
+  // (Save As on the menu, and Export: Save itself, and Ctrl/Cmd+S, are the tab's - TabFiles)
+  const { saveAs } = files;
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
@@ -286,17 +301,34 @@ function WorkspaceContent({
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
   useEffect(
-    () => (ownTab && officeId == null ? setTextTaker(tabId, (texts) => store.getState().addTexts(texts, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setTextTaker(tabId, (texts) => {
+            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState(), pointOfStyle(store.getState().docStyle)).flatMap((t) => sheetRoom(t) ?? []);
+            store.getState().addTexts(texts, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
   );
   // (and PDFs and pictures opened, on its page where it is looked at: docs/PDF.md)
   useEffect(
-    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, pdfTarget.current())) : undefined),
+    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map(pdfRoom)))) : undefined),
     [ownTab, officeId, tabId, store],
   );
   useEffect(
-    () => (ownTab && officeId == null ? setPictureTaker(tabId, (pictures) => void store.getState().addPictures(pictures, pdfTarget.current())) : undefined),
+    () =>
+      ownTab && officeId == null
+        ? setPictureTaker(tabId, (pictures) => {
+            const rooms = picturesInRow(pictures, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
+            void store.getState().addPictures(pictures, freeNear.current(rooms));
+          })
+        : undefined,
     [ownTab, officeId, tabId, store],
+  );
+  // (and structures' files and calculations' outputs opened, as a drop on it puts them: ui/views/files)
+  useEffect(
+    () => (ownTab && officeId == null ? setFileTaker(tabId, (files) => void openedFiles.current(files)) : undefined),
+    [ownTab, officeId, tabId],
   );
   // What readers reading an output as well find, joined to each molecule
   // read from it as it comes - or as the molecule comes to stand here
@@ -488,7 +520,9 @@ function WorkspaceContent({
       setWorking3d("Drawing the formula…");
       setChemError(null);
       try {
-        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
+        // (laid out in the drawing's style, as Clean-up lays it out)
+        const style = styleOf(st.docStyle);
+        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
@@ -794,12 +828,15 @@ function WorkspaceContent({
   }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
-  // (nor a card a menu opened - a colour's, a size's - left over it)
+  // (nor a card a menu opened - a colour's, a size's - left over it, nor a
+  // question asked over the canvas: a procedure's name, a ligand's bond orders)
   useEffect(() => {
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
     setSizeCard(null);
+    setNaming(null);
+    setGivingOrders(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -818,14 +855,35 @@ function WorkspaceContent({
   const askUndo = useEditor((s) => s.askUndo);
   useEffect(() => {
     if (!active) return;
+    // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
+    const escape = () => {
+      if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    };
     const onKey = (e: KeyboardEvent) => {
+      // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)
       const intent = undoIntent(e);
-      if (!intent || !store.getState().holdUndo(intent)) return;
+      if (!intent) return;
+      const s = store.getState();
+      // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
+      // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
+      const words = wordsUnderWay(s);
+      if (words || gestureUnderWay(s) || viewPanning()) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!words) escape();
+        return;
+      }
+      if (!s.holdUndo(intent)) return;
       e.preventDefault();
       e.stopPropagation();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    // (a gesture lost - the window left, the pointer taken: let go, its flags with it)
+    const lost = letLostGesturesGo(window, () => store.getState(), escape);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      lost();
+    };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
@@ -1212,7 +1270,7 @@ function WorkspaceContent({
     chemWorker("checks").catch((e: unknown) => {
       setChemistry({ ...useAppSettings.getState().chemistry, stereoLabels: false });
       setChemError(
-        `R and S cannot be shown: ${e instanceof Error ? e.message : String(e)}`,
+        `${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`,
       );
     });
   };
@@ -1223,7 +1281,6 @@ function WorkspaceContent({
     : files.error
       ? files.dismissError
       : () => setChemError(null);
-  const ownStyle = useEditor((s) => s.docStyle != null);
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1261,7 +1318,13 @@ function WorkspaceContent({
     setRendering({ ids: ms.map((m) => m.id), motions, surfaces: ms.some((m) => !!shownRow(m.id)?.surface) });
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
-  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; molecules: Offered3D[]; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
+  useEffect(() => {
+    if (!talking) return;
+    setRendering(null);
+    setExporting(null);
+  }, [talking]);
 
   // Export: what is selected - its structures, arrows and words, its
   // molecules in 3D - as Meno writes it, or a plugin added that writes
@@ -1272,9 +1335,7 @@ function WorkspaceContent({
     const what = holdsOfDrawn(taken.part);
     const added = useReaders.getState().state;
     const theirs = what.solid ? pluginWriters(WRITER_PLUGINS.filter((p) => added[p.id] === "added")) : [];
-    const names = offeredNames(state.molecules3d);
-    const molecules = state.molecules3d.flatMap((m, i) => (taken.ids3d.includes(m.id) ? [{ id: m.id, name: names[i] }] : []));
-    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, molecules, selected: taken.ids3d, part: taken });
+    setExporting({ writers: [...exportKinds(what).map((k) => WRITERS[k]), ...theirs], from: exportKindOf(state, what), what, selected: taken.ids3d, part: taken });
   };
 
   // What the workspace does as a whole - opening, saving as, fitting, R and
@@ -1300,7 +1361,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    { name: chemistry.stereoLabels ? "Hide R and S" : "Show R and S", keys: "", run: toggleStereoLabels },
+    { name: chemistry.stereoLabels ? STEREO_LABELS.hide : STEREO_LABELS.show, keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
       ? [
           textsOpen
@@ -1319,7 +1380,7 @@ function WorkspaceContent({
         ]
       : []),
     ...(pdfsHeld ? [{ name: "Find in PDF…", keys: shortcutLabel("F"), run: openFind }] : []),
-    { name: ownStyle ? "Drawing style (its own)…" : "Drawing style…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
+    { name: "Drawing style…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
@@ -1394,6 +1455,8 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
+      <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
         {ask3d && (
           <Ask3D
@@ -1446,7 +1509,6 @@ function WorkspaceContent({
             writers={exporting.writers}
             from={exporting.from}
             what={exporting.what}
-            molecules={exporting.molecules}
             selected={exporting.selected}
             known={(ids) => {
               const state = store.getState();
@@ -1504,7 +1566,7 @@ function WorkspaceContent({
             }}
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles);
+              const drawn = await structureFromSmiles(smiles, style);
               const st = store.getState();
               const { at } = quickAdd;
               st.setQuickAdd(null);
@@ -1643,7 +1705,8 @@ function WorkspaceContent({
             // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
-              ...(s.running ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
+              // (its jobs under way, or Meno's own working in turns: Stop)
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
             };
           })()}
@@ -1860,6 +1923,14 @@ function WorkspaceContent({
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
+          // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
+          bondKind={(() => {
+            if (menu.kind !== "bond" || menu.id == null) return undefined;
+            const st = store.getState();
+            const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
+            const bond = st.model.bonds.find((b) => b.id === menu.id);
+            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
+          })()}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
@@ -1946,6 +2017,7 @@ function WorkspaceContent({
         />
       )}
       </AnimatePresence>
+      </AboveGuide>
       {/* (a molecule in 3D made again from its changed drawing: asked of the plugin here) */}
       <Remake3D.Provider value={remake3d}>
       <PageHtmlLayer.Provider value={htmlLayer}>
@@ -2070,6 +2142,7 @@ function WorkspaceContent({
         <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
+        <FollowStyle />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
@@ -2087,9 +2160,10 @@ function WorkspaceContent({
  * The canvas, should it fail as it is drawn: a card in its place, and
  * Reload making it again - whatever it was in the middle of let go, the
  * press that would have ended it lost with it. Its document, and its store
- * with it, are as they were (ui/layouts/ErrorBoundary).
+ * with it, are as they were (ui/layouts/ErrorBoundary), and can be saved
+ * meanwhile (TabFiles): a save that fails says so under the card.
  */
-function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNode }) {
+function CanvasBoundary({ files, children }: { files: Pick<FileActions, "error" | "dismissError">; children: (reloaded: boolean) => ReactNode }) {
   const store = useEditorStore();
   // (made again with its tab, or with the window, likewise: the store is as
   // whatever failed left it)
@@ -2103,12 +2177,28 @@ function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNo
       fallback={({ error, reload }) => (
         // (in the canvas's place, as wide, and as white)
         <div className="flex-1 min-w-0 h-full relative bg-white">
-          <div className="absolute top-3 left-0 flex justify-center" style={{ right: cover }}>
+          <div className="absolute top-3 left-0 flex flex-col items-center gap-2" style={{ right: cover }}>
             <StoppedCard
               said="The canvas stopped working. What is on it is kept."
               error={error}
               actions={[{ label: "Reload", run: reload }]}
             />
+            <AnimatePresence>
+              {files.error && (
+                <motion.div
+                  key="alert"
+                  {...RISE}
+                  role="alert"
+                  className="z-50 max-w-[90%] w-max flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+                >
+                  <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
+                  <span className="break-words">{files.error}</span>
+                  <button aria-label="Dismiss" title="Dismiss" onClick={files.dismissError} className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line">
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}
@@ -2116,6 +2206,52 @@ function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNo
       {children}
     </ErrorBoundary>
   );
+}
+
+/**
+ * Save, Save As and Export: the tab's, round the canvas rather than in it,
+ * so that they last as long as the tab does - should the canvas stop
+ * working (CanvasBoundary), its document is still saved by the title bar's
+ * Save, by Ctrl/Cmd+S and as its tab is closed (lib/doc/savers).
+ */
+function TabFiles({
+  tabId,
+  ownTab,
+  active,
+  nameTab,
+  children,
+}: {
+  tabId: string;
+  /** Whether the canvas is a tab's own, which can be saved as the tab is closed. */
+  ownTab: boolean;
+  active: boolean;
+  /**
+   * Names the canvas's tab after the file it is saved as. (One opened from
+   * a document keeps that document's name.)
+   */
+  nameTab?: (label: string) => void;
+  children: (files: FileActions) => ReactNode;
+}) {
+  // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
+  const files = useFileActions(nameTab);
+  const { save, saveAs } = files;
+  // (a tab's own canvas can be saved as its tab is closed)
+  useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
+  const store = useEditorStore();
+  // (where its workspace is saved, read as a file is opened: the same file opened again brings this tab forward)
+  useEffect(() => (ownTab ? setSavedPathOf(tabId, () => store.getState().savedPath) : undefined), [ownTab, tabId, store]);
+  useEffect(() => {
+    if (!active) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const intent = saveIntent(e);
+      if (!intent) return;
+      e.preventDefault();
+      void (intent === "save" ? save() : saveAs());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [active, save, saveAs]);
+  return <>{children(files)}</>;
 }
 
 /**
@@ -2184,32 +2320,41 @@ export default function Workspace({
     "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string } } | null
   >(null);
   const styleOpen = panel === "style";
+  // (a talk begun shuts the panel: the talk has the whole of the window, not what is left beside it)
+  const talking = usePresentingWindow((s) => s.on);
+  useEffect(() => {
+    if (talking) setPanel(null);
+  }, [talking]);
   return (
     <EditorProvider tabId={tabId} document={document}>
       <div className="w-full h-full flex">
         {/* the canvas, and over its right side the column of texts and PDFs (docs/PDF.md, *One canvas*) */}
         <div className="relative flex-1 min-w-0 h-full flex">
         {/* (each its own part: should one fail, the other goes on - docs/ARCHITECTURE.md, *When a part fails*) */}
-        <CanvasBoundary>
-          {(reloaded) => (
-            <WorkspaceContent
-              active={active}
-              tabId={tabId}
-              initialPayload={initialPayload}
-              initialFilename={initialFilename}
-              initialKind={initialKind}
-              initialPath={initialPath}
-              officeId={officeId}
-              ownTab={document != null}
-              nameTab={nameTab}
-              styleOpen={styleOpen}
-              toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
-              openArrowStyle={(id) => setPanel({ arrow: id })}
-              openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
-              fadeIn={reloaded}
-            />
+        <TabFiles tabId={tabId} ownTab={document != null} active={active} nameTab={officeId == null ? nameTab : undefined}>
+          {(files) => (
+            <CanvasBoundary files={files}>
+              {(reloaded) => (
+                <WorkspaceContent
+                  active={active}
+                  tabId={tabId}
+                  initialPayload={initialPayload}
+                  initialFilename={initialFilename}
+                  initialKind={initialKind}
+                  initialPath={initialPath}
+                  officeId={officeId}
+                  ownTab={document != null}
+                  files={files}
+                  styleOpen={styleOpen}
+                  toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
+                  openArrowStyle={(id) => setPanel({ arrow: id })}
+                  openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
+                  fadeIn={reloaded}
+                />
+              )}
+            </CanvasBoundary>
           )}
-        </CanvasBoundary>
+        </TabFiles>
         {/* The texts the workspace holds, in their column */}
         <ColumnBoundary>{(reloaded) => <TextColumn slideIn={reloaded} />}</ColumnBoundary>
         </div>

@@ -23,7 +23,7 @@ use tauri_plugin_fs::FsExt;
 pub struct Opened(Mutex<Vec<String>>);
 
 /// Whether `path` is a workspace file's: `.meno`, in any case, a file there.
-fn is_workspace(path: &Path) -> bool {
+pub(crate) fn is_workspace(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meno")) && path.is_file()
 }
 

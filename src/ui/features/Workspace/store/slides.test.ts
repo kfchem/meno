@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { createWorkspaceDocument, isBlankDocument } from "../document";
+import { addMolecule3d, createWorkspaceDocument, isBlankDocument, withImportedScheme } from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { centredAt, clipItems, readRecord, recordText } from "../utils/copyPaste";
 
@@ -163,5 +163,33 @@ describe("slides on the page", () => {
     expect(state().presenting).toEqual({ at: 0 });
     doc.undo();
     expect(state().presenting).toBeNull();
+  });
+});
+
+describe("a slide's Select what is on it, over a stack of molecules in 3D", () => {
+  it("takes only the molecule the stack shows, as a box and Select All do - so a Delete leaves the others", () => {
+    const water = (k: number) => ({
+      atoms: [
+        { el: "O", x: k / 100, y: 0, z: 0 },
+        { el: "H", x: 0.76, y: 0.59, z: 0 },
+        { el: "H", x: -0.76, y: 0.59, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+    });
+    const doc = createWorkspaceDocument();
+    doc.edit("open", (d) => addMolecule3d(withImportedScheme(d, { molecules3d: [1, 2, 3].map((k) => ({ ...water(k), at: { x: 0, y: 0 }, stack: { id: 1 } })) }), { ...water(0), at: { x: 9, y: 0 } }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const slide = st().addSlide({ x: 0, y: 0, w: 64, h: 36 })!;
+    st().selectAll();
+    const all = [...st().sel3d].sort();
+    st().selectOnSlide(slide);
+    expect([...st().sel3d].sort()).toEqual(all);
+    st().deleteSelection();
+    expect(st().molecules3d).toHaveLength(2);
   });
 });

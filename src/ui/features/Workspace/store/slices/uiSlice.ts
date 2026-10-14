@@ -1,4 +1,6 @@
 import type { DocumentStore } from "../../../../../lib/doc";
+import { gestureStep } from "../../../../../lib/doc/document";
+import { marksAll } from "../../../../../lib/chem/captions";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { EditorState } from "../types";
@@ -7,6 +9,8 @@ import type { StyleChoice } from "../../../../../lib/chem/style";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
 import { abbreviationOf } from "../../../../../lib/chem/abbreviations";
+import { restyledDocument } from "../../restyle";
+import { easeStyle } from "../../styleEase";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -19,6 +23,12 @@ export function createUiSlice(
   set: SetState,
   get: GetState,
 ) {
+  // A slider's drag in the Drawing style card, by its key: the workspace as
+  // the drag began, each tick converted from it - the starting style to the
+  // current one, never tick upon tick, so no error builds up - and the
+  // workspace the last tick left, to tell a drag gone on from one begun
+  // after another edit (docs/WORKSPACE.md, *Drawing style*).
+  let drag: { key: string; start: WorkspaceDocument; last: WorkspaceDocument } | null = null;
   return {
     setCover: (px: number) => {
       if (Math.abs(get().cover - px) > 0.25) set({ cover: px });
@@ -120,10 +130,26 @@ export function createUiSlice(
       doc.edit("aromatic circles", (d) => ops.setAromaticEnabled(d, v));
     },
 
-    setDocumentStyle: (style: StyleChoice | undefined, coalesceKey?: string) => {
-      doc.edit("drawing style", (d) => ops.setDocumentStyle(d, style), {
-        coalesceKey,
-      });
+    setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => {
+      // (once: the style set and the page converted with it, one step)
+      if (!coalesceKey) {
+        drag = null;
+        doc.edit("drawing style", (d) => restyledDocument(d, style));
+        return;
+      }
+      // (a slider's tick: from the workspace as its drag began; a new drag,
+      // or one after another edit, begins again from the workspace as it is)
+      const now = doc.getState();
+      if (!drag || drag.key !== coalesceKey || drag.last !== now) drag = { key: coalesceKey, start: now, last: now };
+      const start = drag.start;
+      doc.edit("drawing style", () => restyledDocument(start, style), { coalesceKey });
+      drag.last = doc.getState();
+    },
+
+    easeDocumentStyle: (style: StyleChoice) => {
+      // (a preset chosen: its bond eased in, one step - ./styleEase)
+      drag = null;
+      easeStyle(doc, style);
     },
 
     toggleAromatic: () => {
@@ -133,11 +159,32 @@ export function createUiSlice(
     },
 
     colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => {
-      doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? { coalesceKey: `colour:${which}:${gesture}` } : undefined);
+      doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? gestureStep(`colour:${which}:${gesture}`) : undefined);
+    },
+
+    // (one colour given to all a selection holds - atoms and bonds, electron
+    // arrows, words, reaction arrows, writing by hand - as one step; the
+    // system's chooser dragged through colours, one step for all of it)
+    colourTogether: (
+      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+      color: string | null,
+      gesture?: string,
+    ) => {
+      doc.edit(
+        "colour",
+        (d) => {
+          let n = ops.colourParts(d, { atoms: what.atoms ?? [], bonds: what.bonds ?? [], pushes: what.pushes ?? [] }, "color", color);
+          if (what.words?.length) n = ops.markCaptions(n, what.words, (c) => marksAll(c.text, c.marks, { color }));
+          if (what.arrows?.length) n = ops.setArrowForm(n, what.arrows, { color });
+          if (what.inks?.length) n = ops.colourInks(n, what.inks, color);
+          return n;
+        },
+        gesture ? gestureStep(`colour:color:${gesture}`) : undefined,
+      );
     },
 
     fillRings: (keys: readonly string[], color: string | null, gesture?: string) => {
-      doc.edit("fill ring", (d) => ops.fillRings(d, keys, color), gesture ? { coalesceKey: `fill:${gesture}` } : undefined);
+      doc.edit("fill ring", (d) => ops.fillRings(d, keys, color), gesture ? gestureStep(`fill:${gesture}`) : undefined);
     },
 
     setRingEnabled: (key: string, v: boolean) => {
