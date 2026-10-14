@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
-import { centredAt, clipItems, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText, schemeAmong } from "./copyPaste";
+import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText, schemeAmong } from "./copyPaste";
 import { middleOf } from "./selection";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { nextFree } from "../chem/engineLayout";
@@ -293,6 +293,18 @@ describe("a selection of very many atoms", () => {
 
   it("has a middle", () => {
     expect(middleOf({ atoms, bonds: [] } as unknown as Model, ids)).toEqual({ x: (499 * 1.8) / 2, y: (-299 * 1.8) / 2 });
+  });
+});
+
+describe("a copy, in pictures", () => {
+  it("is drawn in them with a structure, molecules in 3D, or words, shapes, writing, arrows or \"+\" signs alone - not slides alone", () => {
+    const none = { atoms: [], bonds: [] };
+    expect(drawsPicture(none)).toBe(false);
+    expect(drawsPicture({ ...none, slides: [{ id: 1, x: 0, y: 0, w: 32, h: 18 }] } as never)).toBe(false);
+    expect(drawsPicture({ ...none, captions: [{ id: 1, x: 0, y: 0, text: "Title" }] })).toBe(true);
+    expect(drawsPicture({ ...none, shapes: [{ id: 1, kind: "rect", x0: 0, y0: 0, x1: 2, y1: 1 }] })).toBe(true);
+    expect(drawsPicture({ ...none, inks: [{ id: 1, pen: "pen", width: 1, strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] }] })).toBe(true);
+    expect(drawsPicture({ ...none, atoms: [{ id: 1, x: 0, y: 0, el: "C" }] as never })).toBe(true);
   });
 });
 

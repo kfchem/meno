@@ -412,7 +412,8 @@ export class WordsEditor implements FieldHost {
     const p = this.layout?.places;
     if (!p) return dir < 0 ? this.lines.start(this.lines.at(at)) : this.lines.end(this.lines.at(at));
     const line = p.at[at].line;
-    const on = p.at.map((a, k) => (a.line === line ? k : -1)).filter((k) => k >= 0);
+    // (never inside a letter as the reader sees it - an emoji's halves)
+    const on = p.at.map((a, k) => (a.line === line && !a.inside ? k : -1)).filter((k) => k >= 0);
     return dir < 0 ? on[0] : on[on.length - 1];
   }
 

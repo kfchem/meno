@@ -169,6 +169,12 @@ export function lookOf(m: Pick<Molecule3D, "look">): Look {
   return m.look ?? "primary";
 }
 
+/** Molecules in 3D each in the look `looks` gives it, where it gives one - the same list where it gives none. */
+export function withLooks<M extends Pick<Molecule3D, "id" | "look">>(list: readonly M[], looks: Readonly<Record<number, Look>>): M[] {
+  if (!Object.keys(looks).length) return list as M[];
+  return list.map((m) => (looks[m.id] && looks[m.id] !== lookOf(m) ? { ...m, look: looks[m.id] } : m));
+}
+
 /** A molecule in 3D as it is drawn, frame by frame: about its centre, in world units. */
 export type Solid = {
   /** Each frame's atoms about that frame's own centre: x, y and z in turn. */

@@ -1,6 +1,6 @@
 [package]
 name = "Meno"
-version = "0.1.11"
+version = "0.1.12"
 description = "Molecular Editor for Notation and Orbitals"
 authors = ["Keisuke Fukaya"]
 edition = "2021"
@@ -49,8 +49,9 @@ libc = "0.2"
 # The system clipboard (src/clipboard.rs), by each platform's own API; and the
 # window's keys given back to the page after a talk covers the screen (src/present.rs)
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = { version = "0.3.1", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSView", "NSWindow"] }
-objc2-foundation = { version = "0.3.1", default-features = false, features = ["std", "NSArray", "NSData", "NSString", "NSURL"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.1", default-features = false, features = ["std", "NSApplication", "NSColor", "NSGraphics", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSScreen", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3.1", default-features = false, features = ["std", "NSArray", "NSData", "NSGeometry", "NSString", "NSURL"] }
 
 [target.'cfg(windows)'.dependencies]
 # (and jobs.rs: a job's program, and what it starts, in a job object)

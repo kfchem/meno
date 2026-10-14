@@ -195,20 +195,29 @@ function Invoke-MenoQuickAdd {
       with -CalcRows rows of steps (and procedures) at most -CalcMost icons
       long - Meno's own, alone, by default - and a warning says so. SMILES
       opens the field below the row, which then takes the keys; Shapes, the
-      shapes; Calculations, the calculations.
+      shapes; Calculations, the calculations. A build whose row has Pen,
+      after Slide, is told by the box's width (ten icons, not nine); where the
+      box is not found - or always, where -Pen says it has one. -PassThru returns where the box
+      stands, in shot pixels (Left, Top): a shape is drawn by a press on its
+      icon in the row below (Get-MenoShapeIcon) and a drag.
     #>
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
         [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
-        [int] $CalcMost = 4
+        [int] $CalcMost = 4,
+        [switch] $Pen,
+        [switch] $PassThru
     )
     # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
     $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y
+    # (a row of ten, with the pen: the rule before Calculations comes first, some 389 CSS px in - nine's right edge is at 379)
+    if ($Pen -or ($box -and $box.Width -gt 768)) { $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes") }
+    if ($Item -eq "Pen" -and $row -notcontains "Pen") { throw "this Meno's Quick Add has no Pen" }
     if ($box) {
         $left = $box.Left / 2; $top = $box.Top / 2 - 40
     } else {
@@ -229,6 +238,20 @@ function Invoke-MenoQuickAdd {
     $iy = $top + 1 + 4 + 18
     Invoke-MenoClick -X ([int](2 * $ix)) -Y ([int](2 * ($iy + 40)))
     Start-Sleep -Milliseconds 300
+    if ($PassThru) { [pscustomobject]@{ Left = [int](2 * $left); Top = [int](2 * ($top + 40)) } }
+}
+
+function Get-MenoShapeIcon {
+    <#
+      .SYNOPSIS
+      Where a shape's icon stands in the row Shapes opens below Quick Add's
+      (src/ui/features/Workspace/QuickAdd.tsx, SHAPE_KINDS), in shot pixels,
+      for Quick Add's box as Invoke-MenoQuickAdd returned it: its row 4 + 1
+      + 4 CSS px below the first.
+    #>
+    param([Parameter(Mandatory)] $Box, [Parameter(Mandatory)] [ValidateSet("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")] [string] $Shape)
+    $kinds = @("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")
+    [pscustomobject]@{ X = $Box.Left + 2 * (1 + 4 + $kinds.IndexOf($Shape) * 38 + 18); Y = $Box.Top + 2 * (1 + 4 + 36 + 4 + 1 + 4 + 18) }
 }
 
 function Find-MenoQuickAdd {
@@ -263,7 +286,7 @@ function Find-MenoQuickAdd {
                 # (as wide as its row as it opens - nine icons and Calculations, with their gaps, some 397 CSS px - or not
                 # its left edge: the rule before Calculations, say, walked on past)
                 for ($r = $x + 720; $r -le [Math]::Min($x + 860, $px.Width - 1); $r++) {
-                    if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top } }
+                    if (Test-ShotHairline $px $r $mid) { return [pscustomobject]@{ Left = $x; Top = $top; Width = $r - $x } }
                 }
             }
         }
@@ -290,6 +313,47 @@ function Read-ShotPixels {
         Width = $w; Height = [Math]::Abs($h); Bytes = $b; Offset = [BitConverter]::ToInt32($b, 10)
         Stride = [int]([Math]::Floor(($bpp * $w + 31) / 32) * 4); Step = $bpp / 8; BottomUp = $h -gt 0
     }
+}
+
+function Test-ShotDimmed($px) {
+    # (a question over the page: its white under App's bg-black/20, some 204 each - looked for near both lower corners of
+    # the window, where a fresh page has nothing drawn; the BMP's bytes blue first)
+    foreach ($x in @(40, ($px.Width - 40))) {
+        $y = $px.Height - 40
+        $row = if ($px.BottomUp) { $px.Height - 1 - $y } else { $y }
+        $i = $px.Offset + $row * $px.Stride + $x * $px.Step
+        foreach ($c in @($px.Bytes[$i], $px.Bytes[$i + 1], $px.Bytes[$i + 2])) { if ($c -lt 180 -or $c -gt 225) { return $false } }
+    }
+    return $true
+}
+
+function Close-MenoQuestion {
+    <#
+      .SYNOPSIS
+      A question Meno asks as it starts - keeping it up to date, on a fresh
+      profile - waited for, however long it takes to come, and answered no.
+
+      .DESCRIPTION
+      The window is shot every quarter second until the page is seen dimmed
+      under a question (Test-ShotDimmed), or `TimeoutSec` has passed; then
+      Escape answers it - "Not now", which fetches nothing - wherever its
+      button stands. A fixed wait clicked "Not now" before the question came
+      (it comes some 3 s after the start). Whether there was one.
+    #>
+    param([int] $TimeoutSec = 12)
+    $png = Join-Path ([System.IO.Path]::GetTempPath()) "meno-question-$PID.png"
+    $until = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $until) {
+        Save-MenoShot -Path $png | Out-Null
+        try { $px = Read-ShotPixels -Png $png } finally { Remove-Item $png -ErrorAction SilentlyContinue }
+        if (Test-ShotDimmed $px) {
+            Send-MenoKey Escape
+            Start-Sleep -Milliseconds 600
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
 }
 
 function Test-ShotHairline($px, [int] $x, [int] $y) {

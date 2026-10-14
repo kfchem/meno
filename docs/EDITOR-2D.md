@@ -167,7 +167,9 @@ by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
 **A click keeps each view's own meaning**: in 2D a click on an atom edits
-its label and a click on a bond changes its kind, as drawing wants; in 3D a
+its label and a click on a bond changes its kind, as drawing wants - and
+the bond's right-click menu chooses its kind outright (the maintainer,
+2026-10-14: both), for every bond selected at once, as one step; in 3D a
 click on an atom chooses it, for a measurement, and a click elsewhere on the
 molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
@@ -183,7 +185,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Right-clicked | Icons | Listed |
 |---|---|---|
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
-| A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure, lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
@@ -235,7 +237,7 @@ whole workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide, a picture or a shape made
+thin line in Meno's attention colour (#cd4560) showing each. A slide, a picture or a shape made
 larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
@@ -591,7 +593,8 @@ All hover-based, as above.
      tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
      hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
-     FmBoc stay. iPr stays upright.
+     FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
+     italics as a group does: m-CPBA, p-TSA, n-hexane.
   5. What reads as nothing stays exactly as typed - no capital made.
   6. A reagent's or a ligand's name comes before a metal's formula (the
      maintainer, 2026-10-13), however many letters it makes capitals. No
@@ -773,8 +776,8 @@ All hover-based, as above.
   any other, from the system's chooser; the one given now is ringed.
   - **Colour sets** (the maintainer, 2026-10-11), in Settings, General,
     *Colours*, chosen as the drawing style's presets are; the one chosen is
-    the one in use (the card offers only it). Meno's - its base #317689,
-    its accent #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
+    the one in use (the card offers only it). Meno's - its base colour #317689,
+    its attention colour #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
     highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
     look right as they are, as colour makes a drawing look cheap easily -
     and Okabe and Ito's, told apart by those who see colours otherwise,
@@ -939,9 +942,12 @@ All hover-based, as above.
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
     it, the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
-    each as fit, each line still centred, a word wider alone on its line, a
-    number or a range never parted from the unit after it (60 °C, 12 h,
-    2 equiv, 0–25 °C); a drag is one undo step. Written anew, they are
+    each as fit, each line still centred, a number or a range never parted
+    from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
+    are wider than the words are made; a word wider than that broken at
+    their edge - after a hyphen, a comma or a closing bracket, or before an
+    opening one, where one fits, as a chemical name is broken (the
+    maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align
