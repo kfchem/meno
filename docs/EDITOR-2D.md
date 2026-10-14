@@ -268,7 +268,18 @@ led by a drag from the icon or traced with the button up. *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
-wrong is said under the field. A double-click on an atom still draws one
+wrong is said under the field, in a few words about the SMILES itself - a
+formula written for it (each element once, a count after one; a SMILES
+for a halide of one atom then given - "a SMILES for it is
+Cl[Sn](Cl)(Cl)Cl" for SnCl4, a salt of groups 1 and 2 as ions,
+"[Mg+2].[Cl-].[Cl-]", where as many halogens as its charge), a
+ring left open (and which: "1 is opened and not closed"), a ( or [ not
+closed, a symbol that is no element, an element written without its
+brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
+an atom and an aromatic one), an H written as an atom ("H is left out of
+a SMILES"), an atom with more bonds than it can take (which, with its
+charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
+aromatic ring that cannot alternate. A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
@@ -562,10 +573,33 @@ All hover-based, as above.
      it is drawn on the left, comes before any other reading of them (the
      maintainer, 2026-10-12): ho is HO, kept OH, not holmium; mes is MeS,
      kept SMe, not mesityl - Mes typed so is mesityl. A charge typed last
-     stays last: ho- and HO- are OH-, h3n+ NH3+.
-  4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
-     iPr stays.
+     stays last: ho- and HO- are OH-, h3n+ NH3+. HN typed before a group is
+     NH and the group even where the letters as written read as a whole
+     molecule too: HNiPr and hnipr are NHiPr, not a complex of nickel - a
+     label on a structure stands for part of one.
+  4. A prefix set in italics - n, s, t, sec, tert, o, m, p - gets its
+     hyphen, at a label's start or after an atom, however it was typed:
+     tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
+     hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
+     element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
+     FmBoc stay. iPr stays upright.
   5. What reads as nothing stays exactly as typed - no capital made.
+  6. A reagent's or a ligand's name comes before a metal's formula (the
+     maintainer, 2026-10-13), however many letters it makes capitals. No
+     metal's symbol is read from letters typed small across the name of a
+     group, a reagent or a ligand the same letters spell: tbscl is TBSCl,
+     not terbium's; tmscl TMSCl and tmsotf TMSOTf, not thulium's; tipscl
+     TIPSCl; lah LAH, not LaH; cdi CDI; tbme TBME. Nor holmium's from ho
+     before a group, as rule 3 reads ho: hoac is HOAc, hotf HOTf, homs
+     HOMs, hocl HOCl. Nor two elements' symbols of a letter each from a
+     group's name of two letters typed small: phi is PhI, phio PhIO,
+     phi(oac)2 PhI(OAc)2 - not P and H. Of reagents' names and formulas, a
+     name Meno knows comes first: cpme is CPME, not CpMe. Where no name is
+     spelt, a metal's formula is read as ever: h2zn is H2Zn, pdcl2
+     PdCl2, cocl2 CoCl2, zni2 ZnI2, cp2zrhcl Cp2ZrHCl; and one typed as it
+     is written is that - HoCl3, TbMe. A group's name of one letter, Z (Cbz), is read from z
+     only as part of a structure - co2z is CO2Z, nhz NHZ - never into a
+     metal's formula: nbz stays nbz.
 
   As it is typed, only its letters' case changes, as they are read so far
   - the same letters in the same places, the caret where it was; rules 3

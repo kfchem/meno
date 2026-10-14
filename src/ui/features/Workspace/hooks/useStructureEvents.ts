@@ -25,6 +25,7 @@ import type { DropZone, Dropped } from "../../../../lib/drop";
 
 import { readRecord } from "../utils/copyPaste";
 import { kindOf, MARK_REACH, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
+import { headOfFile, textOfFile } from "../../../../lib/io/text";
 import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
@@ -451,7 +452,7 @@ export function useStructureEvents(
     const at = clientToWorld(x, y) || { x: 0, y: 0 };
     // What a file dropped is, from its start (lib/io/kinds): nothing need be
     // read of a large picture to know it is none of Meno's kinds
-    const head = dropped ? await dropped.slice(0, MARK_REACH).text() : "";
+    const head = dropped ? await headOfFile(dropped, MARK_REACH) : "";
     const kind = dropped ? await kindOfFile(dropped.name, head) : null;
     // None of them: a picture or an object dragged out of Word or
     // PowerPoint, perhaps, whose structure goes where it was dropped,
@@ -483,7 +484,7 @@ export function useStructureEvents(
   const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void, opened?: { path?: string; free?: boolean }): Promise<boolean> => {
     const f = files[0];
     if (!f) return false;
-    const head = await f.slice(0, MARK_REACH).text();
+    const head = await headOfFile(f, MARK_REACH);
     const kind = await kindOfFile(f.name, head);
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
     const pdfs = files.filter((g) => /\.pdf$/i.test(g.name) || g.type === "application/pdf");
@@ -518,11 +519,11 @@ export function useStructureEvents(
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
-      store.getState().addTexts([{ name: f.name, text: await f.text() }], at);
+      store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
       setImportError(null);
       return true;
     }
-    const text = await f.text();
+    const text = await textOfFile(f);
     // a record dropped: what it holds, beside what is drawn, selected
     if (kind?.id === MENO_KINDS.record.id) {
       const drawn = readRecord(text);

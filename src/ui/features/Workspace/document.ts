@@ -930,8 +930,14 @@ export function withImportedScheme(
 // --- molecules in 3D ---------------------------------------------------------
 
 export function addMolecule3d(doc: WorkspaceDocument, m: Omit<Molecule3D, "id">): WorkspaceDocument {
-  const id = doc.nextMolecule3dId ?? 1;
-  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), { ...m, id }], nextMolecule3dId: id + 1 };
+  return addMolecules3d(doc, [m]);
+}
+
+/** Molecules in 3D added at once, each given the next id in turn: the page's molecules copied once, however many. */
+export function addMolecules3d(doc: WorkspaceDocument, ms: readonly Omit<Molecule3D, "id">[]): WorkspaceDocument {
+  if (!ms.length) return doc;
+  const first = doc.nextMolecule3dId ?? 1;
+  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...ms.map((m, i) => ({ ...m, id: first + i }))], nextMolecule3dId: first + ms.length };
 }
 
 /**
@@ -2136,6 +2142,9 @@ export function setRingEnabled(
 
 // --- texts -------------------------------------------------------------------
 
+/** A text as it is held: its lines ended "\n", however its file ended them - Windows writes "\r\n". */
+const heldText = (text: string) => text.replace(/\r\n?/g, "\n");
+
 /**
  * Texts added, each after those it holds, and the id of the last: one it
  * holds already - the same name and text - not added again, its id given;
@@ -2149,12 +2158,13 @@ export function addTexts(
   let next = doc.nextTextId ?? Math.max(0, ...held.map((t) => t.id)) + 1;
   let last: number | null = null;
   for (const t of texts) {
-    const same = held.find((h) => h.name === t.name && h.text === t.text);
+    const text = heldText(t.text);
+    const same = held.find((h) => h.name === t.name && h.text === text);
     if (same) {
       last = same.id;
       continue;
     }
-    held.push({ id: next, name: t.name || newTextName(held), text: t.text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
@@ -2162,7 +2172,8 @@ export function addTexts(
 }
 
 /** A text changed to `text`. */
-export function editText(doc: WorkspaceDocument, id: number, text: string): WorkspaceDocument {
+export function editText(doc: WorkspaceDocument, id: number, typed: string): WorkspaceDocument {
+  const text = heldText(typed);
   const at = (doc.texts ?? []).findIndex((t) => t.id === id);
   if (at < 0 || doc.texts![at].text === text) return doc;
   const texts = doc.texts!.slice();
@@ -2206,7 +2217,7 @@ export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<Workspac
   const ids: number[] = [];
   for (const t of sheets) {
     if (!t.at) continue;
-    held.push({ id: next, name: t.name || newTextName(held), text: t.text, at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text: heldText(t.text), at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
     ids.push(next++);
   }
   return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };

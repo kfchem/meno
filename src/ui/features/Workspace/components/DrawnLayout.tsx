@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import {
@@ -13,7 +13,7 @@ import type { Atom, Bond } from "../store/types";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { DrawnLayoutContext } from "./drawnLayoutContext";
+import { DrawnLayoutContext, DrawnZoomContext, drawnZoomOf } from "./drawnLayoutContext";
 import { NEW_ATOM } from "../utils/stroke";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
@@ -77,6 +77,13 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const [zoom, setZoom] = useState(
     () => (camera as THREE.OrthographicCamera).zoom || 1,
   );
+  // (the same zoom for the layers that read it, each drawn again only as
+  // what it reads of it changes: not in the layout's context, which every
+  // layer reads - drawnLayoutContext `useDrawnZoom`)
+  const [drawnZoom] = useState(() => drawnZoomOf(zoom));
+  // (passed on once it is taken up - in the same commit as a layout laid out at it)
+  useLayoutEffect(() => drawnZoom.set(zoom), [drawnZoom, zoom]);
+  const take = setZoom;
   // The zoom it is laid out for (utils/largeZoom): the view's, taken up as
   // the view moves a hundredth from it (`nearZoom`) - the last of a wheel's
   // zoom, in steps too small to see, lays nothing out again; and, for a very
@@ -95,7 +102,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       if (settle.current != null) window.clearTimeout(settle.current);
       settle.current = null;
       from.current = z;
-      if (!nearZoom(z, zoom)) setZoom(z);
+      if (!nearZoom(z, zoom)) take(z);
       return;
     }
     if (nearZoom(z, from.current)) return;
@@ -105,7 +112,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       settle.current = null;
       const now = (camera as THREE.OrthographicCamera).zoom || 1;
       from.current = now;
-      setZoom(now);
+      take(now);
     }, SETTLE_MS);
   });
   const shownModel = useEditor((s) => s.model);
@@ -340,12 +347,14 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     [drawnAtoms, bonds, opts, layoutZoom, fonts, abbreviations],
   );
   const value = useMemo(
-    () => ({ atoms: drawnAtoms, bonds, opts, layout, zoom }),
-    [drawnAtoms, bonds, opts, layout, zoom],
+    () => ({ atoms: drawnAtoms, bonds, opts, layout, laidAt: layoutZoom }),
+    [drawnAtoms, bonds, opts, layout, layoutZoom],
   );
   return (
-    <DrawnLayoutContext.Provider value={value}>
-      {children}
-    </DrawnLayoutContext.Provider>
+    <DrawnZoomContext.Provider value={drawnZoom}>
+      <DrawnLayoutContext.Provider value={value}>
+        {children}
+      </DrawnLayoutContext.Provider>
+    </DrawnZoomContext.Provider>
   );
 }

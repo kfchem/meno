@@ -175,7 +175,8 @@ export function useClipboardActions(
           await openFiles(files, at);
           return;
         }
-        const found = await structureOnClipboard();
+        // (a SMILES laid out in the drawing's style, as Clean-up lays it out)
+        const found = await structureOnClipboard(styleOf(store.getState().docStyle));
         if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();

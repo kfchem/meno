@@ -53,6 +53,7 @@ import { setPictureTaker } from "../../views/pictures";
 import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
 import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
@@ -109,7 +110,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
-import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type Holds } from "./fileActions";
+import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
@@ -202,7 +203,7 @@ function WorkspaceContent({
   initialPath,
   officeId,
   ownTab,
-  nameTab,
+  files,
   styleOpen,
   toggleStyle,
   openArrowStyle,
@@ -221,11 +222,8 @@ function WorkspaceContent({
   officeId?: number;
   /** Whether the canvas is a tab's own, which offers the app's menu its commands. */
   ownTab: boolean;
-  /**
-   * Names the canvas's tab after the file it is saved as. (One opened from
-   * a document keeps that document's name.)
-   */
-  nameTab?: (label: string) => void;
+  /** Save As and Export, and what went wrong with one: the tab's (TabFiles). */
+  files: FileActions;
   /** Whether the drawing-style panel is open beside the canvas. */
   styleOpen: boolean;
   toggleStyle: () => void;
@@ -238,8 +236,6 @@ function WorkspaceContent({
 }) {
   const fitNonce = useEditor((s) => s.fitNonce);
   const requestFit = useEditor((s) => s.requestFit);
-  // (a canvas opened from a document keeps that document's name)
-  const named = officeId == null ? nameTab : undefined;
 
   // the column over the canvas's right side, and the layer the page's HTML goes in, cut off where it begins
   const cover = useEditor((s) => s.cover);
@@ -289,22 +285,8 @@ function WorkspaceContent({
 
   const onCreated = useCanvasSetup(camRef, domRef);
 
-  // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(named);
-  const { save, saveAs } = files;
-  // (a tab's own canvas can be saved as its tab is closed)
-  useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
-  useEffect(() => {
-    if (!active) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      const intent = saveIntent(e);
-      if (!intent) return;
-      e.preventDefault();
-      void (intent === "save" ? save() : saveAs());
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, save, saveAs]);
+  // (Save As on the menu, and Export: Save itself, and Ctrl/Cmd+S, are the tab's - TabFiles)
+  const { saveAs } = files;
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
@@ -533,7 +515,9 @@ function WorkspaceContent({
       setWorking3d("Drawing the formula…");
       setChemError(null);
       try {
-        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0);
+        // (laid out in the drawing's style, as Clean-up lays it out)
+        const style = styleOf(st.docStyle);
+        const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
@@ -1436,6 +1420,8 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
+      <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
         {ask3d && (
           <Ask3D
@@ -1545,7 +1531,7 @@ function WorkspaceContent({
             }}
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles);
+              const drawn = await structureFromSmiles(smiles, style);
               const st = store.getState();
               const { at } = quickAdd;
               st.setQuickAdd(null);
@@ -1684,7 +1670,8 @@ function WorkspaceContent({
             // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
-              ...(s.running ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
+              // (its jobs under way, or Meno's own working in turns: Stop)
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
             };
           })()}
@@ -1987,6 +1974,7 @@ function WorkspaceContent({
         />
       )}
       </AnimatePresence>
+      </AboveGuide>
       {/* (a molecule in 3D made again from its changed drawing: asked of the plugin here) */}
       <Remake3D.Provider value={remake3d}>
       <PageHtmlLayer.Provider value={htmlLayer}>
@@ -2129,9 +2117,10 @@ function WorkspaceContent({
  * The canvas, should it fail as it is drawn: a card in its place, and
  * Reload making it again - whatever it was in the middle of let go, the
  * press that would have ended it lost with it. Its document, and its store
- * with it, are as they were (ui/layouts/ErrorBoundary).
+ * with it, are as they were (ui/layouts/ErrorBoundary), and can be saved
+ * meanwhile (TabFiles): a save that fails says so under the card.
  */
-function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNode }) {
+function CanvasBoundary({ files, children }: { files: Pick<FileActions, "error" | "dismissError">; children: (reloaded: boolean) => ReactNode }) {
   const store = useEditorStore();
   // (made again with its tab, or with the window, likewise: the store is as
   // whatever failed left it)
@@ -2145,12 +2134,28 @@ function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNo
       fallback={({ error, reload }) => (
         // (in the canvas's place, as wide, and as white)
         <div className="flex-1 min-w-0 h-full relative bg-white">
-          <div className="absolute top-3 left-0 flex justify-center" style={{ right: cover }}>
+          <div className="absolute top-3 left-0 flex flex-col items-center gap-2" style={{ right: cover }}>
             <StoppedCard
               said="The canvas stopped working. What is on it is kept."
               error={error}
               actions={[{ label: "Reload", run: reload }]}
             />
+            <AnimatePresence>
+              {files.error && (
+                <motion.div
+                  key="alert"
+                  {...RISE}
+                  role="alert"
+                  className="z-50 max-w-[90%] w-max flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+                >
+                  <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
+                  <span className="break-words">{files.error}</span>
+                  <button aria-label="Dismiss" title="Dismiss" onClick={files.dismissError} className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line">
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}
@@ -2158,6 +2163,49 @@ function CanvasBoundary({ children }: { children: (reloaded: boolean) => ReactNo
       {children}
     </ErrorBoundary>
   );
+}
+
+/**
+ * Save, Save As and Export: the tab's, round the canvas rather than in it,
+ * so that they last as long as the tab does - should the canvas stop
+ * working (CanvasBoundary), its document is still saved by the title bar's
+ * Save, by Ctrl/Cmd+S and as its tab is closed (lib/doc/savers).
+ */
+function TabFiles({
+  tabId,
+  ownTab,
+  active,
+  nameTab,
+  children,
+}: {
+  tabId: string;
+  /** Whether the canvas is a tab's own, which can be saved as the tab is closed. */
+  ownTab: boolean;
+  active: boolean;
+  /**
+   * Names the canvas's tab after the file it is saved as. (One opened from
+   * a document keeps that document's name.)
+   */
+  nameTab?: (label: string) => void;
+  children: (files: FileActions) => ReactNode;
+}) {
+  // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
+  const files = useFileActions(nameTab);
+  const { save, saveAs } = files;
+  // (a tab's own canvas can be saved as its tab is closed)
+  useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
+  useEffect(() => {
+    if (!active) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const intent = saveIntent(e);
+      if (!intent) return;
+      e.preventDefault();
+      void (intent === "save" ? save() : saveAs());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [active, save, saveAs]);
+  return <>{children(files)}</>;
 }
 
 /**
@@ -2232,26 +2280,30 @@ export default function Workspace({
         {/* the canvas, and over its right side the column of texts and PDFs (docs/PDF.md, *One canvas*) */}
         <div className="relative flex-1 min-w-0 h-full flex">
         {/* (each its own part: should one fail, the other goes on - docs/ARCHITECTURE.md, *When a part fails*) */}
-        <CanvasBoundary>
-          {(reloaded) => (
-            <WorkspaceContent
-              active={active}
-              tabId={tabId}
-              initialPayload={initialPayload}
-              initialFilename={initialFilename}
-              initialKind={initialKind}
-              initialPath={initialPath}
-              officeId={officeId}
-              ownTab={document != null}
-              nameTab={nameTab}
-              styleOpen={styleOpen}
-              toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
-              openArrowStyle={(id) => setPanel({ arrow: id })}
-              openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
-              fadeIn={reloaded}
-            />
+        <TabFiles tabId={tabId} ownTab={document != null} active={active} nameTab={officeId == null ? nameTab : undefined}>
+          {(files) => (
+            <CanvasBoundary files={files}>
+              {(reloaded) => (
+                <WorkspaceContent
+                  active={active}
+                  tabId={tabId}
+                  initialPayload={initialPayload}
+                  initialFilename={initialFilename}
+                  initialKind={initialKind}
+                  initialPath={initialPath}
+                  officeId={officeId}
+                  ownTab={document != null}
+                  files={files}
+                  styleOpen={styleOpen}
+                  toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
+                  openArrowStyle={(id) => setPanel({ arrow: id })}
+                  openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
+                  fadeIn={reloaded}
+                />
+              )}
+            </CanvasBoundary>
           )}
-        </CanvasBoundary>
+        </TabFiles>
         {/* The texts the workspace holds, in their column */}
         <ColumnBoundary>{(reloaded) => <TextColumn slideIn={reloaded} />}</ColumnBoundary>
         </div>

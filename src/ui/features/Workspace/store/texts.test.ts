@@ -31,6 +31,17 @@ describe("the texts a workspace holds", () => {
     expect(state().texts[2].name).toBe("Untitled.txt");
   });
 
+  it("are held with their lines ended \"\\n\", however their files ended them", () => {
+    const { state } = editor();
+    state().addTexts([{ name: "w.inp", text: "! B3LYP\r\n\r\n* xyz 0 1\r\nO 0 0 0\r*\r\n" }]);
+    expect(state().texts[0].text).toBe("! B3LYP\n\n* xyz 0 1\nO 0 0 0\n*\n");
+    // (the same file opened again: the one held, not another)
+    state().addTexts([{ name: "w.inp", text: "! B3LYP\r\n\r\n* xyz 0 1\r\nO 0 0 0\r*\r\n" }]);
+    expect(state().texts).toHaveLength(1);
+    state().editText(state().texts[0].id, "! PBE\r\n");
+    expect(state().texts[0].text).toBe("! PBE\n");
+  });
+
   it("are edited in the document, a run of typing one step", () => {
     const { doc, state } = editor();
     state().addTexts([{ name: "a.txt", text: "" }]);

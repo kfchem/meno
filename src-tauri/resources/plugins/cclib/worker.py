@@ -115,7 +115,7 @@ def per_atom(data, n):
     out = []
     for attr, group, kind, quantity in (
         ("atomcharges", "Partial charges", "charges", "charge"),
-        ("atomspins", "Spin populations", "spins", "number"),
+        ("atomspins", "Spin populations", "spins", "spin"),
     ):
         if not has(data, attr):
             continue
