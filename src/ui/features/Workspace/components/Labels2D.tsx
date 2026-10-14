@@ -6,7 +6,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
 import { fadeLetters } from "./labelFade";
 import { BOLD, ITALIC_SLANT, TextBatch, type BatchRun } from "./textBatch";
@@ -83,7 +83,7 @@ function EachText2D({
   onDrawn,
   keyOf,
 }: TextsProps) {
-  const { opts, zoom } = useDrawnLayout();
+  const { opts } = useDrawnLayout();
 
   // Set in the style's typeface, where the layout has placed each run: the
   // font the layout measures in is the one drawn with, so nothing needs
@@ -132,8 +132,8 @@ function EachText2D({
     invalidate();
   });
   // (labels sized in the drawing's own units are the same at any zoom: the
-  // view zooming leaves them as they are)
-  const labelZoom = opts.units === "px" ? zoom : null;
+  // view zooming leaves them as they are, and draws none of them again)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const labelColor = opts.labelColor ?? "black";
   // (each text drawn as it was while it is the same object, drawn the same
   // way: a structure the layout did not lay out again keeps its labels, and
@@ -199,7 +199,7 @@ function EachText2D({
  * as `EachText2D` draws them one by one.
  */
 function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf }: TextsProps) {
-  const { opts, zoom } = useDrawnLayout();
+  const { opts } = useDrawnLayout();
   const family = opts.fontFamily ?? "Arial";
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
   const font = useLabelFontUrl(family, fallback);
@@ -209,7 +209,8 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
   const invalidate = useThree((st) => st.invalidate);
   const batch = useMemo(() => (font === null ? null : new TextBatch(font, renderOrder, () => invalidate())), [font, renderOrder, invalidate]);
   useEffect(() => () => batch?.dispose(), [batch]);
-  const labelZoom = opts.units === "px" ? zoom : null;
+  // (as `EachText2D`: labels in the drawing's own units are not set again as the view zooms)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const labelColor = opts.labelColor ?? "black";
   const under = useRef<unknown[]>([]);
   useLayoutEffect(() => {

@@ -45,7 +45,7 @@ import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
 import { wordsRoom } from "../../../../lib/chem/shapes";
 import { SHAPE_PAD } from "../document";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { arrowsBeside, useWordsWriting } from "./drawnArrows";
 import { WholeTexts2D } from "./Labels2D";
 import { usePressAmong, useWriting, writingMarks, measured, type WritingDrawn } from "./writing";
@@ -107,7 +107,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     return sh ? wordsRoom(sh, SHAPE_PAD) : null;
   }, [inShape, shapes]);
   const cam = camera as THREE.OrthographicCamera;
-  const zoom = cam.zoom || 1;
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const px = 1 / zoom;
   const margin = MARGIN * fs;
 
