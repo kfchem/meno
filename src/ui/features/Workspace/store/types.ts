@@ -1226,6 +1226,8 @@ export type EditorState = {
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
   jobsSeen: Record<string, JobSeen>;
+  /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
+  menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */
   rewire: (id: number, to: number) => void;
   hoverPulse: { id: number | null; nonce: number; until: number };
@@ -1430,6 +1432,12 @@ export type EditorState = {
    * and the column stay as they are.
    */
   letGo: () => void;
+  /**
+   * No gesture under way any more (store/gesture): the flags a gesture
+   * lost - the window left, the pointer taken - leaves, cleared. What is
+   * drawn, selected or being typed stays as it is.
+   */
+  endGestures: () => void;
   setMoveMode: (mode: "snap" | "free") => void;
   beginMoveDrag: (
     atomId: number,

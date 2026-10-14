@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
 import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
 import { kindOf } from "../../../../lib/io/kinds";
+import { deleteParts, emptyWorkspaceDocument } from "../document";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
@@ -25,6 +26,28 @@ describe("partToCopy", () => {
   it("with nothing selected, takes the structure under the pointer, or nothing", () => {
     expect(partToCopy(model, none, 3)!.atoms.map((a) => a.id)).toEqual([1, 2, 3]);
     expect(partToCopy(model, none, null)).toBeNull();
+  });
+
+  it("takes a large selection, and cuts it, looking at each atom a few times, not once for every other", () => {
+    // (a page of a hundred chains of 28 atoms, all of it selected)
+    const atoms = [];
+    const bonds = [];
+    for (let i = 1; i <= 2800; i++) {
+      atoms.push(atom(i, i % 28, Math.floor(i / 28)));
+      if (i % 28) bonds.push({ id: 100_000 + i, a: i, b: i + 1, order: 1 as const });
+    }
+    const seen = counted(atoms);
+    const m: Model = { atoms: seen.list, bonds };
+    const all = { atoms: new Set(atoms.map((a) => a.id)), bonds: new Set<number>() };
+    const part = partToCopy({ ...m, arrows: [{ id: 1, x: 5, y: 1, angle: 0, length: 2 }] }, all, null)!;
+    const cut = deleteParts({ ...emptyWorkspaceDocument(), model: m }, all.atoms, []);
+    expect(part.atoms).toHaveLength(2800);
+    expect(part.bonds).toHaveLength(2700);
+    expect(part.arrows).toHaveLength(1);
+    expect(cut.model.atoms).toHaveLength(0);
+    // (where each atom selected was sought among them all - and each end of
+    // each bond cut - it was some four million reads: 1.3 s at 28 000 atoms)
+    expect(seen.reads()).toBeLessThan(20 * atoms.length);
   });
 });
 
@@ -253,3 +276,15 @@ describe("a copy, in pictures", () => {
     expect(drawsPicture({ ...none, atoms: [{ id: 1, x: 0, y: 0, el: "C" }] as never })).toBe(true);
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}

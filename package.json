@@ -1,14 +1,14 @@
 {
   "name": "meno",
   "private": true,
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/patch-troika.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc && tsc -p scripts/depiction/tsconfig.json && tsc -p scripts/fonts/tsconfig.json && tsc -p scripts/layout/tsconfig.json",
+    "typecheck": "tsc && tsc -p scripts/depiction/tsconfig.json && tsc -p scripts/fonts/tsconfig.json && tsc -p scripts/layout/tsconfig.json && tsc -p scripts/figure/roundtrip/tsconfig.json",
     "font-metrics": "tsx scripts/fonts/labelMetrics.ts",
     "lint": "eslint .",
     "test": "vitest run",
@@ -19,6 +19,7 @@
     "layout-labels": "tsx scripts/layout/labels.ts",
     "layout-compare": "tsx scripts/layout/compare.ts",
     "layout-stereo": "tsx scripts/layout/stereo.ts",
+    "roundtrip": "vitest run --config scripts/figure/roundtrip/vitest.config.ts",
     "tauri": "tauri"
   },
   "dependencies": {

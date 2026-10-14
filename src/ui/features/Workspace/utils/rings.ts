@@ -69,7 +69,11 @@ export function ringsAmong(model: Model, ids: ReadonlySet<number>): string[] {
     .map((r) => r.key);
 }
 
-/** The fills of the rings whose atoms are all among `ids` - what a copy of them carries. */
-export function fillsAmong(fills: RingFills | undefined, ids: ReadonlySet<number>): RingFills {
+/**
+ * What is kept of each ring whose atoms are all among `ids`, by key - its
+ * fill, whether its circle is drawn: what a copy of them carries, and what
+ * a workspace saves of rings still drawn.
+ */
+export function fillsAmong<T = RingFills[string]>(fills: Readonly<Record<string, T>> | undefined, ids: ReadonlySet<number>): Record<string, T> {
   return Object.fromEntries(Object.entries(fills ?? {}).filter(([key]) => key.split("-").every((id) => ids.has(Number(id)))));
 }

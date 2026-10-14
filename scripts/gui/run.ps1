@@ -162,11 +162,13 @@ function Open-MenoFile {
       app takes no file on its command line yet; if it ever does, this becomes
       one argument to Start-Meno and the most brittle step in the harness goes
       away.
+
+      With -All (macOS), every file in that file's folder is opened at once.
     #>
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [switch] $All)
     $full = (Resolve-Path $Path).Path
     Send-MenoShortcut O
-    Complete-FileDialog -Path $full
+    if ($All) { Complete-FileDialog -Path $full -All } else { Complete-FileDialog -Path $full }
     # The dialog took the foreground with it; take it back.
     Get-MenoWindow -ProcessName Meno -TimeoutSec 10 | Out-Null
     Set-MenoWindow -Width $Width -Height $Height
@@ -209,7 +211,7 @@ function Invoke-MenoQuickAdd {
         [switch] $PassThru
     )
     # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes")
+    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y
@@ -311,6 +313,47 @@ function Read-ShotPixels {
         Width = $w; Height = [Math]::Abs($h); Bytes = $b; Offset = [BitConverter]::ToInt32($b, 10)
         Stride = [int]([Math]::Floor(($bpp * $w + 31) / 32) * 4); Step = $bpp / 8; BottomUp = $h -gt 0
     }
+}
+
+function Test-ShotDimmed($px) {
+    # (a question over the page: its white under App's bg-black/20, some 204 each - looked for near both lower corners of
+    # the window, where a fresh page has nothing drawn; the BMP's bytes blue first)
+    foreach ($x in @(40, ($px.Width - 40))) {
+        $y = $px.Height - 40
+        $row = if ($px.BottomUp) { $px.Height - 1 - $y } else { $y }
+        $i = $px.Offset + $row * $px.Stride + $x * $px.Step
+        foreach ($c in @($px.Bytes[$i], $px.Bytes[$i + 1], $px.Bytes[$i + 2])) { if ($c -lt 180 -or $c -gt 225) { return $false } }
+    }
+    return $true
+}
+
+function Close-MenoQuestion {
+    <#
+      .SYNOPSIS
+      A question Meno asks as it starts - keeping it up to date, on a fresh
+      profile - waited for, however long it takes to come, and answered no.
+
+      .DESCRIPTION
+      The window is shot every quarter second until the page is seen dimmed
+      under a question (Test-ShotDimmed), or `TimeoutSec` has passed; then
+      Escape answers it - "Not now", which fetches nothing - wherever its
+      button stands. A fixed wait clicked "Not now" before the question came
+      (it comes some 3 s after the start). Whether there was one.
+    #>
+    param([int] $TimeoutSec = 12)
+    $png = Join-Path ([System.IO.Path]::GetTempPath()) "meno-question-$PID.png"
+    $until = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $until) {
+        Save-MenoShot -Path $png | Out-Null
+        try { $px = Read-ShotPixels -Png $png } finally { Remove-Item $png -ErrorAction SilentlyContinue }
+        if (Test-ShotDimmed $px) {
+            Send-MenoKey Escape
+            Start-Sleep -Milliseconds 600
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
 }
 
 function Test-ShotHairline($px, [int] $x, [int] $y) {

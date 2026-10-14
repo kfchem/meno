@@ -45,6 +45,11 @@ export default function ColourCard({
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
+  // (the keys given to it as it opens, once: not again each time the canvas
+  // round it is drawn, which took them from wherever they had been put)
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -55,7 +60,6 @@ export default function ColourCard({
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("wheel", onClose, true);
-    ref.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPress, true);

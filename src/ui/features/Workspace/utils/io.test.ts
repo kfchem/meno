@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { calcResult, editorModelOf, opensAsText, processFileContent, xyzComments } from "./io";
+import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
+import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
@@ -99,6 +100,12 @@ describe("files of 3D structures", () => {
     expect(t.molecules3d![0].frames).toEqual([[0, 0, 0, 0.8, 0, 0]]);
   });
 
+  it("open a trajectory whose last frame is cut short with the frames before it, the molecule saying how many were left out", async () => {
+    const r = await processFileContent("md.xyz", "2\nfirst\nH 0 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.80 0 0\n2\nthird\nH 0 0 0\n");
+    expect(r.molecules3d![0].frames).toHaveLength(1);
+    expect(r.molecules3d![0].framesLeftOut).toBe(1);
+  });
+
   it("keep each frame's energy, where a calculation reader finds one", async () => {
     const frame = (comment: string, x: number) => `2\n${comment}\nH 0 0 0\nH ${x} 0 0\n`;
     const crest = await processFileContent("crest_conformers.xyz", frame("  -1.1700", 0.74) + frame("  -1.1650", 0.8));
@@ -162,6 +169,25 @@ describe("a calculation's output, as a reader read it", () => {
     expect(m.calc).toMatchObject({ readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", optimised: true });
   });
 
+  // (the maintainer, 2026-10-13: a file of several jobs - Gaussian's Link1, ORCA's $new_job - opens as one molecule for each)
+  it("of a file of several jobs, stands as one molecule for each, side by side: each its own frames, energies and words", () => {
+    const sp = { ...out, method: "HF", basis: "3-21G", frames: [out.frames[2]], energies: [-75.58], optimised: null, job: { number: 2, of: 2, kind: "Single point" } };
+    const opt = { ...out, method: "HF", basis: "STO-3G", job: { number: 1, of: 2, kind: "Optimisation" } };
+    const r = calcResult({ ...sp, jobs: [opt, sp] }, ["cclib 1.9rc1"], "link1.log", { name: "link1.log", sha256: "c".repeat(64) });
+    const [a, b] = r.molecules3d!;
+    expect(r.molecules3d).toHaveLength(2);
+    expect([a.name, b.name]).toEqual(["link1.log, job 1", "link1.log, job 2"]);
+    // (nothing of one job put with the other's: the opt's path and energies its own, the single point's one frame and energy)
+    expect([a.frames, a.energies]).toEqual([out.frames.slice(1), [-76.30, -76.31, -76.32]]);
+    expect([b.frames, b.energies]).toEqual([undefined, [-75.58]]);
+    expect(a.calc).toMatchObject({ basis: "STO-3G", optimised: true, job: { number: 1, of: 2, kind: "Optimisation" }, source: { sha256: "c".repeat(64) } });
+    expect(b.calc).toMatchObject({ basis: "3-21G", job: { number: 2, of: 2, kind: "Single point" } });
+    expect(b.calc!.optimised).toBeUndefined();
+    // (a job that gives no geometry stands as none; a file of one job, as before)
+    expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["cclib"], "x.log").molecules3d).toHaveLength(1);
+    expect(calcResult(out, ["cclib"], "one.out").molecules3d![0].name).toBe("one.out");
+  });
+
   it("keeps no energies that are not one a frame", () => {
     const [m] = calcResult({ ...out, energies: [-76.32] }, ["cclib"], "x.out").molecules3d!;
     expect(m.energies).toBeUndefined();
@@ -174,3 +200,38 @@ describe("a calculation's output, as a reader read it", () => {
     expect(m.energies).toEqual([-76.32]);
   });
 });
+
+describe("a file a tab was opened with, once read", () => {
+  const read = { centroid: { x: 5, y: 3 }, model: { atoms: [{ x: 4, y: 3 }, { x: 6, y: 3 }] } };
+  it("takes the document's place on a canvas nothing is drawn on, its middle at the origin", () => {
+    expect(openedPlace(true, [], read)).toEqual({ add: false, dx: -5, dy: -3 });
+  });
+  it("is added to the right of what was drawn as it was read, level with it - not put in its place, taking it away", () => {
+    // (a paste made while a 25 MB SD file was read, from 0 to 2 across, at y 1)
+    const { add, dx, dy } = openedPlace(false, [{ x: 0, y: 0 }, { x: 2, y: 2 }], read);
+    expect(add).toBe(true);
+    expect(4 + dx).toBeGreaterThan(2);
+    expect(3 + dy).toBeCloseTo(1, 9);
+  });
+});
+
+describe("an SD file with records that do not read", () => {
+  it("opens the others, and says in a notice which were left out and why", async () => {
+    const record = (el: string, bond: string) =>
+      ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+        `    0.0000    0.0000    0.0000 ${el}   0  0  0  0  0  0  0  0  0  0  0  0`,
+        "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0", bond, "M  END", "$$$$"].join("\n");
+    const r = await processFileContent("three.sdf", [record("C", "  1  2  1  0"), record("N", "  1  4  1  0"), record("S", "  1  2  1  0")].join("\n") + "\n");
+    expect(r.model.atoms.map((a) => a.el)).toEqual(["C", "O", "S", "O"]);
+    expect(useNotices.getState().notices).toMatchObject([{ title: "Part of the file left out", text: "Record 2 has a bond to an atom it does not have. The other records of three.sdf opened." }]);
+    for (const n of useNotices.getState().notices) useNotices.getState().dismiss(n.id);
+  });
+
+  it("names five of those left out at most, then how many more", () => {
+    const left = Array.from({ length: 7 }, (_, i) => ({ record: i + 2, why: "ends before the atoms and bonds it says it has" }));
+    expect(recordsLeftOutSaid("b.sdf", left)).toBe(
+      "Record 2 ends before the atoms and bonds it says it has. Record 3 ends before the atoms and bonds it says it has. Record 4 ends before the atoms and bonds it says it has. Record 5 ends before the atoms and bonds it says it has. Record 6 ends before the atoms and bonds it says it has. 2 more are left out as well. The other records of b.sdf opened.",
+    );
+  });
+});
+

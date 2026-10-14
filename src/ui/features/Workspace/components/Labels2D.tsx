@@ -6,7 +6,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
 import { fadeLetters } from "./labelFade";
 
@@ -76,7 +76,7 @@ export function Texts2D({
   /** What each text is drawn by, from one set to the next: by default its place in the set. */
   keyOf?: (t: TextItem, i: number) => string;
 }) {
-  const { opts, zoom } = useDrawnLayout();
+  const { opts } = useDrawnLayout();
 
   // Set in the style's typeface, where the layout has placed each run: the
   // font the layout measures in is the one drawn with, so nothing needs
@@ -125,8 +125,8 @@ export function Texts2D({
     invalidate();
   });
   // (labels sized in the drawing's own units are the same at any zoom: the
-  // view zooming leaves them as they are)
-  const labelZoom = opts.units === "px" ? zoom : null;
+  // view zooming leaves them as they are, and draws none of them again)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const labelColor = opts.labelColor ?? "black";
   // (each text drawn as it was while it is the same object, drawn the same
   // way: a structure the layout did not lay out again keeps its labels, and
@@ -166,11 +166,11 @@ export function Texts2D({
                     ? // (bold: the letters thickened by an outline of their own colour, as Markdown's are - one face of each)
                       { outlineWidth: BOLD, outlineColor: run.color ?? t.color ?? labelColor, outlineOpacity: fill }
                     : {})}
-                material-toneMapped={false}
-                material-depthTest={false}
-                material-depthWrite={false}
               >
                 {glyphs.shown(run.text)}
+                {/* (its own material, not `material-*` props: an outlined text's material is two - its outline's
+                    and its letters' - and those props went to neither, so a bold run was drawn tone mapped, darker) */}
+                <meshBasicMaterial side={THREE.DoubleSide} transparent toneMapped={false} depthTest={false} depthWrite={false} />
               </Text>
             </group>
           ))}

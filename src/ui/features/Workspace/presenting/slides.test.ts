@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxOf, holds, isStandard, joinOf, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, viewOf, WIDE, zoomOf } from "./slides";
+import { boxOf, holds, isStandard, joinOf, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
 import { bandsAbout } from "./stage";
 import { presentIntent } from "../../../../lib/doc/shortcuts";
 
@@ -44,6 +44,15 @@ describe("slides on the page", () => {
     const v = viewOf({ x: 1, y: 2, zoom: 4 }, 800);
     expect(v).toEqual({ x: 1, y: 2, w: 200 });
     expect(zoomOf(v, 800)).toBe(4);
+  });
+
+  it("end a talk at the last one shown, in the middle of the canvas the talk found, as much of it as a slide made of the view", () => {
+    const s = { x: 10, y: 20, w: 160, h: 90 };
+    expect(talkEnd(s, 1600, 900)).toEqual({ x: 10, y: 20, zoom: OF_VIEW * 10 });
+    // (the column opening again over 400 pixels of a canvas 2000 wide: the slide fits the rest - the view going half the column as it opens)
+    expect(talkEnd(s, 2000, 900, 400)).toEqual({ x: 10, y: 20, zoom: OF_VIEW * 10 });
+    // (a canvas less wide than the slide: as wide as the canvas allows)
+    expect(talkEnd(s, 800, 900).zoom).toBeCloseTo(OF_VIEW * 5, 12);
   });
 
   it("are told in view: the one most nearly what is seen, or the nearest; none with none", () => {

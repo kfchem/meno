@@ -392,7 +392,7 @@ export const STYLE_FIELDS: StyleField[] = [
     group: "Labels",
     label: "Most of a bond that labels may hide",
     description:
-      "The labels at the two ends of a bond may between them take at most this much of it, so that a short bond between two labels still shows.",
+      "The labels at the two ends of a bond may between them take at most this much of it, so that a short bond between two labels still shows - never more than two thirds of it: a third of every bond is seen.",
     kind: share("bond", 0.3, 1, 0.01),
     rule: true,
   },

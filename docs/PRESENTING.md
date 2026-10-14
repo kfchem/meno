@@ -112,11 +112,14 @@ page; a talk is a way through it.
   on the page can be changed by one.
 - **Ended**, the page goes back to its window, at once ready for the
   pointer and the keys - what is under the pointer lit, a key taken,
-  without a click - the view eases back to where it was, the molecules
-  turned in the talk turn back as they were, and shown in their other look
-  are shown as they were, the window is as it was and the column opens
-  again on what it showed. A talk changes nothing in the workspace:
-  nothing to undo, nothing unsaved.
+  without a click - and the view eases to the last slide shown, in the
+  editing view, as slides software ends a talk: in the middle of the
+  canvas, as much of it as a slide made of the view (the view as the talk
+  found it, where that slide is gone). The molecules turned in the talk
+  turn back as they were, and shown in their other look are shown as they
+  were, the window is as it was and the column opens again on what it
+  showed. A talk changes nothing in the workspace: nothing to undo,
+  nothing unsaved.
 - **Nothing comes up over it.** The network's cards, notices, a question
   about the network and an update ready to go in wait until the talk ends,
   and are shown then, each for its while; a question waited for holds

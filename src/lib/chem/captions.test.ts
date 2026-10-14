@@ -17,6 +17,8 @@ describe("a caption's words", () => {
 
   it("set a prefix in italics only at a word's start, and a sign at a formula's end as its charge", () => {
     expect(shown("t-BuOK, THF")).toBe("/t/|-BuOK, THF");
+    expect(shown("m-CPBA, CH2Cl2")).toBe("/m/|-CPBA, CH|_2|Cl|_2");
+    expect(shown("n-hexane")).toBe("/n/|-hexane");
     expect(shown("co-solvent")).toBe("co-solvent");
     expect(shown("NH4+")).toBe("NH|_4|^+");
     expect(shown("BF4-")).toBe("BF|_4|^−");

@@ -60,6 +60,17 @@ export function slideFit(s: Pick<Slide, "x" | "y" | "w" | "h">, width: number, h
   return { x: s.x, y: s.y + top / 2 / zoom, zoom };
 }
 
+/**
+ * Where a talk ends, as slides software ends one: at the last slide shown,
+ * in the middle of the canvas the talk found - `width` by `height` pixels,
+ * `cover` of them on the right under the column as it opens again - as much
+ * of it as a slide made of the view is. The camera's goal while the column
+ * is still shut: the view goes half the column as it opens (FollowCover).
+ */
+export function talkEnd(s: Pick<Slide, "x" | "y" | "w" | "h">, width: number, height: number, cover = 0): { x: number; y: number; zoom: number } {
+  return { x: s.x, y: s.y, zoom: OF_VIEW * Math.min(Math.max(1, width - cover) / s.w, height / s.h) };
+}
+
 /** A camera's view as a way between views takes it: its middle, and how wide a canvas `width` pixels wide sees at its zoom. */
 export const viewOf = (v: { x: number; y: number; zoom: number }, width: number): View => ({ x: v.x, y: v.y, w: width / v.zoom });
 
