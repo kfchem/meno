@@ -18,7 +18,7 @@
  */
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
-import { condensedStructure } from "./condensed";
+import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
@@ -303,7 +303,54 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return condensedStructure(label, groupLabels(), groupStructure);
+  return ionStructure(label) ?? condensedStructure(label, groupLabels(), groupStructure);
+}
+
+/**
+ * An ion written as one, a counter-ion set beside a complex or a salt: an
+ * anion as one is read in a salt, its charge written (PF6-, BF4-, SbF6-,
+ * AlCl4-, ClO4-: ./condensed); a group bound by an O or an S with the
+ * charge there (OTf-, OAc-) - and any of these in parentheses, counted, an
+ * element's own ion too ((Cl-)2: two; Cl- alone is read as an element is).
+ * Null for any other label.
+ */
+function ionStructure(label: string): (GroupStructure & { name: string }) | null {
+  const counted = /^\((.+)\)(\d+)$/.exec(label);
+  if (counted) {
+    const n = Number(counted[2]);
+    const one = n >= 2 && n <= 6 ? oneIon(counted[1], true) : null;
+    if (!one) return null;
+    const atoms: GroupStructure["atoms"] = [];
+    const bonds: GroupStructure["bonds"] = [];
+    for (let k = 0; k < n; k++) {
+      const at = atoms.length;
+      atoms.push(...one.atoms.map((a) => ({ ...a })));
+      bonds.push(...one.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })));
+    }
+    return { atoms, bonds, attach: [], name: `${n} ${counted[1]}` };
+  }
+  const one = oneIon(label, false);
+  return one && { ...one, attach: [], name: label };
+}
+
+/** One ion, as `ionStructure` reads its label - an element alone only where `element` (counted: one alone is read as an element is) - or null. */
+function oneIon(label: string, element: boolean): GroupStructure | null {
+  const m = /^(.+?)([+\-\u2212])$/.exec(label);
+  if (!m) return null;
+  const sign = m[2] === "+" ? "+" : "-";
+  if (ELEMENTS.has(m[1])) return element ? wholeOf(`[${m[1]}${sign}]`) : null;
+  if (sign === "-") {
+    const anion = anionStructure(label, groupLabels(), groupStructure);
+    if (anion) return anion;
+  }
+  const g = abbreviationOf(m[1]);
+  const first = g && !g.kind && /^\*([OS])(?![a-z])/.exec(g.smiles);
+  return first ? wholeOf(`[${first[1]}${sign}]${g.smiles.slice(2)}`) : null;
+}
+
+/** A whole molecule's structure from its SMILES: attached by none. */
+function wholeOf(smiles: string): GroupStructure {
+  return { ...smilesGroup(smiles), attach: [] };
 }
 
 /** What a label stands for as a whole molecule - a ligand on its own, a complex, a reagent - or null for a group. */

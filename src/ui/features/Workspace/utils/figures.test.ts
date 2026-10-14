@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { parse } from "opentype.js/dist/opentype.mjs";
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../../lib/figure/drawn";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -6,7 +8,10 @@ import { readDrawn } from "./copyPaste";
 import { structureFileText } from "../fileActions";
 import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
 import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
-import { atomAs, atomAtSpot, bondAs, figureFrom, placedBeside, readMarks, wholeLabel, type FigureResult, type Unread } from "./figures";
+import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
+import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
+import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
+import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, wholeLabel, type FigureResult, type Unread } from "./figures";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
 const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
@@ -262,6 +267,210 @@ describe("a structure read, carried by the clipboard's record", () => {
     expect(r.atoms[1].seen).toBeUndefined();
     expect(r.atoms[1].unsure).toBeUndefined();
     expect(r.bonds[0].unsure?.as).toBe("1|none||");
+  });
+});
+
+// A figure whose labels are outlines, as many journals print them: each letter a filled path of its own, or each word one
+// path - drawn here from IBM Plex Sans (SIL OFL, src/assets/fonts), and read against the same typeface's letters, as the app
+// reads against the system's.
+const PLEX = (() => {
+  const b = readFileSync(new URL("../../../../assets/fonts/IBMPlexSans-Regular.ttf", import.meta.url));
+  return parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer);
+})();
+type Pt = { x: number; y: number; curve?: boolean };
+/** A letter's outline at a baseline point, `size` points large: its parts, its curves followed in steps (each point on one marked). */
+function glyphParts(c: string, x: number, y: number, size: number): Pt[][] {
+  const parts: Pt[][] = [];
+  let last: Pt = { x, y };
+  for (const k of PLEX.charToGlyph(c).getPath(x, y, size).commands) {
+    if (k.type === "M") parts.push([(last = { x: k.x, y: k.y })]);
+    else if (k.type === "L") parts[parts.length - 1].push((last = { x: k.x, y: k.y }));
+    else if (k.type === "Q" || k.type === "C") {
+      const from = last;
+      for (let i = 1; i <= 6; i++) {
+        const t = i / 6;
+        const u = 1 - t;
+        const p =
+          k.type === "Q"
+            ? { x: u * u * from.x + 2 * u * t * k.x1 + t * t * k.x, y: u * u * from.y + 2 * u * t * k.y1 + t * t * k.y }
+            : { x: u ** 3 * from.x + 3 * u * u * t * k.x1 + 3 * u * t * t * k.x2 + t ** 3 * k.x, y: u ** 3 * from.y + 3 * u * u * t * k.y1 + 3 * u * t * t * k.y2 + t ** 3 * k.y };
+        parts[parts.length - 1].push({ ...p, curve: true });
+      }
+      last = { x: k.x, y: k.y };
+    }
+  }
+  return parts.filter((q) => q.length > 2);
+}
+const CAP = (PLEX.tables.os2?.sCapHeight ?? 700) / PLEX.unitsPerEm;
+const KNOWN: GlyphShape[] = [...LETTERS].map((c) => glyphShape(c, glyphParts(c, 0, 0, 1), CAP));
+/** A word as outlines, its middle at `at`, 10 points large: a path for each letter, or one for the word. */
+function outlinedWord(text: string, at: P, whole = false): FigurePath[] {
+  const size = 10;
+  const width = [...text].reduce((w, c) => w + ((PLEX.charToGlyph(c).advanceWidth ?? 0) / PLEX.unitsPerEm) * size, 0);
+  let x = at[0] - width / 2;
+  const each = [...text].map((c) => {
+    const parts = glyphParts(c, x, at[1] + (CAP * size) / 2, size);
+    x += ((PLEX.charToGlyph(c).advanceWidth ?? 0) / PLEX.unitsPerEm) * size;
+    return parts.flatMap((q) => [...q.map((p, i): PathStep => [i ? (p.curve ? "C" : "L") : "M", p.x, p.y]), ["Z"] as PathStep]);
+  });
+  return whole ? [{ fill: "#000000ff", stroke: null, width: 0, d: each.flat() }] : each.map((d) => ({ fill: "#000000ff", stroke: null, width: 0, d }));
+}
+/** A bond between two points, cut back where it meets a label. */
+const cut = (a: P, b: P, atA: number, atB: number): FigurePath => {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const [ux, uy] = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+  return stroke([a[0] + ux * atA, a[1] + uy * atA], [b[0] - ux * atB, b[1] - uy * atB]);
+};
+/** Two lines side by side, a double bond, cut back at both ends. */
+const doubled = (a: P, b: P, atA: number, atB: number): FigurePath[] => {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const [nx, ny] = [(-(b[1] - a[1]) / l) * 1.3, ((b[0] - a[0]) / l) * 1.3];
+  return [cut([a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny], atA, atB), cut([a[0] - nx, a[1] - ny], [b[0] - nx, b[1] - ny], atA, atB)];
+};
+/** A ring of six carbons from a point, its bonds whole. */
+const ring = (from: P, deg: number): FigurePath[] => {
+  const pts: P[] = [from];
+  for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], deg + 60 * k));
+  return pts.map((p, k) => stroke(p, pts[(k + 1) % 6]));
+};
+/** Methyl phenyl sulfone, Ph-S(=O)2-Me, its S and O outlines - the S of one curved part, like an arrow's head on its double bonds' lines. */
+function sulfone(): FigureDrawn {
+  const s: P = [100, 100];
+  const up = step(s, 90);
+  const down = step(s, -90);
+  const ph = step(s, 180);
+  return {
+    paths: [
+      cut(ph, s, 0, 5),
+      ...ring(ph, 180 - 60),
+      cut(s, step(s, 0), 5, 0),
+      ...doubled(s, up, 5.5, 5.5),
+      ...doubled(s, down, 5.5, 5.5),
+      ...outlinedWord("S", s),
+      ...outlinedWord("O", up),
+      ...outlinedWord("O", down),
+    ],
+    letters: [],
+    pictures: [],
+  };
+}
+/** Letters as outlines in a row from a baseline point, each a path of its own: each run its text, size, how far raised (up, points) and how far its letters lean (an italic's). */
+function outlinedRun(runs: [string, number, number, number][], at: P): FigurePath[] {
+  let x = at[0];
+  const out: FigurePath[] = [];
+  for (const [text, size, up, lean] of runs) {
+    for (const c of text) {
+      const base = at[1] - up;
+      const parts = glyphParts(c, x, base, size).map((q) => q.map((p) => ({ ...p, x: p.x + lean * (base - p.y) })));
+      out.push({ fill: "#000000ff", stroke: null, width: 0, d: parts.flatMap((q) => [...q.map((p, i): PathStep => [i ? (p.curve ? "C" : "L") : "M", p.x, p.y]), ["Z"] as PathStep]) });
+      x += ((PLEX.charToGlyph(c).advanceWidth ?? 0) / PLEX.unitsPerEm) * size;
+    }
+  }
+  return out;
+}
+const elementsOf = (r: FigureResult | Unread) => ("none" in r ? [] : r.model.atoms.map((a) => a.el).sort());
+const quarterTurned = (f: FigureDrawn): FigureDrawn => ({ ...f, paths: f.paths.map((p) => ({ ...p, d: p.d.map((q): PathStep => (q[0] === "Z" ? q : [q[0], 300 - q[2], q[1]])) })) });
+
+describe("a figure whose labels are outlines", () => {
+  it("reads an S drawn as an outline as the S, not as an arrow's head on its double bond", () => {
+    const r = figureFrom(sulfone(), SHA, 0, KNOWN);
+    expect(elementsOf(r)).toEqual(["C", "C", "C", "C", "C", "C", "C", "O", "O", "S"]);
+    expect("none" in r ? null : (r.scheme?.arrows ?? []).length).toBe(0);
+  });
+
+  it.each([true, false])("reads a label drawn as one path of all its letters (or not: %s), its c a small c by its capitals: Boc-N=N-Boc", (whole) => {
+    const top: P = [100, 100];
+    const bottom: P = [100, 100 + L];
+    const f: FigureDrawn = {
+      paths: [
+        ...doubled(top, bottom, 5, 5),
+        cut(top, [78, 93], 5, 0),
+        cut(bottom, [122, 107], 5, 0),
+        ...ring([160, 100], 0),
+        ...outlinedWord("N", top),
+        ...outlinedWord("N", bottom),
+        ...outlinedWord("Boc", [70, 90], whole),
+        ...outlinedWord("Boc", [130, 110], whole),
+      ],
+      letters: [],
+      pictures: [],
+    };
+    expect(elementsOf(figureFrom(f, SHA, 0, KNOWN))).toEqual(["Boc", "Boc", "C", "C", "C", "C", "C", "C", "N", "N"]);
+  });
+
+  it("reads one whose page is turned a quarter, no letter written to tell which way, the way its outlines read as letters", () => {
+    expect(elementsOf(figureFrom(quarterTurned(sulfone()), SHA, 0, KNOWN))).toEqual(["C", "C", "C", "C", "C", "C", "C", "O", "O", "S"]);
+  });
+
+  it("reads Meno's own scheme the same with the system's letters as without: its + of twelve corners a sign, its arrow an arrow", () => {
+    // (Meno's + is a filled outline of many corners, so a scheme of Meno's is taken to draw letters as shapes)
+    const plus = plusOutline({ x: 70, y: 100 }, plusMeasures(styleOf(DEFAULT_STYLE_CHOICE), L));
+    const f: FigureDrawn = {
+      paths: [
+        stroke([30, 100], step([30, 100], 30), step(step([30, 100], 30), -30)),
+        { fill: "#000000ff", stroke: null, width: 0, d: [...plus.map((p, i): PathStep => [i ? "L" : "M", p.x, p.y]), ["Z"]] },
+        stroke([84, 100], step([84, 100], 30), step(step([84, 100], 30), -30)),
+        stroke([120, 100], [150, 100]),
+        { fill: "#000000ff", stroke: null, width: 0, d: [["M", 156, 100], ["L", 149, 97], ["L", 149, 103], ["Z"]] },
+        stroke([164, 100], step([164, 100], 30), step(step([164, 100], 30), -30), step(step(step([164, 100], 30), -30), 30)),
+      ],
+      letters: [...letters("OH", [step(step([84, 100], 30), -30)[0] + 6, 100])],
+      pictures: [],
+    };
+    expect(lettersAsShapes(f)).toBe(true);
+    const shown = (r: FigureResult | Unread) => ("none" in r ? r : { els: elementsOf(r), pluses: r.scheme?.pluses?.length, arrows: r.scheme?.arrows?.length });
+    expect(shown(figureFrom(f, SHA, 0, KNOWN))).toEqual(shown(figureFrom(f, SHA, 0, [])));
+    expect(shown(figureFrom(f, SHA, 0, KNOWN))).toMatchObject({ pluses: 1, arrows: 1 });
+  });
+
+  it("keeps an arrow's filled head an arrow's, and an outlined label beside it a label", () => {
+    const n: P = [116, 100];
+    const f: FigureDrawn = {
+      paths: [
+        ...ring([20, 100], 0),
+        stroke([60, 100], [100, 100]),
+        { fill: "#000000ff", stroke: null, width: 0, d: [["M", 108, 100], ["L", 100, 96.5], ["L", 100, 103.5], ["Z"]] },
+        ...outlinedWord("N", n),
+        cut(n, step(n, 30), 5, 0),
+        cut(n, step(n, -30), 5, 0),
+        stroke(step(n, 30), step(step(n, 30), -30), step(n, -30)),
+      ],
+      letters: [],
+      pictures: [],
+    };
+    const r = figureFrom(f, SHA, 0, KNOWN);
+    expect("none" in r ? null : r.scheme?.arrows?.length).toBe(1);
+    expect(elementsOf(r).filter((e) => e === "N")).toEqual(["N"]);
+  });
+
+  it("reads a label with its i set small and italic, its stem thin and leaning, as one: C(O)NiPr2", () => {
+    const at: P = step([100, 100], 0);
+    const f: FigureDrawn = {
+      paths: [...ring([100, 100], 120), cut([100, 100], at, 0, 2), ...outlinedRun([["C(O)N", 10, 0, 0], ["i", 7, 4, 0.2], ["Pr", 10, 0, 0], ["2", 7, -2, 0]], [at[0] + 1, at[1] + 3.6])],
+      letters: [],
+      pictures: [],
+    };
+    expect(elementsOf(figureFrom(f, SHA, 0, KNOWN))).toContain("C(O)NiPr2");
+  });
+
+  it("reads counter-ions by a complex as ions: a - set high after a subscript, PF6-; ions counted in parentheses, (Cl-)2", () => {
+    const f: FigureDrawn = {
+      paths: [
+        ...ring([100, 100], 120),
+        ...outlinedRun([["PF", 10, 0, 0], ["6", 7, -2, 0], ["-", 7, 4, 0]], [128, 112]),
+        ...outlinedRun([["(Cl", 10, 0, 0], ["-", 7, 4, 0], [")", 10, 0, 0], ["2", 7, -2, 0]], [128, 128]),
+      ],
+      letters: [],
+      pictures: [],
+    };
+    const els = elementsOf(figureFrom(f, SHA, 0, KNOWN));
+    expect(els).toContain("PF6-");
+    expect(els).toContain("(Cl-)2");
+  });
+
+  it("takes outlines of straight lines alone - an N - for letters to read, and a filled wedge for none", () => {
+    expect(lettersAsShapes({ paths: outlinedWord("N", [100, 100]), letters: [], pictures: [] })).toBe(true);
+    expect(lettersAsShapes({ paths: [stroke([0, 0], [14.4, 0]), wedge([0, 0], [10, 10])], letters: [], pictures: [] })).toBe(false);
   });
 });
 

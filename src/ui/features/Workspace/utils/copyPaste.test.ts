@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
-import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText } from "./copyPaste";
+import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText, schemeAmong } from "./copyPaste";
+import { middleOf } from "./selection";
+import { writeMolfile } from "../../../../lib/chem/molWriter";
+import { nextFree } from "../chem/engineLayout";
 import { kindOf } from "../../../../lib/io/kinds";
 import { deleteParts, emptyWorkspaceDocument } from "../document";
 
@@ -262,6 +265,34 @@ describe("an arrow in a record", () => {
     const read = readRecord(record)!;
     expect(read.arrows![0]).toMatchObject({ kind: "retrosynthetic", heads: 2, dash: true, weight: "thin", corners: [{ along: 0.3, across: 1 }], color: "#c44848" });
     expect(read.arrows![1]).toEqual({ id: 2, x: 3, y: 5, angle: 0, length: 4 });
+  });
+});
+
+describe("a selection of very many atoms", () => {
+  // (more than a call takes spread as its arguments: all of a large drawing selected, then deleted or turned over, threw)
+  const atoms = Array.from({ length: 150_000 }, (_, i) => ({ id: i + 1, x: (i % 500) * 1.8, y: -Math.floor(i / 500) * 1.8, el: "C" }));
+  const ids = new Set(atoms.map((a) => a.id));
+
+  it("takes the words, arrows and pluses among it", () => {
+    const drawn = {
+      atoms,
+      bonds: [],
+      captions: [{ id: 1, x: 10, y: -10, text: "in" }, { id: 2, x: -100, y: 0, text: "out" }],
+      pluses: [{ id: 1, x: 20, y: -20 }],
+      arrows: [],
+    } as unknown as Drawn;
+    const among = schemeAmong(drawn, ids);
+    expect(among.captions.map((c) => c.id)).toEqual([1]);
+    expect(among.pluses).toHaveLength(1);
+  });
+
+  it("is written as a molfile, and Clean-up finds the next free id past it", () => {
+    expect(writeMolfile({ atoms, bonds: [] } as never)).toContain("V3000");
+    expect(nextFree({ atoms, bonds: [] } as never)).toBe(150_001);
+  });
+
+  it("has a middle", () => {
+    expect(middleOf({ atoms, bonds: [] } as unknown as Model, ids)).toEqual({ x: (499 * 1.8) / 2, y: (-299 * 1.8) / 2 });
   });
 });
 

@@ -20,6 +20,7 @@ import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -174,9 +175,8 @@ export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style
 /** Where a drawn structure is on the page: its atoms' box, a little round them. */
 export function boxOf(part: Model): Box {
   const pad = 0.4 * NOMINAL_BOND_LENGTH;
-  const xs = part.atoms.map((a) => a.x);
-  const ys = part.atoms.map((a) => a.y);
-  return { x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad, y0: Math.min(...ys) - pad, y1: Math.max(...ys) + pad };
+  const b = boundsOf(part.atoms) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  return { x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad };
 }
 
 const inside = (b: Box, view: Box) => b.x0 >= view.x0 && b.x1 <= view.x1 && b.y0 >= view.y0 && b.y1 <= view.y1;
@@ -390,6 +390,6 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
 export function formulaPlace(m: Molecule3D, formula: Model, style: Style3D): { x: number; y: number } {
   const solid = solidOf(m, style);
   const xs = formula.atoms.map((a) => a.x);
-  const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+  const width = xs.length ? greatest(xs) - least(xs) : 0;
   return { x: m.at.x - solid.reach[lookOf(m)] - GAP - width / 2, y: m.at.y };
 }

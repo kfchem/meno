@@ -196,7 +196,8 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   const [w0, w1] = m1 >= m0 ? [n0, m1] : [m0, n1];
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
-  if (!curved && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
+  // (all but convex: a letter of straight lines alone - an F, wide at one end - is not, a wedge of however many corners is)
+  if (!curved && (corners.length <= 6 || Math.abs(area(pts)) >= 0.85 * Math.abs(area(hull(corners)))) && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
     // (its tip the middle of its narrow end's points; its base the middle of its wide end's outermost two, of
     // all its points that far along - so the middle of a wide end cut slanting)
     const toWide = w0 < w1 ? 1 : -1;
@@ -386,13 +387,15 @@ function turnedBox(b: Box, turn: (p: Point) => Point): Box {
 /**
  * A figure whose words read other than left to right as the page shows it
  * - a scheme printed sideways, a page turned a quarter - turned so that
- * they do: by the quarter most of its letters read, turned back; and how a
- * point of the turned figure is taken back to the page. A figure whose
- * words read left to right, or that has none, is as it was.
+ * they do: by the quarter most of its letters read, turned back (or by
+ * `given`, a quarter found otherwise); and how a point of the turned figure
+ * is taken back to the page. A figure whose words read left to right, or
+ * that has none, is as it was.
  */
-export function uprightOf(drawn: FigureDrawn): { drawn: FigureDrawn; back: (p: Point) => Point; quarters: number } {
+export function uprightOf(drawn: FigureDrawn, given?: number): { drawn: FigureDrawn; back: (p: Point) => Point; quarters: number } {
   const votes = [0, 0, 0, 0];
   for (const l of drawn.letters) if (l.dir != null && Number.isFinite(l.dir)) votes[(((Math.round(l.dir / (Math.PI / 2)) % 4) + 4) % 4)]++;
+  if (given) votes[given % 4] = Infinity;
   const quarters = votes.indexOf(Math.max(...votes));
   if (!quarters || !votes[quarters]) return { drawn, back: (p) => p, quarters: 0 };
   const a = -(quarters * Math.PI) / 2;

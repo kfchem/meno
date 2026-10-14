@@ -744,7 +744,7 @@ Not yet, and where it comes:
 Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
   - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is.
-  - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame.
+  - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
   - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it.
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
@@ -1045,6 +1045,11 @@ workspace holds.
     bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
+  - no line more than six bonds long - a table's rule, a graph's axis, a
+    frame round part of the figure - nor a short line or dash between two
+    words of a line of text, a caption's "3aa, R = H, 73%": the line goes
+    on past both, a word that reads as no label on each side within a
+    space and a comma (a row of labels, HO-P-O-P, is a chain);
   - a short dash between two labels - two words, not one word's ends - as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
     one (N≡N+) - never a hash, however evenly they are set (but a short
@@ -1067,10 +1072,26 @@ workspace holds.
   bond, a short level bar set high beside a letter a minus) is laid on a
   grid and matched against the letters as the system's own typefaces draw
   them - a sans serif and a serif, drawn by the window when first wanted:
-  no letter's shape is carried in Meno. A letter that could be another
-  (l or I, O or 0) is read as the one that makes its label read; one that
-  matched weakly is marked ("Its letters are drawn as shapes: read as
-  "Cl".").
+  no letter's shape is carried in Meno. A word drawn as one shape, all
+  its letters one path (Boc, MeO), is read letter by letter, each sized on
+  its own. A letter whose small form is its capital made smaller (c C,
+  o O, s S, v V, w W, x X, z Z) is told by the capitals beside it on its
+  line: as tall as they, a capital; well under, small. A letter that could
+  be another (l or I, O or 0) is read as the one that makes its label
+  read; one that matched weakly is marked ("Its letters are drawn as
+  shapes: read as "Cl"."). A stem with a dot just over it, however thin
+  and however it leans (an italic i set small, as the i of an iPr is), is
+  an i or a j, the nearer of the two. A minus set high after a subscript's
+  digit is told by the letter before it (the - of a PF6-). A filled shape
+  of straight lines with many corners and far from convex - an F, wide at
+  one end - is no wedge: a wedge of more than six corners is all but
+  convex. A letter read surely from its shape is no
+  arrow's head, however like one an S or an N of one part is. A figure is
+  taken to draw its letters so where it has a shape filled in several
+  parts, or curved, or with many corners (an N, an H, of straight lines
+  alone); one with no letter written, turned a quarter as a page set
+  sideways is, is turned upright the way its outlines read best as
+  letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
   from two sides; and an end by both ends of a bond shorter than ends lie
@@ -1123,7 +1144,8 @@ workspace holds.
   bond: its wedge's, where it has one. A word with a charge - written,
   or drawn in a ring beside it - by the structure, at no bond's end and
   not an H by another atom's label (an element's ion set close by one is
-  still an ion), is an ion (Na+, Br-), and several set in a
+  still an ion), is an ion (Na+, Br-, PF6-), as is one in parentheses,
+  counted ((Cl-)2), and several set in a
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.

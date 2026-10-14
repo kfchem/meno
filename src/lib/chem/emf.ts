@@ -20,6 +20,7 @@
  * multiple of four, which PowerPoint's reader is strict about.
  */
 import { labelFont } from "./labelFonts";
+import { greatest, least } from "./lists";
 import {
   BALL_SHADE,
   circlePoints,
@@ -256,17 +257,12 @@ export function layoutEmf(
   const points = (pts: { x: number; y: number }[]) => pts.map((p) => [X(p.x), Y(p.y)] as const);
   // (by a loop, not spread into one call: a long outline overran the stack)
   const bounds = (pts: readonly (readonly [number, number])[], v: DataView) => {
-    let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const [x, y] of pts) {
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
-    }
-    v.setInt32(0, x0, true);
-    v.setInt32(4, y0, true);
-    v.setInt32(8, x1, true);
-    v.setInt32(12, y1, true);
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    v.setInt32(0, least(xs), true);
+    v.setInt32(4, least(ys), true);
+    v.setInt32(8, greatest(xs), true);
+    v.setInt32(12, greatest(ys), true);
   };
   const poly = (type: number, pts: readonly (readonly [number, number])[]) =>
     w.add(type, 20 + 8 * pts.length, (v) => {

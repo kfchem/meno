@@ -35,6 +35,7 @@ import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
+import { greatest } from "../../../../lib/chem/lists";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -105,12 +106,12 @@ export function useStructureEvents(
     // An output's jobs stand side by side)
     const stacked = openedAsStack(solids);
     const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
-    const room = stacked ? [Math.max(...reaches)] : reaches;
+    const room = stacked ? [greatest(reaches)] : reaches;
     // (beside a drawing the same file brings, to its right)
     const drawn = result.model?.atoms ?? [];
     const row = drawn.length
       ? rowAfter(
-          Math.max(...drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
+          greatest(drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
           drawn.reduce((y, a) => y + a.y, 0) / drawn.length + dy,
           room,
         )

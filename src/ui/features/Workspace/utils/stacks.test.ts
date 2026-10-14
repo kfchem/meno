@@ -253,6 +253,18 @@ describe("a stack of drawings", () => {
   });
 });
 
+describe("a stack of more records than a call takes as its arguments", () => {
+  // (65,536 in WebKit, about twice that here: a stack of that many records threw as it was shown or laid out as a grid)
+  const n = 150_000;
+  const atoms = Array.from({ length: n }, (_, k) => ({ id: k + 1, x: 0, y: 0, el: "C", stack: { id: 1, record: n - k } }));
+
+  it("shows its first record, lays its records out as a grid, and places molecules in 3D in one", () => {
+    expect(shownModel({ atoms, bonds: [] }, {}).atoms.map((a) => a.id)).toEqual([n]);
+    expect(recordsGrid({ atoms }, 1).size).toBe(n);
+    expect(gridPlaces({ x: 0, y: 0 }, Array.from({ length: n }, () => 1))).toHaveLength(n);
+  });
+});
+
 /** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
 function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
   let n = 0;
