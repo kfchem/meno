@@ -146,6 +146,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   if (!grow.current) grow.current = new ChainGrow(CHAIN_EASE);
   const [growStep, setGrowStep] = useState(0);
   const growing = useRef(false);
+  const hadChain = useRef(false);
   const chainNodes = stroke?.kind === "chain" ? stroke.nodes : null;
   const basePlace = (() => {
     if (!stroke) return null;
@@ -157,11 +158,15 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const g = grow.current!;
     const now = performance.now();
     if (!chainNodes) {
-      // (no chain: nothing held of one before)
-      grow.current = new ChainGrow(CHAIN_EASE);
+      // (no chain: what was held of one that ended is let go, once)
+      if (hadChain.current) {
+        grow.current = new ChainGrow(CHAIN_EASE);
+        hadChain.current = false;
+      }
       growing.current = false;
       return null;
     }
+    hadChain.current = true;
     g.set(chainNodes, now);
     const { out, moving } = g.at(now, (n, i, shown) => {
       const parent = n.from != null ? (n.from === -1 ? basePlace : shown[n.from]) : i > 0 ? shown[i - 1] : basePlace;
