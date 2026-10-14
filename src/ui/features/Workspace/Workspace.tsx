@@ -164,6 +164,7 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { gestureUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -863,7 +864,16 @@ function WorkspaceContent({
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const intent = undoIntent(e);
-      if (!intent || !store.getState().holdUndo(intent)) return;
+      if (!intent) return;
+      // (a gesture under way - a chain, a shape, a drag: undo lets it go as
+      // Escape does, by the gesture's own Escape, and undoes nothing more)
+      if (gestureUnderWay(store.getState())) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+        return;
+      }
+      if (!store.getState().holdUndo(intent)) return;
       e.preventDefault();
       e.stopPropagation();
     };
