@@ -119,6 +119,8 @@ def with_charge(atom):
 # a count after one of them at least.
 FORMULA = re.compile(r"(?:[A-Z][a-z]?\d*)+")
 HALOGENS = {"F", "Cl", "Br", "I"}
+# The charges of groups 1 and 2's ions: their halides salts, written as ions.
+IONIC = {**dict.fromkeys(("Li", "Na", "K", "Rb", "Cs", "Fr"), 1), **dict.fromkeys(("Be", "Mg", "Ca", "Sr", "Ba", "Ra"), 2)}
 
 
 def as_formula(text):
@@ -134,14 +136,22 @@ def as_formula(text):
 
 
 def formula_said(parts):
-    """What a SMILES for a formula is like: a halide's own - SnCl4 as
-    Cl[Sn](Cl)(Cl)Cl, each halogen bonded to the one atom - or an example."""
+    """What a SMILES for a formula is like: a halide's of one atom - a salt
+    of groups 1 and 2 as ions, [Mg+2].[Cl-].[Cl-], where as many halogens
+    as its charge; any other, each halogen bonded to the one atom, SnCl4 as
+    Cl[Sn](Cl)(Cl)Cl, where that reads - or an example. A SMILES for it,
+    not the one: a formula does not say how its atoms are bonded (AlCl3 is
+    two in one as a solid)."""
     if len(parts) == 2 and parts[0][1] == 1 and parts[0][0] != "H" and parts[1][0] in HALOGENS:
         (centre, _), (x, n) = parts
-        atom = centre if centre in ORGANIC else f"[{centre}]"
-        smiles = x + atom + f"({x})" * (n - 2) + x
-        if Chem.MolFromSmiles(smiles) is not None:
-            return f"it reads like a formula; as a SMILES it is {smiles}"
+        if centre in IONIC:
+            charge = IONIC[centre]
+            smiles = f"[{centre}+{charge if charge > 1 else ''}]" + f".[{x}-]" * n if n == charge else None
+        else:
+            atom = centre if centre in ORGANIC else f"[{centre}]"
+            smiles = x + atom + f"({x})" * (n - 2) + x
+        if smiles and Chem.MolFromSmiles(smiles) is not None:
+            return f"it reads like a formula; a SMILES for it is {smiles}"
     return "it reads like a formula; a SMILES writes the atoms and how they are bonded, as CCO for ethanol"
 
 

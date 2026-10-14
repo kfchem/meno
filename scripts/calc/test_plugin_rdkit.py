@@ -77,11 +77,17 @@ class WhyUnreadable(unittest.TestCase):
         self.assertIn("its 2nd atom, O, has 3 bonds", self.said("OO=O"))
 
     def test_says_a_formula_is_one_and_what_a_smiles_writes(self):
-        self.assertIn("it reads like a formula; as a SMILES it is Cl[Sn](Cl)(Cl)Cl", self.said("SnCl4"))
-        self.assertIn("as a SMILES it is ClC(Cl)(Cl)Cl", self.said("CCl4"))
-        self.assertIn("as a SMILES it is Cl[Al](Cl)Cl", self.said("AlCl3"))
-        self.assertIn("as a SMILES it is FB(F)F", self.said("BF3"))
-        for formula in ("C6H6", "H2O", "Fe2O3", "CO2"):
+        self.assertIn("it reads like a formula; a SMILES for it is Cl[Sn](Cl)(Cl)Cl", self.said("SnCl4"))
+        self.assertIn("a SMILES for it is ClC(Cl)(Cl)Cl", self.said("CCl4"))
+        self.assertIn("a SMILES for it is Cl[Al](Cl)Cl", self.said("AlCl3"))
+        self.assertIn("a SMILES for it is Cl[Fe](Cl)Cl", self.said("FeCl3"))
+        self.assertIn("a SMILES for it is FB(F)F", self.said("BF3"))
+        # (a salt of groups 1 and 2: as ions, where as many halogens as its charge)
+        self.assertIn("a SMILES for it is [Mg+2].[Cl-].[Cl-]", self.said("MgCl2"))
+        self.assertIn("a SMILES for it is [Ca+2].[Cl-].[Cl-]", self.said("CaCl2"))
+        self.assertIn("a SMILES for it is [Ba+2].[Br-].[Br-]", self.said("BaBr2"))
+        # (no such compound, or none a halide of one atom: an example only)
+        for formula in ("NaCl2", "KCl3", "MgCl3", "C6H6", "H2O", "Fe2O3", "CO2", "IF7"):
             self.assertIn("it reads like a formula; a SMILES writes the atoms and how they are bonded", self.said(formula))
         # (an element twice, or no count past one: as a SMILES still)
         self.assertIn("a ring is left open: 2 is opened and not closed", self.said("CC2"))
