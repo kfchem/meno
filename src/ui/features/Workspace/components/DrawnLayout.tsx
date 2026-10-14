@@ -14,7 +14,9 @@ import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DrawnLayoutContext, DrawnZoomContext, drawnZoomOf } from "./drawnLayoutContext";
-import { NEW_ATOM } from "../utils/stroke";
+import { NEW_ATOM, type StrokeNode } from "../utils/stroke";
+import { ChainGrow } from "../utils/chainGrow";
+import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
@@ -139,6 +141,37 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // is leading, to a new atom or onto one already there.
   const stroke = extend.active ? extend.stroke : null;
   const preview = extend.active ? extend.preview : null;
+  // A chain's new bonds grow out of the last, and one taken back goes back the same way (utils/chainGrow)
+  const grow = useRef<ChainGrow | null>(null);
+  if (!grow.current) grow.current = new ChainGrow(CHAIN_EASE);
+  const [growStep, setGrowStep] = useState(0);
+  const growing = useRef(false);
+  const chainNodes = stroke?.kind === "chain" ? stroke.nodes : null;
+  const basePlace = (() => {
+    if (!stroke) return null;
+    if (stroke.baseId === NEW_ATOM) return stroke.start ?? null;
+    const a = model.atoms.find((x) => x.id === stroke.baseId);
+    return a ? { x: a.x, y: a.y } : null;
+  })();
+  const grownNodes: { node: StrokeNode; i: number; x: number; y: number }[] | null = (() => {
+    const g = grow.current!;
+    const now = performance.now();
+    if (!chainNodes) {
+      // (no chain: nothing held of one before)
+      grow.current = new ChainGrow(CHAIN_EASE);
+      growing.current = false;
+      return null;
+    }
+    g.set(chainNodes, now);
+    const { out, moving } = g.at(now, (n, i, shown) => {
+      const parent = n.from != null ? (n.from === -1 ? basePlace : shown[n.from]) : i > 0 ? shown[i - 1] : basePlace;
+      return parent ?? n;
+    });
+    growing.current = moving;
+    return out.map((h) => ({ node: h.node, i: h.i, x: h.x, y: h.y }));
+    // (taken again at each frame it is on its way: growStep)
+  })();
+  void growStep;
   // (each atom and bond as the layout takes it, the same object while it is
   // the same: what the layout made of a structure none of whose atoms and
   // bonds changed is taken again - lib/chem/layoutStructures)
@@ -156,16 +189,16 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
       out.push({ id: STROKE_START_ID, x: stroke.start.x, y: stroke.start.y, el: "C" });
     }
-    stroke?.nodes.forEach((n, i) => {
+    (grownNodes ?? stroke?.nodes.map((n, i) => ({ node: n, i, x: n.x, y: n.y })) ?? []).forEach(({ node: n, i, x, y }) => {
       if (n.atomId == null && n.pathIndex == null) {
-        out.push({ id: EXTENDING_ATOM_ID - i, x: n.x, y: n.y, el: "C" });
+        out.push({ id: EXTENDING_ATOM_ID - i, x, y, el: "C" });
       }
     });
     if (preview && preview.atomId == null && preview.pathIndex == null) {
       out.push({ id: EXTENDING_ATOM_ID - 1000, x: preview.x, y: preview.y, el: "C" });
     }
     return out;
-  }, [model.atoms, draggedId, dragX, dragY, stroke, preview]);
+  }, [model.atoms, draggedId, dragX, dragY, stroke, preview, growStep]);
   // Where each atom is drawn: where it is, or - after a Clean-up, an undo, a
   // snap - on its way there, each structure turning as a whole and settling
   // into its new shape (utils/glide) rather than jumping. An atom being
@@ -247,6 +280,12 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- step: a frame of the way there; model: its structures, and fullModel, where what comes into sight stood, read as the way is planned
   }, [atoms, draggedId, step]);
+  // A chain's bonds on their way out (or back): drawn again every frame until they are.
+  useFrame(() => {
+    if (!growing.current) return;
+    setGrowStep((n) => n + 1);
+    invalidate();
+  });
   // On the way: drawn again every frame until there.
   useFrame(() => {
     const g = glide.current;
@@ -293,7 +332,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
           ? ofPath(n.pathIndex)
           : index.get(EXTENDING_ATOM_ID - i);
     let from = baseIndex;
-    stroke.nodes.forEach((n, i) => {
+    (grownNodes ?? stroke.nodes.map((n, i) => ({ node: n, i }))).forEach(({ node: n, i }) => {
       if (n.from != null) from = ofPath(n.from) ?? from;
       const to = at(n, i);
       if (from != null && to != null && from !== to) {
@@ -311,7 +350,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       }
     }
     return out;
-  }, [drawnAtoms, model.bonds, stroke, preview]);
+  }, [drawnAtoms, model.bonds, stroke, preview, growStep]);
   const opts = useMemo(() => {
     const keys = Object.keys(aromaticRings || {}).filter(
       (k) => aromaticRings[k],
