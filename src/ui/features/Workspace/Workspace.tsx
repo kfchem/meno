@@ -1683,7 +1683,8 @@ function WorkspaceContent({
             // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
-              ...(s.running ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
+              // (its jobs under way, or Meno's own working in turns: Stop)
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
             };
           })()}
