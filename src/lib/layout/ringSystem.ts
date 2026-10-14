@@ -29,6 +29,7 @@ import {
 } from "./geometry";
 import { macrocycleShapes } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
+import { ringKey, ringRank } from "./ranks";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
 export const MACROCYCLE = 9;
@@ -52,13 +53,23 @@ function squareStart(n: number): number {
  * the macrocycles are then chains drawn between rings already regular.
  * That ring, or null for any other system.
  */
-function hubOf(rings: number[][]): number[] | null {
+function hubOf(mol: Molecule, rings: number[][]): number[] | null {
   const macro = rings.filter((r) => r.length >= MACROCYCLE);
   const runsThrough = (r: number[]) => macro.filter((m) => r.filter((a) => m.includes(a)).length >= 3).length;
-  if (macro.length === 1) return blockHub(rings, macro[0]);
+  if (macro.length === 1) return blockHub(mol, rings, macro[0]);
   if (macro.length < 2) return null;
   const hubs = rings.filter((r) => r.length === 6 && runsThrough(r) >= 2);
-  return hubs.sort((p, q) => runsThrough(q) - runsThrough(p))[0] ?? null;
+  // (rings alike in that by their atoms, then by the canonical rank: never the one listed first)
+  return hubs.sort((p, q) => runsThrough(q) - runsThrough(p) || byRing(mol)(p, q))[0] ?? null;
+}
+
+/** Two rings compared by their atoms as the structure has them (`ringKey`), then by the canonical rank (`ringRank`). */
+function byRing(mol: Molecule): (p: readonly number[], q: readonly number[]) => number {
+  return (p, q) => {
+    const kp = ringKey(mol, p);
+    const kq = ringKey(mol, q);
+    return kp < kq ? -1 : kp > kq ? 1 : ringRank(mol, p) - ringRank(mol, q);
+  };
 }
 
 /**
@@ -66,19 +77,23 @@ function hubOf(rings: number[][]): number[] | null {
  * rifampicin's ansa chain through its naphthofuranone - starts from the
  * block, which stays regular: the macrocycle is then a chain drawn round
  * from it, as an ansa bridge is. The six-membered ring of the block it
- * runs through fused to the most others, or null.
+ * runs through by the most atoms, then fused to the most others, or null.
  */
-function blockHub(rings: number[][], macro: number[]): number[] | null {
+function blockHub(mol: Molecule, rings: number[][], macro: number[]): number[] | null {
   const small = rings.filter((r) => r.length < MACROCYCLE);
   const fused = (r: number[]) => small.filter((q) => q !== r && q.filter((a) => r.includes(a)).length === 2).length;
-  const hubs = small.filter((r) => r.length === 6 && r.filter((a) => macro.includes(a)).length >= 3 && fused(r) >= 1);
-  return hubs.sort((p, q) => fused(q) - fused(p))[0] ?? null;
+  const shared = (r: number[]) => r.filter((a) => macro.includes(a)).length;
+  const hubs = small.filter((r) => r.length === 6 && shared(r) >= 3 && fused(r) >= 1);
+  // (the one the macrocycle shares the most atoms with, then the most
+  // fused, then by its atoms: rings tied in how fused they are went to the
+  // one listed first)
+  return hubs.sort((p, q) => shared(q) - shared(p) || fused(q) - fused(p) || byRing(mol)(p, q))[0] ?? null;
 }
 
 export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
   const rings = sys.rings.map((i) => mol.rings[i]);
   const big = Math.max(0, ...rings.map((r) => r.length));
-  if (big < MACROCYCLE || hubOf(rings)) return 1;
+  if (big < MACROCYCLE || hubOf(mol, rings)) return 1;
   return macrocycleShapes(big).length;
 }
 
@@ -118,7 +133,7 @@ export function placeRingSystem(
     return q.length - p.length;
   });
   // (or the ring asked for: a bridged system is tried from each)
-  const first = start != null ? mol.rings[start] : hubOf(rings) ?? ordered[0];
+  const first = start != null ? mol.rings[start] : hubOf(mol, rings) ?? ordered[0];
 
   // a macrocycle that runs mostly through other rings is a ring of rings,
   // round a circle; one that runs through a ring or two on its way
