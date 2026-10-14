@@ -592,7 +592,13 @@ Each result says what it belongs to, and Meno puts it there:
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the
   run went, "Run ended with an error" - is said however long the line
-  (2026-10-13).
+  (2026-10-13). So is what geometries that are no optimisation's are -
+  "Relaxed scan · 5 points", "Reaction path · 21 points" (a Gaussian
+  reaction path's points in the order of its coordinate, as its summary
+  lists them) - none of them called optimised; and "Excited state ·
+  energies not read" where an excited state was optimised, whose energies
+  at each geometry are not the ground state's that the output also gives
+  (2026-10-14).
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".

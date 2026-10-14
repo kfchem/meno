@@ -514,18 +514,81 @@ def op_read(m):
         "multiplicity": int(data.mult) if has(data, "mult") else None,
         "atoms": atoms,
         "frames": frames,
-        "energies": frame_energies(data, len(frames)) if frames else None,
-        "optimised": bool(data.optdone) if has(data, "optdone") else None,
+        # (an excited state's geometries: their energies the excited state's, which are not read here - not the
+        # ground state's at each, which cclib gives)
+        "energies": frame_energies(data, len(frames)) if frames and not excited_path(data, len(frames)) else None,
+        # (a scan's or a reaction path's last geometry is no optimum)
+        "optimised": bool(data.optdone) if has(data, "optdone") and not path_kind(data, text) else None,
     }
     result["results"] = (
         run_results(ended, why, scf, whole)
+        + path_said(data, text, len(frames))
         + molecule_wide(data)
         + per_frame(data, len(frames))
         + per_atom(data, len(atoms))
         + vibrations(data, len(atoms))
         + orbitals(data)
     )
+    # (a Gaussian reaction path's points in the order of its reaction coordinate, as its own summary lists them)
+    order = irc_order(text, len(frames)) if path_kind(data, text) == "irc" else None
+    if order:
+        result["frames"] = [frames[k] for k in order]
+        if result["energies"]:
+            result["energies"] = [result["energies"][k] for k in order]
+        for r in result["results"]:
+            if r.get("on") == "frames":
+                r["values"] = [r["values"][k] for k in order]
     return without(result, ghosts)
+
+
+# a Gaussian route line (it echoes its route section, each line begun by " #")
+GAUSSIAN_ROUTE = re.compile(r"^ #.*$", re.M)
+# a point on a Gaussian reaction path: "Point Number:  3          Path Number:   1"
+IRC_POINT = re.compile(r"Point Number:\s+(\d+)\s+Path Number:\s+(\d+)")
+
+
+def path_kind(data, text):
+    """What a run's geometries are where they are no optimisation's path: a relaxed scan's ("scan", by the scan
+    cclib reads), a Gaussian reaction path's ("irc", by its route); otherwise None."""
+    if has(data, "scanenergies") and len(data.scanenergies) > 1:
+        return "scan"
+    if any(re.search(r"\bIRC\b", line, re.I) for line in GAUSSIAN_ROUTE.findall(text or "")):
+        return "irc"
+    return None
+
+
+def excited_path(data, frames):
+    """Whether a run's geometries are an excited state's: excited states worked out over more than one geometry -
+    an excited state optimised (Gaussian's TD with Opt, ORCA's TD-DFT with Opt)."""
+    return has(data, "etenergies") and frames > 1
+
+
+def path_said(data, text, frames):
+    """What a run's geometries are, where they are not an optimisation's path, and that an excited state's
+    energies are not read: first in the chip's line."""
+    out = []
+    kind = path_kind(data, text)
+    if kind == "scan":
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Relaxed scan", "value": f"{len(data.scanenergies)} points", "rank": 0})
+    elif kind == "irc":
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": f"{frames} points", "rank": 0})
+    if excited_path(data, frames):
+        out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
+    return out
+
+
+def irc_order(text, frames):
+    """A Gaussian reaction path's points in the order of its reaction coordinate - the second path's (the reverse
+    direction) last first, the transition state, then the first path's - where the output gives the transition
+    state and each path's points one after another, as many as its geometries; otherwise None."""
+    last = {}
+    for m in IRC_POINT.finditer(text or ""):
+        point, path = int(m.group(1)), int(m.group(2))
+        last[path] = max(last.get(path, 0), point)
+    ahead, back = last.get(1, 0), last.get(2, 0)
+    if not back or set(last) - {1, 2} or 1 + ahead + back != frames:
+        return None
+    return list(range(frames - 1, ahead, -1)) + [0] + list(range(1, ahead + 1))
 
 
 def run_results(ended, why, scf, whole=True):
@@ -596,6 +659,9 @@ def job_kind(out):
     """What a job did, in words, by what was read of it: an optimisation (and frequencies), frequencies, or a
     single point."""
     vibrations = any(r.get("id") == "vibrations" for r in out.get("results") or [])
+    path = next((r["label"] for r in out.get("results") or [] if r.get("id") == "run.path"), None)
+    if path:
+        return path
     if out.get("optimised") is not None:
         return "Optimisation and frequencies" if vibrations else "Optimisation"
     return "Frequencies" if vibrations else "Single point"
