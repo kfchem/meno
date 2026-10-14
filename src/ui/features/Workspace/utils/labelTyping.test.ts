@@ -180,7 +180,9 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
       expect(live(typed), typed).toBe(label);
     }
     // (and Z in no complex of a metal: what reads as nothing else stays as typed - rule 5)
-    for (const typed of ["nbz", "hoz", "zpro", "zna"]) expect(kept(typed), typed).toBe(typed);
+    for (const typed of ["hoz", "zpro", "zna"]) expect(kept(typed), typed).toBe(typed);
+    // (nbz an N carrying a Bz - an atom and the group on it, by rule - not niobium and a Z)
+    expect(kept("nbz")).toBe("NBz");
   });
 
   it("reads a reagent's or a ligand's name before a metal's formula, from letters typed small (rule 6; the maintainer, 2026-10-13)", () => {

@@ -142,6 +142,13 @@ What is put together from them is read by rule, not listed:
 - an atom and two or more halogens on it, its H after it - CBr3, CHF2,
   CF2Cl, SF5, SiCl3, BCl2 - where the bond out, the H and the halogens
   make a valence the atom has (PCl3 and SiCl4 are molecules);
+- an N or a P written with one group it carries, its other bonds the
+  drawing's - an N in a ring with its protecting group: NBoc, NMOM, NTs,
+  NMe, NBz - the group's name of two letters
+  or more; drawn on a bond's left (BocN, MOMN) it is read turned round, as
+  any label is. Every bond to such a label is the atom's;
+- an O or an S with an alkali metal on it - ONa, OK, SLi - an ion pair, as
+  NaOMe's sodium is bound;
 - a substituted aryl group (`src/lib/chem/substitutedAryl.ts`): positions,
   a multiplying prefix (di, tri, tetra, penta) and a substituent before Ph,
   Bz (benzoyl) or Bn - 2,6-diMeBz, 4-MeO-3-NO2Ph, p-ClBn - or before the
