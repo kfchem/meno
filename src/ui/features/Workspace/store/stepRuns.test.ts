@@ -5,6 +5,8 @@ import type { Job, JobAsk } from "../../../../lib/jobs";
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
 const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
 let next = 1;
+/** A file's text, as the test has it, that stands for one too large to read. */
+const TOO_LARGE = "(too large)";
 /** Where set, what each job's start waits on once its folder is made - a step's jobs started one by one, as the runner does. */
 let holdStart: Promise<void> | null = null;
 const idOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -25,7 +27,11 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     return { text: log.slice(from), next: log.length };
   },
   jobFiles: async (id: string) => Object.keys(jobs.get(id)?.files ?? {}),
-  readJobFile: async (id: string, name: string) => jobs.get(id)!.files[name],
+  readJobFile: async (id: string, name: string) => {
+    const text = jobs.get(id)!.files[name];
+    if (text === TOO_LARGE) throw `${name} is too large to read: 300 MB, past 256 MB`;
+    return text;
+  },
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
@@ -392,6 +398,18 @@ describe("a step that runs a plugin's program", () => {
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, stopped: true, said: "Stopped after 0:31" });
     expect(st().molecules3d).toHaveLength(1);
+  });
+
+  it("says why where a file it wrote could not be read - never taking it for one written empty", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": TOO_LARGE } });
+    await st().lookAtJobs();
+    await ran;
+    expect(worker.collect).not.toHaveBeenCalled();
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "xtbopt.log is too large to read: 300 MB, past 256 MB" });
   });
 
   it("says why it failed, in the plugin's words", async () => {

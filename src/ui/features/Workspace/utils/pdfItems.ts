@@ -35,6 +35,8 @@ export function readPdfs(v: unknown): Omit<PdfItem, "id">[] {
       ...(p.spread === true ? { spread: true } : {}),
       ...(placed.length ? { placed } : {}),
       ...(p.icon === true ? { icon: true } : {}),
+      // (the point it was laid at, where it was the workspace's own: lib/pdf/layout `pointOf`)
+      ...(typeof p.point === "number" && p.point > 0 && Number.isFinite(p.point) ? { point: p.point } : {}),
       ...(reading ? { reading } : {}),
       ...(() => {
         // (writing on its pages, each piece on a page it has)

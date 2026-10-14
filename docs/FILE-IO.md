@@ -432,7 +432,12 @@ As this part of step 5 was built (#155, from main beside step 3):
     page shows them: a trajectory's bonds, found from distances, form and
     break as its frames go. A copy's MOL file, a PDB file and what a
     plugin's writer is given are the same.
-  - **SVG** takes no options yet.
+  - **SVG** takes no options yet. Whatever a document gives it as text -
+    labels, words, a typeface's name, a colour - is escaped, in elements
+    and in attributes alike, and what XML cannot hold at all (the controls
+    but tab and the line breaks, a surrogate without its pair, U+FFFE and
+    U+FFFF) is drawn as the replacement character, so the file is
+    well-formed whatever was pasted.
 - **What a writer takes** is said by it (step 7): Meno's own take what is
   selected on the page; a plugin's, one molecule - the molecules in 3D
   selected, several as one system. A plugin's writer is offered only where
@@ -531,7 +536,20 @@ work.meno (zip)
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
 - **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`).
+  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
+  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is taken for more, or other, than the file says.** What it
+  says of a part's size is not trusted to set room aside by - a few bytes
+  may say a gigabyte: each part is inflated a little at a time, stopped as
+  soon as it comes to more than it says, and taken only if it comes to
+  just that (`lib/binary/zip.ts`). A workspace that does not is said to be
+  damaged; a file kept that does not is not had. And each file kept - an
+  output, a text, a PDF or a picture alike - is taken only if its bytes
+  are what its SHA-256 says, so that no file can pass for another held
+  this session.
+- **Saved within the same limits.** A workspace that would come to more
+  than a workspace file is read with is not written: Save says so, with
+  the sizes, rather than leave a file that would not open again.
 - **The JSON `.meno` of before is not looked for** (the maintainer: not
   needed). One still opens, the JSON being the same as `workspace.json`;
   nothing was added for it, and it is saved as a zip.
@@ -829,6 +847,12 @@ As step 7's writer was built - decided with the maintainer on
   they stand on the page, each turned and placed as it is seen, its
   ångströms kept. Export is for the selection (2026-10-10), so there is
   nothing else to ask.
+  - **After a change of the drawing style** (utils/restyle3d
+    `restyled3d`), molecules that touch - a complex put together on the
+    page - are one body, moved as one, and are written in the same
+    ångströms as before. Separate bodies move apart or closer with their
+    places on the page, so the ångströms between them follow the page as
+    it now stands.
 - **The contract** (`lib/io/writers`): a writer, Meno's or a plugin's, is
   one `Writer` - the kind it writes, its name, its files' extensions,
   what it takes, its options in the general form, who writes it. A

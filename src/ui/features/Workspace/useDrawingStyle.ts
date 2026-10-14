@@ -5,18 +5,12 @@ import {
   type StyleChoice,
 } from "../../../lib/chem/style";
 import type { LayoutOptions } from "../../../lib/chem/layout2d";
-import { useAppSettings } from "../../../lib/settings/appSettings";
 import { useEditor } from "./store";
 import { editorLayoutOptions } from "./layoutOptions";
 
-/**
- * The style choice this canvas is drawn in: its document's own, or the
- * application's.
- */
+/** The style choice this canvas is drawn in: its workspace's, the one it was made in or given since. */
 export function useStyleChoice(): StyleChoice {
-  const own = useEditor((s) => s.docStyle);
-  const app = useAppSettings((s) => s.drawingStyle);
-  return own ?? app;
+  return useEditor((s) => s.docStyle);
 }
 
 /** The drawing style this canvas is drawn in. */

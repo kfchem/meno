@@ -11,6 +11,7 @@ import {
   readGlyphs,
   registerGlyphs,
 } from "../../lib/chem/labelFonts";
+import { isTypefaceName } from "../../lib/chem/styleFields";
 
 /**
  * The font files atom labels are drawn from, and the letters the layout
@@ -171,10 +172,14 @@ export function useLabelFontUrl(
 
 let systemFamilies: Promise<string[]> | undefined;
 
-/** The typefaces installed on this computer; none outside the app. */
+/**
+ * The typefaces installed on this computer; none outside the app. Only
+ * those a style keeps (`isTypefaceName`): one picked is read back from the
+ * settings and from files.
+ */
 export function systemTypefaces(): Promise<string[]> {
   systemFamilies ??= isTauri()
-    ? invoke<string[]>("font_families").catch(() => [])
+    ? invoke<string[]>("font_families").then((names) => names.filter(isTypefaceName)).catch(() => [])
     : Promise.resolve([]);
   return systemFamilies;
 }

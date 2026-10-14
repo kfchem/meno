@@ -306,6 +306,125 @@ describe("an arrow in a record", () => {
   });
 });
 
+// Null where a record's lists hold objects threw as it was pasted. Null, a
+// number, a string or a list is put in every list of a record that holds
+// one of everything, and in place of every value it has.
+describe("a record with what is no entry in its lists", () => {
+  const STRAYS: unknown[] = [null, 0, 7, "", "C", [], [1, 2], true];
+  const ink = { pen: "pen", strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] };
+  // (a cyclopropane, its ring filled, an electron-pushing arrow on it - and one of everything else a record carries)
+  const WHOLE = {
+    format: "meno-structure",
+    version: 1,
+    atoms: [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5, y: 0, el: "C" },
+      { id: 3, x: 0.75, y: 1.3, el: "C" },
+    ],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 1 },
+      { id: 13, a: 3, b: 1, order: 1 },
+    ],
+    pushes: [{ id: 1, from: { atom: 1 }, to: { bond: 12 } }],
+    ringFills: { "1-2-3": "#ff0000" },
+    arrows: [{ id: 1, x: 6, y: 0, angle: 0, length: 2, corners: [{ along: 0.5, across: 0.2 }] }],
+    pluses: [{ id: 1, x: -3, y: 0 }],
+    captions: [{ id: 1, x: 6, y: 1, text: "heat", marks: [{ from: 0, to: 2, bold: true }] }],
+    molecules3d: [
+      {
+        atoms: [
+          { el: "O", x: 0, y: 0, z: 0 },
+          { el: "H", x: 0.76, y: 0.59, z: 0 },
+        ],
+        bonds: [{ a1: 0, a2: 1, order: 1 }],
+        at: { x: 10, y: 0 },
+        frames: [[0, 0, 0, 0.8, 0.6, 0]],
+        measures: [{ id: 1, atoms: [0, 1] }],
+        made: { how: [{ label: "Optimised", text: "MMFF94" }] },
+      },
+    ],
+    flow: {
+      sets: [{ id: 1, x0: 0, y0: -9, x1: 4, y1: -5 }],
+      steps: [{ id: 2, kind: "optimise", x: 8, y: -7 }],
+      wires: [{ id: 3, from: { set: 1 }, to: 2 }],
+    },
+    pdfs: [{ name: "paper.pdf", sha256: "b".repeat(64), pages: [[612, 792]], x: 20, y: 0, placed: [{ page: 0, x: 30, y: 0 }], inks: [{ ...ink, page: 0 }] }],
+    sheets: [{ name: "notes.txt", text: "a note", at: { x: 0, y: 9 } }],
+    pictures: [{ id: 1, name: "a.png", sha256: "a".repeat(64), media: "image/png", px: [10, 10], x: 0, y: 20, w: 1, h: 1 }],
+    slides: [{ id: 1, x: 0, y: 30, w: 16, h: 9 }],
+    shapes: [{ id: 1, kind: "rect", x0: 0, y0: 40, x1: 1, y1: 41 }],
+    inks: [{ ...ink, id: 1 }],
+  };
+
+  type Path = (string | number)[];
+  type Node = Record<string | number, unknown>;
+  /** Every place in `v` - each list's entries and each object's fields - by its path. */
+  const placesIn = (v: unknown, path: Path = []): Path[] =>
+    v && typeof v === "object"
+      ? Object.entries(v).flatMap(([k, x]) => {
+          const here = [...path, Array.isArray(v) ? Number(k) : k];
+          return [here, ...placesIn(x, here)];
+        })
+      : [];
+  const valueAt = (path: Path) => path.reduce((o: unknown, k) => (o as Node)[k], WHOLE);
+  /** The record's text with `edit` done to a copy of it at `path`: given what holds the place there, and its key. */
+  const edited = (path: Path, edit: (holder: Node, key: string | number) => void) => {
+    // (copied through its JSON, as the clipboard holds it: no list in two places)
+    const copy = JSON.parse(JSON.stringify(WHOLE));
+    edit(path.slice(0, -1).reduce((o: unknown, k) => (o as Node)[k], copy) as Node, path[path.length - 1]);
+    return JSON.stringify(copy);
+  };
+  const lists = placesIn(WHOLE).filter((p) => Array.isArray(valueAt(p)));
+  const isEntry = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
+
+  it("reads, carrying one of everything", () => {
+    const d = readRecord(JSON.stringify(WHOLE))!;
+    expect([d.atoms, d.bonds, d.pushes, d.arrows, d.arrows![0].corners, d.pluses, d.captions, d.captions![0].marks].map((l) => l?.length)).toEqual([3, 3, 1, 1, 1, 1, 1, 1]);
+    expect([d.molecules3d, d.molecules3d![0].measures, d.molecules3d![0].made?.how, d.pictures, d.slides, d.shapes, d.inks].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect([d.flow?.sets, d.flow?.steps, d.flow?.wires, d.pdfs, d.pdfs?.[0].placed, d.pdfs?.[0].inks, d.sheets].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(d.ringFills).toEqual({ "1-2-3": "#ff0000" });
+  });
+
+  it("reads round it in any list of entries: it is left out, and what reads is read as before", () => {
+    const whole = readRecord(JSON.stringify(WHOLE));
+    const entries = lists.filter((p) => (valueAt(p) as unknown[]).every(isEntry));
+    expect(entries.length).toBeGreaterThan(20);
+    for (const path of entries) {
+      const key = path[path.length - 1];
+      // (as an atom or a bond that does not read: the record, or the molecule it is of, does not)
+      const expected =
+        key !== "atoms" && key !== "bonds"
+          ? whole
+          : path.length === 1
+            ? null
+            : readRecord(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
+      // (put last: a sheet is numbered by its place in the list)
+      for (const stray of STRAYS) expect(readRecord(edited(path, (holder, k) => (holder[k] as unknown[]).push(stray))), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+    }
+  }, 60_000);
+
+  it("is never thrown at by it, anywhere: first or last in a list of any kind, or in place of any value", () => {
+    const threw: string[] = [];
+    const tryReading = (text: string, said: string) => {
+      try {
+        readRecord(text);
+      } catch (e) {
+        threw.push(`${said}: ${(e as Error).message}`);
+      }
+    };
+    for (const stray of STRAYS) {
+      for (const path of lists) {
+        tryReading(edited(path, (holder, k) => (holder[k] as unknown[]).unshift(stray)), `${path.join(".")} holding ${JSON.stringify(stray)} first`);
+        tryReading(edited(path, (holder, k) => (holder[k] as unknown[]).push(stray)), `${path.join(".")} holding ${JSON.stringify(stray)} last`);
+      }
+      for (const path of placesIn(WHOLE)) tryReading(edited(path, (holder, k) => (holder[k] = stray)), `${path.join(".")} = ${JSON.stringify(stray)}`);
+      tryReading(JSON.stringify(stray), `the whole = ${JSON.stringify(stray)}`);
+    }
+    expect(threw).toEqual([]);
+  }, 60_000);
+});
+
 describe("a selection of very many atoms", () => {
   // (more than a call takes spread as its arguments: all of a large drawing selected, then deleted or turned over, threw)
   const atoms = Array.from({ length: 150_000 }, (_, i) => ({ id: i + 1, x: (i % 500) * 1.8, y: -Math.floor(i / 500) * 1.8, el: "C" }));

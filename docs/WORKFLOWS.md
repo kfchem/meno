@@ -3,8 +3,9 @@
 A specification of stage 6 (WORKSPACE.md, *Stages*): calculations built as
 workflows and run, on the page itself. Written on 2026-10-08 at the
 maintainer's request - *a detailed UI specification before anything is
-built* - and revised the same day with their answers. Step 1 is built
-(*As built*, below); the rest is not yet. Judge it against [PURPOSE.md](PURPOSE.md): a procedure that
+built* - and revised the same day with their answers. All seven steps of
+*In order* are built, with what review changed since (*As built*,
+below). Judge it against [PURPOSE.md](PURPOSE.md): a procedure that
 combines several methods, expressed in a form the chemist can read,
 rearrange and run again, with its results beside the molecule it is about.
 
@@ -95,8 +96,8 @@ rearrange and run again, with its results beside the molecule it is about.
     (*How it looks*). The ports stay where they were: a step's level with
     its first lines, a set's half-way down its edge.
 
-No question is left open; the whole is for the maintainer to read and
-agree before step 1 is built.
+No question is left open. All seven steps of *In order* are built (*As
+built*).
 
 ## Words
 
@@ -133,8 +134,9 @@ A workflow lives among everything else on the page - drawings, molecules
 in 3D, arrows, text - and is made of three things:
 
 - **Sets.** A thin rounded frame, its name along its top, inside it -
-  *Input*, or what a step made (*Conformers*, *Optimised*) - and how
-  many entries it holds (*1 structure*, *81 conformers*, *23 of 81*). It
+  *Input*, or what a step made (*Conformers*, *Optimised*, *Within 3
+  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *1
+  compound · 81*, *1 compound · 23 of 81*). It
   gives from a port on its right edge, half-way down; a result set takes
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
@@ -244,7 +246,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
 
-The first five run a program; the last five work on a set's entries
+The first six run a program; the last five work on a set's entries
 alone (*Who does a step*). A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
@@ -278,8 +280,9 @@ one of the kinds of calculation it does (decided: 16):
 
 ![Quick Add with one button for calculations](workflows/2-quick-add.svg)
 
-- **Quick Add keeps its four** - bond, text, reaction arrow, "+" - and
-  gains **one button**: *Calculations*, a small graph of two joined
+- **Quick Add keeps its ten** - bond, chain, SMILES, text, reaction
+  arrow, "+", electron-pushing arrow, slide, pen, shapes (`QuickAdd.tsx`)
+  - and gains **one button**: *Calculations*, a small graph of two joined
   sets, after a thin rule.
 - **Pressed, it opens** a panel below the row, a line for each plugin
   added that does steps - those that run a program first - then Meno:
@@ -316,16 +319,20 @@ one of the kinds of calculation it does (decided: 16):
 A click on a step opens it, in place, to its options - as a molecule's
 frames chip opens to its slider:
 
+- what it does: another of the kinds of calculation its plugin does,
+  where it does more than one (*Calculation*; *Who does a step*) - the
+  options the two share kept as they were;
 - the plugin's own options, drawn in Meno's general form (`lib/options`,
   as Export draws a writer's): for xTB, its method (GFN2-xTB, GFN1-xTB,
   GFN-FF), solvent, optimisation level; for *Energy window*, the window
-  (3 kcal/mol);
-- the charge and the unpaired electrons, read from each entry as Export
-  reads them, and changeable;
-- what it does: another of the kinds of calculation its plugin does,
-  where it does more than one (*Who does a step*) - the options the two
-  share kept as they were;
-- *Show log* and *Show files* once it has run.
+  (3 kcal/mol) - or *No options*;
+- its runs, where it has more than one: each when, and what it said,
+  with *Show* to put its results back on the page (*Results*).
+
+The charge and the unpaired electrons are not on the card: each entry's
+are read as Export reads them (`pluginEntry`), and given with it. *Show
+log* and *Show files* are on the step's menu (right-click), once it has
+run.
 
 Another click on its title, its *Close*, or Escape closes it; a press elsewhere does not - the page is worked on (panned, scrolled, other cards) while its options stay open (2026-10-14). The
 step's options are its own: it starts with the defaults Settings,
@@ -370,8 +377,15 @@ Conformers go through a workflow as any set does (decided):
   its chip saying the entry, its energy and population; entries set aside
   are not among its frames. A compound set's entries are separate
   molecules, each its own.
-- **A set's tab says which it is**: *Compounds · 2*, *Conformers · 2
-  compounds · 81*.
+- **A set's count says what it holds**: a compound set of molecules in
+  3D, its compounds (*2 compounds*); a conformer set, its compounds and
+  its conformers (*2 compounds · 81*); either, where some are set aside,
+  how many of how many (*2 compounds · 23 of 81*); structures drawn, or a
+  Render step's pictures, how many (*3 structures*, *9 pictures*); a set
+  with nothing in it, *Empty*. Its name is *Input* where the chemist made
+  it, else what its step made, as its kind says it - an option's value in
+  it where the kind says one (*Within 3 kcal/mol*, *Populations at
+  298.15 K*).
 
 ## Running
 
@@ -379,11 +393,11 @@ Conformers go through a workflow as any set does (decided):
 
 | From | What |
 | --- | --- |
-| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run or has changed |
+| A step's menu (right-click) | *Run* - this step, and first any step before it that is not done: not run, changed, failed or stopped |
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
-| The menu on empty space | *Run all* - every step on the page that has not run or has changed, in order |
+| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - in order |
 | | *Stop all* - while any runs |
 
 No key starts a run (decided: menus, at first). Steps run in the order
@@ -408,8 +422,10 @@ once (*Several at once*).
 
 *Show log* opens the job's log in the workspace's column of texts (PR
 #172), updating while the job runs - its last lines kept in view unless
-the chemist scrolled up. A step of many entries has a log for each,
-named for the entry. A log is a text of the workspace like any other,
+the chemist scrolled up. A step that ran several jobs has a log for
+each job, named for the step's kind and numbered in the order the jobs
+were made (*Optimise log 1*, *Optimise log 2*); one job's is *Optimise
+log*. A log is a text of the workspace like any other,
 but with no sheet on the page: its step is its body, and it rises out of
 the step's card into the column, and goes back into it as the column
 shuts (docs/PDF.md, step 5).
@@ -480,6 +496,9 @@ gave), and one can be shown again.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
+- **A render asked for with Render…** is no step's (RENDER.md): nothing
+  picks it up again, so its workspace's tab closing stops it, saved or
+  not, and asks nothing more. Render as a step's jobs are a step's.
 
 ### Undo
 
@@ -499,9 +518,15 @@ gave), and one can be shown again.
 ## Saving and sharing
 
 - **The workspace keeps it all** (`.meno`, FILE-IO.md, *The workspace
-  file*): sets, steps, wires, options; each run - when, with what
-  options, which program and version, how it ended; logs and outputs, as
-  files kept by their SHA-256; results as entries on the page.
+  file*): sets, steps, wires, options; each run - when, its kind and
+  options, what it said and how it ended, how long it took, its jobs by
+  id - and the molecules each of its last ten gave; the outputs its
+  molecules were read from, as files kept by their SHA-256, each
+  molecule's calculation saying its program and version as the output
+  does; a job's log, as a text, where it was shown; results as entries
+  on the page. A job's own folder stays in Meno's data folder, not in the
+  file. (Each run keeping its program, version and log with it is a
+  requirement for the rebuild.)
 - **Shared, a workspace is the procedure with its results**: opened
   elsewhere, everything is there to read, and runs again where the same
   plugins are added.
@@ -518,13 +543,20 @@ gave), and one can be shown again.
 ## Programs and plugins
 
 - **xTB**: a plugin whose environment is made by pixi from conda-forge -
-  xtb 6.7.1, LGPL-3.0, for macOS (Apple silicon and Intel), Windows and
-  Linux. It fills *Optimise*, *Energy* and *Frequencies*, and reads its
-  own outputs back.
+  xtb 6.7.1, LGPL-3.0-or-later, for macOS (Apple silicon and Intel),
+  Windows and Linux. It fills *Optimise*, *Energy* and *Frequencies*, and
+  reads its own outputs back. *Frequencies* of an entry with an isotope is
+  refused, naming it (2026-10-13): xtb 6.7.1 says it takes an atom's mass
+  (xcontrol(7), `$hess`) and that it changed it, but its frequencies and
+  thermochemistry came out as the natural element's - D2O's as H2O's, run
+  here. Geometries and energies do not depend on the masses, so
+  *Optimise* and *Energy* run as before. ORCA writes each isotope's mass
+  ("M =" after the atom's coordinates, as its manual has it), and
+  Gaussian its mass number ("(Iso=n)").
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
-  with xtb 6.7.1, LGPL-3.0, on conda-forge for macOS and Linux only. On
-  Windows it cannot be added, and *Conformers* is filled by RDKit alone
-  there. (Not 3.0.2: *As built*, step 5.)
+  with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
+  only. On Windows it cannot be added, and *Conformers* is filled by RDKit
+  alone there. (Not 3.0.2: *As built*, step 5.)
 - **Programs installed separately** (ORCA, Gaussian; step 6): never fetched by
   Meno - their licences do not allow it. A plugin's manifest says which
   program it needs and how to know it (its name, and the line its version
@@ -571,7 +603,7 @@ gave), and one can be shown again.
   with no code taken or read from ReactFlow, the Workflow Builder tab, or
   any other node editor (the maintainer, 2026-10-08). ReactFlow
   (`@xyflow/react`) leaves Meno's dependencies with the tab.
-- **Programs are run, not linked**: xTB and CREST (LGPL-3.0) are
+- **Programs are run, not linked**: xTB and CREST (LGPL-3.0-or-later) are
   separate programs in their plugins' environments, fetched from
   conda-forge with the chemist's consent; their licences are shown in
   Settings, *Plugins*, as each plugin's is.
@@ -793,9 +825,9 @@ Decided while building it, for the maintainer to confirm:
   that failed counts each of them (*2 of 3 failed*), and where its runner
   said why (*xtb could not be started*) that is the reason given.
 - **Show log** opens each job's log as a text of the workspace, *Optimise
-  log* (*Optimise log 2*, ... where there are several), following the
-  job while it runs; a text that grows at its end keeps its last lines in
-  view unless it was scrolled up.
+  log* (*Optimise log 1*, *Optimise log 2*, ... where there are
+  several), following the job while it runs; a text that grows at its
+  end keeps its last lines in view unless it was scrolled up.
 - **A choice of more than five** is a list to pick from, in a step's
   options and in Settings (xTB's solvents, its convergence levels).
 - **xTB's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF), a solvent -
@@ -823,12 +855,13 @@ Not yet, and where it comes:
 Built: *Run from here* in a step's menu - the step and every step after
 it, those that take what it gives and those after them; *Run all* and
 *Stop all* in Meno's menu, under *Calculations* (on the right-click menu
-on empty space since 2026-10-10) - every step that has not
-run or has changed, in the order their wires give; steps that do not wait
-on one another run at once, their jobs queued as Settings allows; a step
-after one that failed is not run. A step keeps its earlier runs: opened,
-its card lists them under *Runs* - when, what it gave, how it was set -
-and one can be shown again, its results back in the step's result set.
+on empty space since 2026-10-10) - every step that is not done (not
+run, changed, failed or stopped), in the order their wires give; steps
+that do not wait on one another run at once, their jobs queued as
+Settings allows; a step after one that failed is not run. A step keeps
+its earlier runs: opened, its card lists them under *Runs* - when, what
+it gave, how it was set - and one can be shown again, its results back
+in the step's result set.
 How it works: ARCHITECTURE.md, *Workflows*.
 
 Decided while building it, for the maintainer to confirm:
@@ -885,7 +918,9 @@ Decided while building it, for the maintainer to confirm:
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the
   search is (full, or CREST's three quicker ones), and the energy window
   (6 kcal/mol by default). The charge and spin multiplicity are those
-  Export reads, as for xTB.
+  Export reads, as for xTB. Its search samples with the natural masses:
+  CREST is given none (its help lists no way to), which changes how it
+  explores, not the conformers or energies it gives.
 - **CREST 2.12, not 3.0.2.** conda-forge's CREST 3.0.2 for macOS keeps
   only the lowest conformer, whatever energy window it is given: its
   CREGEN sorting takes the window as 0 (github.com/crest-lab/crest/issues/431,
@@ -1202,6 +1237,5 @@ structure* step opens without that step (no shim before 1.0).
 
 ## Questions
 
-None left open (2026-10-08). The specification as a whole is for the
-maintainer to read and agree before step 1 is built; what they change
-is folded in here first.
+None left open (2026-10-08). All seven steps are built (*As built*);
+what the maintainer changes is folded in here first.

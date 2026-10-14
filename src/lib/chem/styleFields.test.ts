@@ -12,6 +12,7 @@ import {
   acceptStyleChoice,
   acceptValue,
   automaticValue,
+  isTypefaceName,
   STYLE_FIELDS,
   STYLE_GROUPS,
   withSetting,
@@ -101,6 +102,19 @@ describe("reading a style choice back", () => {
     });
     // not a font's name
     for (const bad of ["", "   ", "a\nb", "x".repeat(121), 3]) {
+      expect(acceptStyleChoice({ preset: "meno", changes: { fontFamily: bad } }).changes).toEqual({});
+    }
+  });
+
+  it("takes a typeface's name in any script, and nothing a name is not made of", () => {
+    for (const name of ["Hiragino Sans", "\u30d2\u30e9\u30ae\u30ce\u89d2\u30b4\u30b7\u30c3\u30af" /* a Japanese font name */, "M+ 1p", "Bodoni 72 Oldstyle", "O'Neil Sans", "Font_Name-2.0", "Arial & Helvetica"]) {
+      expect(isTypefaceName(name)).toBe(true);
+      expect(acceptStyleChoice({ preset: "meno", changes: { fontFamily: name } }).changes).toEqual({ fontFamily: name });
+    }
+    // what would close the attribute or the tag a name is written into, or end a font's rule
+    const hostile = ['Bad"Name', 'x"/><script>alert(1)</script><text x="', "A<B", "A>B", "Arial; color: red", "Font\\Name", "Arial, Helvetica", "a\tb", "a\x00b", "a\u{FFFE}b"];
+    for (const bad of hostile) {
+      expect(isTypefaceName(bad)).toBe(false);
       expect(acceptStyleChoice({ preset: "meno", changes: { fontFamily: bad } }).changes).toEqual({});
     }
   });

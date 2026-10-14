@@ -1,4 +1,4 @@
-import { createSVG, layoutMolecule, type Atom, type Bond } from "./layout2d";
+import { createSVG, layoutMolecule, xmlAttr, type Atom, type Bond } from "./layout2d";
 import { layoutOptionsFor, type DrawingStyle } from "./style";
 import { arrowMeasures, arrowOutline } from "./reactionArrow";
 
@@ -140,6 +140,6 @@ export function arrowSampleSvg(style: DrawingStyle, magnification = 1): string {
   const h = n(2 * (half + pad));
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}">` +
-    `<path d="${d}" fill="${style.bondColor}"/></svg>`
+    `<path d="${d}" fill="${xmlAttr(style.bondColor)}"/></svg>`
   );
 }

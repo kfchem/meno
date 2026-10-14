@@ -4517,24 +4517,33 @@ function xmlChars(text: string): string {
   return out;
 }
 
+const XML_ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
+
+/** Text as an element holds it: its markup escaped, what XML cannot hold the replacement character. */
 function escapeXml(text: string): string {
-  // (what XML cannot hold, the replacement character in its place)
-  return xmlChars(String(text))
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return xmlChars(String(text)).replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
+}
+
+/**
+ * A value as an attribute in double quotes holds it: escaped as text is,
+ * but for an apostrophe, which a font stack quotes names in. Every value an
+ * SVG is written with that is not a number goes through it - a typeface's
+ * name, a colour, an image's address - as a document or the settings may
+ * give any of them.
+ */
+export function xmlAttr(value: string): string {
+  return xmlChars(String(value)).replace(/[&<>"]/g, (c) => XML_ESCAPES[c]);
 }
 
 /**
  * The CSS font stack for a typeface: itself, its nearest stand-ins, then
  * IBM Plex Sans JP for what it lacks - as the canvas draws it. IBM Plex
  * Sans, which Meno carries but a picture's reader seldom has, stands in as
- * Arial or Helvetica there, the nearest most have.
+ * Arial or Helvetica there, the nearest most have. A name with more than
+ * letters, digits and hyphens is quoted, an apostrophe in it escaped.
  */
 export function fontStack(family: string): string {
-  const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name);
+  const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name.replace(/[\\']/g, "\\$&")}'` : name);
   const standIn =
     family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : family === "IBM Plex Sans" ? ["Arial", "Helvetica"] : [];
   return [family, ...standIn, "IBM Plex Sans JP", "sans-serif"]
@@ -4549,14 +4558,14 @@ function svgLabel(
   set: LabelSet,
   fill: string,
 ): string {
-  const fontFamily = fontStack(set.fontFamily ?? "Arial");
+  const fontFamily = xmlAttr(fontStack(set.fontFamily ?? "Arial"));
   let out = "";
   for (const run of placeLabel(t, fontSize, set)) {
     // (a mark is drawn with the lines and shapes)
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${svgColor(run.color, fill)}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"` +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4591,26 +4600,26 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     return d + "Z";
   };
   for (const m of layout.shapes ?? []) {
-    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
-    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${svgColor(m.curve.color)}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${xmlAttr(svgColor(m.fill.color))}" stroke="none" />`;
+    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${xmlAttr(svgColor(m.curve.color))}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     for (const l of m.lines) {
       const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
-      s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+      s += `<path d="${d}" fill="none" stroke="${xmlAttr(svgColor(l.color))}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     }
   }
   // a marker's writing, over the shapes and under the drawing
   for (const k of layout.inks ?? []) if (!k.over) s += svgInk(k);
   // behind the drawing: the rings' fills and the parts' highlights
   for (const u of layout.under ?? []) {
-    s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
+    s += `<path d="${toSvgPath(u)}" fill="${xmlAttr(svgColor(u.color))}" stroke="none" />`;
   }
   // filled join caps
   for (const c of layout.fills || []) {
     s += `<circle cx="${c.c.x}" cy="${-c.c
-      .y}" r="${c.r}" fill="${svgColor(c.color, stroke)}" stroke="none" />`;
+      .y}" r="${c.r}" fill="${xmlAttr(svgColor(c.color, stroke))}" stroke="none" />`;
   }
   for (const p of layout.polys) {
-    s += `<path d="${toSvgPath(p)}" fill="${svgColor(p.color, stroke)}" stroke="none" />`;
+    s += `<path d="${toSvgPath(p)}" fill="${xmlAttr(svgColor(p.color, stroke))}" stroke="none" />`;
   }
   for (const c of layout.curves ?? []) {
     if (c.points.length < 4) continue;
@@ -4619,7 +4628,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       const [p, q, r] = [c.points[i], c.points[i + 1], c.points[i + 2]];
       d += `C${p.x} ${-p.y} ${q.x} ${-q.y} ${r.x} ${-r.y}`;
     }
-    s += `<path d="${d}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${c.width}"` +
+    s += `<path d="${d}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${c.width}"` +
       ` stroke-linecap="${c.round ? "round" : "butt"}" stroke-linejoin="round" />`;
   }
   for (const c of layout.circles || []) {
@@ -4627,13 +4636,13 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       c.squash != null && c.squash < 1
         ? `<ellipse cx="${c.c.x}" cy="${-c.c.y}" rx="${c.r}" ry="${c.r * c.squash}"` +
           ` transform="rotate(${(-(c.angle ?? 0) * 180) / Math.PI} ${c.c.x} ${-c.c.y})"` +
-          ` fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`
-        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`;
+          ` fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`
+        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`;
   }
   for (const l of layout.lines) {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${svgColor(l.color, stroke)}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="butt"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
@@ -4641,7 +4650,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   }
   const img = layout.solidsImage;
   s += img
-    ? `<image href="${img.href}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
+    ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
       ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
     : svgSolids(layout.solids ?? []);
   // (with the molecules an image, their measurements' lines and fans are in
@@ -4653,12 +4662,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   return s;
 }
 
-/** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
 /** A stroke written by hand, as SVG: its outline, filled - see-through where it is a marker's. */
 function svgInk(k: InkMark): string {
-  return `<path d="${toSvgPath(k)}" fill="${svgColor(k.color)}"${k.opacity != null && k.opacity < 1 ? ` fill-opacity="${k.opacity}"` : ""} stroke="none" />`;
+  return `<path d="${toSvgPath(k)}" fill="${xmlAttr(svgColor(k.color))}"${k.opacity != null && k.opacity < 1 ? ` fill-opacity="${k.opacity}"` : ""} stroke="none" />`;
 }
 
+/** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
 function svgColor(css: string | undefined, otherwise = "black"): string {
   return css && /^#[0-9a-f]{6}$/i.test(css) ? css : otherwise;
 }
@@ -4667,17 +4676,17 @@ function svgColor(css: string | undefined, otherwise = "black"): string {
 function svgMeasure(m: MeasureMark, family: string | undefined, lines = true): string {
   let s = "";
   for (const [a, b, c] of lines ? m.fan : []) {
-    s += `<path d="M${a.x} ${-a.y}L${b.x} ${-b.y}L${c.x} ${-c.y}Z" fill="${m.color}" fill-opacity="${m.fanOpacity}" stroke="none" />`;
+    s += `<path d="M${a.x} ${-a.y}L${b.x} ${-b.y}L${c.x} ${-c.y}Z" fill="${xmlAttr(m.color)}" fill-opacity="${m.fanOpacity}" stroke="none" />`;
   }
   for (const [a, b] of lines ? m.lines : []) {
-    s += `<line x1="${a.x}" y1="${-a.y}" x2="${b.x}" y2="${-b.y}" stroke="${m.color}" stroke-width="${m.width}" stroke-linecap="butt" />`;
+    s += `<line x1="${a.x}" y1="${-a.y}" x2="${b.x}" y2="${-b.y}" stroke="${xmlAttr(m.color)}" stroke-width="${m.width}" stroke-linecap="butt" />`;
   }
   const box = measureLabelBox(m, family);
   s +=
     `<rect x="${box.min.x}" y="${-box.max.y}" width="${box.max.x - box.min.x}" height="${box.max.y - box.min.y}"` +
     ` rx="${(box.max.y - box.min.y) / 2}" fill="white" fill-opacity="0.9" stroke="none" />` +
-    `<text x="${box.baseline.x}" y="${-box.baseline.y}" font-family="${fontStack(family ?? "Arial")}"` +
-    ` font-size="${m.size}" fill="${m.color}" stroke="none" text-anchor="start">${escapeXml(m.text)}</text>`;
+    `<text x="${box.baseline.x}" y="${-box.baseline.y}" font-family="${xmlAttr(fontStack(family ?? "Arial"))}"` +
+    ` font-size="${m.size}" fill="${xmlAttr(m.color)}" stroke="none" text-anchor="start">${escapeXml(m.text)}</text>`;
   return s;
 }
 
@@ -4719,7 +4728,7 @@ function svgSolids(marks: SolidMark[]): string {
     defs +=
       `<radialGradient id="${id}" cx="0.5" cy="0.5" r="0.5" fx="${fx}" fy="${fy}">` +
       `<stop offset="0" stop-color="${shadeOf(m.color, BALL_SHADE.light)}"/>` +
-      `<stop offset="0.6" stop-color="${m.color}"/>` +
+      `<stop offset="0.6" stop-color="${xmlAttr(m.color)}"/>` +
       `<stop offset="1" stop-color="${shadeOf(m.color, -BALL_SHADE.dark)}"/>` +
       `</radialGradient>`;
   }
@@ -4728,7 +4737,7 @@ function svgSolids(marks: SolidMark[]): string {
     s +=
       m.kind === "ball"
         ? `<circle cx="${m.c.x}" cy="${-m.c.y}" r="${m.r}" fill="url(#${ids.get(m.color)})" stroke="none" />`
-        : `<line x1="${m.a.x}" y1="${-m.a.y}" x2="${m.b.x}" y2="${-m.b.y}" stroke="${m.color}" stroke-width="${m.width}" stroke-linecap="butt" />`;
+        : `<line x1="${m.a.x}" y1="${-m.a.y}" x2="${m.b.x}" y2="${-m.b.y}" stroke="${xmlAttr(m.color)}" stroke-width="${m.width}" stroke-linecap="butt" />`;
   }
   return s;
 }

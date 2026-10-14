@@ -10,7 +10,7 @@
 import type { EditorStore } from "../store";
 import type { PdfBox, PdfItem, PictureFlight, PictureToAdd } from "../store/types";
 import { boxPicture } from "../../../../lib/pdf/reader";
-import { POINT } from "../../../../lib/pdf/layout";
+import { pointOf } from "../../../../lib/pdf/layout";
 import { holdPicture } from "../../../../lib/picture/held";
 import { withDpi } from "../../../../lib/binary/png";
 import { copying, writeClipboard } from "../../../../lib/clipboard";
@@ -57,11 +57,12 @@ export function copyBox(pdf: Pick<PdfItem, "sha256">, box: PdfBox): Promise<void
  * a picture on the page where it was held, as one step; anywhere else, or
  * on its own PDF, back.
  */
-export async function dragBox(store: EditorStore, pdf: Pick<PdfItem, "id" | "name" | "sha256">, box: PdfBox, at: { x: number; y: number }, screen: OnScreen): Promise<void> {
+export async function dragBox(store: EditorStore, pdf: Pick<PdfItem, "id" | "name" | "sha256" | "point">, box: PdfBox, at: { x: number; y: number }, screen: OnScreen): Promise<void> {
   const corner = screen.at(box.page, box.box[0], box.box[1]);
   const flight: PictureFlight = {
     box,
-    from: { left: corner.x, top: corner.y, k: screen.pxPerPoint / POINT },
+    point: pointOf(pdf),
+    from: { left: corner.x, top: corner.y, k: screen.pxPerPoint / pointOf(pdf) },
     grab: { x: at.x, y: at.y },
     start: performance.now(),
     now: { x: at.x, y: at.y, over: overCanvasAt(store, at.x, at.y), shown: null, end: null },
@@ -76,8 +77,8 @@ export async function dragBox(store: EditorStore, pdf: Pick<PdfItem, "id" | "nam
     .catch(() => undefined);
   const picture = boxToAdd(pdf, box).catch(() => null);
   // (where in it the pointer holds it, in units of the page from its middle: the picture's middle goes where the pointer leaves it, less that)
-  const w = (box.box[2] - box.box[0]) * POINT;
-  const h = (box.box[3] - box.box[1]) * POINT;
+  const w = (box.box[2] - box.box[0]) * pointOf(pdf);
+  const h = (box.box[3] - box.box[1]) * pointOf(pdf);
   const held = { x: (at.x - corner.x) / flight.from.k - w / 2, y: h / 2 - (at.y - corner.y) / flight.from.k };
   const onMove = (e: PointerEvent) => {
     flight.now.x = e.clientX;

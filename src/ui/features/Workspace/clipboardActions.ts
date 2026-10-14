@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { clipboardFiles, copying, openWorkspacesFrom, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { isWorkspaceFile } from "./utils/workspace";
 import { styleOf } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { labelPtOf } from "./restyle";
 import { chemMolblock } from "../../../lib/roles/molblock";
 import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
@@ -115,7 +115,9 @@ export function useClipboardActions(
   const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
     if (!taken || busy()) return false;
-    const p = taken.part;
+    const state0 = store.getState();
+    // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
+    const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt, labelPt: labelPtOf(state0.docStyle) };
     try {
       const state = store.getState();
       // (the structure is copied, pictures or no: the drawing's and the
@@ -129,7 +131,7 @@ export function useClipboardActions(
         : await pictureItems(
             p,
             state,
-            styleOf(state.docStyle ?? useAppSettings.getState().drawingStyle),
+            styleOf(state.docStyle),
           ).catch((e: unknown) => {
             console.warn("the structure is copied without its pictures", e);
             return [];
@@ -181,7 +183,7 @@ export function useClipboardActions(
           return;
         }
         // (a SMILES laid out in the drawing's style, as Clean-up lays it out)
-        const found = await structureOnClipboard(styleOf(store.getState().docStyle ?? useAppSettings.getState().drawingStyle));
+        const found = await structureOnClipboard(styleOf(store.getState().docStyle));
         if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();
@@ -227,7 +229,7 @@ export function useClipboardActions(
         if (!p) return;
         try {
           const png = await picturePng(p);
-          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p] }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
+          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt, labelPt: labelPtOf(store.getState().docStyle) }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
         } catch (e) {
           onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
         }

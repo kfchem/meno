@@ -92,6 +92,14 @@ describe("a workspace file", () => {
     expect(doc.history().undoDepth).toBe(0);
   });
 
+  it("takes from a file's own style a typeface's name, never markup in its place", () => {
+    const { st } = canvas();
+    const json = JSON.parse(workspaceText(st()));
+    // (a file made elsewhere, its typeface closing the attribute a picture writes it into)
+    json.style = { preset: "meno", changes: { bondColor: "#204080", fontFamily: `x"><meta http-equiv="refresh" content="0">` } };
+    expect(readWorkspace(JSON.stringify(json))!.style).toEqual({ preset: "meno", changes: { bondColor: "#204080" } });
+  });
+
   it("opened over a canvas is one step, undone as one", () => {
     const { st } = canvas();
     const text = workspaceText(st());
@@ -245,6 +253,142 @@ describe("a workspace that does not open", () => {
     expect(workspaceProblem("{")).toBe("it is not a workspace Meno reads");
     expect(workspaceProblem(JSON.stringify({ format: "something else", version: 1 }))).toBe("it is not a workspace Meno reads");
   });
+});
+
+// Null, a number, a string or a list where a workspace's lists hold objects
+// threw as it was read - and so as it was asked about, before a tab was made
+// for it. Each such thing is put in every list of a workspace that holds one
+// of everything, first and last, and in place of every value it has.
+describe("a workspace with what is no entry in its lists", () => {
+  const STRAYS: unknown[] = [null, 0, 7, "", "C", [], [1, 2], true];
+  const job = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const ink = { pen: "pen", strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] };
+  const molecule = { ...water3d, made: { how: [{ label: "Optimised", text: "MMFF94" }] } };
+  // (a cyclopropane, its ring filled, an electron-pushing arrow on it - and one of everything else a workspace holds)
+  const WHOLE = {
+    format: "meno-workspace",
+    version: 1,
+    atoms: [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5, y: 0, el: "C" },
+      { id: 3, x: 0.75, y: 1.3, el: "C" },
+    ],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 1 },
+      { id: 13, a: 3, b: 1, order: 1 },
+    ],
+    pushes: [{ id: 1, from: { atom: 1 }, to: { bond: 12 } }],
+    ringFills: { "1-2-3": "#ff0000" },
+    arrows: [{ id: 1, x: 6, y: 0, angle: 0, length: 2, corners: [{ along: 0.5, across: 0.2 }] }],
+    pluses: [{ id: 1, x: -3, y: 0 }],
+    captions: [{ id: 1, x: 6, y: 1, text: "heat", marks: [{ from: 0, to: 2, bold: true }] }],
+    molecules3d: [{ ...molecule, at: { x: 10, y: 0 } }],
+    sets: [{ id: 1, x0: 0, y0: -9, x1: 4, y1: -5, aside: [{ compound: 0, number: 1 }] }],
+    steps: [
+      {
+        id: 2,
+        kind: "optimise",
+        x: 8,
+        y: -7,
+        ran: { at: 1, ok: true, said: "done", input: "in", jobs: [job] },
+        runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], aside: [{ compound: 0, number: 1 }], holds: "molecules" } }],
+        running: { at: 2, input: "in", jobs: [{ id: job, entries: [0], reads: ["run.out"] }] },
+      },
+    ],
+    wires: [{ id: 3, from: { set: 1 }, to: 2 }],
+    texts: [{ name: "notes.txt", sha256: "c".repeat(64), at: { x: 0, y: 9 } }],
+    pdfs: [{ name: "paper.pdf", sha256: "b".repeat(64), pages: [[612, 792]], x: 20, y: 0, placed: [{ page: 0, x: 30, y: 0 }], inks: [{ ...ink, page: 0 }] }],
+    pictures: [{ id: 1, name: "a.png", sha256: "a".repeat(64), media: "image/png", px: [10, 10], x: 0, y: 20, w: 1, h: 1 }],
+    slides: [{ id: 1, x: 0, y: 30, w: 16, h: 9 }],
+    shapes: [{ id: 1, kind: "rect", x0: 0, y0: 40, x1: 1, y1: 41 }],
+    inks: [{ ...ink, id: 1 }],
+  };
+
+  type Path = (string | number)[];
+  type Node = Record<string | number, unknown>;
+  /** Every place in `v` - each list's entries and each object's fields - by its path. */
+  const placesIn = (v: unknown, path: Path = []): Path[] =>
+    v && typeof v === "object"
+      ? Object.entries(v).flatMap(([k, x]) => {
+          const here = [...path, Array.isArray(v) ? Number(k) : k];
+          return [here, ...placesIn(x, here)];
+        })
+      : [];
+  const valueAt = (path: Path) => path.reduce((o: unknown, k) => (o as Node)[k], WHOLE);
+  /** The workspace's JSON with `edit` done to a copy of it at `path`: given what holds the place there, and its key. */
+  const edited = (path: Path, edit: (holder: Node, key: string | number) => void) => {
+    // (copied through its JSON, as a file holds it: no list in two places)
+    const copy = JSON.parse(JSON.stringify(WHOLE));
+    edit(path.slice(0, -1).reduce((o: unknown, k) => (o as Node)[k], copy) as Node, path[path.length - 1]);
+    return JSON.stringify(copy);
+  };
+  const lists = placesIn(WHOLE).filter((p) => Array.isArray(valueAt(p)));
+  const isEntry = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
+
+  it("reads, holding one of everything", () => {
+    const ws = readWorkspace(JSON.stringify(WHOLE))!;
+    const d = ws.drawn;
+    expect([d.atoms, d.bonds, d.pushes, d.arrows, d.arrows![0].corners, d.pluses, d.captions, d.captions![0].marks].map((l) => l?.length)).toEqual([3, 3, 1, 1, 1, 1, 1, 1]);
+    expect([d.molecules3d, d.molecules3d![0].measures, d.molecules3d![0].made?.how, d.pictures, d.slides, d.shapes, d.inks].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(d.ringFills).toEqual({ "1-2-3": "#ff0000" });
+    const { sets, steps, wires } = ws.workflow!;
+    expect([sets, sets[0].aside, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].running?.jobs].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect([ws.texts, ws.pdfs, ws.pdfs[0].placed, ws.pdfs[0].inks].map((l) => l?.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  it("reads round it in any list of entries, first or last: it is left out, and what reads is read as before", () => {
+    const whole = readWorkspace(JSON.stringify(WHOLE));
+    const entries = lists.filter((p) => (valueAt(p) as unknown[]).every(isEntry));
+    expect(entries.length).toBeGreaterThan(30);
+    for (const path of entries) {
+      const key = path[path.length - 1];
+      // (as an atom or a bond that does not read: the workspace, or the molecule it is of, does not)
+      const expected =
+        key !== "atoms" && key !== "bonds"
+          ? whole
+          : path.length === 1
+            ? null
+            : readWorkspace(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
+      for (const stray of STRAYS)
+        for (const first of [true, false]) {
+          const text = edited(path, (holder, k) => {
+            const list = holder[k] as unknown[];
+            if (first) list.unshift(stray);
+            else list.push(stray);
+          });
+          expect(readWorkspace(text), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+          expect(workspaceProblem(text)).toBe(expected ? null : "it is not a workspace Meno reads");
+        }
+    }
+  }, 60_000);
+
+  it("does not open with null for its atom, and says so before a tab is made for it", () => {
+    const text = '{"format":"meno-workspace","version":1,"atoms":[null],"bonds":[]}';
+    expect(readWorkspace(text)).toBeNull();
+    expect(workspaceProblem(text)).toBe("it is not a workspace Meno reads");
+  });
+
+  it("is never thrown at by it, anywhere: first or last in a list of any kind, or in place of any value", () => {
+    const threw: string[] = [];
+    const tryReading = (text: string, said: string) => {
+      // (asked as a file is before a tab is made for it - which reads it first)
+      try {
+        workspaceProblem(text);
+      } catch (e) {
+        threw.push(`${said}: ${(e as Error).message}`);
+      }
+    };
+    for (const stray of STRAYS) {
+      for (const path of lists) {
+        tryReading(edited(path, (holder, k) => (holder[k] as unknown[]).unshift(stray)), `${path.join(".")} holding ${JSON.stringify(stray)} first`);
+        tryReading(edited(path, (holder, k) => (holder[k] as unknown[]).push(stray)), `${path.join(".")} holding ${JSON.stringify(stray)} last`);
+      }
+      for (const path of placesIn(WHOLE)) tryReading(edited(path, (holder, k) => (holder[k] = stray)), `${path.join(".")} = ${JSON.stringify(stray)}`);
+      tryReading(JSON.stringify(stray), `the whole = ${JSON.stringify(stray)}`);
+    }
+    expect(threw).toEqual([]);
+  }, 60_000);
 });
 
 describe("a ring's circle, saved", () => {

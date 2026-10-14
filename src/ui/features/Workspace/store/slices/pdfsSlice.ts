@@ -1,4 +1,5 @@
 import { gestureStep } from "../../../../../lib/doc/document";
+import { pointOfStyle } from "../../restyle";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -77,7 +78,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       ),
     addPdfs: (pdfs: Parameters<EditorState["addPdfs"]>[0], at: { x: number; y: number }) => {
       // (clear of the PDFs already there, not over them)
-      const row = ops.clearOfPdfs(ops.pdfsInRow(pdfs, at), doc.getState().pdfs ?? []);
+      const row = ops.clearOfPdfs(ops.pdfsInRow(pdfs, at, pointOfStyle(doc.getState().style)), doc.getState().pdfs ?? []);
       if (row.length) doc.edit(row.length > 1 ? "add PDFs" : "add PDF", (d) => row.reduce(ops.addPdf, d));
     },
     movePdf: (id: number, x: number, y: number, gesture?: string) =>
