@@ -159,7 +159,7 @@ describe("a copied picture's resolution", () => {
     const w = (widthPt * 96) / 72;
     const h = (heightPt * 96) / 72;
     const dpi = pictureDpiFor(w, h, 600);
-    // (Chromium - WebView2 on Windows - and Firefox draw no canvas wider or taller than 32 767 px)
+    // (no side of its canvas over 32 767 px)
     expect(Math.ceil((w * dpi) / 96)).toBeLessThanOrEqual(32767);
   }, 30_000);
 });

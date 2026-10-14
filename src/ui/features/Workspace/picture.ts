@@ -45,7 +45,7 @@ const MOST_PIXELS = 48_000_000;
 /** The resolution copied pictures are made at, as Settings says. */
 const pictureDpi = () => useAppSettings.getState().pictures.dpi;
 
-/** The longest side of a canvas a picture is drawn on, in pixels: what WebView2 (Chromium) and Firefox draw at most. */
+/** The longest side of a canvas a picture is drawn on, in pixels. */
 const MOST_SIDE = 32_767;
 
 /**
