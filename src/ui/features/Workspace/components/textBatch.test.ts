@@ -47,6 +47,25 @@ describe("texts drawn as a batch", () => {
     expect(b.root.children.every((c) => c.renderOrder === 30)).toBe(true);
   });
 
+  it("lets a chunk left empty go: a page set again whole, again and again, keeps as many chunks as it needs", () => {
+    const b = new TextBatch("font.ttf", 30);
+    const n = BATCH_MOST + 10;
+    for (let round = 0; round < 3; round++) {
+      // (every label set again, as a change of style or colour sets them: all let go, then all drawn anew)
+      b.keepOnly(new Set());
+      expect(b.root.children).toHaveLength(0);
+      for (let i = 0; i < n; i++) b.set(`k${i}`, {}, [run("N")], 1);
+      expect(b.sizes()).toEqual({ labels: n, members: n, chunks: 2 });
+      expect(b.root.children).toHaveLength(2);
+    }
+    // (a label let go and another set fills the room it left)
+    b.drop("k0");
+    b.set("k-new", {}, [run("O")], 1);
+    expect(b.root.children).toHaveLength(2);
+    b.dispose();
+    expect(b.root.children).toHaveLength(0);
+  });
+
   it("unpacks a member's colour as the page's colours are: the line of troika's shader it replaces is there to be replaced", () => {
     // (./textBatch's PageBatch replaces the line that unpacks a member's colour with Meno's, which reads it as
     // sRGB - were the line to change with troika, Meno's would no longer be put in: this says so first)

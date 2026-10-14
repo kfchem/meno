@@ -116,8 +116,11 @@ export class TextBatch {
       h.chunk.removeText(t);
       t.dispose();
     }
-    this.count.set(h.chunk, (this.count.get(h.chunk) ?? 0) - h.members.length);
+    const left = (this.count.get(h.chunk) ?? 0) - h.members.length;
+    this.count.set(h.chunk, left);
     this.held.delete(key);
+    // (a chunk left empty goes: a page set again whole would otherwise leave one more behind each time)
+    if (left <= 0) this.dropChunk(h.chunk);
   }
 
   /** Every label but those in `keep` no longer drawn. */
@@ -158,18 +161,22 @@ export class TextBatch {
 
   dispose(): void {
     for (const key of [...this.held.keys()]) this.drop(key);
-    for (const c of this.chunks) {
-      c.removeEventListener("synccomplete" as never, this.heard);
-      this.root.remove(c);
-      c.dispose();
-    }
-    this.chunks.length = 0;
+    for (const c of [...this.chunks]) this.dropChunk(c);
   }
 
-  /** A chunk with room for `n` more members: the last, or a new one. */
+  /** A chunk no longer drawn: out of the page, and let go. */
+  private dropChunk(c: BatchedText): void {
+    c.removeEventListener("synccomplete" as never, this.heard);
+    this.root.remove(c);
+    c.dispose();
+    this.chunks.splice(this.chunks.indexOf(c), 1);
+    this.count.delete(c);
+  }
+
+  /** A chunk with room for `n` more members: the first that has it, or a new one. */
   private chunkFor(n: number): BatchedText {
-    const last = this.chunks[this.chunks.length - 1];
-    if (last && (this.count.get(last) ?? 0) + n <= BATCH_MOST) return last;
+    const room = this.chunks.find((c) => (this.count.get(c) ?? 0) + n <= BATCH_MOST);
+    if (room) return room;
     const c = new PageBatch();
     c.addEventListener("synccomplete" as never, this.heard);
     c.renderOrder = this.renderOrder;
