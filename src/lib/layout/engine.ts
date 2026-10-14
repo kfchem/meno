@@ -111,9 +111,14 @@ export function layout2D(input: LayoutInput): Layout2D {
     // system flat: which reads better goes by the whole drawing, not by the
     // system's own measure - scopolamine's epoxide flat onto its tropane
     // crowded the ester hung from it.
-    const wholes = wholeToo.filter((i) => !redo.flat.has(i));
+    // (and so too a system drawn flat because its cage in perspective, the
+    // rest flat onto it, did not read as given: its whole solid is another
+    // drawing, read back on its own - aconitine's second cage laid flat
+    // onto its first turned a junction, its whole solid did not)
+    const wholes = [...wholeToo.filter((i) => !redo.flat.has(i)), ...[...redo.flat].filter((i) => redo.alone.has(i))];
     if (wholes.length) {
-      const whole = laidOut(input, { ...redo, solid: new Set([...redo.solid, ...wholes]), whole: new Set(wholes) });
+      const flat = new Set([...redo.flat].filter((i) => !wholes.includes(i)));
+      const whole = laidOut(input, { ...redo, flat, solid: new Set([...redo.solid, ...wholes]), whole: new Set(wholes) });
       const score = drawingScore(input, mol, whole.out);
       if (!misread(input, whole.mol, whole.out).size && score < bestScore - 1e-9) [best, bestScore] = [whole.out, score];
     }
@@ -792,18 +797,27 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
   const core = cageCore(mol, sys);
   if (!core) return whole && (asSolid || wholeFaults < flatFaults - 1) ? { ...whole, solid: true } : { ...flat, solidToo: !!whole };
   const view = projectCage(mol, core);
+  // (the rings fused flat at the depth of the cage's atoms they are fused
+  // to: each atom one bond further out than the last at the mean depth of
+  // its neighbours set before it - all of a round from the round before,
+  // so that the order of the atoms never decides)
+  const depthOnto = (given: Map<number, number>) => {
+    const depth = new Map(given);
+    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++) {
+      const round = sys.atoms.flatMap((a) => {
+        if (depth.has(a)) return [];
+        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
+        return near.length ? [[a, near.reduce((s, d) => s + d, 0) / near.length] as const] : [];
+      });
+      if (!round.length) break;
+      for (const [a, d] of round) depth.set(a, d);
+    }
+    return depth;
+  };
   const onto = (v: Omit<CageView, "other">) => {
     const pos = new Map(v.pos);
     extendRingSystem(mol, sys, pos);
-    // (the rings fused flat at the depth of the cage's atoms they are fused to)
-    const depth = new Map(v.depth);
-    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++)
-      for (const a of sys.atoms) {
-        if (depth.has(a)) continue;
-        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
-        if (near.length) depth.set(a, near.reduce((s, d) => s + d, 0) / near.length);
-      }
-    return { pos, depth, hints: v.hints, cost: v.cost };
+    return { pos, depth: depthOnto(v.depth), hints: v.hints, cost: v.cost };
   };
   // (and a ring fused onto the cage on a bond that the solid has as a chair
   // or a boat, with no double bond in it, drawn as one by the template -
@@ -842,13 +856,7 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
     }
     if (!any) return null;
     extendRingSystem(mol, sys, pos);
-    const depth = new Map(v.depth);
-    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++)
-      for (const a of sys.atoms) {
-        if (depth.has(a)) continue;
-        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
-        if (near.length) depth.set(a, near.reduce((s, d) => s + d, 0) / near.length);
-      }
+    const depth = depthOnto(v.depth);
     // (a group axial to such a chair upright, up or down as the solid has it)
     const hints = new Map(v.hints);
     for (const { ring: r, up } of chairs)

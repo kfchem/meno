@@ -292,7 +292,14 @@ they hang from.
   solid is tried too, and kept where the whole drawing reads better - not
   where a ring fused onto the cage is drawn as the chair the solid has it
   as: scopolamine's epoxide flat onto its tropane crowded the ester hung
-  from it, its whole solid did not. A ring with a double bond in it
+  from it, its whole solid did not. So too where the system was drawn
+  flat because its cage in perspective, the rest flat onto it, did not
+  read as given: the whole solid is another drawing, read back on its own
+  (aconitine's second cage laid flat onto its first turned a junction;
+  its whole solid, ring A in front, did not). The rings laid flat onto a
+  cage take their depth from the cage's atoms they are fused to, each
+  round of atoms one bond further out from the round before, so that the
+  order of the atoms never decides it. A ring with a double bond in it
   is drawn flat: where the cage alone can be drawn in perspective with
   such rings flat onto it, the whole is not drawn as a solid (gelsemine's
   oxindole, its benzene ring otherwise foreshortened). A solid is taken
