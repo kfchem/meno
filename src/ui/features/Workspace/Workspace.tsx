@@ -1,4 +1,6 @@
+import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
@@ -111,7 +113,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
-import { setSaver } from "../../../lib/doc/savers";
+import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { CANVAS_DPR } from "./constants";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
@@ -167,6 +169,8 @@ import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
 import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { viewPanning } from "./components/viewGoal";
+import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -823,12 +827,15 @@ function WorkspaceContent({
   }, [active, store, runCleanUp, hoveredPart, structureAt, deletePart, chargeAtom, menu, clip, pasteTarget, requestFit, openFind, copyWords, presentHere]);
   // The same, from the mouse alone: a menu at the pointer on a right-click.
   const closeMenu = useCallback(() => setMenu(null), []);
-  // (nor a card a menu opened - a colour's, a size's - left over it)
+  // (nor a card a menu opened - a colour's, a size's - left over it, nor a
+  // question asked over the canvas: a procedure's name, a ligand's bond orders)
   useEffect(() => {
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
     setSizeCard(null);
+    setNaming(null);
+    setGivingOrders(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -847,14 +854,35 @@ function WorkspaceContent({
   const askUndo = useEditor((s) => s.askUndo);
   useEffect(() => {
     if (!active) return;
+    // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
+    const escape = () => {
+      if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    };
     const onKey = (e: KeyboardEvent) => {
+      // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)
       const intent = undoIntent(e);
-      if (!intent || !store.getState().holdUndo(intent)) return;
+      if (!intent) return;
+      const s = store.getState();
+      // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
+      // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
+      const words = wordsUnderWay(s);
+      if (words || gestureUnderWay(s) || viewPanning()) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!words) escape();
+        return;
+      }
+      if (!s.holdUndo(intent)) return;
       e.preventDefault();
       e.stopPropagation();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    // (a gesture lost - the window left, the pointer taken: let go, its flags with it)
+    const lost = letLostGesturesGo(window, () => store.getState(), escape);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      lost();
+    };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
   // a molecule in 3D right-clicked: what its menu does to it
@@ -1290,6 +1318,12 @@ function WorkspaceContent({
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
+  useEffect(() => {
+    if (!talking) return;
+    setRendering(null);
+    setExporting(null);
+  }, [talking]);
 
   // Export: what is selected - its structures, arrows and words, its
   // molecules in 3D - as Meno writes it, or a plugin added that writes
@@ -1888,6 +1922,14 @@ function WorkspaceContent({
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
+          // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
+          bondKind={(() => {
+            if (menu.kind !== "bond" || menu.id == null) return undefined;
+            const st = store.getState();
+            const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
+            const bond = st.model.bonds.find((b) => b.id === menu.id);
+            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
+          })()}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
@@ -2194,6 +2236,9 @@ function TabFiles({
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
+  const store = useEditorStore();
+  // (where its workspace is saved, read as a file is opened: the same file opened again brings this tab forward)
+  useEffect(() => (ownTab ? setSavedPathOf(tabId, () => store.getState().savedPath) : undefined), [ownTab, tabId, store]);
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -2274,6 +2319,11 @@ export default function Workspace({
     "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string } } | null
   >(null);
   const styleOpen = panel === "style";
+  // (a talk begun shuts the panel: the talk has the whole of the window, not what is left beside it)
+  const talking = usePresentingWindow((s) => s.on);
+  useEffect(() => {
+    if (talking) setPanel(null);
+  }, [talking]);
   return (
     <EditorProvider tabId={tabId} document={document}>
       <div className="w-full h-full flex">

@@ -28,6 +28,22 @@ describe("a file's text, as its bytes are written", () => {
     expect(textOf(new TextEncoder().encode(`CCO ${ACETONE}`))).toBe(`CCO ${ACETONE}`);
   });
 
+  it("reads UTF-16 with no byte order mark that is mostly Japanese - a fifth of its high bytes NUL - either way round", () => {
+    const le = (s: string) => Uint8Array.from([...s].flatMap((c) => [c.charCodeAt(0) & 0xff, c.charCodeAt(0) >> 8]));
+    const be = (s: string) => Uint8Array.from([...s].flatMap((c) => [c.charCodeAt(0) >> 8, c.charCodeAt(0) & 0xff]));
+    // (a line of katakana and a line's end, over and over: about one unit in five NUL-high)
+    const text = `${ACETONE}\r\n${METHANOL}\r\n`.repeat(20);
+    const units = le(text);
+    let nul = 0;
+    for (let i = 1; i < units.length; i += 2) if (units[i] === 0) nul++;
+    expect(nul / (units.length / 2)).toBeLessThan(0.4);
+    expect(textOf(units)).toBe(text);
+    expect(textOf(be(text))).toBe(text);
+    // (Shift_JIS has no NUL, and bytes are not letters a text holds: neither read as UTF-16)
+    expect(textOf(bytes(131, 65, 131, 90, 131, 103, 131, 147))).toBe(ACETONE);
+    expect(textOf(bytes(0, 1, 0, 2, 0xff, 0x00, 0x13, 0x00, 0x07, 0x00)).startsWith("\u0000")).toBe(true);
+  });
+
   it("reads bytes that are not UTF-8 as Shift_JIS, as Windows in Japanese writes text", () => {
     expect(textOf(bytes(131, 65, 131, 90, 131, 103, 131, 147))).toBe(ACETONE);
     expect(textOf(bytes(131, 129, 131, 94, 131, 109, 129, 91, 131, 139, 13, 10))).toBe(`${METHANOL}\r\n`);

@@ -583,16 +583,32 @@ Each result says what it belongs to, and Meno puts it there:
   negative), a length in ångströms, a dipole in debye, a number, a text -
   and Meno writes it, the same way whichever plugin gave it. Any other
   gives its unit, and is written with it.
+- **A charged molecule's dipole is taken about its centre of mass**
+  (2026-10-14). An ion's dipole depends on the point it is taken about -
+  H3O+ moved 6 Å from the origin its program took it about reads 28.9 D
+  there, 2.1 D about itself - and programs take it about different points
+  (the origin of the coordinates, the centre of nuclear charge, the centre
+  of mass). So the plugin takes it again about the centre of mass of the
+  geometry it is of, and calls it *Dipole moment about the centre of
+  mass* wherever it is shown. A neutral molecule's is the program's own.
 - **A list's row can point at atoms, a frame or a motion.** Pointed at,
   its atoms are marked; chosen, its frame is shown, or the molecule moves
   in it. Vibrations are a list whose rows move the molecule - no arrows
-  and no spectrum. These are what Meno can do with a row, and more come
+  and no spectrum. Its columns are those the output holds: the reduced
+  masses, IR intensities and Raman activities where it gives them, and
+  no empty column where it does not (2026-10-14). These are what Meno can do with a row, and more come
   as Meno learns them: a surface, for an orbital's row.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the
   run went, "Run ended with an error" - is said however long the line
-  (2026-10-13).
+  (2026-10-13). So is what geometries that are no optimisation's are -
+  "Relaxed scan · 5 points" (a rigid one "Scan"), "Reaction path · 21 points" (a Gaussian
+  reaction path's points in the order of its coordinate, as its summary
+  lists them) - none of them called optimised; and "Excited state ·
+  energies not read" where an excited state was optimised, whose energies
+  at each geometry are not the ground state's that the output also gives
+  (2026-10-14).
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".

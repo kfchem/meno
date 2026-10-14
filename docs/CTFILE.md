@@ -18,7 +18,8 @@ written back as RXN files.
 ## Reading
 
 Everything below is read and kept (`CtMolecule`, carried on a file's
-molecule as `Molecule.ct`):
+molecule as `Molecule.ct`) - of an SD file, each record's molfile and its
+title, its first line; the record's data items are not kept:
 
 - **Atoms**: coordinates; symbol, or a reserved type (R#, A, Q, X, M, R, *,
   LP) or an atom list (L, `[N,O]`, `NOT [S,Se]`); mass (V2000's mass
@@ -39,7 +40,13 @@ molecule as `Molecule.ct`):
   and formulations (COM, MIX, FOR), generic and data Sgroups - with their
   atoms, crossing and containment bonds, labels, subtypes, connectivity,
   brackets and their style, expansion state, attachment points, parents,
-  and a data Sgroup's field, data and display.
+  and a data Sgroup's field - its name, type, units or format (V2000's
+  M  SDT; V3000's FIELDINFO, which the format calls program-specific field
+  information and gives as <type><units/format>: *CTfile Formats*, chapter
+  2, the V3000 Sgroup fields - read so where it is F, N or T then its units,
+  else kept as it was written) and query - its data and its display
+  (M  SDD, FIELDDISP), all kept on its atoms in the editor to be written
+  back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
   highlighting, a file's own.
@@ -48,7 +55,40 @@ molecule as `Molecule.ct`):
   REAGENT blocks), their molecules in the file's order: reactants,
   products, then reagents.
 
-Not read: V3000 3D blocks and templates (SCSR), RDfiles and XDfiles.
+Not read: an SD file's data items - the `> <name>` fields after each
+record's M  END, among them the energy Meno writes for each frame of a
+molecule in 3D saved with all its frames (`readSDfile`); V3000 3D blocks
+and templates (SCSR), RDfiles and XDfiles.
+
+A connection table that ends before the atoms and bonds its counts line
+gives - an atom's line missing or with no place, a bond's line that joins
+no atoms, V3000's END CTAB missing - is cut short or damaged, and the file
+is not read but refused, saying so: read anyway, its missing atoms stood
+at the origin as carbons. So is an Rxnfile with fewer molecules than its
+counts line gives (`CtMolecule.cut`, `CtReaction.cut`).
+
+So is one whose atoms or bonds do not read as what they are, saying what
+(`CtMolecule.damaged`): an atom with no symbol (read anyway, a carbon); a
+place, or another of an atom's or a bond's numbers, that is not a number
+as the format writes one - with an E exponent or not, but no other text:
+"1.19D+01" is not read as 1.19, nor "0N" as 0; a bond to an atom its
+table has not (read anyway, in an SD file, a bond to the next record's
+atom, or to the one before's for an atom 0). And so is one with a V2000
+mass difference on an element whose mass in the periodic table Meno does
+not hold - Tc, Pr to Lu, Hf to Ir, and from Po on - unless an M  ISO line
+gives that atom's mass itself, which is read for any element
+(`CtMolecule.unread`).
+
+Of an SD file's several records, one refused so is left out, and the
+others are opened; a notice names each left out, by its number and why,
+as a trajectory's frames left out are said (the maintainer, 2026-10-14:
+`recordsLeftOut`, `lib/io/structures.ts`). A file whose only record is
+refused, or none of whose records reads, is refused, naming the first.
+
+An Sgroup that names an atom or a bond its table has not - in V2000's
+SAL, SPA, SBL or SAP, or V3000's lists - keeps those it has, and a V2000
+property line that counts more entries than it holds is read for those it
+holds whole: the file is read (before, either failed as it was read).
 
 ## Drawing
 
@@ -142,6 +182,13 @@ What is put together from them is read by rule, not listed:
 - an atom and two or more halogens on it, its H after it - CBr3, CHF2,
   CF2Cl, SF5, SiCl3, BCl2 - where the bond out, the H and the halogens
   make a valence the atom has (PCl3 and SiCl4 are molecules);
+- an N or a P written with one group it carries, its other bonds the
+  drawing's - an N in a ring with its protecting group: NBoc, NMOM, NTs,
+  NMe, NBz - the group's name of two letters
+  or more; drawn on a bond's left (BocN, MOMN) it is read turned round, as
+  any label is. Every bond to such a label is the atom's;
+- an O or an S with an alkali metal on it - ONa, OK, SLi - an ion pair, as
+  NaOMe's sodium is bound;
 - a substituted aryl group (`src/lib/chem/substitutedAryl.ts`): positions,
   a multiplying prefix (di, tri, tetra, penta) and a substituent before Ph,
   Bz (benzoyl) or Bn - 2,6-diMeBz, 4-MeO-3-NO2Ph, p-ClBn - or before the
@@ -310,7 +357,12 @@ by the same engine: a wedge on a bond out of its rings, its narrow end at
 the centre, an H drawn where it has no other way, or - in a cage - the
 perspective drawing itself; Clean-up reads the configuration back from it
 as the one given (tested). A cage's, shown by its perspective with no
-wedge, is not yet written to a MOL file, as with any cage Clean-up draws.
+wedge, is written to a MOL or SD file - and copied, and sent to RDKit -
+with a wedge that says it, as any cage Clean-up draws is: on a bond out of
+the centre, or - where it has none to take one - on an explicit H atom
+added to the file for it, after every atom there is
+(`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
+not written, so the cage opens again flat, its configuration wedged.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H
 than its valence leaves - Bu3SnH's tin, a metal's hydride, LiAlH4's
@@ -375,8 +427,12 @@ as a structure above the arrow is the file's reagent.
 
 Every Sgroup goes back with its type, atoms, bonds out, label or
 multiplier, subtype, connectivity, bracket style, parent, component number,
-expansion state and data, and its brackets where Meno draws them; a haptic
-bond with its endpoints (V3000).
+expansion state and data, and its brackets where Meno draws them; a data
+Sgroup with its field's name, type and units or format (M  SDT; FIELDINFO
+as <type><units/format>, or another program's FIELDINFO as it was), query
+and display (M  SDD, FIELDDISP) as its file gave them -
+the display as the file wrote it, its place not followed; a haptic bond
+with its endpoints (V3000).
 
 Mapping numbers, inversion and retention, exact change and reacting
 centres go in their fields. Enhanced stereo is written as V3000 collections
@@ -420,9 +476,13 @@ none, and is left out.
 MOL files are written V2000 where that can say everything, and V3000
 where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past
 999 or a coordinate past xxxxx.xxxx (V2000's fields are fixed in width:
-the format's *automatic V3000 output*, long fields); a coordination or
-hydrogen bond (V2000's types stop at 8), and whether a coordination bond
-is shown plainly (DISP=COORD). A query bond is written with its query
+the format's *automatic V3000 output*, long fields); an atom list past the
+16 symbols an M  ALS line holds; a data Sgroup's field name past the 30
+columns of its M  SDT line, its units past their 20, or its data past the
+200 characters V2000's SCD and SED lines hold (V3000 holds its type too,
+in FIELDINFO); a coordination or hydrogen bond (V2000's types stop at 8), and
+whether a coordination bond is shown plainly (DISP=COORD). A title is cut
+at 80 characters, never within one. A query bond is written with its query
 type, and a double bond of either configuration as V2000's stereo 3,
 V3000's CFG=2. What RDKit is asked about takes a query bond as the bond it
 is drawn as.
@@ -435,4 +495,7 @@ coordinate or a symbol wider than V2000's field, or a coordination or
 hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
 atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
 such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
-quote, a double quote, "=", "(" or ")" are written in double quotes.
+quote, a double quote, "=", "(" or ")" are written in double quotes, and
+so are those that end in "-", which at a line's end continues it: a
+counter-anion's label beside a complex, Nu- or OTf-, read back as "NuEND"
+when written bare.

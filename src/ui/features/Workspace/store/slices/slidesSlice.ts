@@ -10,6 +10,7 @@ import { pdfBounds, pointOf } from "../../../../../lib/pdf/layout";
 import { flowIn } from "../../workflow/parts";
 import { boxOf } from "../../presenting/slides";
 import { strokesBounds } from "../../../../../lib/chem/ink";
+import { hiddenInStacks } from "../../utils/stacks";
 import { middleOf } from "../../../../../lib/chem/shapes";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -54,7 +55,9 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       ];
       const within = (p: { x: number; y: number }) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
       st.clearSel();
-      st.selectMolecules3d(molecules3dIn(st.molecules3d, "box", box));
+      // (a stack's molecules out of sight not among them, as a box and Select All have it)
+      const outOfSight = hiddenInStacks(st.molecules3d, st.stacksShown);
+      st.selectMolecules3d(molecules3dIn(st.molecules3d.filter((m) => !outOfSight.has(m.id)), "box", box));
       st.selectPictures(molecules3dIn(st.pictures.map((p) => ({ id: p.id, at: p })), "box", box));
       st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name, pointOf(t)) }] : [])), "box", box));
       // (and writing by hand on it, each piece by its middle, as a box takes it)

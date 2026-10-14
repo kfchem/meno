@@ -473,7 +473,10 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
     changed = true;
     const { display: _display, stereoAt: _at, ...rest } = b;
-    return [{ ...rest, stereo: p.stereo, stereoOrient: p.stereoOrient, ...(display ? { display } : {}) }];
+    // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
+    const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
+    const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
+    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
   let nextId = doc.nextId;
@@ -1878,12 +1881,18 @@ function patched(s: Shape, patch: ShapePatch): Shape {
 
 const sameShape = (a: Shape, b: Shape) => JSON.stringify(a) === JSON.stringify(b);
 
-/** `doc` with the shape `id` changed as `patch` says - never to a box with no room - its words where it now is. */
+/**
+ * `doc` with the shape `id` changed as `patch` says - never to a box with no
+ * room, nor to a line with no length (as `addShape` and the reader refuse
+ * one: a line's end dragged onto its other end was kept, then lost on
+ * saving) - its words where it now is.
+ */
 export function updateShape(doc: WorkspaceDocument, id: number, patch: ShapePatch): WorkspaceDocument {
   const was = doc.shapes?.find((x) => x.id === id);
   if (!was) return doc;
   const next = patched(was, patch);
-  if (!finite(next.x0, next.y0, next.x1, next.y1) || (isBox(next.kind) && !(next.x1 > next.x0 && next.y1 > next.y0)) || sameShape(was, next)) return doc;
+  const roomless = isBox(next.kind) ? !(next.x1 > next.x0 && next.y1 > next.y0) : next.x0 === next.x1 && next.y0 === next.y1;
+  if (!finite(next.x0, next.y0, next.x1, next.y1) || roomless || sameShape(was, next)) return doc;
   return withShapeWords({ ...doc, shapes: doc.shapes!.map((x) => (x.id === id ? next : x)) }, new Set([id]));
 }
 

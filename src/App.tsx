@@ -25,7 +25,7 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { saverOf } from "./lib/doc/savers";
+import { saverOf, tabHolding } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
@@ -364,7 +364,13 @@ export default function App() {
     // front only where nothing else opened is to go there - and that one
     // brought back in front, to take the rest)
     const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
-    for (const w of workspaces) openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    // (one already open in a tab - by where it is saved - brought forward, not opened again: two tabs on one file overwrite each other)
+    const tabs = () => Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path }));
+    for (const w of workspaces) {
+      const held = tabHolding(w.path, tabs());
+      if (held) act({ type: "SELECT_TAB", id: held });
+      else openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    }
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
     if (pdfs.length) openPdfs(pdfs, front);

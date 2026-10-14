@@ -709,6 +709,39 @@ export function runsWidth(runs: readonly TextRun[], fontSize: number, set: Label
   return w;
 }
 
+/**
+ * How far in each place of `runs` set side by side lies - before each of
+ * their letters, by its place in their text, and at their end: what
+ * `runsWidth` measures of them cut there, in one pass, not a measure for
+ * each place.
+ */
+export function runsPlaces(runs: readonly TextRun[], fontSize: number, set: LabelSet = ACS_LABEL_SET): number[] {
+  const font = labelFont(set.fontFamily);
+  const out = [0];
+  // (the runs before, added up as runsWidth adds them, and the one cut, as runWidth adds its letters: the same sums, so the same numbers)
+  let done = 0;
+  for (const r of runs) {
+    const size = fontSize * (r.sub || r.sup || r.mark ? set.subscriptSize : 1);
+    let w = 0;
+    if (r.mark) {
+      w = size * MARK_WIDTH;
+      for (let k = 1; k < r.text.length; k++) out.push(done + w);
+    } else {
+      let k = 0;
+      for (const ch of r.text) {
+        if (k > 0) out.push(done + w);
+        // (cut between the halves of a letter of two code units: the first half, as runWidth reads it)
+        if (ch.length === 2) out.push(done + (w + font.advance(ch[0]) * size));
+        w += font.advance(ch) * size;
+        k += ch.length;
+      }
+    }
+    done += w;
+    if (r.text.length) out.push(done);
+  }
+  return out;
+}
+
 export function computeBounds(atoms: Atom[]): { min: Vec2; max: Vec2 } {
   let minX = Infinity,
     minY = Infinity,
@@ -2578,6 +2611,9 @@ export function labelTrims(
   };
 }
 
+/** The least share of a bond seen between the labels at its ends, however much of it they would take. */
+export const BOND_SEEN_LEAST = 1 / 3;
+
 export function buildBondPrimitives(
   atoms: Atom[],
   bond: Bond,
@@ -2621,6 +2657,15 @@ export function buildBondPrimitives(
   const room = trims.room;
   if (trimA + trimB > room) {
     const k = room / (trimA + trimB);
+    trimA *= k;
+    trimB *= k;
+  }
+  // And whatever the labels, a bond is seen for a third of its length at
+  // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  const seen = L0 * BOND_SEEN_LEAST;
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;
   }
@@ -4450,8 +4495,31 @@ function expandBounds(
   };
 }
 
+/**
+ * What XML 1.0 does not allow in a document, at all (Characters, [2]): the
+ * control characters but tab, line feed and carriage return; U+FFFE and
+ * U+FFFF; and a surrogate with no other half. Written as they came - a
+ * NUL from a damaged file, an escape from a PDF's words - the SVG was no
+ * well-formed XML, and a picture of it was dropped from the clipboard.
+ */
+function xmlChars(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // (a surrogate with its other half: a character beyond the first plane, kept)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+      out += text[i] + text[++i];
+      continue;
+    }
+    const banned = (c < 0x20 && c !== 0x9 && c !== 0xa && c !== 0xd) || c === 0xfffe || c === 0xffff || (c >= 0xd800 && c <= 0xdfff);
+    out += banned ? "\uFFFD" : text[i];
+  }
+  return out;
+}
+
 function escapeXml(text: string): string {
-  return String(text)
+  // (what XML cannot hold, the replacement character in its place)
+  return xmlChars(String(text))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

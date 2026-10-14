@@ -1,4 +1,5 @@
 import type { EditorModel } from "../../../../utils/importers";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
 import { currentStyle3D } from "../style3d";
@@ -10,6 +11,7 @@ import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
+import { useNotices } from "../../../notices";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -77,8 +79,41 @@ export async function processFileContent(
     throw new Error(`${name} is a ${kind.name}: it is opened as one, not read as a structure's file.`);
   }
   // a structure's file: what it holds, as its reader gives it, checked -
-  // its several records drawn flat a stack of drawings
-  return stackedRead(await readStructureFile(filename, content, kind));
+  // its several records drawn flat a stack of drawings - and the records
+  // of it left out, said in the corner
+  const read = await readStructureFile(filename, content, kind);
+  if (read.recordsLeftOut?.length) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: recordsLeftOutSaid(name, read.recordsLeftOut) });
+  return stackedRead(read);
+}
+
+/** What is said of the records of file `name` left out as it was read (lib/io/structures `recordsLeftOut`): each by its number and why - five at most, then how many more. */
+export function recordsLeftOutSaid(name: string, left: readonly { record: number; why: string }[]): string {
+  const said = left.slice(0, 5).map((r) => `Record ${r.record} ${r.why}.`);
+  const more = left.length > 5 ? [`${left.length - 5} more ${left.length - 5 === 1 ? "is" : "are"} left out as well.`] : [];
+  return [...said, ...more, `The other records of ${name} opened.`].join(" ");
+}
+
+/**
+ * Where a file a tab was opened with goes once it is read, and how: on a
+ * canvas nothing is drawn on, in the document's place, its middle at the
+ * origin; on one drawn on as it was read - a paste, a bond, while a large
+ * file took its seconds - added to the right of what is there, its middle
+ * level with that, rather than in its place, which took what was drawn
+ * away, saying nothing.
+ */
+export function openedPlace(
+  blank: boolean,
+  there: readonly { x: number; y: number }[],
+  read: Pick<ProcessedFileResult, "centroid"> & { model: { atoms: readonly { x: number; y: number }[] } },
+): { add: boolean; dx: number; dy: number } {
+  const atoms = read.model.atoms;
+  if (blank) return { add: false, dx: -read.centroid.x, dy: -read.centroid.y };
+  if (!there.length || !atoms.length) return { add: true, dx: -read.centroid.x, dy: -read.centroid.y };
+  return {
+    add: true,
+    dx: Math.max(...there.map((a) => a.x)) + 2 * NOMINAL_BOND_LENGTH - Math.min(...atoms.map((a) => a.x)),
+    dy: there.reduce((t, a) => t + a.y, 0) / there.length - read.centroid.y,
+  };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
-import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { clipboardFiles, copying, openWorkspacesFrom, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { isWorkspaceFile } from "./utils/workspace";
 import { styleOf } from "../../../lib/chem/style";
 import { labelPtOf } from "./restyle";
 import { chemMolblock } from "../../../lib/roles/molblock";
@@ -10,7 +11,7 @@ import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
 import type { Carried3D, Drawn } from "./store/types";
-import { centredAt, clipItems, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
+import { centredAt, clipItems, drawsPicture, hasFlow, partToCopy, pastePlace, recordText, type PastesAt } from "./utils/copyPaste";
 import { pictureOnClipboard, picturePng, pictureToAdd } from "./utils/pictures";
 import { bondsAmong } from "./utils/selection";
 import { carriedOf } from "./utils/workspace";
@@ -125,7 +126,7 @@ export function useClipboardActions(
       const alone = !p.atoms.length && !p.molecules3d?.length && !hasFlow(p) && !p.pdfs?.length && !p.sheets?.length && p.pictures?.length === 1 ? p.pictures[0] : null;
       const pictures = alone
         ? await picturePng(alone).then((png) => (png ? [{ flavor: "png" as const, bytes: png }] : [])).catch(() => [])
-        : !p.atoms.length && !p.molecules3d?.length
+        : !drawsPicture(p)
         ? []
         : await pictureItems(
             p,
@@ -168,8 +169,14 @@ export function useClipboardActions(
       if (busy()) return;
       const { place: at, pastes: now } = pastePlace(pastes.current, asked);
       try {
-        // (files copied in the Finder or Explorer: as they would come dropped there)
-        const files = openFiles ? await clipboardFiles() : [];
+        // (files copied in the Finder or Explorer: as they would come dropped
+        // there - but a workspace file opened by its path, to be saved back to it)
+        const byPath = openFiles ? await openWorkspacesFrom("clipboard") : 0;
+        const files = (openFiles ? await clipboardFiles() : []).filter((f) => !byPath || !isWorkspaceFile(f.name));
+        if (byPath && !files.length) {
+          pastes.current = now;
+          return;
+        }
         if (files.length && openFiles) {
           pastes.current = now;
           await openFiles(files, at);

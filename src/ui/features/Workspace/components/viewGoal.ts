@@ -87,3 +87,14 @@ export function setPressMovedUnder(camera: THREE.Camera, moved: boolean): void {
 export function pressMovedUnder(camera: THREE.Camera): boolean {
   return pressesMovedUnder.has(camera);
 }
+
+/**
+ * Whether the view is being panned by a press dragged over empty space:
+ * undo then does nothing - there is nothing of the pan to undo - as for any
+ * gesture under way (store/gesture), and never takes the step before it.
+ */
+let panning = false;
+export const setViewPanning = (on: boolean): void => {
+  panning = on;
+};
+export const viewPanning = (): boolean => panning;

@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { centredAt, clipItems, readRecord, recordText } from "../utils/copyPaste";
-import { drawingLayout, drawingSvg } from "../fileActions";
+import { drawingLayout, drawingSvg, drawnOf } from "../fileActions";
+import { schemeOf } from "../document";
+import { carriedOf } from "../utils/workspace";
 import { layoutEmf } from "../../../../lib/chem/emf";
 import { ACS_1996 } from "../../../../lib/chem/style";
 import type { InkLook } from "./types";
@@ -163,5 +165,59 @@ describe("writing by hand on the page", () => {
     state().writeTalkStroke(PEN, stroke(0));
     state().endPresenting();
     expect(state().talkInk).toEqual([]);
+  });
+});
+
+describe("writing by hand, step by step", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("rubbed out in one rub is one undo step, however long the hand pauses in it", () => {
+    const { doc, state } = editor();
+    const k = state().writeStroke(PEN, stroke(0))!;
+    state().writeStroke(PEN, stroke(3), k);
+    state().writeStroke(PEN, stroke(6), k);
+    const depth = doc.history().undoDepth;
+    state().eraseStrokes([{ id: k, index: 0 }], "rub");
+    vi.advanceTimersByTime(800);
+    state().eraseStrokes([{ id: k, index: 0 }], "rub");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+  });
+
+  it("coloured with words selected with it is one step - a swatch, or the system's chooser dragged through colours", () => {
+    const { doc, state } = editor();
+    const w = state().addCaption("NaH", 5, 5);
+    const k = state().writeStroke(PEN, stroke(0))!;
+    let depth = doc.history().undoDepth;
+    state().colourTogether({ words: [w], inks: [k] }, "#ff0000");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    expect(state().inks[0].color).toBe("#ff0000");
+    expect(state().captions[0].marks?.[0]).toMatchObject({ color: "#ff0000" });
+    depth = doc.history().undoDepth;
+    for (const c of ["#ee0000", "#dd0000", "#cc0000"]) {
+      state().colourTogether({ words: [w], inks: [k] }, c, "card-1:color");
+      vi.advanceTimersByTime(800);
+    }
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    expect(state().inks[0].color).toBe("#cc0000");
+  });
+});
+
+describe("writing by hand in an Office document's object", () => {
+  it("comes back when the object is opened again - and the slides a copy's object holds", () => {
+    const { state } = editor();
+    state().addAtom(0, 0, "C");
+    state().writeStroke(PEN, stroke(5));
+    // (what the link to the document sends it, read back as the object is opened again)
+    const r = readRecord(recordText({ ...drawnOf(state()), molecules3d: carriedOf(state()) }))!;
+    const other = editor();
+    other.state().openModel(r, schemeOf(r));
+    expect(other.state().model.atoms).toHaveLength(1);
+    expect(other.state().inks).toHaveLength(1);
+    // (a copy's record - pasted into a document as an object - holds slides too)
+    const copied = readRecord(JSON.stringify({ format: "meno-structure", version: 1, atoms: [{ id: 1, x: 0, y: 0, el: "C" }], bonds: [], slides: [{ id: 4, x: 0, y: 0, w: 32, h: 18 }] }))!;
+    const third = editor();
+    third.state().openModel(copied, schemeOf(copied));
+    expect(third.state().slides).toMatchObject([{ id: 1, w: 32, h: 18 }]);
   });
 });

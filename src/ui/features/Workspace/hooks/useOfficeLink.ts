@@ -81,6 +81,11 @@ export function linkToOffice(
       s.model === prev.model &&
       s.arrows === prev.arrows &&
       s.pluses === prev.pluses &&
+      s.captions === prev.captions &&
+      s.shapes === prev.shapes &&
+      s.inks === prev.inks &&
+      s.pushes === prev.pushes &&
+      s.ringFills === prev.ringFills &&
       s.molecules3d === prev.molecules3d &&
       s.turns3d === prev.turns3d &&
       s.frames3d === prev.frames3d &&
