@@ -105,7 +105,7 @@ export function useStructureEvents(
     // An output's jobs stand side by side)
     const stacked = openedAsStack(solids);
     const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
-    const room = stacked ? [Math.max(...reaches)] : reaches;
+    const room = stacked ? [greatest(reaches)] : reaches;
     // (beside a drawing the same file brings, to its right)
     const drawn = result.model?.atoms ?? [];
     const row = drawn.length

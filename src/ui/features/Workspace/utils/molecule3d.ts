@@ -699,7 +699,7 @@ export function turnedTogether(ms: readonly Turning3D[], q: THREE.Quaternion): (
     const turn = q.clone().multiply(m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion()).normalize();
     return { id: m.id, at: { x: r.x, y: r.y, z: r.z }, turn: turnOf(turn) };
   });
-  const lift = -Math.min(...placed.map((p, i) => p.at.z - ms[i].standing));
+  const lift = -least(placed.map((p, i) => p.at.z - ms[i].standing));
   return placed.map((p) => ({ ...p, at: { ...p.at, z: p.at.z + lift } }));
 }
 
