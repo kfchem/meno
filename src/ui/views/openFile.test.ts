@@ -14,6 +14,13 @@ M  END
 `;
 
 describe("openedAs", () => {
+  it("holds a file of no kind as a text, as a drop does - but not bytes, which are read as a drop reads them", () => {
+    expect(textsOf(openedAs("notes.txt", "line one\nline two\n"))).toEqual([{ name: "notes.txt", text: "line one\nline two\n" }]);
+    const bytes = openedAs("blob.bin", "\u0000\u0001\u0002garbage");
+    expect(textsOf(bytes)).toBeUndefined();
+    expect(bytes.data).toMatchObject({ filename: "blob.bin" });
+  });
+
   it("opens a chemical file on a workspace, named for the file", () => {
     expect(openedAs("ethanol.mol", MOL)).toEqual({
       kind: "workspace",

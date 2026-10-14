@@ -37,6 +37,15 @@ export type Flavor = "meno" | "mol" | "rxn" | "text" | "gvml" | "emf" | "png" | 
 
 export type ClipItem = { flavor: Flavor; text?: string; bytes?: Uint8Array };
 
+/** Whether this is Windows. */
+const IS_WINDOWS = typeof navigator !== "undefined" && /Win/.test(navigator.platform || navigator.userAgent);
+
+/** On Windows, a text's lines ended "\r\n", as Notepad and Office write it and as Meno's own copies give it (clipboard.rs `crlf`); elsewhere, as it is. */
+export function forTheClipboard(text: string, windows = IS_WINDOWS): string {
+  return windows ? text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n") : text;
+}
+
+
 type Wire = { flavor: Flavor; text?: string; base64?: string };
 
 let own: ClipItem[] = [];

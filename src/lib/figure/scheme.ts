@@ -829,7 +829,8 @@ export function readScheme(
   const long = shapes.strokes.filter((s) => len(s) > 0.5 * byLines);
   const meetsLong = (s: Stroke) => long.some((t) => t !== s && [t.a, t.b].some((q) => dist(q, s.a) < 0.12 * len(s) || dist(q, s.b) < 0.12 * len(s)));
   const joints = long.filter((s) => Math.abs(len(s) - byLines) <= byLines / 4 && meetsLong(s)).length;
-  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || joints >= 3) ? byLines : byLetters || byLines || 14.4;
+  // (but never more than six times as long as its letters are set: lines that long meeting - a page's rules, a graph's frame - are no bonds)
+  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || (joints >= 3 && byLines <= 6 * byLetters)) ? byLines : byLetters || byLines || 14.4;
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;

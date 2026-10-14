@@ -5,6 +5,7 @@ import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../.
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
 import { readDrawn } from "./copyPaste";
+import { structureFileText } from "../fileActions";
 import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
 import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
@@ -470,5 +471,32 @@ describe("a figure whose labels are outlines", () => {
   it("takes outlines of straight lines alone - an N - for letters to read, and a filled wedge for none", () => {
     expect(lettersAsShapes({ paths: outlinedWord("N", [100, 100]), letters: [], pictures: [] })).toBe(true);
     expect(lettersAsShapes({ paths: [stroke([0, 0], [14.4, 0]), wedge([0, 0], [10, 10])], letters: [], pictures: [] })).toBe(false);
+  });
+});
+
+describe("a ring atom's label with a group on it", () => {
+  it("reads BocN in a ring as the N with its Boc, both ring bonds to the N: N-Boc-pyrrolidine whole", () => {
+    // (a pyrrolidine, its N at the left, labelled BocN as drawn on its bonds' left)
+    const c: P = [120, 200];
+    const r = L / (2 * Math.sin(Math.PI / 5));
+    const v = Array.from({ length: 5 }, (_, k): P => [c[0] + r * Math.cos(Math.PI + (2 * Math.PI * k) / 5), c[1] + r * Math.sin(Math.PI + (2 * Math.PI * k) / 5)]);
+    const towards = (p: P, q: P, d: number): P => {
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      return [p[0] + ((q[0] - p[0]) * d) / l, p[1] + ((q[1] - p[1]) * d) / l];
+    };
+    const f: FigureDrawn = {
+      paths: [stroke(towards(v[0], v[1], 5), v[1], v[2], v[3], v[4], towards(v[0], v[4], 5))],
+      letters: letters("BocN", [v[0][0] - 3 * 6.8, v[0][1]]),
+      pictures: [],
+    };
+    const m = structureFrom(f, SHA, 0) as Model;
+    expect(m.atoms.find((a) => a.el === "NBoc")).toBeTruthy();
+    // (written out: the N with its two ring bonds and the Boc's C5O2 - C9 N O2 in all)
+    const mol = structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol").split("\n");
+    const n = Number(mol[3].slice(0, 3));
+    const els = mol.slice(4, 4 + n).map((l) => l.slice(31, 34).trim()).sort().join("");
+    expect(els).toBe("CCCCCCCCCNOO");
+    const toN = mol.slice(4 + n).filter((l) => /^\s*\d+\s+\d+\s+\d/.test(l)).filter((l) => [Number(l.slice(0, 3)), Number(l.slice(3, 6))].some((i) => mol[3 + i]?.slice(31, 34).trim() === "N"));
+    expect(toN).toHaveLength(3);
   });
 });

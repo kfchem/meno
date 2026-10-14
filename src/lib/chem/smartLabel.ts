@@ -51,10 +51,11 @@ import { ELEMENTS } from "./elements";
  * charge, an abbreviation, a group put together by rule, an Rgroup - or a
  * whole molecule - a reagent, a ligand, a complex - (`whole`); a whole
  * molecule read by a reagent's name (`named`: TBME, HOAc - not H2Zn or
- * PdCl2, formulas read by rule); the element, where it is one; null, where
- * it reads as nothing.
+ * PdCl2, formulas read by rule), or a ligand by its name (TFP); an atom
+ * carrying a group (`carrying`: NBoc, ONa); the element, where it is one;
+ * null, where it reads as nothing.
  */
-export type Reading = { whole: boolean; element?: string; named?: boolean } | null;
+export type Reading = { whole: boolean; element?: string; named?: boolean; carrying?: boolean } | null;
 export type Reads = (label: string) => Reading;
 
 /** The first element after uranium: none from there on is read from letters typed small. */
@@ -436,8 +437,13 @@ function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
     madeOf.set(shown, made);
     return made;
   };
+  // (a reagent's or a ligand's name the letters typed spell, whatever their case: before an atom carrying a group - nbs is NBS, not NBs;
+  // tfp TFP, not TfP - the maintainer's ruling that their names win, 2026-10-13)
+  let spelt: boolean | null = null;
+  const spells = () => (spelt ??= labelUnitNames().some((u) => u.toLowerCase() === typed.toLowerCase() && !!reads(u)?.named));
   const consider = (shown: string, kept: string, r: Reading, w: Writing) => {
     if (!r || !allowed(typed, kept, r)) return;
+    if (r.carrying && spells()) return;
     const made = madeFor(shown);
     // (Z, for Cbz, as part of a structure: no complex of a metal and Z)
     if (made.letters > 0 && r.whole) return;

@@ -1,9 +1,11 @@
 import * as THREE from "three";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useThree } from "@react-three/fiber";
 import { ALPHA, COLORS } from "../../../theme/colors";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { SHADE } from "./selectionShade";
-import { HELD_FADE_MS, type Held } from "./held";
+import { HELD_FADE_MS, heldShows, type Held } from "./held";
+import { usePartFrame } from "./partFrames";
 
 // language=GLSL
 const VERTEX = /* glsl */ `
@@ -78,4 +80,25 @@ export function HeldLight({ b, at, held, now, z = 0.45 }: { b: { x0: number; x1:
       <planeGeometry args={[1, 1]} />
     </mesh>
   );
+}
+
+/**
+ * A press held on one of many parts (Shapes2D, Inks2D, Captions2D): its
+ * light, drawn again at each frame while it shows - by the layer's one frame
+ * callback, the part itself not drawn again - and `gone` told once it no
+ * longer shows, the part then at rest.
+ */
+export function HeldGlow({ held, b, at, z, gone }: { held: Held; b: { x0: number; x1: number; y0: number; y1: number }; at: { x: number; y: number }; z?: number; gone: () => void }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const [now, setNow] = useState(() => performance.now());
+  usePartFrame(() => {
+    const t = performance.now();
+    if (!heldShows(held, t)) {
+      gone();
+      return;
+    }
+    setNow(t);
+    invalidate();
+  });
+  return heldShows(held, now) ? <HeldLight b={b} at={at} held={held} now={now} z={z} /> : null;
 }

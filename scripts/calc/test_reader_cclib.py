@@ -221,6 +221,51 @@ class Vibrations(unittest.TestCase):
         self.assertEqual([row["cells"][0] for row in rows], list(range(1, 55)))
 
 
+class Paths(unittest.TestCase):
+    """Geometries that are no optimisation's path - a relaxed scan's, a reaction path's - and an excited state's."""
+
+    def test_a_scan_or_a_reaction_path_is_no_optimisation_and_says_what_it_is(self):
+        scan = types.SimpleNamespace(scanenergies=[-76.1, -76.0, -75.9])
+        self.assertEqual(worker.path_kind(scan, ""), "scan")
+        route = " -------------------------------\n #p HF/6-31G(d) IRC=(CalcFC,MaxPoints=10) Geom=Check Guess=Read\n -------------------------------\n"
+        self.assertEqual(worker.path_kind(types.SimpleNamespace(), route), "irc")
+        # (an optimisation, or "IRC" only in a title or a comment: neither)
+        self.assertIsNone(worker.path_kind(types.SimpleNamespace(), " #p B3LYP/6-31G(d) Opt\n\n IRC-like title\n"))
+        said = worker.path_said(scan, "", 28)
+        self.assertEqual([(r["label"], r["value"], r["rank"]) for r in said], [("Relaxed scan", "3 points", 0)])
+        # (a rigid scan - a geometry a point - is no relaxed one)
+        self.assertEqual(worker.path_said(scan, "", 3)[0]["label"], "Scan")
+        # (an IRC on the route's wrapped line)
+        wrapped = " #p B3LYP/6-311+G(2d,p) EmpiricalDispersion=GD3BJ SCRF=(SMD,Solvent=Water)\n IRC=(CalcFC,MaxPoints=20)\n ----------------------------\n"
+        self.assertEqual(worker.path_kind(types.SimpleNamespace(), wrapped), "irc")
+        self.assertEqual(worker.path_said(types.SimpleNamespace(), route, 21)[0]["value"], "21 points")
+        # (and a file's job is said so, not "Optimisation")
+        self.assertEqual(worker.job_kind({"optimised": None, "results": said}), "Relaxed scan")
+
+    def test_orca_s_reaction_path_after_its_transition_state_said_not_read(self):
+        said = worker.path_said(types.SimpleNamespace(), "...\n                       IRC PATH SUMMARY              \n...", 7)
+        self.assertEqual([(r["label"], r["value"]) for r in said], [("Reaction path", "not read")])
+
+    def test_an_excited_state_s_geometries_have_their_energies_unread(self):
+        excited = types.SimpleNamespace(etenergies=[30000.0, 40000.0])
+        self.assertTrue(worker.excited_path(excited, 5))
+        # (excited states at one geometry: its energy the ground state's, as given)
+        self.assertFalse(worker.excited_path(excited, 1))
+        self.assertFalse(worker.excited_path(types.SimpleNamespace(), 5))
+        said = worker.path_said(excited, "", 5)
+        self.assertEqual([(r["label"], r["value"]) for r in said], [("Excited state", "energies not read")])
+
+    def test_a_reaction_path_s_points_in_the_order_of_its_coordinate(self):
+        # (as Gaussian gives them: the transition state, then the first path's points, then the second's)
+        points = "".join(f" Point Number: {k:3d}          Path Number:   {p}\n" for p, n in ((1, 3), (2, 2)) for k in range(n + 1))
+        self.assertEqual(worker.irc_order(points, 6), [5, 4, 0, 1, 2, 3])
+        # (as many geometries as points, or the order left as it is)
+        self.assertIsNone(worker.irc_order(points, 7))
+        # (one direction only: as it is)
+        one = "".join(f" Point Number: {k:3d}          Path Number:   1\n" for k in range(4))
+        self.assertIsNone(worker.irc_order(one, 4))
+
+
 class Dipole(unittest.TestCase):
     """A charged molecule's dipole depends on the point it is taken about: taken again about the centre of mass."""
 

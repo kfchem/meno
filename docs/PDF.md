@@ -810,7 +810,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
   - The grammar is made into a parser as it is first wanted (`lib/text/grammars.ts`): tried in a worker within 5 s, then made on the page and kept. A grammar asking for code (`@external`, `@context`) is refused, so a plugin gives Meno data alone, and no text can hold the page up: Lezer's tokenizer reads each letter once and its parser never goes back.
   - A *value*, as a grammar's tones say, Meno colours as a number where it is one (a sign, a point, an exponent, a Fortran D's) and leaves as it is where it is not: 6-31G, def2-SVP.
   - Which grammar: a kind a plugin brings is told by what the text holds, as a file is (lib/io/kinds); a kind it writes, or knows besides, by the text's name and, where it says, what one of its first lines begins with (an ORCA input's `!`, `%` or `*`). Of two plugins that bring a kind, the first's grammar. A plugin not added colours nothing.
-- **What does not read as its grammar says is marked**: underlined in Meno's attention colour - a part read wrongly, or where something is missing, a letter's width. Not on the line the caret is on while the text is typed in, until it is left. An output's grammar takes any text, so nothing in an output is marked.
+- **What does not read as its grammar says is marked**: underlined in Meno's attention colour (#cd4560, `COLORS.attention`) - a part read wrongly, or where something is missing, a letter's width. Not on the line the caret is on while the text is typed in, until it is left. An output's grammar takes any text, so nothing in an output is marked.
 - **The grammars the plugins Meno carries bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
   - **ORCA's input** (the ORCA interface, `.inp`): simple keyword lines, blocks with their options and values and sub-blocks with their own `end`, `%maxcore` with its one value, the geometry and its atoms, a geometry read from a file, comments (ORCA's manual, *General Structure of the Input File* and *Input of Coordinates*). Marked: a block left open - at the next block or geometry - and a geometry with no closing `*`.
   - **Gaussian's input** (the Gaussian interface, `.gjf`, `.com`): Link 0 commands, the route section and its lines on, the title, the charge and multiplicity, the atoms (Cartesian or a Z-matrix), further sections, `--Link1--`, comments (Gaussian's *Input* page). Marked: no route section, and a molecule with no charge and multiplicity line.
@@ -818,7 +818,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
   - **ORCA's output** (cclib, PySCF): *FINAL SINGLE POINT ENERGY*, *SCF CONVERGED AFTER*, the geometry's convergence, the free energy and enthalpy, the frequencies; *THE OPTIMIZATION HAS CONVERGED* and *ORCA TERMINATED NORMALLY* as a run gone well - as ORCA 6.1 printed them; *ORCA finished by error termination* as an error (ORCA's manual, *Troubleshooting*).
   - **xTB's output** (cclib): *TOTAL ENERGY*, *TOTAL FREE ENERGY*, *HOMO-LUMO GAP*, *SCC energy*; *GEOMETRY OPTIMIZATION CONVERGED* and *normal termination of xtb*; *[WARNING]* lines as warnings; *ERROR STOP* and *Error termination* as errors - as xTB 6.7 printed them.
   - Rules of dashes, equals signs, stars or dots in outputs are grey.
-- **Drawn in the column**: each line's parts in their tones, the line drawn whole in each colour and kept to its parts, so that its letters lie just where they would in one. What the IME is composing is drawn uncoloured, as it is. The colours are from the palette the column's look is taken from: red keywords, dark blue strings, blue numbers, options and keys, grey comments, purple definitions and what an output's reader looks for, green XML names and atoms, a deeper green for a run gone well, amber warnings, and Meno's own attention for errors.
+- **Drawn in the column**: each line's parts in their tones, the line drawn whole in each colour and kept to its parts, so that its letters lie just where they would in one. What the IME is composing is drawn uncoloured, as it is. The colours are from the palette the column's look is taken from: red keywords, dark blue strings, blue numbers, options and keys, grey comments, purple definitions and what an output's reader looks for, green XML names and atoms, a deeper green for a run gone well, amber warnings, and Meno's attention colour (#cd4560) for errors.
 
 **Words on the page typed in place** (`components/CaptionTyping2D.tsx`, `utils/wordsEditor.ts`), in place of the field shown over them in HTML:
 - **Drawn by Meno as they will be kept**: set as the drawing sets its labels (a formula's counts low, a prefix in italics), in its typeface at its size, broken into lines as wide as they were made where they were given a width, laid as they will lie - so that what is written is what is kept, its lines broken as they will be. Lit round while they are written.
@@ -839,7 +839,7 @@ Decided while building it, for the maintainer to confirm:
 - **A plugin's grammar, not patterns** (the maintainer, 2026-10-10, from a sketch of an ORCA input and a Gaussian output coloured part by part): a grammar is data that Meno makes into tables, which no text can hold up as a pattern could, and it reads an input's structure - so that what does not read as it should can be marked (the maintainer: very good). Regular expressions are still taken from no plugin (docs/FILE-IO.md, *Marks are data*).
 - **Errors and landmarks only where a program's own words say them.** Gaussian's error line was found neither in Gaussian's own pages nor in what it printed here, so Gaussian's output marks its warnings, not its errors, for now.
 - **The colours**, from the palette the column's look is taken from, as GitHub colours code, with purple for what an output's reader looks for and green for a run gone well (the maintainer agreed to both).
-- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The canvas's text renderer looked for it on the network, which the window may not reach, and left the whole text it was in undrawn: a word typed in place with an emoji in it showed its first letters alone, and the IME's underline ran under nothing. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws.
+- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The canvas's text renderer looked for it on the network, which the window may not reach, and left the whole text it was in undrawn: a word typed in place with an emoji in it showed its first letters alone, and the IME's underline ran under nothing. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws. Arabic and Hebrew letters are white squares on the page too: no typeface for them is planned (the maintainer, 2026-10-13); only emoji is to come with the typeface fetched with leave.
 - **troika changed where it is installed** (`scripts/patch-troika.mjs`, after every install; the maintainer chose it, and no report to troika): it applied every GPOS lookup whatever its feature, so IBM Plex Sans JP's half-width and proportional forms closed up its ideographic comma and the letters after it lay over it (found on Windows); and it took each letter from the font the one before came from, so the Latin after a Japanese letter came from IBM Plex Sans JP, a degree sign a full em wide. Now, as a browser does: kerning and marks alone, and each letter from the first font that has it.
 - **Lenient grammars.** A text written as its program reads it should never be marked: an ORCA block's `end` closes the block on the line it opens, and a sub-block's on its own line; a value block (`%maxcore`) is told by its name; Gaussian's route may go on over lines. What a grammar cannot tell without a program's list of keywords is not marked: a missing blank line after Gaussian's route section reads as more of the route.
 
@@ -988,13 +988,23 @@ workspace holds.
   its corners to another is no bond.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
-  meet none, do not count, nor a line shorter than its letters are tall.
+  meet none, do not count, nor a line shorter than its letters are tall,
+  nor one more than six times as long as its labels' letters would have a
+  bond (the capitals by a line's end; a caption's letters, set larger or
+  smaller, are not taken, unless no letter lies by a line's end).
+  Of the lines that meet, those meeting another other than square count,
+  where any do: where every line meets the others square - a frame, a
+  graph's axes - and no wedge is drawn, no structure is drawn, and none
+  is read. A cyclobutane drawn alone, a square, and a schematic box (rings
+  drawn edge-on as rectangles) are read as no structure so too.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
-    much thicker than the rest a bold one;
+    much thicker than the rest a bold one - but not one more than two and
+    a half bonds long that meets others only square, or none: a frame's
+    side, a graph's axis, a page's rule;
   - lines side by side - the second may be short, from three twentieths
     of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
@@ -1107,7 +1117,10 @@ workspace holds.
   nearest its element; an H set right over or under an
   N, O, S or P is that label's - an NH set between two bonds, its H stacked
   - and a bond cut back at the H, pointing on at the element, is the
-  label's too), read as a label typed is read - an
+  label's too; a group's name set right over or under an N, P, O or S's
+  label with no bond drawn to it - a MOM written over its imidazole's N -
+  is bonded to that atom, where it has a bond to spare and the name stands
+  alone on its line: the Me of an R = Me is the line's), read as a label typed is read - an
   element with its hydrogens and charge, or a group's name - and turned
   round where it is written on its bond's left (HO is OH, TBSO is OTBS,
   MeO2C is CO2Me, BocHN is NHBoc), a charge written last staying last

@@ -757,6 +757,17 @@ export type EditorState = {
   gatherStack: (stack: number, shown: number) => void;
   /** Which record each stack of drawings shows, by the stack's id: by the record's place in its file; its first if absent (utils/stacks). */
   recordsShown: Record<number, number>;
+  /**
+   * Molecules in 3D shown in their other look for a talk - two clicks on
+   * one while it is given (docs/PRESENTING.md) - by id: the view's alone,
+   * gone as the talk ends; the document's looks as they were, nothing to
+   * undo, nothing unsaved.
+   */
+  talkLooks: Readonly<Record<number, Look3D>>;
+  /** A molecule in 3D shown in its other look for the talk being given. */
+  switchTalkLook3d: (id: number) => void;
+  /** The looks a talk switched let go: each molecule as the document has it. */
+  endTalkLooks: () => void;
   /** A stack of drawings shows another of its records - selected in its place, where the one it showed was. */
   showRecord: (stack: number, record: number) => void;
   /**
@@ -1012,6 +1023,8 @@ export type EditorState = {
   /** A shape put on the page, over the others; its id. */
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  /** A resize let go: back as it was at the press (Escape, or undo during it). */
+  dropShapeChange: (id: number, gesture: string) => void;
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
   /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
   styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
@@ -1233,6 +1246,12 @@ export type EditorState = {
    * or highlighted in it - or (null) none: one step.
    */
   colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** One colour given to all a selection holds - atoms and bonds, electron arrows, words, reaction arrows, writing by hand - as one step. */
+  colourTogether: (
+    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+    color: string | null,
+    gesture?: string,
+  ) => void;
   /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
@@ -1333,6 +1352,8 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
+  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
+  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -1460,7 +1481,7 @@ export type EditorState = {
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
-  openModel: (next: Model, scheme?: ImportedScheme) => void;
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => void;
   /** Joins what readers reading an output as well have found to each molecule read from it (lib/calc/readings): learnt of the document, not done to it - nothing to undo. */
   joinReadings: () => void;
   /** A file opened over the canvas's contents, as one undo step. */
