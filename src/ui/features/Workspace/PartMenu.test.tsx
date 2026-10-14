@@ -47,6 +47,19 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
   return { icons, listed, html };
 }
 
+describe("a bond's menu", () => {
+  it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
+    const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
+    expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "Wavy bond", "Delete bond"]);
+    const other = m.html.match(/<div role="group" aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+    expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Bold bond", "Hashed bond", "Dashed bond", "Dative bond"]);
+    expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
+    // (the current kind marked)
+    expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);
+    expect(m.html).toMatch(/aria-label="Single bond" aria-pressed="false"/);
+  });
+});
+
 describe("the right-click menu", () => {
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({

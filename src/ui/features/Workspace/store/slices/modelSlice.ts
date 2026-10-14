@@ -1,3 +1,4 @@
+import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -274,6 +275,12 @@ export const createModelSlice = (
 
   updateBond: (id: number, patch: Partial<Bond>) => {
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
+  },
+
+  // (bonds chosen a kind from the right-click menu: all of them, one step)
+  setBondsKind: (ids: readonly number[], kind: BondKindName) => {
+    const patch = bondKindPatch(kind);
+    doc.edit("change bonds' kind", (d) => ids.reduce((acc, id) => ops.updateBond(acc, id, patch), d));
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {

@@ -1,3 +1,4 @@
+import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
@@ -1908,6 +1909,14 @@ function WorkspaceContent({
           asTyped={(() => {
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
+          })()}
+          // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
+          bondKind={(() => {
+            if (menu.kind !== "bond" || menu.id == null) return undefined;
+            const st = store.getState();
+            const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
+            const bond = st.model.bonds.find((b) => b.id === menu.id);
+            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
           })()}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)

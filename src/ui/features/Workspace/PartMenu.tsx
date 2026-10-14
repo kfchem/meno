@@ -3,7 +3,8 @@ import { motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
-import { MENU_ICONS } from "./menuIcons";
+import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
 
@@ -56,6 +57,8 @@ const WIDTH = 240;
 const ITEM = 32;
 /** Each icon's square along the top, as Quick Add's are, in px. */
 const ROW = 36;
+/** A compact row under the icons: the kinds of bond there are besides the common ones. */
+const ROW2 = 28;
 
 /** What the clipboard's items in the menu do. */
 export type MenuClipboard = {
@@ -71,7 +74,7 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void };
+type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
 export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
@@ -133,6 +136,7 @@ export default function PartMenu({
   onCleanUp,
   onMake3d,
   onSelectStructure,
+  bondKind,
   onTurnOver,
   onCharge,
   onRadical,
@@ -180,6 +184,8 @@ export default function PartMenu({
   /** The part's structure made in 3D, or the selection's structures. */
   onMake3d: () => void;
   onSelectStructure: () => void;
+  /** The kind of the bond right-clicked - or of the bonds selected, where it is one of them - and a kind chosen for it (utils/bondKinds); `current` is null where the bond is none of them. */
+  bondKind?: { current: BondKindName | null; choose: (kind: BondKindName) => void };
   /** The selection turned over, left to right or top to bottom. */
   onTurnOver: (axis: "vertical" | "horizontal") => void;
   /** An atom's charge one up or one down. */
@@ -667,10 +673,19 @@ export default function PartMenu({
                 { name: "Charge one down", keys: "\u2212", run: () => onCharge(-1), icon: MENU_ICONS.chargeDown },
               ]
             : []),
-          { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
-          { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
-          ...pushFrom,
-          ...colour,
+          ...(target.kind === "bond" && bondKind
+            ? [
+                // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
+                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
+              ]
+            : []),
+          ...[
+            { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
+            { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+            ...pushFrom,
+            ...colour,
+          ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined, press: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -682,9 +697,10 @@ export default function PartMenu({
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...stackItem,
         ];
-  const row = items.filter((i) => i.icon);
+  const row = items.filter((i) => i.icon && !i.compact);
+  const row2 = items.filter((i) => i.icon && i.compact);
   const list = items.filter((i) => !i.icon);
-  const height = (row.length ? ROW + 9 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
+  const height = (row.length ? ROW + 9 : 0) + (row2.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     onClose();
     item.run();
@@ -779,6 +795,24 @@ export default function PartMenu({
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
+            </button>
+          ))}
+        </div>
+      )}
+      {row2.length > 0 && (
+        <div role="group" aria-label="Other kinds" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
+          {row2.map((item) => (
+            <button
+              key={item.name}
+              role="menuitem"
+              aria-label={item.name}
+              aria-pressed={item.checked}
+              title={item.name}
+              onClick={run(item)}
+              className={`shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              style={{ width: ROW2, height: ROW2 }}
+            >
+              <span className="scale-90">{item.icon}</span>
             </button>
           ))}
         </div>
