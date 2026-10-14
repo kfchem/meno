@@ -994,3 +994,53 @@ describe("a figure's charges drawn in rings", () => {
     expect(s.arrows).toHaveLength(0);
   });
 });
+
+describe("a group's name stacked over an atom's label", () => {
+  /** A five-membered ring, its N at the top labelled, its bonds cut back at the N; and words over the N, a size apart from it. */
+  const ring = (over: string, nBonds = 2): FigureDrawn => {
+    const c: P = [100, 120];
+    const r = L / (2 * Math.sin(Math.PI / 5));
+    const v = Array.from({ length: 5 }, (_, k): P => [c[0] + r * Math.cos(-Math.PI / 2 + (2 * Math.PI * k) / 5), c[1] + r * Math.sin(-Math.PI / 2 + (2 * Math.PI * k) / 5)]);
+    const cut = (p: P, q: P): P => along(p, q, 5 / Math.hypot(q[0] - p[0], q[1] - p[1]));
+    const extra = nBonds > 2 ? [stroke(cut(v[0], step(v[0], 0)), step(v[0], 0))] : [];
+    return figure([stroke(cut(v[0], v[1]), v[1], v[2], v[3], v[4], cut(v[0], v[4])), ...extra], [...word("N", v[0]), ...word(over, [v[0][0] - ((over.length - 1) * 6.8) / 2, v[0][1] - 10])]);
+  };
+  const readsToo = (l: string) => l === "MOM" || l === "Me" || readDrawnLabel(l, reads).read;
+  const bondedTo = (f: FigureDrawn, label: string) => {
+    const r = readFigure(f, readsToo);
+    const k = r.atoms.findIndex((a) => a.label === label);
+    return k < 0 ? null : r.bonds.filter((b) => b.a === k || b.b === k).map((b) => r.atoms[b.a === k ? b.b : b.a].label ?? "C");
+  };
+
+  it("bonds a group's name set right over a heteroatom's label, no bond drawn to it, to that atom: MOM over its N", () => {
+    expect(bondedTo(ring("MOM"), "MOM")).toEqual(["N"]);
+    expect(bondedTo(ring("Me"), "Me")).toEqual(["N"]);
+  });
+
+  it("bonds none to an atom with no bond to spare, and no element's symbol alone so", () => {
+    expect(bondedTo(ring("MOM", 3), "MOM")).toBeNull();
+    expect(bondedTo(ring("Cl"), "Cl")).toBeNull();
+  });
+});
+
+describe("a frame, a graph's axes and a page's rules", () => {
+  const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath[] => [stroke([x0, y0], [x1, y0]), stroke([x1, y0], [x1, y1]), stroke([x1, y1], [x0, y1]), stroke([x0, y1], [x0, y0])];
+  const hexagon = (from: P): FigurePath[] => {
+    const pts: P[] = [from];
+    for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
+    return pts.map((p, k) => stroke(p, pts[(k + 1) % 6]));
+  };
+
+  it("reads no structure in a graph: its frame and axes meeting square, its ticks and numbers by them", () => {
+    const ticks = [0, 1, 2, 3, 4].map((k) => stroke([60 + 25 * k, 160], [60 + 25 * k, 156]));
+    const numbers = [0, 1, 2, 3, 4].flatMap((k) => word(`${k}`, [60 + 25 * k, 168]));
+    const r = readFigure(figure([...frame(60, 60, 160, 160), ...ticks], [...numbers, ...word("Yield", [40, 110])]));
+    expect(r.atoms).toHaveLength(0);
+  });
+
+  it("reads a structure drawn in a frame without the frame: its sides meet only each other, square", () => {
+    const r = readFigure(figure([...hexagon([100, 120]), ...frame(70, 70, 190, 150)], word("L1", [130, 160])));
+    expect(r.atoms).toHaveLength(6);
+    expect(r.bonds).toHaveLength(6);
+  });
+});

@@ -9,6 +9,7 @@
  */
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
+import { ELEMENTS } from "../chem/elements";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -258,6 +259,13 @@ function wavy(c: Curve, bond: number): Drawn | null {
   return turns >= 2 ? { a, b, order: 1, stereo: "wavy" } : null;
 }
 
+const SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
+/** Whether a label is an element's symbol alone, with its H and charge (N, OH, Cl-): no group's name (Me is one). */
+const isElementSymbolLike = (text: string) => {
+  const m = /^([A-Z][a-z]?)(H\d*)?[+-]?$/.exec(text);
+  return !!m && SYMBOLS.has(m[1]);
+};
+
 /** A compound's number as a figure writes it: digits, maybe a letter or two and primes, maybe in brackets - 1, 12b, 3', (4). */
 export const COMPOUND_NUMBER = /^[([]?\d+[a-z]{0,2}['\u2032\u2033]*[)\]]?$/;
 
@@ -430,7 +438,8 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number): 
  * How long a figure's bonds are drawn, from the shapes its paths make and
  * its letters: the length most of its lines that meet another share (a
  * bond's line meets another's end, as a hash's strokes and a ring's inner
- * lines do not), longer than its letters are tall.
+ * lines do not), longer than its letters are tall and no more than six
+ * times as long as they would have a bond.
  */
 export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): number {
   // (another's end: a line's in a path of several meets the next's, though they share the point)
@@ -440,10 +449,29 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
     return [s.a, s.b].some((p) => tips.some((q) => q.of !== s && dist(p, q.p) < r));
   };
   const joined = shapes.strokes.filter(meets);
-  const lengths = [...(joined.length ? joined : shapes.strokes).map(len), ...shapes.wedges.map((w) => dist(w.tip, w.base))];
+  // (of those, the ones meeting another other than square: a frame's sides and a graph's axes meet square)
+  const angled = joined.filter((s) => {
+    const r = 0.12 * len(s);
+    return [s.a, s.b].some((p) => shapes.strokes.some((t) => t !== s && [t.a, t.b].some((q) => dist(p, q) < r && !square(s, p, t, q))));
+  });
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
   const least = sizes.length ? 0.6 * sizes[Math.floor(sizes.length / 2)] : 0;
-  const found = bondLength(lengths, least);
+  // (and no longer than six bonds as long as its letters are set would have them: a page's rules, a graph's frame, are none)
+  const most = sizes.length ? 6 * BOND_PER_SIZE * sizes[Math.floor(sizes.length / 2)] : Infinity;
+  // (lines meeting, every one of them square - a frame, a graph's axes - and no wedge: no structure is drawn, no bond; a cyclobutane
+  // drawn alone, a square, is so too)
+  if (joined.length && !angled.length && !shapes.wedges.length) return 0;
+  const lengths = [...(joined.length ? joined : shapes.strokes).map(len), ...shapes.wedges.map((w) => dist(w.tip, w.base))].filter((l) => l <= most);
+  let found = bondLength(lengths, least);
+  // (where every line of the length found meets the others only square - a frame's sides, round a graph or a part of the figure - it is
+  // none: the length of the rest)
+  const squareOnly = (s: Stroke) => {
+    const r = 0.12 * len(s);
+    const met = [s.a, s.b].flatMap((p) => shapes.strokes.flatMap((t) => (t === s ? [] : [t.a, t.b].filter((q) => dist(p, q) < r).map((q) => ({ p, t, q })))));
+    return met.length > 0 && met.every(({ p, t, q }) => square(s, p, t, q));
+  };
+  const ofFound = joined.filter((s) => Math.abs(len(s) - found) <= found / 8);
+  if (found && ofFound.length && ofFound.every(squareOnly)) found = bondLength(lengths.filter((l) => Math.abs(l - found) > found / 8), least);
   if (found) return found;
   // (every line drawn short of a label at either end - a metal's bonds, Pt to N and Cl: each measured on to the middles of the letters it is cut short of)
   const by = (p: Point) => {
@@ -451,9 +479,17 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
     return near.length ? Math.min(...near.map((l) => dist(p, centre(l.box)))) : 0;
   };
   return bondLength(
-    shapes.strokes.map((s) => len(s) + by(s.a) + by(s.b)),
+    shapes.strokes.map((s) => len(s) + by(s.a) + by(s.b)).filter((l) => l <= most),
     least,
   );
+}
+
+/** Whether two lines meet square at their ends `p` (of `s`) and `q` (of `t`): between 75 and 105 degrees, as a frame's sides and a graph's axes do. */
+function square(s: Stroke, p: Point, t: Stroke, q: Point): boolean {
+  const u = unit(p, dist(s.a, p) < dist(s.b, p) ? s.b : s.a);
+  const v = unit(q, dist(t.a, q) < dist(t.b, q) ? t.b : t.a);
+  const angle = (Math.acos(Math.max(-1, Math.min(1, dot(u, v)))) * 180) / Math.PI;
+  return angle >= 75 && angle <= 105;
 }
 
 /** How far apart two boxes lie: nothing where they meet. */
@@ -565,7 +601,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     return !!from && !words.some((w) => w !== from && fromBox(q, w.box) < 0.3 * bond) && !tipsOf.some((t) => t.of !== s && dist(t.p, q) < 0.2 * bond);
   };
   const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
+  // (a line more than two and a half bonds long meeting others only square, or none - a frame's side, a graph's axis, a page's rule - is
+  // no bond: a long bond, a large ring's, meets its neighbours as a ring's do)
+  const meetings: { t: Stroke | null; q: Point }[] = [...shapes.strokes.flatMap((t) => [t.a, t.b].map((q) => ({ t, q }))), ...shapes.wedges.flatMap((w) => [w.tip, w.base].map((q) => ({ t: null, q })))];
+  const framing = (s: Stroke) =>
+    len(s) > 2.5 * bond && [s.a, s.b].every((p) => meetings.every(({ t, q }) => t === s || dist(p, q) >= 0.12 * bond || (t !== null && square(s, p, t, q))));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !framing(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && between(s)) || stub(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
@@ -837,6 +878,26 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       }
     });
   }
+  // (a group's name set right over or under a heteroatom's label, no bond drawn to it - a MOM written over its imidazole's N - is
+  // bonded to that atom, where it has a bond to spare)
+  const SPARE: Record<string, number> = { N: 3, P: 3, O: 2, S: 2 };
+  words.forEach((w, k) => {
+    const text = labelText(w);
+    if (atomOfWord.has(k) || ions.has(k) || isElementSymbolLike(text) || !reads(text)) return;
+    const c = centre(w.box);
+    const width = w.box[2] - w.box[0];
+    const i = atoms.findIndex((a) => {
+      const el = a.label && SPARE[a.label];
+      if (!el || !a.box) return false;
+      const gap = Math.max(a.box[1] - w.box[3], w.box[1] - a.box[3]);
+      const used = bonds.filter((b) => b.a === atoms.indexOf(a) || b.b === atoms.indexOf(a)).reduce((t, b) => t + b.order, 0);
+      return used < el && Math.abs(centre(a.box).x - c.x) < 0.5 * Math.max(width, a.box[2] - a.box[0]) && gap > -0.1 * w.size && gap < 0.5 * w.size;
+    });
+    if (i < 0) return;
+    atomOfWord.set(k, atoms.length);
+    atoms.push({ x: c.x, y: c.y, ...labelOf(w), box: w.box });
+    bonds.push({ a: i, b: atoms.length - 1, order: 1 });
+  });
   const left: FigureLetter[] = [];
   words.forEach((w, k) => {
     if (atomOfWord.has(k)) return;
