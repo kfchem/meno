@@ -185,7 +185,7 @@ export async function cleanUp(
   const labels = cleaned.flatMap((c) => c.labels);
   const written = labels.length ? writtenAsLabels({ ...emptyWorkspaceDocument(), model }, labels).model : model;
   // (in the style it is drawn in: a bond to a terminal label drawn long enough for its labels)
-  const style = styleOf(store.getState().docStyle ?? useAppSettings.getState().drawingStyle);
+  const style = styleOf(store.getState().docStyle);
   const changes = cleaned.map((c) => relayoutFrom(written, c.part, c.job, c.laid, style));
   store.getState().relayout(
     {

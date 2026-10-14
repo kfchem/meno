@@ -11,6 +11,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { releaseClicksBond } from "../utils/press";
 
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
@@ -382,8 +383,11 @@ export default function BondsPick2D() {
         const b = model.bonds[idx];
         if (!b) return;
         const st = clickState.current;
-        if (!st.armed || st.downBondId !== b.id) return;
         const ev = (e as any).nativeEvent ?? e;
+        if (!releaseClicksBond(st, b.id, ev?.button ?? 0)) return;
+        // (the press's arming used up: the next click arms again with its own)
+        st.armed = false;
+        st.downBondId = null;
         const down = st.downPos;
         const moved = (() => {
           if (!down || !ev) return false;

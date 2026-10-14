@@ -9,7 +9,7 @@
  * letters, its first rows - its type as much smaller than the column's as
  * the sheet's monospaced type is.
  */
-import { ICON_HEIGHT, ICON_NAME_PT, ICON_NAME_WIDTH, POINT } from "../../../../lib/pdf/layout";
+import { ICON_HEIGHT, ICON_NAME_PT, ICON_NAME_WIDTH, POINT, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
 import { layOut, PAD_FOOT, PAD_X, type Laid } from "../../TextEditor/markdownLayout";
 import { measureText, typeVersion } from "../../TextEditor/markdownType";
@@ -68,8 +68,23 @@ function lettersAcross(line: string): number {
 const sheets = new Map<string, TextSheet>();
 const MOST_SHEETS = 64;
 
-/** The sheet a text lies on, on the page: a Markdown text's, by its name, formatted. */
-export function sheetOf(text: string, name = ""): TextSheet {
+/**
+ * The sheet a text lies on, on the page: a Markdown text's, by its name,
+ * formatted - laid at `point` (lib/pdf/layout `pointOf`), ACS 1996's
+ * unless it was laid at the workspace's own.
+ */
+export function sheetOf(text: string, name = "", point = POINT): TextSheet {
+  const s = sheetAtAcs(text, name);
+  if (point === POINT) return s;
+  const f = point / POINT;
+  return { ...s, w: s.w * f, h: s.h * f, ...(s.md ? { md: { ...s.md, scale: s.md.scale * f } } : {}) };
+}
+
+/** A text's own sheet, at the point it was laid at. */
+export const sheetOfText = (t: { text: string; name?: string; point?: number }): TextSheet => sheetOf(t.text, t.name, pointOf(t));
+
+/** The sheet at ACS 1996's point, kept for the texts asked about last. */
+function sheetAtAcs(text: string, name: string): TextSheet {
   const md = isMarkdown(name);
   // (laid out again once the type has come)
   const key = `${md ? typeVersion() + 1 : 0}\u0000${text}`;
@@ -120,8 +135,8 @@ export function sheetBox(at: { x: number; y: number }, s: Pick<TextSheet, "w" | 
 }
 
 /** A sheet's middle, where it lies at `at`: what a box or a lasso takes it by. */
-export function sheetMiddle(at: { x: number; y: number }, text: string, name = ""): { x: number; y: number } {
-  const s = sheetOf(text, name);
+export function sheetMiddle(at: { x: number; y: number }, text: string, name = "", point = POINT): { x: number; y: number } {
+  const s = sheetOf(text, name, point);
   return { x: at.x + s.w / 2, y: at.y - s.h / 2 };
 }
 
@@ -130,8 +145,8 @@ export function sheetMiddle(at: { x: number; y: number }, text: string, name = "
  * middle: its longer side as long as a PDF's icon is tall (lib/pdf/layout
  * `ICON_HEIGHT`) - a few lines wide, a long log tall.
  */
-export function iconScaleOf(s: Pick<TextSheet, "w" | "h">): number {
-  return Math.min(ICON_HEIGHT / Math.max(s.w, s.h), 1);
+export function iconScaleOf(s: Pick<TextSheet, "w" | "h">, scale = 1): number {
+  return Math.min((ICON_HEIGHT * scale) / Math.max(s.w, s.h), 1);
 }
 
 /** A sheet as it is drawn made `k` times its size about its middle - an icon's, or one on its way to being one. */
@@ -142,16 +157,17 @@ export function sheetBoxAt(at: { x: number; y: number }, s: Pick<TextSheet, "w" 
 }
 
 /** Where a text's sheet lies on the page as it is drawn: made an icon, or full size. */
-export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true }): { x0: number; x1: number; y0: number; y1: number } | null {
+export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
   if (!t.at) return null;
-  const s = sheetOf(t.text, t.name);
-  return sheetBoxAt(t.at, s, t.icon ? iconScaleOf(s) : 1);
+  const s = sheetOfText(t);
+  return sheetBoxAt(t.at, s, t.icon ? iconScaleOf(s, scaleOf(t)) : 1);
 }
 
 /** The room a sheet takes on the page: as it is drawn, and made an icon, its name's under it too - as a PDF's (lib/pdf/layout `pdfRoom`). */
-export function sheetRoom(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true }): { x0: number; x1: number; y0: number; y1: number } | null {
+export function sheetRoom(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
   const b = drawnSheetBox(t);
   if (!b || !t.icon) return b;
   const mx = (b.x0 + b.x1) / 2;
-  return { x0: Math.min(b.x0, mx - ICON_NAME_WIDTH / 2), x1: Math.max(b.x1, mx + ICON_NAME_WIDTH / 2), y0: b.y0 - 3 * ICON_NAME_PT * POINT, y1: b.y1 };
+  const name = ICON_NAME_WIDTH * scaleOf(t);
+  return { x0: Math.min(b.x0, mx - name / 2), x1: Math.max(b.x1, mx + name / 2), y0: b.y0 - 3 * ICON_NAME_PT * pointOf(t), y1: b.y1 };
 }

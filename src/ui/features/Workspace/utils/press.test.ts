@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, joinedBy, movePress, onChord, startPress, swallowPress, togglesOn, traceEndedBy } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -158,5 +158,24 @@ describe("a click on a panel's toggle", () => {
     expect(togglesOn(2)).toBe(false);
     expect(togglesOn(3)).toBe(false);
     expect(togglesOn(0)).toBe(true);
+  });
+});
+
+/**
+ * A right-click on the bond clicked last cycled it - a wedge became hashed -
+ * and shut the menu it had opened: the left press's arming was never used
+ * up, and the right release counted it as a click.
+ */
+describe("a release on a bond", () => {
+  const armed = { armed: true, downBondId: 7 };
+
+  it("clicks it after a press with the main button that began on it", () => {
+    expect(releaseClicksBond(armed, 7, 0)).toBe(true);
+  });
+
+  it("is no click of the right button's, nor on another bond, nor unarmed", () => {
+    expect(releaseClicksBond(armed, 7, 2)).toBe(false);
+    expect(releaseClicksBond(armed, 8, 0)).toBe(false);
+    expect(releaseClicksBond({ armed: false, downBondId: null }, 7, 0)).toBe(false);
   });
 });

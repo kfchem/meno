@@ -352,6 +352,11 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
   if (!atoms.every((a) => isPoint(a) && finite(a.id) && typeof a.el === "string")) throw bad("an atom of its drawing is not placed");
   const ids = new Set(atoms.map((a) => a.id));
   if (!bonds.every((b) => finite(b.id) && ids.has(b.a) && ids.has(b.b))) throw bad("a bond of its drawing joins no atoms");
+  // (drawn, neither shows - and no structure with them could be read to
+  // clean up or make in 3D)
+  if (bonds.some((b) => b.a === b.b)) throw bad("a bond of its drawing joins an atom to itself");
+  const pairs = new Set(bonds.map((b) => (b.a < b.b ? `${b.a} ${b.b}` : `${b.b} ${b.a}`)));
+  if (pairs.size < bonds.length) throw bad("two bonds of its drawing join the same atoms");
   if (s!.arrow != null && ![s!.arrow.x1, s!.arrow.y1, s!.arrow.x2, s!.arrow.y2].every(finite)) throw bad("its arrow is not placed");
   if (s!.pluses != null && !(Array.isArray(s!.pluses) && s!.pluses.every(isPoint))) throw bad("a \"+\" sign is not placed");
   if (s!.records != null && !(Array.isArray(s!.records) && s!.records.every((r) => Array.isArray(r?.atoms) && r.atoms.every((id) => ids.has(id)) && (r.title == null || typeof r.title === "string")))) {

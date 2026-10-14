@@ -82,6 +82,27 @@ class Prepare(unittest.TestCase):
         self.assertNotIn("then", job)
         self.assertEqual(job["reads"], [])
 
+    def test_text_typed_into_the_simple_input_line_names_no_program_and_no_file(self):
+        # (the manual names them only in a block, begun by "%", in quotes: %method ProgExt "path", %MOInp "file")
+        for options in ({"keywords": 'ExtOpt %method ProgExt "/bin/sh" end'}, {"keywords": 'MORead %moinp "/etc/hosts"'}, {"basis": "def2-SVP\n%method ProgExt x end"}):
+            said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))
+            self.assertFalse(said["ok"], options)
+
+    def test_an_isotope_is_given_its_mass_after_its_coordinates(self):
+        # (heavy water: each H a deuterium, its mass as Meno gives it - the manual's "M =" after the coordinates)
+        d2o = {**WATER, "atoms": [WATER["atoms"][0]] + [{**a, "isotope": 2, "mass": 2.01410177812} for a in WATER["atoms"][1:]]}
+        text = ask("prepare", step="frequencies", entries=[d2o], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        atoms = [l for l in text.splitlines() if l[:1] in ("O", "H")]
+        self.assertFalse(atoms[0].endswith("M = 2.01410177812"))
+        self.assertTrue(all(l.endswith("  M = 2.01410177812") for l in atoms[1:]), atoms)
+        # (no isotope: as before)
+        plain = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        self.assertNotIn("M =", plain)
+        # (an isotope Meno knows no mass for: refused, naming it - never given as the natural element)
+        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [{**WATER, "atoms": [{**WATER["atoms"][0], "isotope": 99}] + WATER["atoms"][1:]}], "options": defaults("energy")}))
+        self.assertFalse(said["ok"])
+        self.assertIn("99O", said["error"])
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))

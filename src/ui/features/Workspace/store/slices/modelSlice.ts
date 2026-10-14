@@ -1,3 +1,6 @@
+import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
+import { restyledDrawn } from "../../utils/copyPaste";
+import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
@@ -343,7 +346,7 @@ export const createModelSlice = (
     const { drawn } = ws;
     // (its texts, those read - utils/workspace `readTexts` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered)
     const read = ws.texts.filter((t) => t.text != null);
-    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) }));
+    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) }));
     const shown = ws.textShown != null ? read.indexOf(ws.texts[ws.textShown]) : -1;
     const opened = (d: WorkspaceDocument) => {
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
@@ -353,6 +356,8 @@ export const createModelSlice = (
         {
           ...next,
           ...workflow,
+          // (a page of its own: the view follows changes of style on one page, not from one page to another - FollowStyle)
+          pageId: ops.newPageId(),
           aromaticEnabled: ws.aromaticEnabled,
           aromaticRings: ws.aromaticRings,
           texts,
@@ -366,7 +371,8 @@ export const createModelSlice = (
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
         },
-        ws.style,
+        // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
+        ws.style ?? useAppSettings.getState().drawingStyle,
       );
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
@@ -440,7 +446,11 @@ export const createModelSlice = (
     }));
   },
 
-  pasteModel: (next: Drawn) => {
+  pasteModel: (given: Drawn) => {
+    // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
+    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
+    // (and its words as large in print: those given no size at the labels' size it was copied in)
+    const next = converted.labelPt && converted.captions?.length ? { ...converted, captions: wordsKept(converted.captions, converted.labelPt, labelPtOf(get().docStyle)) } : converted;
     const carried = next.molecules3d ?? [];
     const flow = next.flow ?? NO_PARTS;
     // (pictures pasted only where they are held: a copy carries them by what they are known by)

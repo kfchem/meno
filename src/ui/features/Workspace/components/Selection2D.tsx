@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
-import { sheetMiddle, sheetOf } from "../utils/textSheets";
-import { pdfBounds } from "../../../../lib/pdf/layout";
+import { sheetMiddle, sheetOfText } from "../utils/textSheets";
+import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -180,7 +180,7 @@ export default function Selection2D() {
         s.selectMolecules3d(molecules3dIn(s.molecules3d.filter((m) => !outOfSight.has(m.id)), kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
         // (and texts' sheets, by their middles - and PDFs, by the middle of what they cover)
-        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), kind, points), add);
+        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name, pointOf(t)) }] : [])), kind, points), add);
         s.selectPdfs(
           molecules3dIn(
             s.pdfs.map((p) => {
@@ -347,7 +347,7 @@ export default function Selection2D() {
     const picturesAt = (angle: number) => turned(pics, about, angle).map((q, i) => ({ ...q, turn: (pics[i].turn ?? 0) + angle }));
     const sheets = st.texts.flatMap((t) => {
       if (!t.at || !st.selTexts.has(t.id)) return [];
-      const s = sheetOf(t.text, t.name);
+      const s = sheetOfText(t);
       return [{ id: t.id, x: t.at.x + s.w / 2, y: t.at.y - s.h / 2, w: s.w, h: s.h }];
     });
     const sheetsAt = (angle: number) => turned(sheets, about, angle).map((q, i) => ({ id: q.id, x: q.x - sheets[i].w / 2, y: q.y + sheets[i].h / 2 }));

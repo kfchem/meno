@@ -130,3 +130,15 @@ export function swallowPress(down: Event, on: EventTarget = window, most = 10_00
   for (const type of AFTER_PRESS) on.addEventListener(type, stop, { capture: true });
   const late = setTimeout(off, most);
 }
+
+/**
+ * Whether a release on a bond (`id`) ends a click on it: the main button's,
+ * after a press that began on that bond with it (`armed`). A right press
+ * is the bond's menu's; a release after a press elsewhere is no click.
+ * A press's arming is used up by its release: left armed, a right-click
+ * on the bond clicked last cycled it (a wedge became hashed) and shut the
+ * menu it opened.
+ */
+export function releaseClicksBond(armed: { armed: boolean; downBondId: number | null }, id: number, button: number): boolean {
+  return button === 0 && armed.armed && armed.downBondId === id;
+}

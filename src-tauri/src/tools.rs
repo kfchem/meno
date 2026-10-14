@@ -184,6 +184,10 @@ pub async fn ensure(data: &Path, tool: Tool, proxy: Option<String>) -> Result<Pa
     Ok(program)
 }
 
+/// The most a tool's archive may be. uv's and pixi's are tens of megabytes;
+/// no size is pinned with them, so the bound is a generous one.
+const ARCHIVE_MOST: u64 = 256 * 1024 * 1024;
+
 async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
     // (rustls, as the updater has it: its crypto provider set once)
     if rustls::crypto::CryptoProvider::get_default().is_none() {
@@ -200,8 +204,53 @@ async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
         .await
         .and_then(|r| r.error_for_status())
         .map_err(|e| format!("fetching {url}: {e}"))?;
-    let bytes = response.bytes().await.map_err(|e| format!("fetching {url}: {e}"))?;
-    Ok(bytes.to_vec())
+    body_within(response, url, ARCHIVE_MOST).await
+}
+
+/// A response's body, read piece by piece as it comes, never more than
+/// `most` bytes (`Within`) - one that says beforehand it is more, not read at all.
+pub async fn body_within(mut response: reqwest::Response, what: &str, most: u64) -> Result<Vec<u8>, String> {
+    let mut body = Within::new(what, most);
+    if response.content_length().is_some_and(|n| n > most) {
+        return Err(body.too_large());
+    }
+    while let Some(piece) = response.chunk().await.map_err(|e| format!("fetching {what}: {e}"))? {
+        body.take(&piece)?;
+    }
+    Ok(body.whole())
+}
+
+/// A body gathered as it comes, never more than `most` bytes: a piece that
+/// would take it past them is refused, saying so - and what came is let go.
+pub struct Within {
+    what: String,
+    most: u64,
+    body: Vec<u8>,
+}
+
+impl Within {
+    pub fn new(what: &str, most: u64) -> Within {
+        Within { what: what.to_string(), most, body: Vec::new() }
+    }
+
+    /// One more piece of it.
+    pub fn take(&mut self, piece: &[u8]) -> Result<(), String> {
+        if self.body.len() as u64 + piece.len() as u64 > self.most {
+            self.body = Vec::new();
+            return Err(self.too_large());
+        }
+        self.body.extend_from_slice(piece);
+        Ok(())
+    }
+
+    /// All of it.
+    pub fn whole(self) -> Vec<u8> {
+        self.body
+    }
+
+    fn too_large(&self) -> String {
+        format!("{} is larger than Meno takes it to be (more than {} bytes): not taken", self.what, self.most)
+    }
 }
 
 /// Whether `bytes` are what `sha256` (hex) says.
@@ -346,6 +395,41 @@ mod tests {
         assert!(unpack(&zip, Archive::Zip, "pixi.exe").is_err());
     }
 
+    /// A body in memory read as a response's comes, `size` bytes a piece,
+    /// into `Within`: all of it, or why not and how much was left unread.
+    fn read_within(body: &[u8], size: usize, most: u64) -> (Result<Vec<u8>, String>, usize) {
+        let mut stream = Cursor::new(body);
+        let mut within = Within::new("the archive", most);
+        let mut piece = vec![0u8; size];
+        loop {
+            let n = stream.read(&mut piece).unwrap();
+            if n == 0 {
+                return (Ok(within.whole()), 0);
+            }
+            if let Err(e) = within.take(&piece[..n]) {
+                return (Err(e), body.len() - stream.position() as usize);
+            }
+        }
+    }
+
+    #[test]
+    fn takes_a_body_only_up_to_its_bound() {
+        let body: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+        // within it, or exactly it: whole
+        for most in [10_000, 1 << 20] {
+            assert_eq!(read_within(&body, 333, most).0.unwrap(), body);
+        }
+        // a byte past it: refused, saying so
+        let (got, _) = read_within(&body, 333, 9_999);
+        assert_eq!(got.unwrap_err(), "the archive is larger than Meno takes it to be (more than 9999 bytes): not taken");
+        // (stopped at the piece that goes past it: the rest never read)
+        let (got, unread) = read_within(&body, 333, 1_000);
+        assert!(got.is_err());
+        assert_eq!(unread, 10_000 - 4 * 333);
+        // nothing at all
+        assert_eq!(read_within(&[], 1, 0).0.unwrap(), Vec::<u8>::new());
+    }
+
     #[test]
     fn a_program_is_put_in_place_runnable_and_other_versions_go() {
         let data = std::env::temp_dir().join(format!("meno-tools-{}", uuid::Uuid::new_v4()));
@@ -376,6 +460,8 @@ mod tests {
             let p = pin(tool).unwrap();
             let archive = direct(p.url).await;
             check(&archive, p.sha256).unwrap();
+            // (within the bound Meno fetches it under)
+            assert!(archive.len() as u64 <= ARCHIVE_MOST, "{}: {} bytes", p.url, archive.len());
             let program = program_path(&data, p);
             place(&program, &unpack(&archive, p.archive, p.member).unwrap()).unwrap();
             let out = std::process::Command::new(&program).arg("--version").output().unwrap();

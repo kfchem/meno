@@ -37,6 +37,22 @@ export function viewDriven(camera: THREE.Camera): boolean {
 }
 
 /**
+ * Cameras moved by the page being laid again at another scale - a change of
+ * the drawing style, its undo, its redo (FollowStyle) - for PanZoom2D to
+ * take up from where they are now at its next frame, as after a talk,
+ * rather than set back where it had them.
+ */
+const relaid = new WeakSet<THREE.Camera>();
+
+export function setViewRelaid(camera: THREE.Camera): void {
+  relaid.add(camera);
+}
+
+export function tookViewRelaid(camera: THREE.Camera): boolean {
+  return relaid.delete(camera);
+}
+
+/**
  * Cameras under whose resting pointer something has moved other than the
  * view - a molecule turning on after it was let go, or let go after a
  * gesture that kept the pointer's moves to itself - for PanZoom2D to find

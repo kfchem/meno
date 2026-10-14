@@ -612,10 +612,12 @@ describe("editor store over a document", () => {
   });
 });
 
-describe("a document's own drawing style", () => {
-  it("is an edit like any other: mirrored, undone, and one step for a run of changes to one setting", () => {
+describe("a workspace's drawing style", () => {
+  it("is always set, and changed by an edit like any other: mirrored, undone, and one step for a run of changes to one setting", () => {
     const { doc, state } = editor();
-    expect(state().docStyle).toBeUndefined();
+    // (made in a style - Meno's, where none is given - and never without one)
+    expect(state().docStyle).toEqual(doc.getState().style);
+    expect(state().docStyle.preset).toBe("meno");
 
     state().setDocumentStyle({ preset: "rsc", changes: {} });
     expect(doc.getState().style).toEqual({ preset: "rsc", changes: {} });
@@ -633,10 +635,9 @@ describe("a document's own drawing style", () => {
     doc.undo();
     expect(state().docStyle).toEqual({ preset: "rsc", changes: {} });
 
-    // back to the app's style
-    state().setDocumentStyle(undefined);
-    expect("style" in doc.getState()).toBe(false);
-    expect(state().docStyle).toBeUndefined();
+    // (another style - one step - and undone, the one before; no style ever none)
+    state().setDocumentStyle({ preset: "acs1996", changes: {} });
+    expect(state().docStyle).toEqual({ preset: "acs1996", changes: {} });
     doc.undo();
     expect(state().docStyle).toEqual({ preset: "rsc", changes: {} });
   });

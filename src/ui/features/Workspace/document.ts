@@ -11,7 +11,7 @@ import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
 import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import type { StyleChoice } from "../../../lib/chem/style";
+import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
@@ -20,7 +20,7 @@ import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } f
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
 import type { InkStroke } from "../../../lib/chem/ink";
-import { ICON_NAME_WIDTH, pdfRoom, POINT } from "../../../lib/pdf/layout";
+import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
@@ -59,10 +59,19 @@ export type WorkspaceDocument = {
   molecules3d?: Molecule3D[];
   nextMolecule3dId?: number;
   /**
-   * The document's own drawing style; unset, it is drawn in the
-   * application's. Saving to a MOL or SD file keeps the structure only.
+   * The workspace's drawing style, its one: every structure on it is drawn
+   * in it. Fixed as the workspace is made - Settings' then, which is for
+   * new workspaces only - and changed from its canvas (docs/WORKSPACE.md,
+   * *Drawing style*). Saving to a MOL or SD file keeps the structure only.
    */
-  style?: StyleChoice;
+  /**
+   * Which page this is, where it was opened from a file: a new one each time,
+   * kept through its edits and its changes of style - so that the view
+   * follows a change of style on one page (components/FollowStyle), not the
+   * going over to another. Never saved.
+   */
+  pageId?: number;
+  style: StyleChoice;
   /**
    * The atoms *Expand abbreviation* drew out last, which the Clean-up
    * straight after it leaves drawn out (chem/cleanUp). Not saved.
@@ -107,8 +116,14 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
   );
 }
 
-export function emptyWorkspaceDocument(): WorkspaceDocument {
+/** An empty workspace in `style` - by default Meno's own, for a document that is only worked on, never shown. */
+let pages = 0;
+/** A page's id, new (`pageId`). */
+export const newPageId = (): number => ++pages;
+
+export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE): WorkspaceDocument {
   return {
+    style,
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -123,12 +138,13 @@ export function emptyWorkspaceDocument(): WorkspaceDocument {
 }
 
 /**
- * Builds a document for a workspace tab. The tab's data may carry a file to
- * import (`payload`), which the view parses and applies, so the document
- * starts empty here - or files opened as text (`texts`), which it starts
- * holding.
+ * Builds a document for a workspace tab, in `style` - Settings' as it is
+ * made, given by whoever makes it (views/registry): this module reads no
+ * settings. The tab's data may carry a file to import (`payload`), which
+ * the view parses and applies, so the document starts empty here - or
+ * files opened as text (`texts`), which it starts holding.
  */
-export function createWorkspaceDocument(data?: unknown): DocumentStore<WorkspaceDocument> {
+export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -137,7 +153,7 @@ export function createWorkspaceDocument(data?: unknown): DocumentStore<Workspace
   );
   // (PDFs opened on a canvas of their own: in a row from the middle of the page - and pictures likewise)
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
-  let doc = addTexts(emptyWorkspaceDocument(), texts).doc;
+  let doc = addTexts(emptyWorkspaceDocument(style), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
@@ -184,12 +200,11 @@ export function endpointsHeld(model: Model): Model {
   return changed ? { ...model, bonds } : model;
 }
 
-/** PDFs held, as they go on the page: the first's top page in the middle of `at`, the others to its right, a little apart. */
 /** A row of PDFs put down clear of those already on the page: moved along to the right, a place at a time, until none of them, nor their names, lies over another. */
 export function clearOfPdfs<T extends Omit<PdfItem, "id">>(row: T[], others: readonly Omit<PdfItem, "id">[]): T[] {
   const room = (p: Omit<PdfItem, "id">) => pdfRoom(p);
   const taken = others.map(room);
-  const step = ICON_NAME_WIDTH + NOMINAL_BOND_LENGTH;
+  const step = ICON_NAME_WIDTH * scaleOf(row[0] ?? {}) + NOMINAL_BOND_LENGTH;
   for (let n = 0; n < 200; n++) {
     const moved = row.map((p) => ({ ...p, x: p.x + n * step }));
     if (!moved.some((p) => taken.some((t) => overlaps(room(p), t)))) return moved;
@@ -200,16 +215,17 @@ export function clearOfPdfs<T extends Omit<PdfItem, "id">>(row: T[], others: rea
 const overlaps = (a: { x0: number; x1: number; y0: number; y1: number }, b: { x0: number; x1: number; y0: number; y1: number }) =>
   a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 
-export function pdfsInRow(held: readonly unknown[], at: { x: number; y: number }): Omit<PdfItem, "id">[] {
+/** PDFs held, as they go on the page, laid at `point` (the workspace's, lib/pdf/layout `pointFor`): the first's top page in the middle of `at`, the others to its right, a little apart. */
+export function pdfsInRow(held: readonly unknown[], at: { x: number; y: number }, point = POINT): Omit<PdfItem, "id">[] {
   const out: Omit<PdfItem, "id">[] = [];
   let x = at.x;
   for (const h of held as Partial<PdfItem>[]) {
     const pages = Array.isArray(h?.pages) ? h.pages.filter((p): p is [number, number] => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(v) && v > 0)) : [];
     if (typeof h?.name !== "string" || typeof h.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(h.sha256) || !pages.length) continue;
     // (each an icon at first, room for its name beside the next)
-    const w = ICON_NAME_WIDTH;
+    const w = (ICON_NAME_WIDTH * point) / POINT;
     if (out.length) x += w / 2;
-    out.push({ name: h.name, sha256: h.sha256, pages, x, y: at.y, page: 0, icon: true });
+    out.push({ name: h.name, sha256: h.sha256, pages, x, y: at.y, page: 0, icon: true, ...(point !== POINT ? { point } : {}) });
     x += w / 2 + NOMINAL_BOND_LENGTH;
   }
   return out;
@@ -1779,16 +1795,16 @@ function turnOf(turn: number | undefined): { turn?: number } {
  * (lib/picture/image `printedSize`), the first's middle at `at`, the others
  * to its right, a bond apart.
  */
-export function picturesInRow(held: readonly PictureToAdd[], at: { x: number; y: number }): Omit<PictureItem, "id">[] {
+export function picturesInRow(held: readonly PictureToAdd[], at: { x: number; y: number }, point = POINT): Omit<PictureItem, "id">[] {
   const out: Omit<PictureItem, "id">[] = [];
   let x = at.x;
   for (const h of held) {
     if (typeof h?.name !== "string" || typeof h.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(h.sha256)) continue;
     if (!PICTURE_MEDIA.includes(h.media) || !(h.width > 0) || !(h.height > 0)) continue;
     const size = printedSize(h);
-    const w = size.w * POINT;
+    const w = size.w * point;
     if (out.length) x += w / 2;
-    out.push({ name: h.name, sha256: h.sha256, media: h.media, px: [h.width, h.height], x, y: at.y, w, h: size.h * POINT, ...(h.from ? { from: h.from } : {}) });
+    out.push({ name: h.name, sha256: h.sha256, media: h.media, px: [h.width, h.height], x, y: at.y, w, h: size.h * point, ...(h.from ? { from: h.from } : {}) });
     x += w / 2 + NOMINAL_BOND_LENGTH;
   }
   return out;
@@ -2170,17 +2186,14 @@ export function setAromaticEnabled(
     : { ...doc, aromaticEnabled: enabled };
 }
 
-/** Gives the document its own drawing style, or (undefined) the application's. */
-export function setDocumentStyle(
-  doc: WorkspaceDocument,
-  style: StyleChoice | undefined,
-): WorkspaceDocument {
-  if (doc.style === style) return doc;
-  if (style === undefined) {
-    const { style: _dropped, ...rest } = doc;
-    return rest;
-  }
-  return { ...doc, style };
+/**
+ * The workspace in drawing style `style`, set as it is - nothing on the page
+ * converted: as a file saved without one is given Settings'. A change of
+ * style from the canvas converts the page with it (./restyle
+ * `restyledDocument`).
+ */
+export function setDocumentStyle(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
+  return doc.style === style ? doc : { ...doc, style };
 }
 
 export function setRingEnabled(
@@ -2216,7 +2229,7 @@ export function addTexts(
       last = same.id;
       continue;
     }
-    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
@@ -2297,12 +2310,12 @@ export function setTextReading(doc: WorkspaceDocument, id: number, reading: bool
  * right, room for their names between them - all put down clear of what
  * lies there, pictures, PDFs and other sheets.
  */
-export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly T[], at: { x: number; y: number }, doc: Pick<WorkspaceDocument, "pictures" | "pdfs" | "texts">): (T & { at: { x: number; y: number }; icon: true })[] {
-  const step = ICON_NAME_WIDTH + NOMINAL_BOND_LENGTH;
-  // (each by its top left, its middle where it goes)
+export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly T[], at: { x: number; y: number }, doc: Pick<WorkspaceDocument, "pictures" | "pdfs" | "texts">, point = POINT): (T & { at: { x: number; y: number }; icon: true; point?: number })[] {
+  const step = (ICON_NAME_WIDTH * point) / POINT + NOMINAL_BOND_LENGTH;
+  // (each by its top left, its middle where it goes; laid at `point`, the workspace's)
   const row = texts.map((t, i) => {
-    const s = sheetOf(t.text, t.name);
-    return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const };
+    const s = sheetOf(t.text, t.name, point);
+    return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const, ...(point !== POINT ? { point } : {}) };
   });
   const taken = [
     ...(doc.pictures ?? []).map((p) => ({ x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y - p.h / 2, y1: p.y + p.h / 2 })),

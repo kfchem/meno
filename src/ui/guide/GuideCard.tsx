@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { DURATION, EASE, FADE } from "../theme/motion";
-import { closeGuide, nextStep, shownStep, useGuide } from "../../lib/plugins/guides";
+import { closeGuide, keyOnGuide, nextStep, shownStep, useGuide } from "../../lib/plugins/guides";
 import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../lib/calc/workers";
 import { forThisSystem } from "../../lib/plugins/here";
@@ -29,6 +29,15 @@ export default function GuideCard() {
   const [size, setSize] = useState({ width: 320, height: 160 });
   // (a step about a workspace, while none is in front, waits out of sight)
   const isShown = shown != null && !waitsUnseen(at, part, page);
+  // Escape skips it, as Skip does - where nothing else took that Escape (heard last, as it comes back up)
+  useEffect(() => {
+    if (!isShown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (keyOnGuide(e.key, e.defaultPrevented)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isShown]);
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;

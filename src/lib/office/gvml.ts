@@ -76,11 +76,12 @@ export function gvmlPicture(
   ]);
 }
 
-/** The images in a clip-format package - Office's, or Meno's - by name. */
-export async function gvmlImages(pkg: Uint8Array): Promise<{ name: string; data: Uint8Array }[]> {
-  const files = await unzip(pkg).catch(() => null);
-  if (!files) return [];
-  return [...files]
-    .filter(([name]) => /(^|\/)media\/[^/]+$/.test(name))
-    .map(([name, data]) => ({ name, data }));
+/**
+ * The images in a clip-format package - Office's, or Meno's - by name: only
+ * they are inflated, and none are had from a package that is no zip, or
+ * whose images would come to more than a zip is unpacked to (binary/zip).
+ */
+export function gvmlImages(pkg: Uint8Array): { name: string; data: Uint8Array }[] {
+  const files = unzip(pkg, (name) => /(^|\/)media\/[^/]+$/.test(name));
+  return files ? [...files].map(([name, data]) => ({ name, data })) : [];
 }

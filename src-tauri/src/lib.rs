@@ -45,7 +45,7 @@ struct PyEnvInfo {
     #[serde(rename = "pythonVersion")]
     python_version: String,
     /// What the environment is for, as the user allowed its download
-    /// ("python-env:console"), and in words.
+    /// ("python-env:plugin-rdkit"), and in words.
     #[serde(default)]
     purpose: String,
     #[serde(default)]
@@ -66,7 +66,7 @@ fn lock_is_hashed(lock: &str) -> bool {
 }
 
 /// The purpose a setup's downloads go under: one of the Python environments'
-/// own, never another's - the user's code needs no asking, a setup does.
+/// own, never another's.
 fn setup_purpose(info: &PyEnvInfo) -> Result<String, String> {
     let name = info
         .purpose
@@ -87,6 +87,9 @@ fn setup_purpose(info: &PyEnvInfo) -> Result<String, String> {
 const PYTHON_NAMES: &[&str] = &["python", "python3", "python.exe"];
 /// Interpreter flags allowed before the worker script.
 const PYTHON_FLAGS: &[&str] = &["-u", "-B"];
+/// Where a sidecar's script may be, among the resources: a plugin's folder.
+/// (Meno carries no worker of its own: the console's went with the console.)
+const SIDECAR_SCRIPTS: &[&str] = &["resources/plugins"];
 
 /// Parse `p` as a path relative to some base directory, rejecting anything
 /// that could escape it: absolute paths, drive/UNC prefixes, `.` and `..`.
@@ -129,27 +132,15 @@ fn validate_env_info(info: &PyEnvInfo) -> Result<ValidatedEnv, String> {
         return Err(format!("unexpected host: {}", info.host));
     }
     let lock = safe_relative(&info.lock_path)?;
-    let is_lock = lock.extension().and_then(|e| e.to_str()) == Some("lock");
     let venv_home = safe_relative(&info.venv_home)?;
-    match plugin_file(&lock) {
-        // (a plugin's: its requirements.lock, made into its own environment)
-        Some((id, file)) => {
-            if file != "requirements.lock" {
-                return Err(format!("unexpected lock file: {}", info.lock_path));
-            }
-            if venv_home != Path::new("uv").join(format!("plugin-{id}")).join("venv") {
-                return Err(format!("unexpected venv location: {}", info.venv_home));
-            }
-        }
-        // (Meno's own, among its locks)
-        None => {
-            if !is_lock || !lock.starts_with("resources/py") {
-                return Err(format!("unexpected lock file: {}", info.lock_path));
-            }
-            if !venv_home.starts_with("uv") || venv_home.as_path() == Path::new("uv") {
-                return Err(format!("unexpected venv location: {}", info.venv_home));
-            }
-        }
+    // (a plugin's: its requirements.lock, made into its own environment and
+    // no other; Meno has no environment of its own)
+    let (id, file) = plugin_file(&lock).ok_or_else(|| format!("unexpected lock file: {}", info.lock_path))?;
+    if file != "requirements.lock" {
+        return Err(format!("unexpected lock file: {}", info.lock_path));
+    }
+    if venv_home != Path::new("uv").join(format!("plugin-{id}")).join("venv") {
+        return Err(format!("unexpected venv location: {}", info.venv_home));
     }
     let venv_python_rel = safe_relative(&info.venv_python_rel)?;
     if !valid_python_version(&info.python_version) {
@@ -182,14 +173,14 @@ fn plugin_file(path: &Path) -> Option<(String, String)> {
     }
 }
 
-/// Where a plugin's worker runs: a script in the plugins' folders must be a
-/// plugin's `worker.py`, run by the interpreter of that plugin's own
-/// environment - `uv/plugin-<id>/venv` or `pixi/plugin-<id>` in the app
-/// data (`data`) - never another plugin's. All paths canonical; a script
-/// elsewhere (Meno's own workers) is not a plugin's, and fits.
+/// Where a plugin's worker runs: a sidecar's script must be a plugin's
+/// `worker.py`, run by the interpreter of that plugin's own environment -
+/// `uv/plugin-<id>/venv` or `pixi/plugin-<id>` in the app data (`data`) -
+/// never another plugin's. All paths canonical; a script elsewhere is no
+/// plugin's, and is refused.
 fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data: &Path) -> Result<(), String> {
     let Ok(rel) = script.strip_prefix(plugins_root) else {
-        return Ok(());
+        return Err("a sidecar runs only a plugin's worker".into());
     };
     let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     let id = match parts.as_slice() {
@@ -234,10 +225,10 @@ fn validate_pixi_env(info: &PyEnvInfo) -> Result<ValidatedEnv, String> {
 
 /// Check a sidecar request: `entry` must be a Python interpreter inside
 /// `venv_root`, and `args` must be allowed interpreter flags followed by a
-/// `.py` script inside one of `workers_roots` - Meno's own workers, or the
-/// plugins' folders (arguments after the script are passed to it
-/// untouched). The roots must already be canonical. Returns the script's
-/// directory, used as the working directory.
+/// `.py` script inside one of `workers_roots` - the plugins' folders, or a
+/// job's plugin's (arguments after the script are passed to it untouched).
+/// The roots must already be canonical. Returns the script's directory,
+/// used as the working directory.
 fn validate_sidecar(
     entry: &Path,
     args: &[String],
@@ -278,12 +269,6 @@ fn validate_sidecar(
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| "sidecar script has no parent directory".into())
-}
-
-/// The file name of the worker script a sidecar runs.
-fn worker_name(args: &[String]) -> Option<&str> {
-    let script = args.iter().find(|a| !PYTHON_FLAGS.contains(&a.as_str()))?;
-    Path::new(script).file_name()?.to_str()
 }
 
 fn resource_path(app: &AppHandle, rel: &Path) -> Result<PathBuf, String> {
@@ -628,8 +613,8 @@ async fn ext_spawn_sidecar(
     if roots.is_empty() {
         return Err("the Python environment is not set up".to_string());
     }
-    // (Meno's own workers, and the plugins' - each in its folder)
-    let workers_roots: Vec<PathBuf> = ["resources/workers", "resources/plugins"]
+    // (the plugins' workers, each in its plugin's folder)
+    let workers_roots: Vec<PathBuf> = SIDECAR_SCRIPTS
         .iter()
         .filter_map(|r| resource_path(&app, Path::new(r)).ok()?.canonicalize().ok())
         .collect();
@@ -662,14 +647,10 @@ async fn ext_spawn_sidecar(
             pixienv::activate(&mut cmd, &activation);
         }
     }
-    // Whatever the code run in the console reaches for goes through the
-    // proxy, seen and logged, as a task that lasts as long as the sidecar.
-    // The other workers run no one's code and need no network; nor may the
-    // console while Meno is offline. Those are pointed at the proxy with no
-    // task, so an attempt is refused and on the record - never left to go
-    // out on its own.
-    let console = worker_name(&payload.args) == Some("interactive_worker.py");
-    let task = net.route_sidecar(&mut cmd, console);
+    // A plugin's worker runs no one's code and needs no network: it is
+    // pointed at the proxy with no task, so an attempt is refused and on the
+    // record - never left to go out on its own.
+    net.route_nowhere(&mut cmd);
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -697,10 +678,6 @@ async fn ext_spawn_sidecar(
             });
             if app2.state::<ProcState>().reap(&id2) {
                 let _ = app2.emit("ext:exit", serde_json::json!({"id": id2}).to_string());
-            }
-            // the sidecar's time on the network ends with it
-            if let Some(task) = task {
-                task.finish(true);
             }
         });
     }
@@ -1055,20 +1032,16 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn tells_a_hashed_lock_and_which_worker_a_sidecar_runs() {
+    fn tells_a_hashed_lock() {
         assert!(lock_is_hashed("rdkit==2026.3.6 \\\n    --hash=sha256:abc\n"));
         assert!(!lock_is_hashed("numpy==2.3.2\n    # via accel\n"));
-        let args = |s: &[&str]| s.iter().map(|a| a.to_string()).collect::<Vec<_>>();
-        assert_eq!(worker_name(&args(&["-u", "/r/workers/chem_worker.py"])), Some("chem_worker.py"));
-        assert_eq!(worker_name(&args(&["/r/workers/interactive_worker.py", "x"])), Some("interactive_worker.py"));
-        assert_eq!(worker_name(&args(&["-u"])), None);
     }
 
     #[test]
     fn a_setup_downloads_only_under_a_python_environments_purpose() {
-        let mut info = env_info("resources/py/requirements.lock", "uv/console/venv", "3.12");
-        assert_eq!(setup_purpose(&info).as_deref(), Ok("python-env:console"));
-        // not the user's own code, which needs no asking, nor anything else
+        let mut info = env_info(LOCK, VENV, "3.12");
+        assert_eq!(setup_purpose(&info).as_deref(), Ok("python-env:plugin-cclib"));
+        // nothing but a Python environment's
         for bad in ["python-code", "python-env:", "python-env:a b", "anything"] {
             info.purpose = bad.into();
             assert!(setup_purpose(&info).is_err(), "{bad}");
@@ -1111,7 +1084,7 @@ mod tests {
             },
             _stamp_path: String::new(),
             python_version: py.into(),
-            purpose: "python-env:console".into(),
+            purpose: "python-env:plugin-cclib".into(),
             label: String::new(),
             host: String::new(),
             hosts: None,
@@ -1125,7 +1098,7 @@ mod tests {
             venv_python_rel: python.into(),
             purpose: "python-env:plugin-pyscf".into(),
             host: "pixi".into(),
-            ..env_info(LOCK, "uv/console/venv", "3.12")
+            ..env_info(LOCK, VENV, "3.12")
         }
     }
 
@@ -1148,12 +1121,14 @@ mod tests {
         ] {
             assert!(validate_env_info(&pixi_info(lock, home, python)).is_err(), "{lock} {home} {python}");
         }
-        let mut odd = env_info(LOCK, "uv/console/venv", "3.12");
+        let mut odd = env_info(LOCK, VENV, "3.12");
         odd.host = "conda".into();
         assert!(validate_env_info(&odd).is_err());
     }
 
-    const LOCK: &str = "resources/py/requirements.console.lock";
+    /// A plugin's lock, and where its environment is made.
+    const LOCK: &str = "resources/plugins/cclib/requirements.lock";
+    const VENV: &str = "uv/plugin-cclib/venv";
 
     #[test]
     fn only_a_plugins_environment_is_taken_away() {
@@ -1197,17 +1172,31 @@ mod tests {
 
     #[test]
     fn env_info_accepts_the_frontend_payload() {
-        let env = validate_env_info(&env_info(LOCK, "uv/console/venv", "3.12"))
-            .expect("frontend payload must validate");
-        assert_eq!(env.venv_home, Path::new("uv/console/venv"));
-        assert!(validate_env_info(&env_info(
-            "resources/py/requirements.lock",
-            "uv/node/venv",
-            "3.12"
-        ))
-        .is_ok());
-        // a plugin's, from its folder
-        assert!(validate_env_info(&env_info("resources/plugins/cclib/requirements.lock", "uv/plugin-cclib/venv", "3.12")).is_ok());
+        // a plugin's, from its folder, made in its own environment
+        let env = validate_env_info(&env_info(LOCK, VENV, "3.12")).expect("frontend payload must validate");
+        assert_eq!((env.lock.as_path(), env.venv_home.as_path()), (Path::new(LOCK), Path::new(VENV)));
+        assert!(!env.pixi);
+    }
+
+    #[test]
+    fn every_lock_meno_takes_pins_its_packages_by_hash() {
+        // (Meno's own environments' locks, unhashed, went with the console)
+        let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+        assert!(!resources.join("py").exists());
+        let package = |l: &str| {
+            let name = l.split_once("==").or_else(|| l.split_once(" @ ")).map(|(n, _)| n).unwrap_or_default();
+            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+        };
+        let mut seen = 0;
+        for entry in fs::read_dir(resources.join("plugins")).unwrap().flatten() {
+            let Ok(text) = fs::read_to_string(entry.path().join("requirements.lock")) else { continue };
+            // (one that names none - a plugin that needs Python alone - has none to pin)
+            if text.lines().any(package) {
+                assert!(lock_is_hashed(&text), "{}", entry.path().display());
+                seen += 1;
+            }
+        }
+        assert!(seen > 0);
     }
 
     #[test]
@@ -1223,20 +1212,28 @@ mod tests {
     #[test]
     fn env_info_rejects_foreign_paths() {
         let cases = [
-            env_info("resources/py/notes.txt", "uv/console/venv", "3.12"),
-            env_info("resources/plugins/cclib/manifest.json", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/plugins/cclib/x/requirements.lock", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/workers/requirements.lock", "uv/console/venv", "3.12"),
-            // a plugin's lock is its requirements.lock, made into its own environment
-            env_info("resources/plugins/cclib/other.lock", "uv/plugin-cclib/venv", "3.12"),
-            env_info("resources/plugins/cclib/requirements.lock", "uv/plugin-pyscf/venv", "3.12"),
-            env_info("resources/plugins/cclib/requirements.lock", "uv/console/venv", "3.12"),
+            env_info("resources/py/notes.txt", VENV, "3.12"),
+            env_info("resources/plugins/cclib/manifest.json", VENV, "3.12"),
+            env_info("resources/plugins/cclib/x/requirements.lock", VENV, "3.12"),
+            env_info("resources/workers/requirements.lock", VENV, "3.12"),
+            // a plugin's lock is its requirements.lock, made into its own environment, exactly there
+            env_info("resources/plugins/cclib/other.lock", VENV, "3.12"),
+            env_info(LOCK, "uv/plugin-pyscf/venv", "3.12"),
+            env_info(LOCK, "uv/console/venv", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib/venv/x", "3.12"),
+            env_info(LOCK, "uv/plugin-cclib/other", "3.12"),
             env_info("resources/plugins/CClib/requirements.lock", "uv/plugin-CClib/venv", "3.12"),
-            env_info("../outside.lock", "uv/console/venv", "3.12"),
+            env_info("../outside.lock", VENV, "3.12"),
             env_info(LOCK, "../../elsewhere", "3.12"),
             env_info(LOCK, "uv", "3.12"),
             env_info(LOCK, "other/venv", "3.12"),
-            env_info(LOCK, "uv/console/venv", "3.12 --index-url x"),
+            env_info(LOCK, VENV, "3.12 --index-url x"),
+            // Meno's own environments - the console's, workflows' - unhashed: none any more
+            env_info("resources/py/requirements.console.lock", "uv/console/venv", "3.12"),
+            env_info("resources/py/requirements.node.lock", "uv/node/venv", "3.12"),
+            env_info("resources/py/requirements.lock", "uv/node/venv", "3.12"),
+            env_info("resources/py/requirements.lock", "uv/anything/venv", "3.12"),
         ];
         for info in &cases {
             assert!(
@@ -1362,8 +1359,8 @@ mod tests {
         assert!(fits("plugins/p/worker.py", &format!("uv/plugin-q/venv/{bin}")).is_err());
         assert!(fits("plugins/r/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
         assert!(fits("plugins/p/other.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
-        // Meno's own workers are no plugin's
-        assert!(fits("workers/w.py", &format!("uv/plugin-q/venv/{bin}")).is_ok());
+        // a script that is no plugin's
+        assert!(fits("workers/w.py", &format!("uv/plugin-q/venv/{bin}")).is_err());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -1389,6 +1386,22 @@ mod tests {
         // (its pipe closed by the kill, the write fails rather than waits on)
         assert!(writer.join().expect("the writer ends").is_err());
         assert!(write_stdin(&state, "held", "x").is_err());
+    }
+
+    #[test]
+    fn a_sidecar_runs_no_worker_but_a_plugin_s() {
+        let sb = Sandbox::new();
+        for file in ["resources/workers/interactive_worker.py", "resources/plugins/p/worker.py"] {
+            fs::create_dir_all(sb.p(file).parent().unwrap()).unwrap();
+            fs::write(sb.p(file), "").unwrap();
+        }
+        // (the folders a sidecar's script may be in, as Meno has them)
+        let roots: Vec<PathBuf> = SIDECAR_SCRIPTS.iter().map(|r| sb.p(r).canonicalize().unwrap()).collect();
+        let check = |script: &str| validate_sidecar(&sb.python(), &["-u".into(), sb.p(script).to_string_lossy().into_owned()], &sb.p("uv"), &roots);
+        assert_eq!(check("resources/plugins/p/worker.py"), Ok(sb.p("resources/plugins/p")));
+        // (the console's worker, gone with the console, is not one)
+        assert!(check("resources/workers/interactive_worker.py").is_err());
+        assert!(!Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/workers").exists());
     }
 
     #[test]

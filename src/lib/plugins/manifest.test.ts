@@ -181,6 +181,12 @@ describe("a plugin's manifest", () => {
     const usual = { macos: ["/Applications/G16.app/Contents/MacOS", "{home}/Applications/G16.app/Contents/MacOS"], windows: ["{programs}/Gaussian */bin"] };
     expect(g16({ files: { linux: "g16", macos: "g16" }, places: usual })?.[0].places).toEqual(usual);
     for (const bad of ["Applications/g16", "/a/../b", "{home}g16", "{folder}/g16", "/a/**/b", "/a/{home}", "C:\\g16"]) expect(g16({ places: { linux: [bad] } })).toEqual([]);
+    // never a shell, an interpreter that takes code, or Python, whatever its case or ending: left out as a path is - the backend's rule (`program_file_ok`)
+    for (const bad of ["sh", "bash", "zsh.exe", "cmd.exe", "PowerShell.exe", "pwsh", "env", "perl", "node.exe", "osascript", "python", "python3", "python3.12", "Python.exe", "pythonw.exe"])
+      expect(g16({ files: { linux: bad } }), bad).toEqual([]);
+    expect(g16({ files: { linux: "g16", windows: "cmd.exe" } })?.[0].files).toEqual({ linux: "g16" });
+    // (a name that only begins like one is a program of its own)
+    expect(g16({ files: { linux: "shelxl", macos: "envelope" } })?.[0].files).toEqual({ macos: "envelope", linux: "shelxl" });
     // run by a role, not a step: kept too
     const byRole = { ...good, reads: [], kinds: [], roles: [{ role: "render", programs: ["blender"] }], installed: [{ name: "blender", label: "Blender", files: { macos: "Blender" } }] };
     expect(acceptManifest(byRole)?.installed.map((d) => d.name)).toEqual(["blender"]);
@@ -194,6 +200,8 @@ describe("a plugin's manifest", () => {
     expect(orca({ orca_2mkl: { macos: "orca_2mkl", windows: "orca_2mkl.exe" } })?.[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", windows: "orca_2mkl.exe" } });
     expect(orca(undefined)?.[0]).not.toHaveProperty("beside");
     for (const bad of [{ "../x": { macos: "x" } }, { x: { macos: "../x" } }, { x: { amiga: "x" } }, { x: "x" }, ["x"], { a: {}, b: {}, c: {}, d: {}, e: {} }]) expect(orca(bad)).toEqual([]);
+    // (never a shell or Python beside it, as the backend refuses one)
+    for (const bad of [{ x: { macos: "sh" } }, { x: { windows: "cmd.exe" } }, { x: { linux: "python3" } }]) expect(orca(bad)).toEqual([]);
     // (ORCA's, as Meno carries it)
     expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
   });
