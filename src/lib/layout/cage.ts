@@ -261,6 +261,8 @@ export type CageView = {
    * turned round with its depth, which would show it from below.
    */
   other?: Omit<CageView, "other">;
+  /** As good as the best view by the system's own measure: chosen among with no margin, by what hangs from it. */
+  tied?: true;
 };
 
 /**
@@ -525,6 +527,27 @@ export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
  * cage: a cage the same from several sides reads best from the one that
  * leaves room for the rest. Null where there is no such view.
  */
+/**
+ * Every textbook view of a cage as good as its best, from either side
+ * (`projectCage`'s ranks are one hand's): a cage alike from several sides
+ * offers them all, to choose among by what is fused to it and hangs from
+ * it. Empty where the cage is not drawn by the template.
+ */
+export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const bonds: [number, number][] = [];
+  for (const [k] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
+  }
+  const X = embed(mol, atoms, index);
+  if (twinChairs(mol, sys, X, index, bonds)) return [];
+  const tied: CageView[] = [];
+  const best = textbook(mol, sys, X, index, bonds, 0, tied);
+  return best && best.cost < 8 ? tied : [];
+}
+
 export function projectCage(mol: Molecule, sys: RingSystem): CageView;
 export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
 export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView | null {
@@ -845,6 +868,54 @@ export function affineFit(from: Vec3[], to: Point[]): { x: number[]; y: number[]
 }
 
 /**
+ * Each double bond of the system in a ring of seven atoms or fewer, with
+ * a neighbour of each end round such a ring: [its two ends, those two
+ * neighbours], by their places among the system's atoms (`index`). Such a
+ * ring has the bond cis. Found by the fewest bonds from the one neighbour
+ * round to the other, not through the bond itself - not by the rings the
+ * smallest set holds, which a cage alike in several rings leaves to the
+ * order of its atoms.
+ */
+function ringDoubleBonds(mol: Molecule, index: Map<number, number>): [number, number, number, number][] {
+  const found: [number, number, number, number][] = [];
+  for (const { a, b, order } of mol.bonds) {
+    if (order !== 2 || !index.has(a) || !index.has(b)) continue;
+    for (const p of mol.neighbours[a])
+      for (const q of mol.neighbours[b]) {
+        if (p === b || q === a || p === q || !index.has(p) || !index.has(q)) continue;
+        // (four bonds at most from p to q: the ring seven atoms at most)
+        const hop = new Map([[p, 0]]);
+        const queue = [p];
+        for (let h = 0; h < queue.length && !hop.has(q); h++) {
+          const u = queue[h];
+          if (hop.get(u)! >= 4) break;
+          for (const v of mol.neighbours[u]) {
+            if (v === a || v === b || !index.has(v) || hop.has(v)) continue;
+            hop.set(v, hop.get(u)! + 1);
+            queue.push(v);
+          }
+        }
+        if (hop.has(q)) found.push([index.get(a)!, index.get(b)!, index.get(p)!, index.get(q)!]);
+      }
+  }
+  return found;
+}
+
+/**
+ * How many of those double bonds (`ringDoubleBonds`) a drawing shows
+ * trans: the two neighbours on opposite sides of the bond. The solid has
+ * each flat and cis, and seen from any side it stays so; easing the rest
+ * of the cage to bonds of one length can turn one (tetrodotoxin's
+ * guanidine ring, seen nearly edge on, its C=N a zigzag).
+ */
+function turnedInRings(pts: readonly Point[], found: readonly [number, number, number, number][]): number {
+  return found.filter(([a, b, p, q]) => {
+    const side = (v: number) => Math.sign((pts[b].x - pts[a].x) * (pts[v].y - pts[a].y) - (pts[b].y - pts[a].y) * (pts[v].x - pts[a].x));
+    return side(p) * side(q) < 0;
+  }).length;
+}
+
+/**
  * The cage as a chemist draws it: one of its six-membered rings as the
  * chair or boat it is, by the template above, and the rest of the cage
  * built up from it - a bond axial to that ring upright, an atom bridging
@@ -853,7 +924,8 @@ export function affineFit(from: Vec3[], to: Point[]): { x: number[]; y: number[]
  * same way, puts it, eased to bonds of one length. Null for a cage with
  * no six-membered ring. Adamantane comes out as four chairs, the one at
  * the bottom with its three axial bonds rising to the fourth bridgehead;
- * norbornane and camphor as a boat with their bridge above.
+ * norbornane and camphor as a boat with their bridge above. A double bond
+ * in a ring of seven atoms or fewer is drawn cis, as the ring has it.
  */
 function textbook(
   mol: Molecule,
@@ -862,6 +934,7 @@ function textbook(
   index: Map<number, number>,
   bonds: [number, number][],
   rank = 0,
+  tied?: CageView[],
 ): CageView | null {
   const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
@@ -873,6 +946,7 @@ function textbook(
     [1, 1],
   ];
   const at = (a: number) => X[index.get(a)!];
+  const inSmallRings = ringDoubleBonds(mol, index);
   type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
   // (the atoms of every six-membered ring the solid has as a chair or a
   // boat: a bond axial to one is drawn upright, the ring drawn by the
@@ -946,13 +1020,19 @@ function textbook(
                 (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
                 0,
               );
+              // (and a double bond in a small ring drawn trans counted as a
+              // bridge's is (bridge.ts): it reads as another molecule -
+              // tetrodotoxin's guanidine C=N, which won or lost by how near
+              // an OH's label came to the ring's N, a hair either side of a
+              // label's breadth as the atoms came)
               const cost =
                 viewCost(pts, bonds, 0.45, 0.2) +
                 cost0 +
                 (restUp ? 0 : 0.5) +
                 exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
                 0.25 * behind +
-                LEVEL_AXIS * axisTiltOf(pts);
+                LEVEL_AXIS * axisTiltOf(pts) +
+                20 * turnedInRings(pts, inSmallRings);
               best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
             }
           }
@@ -981,6 +1061,14 @@ function textbook(
     });
     return { pos, depth, hints: f.hints, cost: f.cost };
   };
+  // (and every view of either hand as good as the best, each with the
+  // other hand's best for its other side: two hands alike - an achiral
+  // cage, adamantane - and which came first went by the order of the atoms)
+  if (tied)
+    hands.forEach((fs, h) => {
+      const back = hands[1 - h]?.[0];
+      for (const f of fs) if (f.cost < hands[0][0].cost + 1e-6) tied.push({ ...view(f), other: back ? view(back) : undefined });
+    });
   return { ...view(found[0]), other: found[1] ? view(found[1]) : undefined };
 }
 
