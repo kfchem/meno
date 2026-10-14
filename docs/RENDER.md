@@ -31,10 +31,22 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
     or square;
-  - what the molecules are made of: as the 3D style draws them, glossy,
-    metal, glass, matte or clay (one light grey); and, where a surface is
-    shown, what it is made of: as the canvas draws it, glass, glossy or
-    matte.
+  - the **look**: one choice, a bundle of what the molecules are made of,
+    what the surfaces are made of, how it is shaded and how it is
+    outlined - as the canvas draws them, glossy, matte, clay, glass,
+    metal, cartoon, line art (2026-10-15). Folded under it, *Adjust this
+    look* shows its parts, filled in from it, each the chemist's to change
+    for this render alone: the molecules' material (as the 3D style draws
+    them, glossy, metal, glass, matte, clay, white); where a surface is
+    shown, the surface's (as the canvas draws it, glass, glossy, matte);
+    the shading (lit, as a renderer finds light and shadow, or toon: one
+    lit band and one in shade, the band's size chosen); and the outlines
+    (none; thin, on every line; the outer edge only; the outer edge thick
+    and the inner lines thin) with their width and colour. A part that
+    does not apply - a band's size without toon shading, a width without
+    an outer edge - is not shown.
+  - A look no added plugin can make is not offered: a plugin's manifest
+    declares the looks it can make (`looks`, PLUGINS.md).
 - The plugin's options, as its manifest declares them (the Blender
   plugin's below).
 
@@ -109,9 +121,9 @@ maintainer to change later:
   nothing besides (no list's surface, no vibration) - one job for each.
   No step takes pictures, so nothing is wired on from it.
 - **Pictures only**, no films.
-- Its options are Meno's own choices for a picture - width, shape, what
-  the molecules and the surfaces are made of, starting from the command's
-  defaults - then the plugin's; remembered for the step as any step's
+- Its options are Meno's own choices for a picture - width, shape, the
+  look and its parts, starting from the command's defaults - then the
+  plugin's; remembered for the step as any step's
   are (Settings, *Calculations*), apart from the command's.
 - The pictures go **in the step's result set**, framed and wired from
   the step as any step's result set is, named *Rendered* and counted
@@ -211,13 +223,18 @@ uv, no package), and the script Blender runs, `render.py`.
   (transparent - a film's then white - white, black or grey), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
-  the shadows' softness, and a film's quality; and its *look*: realistic,
-  or **cartoon** (2026-10-15) - each material a Toon BSDF in the colour
-  it had, lit in one band whose size is chosen, and the shapes outlined by
-  Freestyle, an outline of a width in pixels and a colour (black, white or
-  grey). Cartoon is drawn by Cycles, which draws the Toon BSDF's band as
-  one, and without noise removal, which would soften its edge; the
-  picture's place and size are as the realistic look's.
+  the shadows' softness, and a film's quality. The renderer and noise
+  removal are not offered under toon shading, which Cycles draws.
+- **Its looks** (2026-10-15): all of Meno's. The materials are in the
+  scene's file. Toon shading is each material a Toon BSDF in the colour it
+  had, lit in one band whose size is chosen, drawn by Cycles - which draws
+  the band as a band - without noise removal, which would soften its edge.
+  Outlines: Freestyle's silhouettes, borders and creases for the thin
+  line, one pixel; and for the outer edge, the picture's own silhouette
+  grown by the width, in the colour, under the picture - one edge round
+  the molecule however its shapes overlap, which Freestyle's own external
+  contour (each shape's) is not. Meno's looks keep the picture's place
+  and size.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer

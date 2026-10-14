@@ -19,14 +19,11 @@
     {
       "role": "render",
       "programs": ["blender"],
+      "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"],
       "options": [
-        {"id": "look", "label": "Look", "type": "choice", "choices": [{"value": "realistic", "label": "Realistic"}, {"value": "cartoon", "label": "Cartoon: lit in a band, outlined (Cycles)"}], "default": "realistic"},
-        {"id": "band", "label": "Cartoon: size of the lit band", "type": "number", "default": 0.5, "min": 0.05, "max": 1, "step": 0.05},
-        {"id": "outline", "label": "Cartoon: outline width", "type": "number", "default": 2, "min": 0.5, "max": 20, "step": 0.5, "unit": "px"},
-        {"id": "outline_colour", "label": "Cartoon: outline colour", "type": "choice", "choices": [{"value": "black", "label": "Black"}, {"value": "white", "label": "White"}, {"value": "grey", "label": "Grey"}], "default": "black"},
-        {"id": "engine", "label": "Renderer", "type": "choice", "choices": [{"value": "cycles", "label": "Cycles: light traced, true shadows"}, {"value": "eevee", "label": "EEVEE: fast"}], "default": "cycles"},
+        {"id": "engine", "when": {"id": "shading", "in": ["lit"]}, "label": "Renderer", "type": "choice", "choices": [{"value": "cycles", "label": "Cycles: light traced, true shadows"}, {"value": "eevee", "label": "EEVEE: fast"}], "default": "cycles"},
         {"id": "samples", "label": "Samples for each pixel", "type": "number", "default": 128, "min": 1, "max": 4096, "step": 1},
-        {"id": "denoise", "label": "Remove noise", "type": "switch", "default": true},
+        {"id": "denoise", "when": {"id": "shading", "in": ["lit"]}, "label": "Remove noise", "type": "switch", "default": true},
         {"id": "gpu", "label": "Use the graphics processor where Blender can", "type": "switch", "default": true},
         {"id": "background", "label": "Background", "type": "choice", "choices": [{"value": "transparent", "label": "Transparent (a film's is white)"}, {"value": "white", "label": "White"}, {"value": "black", "label": "Black"}, {"value": "grey", "label": "Grey"}], "default": "transparent"},
         {"id": "colours", "label": "Colours", "type": "choice", "choices": [{"value": "neutral", "label": "True to the style (Khronos PBR Neutral)"}, {"value": "agx", "label": "Film-like (AgX)"}, {"value": "standard", "label": "Standard"}], "default": "neutral"},

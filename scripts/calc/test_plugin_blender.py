@@ -57,14 +57,21 @@ class Prepare(unittest.TestCase):
         self.assertEqual((settings["width"], settings["height"], settings["engine"], settings["samples"]), (320, 240, "cycles", 128))
         self.assertEqual(job["reads"], [])
 
-    def test_the_cartoon_look_and_its_choices_are_written_as_settings(self):
-        said = ask("prepare", step="render", entries=[SCENE], options={"look": "cartoon", "band": 0.3, "outline": 4, "outline_colour": "white"})
+    def test_the_looks_shading_and_outlines_are_written_as_settings_from_the_entry(self):
+        entry = {**SCENE, "shading": "toon", "band": 0.3, "outlines": "mixed", "outline": 4, "outline_colour": "white"}
+        said = ask("prepare", step="render", entries=[entry], options={})
         settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
-        self.assertEqual((settings["look"], settings["band"], settings["outline"], settings["outline_colour"]), ("cartoon", 0.3, 4, "white"))
-        # (the realistic look, as before, and the cartoon's defaults: a band of a half, 2 px, black)
+        self.assertEqual((settings["shading"], settings["band"], settings["outlines"], settings["outline"], settings["outline_colour"]), ("toon", 0.3, "mixed", 4, "white"))
+        # (lit and not outlined, as before, where the entry says nothing)
         plain = ask("prepare", step="render", entries=[SCENE], options={})
         plain = json.loads({f["name"]: f["text"] for f in plain["result"]["jobs"][0]["files"]}["render.json"])
-        self.assertEqual((plain["look"], plain["band"], plain["outline"], plain["outline_colour"]), ("realistic", 0.5, 2, "black"))
+        self.assertEqual((plain["shading"], plain["outlines"]), ("lit", "none"))
+
+    def test_declares_the_looks_it_makes(self):
+        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
+        looks = m["roles"][0]["looks"]
+        self.assertIn("cartoon", looks)
+        self.assertIn("meno", looks)
 
     def test_a_film_is_written_as_one(self):
         said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 240, "fps": 30}], options={"quality": "lossless", "background": "black"})
@@ -84,11 +91,12 @@ class Prepare(unittest.TestCase):
             (SCENE, {"denoise": "yes"}),
             (SCENE, {"key": float("nan")}),
             (SCENE, {"softness": 120}),
-            (SCENE, {"look": "sketch"}),
-            (SCENE, {"outline": 0}),
-            (SCENE, {"outline": 50}),
-            (SCENE, {"band": 0}),
-            (SCENE, {"outline_colour": "#000000"}),
+            ({**SCENE, "shading": "sketch"}, {}),
+            ({**SCENE, "outlines": "dotted"}, {}),
+            ({**SCENE, "outline": 0}, {}),
+            ({**SCENE, "outline": 50}, {}),
+            ({**SCENE, "band": 0}, {}),
+            ({**SCENE, "outline_colour": "#000000"}, {}),
         ]:
             said = ask("prepare", step="render", entries=[entry], options=options)
             self.assertFalse(said["ok"], (entry, options))
@@ -121,7 +129,7 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "look", "band", "outline", "outline_colour"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality"})
 
 
 def blender():
@@ -204,7 +212,8 @@ class Renders(unittest.TestCase):
             scene = {**BALL, **ball_mesh()}
             scene["materials"] = [{"pbrMetallicRoughness": {"baseColorFactor": [1, 0, 0, 1], "metallicFactor": 0, "roughnessFactor": 1}}]
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "gpu": False, "look": "cartoon", "outline": 4})
+            entry = {**SCENE, "shading": "toon", "outlines": "mixed", "outline": 4}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "gpu": False})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")

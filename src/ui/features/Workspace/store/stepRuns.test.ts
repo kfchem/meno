@@ -730,7 +730,7 @@ describe("Render as a step", () => {
     const step = st().addStep("render", "blender", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
     // (Meno's own choices first, then Blender's - the role's, asked as a step)
-    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 4)).toEqual(["width", "shape", "molecules", "surfaces"]);
+    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 5)).toEqual(["width", "shape", "look", "molecules", "surfaces"]);
     expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
     // (it gives pictures, which no step takes: nothing is wired from it)
     expect(canWire(st(), { step }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
