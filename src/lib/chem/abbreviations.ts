@@ -567,6 +567,7 @@ export function labelProblem(label: string, except?: CustomAbbreviation): string
   if (l.length > 24) return "A label is at most 24 characters.";
   if (/^[\d,]/.test(l) || /^[+−-]|[+−-]$/.test(l)) return "A label starts with a letter and ends without a charge.";
   if (ELEMENTS.has(l)) return `${l} is an element's symbol.`;
+  if (GENERIC_SYMBOLS.has(l)) return `${l} already means ${GENERIC_SYMBOLS.get(l)}.`;
   const own = custom.get(l);
   if (own && own !== except) return `${l} is already one of yours: ${own.name || own.label}.`;
   if (!own) {
@@ -682,16 +683,34 @@ function smilesGroup(smiles: string): GroupStructure {
 
 const ELEMENTS = new Set(TABLE.map((e) => e.symbol));
 /**
+ * The symbols for a kind of group rather than a group, and what each stands
+ * for (the maintainer, 2026-10-13): names, as TBS is - read whole, so never
+ * turned round on a bond's left (OPG is PGO there, not GPO), written so
+ * however typed (pg is PG), and no label of the user's own - but holding no
+ * structure.
+ */
+export const GENERIC_SYMBOLS: ReadonlyMap<string, string> = new Map([
+  ["PG", "a protecting group"],
+  ["LG", "a leaving group"],
+  ["EWG", "an electron-withdrawing group"],
+  ["EDG", "an electron-donating group"],
+  ["Nu", "a nucleophile"],
+  ["E", "an electrophile"],
+  ["Hal", "a halogen"],
+  ["Het", "a heteroatom"],
+]);
+/**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.
  */
 let UNITS: string[] = [];
 /** The units by their first letter, each letter's longest first: what a label is read into at a letter, looked up by it. */
 let UNITS_AT = new Map<string, string[]>();
-/** The units labels are read into: the groups', the user's own among them. */
+/** The units labels are read into: the groups', the user's own among them, and the symbols for a kind of group. */
 function setUnits(): void {
-  UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, "pin", "Phth"])]
-    // (Bpin is B and pin, and so on the left pinB)
+  UNITS = [...new Set([...[...GROUPS, ...custom.values()].flatMap((g) => [g.label, ...(g.also ?? [])]), ...LIGAND_UNITS, ...REAGENT_UNITS, ...GENERIC_SYMBOLS.keys(), "pin", "Phth"])]
+    // (Bpin is B and pin, and so on the left pinB; a capital alone - E - is a
+    // unit as it is, and here would come before Eu)
     .filter((u) => u.length > 1 && u !== "Bpin")
     .sort((x, y) => y.length - x.length);
   UNITS_AT = new Map();
@@ -703,15 +722,32 @@ function setUnits(): void {
 }
 setUnits();
 
-/** The names labels are read into - the groups', the user's own among them, ligands' and reagents' - as they are written. */
+/** The names labels are read into - the groups', the user's own among them, ligands', reagents' and the symbols for a kind of group - as they are written. */
 export function labelUnitNames(): readonly string[] {
   return UNITS;
 }
 
 /**
+ * The unit a label's letters at `i` make, where no group's name begins: a
+ * capital and the small letters after it - an element, Cl, or a word that
+ * names nothing Meno knows, Nu, Hal, Het, read whole (letter by letter, Nu
+ * was written uN on a bond's left) - up to a group's name (Bpin is B and
+ * pin) or a prefix (Ot-Bu), past an element's own two letters; any other
+ * character on its own.
+ */
+function letters(text: string, i: number): string {
+  if (!/[A-Z]/.test(text[i])) return text[i];
+  // (an element's two letters first: SnBu3 is Sn and Bu3, not S and nBu3)
+  let j = ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? i + 2 : i + 1;
+  const prefix = (k: number) => text[k + 1] === "-" && /[A-Za-z(]/.test(text[k + 2] ?? "");
+  while (/[a-z]/.test(text[j] ?? "") && !prefix(j) && !UNITS.some((u) => text.startsWith(u, j))) j++;
+  return text.slice(i, j);
+}
+
+/**
  * A label's units, as a chemist reads it: each element or group with its
- * count - CO2Me is C, O2, Me - parentheses with what they hold, and any
- * other character on its own.
+ * count - CO2Me is C, O2, Me - parentheses with what they hold, a word
+ * Meno does not know whole, and any other character on its own.
  */
 export function labelUnits(text: string): string[] {
   const out: string[] = [];
@@ -728,9 +764,11 @@ export function labelUnits(text: string): string[] {
       }
       unit = text.slice(i, j + 1);
     } else {
+      // (a symbol for a kind of group only where its word ends: NHallyl is
+      // NH and allyl, PGe P and Ge)
       unit =
-        UNITS_AT.get(text[i])?.find((u) => text.startsWith(u, i)) ??
-        (ELEMENTS.has(text.slice(i, i + 2)) && /[a-z]/.test(text[i + 1] ?? "") ? text.slice(i, i + 2) : text[i]);
+        UNITS_AT.get(text[i])?.find((u) => text.startsWith(u, i) && !(GENERIC_SYMBOLS.has(u) && /[a-z]/.test(text[i + u.length] ?? ""))) ??
+        letters(text, i);
     }
     i += unit.length;
     // its count - after a letter or a bracket, not a ring's position (2,6-)

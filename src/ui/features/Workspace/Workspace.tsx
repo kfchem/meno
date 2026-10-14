@@ -110,6 +110,7 @@ import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -1269,7 +1270,7 @@ function WorkspaceContent({
     chemWorker("checks").catch((e: unknown) => {
       setChemistry({ ...useAppSettings.getState().chemistry, stereoLabels: false });
       setChemError(
-        `R and S cannot be shown: ${e instanceof Error ? e.message : String(e)}`,
+        `${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`,
       );
     });
   };
@@ -1360,7 +1361,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    { name: chemistry.stereoLabels ? "Hide R and S" : "Show R and S", keys: "", run: toggleStereoLabels },
+    { name: chemistry.stereoLabels ? STEREO_LABELS.hide : STEREO_LABELS.show, keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
       ? [
           textsOpen

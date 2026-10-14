@@ -11,7 +11,7 @@
  * once the text is committed.
  */
 
-import { abbreviationOf } from "../../../../lib/chem/abbreviations";
+import { abbreviationOf, GENERIC_SYMBOLS } from "../../../../lib/chem/abbreviations";
 import { reagentOf } from "../../../../lib/chem/reagents";
 import type { Reading } from "../../../../lib/chem/smartLabel";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
@@ -34,7 +34,7 @@ export function labelKey(e: KeyLike): string | null {
 /**
  * What a label reads as (lib/chem/smartLabel `Reading`): an element - with
  * its H, its charge, its mass number - or a charge alone, an Rgroup, or
- * what the abbreviations read - Meno's, the user's own, those put together
+ * a symbol for a kind of group (PG, Nu), or what the abbreviations read - Meno's, the user's own, those put together
  * by rule - part of a structure; a reagent or a complex, a whole molecule,
  * by a reagent's name where the reagents list it (TBME, CPME) - not by a
  * formula read by rule (HOAc, H2Zn, PdCl2); a ligand by its name, named
@@ -48,6 +48,13 @@ export function labelReading(label: string): Reading {
   if (read.kind === "element" && named && isElementSymbol(label)) return { whole: false };
   if (read.kind !== "text") return { whole: false, ...(read.kind === "element" ? { element: read.el } : {}) };
   if (/^R\d+$/.test(label)) return { whole: false };
+  // (a symbol for a kind of group - PG, Nu, Hal - alone, or behind what
+  // reads as part of a structure: OPG, NHPG, CH2Hal - its element said, so
+  // that none after uranium is read from letters typed small: NHPG, not NhPG)
+  const generic = named ? undefined : [...GENERIC_SYMBOLS.keys()].find((g) => label.endsWith(g));
+  if (generic && label === generic) return { whole: false };
+  const before = generic ? labelReading(label.slice(0, -generic.length)) : null;
+  if (before && !before.whole) return { whole: false, ...(before.element ? { element: before.element } : {}) };
   if (!named) return null;
   if (named.kind === "reagent" && reagentOf(label.trim())) return { whole: true, named: true };
   // (a ligand by its name - TFP, dppf - is named too, part of a structure as it is; an atom carrying a group says so)

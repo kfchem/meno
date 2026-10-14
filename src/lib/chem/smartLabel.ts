@@ -43,7 +43,7 @@
  * letters, where they were typed, so that the caret stays where it is;
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
-import { customAbbreviations, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
+import { customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 
 /**
@@ -97,8 +97,9 @@ function vocabulary(): Vocabulary {
       // (by symbol, as ever: ties among writings keep this order)
       ...symbols.map((text) => (NOT_METALS.has(text) || unitSet.has(text) ? { text } : { text, metal: true as const })),
       ...units.map((text) => ({ text })),
-      // (an Rgroup's R)
+      // (an Rgroup's R; an electrophile's E, a name one letter long)
       { text: "R" },
+      ...[...GENERIC_SYMBOLS.keys()].filter((g) => !units.includes(g)).map((text) => ({ text })),
       ...[...letters].map((text) => ({ text, letter: true as const })),
     ];
     // (by their first character, a letter as a capital: what a letter typed, small or not, may begin - 1-Naph by its 1)

@@ -625,6 +625,19 @@ All hover-based, as above.
   has it back, read as nothing else (*As typed: obz*, *As typed: HO*, one
   step); Settings › General, *Read labels as they are meant*, turned off
   keeps every label exactly as typed.
+- **Symbols for a kind of group** (the maintainer, 2026-10-13): PG (a
+  protecting group), LG (a leaving group), EWG and EDG (an electron-
+  withdrawing and an electron-donating group), Nu (a nucleophile), E (an
+  electrophile), Hal (a halogen) and Het (a heteroatom) are names, as TBS
+  is, that hold no structure (`GENERIC_SYMBOLS`, `lib/chem/abbreviations`).
+  So a label with one is never turned round letter by letter where its
+  bond comes in from the right - OPG is drawn PGO there, NHPG PGHN, ONu
+  NuO, not GPO - and they are read however typed: pg is PG, hal Hal (not
+  AlH), opg OPG, and pgo, as drawn on a bond's left, is kept OPG. One is
+  read only where its word ends - NHallyl is NH and allyl - and none can
+  be a label of the user's own. A word read as no element, group or such
+  symbol - Alk, say - is kept whole too: a capital and the small letters
+  after it.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
   clicks on an atom or two on empty space, the honeycomb's ring where a
@@ -676,8 +689,8 @@ All hover-based, as above.
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
   - Hidden unless asked for, on the drawing and in 3D (the maintainer,
-    2026-10-10): *Show R and S* (the menu, or Settings › Chemistry) shows
-    them; making every stereoisomer a drawing leaves open shows each
+    2026-10-10): *Show R/S and E/Z* (the menu, or Settings › Chemistry;
+    named for both, the maintainer, 2026-10-13) shows them; making every stereoisomer a drawing leaves open shows each
     one's open centres, to tell them apart (docs/WORKSPACE.md, *Told
     apart*).
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
@@ -1155,7 +1168,7 @@ traced from reference drawings.
   drawn in - and PNG. The SVG export draws what the canvas draws (PR #36),
   at ACS 1996's own size (PR #43); PNG to come.
 - No buttons on the canvas (2026-10-04): Open (Ctrl/Cmd+O), Save As, New
-  text, Fit to content (Ctrl/Cmd+1), R and S and Drawing style are on the
+  text, Fit to content (Ctrl/Cmd+1), R/S and E/Z and Drawing style are on the
   right-click menu on empty space; Save is a button in the title bar, by
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu

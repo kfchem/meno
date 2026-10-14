@@ -198,7 +198,8 @@ page itself.
   network as adding always does.
 - **Once.** A plugin's guide is shown the first time the plugin is there:
   on Meno's first start for one that comes added, or as soon as one that
-  brings a guide is added. Gone through or skipped, it is kept as shown
+  brings a guide is added. Gone through or skipped - Skip, or Escape where
+  nothing else takes it (the maintainer, 2026-10-13) - it is kept as shown
   (settings `plugins.guided`). Settings, *Plugins*, shows it again
   (*Show*), with a workspace brought to the front.
 - **Meno's question about keeping itself up to date** waits until a guide
