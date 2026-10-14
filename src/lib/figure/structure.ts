@@ -7,6 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { reversedLabel } from "../chem/abbreviations";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens, type Radical } from "../chem/molecule";
+import { isMetal } from "../layout/perceive";
 import type { FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
@@ -147,7 +148,8 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
   const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
   const kinds = atomKinds(atoms, bonds, hs, lone);
   atoms.forEach((a, i) => {
-    if (!centre(i) || shown.has(i) || wavy.has(i)) return;
+    // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
+    if (isMetal(els[i]) || shown.has(i) || wavy.has(i)) return;
     // (four groups, each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
     if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;

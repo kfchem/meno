@@ -1105,7 +1105,8 @@ workspace holds.
   - a stereocentre whose configuration the figure does not show - no
     wedge or hash narrow at it, as a cage drawn in perspective has none -
     four groups about it each other than the rest, its hydrogens one at
-    most: none is read, and none guessed ("A stereocentre whose
+    most, a P=O's or an S=O's too, as Meno takes a stereocentre, but never
+    a metal's: none is read, and none guessed ("A stereocentre whose
     configuration is not drawn: none is read.");
   - a molecule written as words in a scheme (below).
 
