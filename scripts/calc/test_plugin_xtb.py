@@ -230,6 +230,26 @@ molecular quadrupole (traceless):
                    files={"xtbout.json": json.dumps({"total energy": -5.07, "dipole / a.u.": [6.0 / 0.529177210903, 0.0, -0.664]})})
         self.assertAlmostEqual(next(r for r in bare["outputs"][0]["results"] if r["id"] == "dipole")["value"], here["value"], places=4)
 
+    def test_an_isotope_s_own_mass_places_the_centre(self):
+        # (D3O+: each D's mass as Meno gives it with the entry - NIST's - or, where it gives none, its mass number)
+        def deuteronium(mass):
+            atoms = [("O", 0.0, 0.0, 0.12), ("H", 0.0, 0.94, -0.16), ("H", 0.814, -0.47, -0.16), ("H", -0.814, -0.47, -0.16)]
+            return {"name": "deuteronium", "charge": 1, "multiplicity": 1, "bonds": [],
+                    "atoms": [{"el": e, "x": x, "y": y, "z": z, **({"isotope": 2, **({"mass": mass} if mass else {})} if e == "H" else {})}
+                              for e, x, y, z in atoms]}
+
+        def dipole(entry):
+            out = ask("collect", step="energy", entries=[entry], options={}, ended="done", log="",
+                      files={"xtbout.json": json.dumps({"total energy": -5.07, "dipole / a.u.": [0.0, 0.0, -0.664]})})
+            return next(r for r in out["outputs"][0]["results"] if r["id"] == "dipole")["value"]
+
+        centre = (15.999 * 0.12 - 3 * 2.01410177812 * 0.16) / (15.999 + 3 * 2.01410177812)
+        self.assertAlmostEqual(dipole(deuteronium(2.01410177812)), abs(-0.664 - centre / 0.529177210903) * 2.541746473, places=6)
+        # (its mass number: within a few thousandths of a debye; natural hydrogen's weight would be some 0.2 D off)
+        self.assertAlmostEqual(dipole(deuteronium(None)), dipole(deuteronium(2.01410177812)), places=2)
+        natural = (15.999 * 0.12 - 3 * 1.008 * 0.16) / (15.999 + 3 * 1.008)
+        self.assertGreater(abs(dipole(deuteronium(2.01410177812)) - abs(-0.664 - natural / 0.529177210903) * 2.541746473), 0.15)
+
     def test_a_neutral_molecule_s_dipole_is_xtb_s_as_it_printed_it(self):
         out = ask("collect", step="energy", entries=[ETHYNE], options={}, files={"xtbout.json": json.dumps({"total energy": -5.07})},
                   log=PRINTOUT, ended="done")["outputs"][0]

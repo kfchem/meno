@@ -38,7 +38,8 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
   dipole is taken about the origin of the coordinates xtb was given, so a
   charged molecule's is taken again about its centre of mass (an ion's
   dipole depends on where it is taken about), from the geometry it is of
-  and the standard atomic weights; the
+  and its atoms' masses - an isotope's own, the rest the standard atomic
+  weights; the
   thermochemistry from the THERMODYNAMIC summary and the H(T), T*S and
   G(T) table it prints.
 
@@ -276,15 +277,37 @@ def floats(v, n=None):
     return [float(x) for x in v]
 
 
-def centre_of_mass(elements, xyz):
-    """Where a molecule's centre of mass is, in angstroms, from its atoms' standard atomic weights; none where one is not known."""
-    if not xyz or len(xyz) != 3 * len(elements) or any(e not in MASSES for e in elements):
+def masses_of(entry):
+    """Each atom's mass, for the centre of mass: an isotope's own - the mass
+    Meno gives with the entry (NIST's, as ORCA's "M =" is given it), or else
+    its mass number, which is within a tenth of a dalton of it - and the standard
+    atomic weight of the rest; none where an element has none here."""
+    out = []
+    for a in entry.get("atoms") or []:
+        iso, mass = a.get("isotope"), a.get("mass")
+        if iso:
+            if not isinstance(mass, bool) and isinstance(mass, (int, float)) and math.isfinite(mass) and mass > 0:
+                out.append(float(mass))
+                continue
+            if not isinstance(iso, bool) and isinstance(iso, (int, float)) and iso == int(iso) and iso > 0:
+                out.append(float(iso))
+                continue
+        el = str(a.get("el", "")).strip()
+        if el not in MASSES:
+            return None
+        out.append(MASSES[el])
+    return out
+
+
+def centre_of_mass(masses, xyz):
+    """Where a molecule's centre of mass is, in angstroms, from its atoms' masses; none where they are not known."""
+    if not masses or not xyz or len(xyz) != 3 * len(masses):
         return None
-    total = sum(MASSES[e] for e in elements)
-    return [sum(MASSES[e] * xyz[3 * i + k] for i, e in enumerate(elements)) / total for k in range(3)]
+    total = sum(masses)
+    return [sum(m * xyz[3 * i + k] for i, m in enumerate(masses)) / total for k in range(3)]
 
 
-def dipole_of(dump, log, charge=0, elements=(), start=None, end=None):
+def dipole_of(dump, log, charge=0, masses=None, start=None, end=None):
     """The dipole moment, in debye, and whether it was taken about the
     centre of mass: the one xtb printed last - of the geometry it ended on,
     `end` - or, where it printed none, the dump's, of the one it began with,
@@ -303,7 +326,7 @@ def dipole_of(dump, log, charge=0, elements=(), start=None, end=None):
         total, at = math.sqrt(sum(v * v for v in vector)) * DEBYE_PER_AU, start
     if not charge:
         return (total, False) if total is not None else None
-    centre = centre_of_mass(elements, at)
+    centre = centre_of_mass(masses, at)
     if centre is None or None in vector:
         return None
     # (taken about the centre instead of the origin: less the charge there - in atomic units, the centre in bohr)
@@ -311,13 +334,13 @@ def dipole_of(dump, log, charge=0, elements=(), start=None, end=None):
     return math.sqrt(sum(v * v for v in moved)) * DEBYE_PER_AU, True
 
 
-def results_of(dump, n, log="", charge=0, elements=(), start=None, end=None):
+def results_of(dump, n, log="", charge=0, masses=None, start=None, end=None):
     """The job's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
     out = []
     gap = dump.get("HOMO-LUMO gap / eV")
     if isinstance(gap, (int, float)) and math.isfinite(gap):
         out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": float(gap), "unit": "eV", "digits": 2})
-    dipole = dipole_of(dump, log, charge, elements, start, end)
+    dipole = dipole_of(dump, log, charge, masses, start, end)
     if dipole is not None:
         value, about = dipole
         out.append({
@@ -426,7 +449,7 @@ def output_of(step, entry, options, files, log):
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
     version = str(dump.get("xtb version") or VERSION).split()[0]
     charge = whole(entry.get("charge", 0), "The charge")
-    results = results_of(dump, n, log, charge, elements, start, frames[-1])
+    results = results_of(dump, n, log, charge, masses_of(entry), start, frames[-1])
     if step == "frequencies":
         results += thermo_of(log)
     solvent = options.get("solvent", "none")
