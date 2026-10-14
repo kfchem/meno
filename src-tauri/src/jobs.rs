@@ -1590,7 +1590,7 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
 /// neither leads out - and holding what it is to run. Where it is there.
 pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
     let refused = || format!("not a job of Meno's: {}", dir.display());
-    let jobs = data.join("jobs");
+    let jobs = jobs_in(data);
     let root = jobs.canonicalize().map_err(|_| refused())?;
     let real = dir.canonicalize().map_err(|_| refused())?;
     let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
@@ -1621,12 +1621,14 @@ fn plain(path: PathBuf) -> PathBuf {
 /// Meno's identifier (tauri.conf.json), which names its data folder.
 const IDENTIFIER: &str = "com.kfchem.meno";
 
-/// Meno's data folder as Tauri finds it (`app_data_dir`: the system's
-/// folder for applications' data, then Meno's identifier) - for a job's
-/// runner, which has no window to ask.
+/// Meno's local data folder as Tauri finds it (`app_local_data_dir`: the
+/// system's folder for applications' local data, then Meno's identifier),
+/// where Meno makes jobs (lib.rs `local_data_dir`) - for a job's runner,
+/// which has no window to ask. On a Mac and on Linux it is the data folder
+/// itself; on Windows the local one, not the roaming one.
 fn data_dir_here() -> Option<PathBuf> {
     #[cfg(windows)]
-    let base = roaming_app_data();
+    let base = local_app_data();
     #[cfg(unix)]
     let base = {
         let home = std::env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute());
@@ -1640,14 +1642,14 @@ fn data_dir_here() -> Option<PathBuf> {
     base.map(|b| b.join(IDENTIFIER))
 }
 
-/// The user's roaming application data folder (Windows' known folder, as Tauri reads it).
+/// The user's local application data folder (Windows' known folder, as Tauri reads it).
 #[cfg(windows)]
-fn roaming_app_data() -> Option<PathBuf> {
+fn local_app_data() -> Option<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath};
+    use windows_sys::Win32::UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath};
     unsafe {
         let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
-        let ok = SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, std::ptr::null_mut(), &mut path) == 0;
+        let ok = SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, std::ptr::null_mut(), &mut path) == 0;
         let found = (ok && !path.is_null()).then(|| {
             let len = (0..).take_while(|&i| *path.add(i) != 0).count();
             PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
@@ -1673,8 +1675,13 @@ fn plugins_here() -> Option<PathBuf> {
 
 // --- Meno's commands ---------------------------------------------------------
 
+/// The jobs' folder in Meno's local data folder `data`: where Meno makes them, and the only one their runner takes them from.
+fn jobs_in(data: &Path) -> PathBuf {
+    data.join("jobs")
+}
+
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = crate::local_data_dir(app)?.join("jobs");
+    let root = jobs_in(&crate::local_data_dir(app)?);
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
 }
@@ -2713,6 +2720,27 @@ mod tests {
             assert!(spec_allowed(&data, &plugins, &then, &written).is_err(), "{arg}");
         }
         assert!(spec_allowed(&data, &plugins, &good, &[]).is_err());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_takes_a_job_made_in_the_local_data_folder() {
+        // (where the runner looks: the folder Tauri gives as the local one, in which Meno makes jobs - on Windows not the roaming one)
+        let here = data_dir_here().unwrap();
+        #[cfg(windows)]
+        {
+            let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join(IDENTIFIER);
+            assert_eq!(here, local);
+            assert!(!here.starts_with(std::env::var_os("APPDATA").unwrap()));
+        }
+        #[cfg(target_os = "macos")]
+        assert_eq!(here, PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library").join("Application Support").join(IDENTIFIER));
+        // (a job made as job_start makes it, in a local data folder: taken by its runner)
+        let base = temp();
+        let data = base.join("local");
+        let source = shell(&base.join("source"), ECHO, 1);
+        let (id, dir) = make_job(&jobs_in(&data), &read_spec(&source).unwrap(), &[]).unwrap();
+        assert_eq!(runner_folder(&data, &dir), Ok(plain(jobs_in(&data).canonicalize().unwrap().join(&id))));
         let _ = fs::remove_dir_all(base);
     }
 

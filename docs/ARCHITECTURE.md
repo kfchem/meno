@@ -1331,7 +1331,7 @@ path it is given:
   32 folders deep, and no more than 10,000 files and folders are looked
   at. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be
-  `<app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
+  `<local app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
   job in the folder it checked), and what it is to run - the program, the programs after it, their arguments against
   the files in its work folder, their environment - what `job_start`
   would give (`spec_allowed`). Otherwise it writes a Failed record into
