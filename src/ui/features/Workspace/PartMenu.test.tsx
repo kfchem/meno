@@ -50,9 +50,13 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
 describe("a bond's menu", () => {
   it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
     const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
-    expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "Wavy bond", "Delete bond"]);
-    const other = m.html.match(/<div role="group" aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
-    expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Bold bond", "Hashed bond", "Dashed bond", "Dative bond"]);
+    expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "Delete bond"]);
+    // (its second row hidden until "more" is pressed - and shown at once where the bond is one of those kinds)
+    expect(m.html).not.toContain("Other kinds");
+    const open = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "dashed", choose: none } }).html;
+    const other = open.match(/aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+    expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Wavy bond", "Bold bond", "Bold dashed bond", "Dashed bond", "Dative bond"]);
+    expect(open).toMatch(/aria-label="Dashed bond" aria-pressed="true"/);
     expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
     // (the current kind marked)
     expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);

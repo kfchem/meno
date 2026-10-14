@@ -9,9 +9,9 @@ import type { Bond } from "../store/types";
 
 export type BondKindName = "single" | "double" | "triple" | "wedge" | "hashed-wedge" | "wavy" | "bold" | "hashed" | "dashed" | "dative";
 
-/** The six that are done most, as icons; the rest as a compact row under them. */
-export const COMMON_BOND_KINDS: readonly BondKindName[] = ["single", "double", "triple", "wedge", "hashed-wedge", "wavy"];
-export const OTHER_BOND_KINDS: readonly BondKindName[] = ["bold", "hashed", "dashed", "dative"];
+/** The five that are done most, as icons; the rest in a second row, shown as "more" is pressed. */
+export const COMMON_BOND_KINDS: readonly BondKindName[] = ["single", "double", "triple", "wedge", "hashed-wedge"];
+export const OTHER_BOND_KINDS: readonly BondKindName[] = ["wavy", "bold", "hashed", "dashed", "dative"];
 
 /** What each kind is called where it is named. */
 export const BOND_KIND_NAMES: Record<BondKindName, string> = {
@@ -22,7 +22,7 @@ export const BOND_KIND_NAMES: Record<BondKindName, string> = {
   "hashed-wedge": "Hashed wedge",
   wavy: "Wavy bond",
   bold: "Bold bond",
-  hashed: "Hashed bond",
+  hashed: "Bold dashed bond",
   dashed: "Dashed bond",
   dative: "Dative bond",
 };

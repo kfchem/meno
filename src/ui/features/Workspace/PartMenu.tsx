@@ -1,5 +1,5 @@
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
@@ -74,7 +74,7 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean };
+type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
 export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
@@ -333,6 +333,8 @@ export default function PartMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // a bond's second row of kinds: shown at once where the bond is one of them, else as "more" is pressed
+  const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the width it came out at, so that the whole of it stays in the canvas
   const [width, setWidth] = useState(WIDTH);
   useLayoutEffect(() => {
@@ -677,6 +679,7 @@ export default function PartMenu({
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
                 ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
                 ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
               ]
             : []),
@@ -698,11 +701,11 @@ export default function PartMenu({
           ...stackItem,
         ];
   const row = items.filter((i) => i.icon && !i.compact);
-  const row2 = items.filter((i) => i.icon && i.compact);
+  const row2 = more ? items.filter((i) => i.icon && i.compact) : [];
   const list = items.filter((i) => !i.icon);
   const height = (row.length ? ROW + 9 : 0) + (row2.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
-    onClose();
+    if (!item.keep) onClose();
     item.run();
   };
   return (
@@ -799,8 +802,18 @@ export default function PartMenu({
           ))}
         </div>
       )}
+      <AnimatePresence initial={false}>
       {row2.length > 0 && (
-        <div role="group" aria-label="Other kinds" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
+        <motion.div
+          key="other-kinds"
+          role="group"
+          aria-label="Other kinds"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: ROW2 + 4, opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          className="flex items-center gap-0.5 px-1 overflow-hidden"
+        >
           {row2.map((item) => (
             <button
               key={item.name}
@@ -815,8 +828,9 @@ export default function PartMenu({
               <span className="scale-90">{item.icon}</span>
             </button>
           ))}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
       {list.map((item) => [
         item.divider && <div key={`${item.name}-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button

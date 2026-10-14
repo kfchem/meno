@@ -51,6 +51,7 @@ export const BOND_ICONS = {
   hashed: own(<path d="M4 16 L16 4" strokeDasharray="1.6 2.4" strokeWidth={2.4} />),
   dashed: own(<path d="M4 16 L16 4" strokeDasharray="3.6 3" />),
   dative: own(<path d="M4 16 L15 5 M9.5 4.5 H15.5 V10.5" />),
+  more: own(<path d="M4.5 10 h.01 M10 10 h.01 M15.5 10 h.01" strokeWidth={3} />),
 };
 
 export const MENU_ICONS = {
