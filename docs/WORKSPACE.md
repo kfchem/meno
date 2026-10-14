@@ -768,8 +768,8 @@ molecules in 3D.
   | A "+" | x, y | times k; its size is the style's |
   | Words | x, y, `width` | times k; their size in pt is kept |
   | A slide, a picture | x, y, w, h | times k; a picture's turn is kept |
-  | A PDF | x, y; its own pages' places | times k; its pages are drawn at the workspace's point (below); ink on its pages is in its own points and kept |
-  | A text's sheet on the page | `at` | times k; drawn at the workspace's point |
+  | A PDF | x, y; its own pages' places; `point` | times k, and the point its pages are laid at times k (below); ink on its pages is in its own points and kept |
+  | A text's sheet on the page | `at`; `point` | times k, and its point times k |
   | A shape | x0, y0, x1, y1, a callout's tail | times k; its weight in pt is kept |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
@@ -784,10 +784,15 @@ molecules in 3D.
   place times k and its zoom divided by k. Slides, words and pictures stay
   where they are on the screen while the structures grow or shrink about
   their middles.
-- **PDFs and texts at the workspace's point.** A PDF's pages and a text's
-  sheet are drawn at ACS's point in every style today (`POINT`, 1.8 / 14.4);
-  they go over to the workspace's point (`pointPx`), so a PDF prints at its
-  own size in any style and keeps it through a change.
+- **PDFs and texts at their own point.** A PDF's pages and a text's sheet
+  were drawn at ACS 1996's point in every style (`POINT`, 1.8 / 14.4). Each
+  now keeps the point it was laid at (`point`, units in a point: lib/pdf/layout
+  `pointOf`): one put on the page takes the workspace's (`pointFor`), and a
+  change of style multiplies it by k with the rest of the page, so a PDF
+  prints at its own size in any style and keeps it through a change. Its
+  icon, its name's room, the gaps between its pages and what is carried out
+  of it (a picture, words) are laid at it too. A PDF or a text from before
+  keeps none and stays at `POINT`, as large as it was.
 - **One undo step.** The style and the converted page go together, in one
   edit ("drawing style"). A preset chosen is one step and does not jump:
   the new style is taken at once but its bond length eases from the old one
@@ -823,8 +828,9 @@ molecules in 3D.
   - A workspace saved without a style takes Settings' style as it is
     opened, kept from then on, without marking the tab changed. It looks
     different from when it was drawn if Settings has changed since.
-  - In a workspace whose style is not ACS 1996, PDFs and texts' sheets now
-    print at their own size, so they change size on the page.
+  - A PDF or a text's sheet laid before keeps ACS 1996's point, so in a
+    workspace of another style it prints as large as it did - not at its
+    own size - until the style is changed and back, or it is laid again.
   - Copies made before carry no style and paste unconverted.
 - **Magnified display, later.** A per-object display state (100% being true
   size, an "n%" mark, Back to 100%): a transform after the layout in 2D and

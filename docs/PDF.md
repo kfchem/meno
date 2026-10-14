@@ -607,7 +607,7 @@ Decided while building it, for the maintainer to confirm:
   - Over it, the arrow keys and Page Up and Page Down turn too, and its menu has *Next page* and *Previous page*.
   - The wheel and two fingers stay the canvas's zoom and pan. Over a stack they would take the zoom away from whoever is reading the page at hand; the first draft had them turn pages.
 - **Its menu:** *Next page*, *Previous page*, *Spread pages* (or *Gather pages*), and *Delete PDF*.
-- **Printed size.** A PDF lies on the page at the size it is printed: a point is a fourteenth and a half of a bond, as the ACS's style prints a bond 14.4 points long.
+- **Printed size.** A PDF lies on the page at the size it is printed, at the workspace's point: a bond is as many points as the workspace's drawing style prints it - 14.4 in ACS 1996's - and a change of style keeps the PDF as large in print (docs/WORKSPACE.md, *Drawing style*).
 - **Spread pages** lie in rows of four, the first where the stack's top page lay.
 - **PDFs lie under the drawing** for now. Their place among the other things, by when they were put there, comes with pictures (step 4).
 - **The cache is never cleared yet.** A PDF stays in Meno's cache once held, so that a workspace opened later finds it, and the cache grows with the PDFs opened.
