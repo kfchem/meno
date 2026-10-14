@@ -14,7 +14,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { greatest, least, pushAll } from "./lists";
-import { namesLaid } from "../layout/names";
+import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
 
@@ -2448,7 +2448,14 @@ export function buildTextLabels(
     // and above it when they fall - on the side further from every bond, so
     // that three bonds evenly spread, one of them straight down (a borate's
     // BH), keep the line clear of it; where neither is, as the bonds lean.
-    if (leftward.has(i) && rightward.has(i)) {
+    // (and only where the line above or below is clearer of the bonds
+    // than the row beside the symbol: two bonds nearly in a line, steep -
+    // tetrodotoxin's guanidine NH - leave the sides open and the line
+    // above or below on a bond)
+    // (lib/layout/names `rowClearer`, as the engine reckons where the H goes)
+    const dirs = (ways.get(i) ?? []).map((w) => w.dir);
+    const onRow = leftward.has(i) && rightward.has(i) && rowClearer(dirs);
+    if (leftward.has(i) && rightward.has(i) && !onRow) {
       const rise = Math.max(...(ways.get(i) ?? []).map((w) => w.dir.y));
       const fall = Math.max(...(ways.get(i) ?? []).map((w) => -w.dir.y));
       const stack = rise < fall - 1e-6 ? "above" : fall < rise - 1e-6 ? "below" : toward.y >= 0 ? "below" : "above";
@@ -2470,9 +2477,12 @@ export function buildTextLabels(
     // go where its formula is written with them - first for oxygen and the
     // halogens and their groups, H2O, H2S, HCl, H3O+; after the symbol for
     // the rest, NH3, CH4, PH3.
-    const neighboursRight = bonded.has(i)
+    let neighboursRight = bonded.has(i)
       ? toward.x > Math.hypot(toward.x, toward.y) * band
       : HYDROGENS_FIRST.has(a.el);
+    // (on the row because it is clearer than the line above or below: on its
+    // clearer side - NH, or HN - and, the two alike, after the symbol)
+    if (onRow) neighboursRight = clearRowSide(dirs) === "before";
     // (the charge after all of it where the H follow the symbol: NH3+; after
     // the symbol where they come first: H3N+)
     const runs = neighboursRight
@@ -2568,6 +2578,9 @@ export function labelTrims(
   };
 }
 
+/** The least share of a bond seen between the labels at its ends, however much of it they would take. */
+export const BOND_SEEN_LEAST = 1 / 3;
+
 export function buildBondPrimitives(
   atoms: Atom[],
   bond: Bond,
@@ -2611,6 +2624,15 @@ export function buildBondPrimitives(
   const room = trims.room;
   if (trimA + trimB > room) {
     const k = room / (trimA + trimB);
+    trimA *= k;
+    trimB *= k;
+  }
+  // And whatever the labels, a bond is seen for a third of its length at
+  // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  const seen = L0 * BOND_SEEN_LEAST;
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;
   }
@@ -4440,8 +4462,31 @@ function expandBounds(
   };
 }
 
+/**
+ * What XML 1.0 does not allow in a document, at all (Characters, [2]): the
+ * control characters but tab, line feed and carriage return; U+FFFE and
+ * U+FFFF; and a surrogate with no other half. Written as they came - a
+ * NUL from a damaged file, an escape from a PDF's words - the SVG was no
+ * well-formed XML, and a picture of it was dropped from the clipboard.
+ */
+function xmlChars(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // (a surrogate with its other half: a character beyond the first plane, kept)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+      out += text[i] + text[++i];
+      continue;
+    }
+    const banned = (c < 0x20 && c !== 0x9 && c !== 0xa && c !== 0xd) || c === 0xfffe || c === 0xffff || (c >= 0xd800 && c <= 0xdfff);
+    out += banned ? "\uFFFD" : text[i];
+  }
+  return out;
+}
+
 function escapeXml(text: string): string {
-  return String(text)
+  // (what XML cannot hold, the replacement character in its place)
+  return xmlChars(String(text))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

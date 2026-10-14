@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atomsTogether, bondsByDistance, bondRadii, parseSDF, parseXYZ } from "./structureParsers";
+import { atomsTogether, bondedPairs, bondsByDistance, bondRadii, parseSDF, parseXYZ } from "./structureParsers";
 import samplePdbText from "../samples/cholesterol.pdb?raw";
 import { readStructures } from "../lib/io/structures";
 import sampleXyz from "../samples/cholesterol.xyz?raw";
@@ -44,14 +44,14 @@ describe("parseXYZ, on a file as it may be left", () => {
 
   it("leaves out a frame the file ends in the middle of, but for the first", () => {
     expect(parseXYZ(`${frame("0")}\n${frame("0")}\n2\nE = -1.0\nC 0 0 0`)).toHaveLength(2);
-    expect(() => parseXYZ("3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("The XYZ file ends before its atoms do: it says 3, and gives 2.");
+    expect(() => parseXYZ("3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("The XYZ file could not be read: its first frame ends before its atoms do (it says 3, and gives 2).");
   });
 
   it("reads no place that is not a number - Fortran's D exponent, nan, infinity, a missing one - and says which line", () => {
     expect(parseXYZ(frame("1.5e-1"))[0].atoms[1].z).toBe(0.15);
-    expect(() => parseXYZ(frame("1.19D-01"))).toThrow('Line 4 of the XYZ file gives C a place that is not a number: "1.19D-01".');
-    for (const z of ["nan", "Infinity", "0x10"]) expect(() => parseXYZ(frame(z))).toThrow(/Line 4 .* not a number/);
-    expect(() => parseXYZ("2\nc\nC 0 0 0\nC 1.54 0")).toThrow('Line 4 of the XYZ file gives C a place that is not a number: "".');
+    expect(() => parseXYZ(frame("1.19D-01"))).toThrow('The XYZ file could not be read: line 4 gives C a place that is not a number: "1.19D-01".');
+    for (const z of ["nan", "Infinity", "0x10"]) expect(() => parseXYZ(frame(z))).toThrow(/could not be read: line 4 .* not a number/);
+    expect(() => parseXYZ("2\nc\nC 0 0 0\nC 1.54 0")).toThrow('The XYZ file could not be read: line 4 gives C a place that is not a number: "".');
   });
 });
 
@@ -224,14 +224,32 @@ describe("bonds by distance, at their edges", () => {
     }
   });
 
-  it("finds no bond between atoms in one place - two thousand of them in a damaged file, at once - and counts them", () => {
+  it("finds no bond between atoms in one place - two thousand of them in a damaged file, each pair tried once at most - and counts them", () => {
     const together = Array.from({ length: 2000 }, () => ({ el: "C", x: 0, y: 0, z: 0 }));
-    const t0 = performance.now();
     expect(bondsByDistance(together)).toEqual([]);
-    expect(performance.now() - t0).toBeLessThan(2000);
+    // (how many times their places are read, four hundred of them: six for
+    // each pair tried - all in one cube, every pair is - and a few for each
+    // atom's cube; counted, not timed, so that a busy machine fails nothing)
+    const n = 400;
+    const seen = counted(new Float64Array(3 * n));
+    expect(bondedPairs(seen.list, bondRadii(together.slice(0, n).map((a) => a.el)))).toEqual([]);
+    expect(seen.reads()).toBeLessThanOrEqual((6 * n * (n - 1)) / 2 + 12 * n);
     expect(atomsTogether(together.flatMap((a) => [a.x, a.y, a.z]))).toBe(1999);
     // (none in one place in a molecule; two 0.05 A apart are)
     expect(atomsTogether([0, 0, 0, 1.54, 0, 0, 3, 0, 0])).toBe(0);
     expect(atomsTogether([0, 0, 0, 0.05, 0, 0, 3, 0, 0])).toBe(1);
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T extends ArrayLike<number>>(xs: T): { list: T; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      const v = Reflect.get(target, key);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+  return { list, reads: () => n };
+}

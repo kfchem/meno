@@ -94,7 +94,8 @@ export type NameGeometry = {
  * Where the drawing sets a labelled atom's H, from the atom, in bond
  * lengths, given the ways its bonds leave it (unit vectors): beside the
  * symbol on the side its bonds leave free - OH, or HO where they leave to
- * the right - or under it (over it) where they leave on both sides. (The
+ * the right - or under it (over it) where they leave on both sides and
+ * that line is clearer of them than the row beside it. (The
  * font is 0.69 of a bond: an H beside its symbol is half a bond off, one
  * under it 0.6.)
  */
@@ -102,8 +103,52 @@ export function hydrogenSpot(ways: readonly { x: number; y: number }[]): { x: nu
   const band = Math.sin((10 * Math.PI) / 180);
   const sx = ways.reduce((sum, w) => sum + w.x, 0);
   const sy = ways.reduce((sum, w) => sum + w.y, 0);
-  if (ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
+  if (ways.some((w) => w.x < -band) && ways.some((w) => w.x > band)) {
+    // (and only where that line is clearer of the bonds than the row beside
+    // the symbol, as the drawing sets it - else on the row's clearer side)
+    if (!rowClearer(ways)) return { x: 0, y: sy >= 0 ? -0.6 : 0.6 };
+    return { x: clearRowSide(ways) === "before" ? -0.5 : 0.5, y: 0 };
+  }
   return { x: sx > Math.hypot(sx, sy) * band ? -0.5 : 0.5, y: 0 };
+}
+
+/** How far, in radians, an atom's bonds leave the way `v` (a unit vector) clear: the angle to the nearest. */
+function clearOf(ways: readonly { x: number; y: number }[], vx: number, vy: number): number {
+  return Math.min(...ways.map((w) => Math.acos(Math.max(-1, Math.min(1, w.x * vx + w.y * vy)))));
+}
+
+/**
+ * How much clearer of an atom's bonds the row beside its symbol must be than
+ * the line above or below it before its H leaves that line for the row: as
+ * the label band elsewhere (10 degrees). Nearer even, the H stays stacked,
+ * as it always was - so that a bond turned through where the two are alike
+ * does not send the H from one to the other and back.
+ */
+export const ROW_BAND = (10 * Math.PI) / 180;
+
+/**
+ * Whether an atom's H, its bonds leaving it on both sides (`ways`, unit
+ * vectors), goes on the row beside its symbol rather than stacked above or
+ * below it: where the row is clearer of the bonds than that line, by more
+ * than `ROW_BAND` - two bonds nearly in a line, steep (tetrodotoxin's
+ * guanidine NH).
+ */
+export function rowClearer(ways: readonly { x: number; y: number }[]): boolean {
+  const stacked = Math.max(clearOf(ways, 0, 1), clearOf(ways, 0, -1));
+  const row = Math.max(clearOf(ways, 1, 0), clearOf(ways, -1, 0));
+  return row > stacked + ROW_BAND;
+}
+
+/**
+ * Which side of its symbol an H on the row goes (`rowClearer`): the side
+ * clearer of the bonds - after the symbol, NH, or before it, HN - and, the
+ * two alike (bonds in a line), after it, always. Before, the side was the
+ * one the bonds' sum leaned from, which for three bonds spread evenly
+ * (a borate's BH-) could be a bond's own way, and for two in a line was
+ * decided by rounding.
+ */
+export function clearRowSide(ways: readonly { x: number; y: number }[]): "after" | "before" {
+  return clearOf(ways, -1, 0) > clearOf(ways, 1, 0) + 1e-6 ? "before" : "after";
 }
 
 

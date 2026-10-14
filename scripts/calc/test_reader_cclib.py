@@ -199,6 +199,19 @@ class Vibrations(unittest.TestCase):
         self.assertEqual([row["move"][2] for row in v["rows"]], [6.0, 7.0, 8.0])
         self.assertEqual(worker.vibrations(types.SimpleNamespace(vibfreqs=[0.0] * 6), 3), [])
 
+    def test_reduced_masses_and_raman_activities_where_the_output_gives_them(self):
+        data = types.SimpleNamespace(
+            vibfreqs=[1600.0, 3650.0, 3750.0], vibsyms=["A1", "A1", "B2"], vibirs=[11.6, 1.2, 4.8],
+            vibrmasses=[1.08, 1.05, 1.08], vibramans=[8.1, 43.6, 17.3],
+        )
+        v = worker.vibrations(data, 3)[0]
+        self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity", "Raman activity"])
+        self.assertEqual(v["columns"][-1]["unit"], "Å⁴/amu")
+        self.assertEqual(v["rows"][1]["cells"], [2, "A1", 3650.0, 1.05, 1.2, 43.6])
+        # (where it gives none - or not one for each - no column)
+        data.vibramans, data.vibrmasses = None, [1.0]
+        self.assertEqual([c["label"] for c in worker.vibrations(data, 3)[0]["columns"]], ["Mode", "Symmetry", "Frequency", "IR intensity"])
+
     def test_an_xtb_output_s_vibrations_are_the_molecule_s_own(self):
         r = read(sample("XTB/dvb_ir.out"))["result"]
         rows = result(r, "vibrations")["rows"]
@@ -251,6 +264,43 @@ class Paths(unittest.TestCase):
         # (one direction only: as it is)
         one = "".join(f" Point Number: {k:3d}          Path Number:   1\n" for k in range(4))
         self.assertIsNone(worker.irc_order(one, 4))
+
+
+class Dipole(unittest.TestCase):
+    """A charged molecule's dipole depends on the point it is taken about: taken again about the centre of mass."""
+
+    # (H3O+, in angstroms; its masses as an output gives them)
+    XYZ = [0.0, 0.0, 0.12, 0.0, 0.94, -0.16, 0.814, -0.47, -0.16, -0.814, -0.47, -0.16]
+    MASSES = [15.9949146, 1.007825, 1.007825, 1.007825]
+
+    def data(self, charge, moments, xyz=XYZ):
+        return types.SimpleNamespace(atomnos=[8, 1, 1, 1], atommasses=self.MASSES, charge=charge, moments=moments), xyz
+
+    def centre_z(self):
+        return sum(m * self.XYZ[3 * i + 2] for i, m in enumerate(self.MASSES)) / sum(self.MASSES)
+
+    def test_a_neutral_molecule_s_is_the_output_s(self):
+        data, xyz = self.data(0, [[0.0, 0.0, 0.0], [0.0, 0.0, 1.5]])
+        self.assertEqual(worker.dipole(data, "", "gaussian", xyz),
+                         [{"id": "dipole", "on": "molecule", "group": "Properties", "label": "Dipole moment", "value": 1.5, "quantity": "dipole", "rank": 2}])
+
+    def test_a_charged_one_s_about_its_centre_of_mass_wherever_it_was_taken(self):
+        # (taken about the origin, then about a point 6 angstroms along x: the dipole there less the charge times the shift)
+        here = worker.dipole(self.data(1, [[0.0, 0.0, 0.0], [0.0, 0.0, -1.7]])[0], "", "gaussian", self.XYZ)[0]
+        there = worker.dipole(self.data(1, [[6.0, 0.0, 0.0], [-6.0 * 4.803204712570263, 0.0, -1.7]])[0], "", "gaussian", self.XYZ)[0]
+        self.assertEqual(here["label"], "Dipole moment about the centre of mass")
+        self.assertAlmostEqual(here["value"], abs(-1.7 - self.centre_z() * 4.803204712570263))
+        self.assertAlmostEqual(there["value"], here["value"])
+
+    def test_orca_s_from_where_it_says_it_took_it(self):
+        # (ORCA says where, in bohr - here the centre of mass itself, so the dipole is its own)
+        text = f"Position of electric origin             ...     0.000000     0.000000     {self.centre_z() / 0.529177210903:.6f}\n"
+        data, xyz = self.data(1, [[0.0, 0.0, 0.0], [0.0, 0.0, -1.929]])
+        self.assertAlmostEqual(worker.dipole(data, text, "orca", xyz)[0]["value"], 1.929, places=5)
+
+    def test_left_out_where_its_centre_cannot_be_found(self):
+        data, _ = self.data(1, [[0.0, 0.0, 0.0], [0.0, 0.0, -1.7]])
+        self.assertEqual(worker.dipole(data, "", "gaussian", None), [])
 
 
 class EveryProgram(unittest.TestCase):

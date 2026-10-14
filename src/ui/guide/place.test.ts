@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EDGE, GAP, placeCard } from "./place";
+import { EDGE, GAP, placeCard, waitsUnseen } from "./place";
 
 const win = { width: 1280, height: 800 };
 const page = { left: 0, top: 40, width: 1280, height: 760 };
@@ -41,5 +41,16 @@ describe("a guide's card", () => {
     expect(at.notch).toBeUndefined();
     const low = placeCard({ ...wide, top: 680 }, page, card, win);
     expect(low.top).toBe(680 - GAP - card.height);
+  });
+
+  it("waits out of sight while its step points at a part and no page is seen, as with Settings in front", () => {
+    const quickAdd = { left: 400, top: 300, width: 300, height: 44 };
+    const save = { left: 1190, top: 6, width: 28, height: 28 };
+    expect(waitsUnseen("page", null, null)).toBe(true);
+    expect(waitsUnseen("quick-add", null, null)).toBe(true);
+    expect(waitsUnseen("quick-add", null, page)).toBe(false);
+    expect(waitsUnseen("quick-add", quickAdd, page)).toBe(false);
+    expect(waitsUnseen("save", save, null)).toBe(false);
+    expect(waitsUnseen(undefined, null, null)).toBe(false);
   });
 });

@@ -586,7 +586,7 @@ Built:
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
-  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), or one broken (*it could not be read*, with PDFium's reason). One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -977,7 +977,9 @@ workspace holds.
   its middle and its atom's colour on, as RDKit draws one by default -
   is one line: two lines of different colours, end to end along one
   way, with nothing else ending where they meet (a double bond's other
-  line, side by side, its colour changing there too, is nothing else). So is a wedge drawn in
+  line, side by side, its colour changing there too, is nothing else) -
+  once: a line so joined is a bond whole, and an sp carbon's single bond
+  going straight on into its triple bond's middle line is another. So is a wedge drawn in
   two colours: a filled four-cornered shape of another colour going on
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
@@ -992,19 +994,23 @@ workspace holds.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one;
-  - lines side by side, a fifth of a bond or so apart and alongside each
+  - lines side by side - the second may be short, from three twentieths
+    of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
     drawn in perspective half past each other, are none), are a double or a
     triple bond, its ends taken to an atom within a quarter of a bond
-    where its lines run a little past it or stop short of it - its ends the longer line's where one is longer, as a
-    ring's second line is drawn inside it, else the middle line's;
+    where its lines run a little past it or stop short of it (not an end
+    inside a label's box: that is the label's) - its ends the longer line's where one is longer, as a
+    ring's second line is drawn inside it (but where the two end together at one end and the longer runs on alone past
+    the other, to nothing, while the shorter ends there by other lines, that end is the shorter's), else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its
     narrow end a point, rounded, or cut flat a line's width across, and
     its wide end cut slanting along the bond it meets however far; one
     under three tenths of a bond long only where its wide end points
     into a label (a stereocentre's H set close, the wedge cut back at it),
     and one cut back so far it is wider than long - three corners, two
-    sides from its tip as long, its wide end longer - narrow at that tip;
+    sides from its tip as long, its wide end longer - narrow at that tip,
+    or, its three sides near as long, at the one corner a line ends at;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
@@ -1028,15 +1034,21 @@ workspace holds.
     bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
-  - a short dash between two labels, as between S and O in a sulfonyl, is
+  - a short dash between two labels - two words, not one word's ends - as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
-    one (N≡N+) - never a hash, however evenly they are set; and so is a
+    one (N≡N+) - never a hash, however evenly they are set (but a short
+    line side by side with another that runs to no label is a hash's: its
+    widest line by an H set close, the hash two lines and the dots at its
+    narrow end); and so is a
     short line from a joint of bonds to a label stacked tall - an NH with
     its H over its N - cut back short of its H;
   - a short line, a sixth of a bond long or more, running straight out
     of a label to nothing - no line's end and no other word by its far
     end - is a bond to a methyl: an N-methyl in a bridge squeezed short
-    and cut back at its N.
+    and cut back at its N;
+  - a line more than three twentieths of a bond long, from a joint - another
+    bond's end, a wedge's or a hash's, at its own - into a label, is that
+    label's bond: one cut back at the label further than most.
 - **Letters drawn as outlines** - a figure whose labels were turned into
   filled shapes, as some journals print them - are read from their shapes:
   each shape as tall as a letter beside the bonds (its holes and an i's
@@ -1053,9 +1065,16 @@ workspace holds.
   from two sides; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word - its letters side by side on one line (their ink near, or their
+  word (one so short both its ends lie in the word's box, its other end
+  coming to another label - a metal's - at the end nearer its element;
+  of two it comes by, the nearer, unless it points away from that one and
+  into the other - an H set under the NH it goes to)
+  - its letters side by side on one line (their ink near, or their
   rooms as the PDF sets them: a 1's ink stands well inside its room, and
-  small letters may be set apart; two labels set touching, the first
+  small letters may be set apart; but two letters as large set over each
+  other, their rooms well into each other, are two, and a letter as large
+  as the word's own whose baseline is a tenth of a letter off theirs
+  starts a word; two labels set touching, the first
   ending in its charge - Cl- HN+ - are two, where the word reads as
   nothing and its pieces do): two capitals as large set
   off one line, two H's of atoms side by side drawn half over each other,
@@ -1102,6 +1121,10 @@ workspace holds.
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
   - a bond drawn twice over;
+  - an O alone, or a label with its hydrogens written, with more bonds
+    coming to it than it takes, where one let go was all but as near as
+    those kept ("More bonds come to it than it takes: those nearest its
+    letter kept.");
   - a molecule written as words in a scheme (below).
 
 **What is put on the page**: the structure, beside the PDF or the picture -
