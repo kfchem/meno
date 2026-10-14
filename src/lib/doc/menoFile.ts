@@ -11,10 +11,15 @@
  * what reading the JSON costs and it reads as it is once unzipped. The files
  * kept - calculations' outputs opened, later PDFs and pictures - are read
  * only when wanted, each by its SHA-256, which is what the workspace knows
- * it by. Nothing is ever unpacked to the disk; what the file says of its
- * sizes is held to limits before anything is inflated.
+ * it by, and taken only if they are what it says. Nothing is ever unpacked
+ * to the disk; what the file says of its sizes is held to limits before
+ * anything is inflated, and nothing is inflated to more than it says, or
+ * taken if it comes to less. A workspace is written only within the limits
+ * it is read with.
  */
-import { inflateSync, strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
+import { strFromU8, strToU8, zipSync, type Zippable } from "fflate";
+import { sha256Hex } from "../binary/sha256";
+import { entryBytes, zipEntries } from "../binary/zip";
 
 export const MENO_MEDIA_TYPE = "application/vnd.kfchem.meno+zip";
 
@@ -34,12 +39,15 @@ export type KeptFile = {
 /** A file kept, with its bytes, as a workspace is written with it. */
 export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 
-/** The most a workspace's own JSON may come to, and any one file it keeps. */
-const MOST_WORKSPACE = 256 * 1024 * 1024;
-const MOST_FILE = 1024 * 1024 * 1024;
-const MOST_FILES = 10_000;
+/** The most a workspace's own JSON may come to, any one file it keeps, and how many it keeps: read so, and written so. */
+export const MOST_WORKSPACE = 256 * 1024 * 1024;
+export const MOST_FILE = 1024 * 1024 * 1024;
+export const MOST_FILES = 10_000;
 
 const SHA = /^[0-9a-f]{64}$/;
+
+/** A size as the limits are set in - megabytes, or gigabytes from one up - rounded up, so that one past a limit never reads as the limit. */
+const sized = (n: number) => (n >= 2 ** 30 ? `${Math.ceil((n / 2 ** 30) * 10) / 10} GB` : `${Math.ceil(n / 2 ** 20)} MB`);
 
 /** Whether `bytes` - a file's start will do - are a workspace file: a zip whose first entry, stored, says it is one. */
 export function isMenoFile(bytes: Uint8Array): boolean {
@@ -51,19 +59,33 @@ export function isMenoFile(bytes: Uint8Array): boolean {
   return name === "mimetype" && strFromU8(bytes.subarray(start, start + MENO_MEDIA_TYPE.length)) === MENO_MEDIA_TYPE;
 }
 
-/** A workspace written as its file, with the files it keeps. */
+/**
+ * A workspace written as its file, with the files it keeps. Throws, saying
+ * why, where it would come to more than a workspace file is read with
+ * (`readMenoFile`): a file that would not open again is not written.
+ */
 export function menoFileBytes(workspace: string, files: readonly KeptData[]): Uint8Array {
+  // (a string's UTF-8 is at least as long as the string: one far too long is not turned into bytes to be told so)
+  const json = workspace.length <= MOST_WORKSPACE ? strToU8(workspace) : null;
+  if (!json || json.length > MOST_WORKSPACE) {
+    throw new Error(`A workspace file holds a workspace of at most ${sized(MOST_WORKSPACE)}; this one comes to ${sized(json?.length ?? workspace.length)}.`);
+  }
   const index: Record<string, Omit<KeptFile, "sha256">> = {};
   const entries: Zippable = {
     mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }],
-    "workspace.json": [strToU8(workspace), { level: 0 }],
+    "workspace.json": [json, { level: 0 }],
   };
   const kept: Zippable = {};
+  let count = 0;
   for (const f of files) {
     if (!SHA.test(f.sha256) || index[f.sha256]) continue;
+    if (f.data.length > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.data.length)}.`);
     index[f.sha256] = { name: f.name, ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: f.data.length };
     kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") ? 6 : 0 }];
+    count++;
   }
+  if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);
+  // (the list of them - a few hundred bytes a file - cannot come near the workspace's limit, which it is read with)
   entries["files.json"] = [strToU8(JSON.stringify(index, null, 1)), { level: 0 }];
   return zipSync({ ...entries, ...kept });
 }
@@ -72,7 +94,7 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[]): Ui
 export type MenoFile = {
   workspace: string;
   files: KeptFile[];
-  /** A file kept, by its SHA-256: its bytes; none where it keeps none such, or it will not read. */
+  /** A file kept, by its SHA-256: its bytes; none where it keeps none such, it will not read, or it is not what its SHA-256 says. */
   data(sha256: string): Uint8Array | null;
 };
 
@@ -86,27 +108,22 @@ export class NotMenoFile extends Error {}
  */
 export function readMenoFile(bytes: Uint8Array): MenoFile {
   if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno workspace.");
-  let entries = 0;
-  let head: ReturnType<typeof unzipSync>;
-  try {
-    head = unzipSync(bytes, {
-      filter: (f) => {
-        entries++;
-        if (f.name === "workspace.json" && f.originalSize > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
-        return f.name === "workspace.json" || (f.name === "files.json" && f.originalSize <= MOST_WORKSPACE);
-      },
-    });
-  } catch (e) {
-    if (e instanceof NotMenoFile) throw e;
-    // (begun as a workspace, but not read through: said so, not in the zip reader's words)
-    throw new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
-  }
-  if (entries > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
-  const json = head["workspace.json"];
-  if (!json) throw new NotMenoFile("It holds no workspace.");
+  // (begun as a workspace, but not read through: said so, not in the zip reader's words)
+  const damaged = () => new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
+  const entries = zipEntries(bytes);
+  if (!entries) throw damaged();
+  if (entries.length > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
+  const named = new Map(entries.map((e) => [e.name, e]));
+  const head = named.get("workspace.json");
+  if (!head) throw new NotMenoFile("It holds no workspace.");
+  if (head.size > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
+  const json = entryBytes(head);
+  if (!json) throw damaged();
+  const list = named.get("files.json");
+  const listed = list && list.size <= MOST_WORKSPACE ? entryBytes(list) : null;
   const files: KeptFile[] = [];
   try {
-    const index = JSON.parse(strFromU8(head["files.json"] ?? strToU8("{}"))) as Record<string, Partial<KeptFile>>;
+    const index = JSON.parse(strFromU8(listed ?? strToU8("{}"))) as Record<string, Partial<KeptFile>>;
     for (const [sha256, f] of Object.entries(index ?? {})) {
       if (!SHA.test(sha256) || typeof f?.name !== "string" || typeof f.media !== "string" || typeof f.size !== "number") continue;
       files.push({ sha256, name: f.name.slice(0, 260), ...(typeof f.kind === "string" ? { kind: f.kind } : {}), media: f.media, size: f.size });
@@ -115,84 +132,16 @@ export function readMenoFile(bytes: Uint8Array): MenoFile {
     // (a list that does not read keeps nothing that can be had)
   }
   const known = new Set(files.map((f) => f.sha256));
-  // (where each file lies in the zip, read from its directory once, as the first file is wanted - not the whole
-  // directory again for each: 9,000 pictures took 20 s)
-  let where: Map<string, Entry> | null | undefined;
   return {
     workspace: strFromU8(json),
     files,
     data: (sha256) => {
-      if (!known.has(sha256)) return null;
-      const name = `files/${sha256}`;
-      // (a directory that throws as it is read is one this does not read: the zip reader's, below)
-      if (where === undefined) {
-        try {
-          where = entriesOf(bytes);
-        } catch {
-          where = null;
-        }
-      }
-      try {
-        // (a directory this does not read - zip64, say - read as the zip reader reads it)
-        if (!where) return unzipSync(bytes, { filter: (f) => f.name === name && f.originalSize <= MOST_FILE })[name] ?? null;
-        const e = where.get(name);
-        return e && e.size <= MOST_FILE ? entryData(bytes, e) : null;
-      } catch {
-        return null;
-      }
+      const entry = known.has(sha256) ? named.get(`files/${sha256}`) : undefined;
+      if (!entry || entry.size > MOST_FILE) return null;
+      const data = entryBytes(entry);
+      // every file kept - an output, a text, a PDF, a picture - is "taken only if they are what it says"
+      // (docs/FILE-IO.md, *The workspace file*): bytes that are not what their SHA-256 says are no such file
+      return data && sha256Hex(data) === sha256 ? data : null;
     },
   };
-}
-
-/** A file in a zip, as its directory says: how it is kept (0 stored, 8 deflated), its sizes, and where its local header is. */
-type Entry = { method: number; packed: number; size: number; at: number };
-
-const u16 = (b: Uint8Array, i: number) => b[i] | (b[i + 1] << 8);
-const u32 = (b: Uint8Array, i: number) => (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
-
-/**
- * The files of a zip by name, read from its central directory (APPNOTE 4.3.12,
- * 4.3.16): null where it is not one this reads - no end record, or one a
- * zip64 directory stands behind.
- */
-function entriesOf(b: Uint8Array): Map<string, Entry> | null {
-  // the end of central directory record: last in the file, before a comment of at most 65,535 bytes
-  let end = -1;
-  for (let i = b.length - 22; i >= 0 && i >= b.length - 22 - 0xffff; i--) {
-    if (u32(b, i) === 0x06054b50) {
-      end = i;
-      break;
-    }
-  }
-  if (end < 0) return null;
-  const count = u16(b, end + 10);
-  const start = u32(b, end + 16);
-  if (count === 0xffff || start === 0xffffffff) return null;
-  const out = new Map<string, Entry>();
-  let i = start;
-  for (let k = 0; k < count; k++) {
-    if (i + 46 > b.length || u32(b, i) !== 0x02014b50) return null;
-    const packed = u32(b, i + 20);
-    const size = u32(b, i + 24);
-    const nameLength = u16(b, i + 28);
-    const at = u32(b, i + 42);
-    if (packed === 0xffffffff || size === 0xffffffff || at === 0xffffffff) return null;
-    out.set(strFromU8(b.subarray(i + 46, i + 46 + nameLength)), { method: u16(b, i + 10), packed, size, at });
-    i += 46 + nameLength + u16(b, i + 30) + u16(b, i + 32);
-  }
-  return out;
-}
-
-/** A file's bytes, from where its directory says it lies: as kept, or inflated - a copy of its own. */
-function entryData(b: Uint8Array, e: Entry): Uint8Array | null {
-  if (u32(b, e.at) !== 0x04034b50) return null;
-  const from = e.at + 30 + u16(b, e.at + 26) + u16(b, e.at + 28);
-  if (from + e.packed > b.length) return null;
-  const packed = b.subarray(from, from + e.packed);
-  if (e.method === 0) return packed.length === e.size ? packed.slice() : null;
-  if (e.method === 8) {
-    const out = inflateSync(packed, { out: new Uint8Array(e.size) });
-    return out.length === e.size ? out : null;
-  }
-  return null;
 }
