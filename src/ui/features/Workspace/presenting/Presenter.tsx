@@ -16,8 +16,9 @@
  *   wheel or a pinch move and zoom the view freely, for a question - the
  *   next key goes on from there;
  * - the keys: those slides software has, and a clicker sends (presentAct);
- * - ended, the view goes back to where it was, the molecules turn back as
- *   they were and the window is as it was: a talk changes nothing.
+ * - ended, the view goes to the last slide shown, in the editing view, as
+ *   slides software ends a talk; the molecules turn back as they were and
+ *   the window is as it was: a talk changes nothing on the page.
  *
  * What it moves over the canvas - the veil, the black screen, the slide's
  * number - is PresentLayer's.
@@ -27,7 +28,7 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { EditorState, Turn3D } from "../store/types";
-import { boxOf, presentAct, slideFit, viewOf, zoomOf } from "./slides";
+import { boxOf, presentAct, slideFit, talkEnd, viewOf, zoomOf } from "./slides";
 import { easeInOut, flightMs, zoomPath, type ZoomPath } from "./zoomPath";
 import { bandsAbout, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
@@ -63,8 +64,9 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 300;
 
 type Run = {
-  /** The view, the molecules' turns and the column, as the talk found them. */
+  /** The view, the canvas's size, the molecules' turns and the column, as the talk found them. */
   before: ViewNow;
+  canvas: { w: number; h: number };
   turns: EditorState["turns3d"];
   texts: { open: boolean; pdf: number | null; text: number | null; cover: number };
   /** Whether the talk made the window full screen (and so puts it back). */
@@ -389,6 +391,7 @@ export default function Presenter() {
       const s = st();
       const r: Run = {
         before: viewNow(),
+        canvas: { w: sizeNow.current.width, h: sizeNow.current.height },
         turns: s.turns3d,
         texts: { open: s.textsOpen, pdf: s.pdfShown, text: s.textShown, cover: s.textsOpen ? s.cover : 0 },
         madeFull: false,
@@ -418,8 +421,8 @@ export default function Presenter() {
       goTo(r, at);
     };
 
-    // ended: the window as it was, the view going back, the molecules turning back
-    const finish = (r: Run, settle: boolean) => {
+    // ended - at the slide `last`, if it is there still: the window as it was, the view going to that slide, the molecules turning back
+    const finish = (r: Run, settle: boolean, last?: number) => {
       r.detach();
       if (r.countTimer != null) window.clearTimeout(r.countTimer);
       if (r.pointerTimer != null) window.clearTimeout(r.pointerTimer);
@@ -436,10 +439,12 @@ export default function Presenter() {
       setPresentingWindow(false);
       if (r.madeFull) void windowFullScreen(false);
       if (!settle) return;
-      // (back where it was - less the half of the column the view goes as the column opens again: FollowCover)
+      // (at the last slide shown, as the editing view has it - or, gone, back where it was - less the half of the column the view goes as the column opens again: FollowCover)
       const s = st();
       const reopens = r.texts.open && ((r.texts.pdf != null && s.pdfs.some((p) => p.id === r.texts.pdf)) || (r.texts.text != null && s.texts.some((t) => t.id === r.texts.text)));
-      setViewGoal(cam, { ...r.before, x: r.before.x - (reopens ? r.texts.cover / 2 / r.before.zoom : 0) });
+      const cover = reopens ? r.texts.cover : 0;
+      const slide = last != null ? s.slides[last] : undefined;
+      setViewGoal(cam, slide ? talkEnd(slide, r.canvas.w, r.canvas.h, cover) : { ...r.before, x: r.before.x - cover / 2 / r.before.zoom });
       const from = new Map<number, THREE.Quaternion>();
       for (const m of s.molecules3d) {
         const now = s.turns3d[m.id];
@@ -464,7 +469,7 @@ export default function Presenter() {
       was = now;
       if (now && !before) begin(now.at);
       else if (now && before && run.current) goTo(run.current, now.at);
-      else if (!now && run.current) finish(run.current, true);
+      else if (!now && run.current) finish(run.current, true, before?.at);
     });
     if (was && !run.current) begin(was.at);
     return () => {
