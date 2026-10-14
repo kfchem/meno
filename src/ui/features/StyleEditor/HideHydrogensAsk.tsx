@@ -41,9 +41,8 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
         aria-modal="true"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-text`}
-        // (a press in it that is on nothing that takes the keys - the box ticked, its words: WebKit gives a
-        // checkbox no focus - leaves them with the box, so that an Enter after it is the box's, not lost
-        // behind it)
+        // (a press in it that is on nothing that takes the keys - the box ticked, its words - leaves them
+        // with the box, so that an Enter after it is the box's, not lost behind it)
         tabIndex={-1}
         className="w-[480px] max-w-[90%] rounded-lg border border-accel-accent/50 bg-white shadow-lg p-5 text-sm text-gh-black outline-none"
         onKeyDown={(e) => {

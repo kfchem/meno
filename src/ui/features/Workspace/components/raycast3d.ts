@@ -1,11 +1,11 @@
 import * as THREE from "three";
 
 /**
- * What the pointer is over on a molecule in 3D, found without trying every
- * triangle: three.js tries a ray against every triangle of every sphere it
- * comes near, and every triangle of a ribbon - 5 to 19 ms a pointer move
- * over the atoms of a protein of 28 000, 46 ms over a ribbon of 3 500
- * residues.
+ * What the pointer is over on a molecule in 3D, found from where each atom,
+ * bond and residue is: a ray met with each atom's sphere and each bond's
+ * cylinder, worked out exactly, and with the triangles of only those of a
+ * ribbon's residues it passes - so that a pointer move over a protein of
+ * tens of thousands of atoms tries no more than it passes.
  */
 
 const inverse = new THREE.Matrix4();
@@ -22,7 +22,7 @@ const instance = new THREE.Matrix4();
  * An instanced mesh of spheres - a molecule's atoms, each a sphere of its
  * geometry's radius scaled alike every way - hit where each instance's
  * sphere is, worked out exactly: the near side of each sphere the ray goes
- * through (its outside, the side three.js finds a sphere's triangles on),
+ * through (its outside, the side its drawn triangles face),
  * nearest first. An instance scaled to nothing (an atom not drawn) is not
  * hit.
  */
@@ -69,8 +69,8 @@ export function raycastSpheres(mesh: THREE.InstancedMesh, raycaster: THREE.Rayca
  * its geometry (as wide at both ends, its caps on) set from one end of the
  * bond to the other - hit where each instance's cylinder is, worked out
  * exactly as `raycastSpheres` works out atoms: the near side of each, its
- * wall or a cap, nearest first. A cylinder of another shape is left to
- * three.js.
+ * wall or a cap, nearest first. A cylinder of another shape is met as a
+ * mesh, triangle by triangle.
  */
 export function raycastCylinders(mesh: THREE.InstancedMesh, raycaster: THREE.Raycaster, hits: THREE.Intersection[]): void {
   const shape = (mesh.geometry as THREE.CylinderGeometry).parameters;
@@ -143,7 +143,7 @@ const grouped = new WeakMap<THREE.BufferGeometry, ResidueGroups>();
 
 /**
  * A ribbon - an indexed mesh whose vertices each belong to a residue
- * (`residues`, by vertex) - hit as three.js would hit it, the nearest
+ * (`residues`, by vertex) - hit as its mesh is hit, the nearest
  * triangle with the side its material shows, but trying only the
  * triangles of residues whose sphere the ray goes through. The triangles
  * are grouped afresh as the geometry is filled again.
