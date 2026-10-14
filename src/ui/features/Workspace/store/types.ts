@@ -505,7 +505,7 @@ export type WordsFlight = {
  * or a step's log, has no sheet: that molecule, or its step, is its body
  * (`of`) - what it rises out of into the column, and goes back into.
  */
-export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; reading?: false; icon?: true; of?: TextOf };
+export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
 export type TextOf = { step: number } | { molecule: number };
 /**

@@ -18,10 +18,10 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { WorkspaceText } from "../store/types";
 import { COLORS } from "../../../theme/colors";
-import { ICON_NAME_WIDTH, POINT } from "../../../../lib/pdf/layout";
+import { ICON_NAME_WIDTH, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
-import { iconScaleOf, SHEET_LETTER, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOf } from "../utils/textSheets";
+import { iconScaleOf, SHEET_LETTER, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOfText } from "../utils/textSheets";
 import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
@@ -109,14 +109,16 @@ function Sheet({
   const px = 1 / zoom;
   // (kept by its text - a Markdown text's laid out again once its type has come)
   useMarkdownType();
-  const s = sheetOf(t.text, t.name);
+  const s = sheetOfText(t);
   const [, setTick] = useState(0);
   const at = t.at!;
-  const pad = SHEET_PAD_PT * POINT;
-  const line = SHEET_LINE_PT * POINT;
-  const letter = SHEET_LETTER * SHEET_TYPE_PT * POINT;
+  // (at the point it was laid at: the workspace's, or ACS 1996's for one kept from before)
+  const point = pointOf(t);
+  const pad = SHEET_PAD_PT * point;
+  const line = SHEET_LINE_PT * point;
+  const letter = SHEET_LETTER * SHEET_TYPE_PT * point;
   // how large it is drawn: 1 full size, an icon's size made small, or on its way between them - as a PDF is
-  const small = iconScaleOf(s);
+  const small = iconScaleOf(s, scaleOf(t));
   const turning = useRef<{ to: boolean; start: number } | null>(null);
   const was = useRef(!!t.icon);
   if (was.current !== !!t.icon) {
@@ -140,7 +142,7 @@ function Sheet({
   // (its words as large on the screen as they are: strokes where too small to read, the words over them, coming up -
   // once the letters Meno's typefaces have are known, those they have not drawn as squares: lib/chem/labelFonts `STAND_IN`)
   const lettersKnown = useLabelFontUrl(DEFAULT_LABEL_FAMILY, needsFallback(s.md ? [s.md.laid.plain.slice(0, 8000)] : s.lines)) != null;
-  const wordsPx = SHEET_TYPE_PT * POINT * zoom * k;
+  const wordsPx = SHEET_TYPE_PT * point * zoom * k;
   const words = lettersKnown ? Math.min(1, Math.max(0, (wordsPx - WORDS_FROM_PX) / (WORDS_AT_PX - WORDS_FROM_PX))) : 0;
 
   // the light round it while the pointer is on it, coming and going
@@ -239,7 +241,7 @@ function Sheet({
   const nameX = b.x0 + (mid.x - b.x0) * iconness;
   const nameSizeNow = NAME_PX * px * (1 - iconness) + nameSize * iconness;
   const nameGap = NAME_GAP_PX * px * (1 - iconness) + 0.4 * nameSize * iconness;
-  const nameWidth = Math.max(120 * px, s.w) * (1 - iconness) + ICON_NAME_WIDTH * iconness;
+  const nameWidth = Math.max(120 * px, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
   return (
     <group position={[0, 0, z]}>
       {/* (round it, not under it, as a picture's) */}
@@ -298,7 +300,7 @@ function Sheet({
                 <Text
                   key={`line${i}`}
                   font={plexMono}
-                  fontSize={SHEET_TYPE_PT * POINT}
+                  fontSize={SHEET_TYPE_PT * point}
                   anchorX="left"
                   anchorY="middle"
                   position={[pad, -(pad + (i + 0.5) * line), Z_STEP / 4]}

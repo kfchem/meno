@@ -59,7 +59,8 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
     }));
   if (parts.pluses) out.pluses = parts.pluses.map((p) => ({ ...p, x: x(p.x), y: y(p.y) }));
   if (parts.captions) out.captions = parts.captions.map((c) => ({ ...c, x: x(c.x), y: y(c.y), ...(c.width != null ? { width: c.width * k } : {}) }));
-  if (parts.texts) out.texts = parts.texts.map((t) => (t.at ? { ...t, at: { x: x(t.at.x), y: y(t.at.y) } } : t));
+  // (a text's sheet laid at a point k times larger in units, printed as before - where it lies on the page, and where it will)
+  if (parts.texts) out.texts = parts.texts.map((t) => ({ ...t, ...(t.at ? { at: { x: x(t.at.x), y: y(t.at.y) } } : {}), point: pointOf(t) * k }));
   if (parts.pdfs)
     out.pdfs = parts.pdfs.map((p) => ({
       ...p,

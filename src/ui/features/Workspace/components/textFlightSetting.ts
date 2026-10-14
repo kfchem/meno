@@ -18,8 +18,8 @@ export type Setting = { size: number; line: number; left: number; top: number; r
 export const COLUMN_SETTING: Setting = { size: FONT_PX, line: LINE_PX, left: GUTTER_PX + PAD_PX, top: 0, right: 0 };
 
 /** As a sheet on the page sets it, the page shown `zoom` pixels to a unit. */
-export function sheetSetting(zoom: number): Setting {
-  const pt = POINT * zoom;
+export function sheetSetting(zoom: number, point = POINT): Setting {
+  const pt = point * zoom;
   return { size: SHEET_TYPE_PT * pt, line: SHEET_LINE_PT * pt, left: SHEET_PAD_PT * pt, top: SHEET_PAD_PT * pt, right: SHEET_PAD_PT * pt };
 }
 

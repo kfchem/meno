@@ -2141,7 +2141,7 @@ export function addTexts(
       last = same.id;
       continue;
     }
-    held.push({ id: next, name: t.name || newTextName(held), text: t.text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text: t.text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
@@ -2221,12 +2221,12 @@ export function setTextReading(doc: WorkspaceDocument, id: number, reading: bool
  * right, room for their names between them - all put down clear of what
  * lies there, pictures, PDFs and other sheets.
  */
-export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly T[], at: { x: number; y: number }, doc: Pick<WorkspaceDocument, "pictures" | "pdfs" | "texts">): (T & { at: { x: number; y: number }; icon: true })[] {
-  const step = ICON_NAME_WIDTH + NOMINAL_BOND_LENGTH;
-  // (each by its top left, its middle where it goes)
+export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly T[], at: { x: number; y: number }, doc: Pick<WorkspaceDocument, "pictures" | "pdfs" | "texts">, point = POINT): (T & { at: { x: number; y: number }; icon: true; point?: number })[] {
+  const step = (ICON_NAME_WIDTH * point) / POINT + NOMINAL_BOND_LENGTH;
+  // (each by its top left, its middle where it goes; laid at `point`, the workspace's)
   const row = texts.map((t, i) => {
-    const s = sheetOf(t.text, t.name);
-    return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const };
+    const s = sheetOf(t.text, t.name, point);
+    return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const, ...(point !== POINT ? { point } : {}) };
   });
   const taken = [
     ...(doc.pictures ?? []).map((p) => ({ x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y - p.h / 2, y1: p.y + p.h / 2 })),

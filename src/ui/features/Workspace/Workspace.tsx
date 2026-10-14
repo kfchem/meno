@@ -317,7 +317,7 @@ function WorkspaceContent({
     () =>
       ownTab && officeId == null
         ? setTextTaker(tabId, (texts) => {
-            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState()).flatMap((t) => sheetRoom(t) ?? []);
+            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState(), pointOfStyle(store.getState().docStyle)).flatMap((t) => sheetRoom(t) ?? []);
             store.getState().addTexts(texts, freeNear.current(rooms));
           })
         : undefined,

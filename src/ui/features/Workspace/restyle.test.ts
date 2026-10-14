@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
 import { pdfBounds, POINT, topSheet } from "../../../lib/pdf/layout";
-import { pdfsInRow } from "./document";
+import { pdfsInRow, textsInRow } from "./document";
+import { connectStoreToDocument, createEditorStore } from "./store";
+import { createWorkspaceDocument } from "./document";
+import { drawnSheetBox } from "./utils/textSheets";
+import { readWorkspace, workspaceText } from "./utils/workspace";
 import { bondPtOf, pointOfStyle, restyled, restyledDocument } from "./restyle";
 
 const ACS = { preset: "acs1996", changes: {} };
@@ -34,7 +38,7 @@ function page(): WorkspaceDocument {
     arrows: [{ id: 1, x: 30, y: 10, angle: 0.3, length: 12, corners: [{ along: 0.5, across: 2 }] }],
     pluses: [{ id: 1, x: 20, y: -3 }],
     captions: [{ id: 1, x: 5, y: 8, text: "heat", width: 24, size: 12 }],
-    texts: [{ id: 1, name: "run.log", text: "", at: { x: -40, y: -40 } }],
+    texts: [{ id: 1, name: "run.log", text: "", at: { x: -40, y: -40 }, point: POINT }],
     pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792]], x: 60, y: 0, page: 0, placed: [{ page: 0, x: 70, y: 5 }], point: POINT }],
     pictures: [{ id: 1, name: "p.png", sha256: "b".repeat(64), media: "image/png", px: [64, 48], x: -10, y: 30, w: 16, h: 12, turn: 0.2 }],
     slides: [{ id: 1, x: 0, y: 0, w: 160, h: 90 }],
@@ -135,6 +139,31 @@ describe("a change of drawing style", () => {
     const icon = pdfBounds({ ...p, x: 0, y: 0 });
     const iconAcs = pdfBounds({ ...q, x: 0, y: 0 });
     expect(icon.x1 - icon.x0).toBeCloseTo(((iconAcs.x1 - iconAcs.x0) * bondPtOf(ACS)) / bondPtOf(RSC), 9);
+  });
+
+  it("lays a text's sheet at the workspace's point, and keeps it printed as large through a change", () => {
+    const [t] = textsInRow([{ name: "run.log", text: "SCF Done\nE = -1.0" }], { x: 0, y: 0 }, {}, pointOfStyle(RSC));
+    expect(t.point).toBeCloseTo(NOMINAL_BOND_LENGTH / bondPtOf(RSC), 12);
+    const sheet = { ...t, icon: undefined };
+    const was = drawnSheetBox(sheet)!;
+    const now = drawnSheetBox(restyled({ texts: [{ id: 1, ...sheet }] }, 1 / k).texts![0])!;
+    // (in ACS 1996's style again, as wide in pt as in RSC's)
+    const pt = (units: number, style: typeof ACS) => (units * bondPtOf(style)) / NOMINAL_BOND_LENGTH;
+    expect(pt(now.x1 - now.x0, ACS)).toBeCloseTo(pt(was.x1 - was.x0, RSC), 9);
+  });
+
+  it("keeps the point a PDF and a text were laid at in the workspace's file", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    doc.edit("page", (d) => ({
+      ...d,
+      pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792]], x: 0, y: 0, page: 0, point: 0.2 }],
+      texts: [{ id: 1, name: "run.log", text: "x", at: { x: 1, y: 2 }, point: 0.3 }],
+    }));
+    const ws = readWorkspace(workspaceText(store.getState(), new Set(), ["c".repeat(64)]))!;
+    expect(ws.pdfs[0].point).toBe(0.2);
+    expect(ws.texts[0].point).toBe(0.3);
   });
 
   it("converts about a point: a copy's parts about their middle", () => {
