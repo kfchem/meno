@@ -189,6 +189,16 @@ describe("a change of drawing style", () => {
     expect(reopened.getState().pageId).not.toBe(first);
   });
 
+  it("keeps words given no size at the size they printed at: the old style's labels' size, now their own", () => {
+    const was = { ...page(), captions: [{ id: 1, x: 5, y: 8, text: "heat" }, { id: 2, x: 0, y: 0, text: "Title", size: 14 }] } as WorkspaceDocument;
+    // (Meno's labels are 10 pt, Nature's 6 pt)
+    const now = restyledDocument({ ...was, style: { preset: "meno", changes: {} } }, { preset: "nature", changes: {} });
+    expect(now.captions![0].size).toBe(10);
+    expect(now.captions![1].size).toBe(14);
+    // (a style whose labels are as large leaves them following the labels)
+    expect(restyledDocument({ ...was, style: { preset: "meno", changes: {} } }, ACS).captions![0].size).toBeUndefined();
+  });
+
   it("converts about a point: a copy's parts about their middle", () => {
     const about = { x: 100, y: 50 };
     const now = restyled({ pluses: [{ id: 1, x: 110, y: 50 }] }, 2, about);

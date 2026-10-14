@@ -10,7 +10,7 @@
  * sizes, weights, ink widths, a PDF's pages) is drawn at the new point and
  * so prints as before.
  */
-import { styleOf, type StyleChoice } from "../../../lib/chem/style";
+import { inPoints, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { POINT, pointFor, pointOf } from "../../../lib/pdf/layout";
 import type { WorkspaceDocument } from "./document";
 import type { Model, PictureItem, WorkflowSet } from "./store/types";
@@ -100,7 +100,13 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
  */
 export function restyledDocument(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
   const k = doc.style ? bondPtOf(doc.style) / bondPtOf(style) : 1;
-  return restyled({ ...doc, style }, k);
+  const out = restyled({ ...doc, style }, k);
+  // (words given no size of their own were at the old style's labels' size: they keep it, now as their own, so that they print as before - a style changes no words' size)
+  if (!doc.style || !out.captions?.length) return out;
+  const label = (s: StyleChoice) => inPoints(styleOf(s).fontSize, styleOf(s));
+  const was = label(doc.style);
+  if (Math.abs(was - label(style)) < 1e-9) return out;
+  return { ...out, captions: out.captions.map((c) => (c.size != null ? c : { ...c, size: was })) };
 }
 
 /**

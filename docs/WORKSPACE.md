@@ -766,7 +766,7 @@ molecules in 3D.
   | A molecule in 3D | `at`, `turn` | bodies - molecules whose spheres (each its look's reach, about its place and height) touch or overlap, turned together or not - move by their middle times k, keeping their offsets, heights and turns; a molecule keeps its size in units (1.5 Å is a drawn bond in every style) |
   | A reaction arrow | x, y, length, corners' `across` | times k; its heads, weight and stroke are the style's as it is drawn |
   | A "+" | x, y | times k; its size is the style's |
-  | Words | x, y, `width` | times k; their size in pt is kept |
+  | Words | x, y, `width` | times k; their size in pt is kept - words given none, at the old style's labels' size, keep that as their own where the new style's labels differ |
   | A slide, a picture | x, y, w, h | times k; a picture's turn is kept |
   | A PDF | x, y; its own pages' places; `point` | times k, and the point its pages are laid at times k (below); ink on its pages is in its own points and kept |
   | A text's sheet on the page | `at`; `point` | times k, and its point times k |
@@ -776,9 +776,9 @@ molecules in 3D.
   | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
   | A print frame (later) | its frame | times k |
 
-  What is given in points - words' and labels' sizes, line weights, ink
-  widths, a PDF's page sizes - is kept as it is: drawn at the new point,
-  it prints as before.
+  What is given in points - words' sizes, shapes' weights, ink widths, a
+  PDF's page sizes - is kept as it is: drawn at the new point, it prints
+  as before. A structure's labels and lines are the style's own.
 - **The page holds still on the screen.** The view follows every change of
   the bond's printed length - the command, its undo, its redo: the camera's
   place times k and its zoom divided by k. Slides, words and pictures stay
