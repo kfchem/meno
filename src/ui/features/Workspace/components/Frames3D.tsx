@@ -141,6 +141,20 @@ export function FramesChip({
   // which is after this renders - it is drawn in a root of its own - and
   // whenever it changes width.)
   const [saidWidth, setSaidWidth] = useState(0);
+  // (and what the details say, measured the same way: the chip widens to it while they are read)
+  const [detailsWidth, setDetailsWidth] = useState(0);
+  const watchDetails = useRef<ResizeObserver | null>(null);
+  const detailed = useCallback((el: HTMLDivElement | null) => {
+    watchDetails.current?.disconnect();
+    watchDetails.current = null;
+    if (!el) return;
+    const measure = () => {
+      if (el.offsetWidth) setDetailsWidth(el.offsetWidth);
+    };
+    measure();
+    watchDetails.current = new ResizeObserver(measure);
+    watchDetails.current.observe(el);
+  }, []);
   const watch = useRef<ResizeObserver | null>(null);
   const said = useCallback((el: HTMLDivElement | null) => {
     watch.current?.disconnect();
@@ -215,21 +229,13 @@ export function FramesChip({
     >
       {(!single || about) && (
         <div className="relative">
-          {details.length > 0 && (
-            <div
-              className="pointer-events-none absolute left-1/2 bottom-full mb-1.5 w-max max-w-[20rem] -translate-x-1/2 rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm px-2.5 pt-0.5 pb-1.5 text-[11px] leading-[16px] tabular-nums transition-opacity duration-150 ease-meno"
-              style={{ opacity: reading ? 1 : 0 }}
-            >
-              <ResultGroups groups={details} />
-            </div>
-          )}
           <div
             ref={chipEl}
             className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
             style={{
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? undefined : "none",
-              width: (full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE,
+              width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
             }}
           >
             <div
@@ -291,6 +297,21 @@ export function FramesChip({
                 </>
               )}
             </div>
+            {/* (what the calculation found, in the chip itself: it grows downward, away from the molecule, and back -
+                nothing covers the structure) */}
+            {details.length > 0 && (
+              <div
+                className="grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out"
+                style={{ gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
+                {...read}
+              >
+                <div className="overflow-hidden flex justify-center">
+                  <div ref={detailed} className="w-max max-w-[20rem] px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
+                    <ResultGroups groups={details} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

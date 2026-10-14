@@ -485,25 +485,19 @@ export default function Workflow2D() {
     store.getState().setWorkflowView({ workflowMenu: { kind, id, clientX: e.clientX, clientY: e.clientY } });
   };
 
-  // a step open to its options: shut by Escape, or a press anywhere else
+  // a step open to its options: shut by Escape, its Close, or its card pressed again - not by a press elsewhere:
+  // the page is worked on (panned, scrolled, other cards) while its options are
   useEffect(() => {
     if (openStep == null) return;
     const shut = () => store.getState().setWorkflowView({ openStep: null });
-    const onPress = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest?.(`[data-step-card="${openStep}"]`)) shut();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
       shut();
     };
-    window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPress, true);
-      window.removeEventListener("keydown", onKey, true);
-    };
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [openStep, store]);
 
   // a set chosen: let go by a press anywhere but its tab, or Escape
@@ -683,6 +677,7 @@ export default function Workflow2D() {
             onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
+            onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
             onTakeDown={(e) => drawInto(e, s.id)}
             onGiveDown={(e) => drawFrom(e, { step: s.id })}
