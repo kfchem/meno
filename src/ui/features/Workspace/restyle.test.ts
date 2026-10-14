@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { createWorkspaceDocument, type WorkspaceDocument } from "./document";
+import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
 import { bondPtOf, restyled, restyledDocument } from "./restyle";
 
 const ACS = { preset: "acs1996", changes: {} };
@@ -10,7 +10,7 @@ const RSC = { preset: "rsc", changes: {} };
 function page(): WorkspaceDocument {
   const L = NOMINAL_BOND_LENGTH;
   return {
-    ...createWorkspaceDocument(),
+    ...emptyWorkspaceDocument(),
     style: ACS,
     model: {
       atoms: [
