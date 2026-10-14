@@ -361,8 +361,10 @@ a five-membered one) is set with its long axis level.
 
 Among the ways of setting the frame square - six turns, and their mirror
 images; twelve for a frame of squares and no hexagons, whose sides can
-lie level either way round - the drawing takes the one that reads best
-(section 4).
+lie level either way round, and for a frame of five- and seven-membered
+rings, which lies on the lattice no way round and is set on it only by
+its bonds out (proline's carboxyl level, its ring symmetric about it) -
+the drawing takes the one that reads best (section 4).
 
 ## 4. Reading order
 

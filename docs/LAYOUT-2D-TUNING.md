@@ -303,6 +303,25 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   out once for both own orders, and an input seen before is found by
   itself before any ranks (L8: fourteen tert-butyls took 0.6 s to rank,
   twice). Every drawing is handed out as a copy of its own.
+- **A frame set by where its ring started** (2026-10-14, L8's review).
+  L-proline came out tilted 13.5 degrees (1.35, against 0 on main), its
+  OH standing upright. Its frame, a lone pyrrolidine, was turned by sixty
+  degrees at a time from where its ring's first atom was put, at the top;
+  the bonds out of a five-membered ring then lie at angles that atom
+  decides. In the molecule's own order the walk enters the ring at the
+  carboxyl's carbon, which comes first: its bond out lay at 30 + 60k
+  degrees in every frame and never level. The SMILES order had put it
+  third, its bond 6 degrees off level, squared up to level. A frame of
+  fives and sevens, which lies on the lattice no way round, is now turned
+  by thirty degrees as a frame of squares is (not where a metal sets the
+  frame: PdCl2(dppf) and the second-generation Grubbs catalyst read worse
+  so; nor a frame with a three, which lies on the lattice as a six does:
+  ingenol read worse so). L-proline
+  1.35 -> 0, atorvastatin 3.24 -> 1.70, D-ribose 0.96 -> 0.74,
+  D-fructose 0.53 -> 0.44, prostaglandin E2 1.21 -> 1.18, bilobalide
+  17.80 -> 14.48; nothing worse. Ginkgolide B and paeoniflorin do not
+  change: ginkgolide's cage is drawn upright, which no frame turns, and
+  paeoniflorin's frame has a six.
 - **A core's view chosen by the system alone** (2026-10-14). Ibogaine's
   isoquinuclidine was seen from the side its ring system alone read best
   from, which stood the indole on top of the cage, the drawing twice as
