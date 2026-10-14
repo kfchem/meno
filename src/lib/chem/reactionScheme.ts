@@ -1,5 +1,6 @@
 import { arrowMeasures, arrowPath, arrowPieces, type ArrowForm, type ArrowLook } from "./reactionArrow";
 import { bondFraction, resolveStyle, type DrawingStyle } from "./style";
+import { greatest, least } from "./lists";
 
 /**
  * A reaction as it is drawn: its structures, its arrow, and the "+" signs
@@ -141,8 +142,8 @@ export function reactionRoles(
   const pieces: Piece[] = [...atomsOf.values()].map((atoms) => {
     const xs = atoms.map((a) => a.x);
     const ys = atoms.map((a) => a.y);
-    const min = { x: Math.min(...xs), y: Math.min(...ys) };
-    const max = { x: Math.max(...xs), y: Math.max(...ys) };
+    const min = { x: least(xs), y: least(ys) };
+    const max = { x: greatest(xs), y: greatest(ys) };
     const c = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2 };
     const along = (c.x - from.x) * u.x + (c.y - from.y) * u.y;
     // (to the arrow's left is positive)

@@ -34,6 +34,7 @@ import { readerClient } from "../../../lib/calc/workers";
 import { writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
+import { greatest, least } from "../../../lib/chem/lists";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -250,22 +251,13 @@ export function drawingLayout(
   const layout = layoutMolecule(atoms, bonds, opts, exportPxPerWorld(style));
   // (what the drawing reaches so far: nothing, with no atoms)
   let drawn = model.atoms.length > 0;
-  // (by a loop, not spread into one call: a molecule in 3D's atoms, or a long dashed arrow's pieces, overran the stack)
-  const take = (xs: readonly number[], ys: readonly number[]) => {
+  const take = (xs: number[], ys: number[]) => {
     const { min, max } = layout.bounds;
-    let x0 = drawn ? min.x : Infinity;
-    let y0 = drawn ? min.y : Infinity;
-    let x1 = drawn ? max.x : -Infinity;
-    let y1 = drawn ? max.y : -Infinity;
-    for (const x of xs) {
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-    }
-    for (const y of ys) {
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
-    }
-    layout.bounds = { min: { x: x0, y: y0 }, max: { x: x1, y: y1 } };
+    layout.bounds = {
+      // (not spread into one call: a molecule in 3D's atoms and bonds may be more than a call takes - lib/chem/lists)
+      min: { x: Math.min(drawn ? min.x : Infinity, least(xs)), y: Math.min(drawn ? min.y : Infinity, least(ys)) },
+      max: { x: Math.max(drawn ? max.x : -Infinity, greatest(xs)), y: Math.max(drawn ? max.y : -Infinity, greatest(ys)) },
+    };
     drawn = true;
   };
   // (the electron-pushing arrows, drawn as the canvas draws them, with their lone pairs' dots)

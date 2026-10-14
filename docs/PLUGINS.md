@@ -526,6 +526,24 @@ The same for every plugin and for Meno's own parts:
   isotope and radical, the bonds by index with their orders, a name
   (FILE-IO.md, *As step 7's writer was built*); a reader gives back
   Meno's own plain data, checked by Meno on the way in.
+- **A file of several jobs, one after another** (the maintainer,
+  2026-10-13) - Gaussian's Link1 jobs, ORCA's `$new_job` - is read by a
+  reader that tells them apart as one output for each job, in order,
+  under `jobs`, each saying which it is and what it did - `job: {number,
+  of, kind}`, its kind in words ("Optimisation", "Single point") - and
+  each its own atoms, geometries, energies, method and basis, charge and
+  multiplicity, and results. The answer's own fields are its last job's,
+  so that what knows nothing of jobs reads the file's end. Each job
+  opens as a molecule of its own, side by side; nothing of one job is
+  put with another's. A job of one route that runs in steps - Gaussian's
+  Opt Freq - is one job. Only the reader knows its programs; Meno takes
+  `jobs` from any. A reader chosen to read the file as well joins each
+  job's molecule with what it read of that job, where it read the file
+  job by job; where it read it as one, it joins the last job's alone.
+  (Each job's record - its geometry, its charge and multiplicity, as the
+  file says them, its energy with its method and basis, the file and the
+  job it came from - is what an entry of the rebuilt workflow is to
+  carry.)
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

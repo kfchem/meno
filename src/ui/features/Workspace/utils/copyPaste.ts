@@ -28,6 +28,7 @@ import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 
@@ -39,14 +40,17 @@ type Pt = { x: number; y: number };
  */
 export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn | null {
   const model = { atoms: drawn.atoms, bonds: drawn.bonds };
+  // (the atoms drawn, by id: each selected looked up, not sought among them all)
+  const drawnAtoms = new Set(model.atoms.map((a) => a.id));
   const atoms = sel.atoms.size
-    ? new Set([...sel.atoms].filter((id) => model.atoms.some((a) => a.id === id)))
-    : around != null && model.atoms.some((a) => a.id === around)
+    ? new Set([...sel.atoms].filter((id) => drawnAtoms.has(id)))
+    : around != null && drawnAtoms.has(around)
       ? fragmentOf(model, around)
       : new Set<number>();
   if (!atoms.size) return null;
   // (the electron-pushing arrows wholly on it, and the fills of the rings it holds whole, with it)
-  const pushes = (drawn.pushes ?? []).filter((p) => pushAtoms({ model }, p).every((id) => atoms.has(id)) && [p.from, p.to].every((e) => !("bond" in e) || model.bonds.some((b) => b.id === e.bond)));
+  const drawnBonds = drawn.pushes?.length ? new Set(model.bonds.map((b) => b.id)) : null;
+  const pushes = (drawn.pushes ?? []).filter((p) => pushAtoms({ model }, p).every((id) => atoms.has(id)) && [p.from, p.to].every((e) => !("bond" in e) || !!drawnBonds?.has(e.bond)));
   const fills = fillsAmong(drawn.ringFills, atoms);
   const part = { ...partOf(model, atoms), ...(pushes.length ? { pushes } : {}), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
   if (!sel.atoms.size) return part;
@@ -59,12 +63,6 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
   };
 }
 
-/**
- * The arrows, "+" signs and words drawn among the atoms `ids`: within half
- * a bond of the box round them, an arrow from end to end, words by their
- * middle - or over an arrow that is. What goes with a selection that is
- * copied, cut, deleted or moved.
- */
 /** Where words taken out of a PDF came from, as far as it reads: its SHA-256, and two places in it. */
 function wordsFromOf(v: unknown): WordsFrom | null {
   const f = v as Partial<WordsFrom> | undefined;
@@ -77,17 +75,25 @@ function wordsFromOf(v: unknown): WordsFrom | null {
   return f && typeof f.sha256 === "string" && /^[0-9a-f]{64}$/.test(f.sha256) && from && to ? { sha256: f.sha256, from, to } : null;
 }
 
+/**
+ * The arrows, "+" signs and words drawn among the atoms `ids`: within half
+ * a bond of the box round them, an arrow from end to end, words by their
+ * middle - or over an arrow that is. What goes with a selection that is
+ * copied, cut, deleted or moved.
+ */
 export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; pluses: Plus[]; captions: Caption[] } {
-  const atoms = drawn.atoms.filter((a) => ids.has(a.id));
-  if (!atoms.length) return { arrows: [], pluses: [], captions: [] };
+  // (the box round them, found once - not again for each point tried)
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const a of drawn.atoms) {
+    if (!ids.has(a.id)) continue;
+    x0 = Math.min(x0, a.x);
+    x1 = Math.max(x1, a.x);
+    y0 = Math.min(y0, a.y);
+    y1 = Math.max(y1, a.y);
+  }
+  if (x0 > x1) return { arrows: [], pluses: [], captions: [] };
   const reach = NOMINAL_BOND_LENGTH / 2;
-  const xs = atoms.map((a) => a.x);
-  const ys = atoms.map((a) => a.y);
-  const within = (p: Pt) =>
-    p.x >= Math.min(...xs) - reach &&
-    p.x <= Math.max(...xs) + reach &&
-    p.y >= Math.min(...ys) - reach &&
-    p.y <= Math.max(...ys) + reach;
+  const within = (p: Pt) => p.x >= x0 - reach && p.x <= x1 + reach && p.y >= y0 - reach && p.y <= y1 + reach;
   // (its ends and the corners it turns at, all of them)
   const arrows = (drawn.arrows ?? []).filter((a) => arrowPoints(a).every(within));
   const taken = new Set(arrows.map((a) => a.id));
@@ -663,8 +669,8 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
   if (!points.length) return drawn;
   const xs = points.map((a) => a.x);
   const ys = points.map((a) => a.y);
-  const dx = p.x - (Math.min(...xs) + Math.max(...xs)) / 2;
-  const dy = p.y - (Math.min(...ys) + Math.max(...ys)) / 2;
+  const dx = p.x - (least(xs) + greatest(xs)) / 2;
+  const dy = p.y - (least(ys) + greatest(ys)) / 2;
   const moved = <T extends Pt>(t: T): T => ({ ...t, x: t.x + dx, y: t.y + dy });
   return {
     ...drawn,

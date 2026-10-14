@@ -161,10 +161,40 @@ function fromPng(png: Uint8Array): Drawn | null {
 }
 
 /**
+ * An SVG of layout2d's `createSVG` made ready to be drawn at `wantedDpi` -
+ * or lower where it is large (`pictureDpiFor`): its size whole pixels at
+ * that resolution, and its view widened to match, so that the drawing is
+ * drawn at its own scale exactly, the part of a pixel left over blank on
+ * the right and below. Drawn from the size it said, a browser takes an
+ * image's size in whole pixels (WebKit: 278.9 as 278) and the drawing was
+ * squeezed to them - its bonds a little short, and not alike across and down.
+ */
+export function rasterFrame(svg: string, wantedDpi: number): { svg: string; width: number; height: number; dpi: number } {
+  const head = /<svg\b[^>]*>/.exec(svg)?.[0] ?? "";
+  const attr = (name: string) => Number(new RegExp(` ${name}="([^"]+)"`).exec(head)?.[1]);
+  const width = attr("width");
+  const height = attr("height");
+  const view = / viewBox="([^"]+)"/.exec(head)?.[1].trim().split(/\s+/).map(Number) ?? [];
+  const dpi = pictureDpiFor(width > 0 ? width : 1, height > 0 ? height : 1, wantedDpi);
+  const scale = dpi / 96;
+  const W = Math.max(1, Math.ceil((width > 0 ? width : 1) * scale));
+  const H = Math.max(1, Math.ceil((height > 0 ? height : 1) * scale));
+  if (!(width > 0 && height > 0) || view.length !== 4 || !view.every(Number.isFinite) || !(view[2] > 0)) return { svg, width: W, height: H, dpi };
+  // (pixels to the view's unit, at that resolution: kept, the view made as much larger as the whole pixels are)
+  const perUnit = (width / view[2]) * scale;
+  const fitted = head
+    .replace(/ width="[^"]+"/, ` width="${W}"`)
+    .replace(/ height="[^"]+"/, ` height="${H}"`)
+    .replace(/ viewBox="[^"]+"/, ` viewBox="${view[0]} ${view[1]} ${W / perUnit} ${H / perUnit}"`);
+  return { svg: svg.replace(head, fitted), width: W, height: H, dpi };
+}
+
+/**
  * An SVG drawn at `dpi` - its pixels CSS pixels, 96 to the inch - or lower
- * where it is large (`pictureDpiFor`): as a PNG, and - `dib` asked for - as
- * a DIB for Windows' bitmap-only programs, and the resolution it was drawn
- * at; null where there is no page to draw it in.
+ * where it is large (`pictureDpiFor`), at its own scale (`rasterFrame`): as
+ * a PNG, and - `dib` asked for - as a DIB for Windows' bitmap-only programs,
+ * and the resolution it was drawn at; null where there is no page to draw
+ * it in.
  */
 async function rasterized(
   svg: string,
@@ -172,16 +202,16 @@ async function rasterized(
   dib: boolean,
 ): Promise<{ png: Uint8Array; dib: Uint8Array | null; dpi: number } | null> {
   if (typeof document === "undefined") return null;
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  const frame = rasterFrame(svg, wantedDpi);
+  const dpi = frame.dpi;
+  const url = URL.createObjectURL(new Blob([frame.svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
-    const dpi = pictureDpiFor(img.naturalWidth, img.naturalHeight, wantedDpi);
-    const scale = dpi / 96;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.ceil(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.ceil(img.naturalHeight * scale));
+    canvas.width = frame.width;
+    canvas.height = frame.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
