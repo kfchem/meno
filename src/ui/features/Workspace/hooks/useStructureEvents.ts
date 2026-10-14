@@ -20,6 +20,7 @@ import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
 import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
+import { openedAsStack } from "../utils/stacks";
 import type { DropZone, Dropped } from "../../../../lib/drop";
 
 import { readRecord } from "../utils/copyPaste";
@@ -29,6 +30,10 @@ import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
+import { placeOpened } from "../utils/freePlace";
+import { styleOf } from "../../../../lib/chem/style";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { heldEach } from "../utils/heldEach";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -95,8 +100,9 @@ export function useStructureEvents(
     const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
     const style = currentStyle3D();
     // (several - an SD file's records - a stack, standing in one place, one
-    // shown at a time: utils/stacks; numbered as the document's own when added)
-    const stacked = solids.length > 1;
+    // shown at a time: utils/stacks; numbered as the document's own when added.
+    // An output's jobs stand side by side)
+    const stacked = openedAsStack(solids);
     const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
     const room = stacked ? [Math.max(...reaches)] : reaches;
     // (beside a drawing the same file brings, to its right)
@@ -468,26 +474,27 @@ export function useStructureEvents(
 
   /**
    * Files put on the page at `at`, dropped or pasted - copied in the Finder
-   * or Explorer: PDFs and pictures held and laid there; a record's drawing,
-   * a text's sheet, or a structure read from its file, there, selected; a
-   * workspace file opened as Open opens it, in a tab of its own.
+   * or Explorer - or opened: PDFs and pictures held and laid there; a
+   * record's drawing, a text's sheet, or a structure read from its file,
+   * there, selected; a workspace file opened as Open opens it, in a tab of
+   * its own. Opened (`free`), a structure's file goes in free space near
+   * `at` rather than over what is drawn there, and its path - where Open
+   * said it is - goes with a calculation's output read from it.
    */
-  const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void) => {
+  const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void, opened?: { path?: string; free?: boolean }): Promise<boolean> => {
     const f = files[0];
-    if (!f) return;
+    if (!f) return false;
     const head = await f.slice(0, MARK_REACH).text();
     const kind = await kindOfFile(f.name, head);
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
     const pdfs = files.filter((g) => /\.pdf$/i.test(g.name) || g.type === "application/pdf");
     if (pdfs.length) {
-      try {
-        const held = await Promise.all(pdfs.map(async (g) => ({ name: g.name, ...(await holdPdfBytes(new Uint8Array(await g.arrayBuffer()))) })));
-        store.getState().addPdfs(held, at);
-        setImportError(null);
-      } catch (e) {
-        reportImportError("append", e);
-      }
-      return;
+      // (each held where it can be: one refused, named with why, keeps none of the rest off the page)
+      const { held, refused } = await heldEach(pdfs, async (g) => ({ name: g.name, ...(await holdPdfBytes(new Uint8Array(await g.arrayBuffer()))) }));
+      if (held.length) store.getState().addPdfs(held, at);
+      if (refused) reportImportError("append", new Error(refused));
+      else setImportError(null);
+      return held.length > 0;
     }
     // pictures: held, and put on the page where they were dropped (docs/PDF.md, *A picture*)
     const images = files.filter((g) => isPictureName(g.name) || g.type === "image/png" || g.type === "image/jpeg");
@@ -500,20 +507,21 @@ export function useStructureEvents(
         setImportError(null);
       } catch (e) {
         reportImportError("append", e);
+        return false;
       }
-      return;
+      return true;
     }
     // a workspace file: opened as Open opens it - in a tab of its own - not pasted in part (the maintainer, 2026-10-12)
     if (opensAsWorkspace(isMenoFile(new Uint8Array(await f.slice(0, 128).arrayBuffer())), kind?.id, MENO_KINDS.workspace.id)) {
       askToOpenFiles(files.filter((g) => g === f || isWorkspaceFile(g.name)));
       setImportError(null);
-      return;
+      return true;
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
       store.getState().addTexts([{ name: f.name, text: await f.text() }], at);
       setImportError(null);
-      return;
+      return true;
     }
     const text = await f.text();
     // a record dropped: what it holds, beside what is drawn, selected
@@ -522,13 +530,19 @@ export function useStructureEvents(
       if (drawn) {
         store.getState().pasteModel(centredAt(drawn, at));
         setImportError(null);
-      } else reportImportError("append", new Error(`${f.name} could not be read.`));
-      return;
+        return true;
+      }
+      reportImportError("append", new Error(`${f.name} could not be read.`));
+      return false;
     }
     try {
-      const result = await processFileContent(f.name, text, kind);
-      const dx = at.x - result.centroid.x;
-      const dy = at.y - result.centroid.y;
+      const result = await processFileContent(f.name, text, kind, opened?.path);
+      // (opened rather than dropped: in free space near the middle of the view)
+      const st = store.getState();
+      const drawingStyle = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+      const place = opened?.free ? placeOpened(st, result, importedScheme(result, -result.centroid.x, -result.centroid.y), at, drawingStyle) : at;
+      const dx = place.x - result.centroid.x;
+      const dy = place.y - result.centroid.y;
 
       const shifted = {
         atoms: result.model.atoms.map((a) => ({
@@ -541,10 +555,14 @@ export function useStructureEvents(
 
       store
         .getState()
-        .appendModel(toModel(shifted), importedScheme(result, dx, dy, at));
+        .appendModel(toModel(shifted), importedScheme(result, dx, dy, place));
+      // (put past the edge of a page wider than the view: the view goes to show it, eased, as Fit goes)
+      if ("beyond" in place && place.beyond) store.getState().requestFit();
       setImportError(null);
+      return true;
     } catch (err) {
       reportImportError("append", err, again);
+      return false;
     }
   };
 
@@ -578,13 +596,16 @@ export function useStructureEvents(
     }
   };
 
+  /** The middle of what can be seen: the column over the canvas's right side left out. */
+  const viewMiddle = () => {
+    const cam = camRef.current;
+    const cover = store.getState().cover;
+    return { x: (cam?.position.x ?? 0) - (cam?.zoom ? cover / 2 / cam.zoom : 0), y: cam?.position.y ?? 0 };
+  };
   /** Where a paste goes: the pointer, over the drawing; else the middle of the view. */
   const pasteTarget = () => {
     const p = pointerRef.current && clientToWorld(pointerRef.current.x, pointerRef.current.y);
-    const cam = camRef.current;
-    // (the middle of what can be seen: the column over the canvas's right side left out)
-    const cover = store.getState().cover;
-    return p ?? { x: (cam?.position.x ?? 0) - (cam?.zoom ? cover / 2 / cam.zoom : 0), y: cam?.position.y ?? 0 };
+    return p ?? viewMiddle();
   };
 
   return {
@@ -592,6 +613,7 @@ export function useStructureEvents(
     domRef,
     clientToWorld,
     pasteTarget,
+    viewMiddle,
     handleDoubleClick,
     handleWrapperMouseMove,
     handleWrapperMouseLeave,

@@ -213,3 +213,53 @@ export function ribbonMesh(places: ArrayLike<number>, runs: readonly ChainRun[],
   }
   return { positions, normals, colours, indices, residues };
 }
+
+/**
+ * A ribbon's residues as spheres, each round its own corners: what the
+ * pointer is found over, a residue at a time - a protein's ribbons are
+ * hundreds of thousands of triangles, too many to try one by one as the
+ * pointer moves, or as the view moves under it.
+ */
+export type RibbonSpheres = { residues: Int32Array; centres: Float32Array; radii: Float32Array };
+
+export function ribbonSpheres(m: Pick<RibbonMesh, "positions" | "residues">): RibbonSpheres {
+  const slot = new Map<number, number>();
+  for (const r of m.residues) if (!slot.has(r)) slot.set(r, slot.size);
+  const n = slot.size;
+  const centres = new Float64Array(3 * n);
+  const counts = new Uint32Array(n);
+  m.residues.forEach((r, v) => {
+    const k = slot.get(r)!;
+    for (let a = 0; a < 3; a++) centres[3 * k + a] += m.positions[3 * v + a];
+    counts[k]++;
+  });
+  for (let k = 0; k < n; k++) for (let a = 0; a < 3; a++) centres[3 * k + a] /= counts[k];
+  const radii = new Float32Array(n);
+  m.residues.forEach((r, v) => {
+    const k = slot.get(r)!;
+    const d = Math.hypot(m.positions[3 * v] - centres[3 * k], m.positions[3 * v + 1] - centres[3 * k + 1], m.positions[3 * v + 2] - centres[3 * k + 2]);
+    if (d > radii[k]) radii[k] = d;
+  });
+  return { residues: Int32Array.from(slot.keys()), centres: Float32Array.from(centres), radii };
+}
+
+const near = new THREE.Vector3();
+const centre = new THREE.Vector3();
+
+/** The residue a ray meets first among a ribbon's spheres, in the ribbon's own frame, where along the ray, and the point; none, where it meets none. */
+export function residueOnRay(s: RibbonSpheres, ray: THREE.Ray): { residue: number; distance: number; point: THREE.Vector3 } | null {
+  let best: { residue: number; distance: number } | null = null;
+  for (let k = 0; k < s.residues.length; k++) {
+    centre.fromArray(s.centres, 3 * k);
+    const along = centre.clone().sub(ray.origin).dot(ray.direction);
+    ray.at(along, near);
+    const off = near.distanceToSquared(centre);
+    const r2 = s.radii[k] * s.radii[k];
+    if (off > r2) continue;
+    // (where the ray enters the sphere)
+    const t = along - Math.sqrt(r2 - off);
+    if (t < 0 && along < 0) continue;
+    if (!best || t < best.distance) best = { residue: s.residues[k], distance: t };
+  }
+  return best ? { ...best, point: ray.at(best.distance, new THREE.Vector3()) } : null;
+}

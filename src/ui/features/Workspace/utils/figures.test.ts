@@ -3,7 +3,9 @@ import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../.
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
 import { readDrawn } from "./copyPaste";
-import { atomAs, atomAtSpot, bondAs, figureFrom, placedBeside, readMarks, type FigureResult, type Unread } from "./figures";
+import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
+import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
+import { atomAs, atomAtSpot, bondAs, figureFrom, placedBeside, readMarks, wholeLabel, type FigureResult, type Unread } from "./figures";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
 const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
@@ -54,6 +56,62 @@ describe("a figure read as a structure for the page", () => {
     expect(w.stereoOrient).toBeUndefined();
   });
 
+  it("reads a mass number set high before an element as its isotope, and a count set low before it as no one's", () => {
+    // (the end of a chain: 18F, its 18 smaller and set high; then H3N with its H cut off by the box - a 3 set low before the N)
+    const label = (digits: string, high: boolean, el: string, [x, y]: P): FigureLetter[] => [
+      ...[...digits].map((c, i): FigureLetter => {
+        const left = x - 3.4 - 4.2 * (digits.length - i);
+        const base = high ? y - 1 : y + 6;
+        return { c, box: [left, base - 5, left + 3.8, base], at: [left, base], size: 7 };
+      }),
+      ...letters(el, [x, y]),
+    ];
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const f = step(b, -30);
+    const iso = structureFrom({ paths: [stroke(a, b, [b[0] + (f[0] - b[0]) * 0.45, b[1] + (f[1] - b[1]) * 0.45])], letters: label("18", true, "F", f), pictures: [] }, SHA, 1) as Model;
+    expect(iso.atoms.find((x) => x.el === "F")?.isotope).toBe(18);
+    const cut = structureFrom({ paths: [stroke(a, b, [b[0] + (f[0] - b[0]) * 0.45, b[1] + (f[1] - b[1]) * 0.45])], letters: label("3", false, "N", f), pictures: [] }, SHA, 1) as Model;
+    expect(cut.atoms.find((x) => x.el === "N")?.isotope).toBeUndefined();
+  });
+
+  it("reads a metal whose every bond is drawn short between labels, shorter than its letters are tall", () => {
+    // (a square-planar Pt, two N and two Cl round it, each bond under a third of its length between the labels)
+    const pt: P = [120, 200];
+    const ends = [0, 90, 180, 270].map((deg): P => [pt[0] + 1.4 * L * Math.cos((deg * Math.PI) / 180), pt[1] - 1.4 * L * Math.sin((deg * Math.PI) / 180)]);
+    const part = (p: P, q: P, t: number): P => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const m = structureFrom(
+      {
+        paths: ends.map((e) => stroke(part(pt, e, 0.36), part(pt, e, 0.64))),
+        letters: [...letters("Pt", pt), ...ends.flatMap((e, i) => letters(i % 2 ? "Cl" : "N", e))],
+        pictures: [],
+      },
+      SHA,
+      1,
+    ) as Model;
+    expect(m.atoms.map((a) => a.el).sort()).toEqual(["Cl", "Cl", "N", "N", "Pt"]);
+    expect(m.bonds).toHaveLength(4);
+  });
+
+  it("reads a radical's dot by an atom as its unpaired electron, and a line's round end as none", () => {
+    // (a nitroxide's N-O: the O's dot at its upper right, twice as wide as a line; a round end drawn at the chain's other end)
+    const disc = ([cx, cy]: P, r: number): FigurePath => {
+      const k = 0.5523 * r;
+      return {
+        fill: "#000000ff",
+        stroke: null,
+        width: 0,
+        d: [["M", cx + r, cy], ["C", cx + r, cy + k], ["C", cx + k, cy + r], ["C", cx, cy + r], ["C", cx - k, cy + r], ["C", cx - r, cy + k], ["C", cx - r, cy], ["C", cx - r, cy - k], ["C", cx - k, cy - r], ["C", cx, cy - r], ["C", cx + k, cy - r], ["C", cx + r, cy - k], ["C", cx + r, cy], ["Z"]],
+      };
+    };
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const o = step(b, -30);
+    const m = structureFrom({ paths: [stroke(a, b, [b[0] + (o[0] - b[0]) * 0.6, b[1] + (o[1] - b[1]) * 0.6]), disc([o[0] + 5, o[1] - 3.5], 0.75), disc(a, 0.3)], letters: letters("O", o), pictures: [] }, SHA, 1) as Model;
+    expect(m.atoms.find((x) => x.el === "O")?.radical).toBe("doublet");
+    expect(m.atoms.filter((x) => x.radical)).toHaveLength(1);
+  });
+
   it("says why there is nothing to read: no lines, or a picture", () => {
     expect(structureFrom({ paths: [], letters: [], pictures: [] }, SHA, 0)).toEqual({ none: "No structure is drawn there." });
     expect("none" in (structureFrom({ paths: [], letters: [], pictures: [[0, 0, 10, 10]] }, SHA, 0) as object)).toBe(true);
@@ -83,6 +141,39 @@ describe("a figure read as a structure for the page", () => {
     expect(atomAtSpot(m, SHA, 2, o.seen!.x + 1, o.seen!.y - 1)).toBe(o.id);
     expect(atomAtSpot(m, SHA, 2, o.seen!.x + 6, o.seen!.y)).toBe(null);
     expect(atomAtSpot(m, SHA, 1, o.seen!.x, o.seen!.y)).toBe(null);
+  });
+});
+
+describe("a figure set sideways", () => {
+  /** The figure turned a quarter as the page shows it: its words reading down the page - each point turned, each letter's line reading down. */
+  const sideways = (f: FigureDrawn): FigureDrawn => {
+    const t = (x: number, y: number): [number, number] => [800 - y, x];
+    return {
+      paths: f.paths.map((p) => ({ ...p, d: p.d.map((st): PathStep => (st[0] === "Z" ? st : [st[0], ...t(st[1], st[2])])) })),
+      letters: f.letters.map((l): FigureLetter => {
+        const [a, b] = [t(l.box[0], l.box[1]), t(l.box[2], l.box[3])];
+        return { ...l, box: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])], at: l.at ? t(l.at[0], l.at[1]) : null, dir: Math.PI / 2 };
+      }),
+      pictures: [],
+    };
+  };
+
+  it("is read turned upright, its labels whole, each atom tied to where it lies on the page", () => {
+    const upright = (figureFrom(drawn(), SHA, 2) as FigureResult).model;
+    const turned = (figureFrom(sideways(drawn()), SHA, 2) as FigureResult).model;
+    // (the same structure: the OH read as one label, not an O and a lone H)
+    expect(turned.atoms.map((a) => a.el).sort()).toEqual(upright.atoms.map((a) => a.el).sort());
+    expect(turned.bonds).toHaveLength(upright.bonds.length);
+    // (drawn upright, as it was drawn before it was set sideways)
+    for (let i = 0; i < upright.atoms.length; i++) {
+      expect(turned.atoms[i].x).toBeCloseTo(upright.atoms[i].x, 6);
+      expect(turned.atoms[i].y).toBeCloseTo(upright.atoms[i].y, 6);
+    }
+    // (each tied to where it lies on the page as it is shown)
+    const o = turned.atoms.find((a) => a.el === "O")!.seen!;
+    const o0 = upright.atoms.find((a) => a.el === "O")!.seen!;
+    expect(o.x).toBeCloseTo(800 - o0.y, 6);
+    expect(o.y).toBeCloseTo(o0.x, 6);
   });
 });
 
@@ -117,6 +208,19 @@ describe("where a structure read goes", () => {
 });
 
 describe("a scheme read for the page", () => {
+  it("takes a label alone for a whole molecule where Meno reads it as one, or its H and charge fill its element", () => {
+    for (const l of ["H2O", "HCl", "HI", "NaCl", "Br2", "I-", "Na+", "OH-", "NH3"]) expect(wholeLabel(l), l).toBe(true);
+    for (const l of ["Me", "Ph", "OH", "OMe", "N", "rt", "1", "THF"]) expect(wholeLabel(l), l).toBe(false);
+  });
+
+  it("reads water written as words after a plus sign as a molecule of its own, marked so", () => {
+    // (a Fischer esterification as RDKit's reaction drawing draws it: ethyl acetate + H2O)
+    const r = figureFrom(esterification as unknown as FigureDrawn, "sha", 0) as FigureResult;
+    const water = r.model.atoms.filter((a) => a.unsure?.said.includes(WRITTEN_AS_WORDS));
+    expect(water).toHaveLength(1);
+    expect(r.model.bonds.some((b) => b.a === water[0].id || b.b === water[0].id)).toBe(false);
+  });
+
   it("keeps the figure's layout: two structures, the arrow between them as an equilibrium, its words over it, a compound's number in bold - one middle and one scale for all", () => {
     const chain = (x: number): FigurePath => stroke([x, 100], [x + L * 0.866, 100 - L / 2], [x + 2 * L * 0.866, 100], [x + 3 * L * 0.866, 100 - L / 2]);
     const half = (tip: P, ux: number, side: number): FigurePath => ({ fill: "#000000ff", stroke: null, width: 0, d: [["M", ...tip], ["L", tip[0] - ux * 6, tip[1] + side * 2.5], ["L", tip[0] - ux * 6, tip[1]], ["Z"]] });

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   dashed,
   drawnShape,
+  flattenedCurve,
+  outlineCurve,
   fillOutline,
   handlesOf,
   insidePolygon,
@@ -46,6 +48,36 @@ describe("what a shape draws", () => {
     const r = right.findIndex((p) => p.x === 30);
     expect(right[r - 1].x).toBeCloseTo(20);
     expect(outlineOf(box("callout", { tail: { x: 5, y: 5 } }), PT).points).not.toContainEqual({ x: 5, y: 5 });
+  });
+
+  it("gives a picture an ellipse's edge, and a rounded box's, as the curve it is - closed, smooth where it begins - and a rectangle's none", () => {
+    const at = (c: { x: number; y: number }[], i: number, u: number) => {
+      const [a, b, d, e] = [c[i], c[i + 1], c[i + 2], c[i + 3]];
+      const w = [(1 - u) ** 3, 3 * (1 - u) ** 2 * u, 3 * (1 - u) * u * u, u ** 3];
+      return { x: w[0] * a.x + w[1] * b.x + w[2] * d.x + w[3] * e.x, y: w[0] * a.y + w[1] * b.y + w[2] * d.y + w[3] * e.y };
+    };
+    const e = outlineCurve(box("ellipse"), PT)!;
+    // (four quarter arcs: the start, then three points each)
+    expect(e).toHaveLength(13);
+    expect(e[12].x).toBeCloseTo(e[0].x, 9);
+    expect(e[12].y).toBeCloseTo(e[0].y, 9);
+    // (on the ellipse all along, within a hair of it)
+    for (let i = 0; i + 3 < e.length; i += 3)
+      for (const u of [0, 0.25, 0.5, 0.75, 1]) {
+        const p = at(e, i, u);
+        expect(Math.abs(Math.hypot((p.x - 10) / 10, (p.y - 5) / 5) - 1)).toBeLessThan(3e-4);
+      }
+    // (where it begins and ends, the same way: no seam)
+    expect((e[1].y - e[0].y) * (e[12].x - e[11].x) - (e[1].x - e[0].x) * (e[12].y - e[11].y)).toBeCloseTo(0, 9);
+    const rounded = outlineCurve(box("rounded"), PT)!;
+    expect(rounded[rounded.length - 1].x).toBeCloseTo(rounded[0].x, 9);
+    expect(rounded.some((p) => Math.abs(p.x - 20) < 1e-9 && Math.abs(p.y - 5) < 3)).toBe(true);
+    // (a callout's tail, its tip one of the curve's points)
+    expect(outlineCurve(box("callout", { tail: { x: 4, y: -6 } }), PT)).toContainEqual({ x: 4, y: -6 });
+    expect(outlineCurve(box("rect"), PT)).toBeNull();
+    expect(outlineCurve({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 1 }, PT)).toBeNull();
+    // (flattened for a fill: fine steps along it)
+    expect(flattenedCurve(e, 24)).toHaveLength(1 + 4 * 24);
   });
 
   it("runs a line from end to end, open", () => {

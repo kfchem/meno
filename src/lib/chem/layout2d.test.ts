@@ -333,6 +333,20 @@ describe("wedge geometry", () => {
     expect(Math.abs(base[0].y - base[1].y)).toBeCloseTo(o.wedgeWidthPx, 6);
   });
 
+  it("is as broad at its wide end with round ends as with square ones, the rounding set out by as much as it draws in", () => {
+    // (Meno's: the corners rounded by half a line, which drew the end in to
+    // 2.95 pt of its 3.0, the wedge's long sides leaning in to its tip)
+    for (const length of [1.5, 3]) {
+      const long: Atom[] = [atoms[0], { ...atoms[1], x: length }];
+      const o = opts({ joinStyle: "round" });
+      const { polys } = buildBondPrimitives(long, wedge, o, ZOOM, deg);
+      const ys = polys[0].points.map((p) => p.y);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(o.wedgeWidthPx, 6);
+      // (still round: the broad end's corners are arcs)
+      expect(polys[0].points.length).toBeGreaterThan(8);
+    }
+  });
+
   it("cuts the wide end along a bond that continues from it", () => {
     // stereocentre at 0, wide end at 1, which carries on to 2
     const chain: Atom[] = [

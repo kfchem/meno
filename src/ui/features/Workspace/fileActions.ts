@@ -5,7 +5,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { fillOutline, lineWidthOf, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
@@ -34,6 +34,7 @@ import { readerClient } from "../../../lib/calc/workers";
 import { writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
+import { greatest, least } from "../../../lib/chem/lists";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -253,8 +254,9 @@ export function drawingLayout(
   const take = (xs: number[], ys: number[]) => {
     const { min, max } = layout.bounds;
     layout.bounds = {
-      min: { x: Math.min(drawn ? min.x : Infinity, ...xs), y: Math.min(drawn ? min.y : Infinity, ...ys) },
-      max: { x: Math.max(drawn ? max.x : -Infinity, ...xs), y: Math.max(drawn ? max.y : -Infinity, ...ys) },
+      // (not spread into one call: a molecule in 3D's atoms and bonds may be more than a call takes - lib/chem/lists)
+      min: { x: Math.min(drawn ? min.x : Infinity, least(xs)), y: Math.min(drawn ? min.y : Infinity, least(ys)) },
+      max: { x: Math.max(drawn ? max.x : -Infinity, greatest(xs)), y: Math.max(drawn ? max.y : -Infinity, greatest(ys)) },
     };
     drawn = true;
   };
@@ -298,9 +300,13 @@ export function drawingLayout(
       const lined = s.stroke !== "none";
       const color = s.stroke && s.stroke !== "none" ? s.stroke : ink;
       const width = lineWidthOf(s, pointPx);
+      // (where it curves, the curve itself: its line, whole, and its fill's edge)
+      const curve = outlineCurve(s, pointPx);
+      const whole = lined && curve && !s.dash;
       return {
-        ...(area ? { fill: { points: area, color: s.fill! } } : {}),
-        lines: lined ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
+        ...(area ? { fill: curve ? { points: flattenedCurve(curve), color: s.fill!, curve } : { points: area, color: s.fill! } } : {}),
+        lines: lined && !whole ? strokePieces(s, pointPx).map((p) => ({ ...p, width, color })) : [],
+        ...(whole ? { curve: { points: curve, width, color } } : {}),
       };
     });
     const boxes = shapes.map((s) => shapeBounds(s, pointPx));

@@ -29,13 +29,32 @@ export async function pdfBytes(sha256: string): Promise<Uint8Array> {
 /** PDFs being held, by SHA-256: drawing one waits for it (a workspace's file opened holds its PDFs as it opens). */
 const holding = new Map<string, Promise<unknown>>();
 
-/** Each PDF a workspace's file keeps, held as it opens (lib/doc/menoFile). */
-export function holdPdfsOf(file: { files: { sha256: string; media: string }[]; data(sha256: string): Uint8Array | null }): void {
-  if (!isTauri()) return;
+/** A workspace's file, as far as its PDFs go: each kept, by its SHA-256, with its name; and its bytes. */
+type KeptPdfs = { files: { sha256: string; media: string; name?: string }[]; data(sha256: string): Uint8Array | null };
+
+/**
+ * Each PDF a workspace's file keeps, held as it opens (lib/doc/menoFile) -
+ * `refused` told of each that cannot be, by its name, with why: drawn, it
+ * would be blank.
+ */
+export function holdPdfsOf(file: KeptPdfs, refused: (name: string, why: string) => void = () => {}): void {
+  if (isTauri()) holdEachKept(file, holdPdfBytes, refused, holding);
+}
+
+/** Each PDF `file` keeps held by `hold`, and each that is not - its bytes missing or refused - told to `refused`. */
+export function holdEachKept(file: KeptPdfs, hold: (bytes: Uint8Array) => Promise<unknown>, refused: (name: string, why: string) => void, held: Map<string, Promise<unknown>>): void {
   for (const f of file.files) {
-    if (f.media !== "application/pdf" || holding.has(f.sha256)) continue;
+    if (f.media !== "application/pdf" || held.has(f.sha256)) continue;
+    const name = f.name || "A PDF";
     const bytes = file.data(f.sha256);
-    if (bytes) holding.set(f.sha256, holdPdfBytes(bytes).catch(() => undefined));
+    if (!bytes) {
+      refused(name, "the workspace's file does not hold it whole");
+      continue;
+    }
+    held.set(
+      f.sha256,
+      hold(bytes).catch((e: unknown) => refused(name, e instanceof Error ? e.message : String(e))),
+    );
   }
 }
 

@@ -11,12 +11,17 @@ import { isComponentId, readComponent, type Component } from "../chem/ccd";
 /** The network's purpose for fetching components, as consent is given. */
 export const CCD_PURPOSE = "ccd";
 
-const CONSENT: ConsentRequest = {
+/** Where the dictionary's files are: the wwPDB's own archive. */
+const CCD_HOSTS = ["files.wwpdb.org"];
+
+export const CCD_CONSENT: ConsentRequest = {
   purpose: CCD_PURPOSE,
   title: "Look up chemical components in the wwPDB's dictionary?",
   detail:
     "Each component of the entry - its atoms, bonds and charges, as the Chemical Component Dictionary (CC0) defines it - is fetched once and kept. Only the components' names are sent.",
-  sources: ["The Chemical Component Dictionary: files.wwpdb.org"],
+  sources: [`The Chemical Component Dictionary: ${CCD_HOSTS.join(", ")}`],
+  // (and the hosts the lookup may reach: those alone - src-tauri/src/net.rs)
+  hosts: CCD_HOSTS,
 };
 
 type Answer = { found: Record<string, string>; absent: string[]; missing: string[] };
@@ -32,8 +37,8 @@ export async function componentsNamed(names: readonly string[]): Promise<{ compo
   const ids = [...new Set(names.filter(isComponentId))];
   let answer = await invoke<Answer>("ccd_components", { ids, fetch: false });
   if (answer.missing.length) {
-    if (!(await askToConnect(CONSENT))) return null;
-    const fetched = await invoke<Answer>("ccd_components", { ids: answer.missing, fetch: true });
+    if (!(await askToConnect(CCD_CONSENT))) return null;
+    const fetched = await invoke<Answer>("ccd_components", { ids: answer.missing, fetch: true, hosts: CCD_CONSENT.hosts });
     answer = { found: { ...answer.found, ...fetched.found }, absent: fetched.absent, missing: [] };
   }
   const components = new Map<string, Component>();
