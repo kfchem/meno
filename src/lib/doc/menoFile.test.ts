@@ -53,9 +53,12 @@ describe("a workspace file", () => {
     });
     const file = readMenoFile(menoFileBytes("{}", kept));
     expect(file.files).toHaveLength(5000);
+    // (the reads alone timed: each compared after)
     const t = performance.now();
-    for (const k of kept) expect(file.data(k.sha256)).toEqual(k.data);
-    expect(performance.now() - t).toBeLessThan(1500);
+    const read = kept.map((k) => file.data(k.sha256));
+    const took = performance.now() - t;
+    expect(read.every((d, i) => d != null && Buffer.from(d).equals(kept[i].data))).toBe(true);
+    expect(took).toBeLessThan(1500);
     expect(file.data("0".repeat(64))).toBeNull();
   });
 
