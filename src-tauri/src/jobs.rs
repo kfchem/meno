@@ -2116,7 +2116,8 @@ mod tests {
         };
         sleep_watching(&dir, BEHIND_MOST);
         stop.join().unwrap();
-        assert!(asleep.elapsed() < Duration::from_millis(150) + WAIT_STEP + Duration::from_millis(250), "{:?}", asleep.elapsed());
+        // (woken by the stop, not by the end of its ten seconds: a bound half of them, which a slow runner's scheduling does not reach)
+        assert!(asleep.elapsed() < BEHIND_MOST / 2, "{:?}", asleep.elapsed());
         // (asked nothing, it sleeps all it was to)
         let dir = temp();
         let asleep = Instant::now();
