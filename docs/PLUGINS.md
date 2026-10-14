@@ -86,10 +86,14 @@ Everything a plugin is lives in one folder, named by its id:
   requirements.lock  its environment, made by uv from PyPI - or, where it
   (or pixi.toml and  needs conda-forge, by pixi
    pixi.lock)
+  requirements.in    what its lock was made from (uv's), kept to make it again
+  <script>.py        a script of its own that a job runs, in its environment
+                     (RDKit's conformers_job.py, Blender's render.py)
   <name>.grammar     how a text of a kind it knows is coloured, where it says
   overrides.txt      what its lock overrides, where its makers pin what cannot
                      be installed (MolNexTR's)
-  LICENSE            its licence's text, where it is not Meno's (*Licences*)
+  LICENSE            the licence of its own code, where that is not Meno's
+                     (*Licences*): the Blender plugin's alone
 ```
 
 What it needs besides - a model's trained weights, too large to carry and
@@ -123,11 +127,15 @@ catalogue - has a manifest alone.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
-  own.
+  own: one it names in `reads` that is neither - another plugin's - is
+  left out as the plugin is taken in (`lib/calc/catalog.ts`, `pluginOf`).
 - **Meno checks every manifest as data**, wherever it came from: its id,
   its lock and worker in its folder (the backend allows nothing else), its
-  marks as text of some length, and no mark that one of Meno's own sample
-  files holds.
+  marks as text of some length (`lib/plugins/manifest.ts`); and, as its
+  kinds are registered (`lib/io/kinds.ts`, `registered`), no mark that one
+  of Meno's own sample files holds - an SD, an XYZ, a PDB and an RXN file
+  Meno carries, and its workspace's and a structure's records. Such a mark
+  is not taken, and Settings, *Plugins*, says which.
 - **A grammar is data too** (`<name>.grammar`, in Lezer's form, named in
   the manifest with the tone each of its parts is drawn in): Meno makes it
   into tables - a tokenizer that reads each letter once, a parser that
@@ -149,16 +157,16 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | Field | Form | What it says, and how it is checked |
 | --- | --- | --- |
 | `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
-| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; its licence (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
+| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
-| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own files and refused where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
-| `reads` | ids | The kinds it reads: its own, or Meno's. |
+| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
+| `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
-| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
-| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
+| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
+| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -168,6 +176,19 @@ suggests nothing - is none. Options are in the general form (`lib/options`:
 a choice, a number, a text or a switch, each with a label and a default it
 takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
 charge, multiplicity or name, for a writer's).
+
+A step's options are saved with its workspace, and a workspace may come
+from someone else: whatever a text option holds runs, as the plugin
+writes it into its program's input, when Run is pressed on the computer
+it is opened on. So a plugin writes a text option so that it names no
+program and no file, by its program's own reference, and refuses one
+that would (2026-10-13). Gaussian's route section takes no External,
+however shortened, and no `@`, `%`, `#`, `!` or double quotes; ORCA's
+simple input line takes no `%` or `#`, the manual naming a file or a
+program only in a block, in quotes. These input texts are checked by the
+plugins' workers alone (ARCHITECTURE.md, the known boundary under the
+jobs' rules); what Meno checks itself is which program runs, and that a
+program installed separately is given no file but its job's.
 
 A step's `files` (built 2026-10-11, NCI.md): `{"kinds": ["nci"],
 "programs": ["multiwfn"], "files": ["molden", "gaussian-fchk", "wfn",
@@ -238,12 +259,39 @@ carries; a test keeps its kinds and the kinds those plugins read in step.
 
 ## Licences
 
-A plugin carries its own licence (`licence`; its text, `LICENSE`, in its
-folder where it is not Meno's). Meno is Apache-2.0. A plugin whose code
-must be under another licence - a script for Blender, which uses Blender's
-own Python API and so is GPL - may come with Meno while it stands apart
-(the maintainer, 2026-10-10; to be distributed apart later, if those using
-Meno in companies make that worthwhile):
+Meno is Apache-2.0, and so is what the folders of the plugins it carries
+hold - their workers, manifests, locks and grammars - but for one plugin
+(below). A plugin's `licence`, as its `version` and `homepage`, is that of
+what it brings: the program or package its environment is made with
+(cclib's BSD-3-Clause, xTB's LGPL-3.0-or-later, MolScribe's MIT), or,
+where it brings only its own code - an interface to a program installed
+separately, the WFX reader, Getting started - that code's. Settings,
+*Plugins*, shows it.
+
+What a plugin brings is fetched as it is set up - from PyPI, conda-forge
+or its makers' repository, as its lock says - and is carried neither in
+its folder nor in Meno, so its folder holds no text of that licence
+(checked on 2026-10-13 against the licences the packages install;
+MolScribe's as PDF.md, *A picture read*, gives it):
+
+- **cclib** and **RDKit** (BSD-3-Clause) ask that copies passed on, as
+  source or built, keep their notice; **MolScribe** (MIT), that its
+  notice go with copies of it or of substantial parts of it. Meno passes
+  on no copy of any of them: its lock names each, and a worker of Meno's
+  uses it.
+- **xTB** and **CREST** (LGPL-3.0-or-later) set their conditions on
+  conveying them, and none on running them (GPL-3.0, section 2, which the
+  LGPL takes in): Meno runs each as a program apart, from the environment
+  pixi made on the computer.
+- A model's trained weights (`downloads`) are fetched under their own
+  licence too, and not carried.
+
+A plugin's folder holds a licence's text (`LICENSE`) only where its own
+code is under another licence than Meno's. A plugin whose code must be -
+a script for Blender, which uses Blender's own Python API and so is GPL -
+may come with Meno while it stands apart (the maintainer, 2026-10-10; to
+be distributed apart later, if those using Meno in companies make that
+worthwhile):
 
 - it is a folder of its own, with its licence's text, and says it
   (`licence: "GPL-3.0-or-later"`);
@@ -258,8 +306,9 @@ such plugin.
 
 A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
-`NSIS_HOOK_PREINSTALL`), as was done for the Gaussian input plugin once it
-became the Gaussian interface.
+`NSIS_HOOK_POSTINSTALL`), as was done for the Gaussian input plugin once it
+became the Gaussian interface, and for the console's worker and Meno's own
+Python locks.
 
 ## A program Meno fetches
 
@@ -303,7 +352,10 @@ As the programs stand (the maintainer, 2026-10-12):
 
 - **Blender** is fetched, and always used: GPL-3.0-or-later, official
   builds from download.blender.org - 5.2.2 LTS for macOS on Apple silicon
-  and for Windows on x64 and arm64 (RENDER.md). A Blender located in
+  and for Windows on x64 (RENDER.md). The manifest names Windows on arm64's
+  too, but a download is chosen by the processor Meno was built for, and
+  Meno's Windows build is x64 alone: on an arm64 Windows, run emulated, it
+  fetches the x64 Blender. A Blender located in
   Settings before is not carried over.
 - **ORCA** and **Gaussian** are not fetched: each is obtained under its
   makers' own terms, which each user accepts.
@@ -474,7 +526,7 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {molblock}` and `to_smiles {smiles}` (SMILES); `analyse {molblock}`
+    {smiles}` and `to_smiles {molblock}` (SMILES); `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
@@ -529,7 +581,14 @@ The same for every plugin and for Meno's own parts:
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,
   isotope and radical, the bonds by index with their orders, a name
-  (FILE-IO.md, *As step 7's writer was built*); a reader gives back
+  (FILE-IO.md, *As step 7's writer was built*). A step's entry gives an
+  isotope's mass too (`mass`, in daltons; 2026-10-13), where one is
+  measured: NIST's relative atomic mass ("Atomic Weights and Isotopic
+  Compositions for All Elements", physics.nist.gov, Compositions;
+  `lib/chem/isotopes.ts`, written by `scripts/chem/isotopes.py`). A
+  plugin writes it where its program's input takes a mass, and otherwise
+  refuses what the mass would change, naming the isotope - never giving
+  it as the natural element. A reader gives back
   Meno's own plain data, checked by Meno on the way in.
 - **A file of several jobs, one after another** (the maintainer,
   2026-10-13) - Gaussian's Link1 jobs, ORCA's `$new_job` - is read by a

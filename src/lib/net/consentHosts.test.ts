@@ -5,10 +5,11 @@ import { UPDATE_CONSENT } from "../update";
 import { filesSetUp, pixiSetUp, uvSetUp, type SetUpFile } from "../plugins/setUpSources";
 
 // What every consent says, against the hosts its task is kept to
-// (src-tauri/src/net.rs): Meno's own environments' set-ups, every plugin's
-// set-up and files, keeping Meno up to date, and the wwPDB's dictionary.
+// (src-tauri/src/net.rs): every plugin's set-up and files, keeping Meno up
+// to date, and the wwPDB's dictionary. (Meno has no environment of its own
+// to set up: the console's and the workflows' went, 2026-10-13.)
 const manifests = import.meta.glob<{ id: string; environment?: string; downloads?: SetUpFile[] }>("/src-tauri/resources/plugins/*/manifest.json", { eager: true, import: "default" });
-const uvLocks = import.meta.glob<string>(["/src-tauri/resources/plugins/*/requirements.lock", "/src-tauri/resources/py/requirements.*.lock"], { eager: true, query: "?raw", import: "default" });
+const uvLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/requirements.lock", { eager: true, query: "?raw", import: "default" });
 const pixiLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/pixi.lock", { eager: true, query: "?raw", import: "default" });
 
 const folder = (path: string) => path.split("/").slice(-2, -1)[0];
@@ -39,11 +40,6 @@ function consents(): [string, Pick<ConsentRequest, "sources" | "hosts">][] {
     ["keeping Meno up to date", UPDATE_CONSENT],
     ["the wwPDB's dictionary", CCD_CONSENT],
   ];
-  for (const own of ["console", "node"]) {
-    const lock = uvLocks[`/src-tauri/resources/py/requirements.${own}.lock`];
-    if (lock === undefined) throw new Error(`no lock for ${own}`);
-    all.push([`Python for ${own}`, uvSetUp(lock, [])]);
-  }
   for (const m of Object.values(manifests)) {
     const downloads = m.downloads ?? [];
     if (m.environment === "uv") all.push([`setting ${m.id} up`, uvSetUp(lockOf(uvLocks, m.id)!, downloads)]);
@@ -57,7 +53,7 @@ function consents(): [string, Pick<ConsentRequest, "sources" | "hosts">][] {
 }
 
 describe("the hosts a consent names, and those its task may reach", () => {
-  it("are found for Meno's own set-ups, every plugin's, and each of Meno's other uses of the network", () => {
+  it("are found for every plugin's set-up, and each of Meno's other uses of the network", () => {
     const all = consents();
     expect(all.length).toBeGreaterThan(14);
     for (const [what, c] of all) {

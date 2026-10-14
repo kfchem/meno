@@ -324,6 +324,16 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
 
 /** A program's file, as a system has it: a name, not a path. */
 const FILE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,59}$/;
+/** Programs a job never runs, whatever names them: shells, and interpreters that take code in their arguments. The backend's list (src-tauri/src/jobs.rs `NEVER`). */
+const NEVER_RUN = ["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish", "env", "cmd", "powershell", "pwsh", "perl", "ruby", "node", "osascript", "wscript", "cscript"];
+/** Whether a program installed separately may be run by its file - a name: by that name without its last ending, in any case, never a shell, such an interpreter, or Python, which runs only a plugin's script. The backend's rule (`program_file_ok`). */
+function fileRuns(file: string): boolean {
+  const dot = file.lastIndexOf(".");
+  const stem = (dot > 0 ? file.slice(0, dot) : file).toLowerCase();
+  return !NEVER_RUN.includes(stem) && !stem.startsWith("python");
+}
+/** Whether `f` is a program's file a job may run: a name, not a path, and never a shell or Python. */
+const programFileOk = (f: unknown): f is string => typeof f === "string" && FILE.test(f) && fileRuns(f);
 /** Variables a program installed separately is never given by a plugin: how programs are found and loaded, the network's way out, and the threads Meno sets. Meno's backend refuses the same (src-tauri/src/jobs.rs). */
 const ENV_NEVER = ["PATH", "LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -374,7 +384,7 @@ function installedOf(v: unknown): InstalledDecl | null {
   const label = text(d?.label, 60);
   const given = (d?.files ?? {}) as Record<string, unknown>;
   const files: Partial<Record<System, string>> = {};
-  for (const s of SYSTEMS) if (typeof given[s] === "string" && FILE.test(given[s] as string)) files[s] = given[s] as string;
+  for (const s of SYSTEMS) if (programFileOk(given[s])) files[s] = given[s];
   const path = d?.path === undefined ? [] : placesOf(d.path);
   const env: Record<string, string[]> = {};
   let envOk = true;
@@ -412,7 +422,7 @@ function besideOf(v: unknown): Record<string, Partial<Record<System, string>>> |
     if (!PROGRAM.test(k) || !given || typeof given !== "object" || Array.isArray(given)) return null;
     const files: Partial<Record<System, string>> = {};
     for (const [sys, f] of Object.entries(given as Record<string, unknown>)) {
-      if (!SYSTEMS.includes(sys as System) || typeof f !== "string" || !FILE.test(f)) return null;
+      if (!SYSTEMS.includes(sys as System) || !programFileOk(f)) return null;
       files[sys as System] = f;
     }
     out[k] = files;

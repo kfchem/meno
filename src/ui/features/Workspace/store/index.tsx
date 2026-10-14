@@ -373,6 +373,9 @@ export function storeOf(doc: DocumentStore<WorkspaceDocument>): EditorStore {
   return store;
 }
 
+/** The store a document is drawn from, where one has been made: none for a document never drawn. */
+export const madeStoreOf = (doc: DocumentStore<WorkspaceDocument>): EditorStore | undefined => storesOf.get(doc);
+
 /** The stores that have taken what their canvas was opened with (hooks/useStructureEvents). */
 const openedStores = new WeakSet<EditorStore>();
 
