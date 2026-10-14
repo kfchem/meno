@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
@@ -85,6 +86,7 @@ src-tauri/
   src/fonts.rs            the system's typefaces
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
+  src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
   capabilities/           permission sets for the main window
   resources/py/           the lock files of Meno's own Python profiles (the console's, workflows');
                           uv and pixi are not bundled but fetched the first time an environment
@@ -172,7 +174,8 @@ white - title bar, tabs and all - with no way back but quitting.
 Meno's notices are (`StoppedCard`): what stopped, that what it showed is
 kept, the error in grey beneath, and **Reload**, which makes the part again
 from nothing. Each logs the error with `console.error`, naming the part
-("Meno: the canvas stopped working.") and where in the tree it was.
+("Meno: the canvas stopped working.") and where in the tree it was - into
+Meno's log too (*Meno's log*).
 
 | Part | Where | Its card | Reload also |
 | --- | --- | --- | --- |
@@ -217,6 +220,32 @@ the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
 `useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
 the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
 the document, and a save that fails says so under the canvas's card.
+
+## Meno's log
+
+A release started from the Finder or Explorer has no terminal, so what
+Meno says of itself is written to a file as well, `<app data>/logs/meno.log`
+(on a Mac in `~/Library/Application Support/com.kfchem.meno/logs/`, on
+Windows in `%APPDATA%\com.kfchem.meno\logs\`). Everything still goes where it
+went before, to stderr and the page's console.
+
+- **What goes in**: a line saying which Meno started (its version, the
+  system and the processor); the backend's own lines (`logfile::logged!`,
+  where `eprintln!` was) and a panic, with where it happened; and the
+  page's `console.error` and `console.warn`, and errors thrown and never
+  caught (`lib/log.ts`, through `log_page`). Each line has the time in UTC
+  and what it came from: `meno`, `page error` or `page warn`.
+- **Nothing from documents**: a line says what went wrong. Of an error it
+  has the name, message and stack, words as they were logged, a number; of
+  any other thing only what it is (`[Object]`, `[Map]`). Code that logs
+  names what failed, never what a document holds.
+- **Under 5 MB**: past that the log is begun again, the one before kept as
+  `meno.log.1`, one only. The page sends at most 100 lines a minute; those
+  past that are counted, and the next line says how many were left out. A
+  line from the page is cut at 4000 bytes.
+- Lines from before the log's folder is known, in the first moments after
+  Meno starts, are kept, up to 200, and written once it is.
+- Meno shows no log of its own yet: the file is found in its folder.
 
 ## How things move
 
@@ -1094,6 +1123,7 @@ the frames standing where renders will put what they make
 
 | Command | Called from | Purpose |
 | --- | --- | --- |
+| `log_page` | `lib/log.ts` | A line of the page's errors or warnings into Meno's log (`logfile.rs`), cut at 4000 bytes. |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
 | `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
