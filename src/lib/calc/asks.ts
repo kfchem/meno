@@ -18,6 +18,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import type { KeptData, MenoFile } from "../doc/menoFile";
 import { readerById, readerIdOfLine, type ReaderPlugin } from "./catalog";
 import { kindOf } from "../io/kinds";
+import { textOf } from "../io/text";
 import type { Reader } from "./client";
 import type { CalcInfo, CalcSource } from "./output";
 import { isAsk, resultKey, resultsOn, type ListResult } from "./results";
@@ -94,8 +95,8 @@ export type ReadAt = (path: string) => Promise<string | null>;
 
 const readAt: ReadAt = async (path) => {
   if (!isTauri()) return null;
-  // (as Open reads: bytes, as UTF-8)
-  return readFile(path).then((bytes) => new TextDecoder().decode(bytes), () => null);
+  // (as Open reads: bytes, as lib/io/text reads them - the text its hash was taken of)
+  return readFile(path).then((bytes) => textOf(bytes), () => null);
 };
 
 /** An output kept where it was, read again: its text, where it is there and unchanged - the same SHA-256 - and kept for the session; else none. */
