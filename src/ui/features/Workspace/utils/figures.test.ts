@@ -8,6 +8,8 @@ import { readDrawn } from "./copyPaste";
 import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
 import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
+import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
+import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, wholeLabel, type FigureResult, type Unread } from "./figures";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
@@ -383,6 +385,47 @@ describe("a figure whose labels are outlines", () => {
 
   it("reads one whose page is turned a quarter, no letter written to tell which way, the way its outlines read as letters", () => {
     expect(elementsOf(figureFrom(quarterTurned(sulfone()), SHA, 0, KNOWN))).toEqual(["C", "C", "C", "C", "C", "C", "C", "O", "O", "S"]);
+  });
+
+  it("reads Meno's own scheme the same with the system's letters as without: its + of twelve corners a sign, its arrow an arrow", () => {
+    // (Meno's + is a filled outline of many corners, so a scheme of Meno's is taken to draw letters as shapes)
+    const plus = plusOutline({ x: 70, y: 100 }, plusMeasures(styleOf(DEFAULT_STYLE_CHOICE), L));
+    const f: FigureDrawn = {
+      paths: [
+        stroke([30, 100], step([30, 100], 30), step(step([30, 100], 30), -30)),
+        { fill: "#000000ff", stroke: null, width: 0, d: [...plus.map((p, i): PathStep => [i ? "L" : "M", p.x, p.y]), ["Z"]] },
+        stroke([84, 100], step([84, 100], 30), step(step([84, 100], 30), -30)),
+        stroke([120, 100], [150, 100]),
+        { fill: "#000000ff", stroke: null, width: 0, d: [["M", 156, 100], ["L", 149, 97], ["L", 149, 103], ["Z"]] },
+        stroke([164, 100], step([164, 100], 30), step(step([164, 100], 30), -30), step(step(step([164, 100], 30), -30), 30)),
+      ],
+      letters: [...letters("OH", [step(step([84, 100], 30), -30)[0] + 6, 100])],
+      pictures: [],
+    };
+    expect(lettersAsShapes(f)).toBe(true);
+    const shown = (r: FigureResult | Unread) => ("none" in r ? r : { els: elementsOf(r), pluses: r.scheme?.pluses?.length, arrows: r.scheme?.arrows?.length });
+    expect(shown(figureFrom(f, SHA, 0, KNOWN))).toEqual(shown(figureFrom(f, SHA, 0, [])));
+    expect(shown(figureFrom(f, SHA, 0, KNOWN))).toMatchObject({ pluses: 1, arrows: 1 });
+  });
+
+  it("keeps an arrow's filled head an arrow's, and an outlined label beside it a label", () => {
+    const n: P = [116, 100];
+    const f: FigureDrawn = {
+      paths: [
+        ...ring([20, 100], 0),
+        stroke([60, 100], [100, 100]),
+        { fill: "#000000ff", stroke: null, width: 0, d: [["M", 108, 100], ["L", 100, 96.5], ["L", 100, 103.5], ["Z"]] },
+        ...outlinedWord("N", n),
+        cut(n, step(n, 30), 5, 0),
+        cut(n, step(n, -30), 5, 0),
+        stroke(step(n, 30), step(step(n, 30), -30), step(n, -30)),
+      ],
+      letters: [],
+      pictures: [],
+    };
+    const r = figureFrom(f, SHA, 0, KNOWN);
+    expect("none" in r ? null : r.scheme?.arrows?.length).toBe(1);
+    expect(elementsOf(r).filter((e) => e === "N")).toEqual(["N"]);
   });
 
   it("takes outlines of straight lines alone - an N - for letters to read, and a filled wedge for none", () => {
