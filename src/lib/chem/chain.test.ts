@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { abbreviationOf } from "./abbreviations";
+import { abbreviationOf, abbreviationStructure } from "./abbreviations";
 
 describe("a condensed formula read as a group (./chain)", () => {
   it("is the molecule an H before it makes, without the H: each atom at a valence it has", () => {
@@ -34,5 +34,33 @@ describe("a condensed formula read as a group (./chain)", () => {
   it("leaves the named compositions their names: OAc is acetoxy, not a formula", () => {
     expect(abbreviationOf("OAc")?.name).not.toBe("OAc");
     expect(abbreviationOf("CO2Me")?.smiles).toBe("*C(=O)OC");
+  });
+
+  it("reads an O alone in parentheses as an =O, and a group alone in them as it is unbracketed: C(O)NiPr2, N(iPr)2", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("C(O)NiPr2")).toBe(smiles("CONiPr2"));
+    expect(smiles("C(O)N(iPr)2")).toBe(smiles("CONiPr2"));
+    expect(smiles("C(O)OMe")).toBe("*[C](=[O])[O]C");
+    expect(smiles("C(O)NMe2")).toBe(smiles("CONMe2"));
+    expect(smiles("N(iPr)2")).toBe(smiles("NiPr2"));
+  });
+});
+
+describe("an ion written as one (./abbreviations)", () => {
+  /** Its atoms, each with its charge where it has one: P-1, F. */
+  const atomsOf = (l: string) => abbreviationStructure(l)?.atoms.map((a) => `${a.el}${a.charge ? a.charge : ""}`).sort();
+  it("reads an anion written alone, its charge last, as one is read in a salt: PF6-, BF4-, ClO4-", () => {
+    expect(atomsOf("PF6-")).toEqual(["F", "F", "F", "F", "F", "F", "P-1"]);
+    expect(atomsOf("BF4-")).toEqual(["B-1", "F", "F", "F", "F"]);
+    // (an oxoanion as in a salt: its charge on an O)
+    expect(atomsOf("ClO4-")).toEqual(["Cl", "O", "O", "O", "O-1"]);
+    expect(abbreviationOf("PF6-")?.kind).toBe("reagent");
+  });
+
+  it("reads a group bound by an O with its charge there, and ions in parentheses counted: OTf-, (Cl-)2", () => {
+    expect(atomsOf("OTf-")).toEqual(["C", "F", "F", "F", "O", "O", "O-1", "S"]);
+    expect(atomsOf("(Cl-)2")).toEqual(["Cl-1", "Cl-1"]);
+    // (an element's own ion alone is read as an element is, not as a reagent)
+    expect(abbreviationOf("Cl-")).toBeUndefined();
   });
 });

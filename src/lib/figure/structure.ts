@@ -6,19 +6,22 @@
 import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { reversedLabel } from "../chem/abbreviations";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { implicitHydrogens } from "../chem/molecule";
+import { implicitHydrogens, type Radical } from "../chem/molecule";
 import type { FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
-export type LabelReader = (label: string) => { el: string; charge?: number } | null;
+export type LabelReader = (label: string) => { el: string; charge?: number; isotope?: number } | null;
 
 /**
  * A label as drawn, read: as it is, or - drawn on its bond's left, read
  * from the bond outward - turned round (HO as OH, TBSO as OTBS, MeO2C as
  * CO2Me, H2N as NH2), or an HN before a group as NH (BocHN as NHBoc).
  */
-export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; read: boolean } {
+export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; isotope?: number; read: boolean } {
   const tries = [drawn, reversedLabel(drawn)];
+  // (a charge written last stays last, turned round or not: H3N+ as NH3+)
+  const charged = /^(.+?)(\d*[+-]+\d*)$/.exec(drawn);
+  if (charged) tries.push(`${reversedLabel(charged[1])}${charged[2]}`);
   const hn = /^H(\d*)([A-Z][a-z]?)(?=[A-Z(]|$)/.exec(drawn);
   if (hn && hn[2] !== "H") tries.push(`${hn[2]}H${hn[1]}${drawn.slice(hn[0].length)}`);
   for (const t of tries) {
@@ -28,7 +31,7 @@ export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string;
   return { el: drawn, read: false };
 }
 
-export type StructureAtom = { x: number; y: number; el: string; charge?: number; unsure?: string[] };
+export type StructureAtom = { x: number; y: number; el: string; charge?: number; isotope?: number; radical?: Radical; unsure?: string[] };
 export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; unsure?: string[] };
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
@@ -66,7 +69,10 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     return first;
   });
   const els = labels.map((l) => l?.el ?? "C");
-  const charges = labels.map((l) => l?.charge ?? 0);
+  // (what its label says, and a charge drawn by it in a ring)
+  const charges = labels.map((l, i) => (l?.charge ?? 0) + (read.atoms[i].marked ?? 0));
+  // (a radical's dots: one, its unpaired electron; two, a pair - a singlet, as a triplet is drawn the same)
+  const radicals = read.atoms.map((a): Radical | undefined => (a.dots === 1 ? "doublet" : a.dots === 2 ? "singlet" : undefined));
   // (a ring drawn with its circle: its double bonds as the ring's atoms need them)
   const orders = read.bonds.some((b) => b.aromatic)
     ? kekuleOrders(
@@ -97,18 +103,20 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
       else if (as !== a.label) unsure.splice(0, unsure.length, `Its letters are drawn as shapes: read as "${as}".`);
       const drawn = drawnHydrogens(as);
       if (label.read && drawn != null && els[i] !== "H") {
-        const left = implicitHydrogens(els[i], valence[i], charges[i]);
+        const left = implicitHydrogens(els[i], valence[i], charges[i], radicals[i]);
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
     } else if (els[i] === "C" && valence[i] > 4) {
       unsure.push("More bonds meet here than a carbon has.");
     }
-    return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(unsure.length ? { unsure } : {}) };
+    const isotope = label && "isotope" in label ? label.isotope : undefined;
+    if (radicals[i] === "singlet") unsure.push("Two dots: read as a pair of electrons (a singlet); a triplet is drawn the same.");
+    return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(isotope ? { isotope } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}), ...(unsure.length ? { unsure } : {}) };
   });
   // a hashed bond whose narrow end is not drawn: at the end that can be a
   // stereocentre - an atom of four bonds, its hydrogens counted, none of them
   // double - where only one can; said, where both can or neither
-  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i]) === 4;
+  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
     const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
     if (b.either) {

@@ -215,6 +215,22 @@ impl Drawn {
 }
 
 /// A request answered: its JSON, and its bytes.
+/// Why PDFium could not open a PDF, in words: one locked with a password
+/// said so plainly, as Meno asks for none, one locked another way, and one
+/// damaged past mending - cut short, or no PDF at all. Anything else is said
+/// plainly too, its error to the log, not to the person.
+fn unreadable(e: PdfiumError) -> String {
+    match e {
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => "it is locked with a password".into(),
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::SecurityError) => "it is locked in a way Meno cannot open".into(),
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError) => "it is damaged, or is not a PDF".into(),
+        e => {
+            eprintln!("a PDF not opened: {e:?}");
+            "Meno could not open it".into()
+        }
+    }
+}
+
 fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
     let t = Instant::now();
     let sha = ask["sha"].as_str().unwrap_or("").to_string();
@@ -222,7 +238,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
         return Err("no such PDF".into());
     }
     if !docs.contains_key(&sha) {
-        let doc = pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), None).map_err(|e| format!("it could not be read ({e})"))?;
+        let doc = pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), None).map_err(unreadable)?;
         docs.insert(sha.clone(), doc);
     }
     let doc = &docs[&sha];
@@ -309,13 +325,15 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
         }
         // what the page is made of, each thing where it lies - 20 bytes each:
         // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 5 a form
-        // holding more), and its box, as a letter's is (`text`)
+        // holding more, 6 text that is a "+" alone, as a scheme sets one
+        // between its compounds), and its box, as a letter's is (`text`)
         "objects" => {
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let mut bytes = Vec::new();
             for obj in page.objects().iter() {
                 let kind: u32 = match obj.object_type() {
+                    PdfPageObjectType::Text if obj.as_text_object().map(|t| t.text().trim() == "+").unwrap_or(false) => 6,
                     PdfPageObjectType::Text => 1,
                     PdfPageObjectType::Path => 2,
                     PdfPageObjectType::Image => 3,
@@ -354,7 +372,17 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                     continue;
                 }
                 let o = c.origin().ok().map(|(x, y)| at(x.value, y.value));
-                letters.push(json!({"c": ch.to_string(), "box": bx, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name()}));
+                // (and its loose box: from where it starts to where the next would, as tall as its typeface - how far apart letters are set, which their ink alone does not tell)
+                let loose = c.loose_bounds().ok().map(|r| drawn_box(&at, &r));
+                // (which way its line reads as the page is shown: its own turn on the page, and the page's - radians, y down, naught left to right)
+                let dir = match (c.angle_radians(), c.origin()) {
+                    (Ok(a), Ok((x, y))) => {
+                        let (p, q) = (at(x.value, y.value), at(x.value + 10.0 * a.cos(), y.value + 10.0 * a.sin()));
+                        Some((q.1 - p.1).atan2(q.0 - p.0))
+                    }
+                    _ => None,
+                };
+                letters.push(json!({"c": ch.to_string(), "box": bx, "loose": loose, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name(), "dir": dir}));
             }
             Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "ms": ms(t)}), vec![]))
         }
@@ -511,13 +539,23 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
     }
     let sha = format!("{:x}", Sha256::digest(bytes));
     let path = cache_dir(app)?.join(format!("{sha}.pdf"));
-    if std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64) {
+    let fresh = std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64);
+    if fresh {
         // (written whole, then put in place: never read half written)
         let part = path.with_extension("part");
         std::fs::write(&part, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
     }
-    let (head, _) = ask(app, json!({"op": "pages", "sha": sha})).await?;
+    // (one PDFium cannot open is not kept: taken in just now, it goes again)
+    let (head, _) = match ask(app, json!({"op": "pages", "sha": sha})).await {
+        Ok(answer) => answer,
+        Err(e) => {
+            if fresh {
+                let _ = std::fs::remove_file(&path);
+            }
+            return Err(e);
+        }
+    };
     let pages: Vec<[f32; 2]> = serde_json::from_value(head["pages"].clone()).unwrap_or_default();
     Ok(Held { sha256: sha, size: bytes.len() as u64, pages })
 }
@@ -525,8 +563,26 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
 /// A PDF on the disk, held.
 #[tauri::command]
 pub async fn pdf_hold_path(app: tauri::AppHandle, path: String) -> Result<Held, String> {
-    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let bytes = read_at_most(Path::new(&path), MOST)?;
     hold(&app, &bytes).await
+}
+
+/// A file's bytes, if it is no larger than `most`: too large said from its
+/// size before anything is read, and never more than `most` and one byte
+/// read, should it grow as it is read.
+fn read_at_most(path: &Path, most: u64) -> Result<Vec<u8>, String> {
+    let too_large = || "it is too large".to_string();
+    if std::fs::metadata(path).map_err(|e| e.to_string())?.len() > most {
+        return Err(too_large());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(most + 1).read_to_end(&mut bytes))
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > most {
+        return Err(too_large());
+    }
+    Ok(bytes)
 }
 
 /// A PDF's bytes, sent as they are, held.
@@ -613,6 +669,29 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pdf_locked_with_a_password_is_said_to_be() {
+        let locked = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError));
+        assert_eq!(locked, "it is locked with a password");
+        let broken = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError));
+        assert_eq!(broken, "it is damaged, or is not a PDF");
+        // (no error's name for the person: a PDF cut short reads as damaged, anything else as not opened)
+        let other = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FileError));
+        assert_eq!(other, "Meno could not open it");
+    }
+
+    #[test]
+    fn a_file_too_large_is_refused_before_it_is_read() {
+        let dir = std::env::temp_dir().join(format!("meno-pdf-most-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.pdf");
+        std::fs::write(&file, b"%PDF-1.7\n0123456789").unwrap();
+        assert_eq!(read_at_most(&file, 64).unwrap(), b"%PDF-1.7\n0123456789");
+        assert_eq!(read_at_most(&file, 8).unwrap_err(), "it is too large");
+        assert!(read_at_most(&dir.join("none.pdf"), 64).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_pdf_is_known_by_its_start() {
@@ -790,10 +869,76 @@ mod tests {
         assert_eq!(letters[0]["c"], json!("O"));
         assert!(near(&letters[0]["size"], 5.0), "{:?}", letters[0]);
         assert!(near(&letters[0]["at"][0], 105.0) && near(&letters[0]["at"][1], 432.0), "{:?}", letters[0]);
+        // (its loose box from where it starts, holding its ink: how far apart letters are set)
+        let (ink, loose) = (&letters[0]["box"], &letters[0]["loose"]);
+        let f = |v: &Value, i: usize| v[i].as_f64().unwrap();
+        assert!((f(loose, 0) - 105.0).abs() < 0.2 && f(loose, 0) <= f(ink, 0) + 0.01 && f(loose, 2) >= f(ink, 2) - 0.01, "{:?}", letters[0]);
+        // (its line reads left to right)
+        assert!(letters[0]["dir"].as_f64().unwrap().abs() < 0.01, "{:?}", letters[0]);
         // within a box round the wedge alone, the wedge alone
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
         assert_eq!(head["paths"].as_array().unwrap().len(), 1);
         assert_eq!(head["letters"].as_array().unwrap().len(), 0);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_lone_plus_is_told_from_other_words() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-plus-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "f".repeat(64);
+        // (words with a + among them, and a + set alone, as a scheme sets one between its compounds)
+        let page = "BT /F1 10 Tf 100 700 Td (A + B) Tj ET BT /F1 12 Tf 200 700 Td (+) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let kinds: Vec<u32> = (0..n).map(|i| u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).collect();
+        assert_eq!(kinds, vec![1, 6]);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_turned_pages_letters_read_down_it() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-turned-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "e".repeat(64);
+        // (a page turned a quarter as it is shown, its words set as on any page: they read down it)
+        let page = "BT /F1 10 Tf 100 700 Td (OH) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Rotate 90 /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0})).unwrap();
+        let letters = head["letters"].as_array().unwrap();
+        assert_eq!(letters.len(), 2);
+        for l in letters {
+            assert!((l["dir"].as_f64().unwrap() - std::f64::consts::FRAC_PI_2).abs() < 0.01, "{l:?}");
+        }
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }

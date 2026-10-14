@@ -1,4 +1,6 @@
 import type { DocumentStore } from "../../../../../lib/doc";
+import { gestureStep } from "../../../../../lib/doc/document";
+import { marksAll } from "../../../../../lib/chem/captions";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { EditorState } from "../types";
@@ -133,11 +135,32 @@ export function createUiSlice(
     },
 
     colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => {
-      doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? { coalesceKey: `colour:${which}:${gesture}` } : undefined);
+      doc.edit(which === "color" ? "colour" : "highlight", (d) => ops.colourParts(d, parts, which, color), gesture ? gestureStep(`colour:${which}:${gesture}`) : undefined);
+    },
+
+    // (one colour given to all a selection holds - atoms and bonds, electron
+    // arrows, words, reaction arrows, writing by hand - as one step; the
+    // system's chooser dragged through colours, one step for all of it)
+    colourTogether: (
+      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+      color: string | null,
+      gesture?: string,
+    ) => {
+      doc.edit(
+        "colour",
+        (d) => {
+          let n = ops.colourParts(d, { atoms: what.atoms ?? [], bonds: what.bonds ?? [], pushes: what.pushes ?? [] }, "color", color);
+          if (what.words?.length) n = ops.markCaptions(n, what.words, (c) => marksAll(c.text, c.marks, { color }));
+          if (what.arrows?.length) n = ops.setArrowForm(n, what.arrows, { color });
+          if (what.inks?.length) n = ops.colourInks(n, what.inks, color);
+          return n;
+        },
+        gesture ? gestureStep(`colour:color:${gesture}`) : undefined,
+      );
     },
 
     fillRings: (keys: readonly string[], color: string | null, gesture?: string) => {
-      doc.edit("fill ring", (d) => ops.fillRings(d, keys, color), gesture ? { coalesceKey: `fill:${gesture}` } : undefined);
+      doc.edit("fill ring", (d) => ops.fillRings(d, keys, color), gesture ? gestureStep(`fill:${gesture}`) : undefined);
     },
 
     setRingEnabled: (key: string, v: boolean) => {

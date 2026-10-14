@@ -1,11 +1,11 @@
 import PageHtml from "./PageHtml";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
+import { KCAL_PER_HARTREE } from "../workflow/meno";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
+import { greatest, least } from "../../../../lib/chem/lists";
 
-/** Kilocalories per mole in a hartree. */
-const KCAL_PER_HARTREE = 627.509474;
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
 const BARS = 30;
@@ -21,24 +21,23 @@ const EDGE = 8;
 /** How far below its molecule it hangs, in page pixels (workflow/look CHIP makes room for it). */
 const GAP = 10;
 
-/** A conformer's share of its set, as it is written: "62%", "<1%". */
+/** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
 function share(p: number): string {
-  return p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`;
+  return p < 0.005 ? "<1%" : p > 0.995 && p < 1 ? ">99%" : `${Math.round(p * 100)}%`;
 }
 
-/** An energy above the lowest, as it is written: "1.23 kcal/mol". */
-function relative(e: number): string {
-  return `${e < 10 ? e.toFixed(2) : e.toFixed(1)} kcal/mol`;
-}
+/** An energy above the lowest, as it is written: "1.23 kcal/mol" (lib/calc/results). */
+const relative = aboveText;
 
-/** An energy as a calculation gives it, as it is written: "−382.055117 Eh". */
-function absolute(e: number): string {
-  return `${e.toFixed(6).replace(/^-/, "\u2212")} Eh`;
-}
+/** An energy as a calculation gives it, as it is written wherever Meno writes one: "−382.055117 Eh". */
+const absolute = (e: number) => valueText(e, { quantity: "energy" });
 
 /**
  * A molecule's frames, just below it on the page: which one it shows, of
- * how many, and - hovered or selected - a slider through them. Where its
+ * how many, and - clicked - a slider through them (the maintainer,
+ * 2026-10-13: it opens on a click, not as its molecule is pointed at or
+ * selected); it shuts as it is clicked again, or as anything else is
+ * pressed, or on Escape. Where its
  * file gives each frame's energy, the energies stand above the slider, each
  * as high as it is above the lowest - a bar each, or for a long run of
  * frames one profile through them all - and the frame shown says how far
@@ -57,7 +56,16 @@ function absolute(e: number): string {
  * opened from its file does - it rises as far as it must to stay within
  * the canvas (`area`), over its molecule, and goes back down as it shuts.
  */
-export default function Frames3D({
+export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
+  return (
+    <PageHtml zIndexRange={[30, 20]}>
+      <FramesChip {...props} />
+    </PageHtml>
+  );
+}
+
+/** The chip itself, as it lies on the page (Frames3D). */
+export function FramesChip({
   count,
   frame,
   energies,
@@ -77,7 +85,7 @@ export default function Frames3D({
   frame: number;
   /** Each frame's energy, in hartrees. */
   energies?: number[];
-  /** Shown in full: its molecule hovered or selected. */
+  /** Its molecule pointed at or selected: a single geometry's chip is seen then, and stays a moment after. */
   open: boolean;
   onFrame: (frame: number) => void;
   /** Said just below it - a note on its molecule - and moved down as it opens. */
@@ -102,13 +110,37 @@ export default function Frames3D({
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
   // slider, which go through the frames with the molecule in view)
-  const [reading, setReading] = useState(false);
-  const read = { onPointerEnter: () => setReading(true), onPointerLeave: () => setReading(false) };
+  // (a single geometry has no bars to open: its details are opened by a click on it, and shut as an opened chip is)
+  const [pinned, setPinned] = useState(false);
   const [pointed, setPointed] = useState<number | null>(null);
-  const full = open || hovered;
-  const lowest = energies ? Math.min(...energies) : 0;
+  // (opened by a click on it, and shut by another, a press anywhere else, or Escape)
+  const [expanded, setExpanded] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const opened = expanded || pinned;
+  useEffect(() => {
+    if (!opened) return;
+    const shut = () => {
+      setExpanded(false);
+      setPinned(false);
+    };
+    const onPress = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) shut();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") shut();
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [opened]);
+  // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
+  const reading = opened;
+  const lowest = energies ? least(energies) : 0;
   const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
-  const highest = above ? Math.max(...above, 1e-9) : 1;
+  const highest = above ? Math.max(greatest(above), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)
   const width = count > MANY ? WIDE : WIDTH;
@@ -117,6 +149,20 @@ export default function Frames3D({
   // which is after this renders - it is drawn in a root of its own - and
   // whenever it changes width.)
   const [saidWidth, setSaidWidth] = useState(0);
+  // (and what the details say, measured the same way: the chip widens to it while they are read)
+  const [detailsWidth, setDetailsWidth] = useState(0);
+  const watchDetails = useRef<ResizeObserver | null>(null);
+  const detailed = useCallback((el: HTMLDivElement | null) => {
+    watchDetails.current?.disconnect();
+    watchDetails.current = null;
+    if (!el) return;
+    const measure = () => {
+      if (el.offsetWidth) setDetailsWidth(el.offsetWidth);
+    };
+    measure();
+    watchDetails.current = new ResizeObserver(measure);
+    watchDetails.current.observe(el);
+  }, []);
   const watch = useRef<ResizeObserver | null>(null);
   const said = useCallback((el: HTMLDivElement | null) => {
     watch.current?.disconnect();
@@ -132,6 +178,8 @@ export default function Frames3D({
   // (a single geometry has nothing to go through: it says what the
   // calculation was, and only while its molecule is pointed at)
   const single = count < 2;
+  // in full: opened - a single geometry's, with nothing to go through, as it is pointed at
+  const full = single ? open || hovered : expanded;
   const [lingering, setLingering] = useState(open);
   useEffect(() => {
     if (open) {
@@ -141,7 +189,7 @@ export default function Frames3D({
     const t = window.setTimeout(() => setLingering(false), LINGER_MS);
     return () => window.clearTimeout(t);
   }, [open]);
-  const shown = !single || open || hovered || lingering;
+  const shown = !single || open || hovered || lingering || pinned;
   // what the calculation found of the molecule, and of the frame told
   const details: CardGroups = cardGroupsOf([...resultsOn(results, "molecule"), ...resultsOn(results, "frames")], (r) => {
     const v = r.on === "molecule" ? r.value : (r.values[told] ?? null);
@@ -174,91 +222,108 @@ export default function Frames3D({
     return () => cancelAnimationFrame(id);
   }, [area, full]);
   return (
-    <PageHtml zIndexRange={[30, 20]}>
-      <div
-        className="meno-page-chip meno-control-chip flex flex-col items-center select-none"
-        style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => {
-          setHovered(false);
-          setPointed(null);
-        }}
-      >
-        {(!single || about) && (
-          <div className="relative">
-            {details.length > 0 && (
-              <div
-                className="pointer-events-none absolute left-1/2 bottom-full mb-1.5 w-max max-w-[20rem] -translate-x-1/2 rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm px-2.5 pt-0.5 pb-1.5 text-[11px] leading-[16px] tabular-nums transition-opacity duration-150 ease-meno"
-                style={{ opacity: reading ? 1 : 0 }}
-              >
-                <ResultGroups groups={details} />
-              </div>
-            )}
+    <div
+      ref={root}
+      className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && about) ? "cursor-pointer" : ""}`}
+      style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
+      onClick={() => {
+        if (!single && !expanded) setExpanded(true);
+        else if (single && about) setPinned((v) => !v);
+      }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => {
+        setHovered(false);
+        setPointed(null);
+      }}
+    >
+      {(!single || about) && (
+        <div className="relative">
+          <div
+            ref={chipEl}
+            className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
+            style={{
+              opacity: shown ? (full ? 1 : 0.75) : 0,
+              pointerEvents: shown ? undefined : "none",
+              width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
+            }}
+          >
             <div
-              ref={chipEl}
-              className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
-              style={{
-                opacity: shown ? (full ? 1 : 0.75) : 0,
-                pointerEvents: shown ? undefined : "none",
-                width: (full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE,
-              }}
+              className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+              style={{ gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
             >
-              <div
-                className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                style={{ gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
-              >
-                <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
-                  {above && !single && (
-                    <Energies
-                      above={above}
-                      highest={highest}
-                      frame={frame}
-                      pointed={pointed}
-                      width={width}
-                      onPoint={setPointed}
-                      onFrame={onFrame}
-                    />
-                  )}
-                  {!single && (
-                    <input
-                      type="range"
-                      aria-label="Frame"
-                      min={0}
-                      max={count - 1}
-                      step={1}
-                      value={frame}
-                      onChange={(e) => onFrame(parseInt(e.target.value, 10))}
-                      data-cursor="sideways"
-                      className="my-1.5 h-2 rounded-full appearance-none bg-white/60 border border-gh-line"
-                      style={{ width }}
-                    />
-                  )}
-                  {about && !single && (
-                    <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray tabular-nums" {...read}>
-                      {line(energies?.[told])}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div ref={said} {...read} className="w-max text-[11px] leading-[18px] text-gh-gray tabular-nums whitespace-nowrap">
-                {single ? (
-                  line(energies?.[0])
-                ) : (
-                  <>
-                    {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
-                    {told + 1} / {count}
-                    {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
-                    {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
-                    {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
-                  </>
+              <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
+                {above && !single && (
+                  <Energies
+                    above={above}
+                    highest={highest}
+                    frame={frame}
+                    pointed={pointed}
+                    width={width}
+                    onPoint={setPointed}
+                    onFrame={onFrame}
+                  />
+                )}
+                {!single && (
+                  <input
+                    type="range"
+                    aria-label="Frame"
+                    min={0}
+                    max={count - 1}
+                    step={1}
+                    value={frame}
+                    onChange={(e) => onFrame(parseInt(e.target.value, 10))}
+                    data-cursor="sideways"
+                    className="my-1.5 h-2 rounded-full appearance-none bg-white/60 border border-gh-line"
+                    style={{ width }}
+                  />
+                )}
+                {about && !single && (
+                  <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray tabular-nums">
+                    {line(energies?.[told])}
+                  </div>
                 )}
               </div>
             </div>
+            <div
+              ref={said}
+              className="w-max text-[11px] leading-[18px] text-gh-gray tabular-nums whitespace-nowrap"
+              onClick={(e) => {
+                if (!expanded) return;
+                e.stopPropagation();
+                setExpanded(false);
+              }}
+            >
+              {single ? (
+                line(energies?.[0])
+              ) : (
+                <>
+                  {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
+                  {told + 1} / {count}
+                  {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
+                  {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
+                  {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
+                </>
+              )}
+            </div>
+            {/* (what the calculation found, in the chip itself: it grows downward, away from the molecule, and back -
+                nothing covers the structure) */}
+            {details.length > 0 && (
+              <div
+                className="grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out"
+                style={{ gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
+              >
+                <div className="overflow-hidden flex justify-center">
+                  <div ref={detailed} className="w-max max-w-[20rem] px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
+                    <ResultGroups groups={details} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        {below}
-      </div>
-    </PageHtml>
+        </div>
+      )}
+      {below}
+    </div>
   );
 }
 

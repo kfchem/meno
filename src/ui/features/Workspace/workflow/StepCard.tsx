@@ -3,7 +3,8 @@ import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopC
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import OptionsForm from "../../../options/OptionsForm";
 import type { Option, OptionValues } from "../../../../lib/options";
-import type { WorkflowStep } from "../store/types";
+import type { JobSeen, WorkflowStep } from "../store/types";
+import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
@@ -66,7 +67,19 @@ export function Port({
  * their place among those waiting; where they run, since when, how many of
  * how many have ended, and what the log says last.
  */
-export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string };
+export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number };
+
+/**
+ * How far a run's jobs are, as a share - where a running one says how far
+ * it is ("progress 12/240" in its log): each ended counted whole, each
+ * running as far as it says; none, where none says.
+ */
+export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | undefined)[]): number | undefined {
+  if (!seen.some((x) => x?.state === "running" && x.progress)) return undefined;
+  const ended = seen.filter((x) => x && finished(x.state)).length;
+  const partly = seen.reduce((n, x) => n + (x?.state === "running" && x.progress ? x.progress.done / x.progress.total : 0), 0);
+  return seen.length ? (ended + partly) / seen.length : undefined;
+}
 
 /** A run as its step lists it: when, what it said, how it was set, whether it is the one shown. */
 export type RunRow = { at: number; said: string; how: string; shown: boolean };
@@ -146,6 +159,8 @@ export type StepCardProps = {
   onOptions: (values: OptionValues) => void;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
+  /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
+  onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
   onTakeDown: (e: ReactPointerEvent) => void;
   onGiveDown: (e: ReactPointerEvent) => void;
@@ -165,8 +180,8 @@ export type StepCardProps = {
 export default function StepCard(p: StepCardProps) {
   const line = stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
-  // (a run of several jobs: how many have ended, as a share)
-  const progress = p.state === "running" && p.run && p.run.total > 1 ? p.run.ended / p.run.total : undefined;
+  // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
+  const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
   const w = CARD_W / PX;
   return (
     <div
@@ -267,6 +282,11 @@ export default function StepCard(p: StepCardProps) {
                 </div>
               </div>
             )}
+            <div className="mt-3 flex justify-end">
+              <button onClick={p.onClose} className="h-6 rounded-md border border-gh-line bg-white px-2 text-[11px] text-gh-black hover:bg-gh-base">
+                Close
+              </button>
+            </div>
           </div>
         )}
       </div>

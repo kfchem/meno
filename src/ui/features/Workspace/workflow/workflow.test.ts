@@ -6,12 +6,14 @@ import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type Wo
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { KCAL_PER_HARTREE, boltzmann, runMeno } from "./meno";
+import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
+import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
+import { populations } from "../utils/molecule3d";
 import { selectionFrame } from "./selectionSet";
 import { readWorkflow } from "./saved";
 
@@ -159,6 +161,87 @@ describe("wires", () => {
 });
 
 describe("Meno's own steps", () => {
+  it("group entries in place - each group the same one as it grows, never a copy for each entry", () => {
+    const groups = new Map<number, number[]>();
+    for (let i = 0; i < 2; i++) pushTo(groups, i % 2, i);
+    const even = groups.get(0);
+    for (let i = 2; i < 6; i++) expect(pushTo(groups, i % 2, i)).toBe(groups);
+    expect(groups.get(0)).toBe(even);
+    expect([...groups.entries()]).toEqual([[0, [0, 2, 4]], [1, [1, 3, 5]]]);
+    // (one compound's 20,000 conformers: each step once copied its group for every entry, and took seconds)
+    const one = setEntries([{ ...bent({ x: 0, y: 0 }, 2, [-76, -76.001]), id: 1, conformerSet: true }], "conformers");
+    const many = Array.from({ length: 20_000 }, (_, k) => ({ ...one[k % 2], number: k + 1, energy: -76 + (k % 97) * 1e-4 }));
+    for (const kind of ["populations", "choose", "energy-window"] as const) expect(runMeno(kind, many, "conformers", kind === "energy-window" ? { window: 3 } : undefined).ok).toBe(true);
+  });
+
+  /** `count` conformers of a chain of twelve atoms, each its atoms shaken by up to `shake` Å from the chain's places - by a fixed sequence, the same each run. */
+  const shaken = (count: number, shake: number) => {
+    let seed = 7;
+    const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+    const chain = Array.from({ length: 12 }, (_, i) => [1.25 * i, (i % 2) * 0.85, 0]);
+    const one = setEntries([{ ...bent({ x: 0, y: 0 }, 2), id: 1, conformerSet: true }], "conformers")[0];
+    return Array.from({ length: count }, (_, k) => ({
+      ...one,
+      atoms: chain.map(() => ({ ...one.atoms[0], el: "C" })),
+      number: k + 1,
+      energy: -100 + k * 1e-5,
+      xyz: chain.flatMap((p) => p.map((v) => v + shake * next())),
+    }));
+  };
+
+  it("keep in Duplicates what laying each over every one kept would keep", () => {
+    // (two hundred conformers, each also there again a hair away: half alike)
+    const some = shaken(200, 0.6);
+    const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
+    const plainly: typeof order = [];
+    for (const e of order) if (!plainly.some((k) => rmsd(k.xyz, e.xyz) <= 0.125)) plainly.push(e);
+    expect(keptApart(order, 0.125)).toEqual(plainly);
+    expect(plainly).toHaveLength(200);
+  });
+
+  it("do Duplicates in turns that let the page go on, saying how far they are - and keep what doing it at once keeps", async () => {
+    // (three thousand conformers, each there again a hair away)
+    const some = shaken(1_500, 0.6);
+    const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
+    const done: number[] = [];
+    let pauses = 0;
+    // (a clock that goes on a millisecond each time it is read: a turn over every few entries)
+    let clock = 0;
+    const now = () => clock++;
+    const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { onDone: (n) => done.push(n), pause: async () => void pauses++, slice: 20, tell: 100, now });
+    expect(pauses).toBeGreaterThan(10);
+    const quick = pauses;
+    // (said far less often than the turns: at most every hundred of the clock's milliseconds)
+    expect(done.length).toBeGreaterThan(1);
+    expect(done.length).toBeLessThan(pauses / 2);
+    // (further each turn, and never all of it before the last)
+    expect(done.every((n, i) => n > (done[i - 1] ?? 0) && n < order.length)).toBe(true);
+    expect(out).toEqual(runMeno("duplicates", order, "conformers"));
+    expect(out?.ok && out.kept).toHaveLength(1_500);
+    // (the other steps, done at once)
+    pauses = 0;
+    await runMenoInTurns("populations", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 0 });
+    expect(pauses).toBe(0);
+    // (the page's own turns long - ten of the clock's milliseconds each: the slices four times as long, and so a quarter as many)
+    let slow = 0;
+    clock = 0;
+    await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void ((clock += 10), slow++), slice: 20, now });
+    expect(slow).toBeLessThan(quick / 1.5);
+    // (stopped: given up at the next turn, nothing kept)
+    pauses = 0;
+    expect(await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 20, now, stopped: () => pauses >= 2 })).toBeNull();
+    expect(pauses).toBe(2);
+  });
+
+  it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {
+    const many = shaken(5_000, 0.6);
+    let laid = 0;
+    const kept = keptApart(many, 0.125, (p, q) => (laid++, rmsd(p, q)));
+    expect(kept).toHaveLength(5_000);
+    // (every one over every one kept before it: 12,497,500)
+    expect(laid).toBeLessThan(50_000);
+  });
+
   const entries = (m: Omit<Molecule3D, "id">, set: "molecules" | "conformers") => setEntries([{ ...m, id: 1 }], set);
 
   it("make a compound set a conformer set by constitution", () => {
@@ -192,6 +275,24 @@ describe("Meno's own steps", () => {
     expect(out.ok && out.aside.map((e) => e.number)).toEqual([1]);
   });
 
+  it("never take entries of different charge or spin for one compound, nor set one aside as alike to another", () => {
+    // (water, and its radical cation in the very same shape)
+    const water = setEntries([{ ...bent({ x: 0, y: 0 }), id: 1 }], "molecules");
+    const cation = setEntries([{ ...bent({ x: 0, y: 0 }), id: 2 }], "molecules").map((e) => ({
+      ...e,
+      compound: 1,
+      atoms: e.atoms.map((a, i) => (i === 0 ? { ...a, charge: 1 } : a)),
+    }));
+    const both = runMeno("as-conformers", [...water, ...cation], "molecules");
+    expect(both.ok && both.kept.map((e) => [e.compound, e.number])).toEqual([[0, 1], [1, 1]]);
+    const kept = runMeno("duplicates", [...water, ...cation], "molecules", { rmsd: 0.125 });
+    expect(kept.ok && kept.kept).toHaveLength(2);
+    // (in a conformer set too, whatever compound each is said to be)
+    const one = [...water, ...cation].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
+    const conformers = runMeno("duplicates", one, "conformers", { rmsd: 0.125 });
+    expect(conformers.ok && conformers.kept).toHaveLength(2);
+  });
+
   it("choose one conformer of each compound on purpose - its lowest, or one by its number - and set the rest aside", () => {
     const set = entries(bent({ x: 0, y: 0 }, 3, [kcal(2), 0, kcal(1)]), "conformers");
     const lowest = runMeno("choose", set, "conformers", undefined, "RDKit · MMFF94");
@@ -222,6 +323,23 @@ describe("Meno's own steps", () => {
     expect(out.shares![1] / out.shares![0]).toBeCloseTo(0.1849, 3);
     const hot = boltzmann([0, kcal(1)], 1000);
     expect(hot[1]).toBeGreaterThan(out.shares![1]);
+  });
+
+  it("count each conformer's rotamers in, where its search said how many - as CREST's own weights do", () => {
+    // (n-butane by GFN-FF, as CREST 2.12 found it: anti, and gauche 0.4527 kcal/mol above, found twice alike; CREGEN's weights 0.51759 and 0.48241)
+    const crest = [0.51759, 0.48241];
+    // (to 3e-4: the energies here are CREST's own, rounded as it prints them)
+    const near = (got: number[]) => got.forEach((p, i) => expect(Math.abs(p - crest[i])).toBeLessThan(3e-4));
+    near(boltzmann([0, kcal(0.4527)], 298.15, [1, 2]));
+    // (counted once each, the gauche form's share is half as much)
+    expect(boltzmann([0, kcal(0.4527)], 298.15)[1]).toBeCloseTo(0.318, 3);
+    // a Populations step over CREST's conformers counts them in too: its shares, CREST's
+    const m = { ...bent({ x: 0, y: 0 }, 2, [0, kcal(0.4527)]), conformerSet: true, degeneracies: [1, 2] };
+    const out = runMeno("populations", entries(m, "conformers"), "conformers", { temperature: 298.15 });
+    if (!out.ok) throw new Error(out.said);
+    near(out.shares!);
+    // (and the canvas's own shares, where no step found them)
+    near(populations(m.energies!, m.degeneracies));
   });
 });
 
@@ -266,6 +384,14 @@ describe("running", () => {
     // (its result set's entries replaced, not added to)
     expect(doc.molecules3d!.length).toBe(before);
     expect(resultOf(doc, 3)!.aside).toBeUndefined();
+  });
+
+  it("says a step has changed when what comes in changes only in a charge", () => {
+    let doc = runStep(chain(), 3, W);
+    expect(stateOf(doc, doc.steps![0], "meno")).toBe("done");
+    const m = doc.molecules3d![0];
+    doc = { ...doc, molecules3d: [{ ...m, atoms: m.atoms.map((a, i) => (i === 0 ? { ...a, charge: -1 } : a)) }, ...doc.molecules3d!.slice(1)] };
+    expect(stateOf(doc, doc.steps![0], "meno")).toBe("changed");
   });
 
   it("fails, saying why, where it cannot run", () => {

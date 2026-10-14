@@ -122,6 +122,13 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
 
 ## What has gone wrong before
 
+- **A tie decided by rounding** (2026-10-14). Cyclotetracosane, nothing
+  on it, came out a triangle of zigzags, as tall as wide (hunter B): its
+  five shapes all read 0 on the measure, but the sums differed in the
+  fourteenth place, and the smallest was the fifth shape, the triangle.
+  Shapes alike on the measure now keep the order they are offered in, the
+  one that lies best first; a shape is taken over an earlier one only
+  where it reads better by more than rounding.
 - **The search is greedy and follows a path.** A new kind of move, or a
   new term, can send it to a worse drawing elsewhere (vancomycin and
   azithromycin both did). Compare the whole sheet.
@@ -199,6 +206,44 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   other, ibogaine's isoquinuclidine to a view that crowded its indole.
   The choice among them is now made on the whole drawing, and a cage's
   next best views are tried with what hangs from it.
+- **A cage eased onto its template keeps its atoms apart** (2026-10-13).
+  The atoms of a cage not on its template ring were eased toward bonds of
+  one length with nothing keeping them off each other: seen from the
+  template's side, scopolamine's epoxide landed by its N, and its solid
+  lost to a flat drawing. The easing is run again with atoms not bonded
+  to each other kept 0.7 of a bond apart, and that taken where it leaves
+  fewer pairs of atoms nearer than 0.6 of a mean bond and has a lower
+  `viewCost` at its defaults (0.6 and 0.3, no depth: the measure flat and
+  solid are weighed by, not the one views are ranked by). Kept apart
+  always, adamantane's bonds came out uneven - its back CH2 0.62 from a
+  front bridgehead is how it is drawn - and tetrodotoxin's C4 mark moved
+  onto a ring bond. Taken wherever `viewCost` alone fell (hunter B's
+  review), every bicyclo[2.2.2] view counted as crowded - its back bridge
+  0.52 from the back bridgehead, eased only to 0.54 with its bonds uneven -
+  and of 1230 bridged molecules 37 read worse by more than 0.5 (a
+  chlorobicyclo[2.2.2]octanol 4.3 to 8.4, a 3-aryl nortropane 2.4 to 7.5).
+  A centre the easing turns is put back where it was put, again while any
+  reads wrong. Scopolamine (12.2 to 2.1), gelsemine (9.5 to 6.9) and
+  tetrodotoxin (16.31 to 16.26) read better; nothing else on the two lists
+  changes. Ibogaine, 20.3 to 17.1 by `viewCost` alone, is left as it was.
+- **A double bond is stereo too.** The read-back guards read the
+  stereocentres only, and huperzine A's bridge drew a ring's C=C trans
+  unnoticed. They read every drawn double bond now (2026-10-13): one the
+  molecule gives cis or trans as given, one in a ring of seven atoms or
+  fewer cis. Meno's SMILES reader keeps a double bond's cis or trans from
+  its / and \ marks for that. A chain drawn round a block of rings had
+  its double bonds' cis or trans checked only as its turns were chosen,
+  which leaves out those at its two ends and the last two (hunter B,
+  2026-10-13: an E bond beside a naphthalene drawn cis), and easing it to
+  close moved the last chain atom across a ring atom's bond. Every one is
+  checked on the whole chain now, and the chain kept as found where easing
+  would turn one.
+- **A solid found once.** A cage's solid was found once for each
+  molecule object, but a drawing read back is perceived anew, and every
+  read-back found it again: half of tetrodotoxin's Clean-up. It is kept by
+  what it is found from now - the atoms, bonds and configurations
+  (2026-10-13) - and cages are drawn in about half the time, the
+  drawings the same.
 - **A wedge that reads by luck.** At a centre with two of its bonds in a
   line, or every bond in one half of the page, a wedge says the
   configuration only as the bonds happen to fall, and RDKit read two
@@ -336,7 +381,9 @@ and the held-out list takes new ones. What it showed, by kind:
   (saxitoxin) - fixed: the run's clash test beside a shared atom, and the
   fused system eased once it has a fault;
 - large molecules of two parts, or a macrocycle round an aromatic system
-  (vinblastine, rifampicin), crammed;
+  (vinblastine, rifampicin), crammed - rifampicin done (2026-10-13): its
+  naphthofuranone drawn first and regular, the ansa chain round it with
+  its E/Z as given, its hydrazone outside;
 - orientation: a flavonoid's ring O (the maintainer, 2026-10-11: up, as
   drawn everywhere - done, by the 2- or 3-aryl chromane it is); lovastatin
   (done: the turn is chosen counting the fusion H it will carry, which
@@ -346,6 +393,18 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
+- **Two double bonds in a ring of ten or twelve** (hunter B's sweep of
+  cycloalkadienes, 2026-10-13): one of them still comes out the other way
+  round in 12 of the 126 rings of 8 to 16 atoms - four of eight atoms
+  (drawn regular; hunter B's 8-ring dent is a PR of its own), and eight of
+  10 and 12, where the lattice has one shape or none that holds both (a
+  twelve has a single shape with no dents, and no dented one without a
+  turn of five). Rings of 11, 14 and 16 take a shape from further down
+  now, and every ring of 14 to 24 with two comes out as given (14 of 358
+  wrong on main). With three, two of them trans, 27 of 1820 in rings of
+  14 to 20 (not 19) still come out wrong, against 130 on main: 24 in a
+  ring of 14, and the all-trans conjugated triene of 16, numbered three
+  ways. Not yet checked: the macrolides of 16 to 43 atoms the sweep found.
 - **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
   the perspective drawing read better than the flat one, and both faced
   the wrong way). Its whole solid now reads as given, its centres the
@@ -353,16 +412,32 @@ and the held-out list takes new ones. What it showed, by kind:
   only where chairs show every centre, 2026-10-12). Still open: its
   guanidine ring, with its C=N, is to be drawn flat, but laid flat onto
   the cage on either side of the bond it shares it shows one of the two
-  ring-junction carbons the other way round, from every view tried; it
-  stands a quarter turn from the usual drawing; and the OH in the middle
-  of the cage reads O|H.
+  ring-junction carbons the other way round, from every view tried; and
+  the OH in the middle of the cage reads O|H: a label's H goes on the
+  side away from its own bond, and a cage bond passes there; nudging the
+  OH round its bond finds no better place, and placing the H by the bonds
+  around it is the drawing's rule, not the engine's. Its orientation is
+  done (2026-10-13): of the template views alike, the level one, its
+  guanidine ring beside the cage as in the usual drawing.
 - **The solids' rules still open** (the maintainer, 2026-10-12): quinine's
-  OH on C9, which is no ring atom, drawn straight down (asked in #269);
-  which of paeoniflorin's six-membered rings is to be the boat (asked in
-  #269). Fused chairs are drawn decalin style inside a solid, but no
+  OH on C9, which is no ring atom, drawn straight down (asked in #269).
+  Fused chairs are drawn decalin style inside a solid, but no
   molecule on either list has a solid with such a pair: strychnine and
   artemisinin are drawn flat as decided, sparteine and aconitine read
   better flat.
+- **Paeoniflorin's carbocycle as a boat** (the maintainer, after #269: the
+  leftmost ring of its cage, C1-C6, is to be drawn as the boat its
+  bridges fold it into). Its solid has that ring as a boat (bow and stern
+  C2 and C5) and its dioxane as a chair; the template draws the dioxane,
+  which reads best by every measure. Tried and not taken: the boat by the
+  template, seen from above, puts C7 in the middle of the drawing, and the
+  CH2OBz on it crosses the cage; the boat seen from its side, bow and
+  stern the ends and the bridges above, as norbornane is drawn, is the
+  reference's view, but an orthographic projection of it crowds C1, O9
+  and O10 together. The reference draws the back of the boat about twice
+  as wide as its front, which no projection gives. A template for a boat
+  seen from its side, built that way, is not wanted (the maintainer,
+  2026-10-13): paeoniflorin stays as it is drawn now.
 - **How a ring system is turned once its face is right**: morphinan is
   60 degrees from its reference. IUPAC's stereoparent orientations are
   the candidate knowledge, if no general rule gives it.
@@ -371,3 +446,28 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
+- **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
+  a tangled flat projection, bonds crossing and the second lines of its
+  double bonds floating inside its faces.
+- **Ginkgolide B** (2026-10-13). No two of its rings share three atoms,
+  so it is no cage; three share the bond C7-C12, a propellane, which no
+  flat drawing can lay out without a crossing. The whole is drawn as a
+  solid seen down an axis, and loses to the flat drawing (61 against 32):
+  its four O's, tert-butyl, methyl and seven centre H's crowd any view of
+  so compact a solid. Lean-away does not apply: it opens narrow gaps
+  between groups, and here the rings themselves cannot lie flat. The
+  usual drawing lays its lactone and first cyclopentane flat, draws the
+  ether O27 as a one-atom bridge from C7 to C26, and the rest in
+  perspective. Tried and not taken: the propellane treated as a bridged
+  system (a lactone becomes the bridge, its C=O inside a flat ring); the
+  ether O as the bridge, its bonds drawn longer (the flat rings crowd it);
+  the spiro lactone turned to bring C26 within reach (no placement fits).
+  Choosing the flat rings and two bridges as the usual drawing does is
+  the likely way.
+- **Aconitine** (2026-10-13): two cages fused - the bicyclo[3.2.1] C/D
+  rings onto the core of rings A, B, E and F - drawn as one solid by a
+  projection, since no template view of the whole reads (18.1 against the
+  threshold 8). Laying the second cage flat onto the first misreads a
+  junction, and the whole drawn by the chair template crowds its esters.
+  The usual drawing shows both cages in perspective, ring A a chair in
+  front.

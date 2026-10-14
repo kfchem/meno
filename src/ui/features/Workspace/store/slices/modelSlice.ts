@@ -1,3 +1,4 @@
+import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -284,6 +285,12 @@ export const createModelSlice = (
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
   },
 
+  // (bonds chosen a kind from the right-click menu: all of them, one step)
+  setBondsKind: (ids: readonly number[], kind: BondKindName) => {
+    const patch = bondKindPatch(kind);
+    doc.edit("change bonds' kind", (d) => ids.reduce((acc, id) => ops.updateBond(acc, id, patch), d));
+  },
+
   setBondOrder: (id: number, order: Bond["order"]) => {
     doc.edit("change bond order", (d) => ops.updateBond(d, id, { order }));
   },
@@ -309,11 +316,15 @@ export const createModelSlice = (
 
   /**
    * The structure a tab opens with. That is where the document starts, not
-   * an edit made to it: nothing to undo, nothing unsaved.
+   * an edit made to it: nothing to undo, nothing unsaved. Meno's own record
+   * - an Office document's object opened again - brings its slides and its
+   * writing by hand with it, numbered from the first.
    */
-  openModel: (next: Model, scheme?: ImportedScheme) => {
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => {
+    const opened = ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme);
+    const withSlides = (next.slides ?? []).reduce((d, { id: _, ...s }) => ops.addSlide(d, s), opened);
     doc.reset(
-      ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme),
+      (next.inks ?? []).reduce((d, { id: _, ...k }) => ops.addInk(d, k), withSlides),
       "open structure",
     );
     get().forgetInteraction();

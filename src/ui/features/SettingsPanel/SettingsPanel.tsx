@@ -11,6 +11,7 @@ import ChemistrySettings from "./ChemistrySettings";
 import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
 import ColourSettings from "./ColourSettings";
+import LogSettings from "./LogSettings";
 import LabelSettings from "./LabelSettings";
 import PictureSettings from "./PictureSettings";
 import CalculationSettings from "./CalculationSettings";
@@ -95,6 +96,7 @@ export default function SettingsPanel() {
             <PointerSettings />
             <LabelSettings />
             <ColourSettings />
+            <LogSettings />
           </section>
         ) : section === "style" ? (
           <section className="mt-6">

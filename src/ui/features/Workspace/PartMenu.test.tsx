@@ -47,6 +47,23 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
   return { icons, listed, html };
 }
 
+describe("a bond's menu", () => {
+  it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
+    const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
+    expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "Delete bond"]);
+    // (its second row hidden until "more" is pressed - and shown at once where the bond is one of those kinds)
+    expect(m.html).not.toContain("Other kinds");
+    const open = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "dashed", choose: none } }).html;
+    const other = open.match(/aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+    expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Wavy bond", "Bold bond", "Bold dashed bond", "Dashed bond", "Dative bond"]);
+    expect(open).toMatch(/aria-label="Dashed bond" aria-pressed="true"/);
+    expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
+    // (the current kind marked)
+    expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);
+    expect(m.html).toMatch(/aria-label="Single bond" aria-pressed="false"/);
+  });
+});
+
 describe("the right-click menu", () => {
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({
@@ -102,6 +119,10 @@ describe("the right-click menu", () => {
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
     expect(icons).toEqual(["Edit text", "Size…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
+    // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
+    expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);
+    expect(html).toMatch(/Subscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+=|⌘=)<\/kbd>/);
+    expect(html).not.toMatch(/Shift\+=|⇧⌘=/);
     expect(html).toMatch(/aria-label="Bold" aria-pressed="true"/);
     expect(html).toMatch(/aria-label="Italic" aria-pressed="false"/);
     expect(html).toMatch(/Align right<\/span><svg[^>]*aria-label="Chosen"/);

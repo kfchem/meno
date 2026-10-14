@@ -33,6 +33,9 @@ import {
   type Turning3D,
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
+import { LARGE_ATOMS } from "./largeDrawing";
+import { bondsByDistance } from "../../../../utils/structureParsers";
+import { least } from "../../../../lib/chem/lists";
 
 /** Two carbons 1.5 Å apart along x, standing at `at`. */
 const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
@@ -296,6 +299,14 @@ describe("molecules turned together, as one body", () => {
     const b = asSeen({ ...ethane({ x: 0, y: 0, z: 3 * WORLD_PER_ANGSTROM } as Molecule3D["at"]) }, undefined, 0, true);
     expect(b[0].z - a[0].z).toBeCloseTo(3, 9);
   });
+
+  it("are turned together past what a call takes as its arguments", () => {
+    // (65,536 in WebKit, about twice that here: so many turned together threw)
+    const many = Array.from({ length: 150_000 }, (_, i) => ({ id: i + 1, at: { x: i % 400, y: Math.floor(i / 400) }, standing: 1 + (i % 3) }));
+    const out = turnedTogether(many, q(1, 0, 0, 1.2));
+    expect(out).toHaveLength(150_000);
+    expect(least(out.map((t, i) => t.at.z - many[i].standing))).toBeCloseTo(0, 6);
+  });
 });
 
 describe("molecules placed in a row", () => {
@@ -408,6 +419,27 @@ describe("a biopolymer's molecule in 3D, its chains as ribbons", () => {
     expect(s.hidesH.primary).toBe(false);
     const pose = poseOf(m, s, "primary");
     expect(atomAt(pose, undefined, 0, 0)).toBe(1);
+  });
+
+  it("counts every atom its ribbons stand for toward a very large drawing - a protein of 22 000 atoms in ribbons is one", () => {
+    // (2 200 residues of ten atoms each, their alpha carbons 3.8 A apart in a line)
+    const atoms: Molecule3D["atoms"] = [];
+    const names: string[] = [];
+    const residueOf: number[] = [];
+    for (let r = 0; r < 2_200; r++) {
+      for (let k = 0; k < 10; k++) {
+        atoms.push({ el: k ? "H" : "C", x: 3.8 * r, y: k ? 1 : 0, z: 0 });
+        names.push(k ? `H${k}` : "CA");
+        residueOf.push(r);
+      }
+    }
+    const residues = Array.from({ length: 2_200 }, (_, r) => ({ name: "ALA", chain: "A", seq: r + 1, iCode: "", standard: true }));
+    const m: Molecule3D = { id: 1, atoms, bonds: [], at: { x: 0, y: 0 }, biopolymer: { names, residueOf, residues, structure: residues.map(() => null) } };
+    const s = solidOf(m, STYLE_3D);
+    expect(s.ribbons.primary).toBe(true);
+    expect(s.radii.primary.every((r) => r === 0)).toBe(true);
+    expect(s.counted.primary).toBe(22_000);
+    expect(s.counted.primary).toBeGreaterThan(LARGE_ATOMS);
   });
 
   it("is drawn in a picture as sticks along its ribbon, in the ribbon's colours", () => {
@@ -535,6 +567,11 @@ describe("coveredLength", () => {
 });
 
 describe("populations", () => {
+  it("are found for more conformers or frames than a call takes as its arguments", () => {
+    const shares = populations(Array.from({ length: 150_000 }, (_, i) => (i === 7 ? -1 : 0)));
+    expect(shares[7]).toBeCloseTo(1, 6);
+  });
+
   const HARTREE = 627.509474;
   it("shares a conformer set by Boltzmann at room temperature, adding up to one", () => {
     expect(populations([0, 0])).toEqual([0.5, 0.5]);
@@ -566,6 +603,32 @@ describe("a molecule's bonds frame by frame", () => {
     expect(fb.present.map((p) => [...p])).toEqual([[1], [0], [1]]);
     expect(bondsAt({ ...h2, bondsFrom: "distance" }, 1)).toEqual([]);
     expect(bondsAt({ ...h2, bondsFrom: "distance" }, 2)).toEqual([{ a1: 0, a2: 1, order: 1 }]);
+  });
+
+  it("are in every frame those its atoms' distances give there - a trajectory of 600 atoms, found cube by cube, its first frame's orders kept", () => {
+    // (200 waters on a grid, shaken more in each frame, so that bonds break and form)
+    let seed = 11;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
+    const base: { el: string; x: number; y: number; z: number }[] = [];
+    for (let u = 0; u < 200; u++) {
+      const [x, y, z] = [(u % 6) * 3.1, (Math.floor(u / 6) % 6) * 3.1, Math.floor(u / 36) * 3.1];
+      base.push({ el: "O", x, y, z }, { el: "H", x: x + 0.96, y, z }, { el: "H", x: x - 0.24, y: y + 0.93, z });
+    }
+    const frames = Array.from({ length: 8 }, (_, f) => base.flatMap((a) => [a.x + rand() * 0.3 * f, a.y + rand() * 0.3 * f, a.z + rand() * 0.3 * f]));
+    const bonds = bondsByDistance(base).map((b, i) => (i === 0 ? { ...b, order: 2 } : b));
+    const m = { atoms: base, bonds, frames, bondsFrom: "distance" as const };
+    const fb = frameBondsOf(m)!;
+    const xyzs = [base.flatMap((a) => [a.x, a.y, a.z]), ...frames];
+    xyzs.forEach((xyz, f) => {
+      const expected = bondsByDistance(base.map((a, i) => ({ el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })));
+      // (as a set: a bond first met in a later frame comes after those met before)
+      const pairs = (bs: { a1: number; a2: number }[]) => bs.map((b) => b.a1 * 600 + b.a2).sort((p, q) => p - q);
+      expect(pairs(bondsAt(m, f))).toEqual(pairs(expected));
+    });
+    // (some came and went)
+    expect(fb.bonds.length).toBeGreaterThan(bonds.length);
+    expect(fb.present.some((p) => p.includes(0))).toBe(true);
+    expect(bondsAt(m, 0)[0].order).toBe(2);
   });
 
   it("are its bonds, in every frame, where its file gave them", () => {

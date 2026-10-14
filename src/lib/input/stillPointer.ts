@@ -28,12 +28,22 @@ export type PointerAt = { clientX: number; clientY: number; pointerId: number; b
 export type View = { x: number; y: number; zoom: number; width: number; height: number };
 
 /**
+ * How often, at most, what is under a pointer with no button held is found
+ * again while the view goes on moving under it, in ms: each finding tries
+ * everything on the canvas - 7 to 10 ms a frame over 28 000 atoms - and
+ * what is lit can wait a few frames. With a button held, what the press
+ * drags follows at every frame.
+ */
+export const FIND_EVERY_MS = 100;
+
+/**
  * A watch on one view's pointer: what it has heard, and whether something
  * has moved under the pointer since it was last found.
  */
 export function stillPointer() {
   let at: PointerAt | null = null;
   let due = false;
+  let last = -Infinity;
   return {
     /**
      * A pointer event heard on the view (pointermove, -down, -up, -leave,
@@ -59,10 +69,17 @@ export function stillPointer() {
      * Where to move the pointer by no distance, once, to find again what is
      * under it: when something has moved under it, and it is over the view.
      */
-    findAgain(): PointerAt | null {
+    findAgain(now: number = performance.now()): PointerAt | null {
       if (!due || !at) return null;
+      // (no button held, found a moment ago: put off - `wait` says for how long)
+      if (at.buttons === 0 && now - last < FIND_EVERY_MS) return null;
       due = false;
+      last = now;
       return { ...at };
+    },
+    /** How long until a finding put off (`findAgain`) is due, in ms; null where none waits. */
+    wait(now: number = performance.now()): number | null {
+      return due && at ? Math.max(0, FIND_EVERY_MS - (now - last)) : null;
     },
   };
 }

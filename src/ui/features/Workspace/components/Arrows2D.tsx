@@ -15,6 +15,7 @@ import { carriedWithMore } from "../utils/selectionScheme";
 import ReactionArrow2D from "./ReactionArrow2D";
 import { useDrawnArrows } from "./drawnArrows";
 import { TAU, follow } from "../../../theme/motion";
+import { useDrawnZoom } from "./drawnLayoutContext";
 
 /** An end handle's radius on the screen, in pixels, and how far round it a press takes it. */
 const HANDLE_PX = 6;
@@ -347,8 +348,8 @@ export default function Arrows2D() {
 
 /** The light round an arrow selected, along its line and its corners, as wide on the screen at any zoom. */
 function ArrowLight({ points }: { points: readonly { x: number; y: number }[] }) {
-  const { camera } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom;
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const key = JSON.stringify(points);
   const geometry = useMemo(() => {
     const t = strokeTriangles(points, false, (2 * LIT_PX) / Math.max(zoom, 1e-6));

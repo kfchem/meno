@@ -18,6 +18,8 @@ export type NetTask = {
   id: string;
   purpose: string;
   label: string;
+  /** The hosts it may reach, as its consent named them; none, any (the user's own code). */
+  hosts?: string[] | null;
   started: number;
   ended?: number | null;
   outcome?: "done" | "failed" | null;
@@ -48,6 +50,13 @@ export type ConsentRequest = {
   detail: string;
   /** Where from: "Python itself: github.com". */
   sources: string[];
+  /**
+   * The hosts those name, as the task asked for is kept to them
+   * (src-tauri/src/net.rs): each exact, or with a leading dot for any host
+   * under one (`.hf.co`). Made with `sources`, from one list, and sent
+   * with what begins the task.
+   */
+  hosts: readonly string[];
   /** Asked even where the purpose is allowed already: what it fetches is more than the user was told of when they allowed it. */
   again?: boolean;
 };

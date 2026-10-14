@@ -62,6 +62,16 @@ describe("layout2D", () => {
     expect(m.tilt).toBeCloseTo(0, 6);
   });
 
+  it("lays a macrocycle with nothing on it wide, in the shape that lies best", () => {
+    // (cyclotetracosane's shapes read alike on the measure, and the one the
+    // rounding of a sum favoured was a triangle, as tall as wide)
+    const n = 24;
+    const { x, y } = layout2D(carbons(n, ring(0, n)));
+    const w = Math.max(...x) - Math.min(...x);
+    const h = Math.max(...y) - Math.min(...y);
+    expect(h / w).toBeLessThan(0.6);
+  });
+
   it("draws a double bond cis or trans as it is", () => {
     for (const cis of [true, false]) {
       const butene = carbons(4, [[0, 1], [1, 2, 2], [2, 3]], [
@@ -104,6 +114,53 @@ describe("layout2D", () => {
     );
     expect(drawnCis(benzo, 7, 8, 6, 9)).toBe(false);
   });
+
+  it("draws both double bonds of a macrocycle cis or trans as they are, where no shape offered has room for both", () => {
+    // cyclotetradeca-, cyclohexadeca- and cyclooctadecadienes: two double
+    // bonds the shapes offered for the size put a corner and a zigzag at the
+    // wrong places for
+    for (const [n, k, cis0, cisK] of [
+      [14, 7, true, false],
+      [16, 2, true, true],
+      [16, 8, true, true],
+      [18, 9, true, false],
+    ] as const) {
+      const bonds = ring(0, n).map(([a, b], i): [number, number, number] => [a, b, i === 0 || i === k ? 2 : 1]);
+      const extra = bonds.map((_, i) =>
+        i === 0 ? { stereo: { refs: [n - 1, 2] as [number, number], cis: cis0 } } : i === k ? { stereo: { refs: [k - 1, k + 2] as [number, number], cis: cisK } } : {},
+      );
+      const { x, y } = layout2D(carbons(n, bonds, extra));
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      expect(side(n - 1, 0, 1) === side(2, 0, 1), `${n} bond 0`).toBe(cis0);
+      expect(side(k - 1, k, k + 1) === side(k + 2, k, k + 1), `${n} bond ${k}`).toBe(cisK);
+    }
+  });
+
+  it("draws every double bond of an odd macrocycle, or of one with two trans, cis or trans as it is", () => {
+    // [size, each double bond's place and whether it is cis]: a
+    // cyclotricosa-1,3-diene, Z,Z, and cyclopentadeca-1,3,8- and
+    // 1,4,12-trienes, all E and Z,E,E - odd, each drawn as a ring one
+    // larger with two atoms drawn together, where the bonds stay as they
+    // are - and a cyclooctadeca-1,3,10-triene, Z,E,E
+    for (const [n, doubles] of [
+      [23, [[0, true], [2, true]]],
+      [15, [[0, false], [2, false], [7, false]]],
+      [15, [[0, true], [3, false], [11, false]]],
+      [18, [[0, true], [2, false], [9, false]]],
+    ] as [number, [number, boolean][]][]) {
+      const cisAt = new Map(doubles);
+      const bonds = ring(0, n).map(([a, b], i): [number, number, number] => [a, b, cisAt.has(i) ? 2 : 1]);
+      const extra = bonds.map((_, i) => {
+        const cis = cisAt.get(i);
+        return cis == null ? {} : { stereo: { refs: [(i - 1 + n) % n, (i + 2) % n] as [number, number], cis } };
+      });
+      const { x, y } = layout2D(carbons(n, bonds, extra));
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      for (const [i, cis] of doubles) {
+        expect(side((i - 1 + n) % n, i, i + 1) === side((i + 2) % n, i, i + 1), `${n} bond ${i}`).toBe(cis);
+      }
+    }
+  }, 30_000);
 
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line
@@ -197,7 +254,34 @@ describe("layout2D", () => {
     // and it is drawn so, as everywhere)
     const morphine = layout2D(input("CN1CC[C@]23[C@@H]4[C@H]1CC5=C2C(=C(C=C5)O)O[C@H]3[C@H](C=C4)O"));
     expect(morphine.solid.some(Boolean)).toBe(false);
-  });
+    // (the whole engine on tetrodotoxin's cage and morphine: about a second
+    // alone, a few times that on a machine busy with the rest of the tests)
+  }, 30_000);
+
+  it("draws tetrodotoxin level, its guanidine ring beside the cage, not under it", () => {
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const given: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+    const ttx = layout2D(given);
+    const mol = perceive(given);
+    const sys = mol.systems.find((x) => x.atoms.length === 14)!;
+    // (the guanidine ring: the one with its two ring N's)
+    const guanidine = mol.rings.find((r) => r.filter((a) => given.atoms[a].el === "N").length === 2)!;
+    const cage = sys.atoms.filter((a) => !guanidine.includes(a));
+    const mid = (atoms: readonly number[]) => ({
+      x: atoms.reduce((t, a) => t + ttx.x[a], 0) / atoms.length,
+      y: atoms.reduce((t, a) => t + ttx.y[a], 0) / atoms.length,
+    });
+    const [g, c] = [mid(guanidine), mid(cage)];
+    expect(Math.abs(g.x - c.x)).toBeGreaterThan(Math.abs(g.y - c.y));
+    // (the whole engine on tetrodotoxin's cage: about a second alone, a few
+    // times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("draws bilobalide's C4 with its bonds spread round it, its wedges read one way only", () => {
     // three five-membered rings round one carbon leave 36 degrees between
@@ -564,7 +648,10 @@ describe("layout2D", () => {
     const m = layoutMetrics({ x, y, edges: input.bonds.map(({ a, b }) => [a, b] as const), depth });
     expect(m.overlaps + m.crossings).toBe(0);
     expect(m.ringError).toBeLessThan(0.05);
-  });
+    // (the whole engine on a bridged system with a ring fused on its side:
+    // about a second alone, a few times that on a machine busy with the rest of
+    // the tests)
+  }, 30_000);
 
   it("draws a ring system from the face its angular groups are on, whichever hand it is", () => {
     // artemisinin: its angular methyl (18) on the ketal carbon (14) in
@@ -619,7 +706,9 @@ describe("layout2D", () => {
     const both = [...benzene, 12, 13, 18];
     expect(y[12]).toBeLessThan(mid(both, y) - 0.1);
     expect(mid(benzene, x)).toBeLessThan(mid([...Array(els.length).keys()], x));
-  });
+    // (the whole engine on each of the fused systems: about a second alone, a
+    // few times that on a machine busy with the rest of the tests)
+  }, 30_000);
 
   it("draws tryptophan as an amino acid, its indole N below", () => {
     // the NH2 (14) below the alpha carbon (10), the COOH (11) on its right
@@ -795,6 +884,67 @@ describe("a ring system drawn as a solid", () => {
   }, 30000);
 });
 
+describe("a macrocycle through a block of fused rings", () => {
+  it("keeps a double bond at either end of the chain drawn round the block as given", () => {
+    // (the chain's first and last double bonds, read with the atoms placed
+    // at its ends: an E one was drawn cis)
+    for (const smiles of ["C2CCCCCC/C=C/c1ccc2c3ccccc31", "C2CCCCC/C=C1/CCC2C3CCCCC31", "C1(CCCCC/C=C/2)CCC2C3CCCCC31"]) {
+      const s = readSmiles(smiles);
+      const orders = kekuleOrders(s.atoms, s.bonds);
+      const sum = s.atoms.map(() => 0);
+      s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+      const g: LayoutInput = {
+        atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]) })),
+        bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
+      };
+      const { x, y } = layout2D(g);
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      for (const b of g.bonds.filter((q) => q.stereo)) {
+        const [r0, r1] = b.stereo!.refs;
+        // (each ref by the end it is on)
+        const nearA = g.bonds.some((q) => (q.a === b.a && q.b === r0) || (q.b === b.a && q.a === r0));
+        const [ra, rb] = nearA ? [r0, r1] : [r1, r0];
+        expect(side(ra, b.a, b.b) === side(rb, b.a, b.b), smiles).toBe(b.stereo!.cis);
+      }
+    }
+  });
+
+  it("draws rifampicin's naphthalene regular, its ansa chain round it, the hydrazone outside", () => {
+    // started from the macrocycle, the naphthalene was squashed to fit it;
+    // started from the naphthofuranone, the ansa chain drawn round it, the
+    // side that shuts in its OHs rather than its hydrazone and piperazine
+    const s = readSmiles("C[C@H]1/C=C/C=C(\\C(=O)NC2=C(C(=C3C(=C2O)C(=C(C4=C3C(=O)[C@](O4)(O/C=C/[C@@H]([C@H]([C@H]([C@@H]([C@@H]([C@@H]([C@H]1O)C)O)C)OC(=O)C)C)OC)C)C)O)O)/C=N/N5CCN(CC5)C)/C");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const g: LayoutInput = {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
+    };
+    const { x, y } = layout2D(g);
+    const mol = perceive(g);
+    const at = (a: number) => ({ x: x[a], y: y[a] });
+    // (each six-membered ring of the naphthalene a regular hexagon: every atom a bond from its middle)
+    for (const r of mol.rings.filter((q) => q.length === 6 && q.every((a) => mol.el[a] === "C" && mol.rings.some((o) => o !== q && o.length === 6 && o.filter((v) => q.includes(v)).length === 2)))) {
+      const c = { x: r.reduce((t, a) => t + x[a], 0) / 6, y: r.reduce((t, a) => t + y[a], 0) / 6 };
+      for (const a of r) expect(dist(at(a), c)).toBeCloseTo(1, 1);
+    }
+    // (the hydrazone's N=N outside the ring the ansa chain closes)
+    const macro = mol.rings.find((r) => r.length >= 9)!;
+    const inside = (p: { x: number; y: number }) => {
+      let odd = false;
+      for (let i = 0, j = macro.length - 1; i < macro.length; j = i++) {
+        const [u, v] = [at(macro[i]), at(macro[j])];
+        if (u.y > p.y !== v.y > p.y && p.x < ((v.x - u.x) * (p.y - u.y)) / (v.y - u.y) + u.x) odd = !odd;
+      }
+      return odd;
+    };
+    const hydrazone = g.atoms.flatMap((a, i) => (a.el === "N" && mol.neighbours[i].some((n) => g.atoms[n].el === "N") ? [i] : []));
+    expect(hydrazone.length).toBeGreaterThan(0);
+    for (const n of hydrazone) expect(inside(at(n)), `N${n}`).toBe(false);
+  }, 30000);
+});
+
 describe("a tert-butyl, and the other tridents", () => {
   const input = (smiles: string): LayoutInput => {
     const s = readSmiles(smiles);
@@ -875,7 +1025,9 @@ describe("a tert-butyl, and the other tridents", () => {
       const box = { x0: x[o] + (h.x - 0.35) * L, x1: x[o] + (h.x + 0.35) * L, y0: y[o] + (h.y - 0.35) * L, y1: y[o] + (h.y + 0.35) * L };
       for (const m of around(g, tb)) expect(segmentMeetsBox({ x: x[tb], y: y[tb] }, { x: x[m], y: y[m] }, box)).toBe(false);
     }
-  });
+    // (the whole engine on ginkgolide B: about a second alone, a few times that
+    // on a machine busy with the rest of the tests)
+  }, 30_000);
 });
 
 describe("a biaryl with something beside its bond on each ring", () => {

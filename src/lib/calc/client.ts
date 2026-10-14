@@ -61,8 +61,14 @@ export function counter(): () => number {
 export class ReaderClient implements Reader {
   private pending = new Map<number, Pending>();
   private stop: () => void;
+  /** Why it was closed, once it is: what it is asked from then on fails at once, saying so. */
+  private closed: string | null = null;
+  /** Where what it is asked once closed goes instead, where its worker was stopped unused: the worker started in its place (lib/plugins/process). */
+  private retake?: () => Promise<ReaderClient>;
+  private notReady: (e: Error) => void = () => {};
   /** The reader's version, once its worker has said it is ready. */
   version: string | null = null;
+  /** Its version, once its worker says it is ready - or why it never will, closed first. */
   readonly ready: Promise<string>;
 
   constructor(
@@ -76,7 +82,12 @@ export class ReaderClient implements Reader {
     private watch?: Watch,
   ) {
     let markReady!: (v: string) => void;
-    this.ready = new Promise((resolve) => (markReady = resolve));
+    this.ready = new Promise((resolve, reject) => {
+      markReady = resolve;
+      this.notReady = reject;
+    });
+    // (a client closed before its worker was ready, that no one waited on: nothing to say)
+    this.ready.catch(() => {});
     this.stop = transport.listen((line) => this.receive(line, markReady));
   }
 
@@ -85,7 +96,17 @@ export class ReaderClient implements Reader {
     try {
       m = JSON.parse(line);
     } catch {
-      return; // not an answer: what the reader's library printed, say
+      // an answer it could not write as JSON - a number that is not one, say: the question it answers given up
+      // now, rather than waited out
+      const said = /^\s*\{\s*"id"\s*:\s*(\d+)\s*,/.exec(line);
+      const p = said ? this.pending.get(Number(said[1])) : undefined;
+      if (p) {
+        this.pending.delete(Number(said![1]));
+        clearTimeout(p.timer);
+        this.watch?.settled(Number(said![1]));
+        p.reject(new Error(`${this.name} answered in a form Meno cannot read`));
+      }
+      return; // else not an answer: what the reader's library printed, say
     }
     if (m.event === "ready") {
       this.version = m.version ?? "";
@@ -144,6 +165,10 @@ export class ReaderClient implements Reader {
   }
 
   private request(question: Record<string, unknown>, what: string): Promise<unknown> {
+    // (its worker stopped unused: asked of the one started in its place)
+    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(question, what));
+    // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
+    if (this.closed !== null) return Promise.reject(new Error(this.closed));
     const id = this.ids();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -157,8 +182,15 @@ export class ReaderClient implements Reader {
     });
   }
 
-  /** Stops listening; whatever is still waiting fails. */
+  /** What it is asked once closed, handed to the client `retake` gives (its worker stopped unused). */
+  handOver(retake: () => Promise<ReaderClient>): void {
+    this.retake = retake;
+  }
+
+  /** Stops listening; whatever is still waiting fails, as does whatever it is asked from then on. */
   close(reason = `the ${this.name} reader stopped`): void {
+    this.closed ??= reason;
+    this.notReady(new Error(this.closed));
     this.stop();
     for (const [id, p] of this.pending) {
       clearTimeout(p.timer);

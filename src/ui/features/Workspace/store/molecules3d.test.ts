@@ -567,3 +567,40 @@ describe("molecules in 3D turned together, then something amended", () => {
     expect(state().turns3d[1]).toEqual(half);
   });
 });
+
+describe("a molecule in 3D shown in its other look for a talk", () => {
+  it("is the view's alone: nothing to undo, nothing unsaved, the document's look as it was - and as it was once the talk ends", () => {
+    const doc = createWorkspaceDocument();
+    doc.edit("open", (d) => addMolecule3d(d, { ...WATER_TALK, at: { x: 0, y: 0 } }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const depth = doc.history().undoDepth;
+    const saved = doc.getState();
+    st().switchTalkLook3d(1);
+    expect(st().molecules3d[0].look).toBe("secondary");
+    expect(doc.getState()).toBe(saved);
+    expect(doc.history().undoDepth).toBe(depth);
+    // (an edit meanwhile keeps it so; two clicks again, back)
+    st().addAtom(9, 0, "C");
+    expect(st().molecules3d[0].look).toBe("secondary");
+    st().switchTalkLook3d(1);
+    expect(st().molecules3d[0].look ?? "primary").toBe("primary");
+    st().switchTalkLook3d(1);
+    st().endTalkLooks();
+    expect(st().molecules3d[0].look ?? "primary").toBe("primary");
+    expect(doc.getState().molecules3d?.[0].look ?? "primary").toBe("primary");
+  });
+});
+
+const WATER_TALK = {
+  atoms: [
+    { el: "O", x: 0, y: 0, z: 0 },
+    { el: "H", x: 0.76, y: 0.59, z: 0 },
+    { el: "H", x: -0.76, y: 0.59, z: 0 },
+  ],
+  bonds: [
+    { a1: 0, a2: 1, order: 1 },
+    { a1: 0, a2: 2, order: 1 },
+  ],
+};

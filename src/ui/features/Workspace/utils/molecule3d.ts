@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { atomColour, atomRadius, bondRadiusOf, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown } from "./completeness";
+import { leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
-import { bondsByDistance } from "../../../../utils/structureParsers";
+import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
+import { least } from "../../../../lib/chem/lists";
 
 /** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
 export const RIBBON_REACH = 1.3;
@@ -147,13 +148,15 @@ export function labelSpot(
 }
 
 /**
- * How much of a conformer set each conformer is at room temperature (298 K),
- * by Boltzmann: from its energy in hartrees, the shares adding up to one.
+ * How much of a conformer set each conformer is at room temperature (298.15
+ * K), by Boltzmann: from its energy in hartrees - each weighed by its
+ * degeneracy where its conformer search said one - the shares adding up to
+ * one.
  */
-export function populations(energies: readonly number[]): number[] {
+export function populations(energies: readonly number[], degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
-  const lowest = Math.min(...energies);
-  const w = energies.map((e) => Math.exp(-(e - lowest) / RT_HARTREE));
+  const lowest = least(energies);
+  const w = energies.map((e, i) => (degeneracies?.length === energies.length ? degeneracies[i] : 1) * Math.exp(-(e - lowest) / RT_HARTREE));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);
 }
@@ -166,6 +169,12 @@ export function lookOf(m: Pick<Molecule3D, "look">): Look {
   return m.look ?? "primary";
 }
 
+/** Molecules in 3D each in the look `looks` gives it, where it gives one - the same list where it gives none. */
+export function withLooks<M extends Pick<Molecule3D, "id" | "look">>(list: readonly M[], looks: Readonly<Record<number, Look>>): M[] {
+  if (!Object.keys(looks).length) return list as M[];
+  return list.map((m) => (looks[m.id] && looks[m.id] !== lookOf(m) ? { ...m, look: looks[m.id] } : m));
+}
+
 /** A molecule in 3D as it is drawn, frame by frame: about its centre, in world units. */
 export type Solid = {
   /** Each frame's atoms about that frame's own centre: x, y and z in turn. */
@@ -176,6 +185,8 @@ export type Solid = {
   hidden: Record<Look, Uint8Array>;
   /** Whether each look leaves out hydrogens on carbon it would draw: the molecule says so (`HIDDEN_MARK`). */
   hidesH: Record<Look, boolean>;
+  /** How many atoms each look counts toward a very large drawing (utils/largeDrawing): lib/chem/style3d `countedAtoms`. */
+  counted: Record<Look, number>;
   /** Whether each look draws its chains as ribbons (Ribbon3D). */
   ribbons: Record<Look, boolean>;
   /**
@@ -245,7 +256,8 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
     return reach;
   };
   const hidesH = { primary: hidesCarbonHydrogens(m, style.primary), secondary: hidesCarbonHydrogens(m, style.secondary) };
-  const solid = { frames, radii, hidden, hidesH, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
+  const counted = { primary: countedAtoms(m, style.primary, hidden.primary), secondary: countedAtoms(m, style.secondary, hidden.secondary) };
+  const solid = { frames, radii, hidden, hidesH, counted, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
   byStyle.set(style, { frames: m.frames, solid });
   return solid;
 }
@@ -282,23 +294,29 @@ export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | 
   if (known && known.frames === m.frames && known.bonds === m.bonds) return known.v;
   const n = m.atoms.length;
   const xyzs = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...m.frames.filter((f) => f.length === 3 * n)];
-  const index = new Map<string, number>();
+  // (each pair by one number, the lower atom first: a trajectory of hundreds
+  // of frames of hundreds of atoms has its bonds found as it is opened)
+  const keyOf = (a1: number, a2: number) => (a1 < a2 ? a1 * n + a2 : a2 * n + a1);
+  const index = new Map<number, number>();
   const bonds: ParsedBond[] = [];
   // (a bond its first frame has keeps the order found for it: utils/completeness)
-  const ordered = new Map(m.bonds.map((b) => [b.a1 < b.a2 ? `${b.a1} ${b.a2}` : `${b.a2} ${b.a1}`, b.order]));
-  const each = xyzs.map((xyz) =>
-    bondsByDistance(m.atoms.map((a, i) => ({ el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }))).map((b) => {
-      const key = `${b.a1} ${b.a2}`;
+  const ordered = new Map(m.bonds.map((b) => [keyOf(b.a1, b.a2), b.order]));
+  const radii = bondRadii(m.atoms.map((a) => a.el));
+  const each = xyzs.map((xyz) => {
+    const pairs = bondedPairs(xyz, radii);
+    const ks: number[] = [];
+    for (let j = 0; j < pairs.length; j += 2) {
+      const key = keyOf(pairs[j], pairs[j + 1]);
       let k = index.get(key);
       if (k === undefined) {
         k = bonds.length;
         index.set(key, k);
-        const order = ordered.get(b.a1 < b.a2 ? key : `${b.a2} ${b.a1}`);
-        bonds.push(order && order !== b.order ? { ...b, order } : b);
+        bonds.push({ a1: pairs[j], a2: pairs[j + 1], order: ordered.get(key) || 1 });
       }
-      return k;
-    }),
-  );
+      ks.push(k);
+    }
+    return ks;
+  });
   const present = each.map((ks) => {
     const there = new Uint8Array(bonds.length);
     for (const k of ks) there[k] = 1;
@@ -687,7 +705,7 @@ export function turnedTogether(ms: readonly Turning3D[], q: THREE.Quaternion): (
     const turn = q.clone().multiply(m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion()).normalize();
     return { id: m.id, at: { x: r.x, y: r.y, z: r.z }, turn: turnOf(turn) };
   });
-  const lift = -Math.min(...placed.map((p, i) => p.at.z - ms[i].standing));
+  const lift = -least(placed.map((p, i) => p.at.z - ms[i].standing));
   return placed.map((p) => ({ ...p, at: { ...p.at, z: p.at.z + lift } }));
 }
 
@@ -845,6 +863,8 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(solid.hidesH[look] ? [HIDDEN_MARK] : []),
     ...(noHydrogensInFile(m, chainsDrawn) ? [NO_H_MARK] : []),
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
+    ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
+    ...(m.together ? [TOGETHER_MARK] : []),
   ];
 }
 

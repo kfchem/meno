@@ -189,6 +189,16 @@ describe("a conformer search", () => {
     const made = conformersWorked(WATER, out, []);
     if (typeof made === "string") throw new Error(made);
     expect(made.map((w) => w.share)).toEqual([0.7, 0.3]);
+    // (and each one's degeneracy, kept with the molecule for a Boltzmann weight to count in)
+    const counted = conformersWorked(WATER, { ...out, degeneracies: [1, 2] }, []);
+    if (typeof counted === "string") throw new Error(counted);
+    expect(counted.map((w) => w.degeneracy)).toEqual([1, 2]);
+    expect(resultsOf({ ok: true, holds: "conformers", kept: counted, aside: [], said: "" }).molecules[0].degeneracies).toEqual([1, 2]);
+    // (all one, or not a whole number for each: none kept)
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }).molecules[0].degeneracies).toBeUndefined();
+    const odd = conformersWorked(WATER, { ...out, degeneracies: [1, 1.5] }, []);
+    if (typeof odd === "string") throw new Error(odd);
+    expect(odd.map((w) => w.degeneracy)).toEqual([undefined, undefined]);
     const without = conformersWorked(WATER, { ...out, populations: [0.7] }, []);
     if (typeof without === "string") throw new Error(without);
     expect(without.map((w) => w.share)).toEqual([undefined, undefined]);
@@ -208,8 +218,9 @@ describe("what a step that ran jobs says", () => {
     expect(clock(42_000)).toBe("0:42");
     expect(clock(723_000)).toBe("12:03");
     expect(clock(3_723_000)).toBe("1:02:03");
-    expect(hartrees(-42.108712)).toBe("−42.10871 Eh");
-    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · −5.07054 Eh");
+    expect(hartrees(-42.108712)).toBe("−42.108712 Eh");
+    expect(hartrees(-0.0000001)).toBe("0.000000 Eh");
+    expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · E −5.070540 Eh");
     expect(doneSaid([WATER, WATER], 3, 65_000)).toBe("1:05 · 2 of 3");
   });
 });

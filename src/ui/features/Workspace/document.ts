@@ -25,6 +25,7 @@ import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
+import type { CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets } from "./workflow/model";
 
@@ -410,10 +411,13 @@ export function deleteParts(
   }
   const left = bonds.filter((b) => !bondsGone.has(b.id));
   const stillBonded = new Set(left.flatMap((b) => [b.a, b.b]));
+  // (each bond's ends by id, not looked for among every atom: everything
+  // selected in a drawing of 28 000 atoms took 10.5 s that way)
+  const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const b of bonds) {
     if (!bondsGone.has(b.id)) continue;
     for (const end of [b.a, b.b]) {
-      const atom = atoms.find((a) => a.id === end);
+      const atom = byId.get(end);
       if (atom && atom.el === "C" && !stillBonded.has(end)) atomsGone.add(end);
     }
   }
@@ -484,7 +488,10 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
     changed = true;
     const { display: _display, stereoAt: _at, ...rest } = b;
-    return [{ ...rest, stereo: p.stereo, stereoOrient: p.stereoOrient, ...(display ? { display } : {}) }];
+    // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
+    const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
+    const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
+    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
   let nextId = doc.nextId;
@@ -956,8 +963,14 @@ export function withImportedScheme(
 // --- molecules in 3D ---------------------------------------------------------
 
 export function addMolecule3d(doc: WorkspaceDocument, m: Omit<Molecule3D, "id">): WorkspaceDocument {
-  const id = doc.nextMolecule3dId ?? 1;
-  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), { ...m, id }], nextMolecule3dId: id + 1 };
+  return addMolecules3d(doc, [m]);
+}
+
+/** Molecules in 3D added at once, each given the next id in turn: the page's molecules copied once, however many. */
+export function addMolecules3d(doc: WorkspaceDocument, ms: readonly Omit<Molecule3D, "id">[]): WorkspaceDocument {
+  if (!ms.length) return doc;
+  const first = doc.nextMolecule3dId ?? 1;
+  return { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...ms.map((m, i) => ({ ...m, id: first + i }))], nextMolecule3dId: first + ms.length };
 }
 
 /**
@@ -968,16 +981,33 @@ export function addMolecule3d(doc: WorkspaceDocument, m: Omit<Molecule3D, "id">)
  * belongs to frames only where it read as many; and a reader that could not
  * read it, said. The document as it was where there is nothing to join.
  */
+/**
+ * What a reader read of one job of a file that holds several: the job of
+ * that number, where it read the file job by job; where it read the file as
+ * one, that - its end - for the last job, and nothing for the others.
+ * Where the molecule is no job of several, what it read.
+ */
+export function readingOfJob(found: Found, job: CalcInfo["job"]): Found | null {
+  if (!job) return found;
+  const jobs = Array.isArray(found.output.jobs) && found.output.jobs.length > 1 ? found.output.jobs : null;
+  if (!jobs) return job.number === job.of ? found : null;
+  const own = jobs.find((j) => j.job?.number === job.number);
+  return own ? { ...found, output: own } : null;
+}
+
 export function withReadings(doc: WorkspaceDocument, bySource: Readonly<Record<string, readonly (Found | Unread)[]>>): WorkspaceDocument {
   let changed = false;
   const molecules3d = (doc.molecules3d ?? []).map((m) => {
     const readings = m.calc?.source ? bySource[m.calc.source.sha256] : undefined;
     if (!m.calc || !readings?.length) return m;
     let calc = m.calc;
-    for (const r of readings) {
+    for (const found of readings) {
       // (a reader as a molecule keeps it: its id, then its version)
-      const has = calc.readers.some((x) => x === r.from || x.startsWith(`${r.from} `)) || calc.unread?.some((u) => u.from === r.from);
+      const has = calc.readers.some((x) => x === found.from || x.startsWith(`${found.from} `)) || calc.unread?.some((u) => u.from === found.from);
       if (has) continue;
+      // (of a file of several jobs, what the reader read of this molecule's job)
+      const r = "why" in found ? found : readingOfJob(found, m.calc.job);
+      if (!r) continue;
       const atoms = m.atoms.map((a) => a.el);
       if ("why" in r || !sameAtoms(r.output.atoms, atoms)) {
         const why = "why" in r ? r.why : "it read other atoms";
@@ -1888,12 +1918,18 @@ function patched(s: Shape, patch: ShapePatch): Shape {
 
 const sameShape = (a: Shape, b: Shape) => JSON.stringify(a) === JSON.stringify(b);
 
-/** `doc` with the shape `id` changed as `patch` says - never to a box with no room - its words where it now is. */
+/**
+ * `doc` with the shape `id` changed as `patch` says - never to a box with no
+ * room, nor to a line with no length (as `addShape` and the reader refuse
+ * one: a line's end dragged onto its other end was kept, then lost on
+ * saving) - its words where it now is.
+ */
 export function updateShape(doc: WorkspaceDocument, id: number, patch: ShapePatch): WorkspaceDocument {
   const was = doc.shapes?.find((x) => x.id === id);
   if (!was) return doc;
   const next = patched(was, patch);
-  if (!finite(next.x0, next.y0, next.x1, next.y1) || (isBox(next.kind) && !(next.x1 > next.x0 && next.y1 > next.y0)) || sameShape(was, next)) return doc;
+  const roomless = isBox(next.kind) ? !(next.x1 > next.x0 && next.y1 > next.y0) : next.x0 === next.x1 && next.y0 === next.y1;
+  if (!finite(next.x0, next.y0, next.x1, next.y1) || roomless || sameShape(was, next)) return doc;
   return withShapeWords({ ...doc, shapes: doc.shapes!.map((x) => (x.id === id ? next : x)) }, new Set([id]));
 }
 
@@ -2158,6 +2194,9 @@ export function setRingEnabled(
 
 // --- texts -------------------------------------------------------------------
 
+/** A text as it is held: its lines ended "\n", however its file ended them - Windows writes "\r\n". */
+const heldText = (text: string) => text.replace(/\r\n?/g, "\n");
+
 /**
  * Texts added, each after those it holds, and the id of the last: one it
  * holds already - the same name and text - not added again, its id given;
@@ -2171,12 +2210,13 @@ export function addTexts(
   let next = doc.nextTextId ?? Math.max(0, ...held.map((t) => t.id)) + 1;
   let last: number | null = null;
   for (const t of texts) {
-    const same = held.find((h) => h.name === t.name && h.text === t.text);
+    const text = heldText(t.text);
+    const same = held.find((h) => h.name === t.name && h.text === text);
     if (same) {
       last = same.id;
       continue;
     }
-    held.push({ id: next, name: t.name || newTextName(held), text: t.text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
@@ -2184,7 +2224,8 @@ export function addTexts(
 }
 
 /** A text changed to `text`. */
-export function editText(doc: WorkspaceDocument, id: number, text: string): WorkspaceDocument {
+export function editText(doc: WorkspaceDocument, id: number, typed: string): WorkspaceDocument {
+  const text = heldText(typed);
   const at = (doc.texts ?? []).findIndex((t) => t.id === id);
   if (at < 0 || doc.texts![at].text === text) return doc;
   const texts = doc.texts!.slice();
@@ -2228,7 +2269,7 @@ export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<Workspac
   const ids: number[] = [];
   for (const t of sheets) {
     if (!t.at) continue;
-    held.push({ id: next, name: t.name || newTextName(held), text: t.text, at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text: heldText(t.text), at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
     ids.push(next++);
   }
   return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };

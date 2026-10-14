@@ -259,12 +259,13 @@ Taken on 2026-10-03:
   - held as a style, as the 2D drawing's is, so that it can be set the
     same way later.
   - Since 2026-10-04 it is set in Settings, under Molecules in 3D, as
-    the drawing style is: a preset - Meno (the viewer's look), Glossy or
-    Space-filling - and what was changed from it, each change marked and
-    taken back alone or all at once. The settings are how molecules are
-    drawn unless one has a look of its own, ball size, bond thickness and
-    colour, the surface, the two lights, and how a molecule turns and
-    coasts when let go. A molecule beside them shows the look and can be
+    the drawing style is: a preset - Ball and stick (the viewer's look;
+    named Meno until 2026-10-10), Glossy or Space-filling - and what was
+    changed from it, each change marked and taken back alone or all at
+    once. The settings are how molecules are drawn unless one has a look
+    of its own, ball size, bond thickness and colour, the surface, the two
+    lights, and how a molecule turns and coasts when let go. A molecule
+    beside them shows the look and can be
     turned, to try the turning. The canvas, the selection's handle, a fit
     and the pictures for other programs all take the look from there. A
     document of its own look, as a drawing can have its own style, is not
@@ -319,7 +320,9 @@ Taken while stage 1 was built, on 2026-10-03:
     measured (found on Windows, 2026-10-05).
 - **Frames.**
   - A molecule with frames has a chip under it: which frame, of how many.
-    Hovered or selected, the chip opens to a slider.
+    Clicked, the chip opens to a slider; clicked again, or with a press
+    anywhere else or Escape, it shuts (the maintainer, 2026-10-13: it
+    opens on a click, not as its molecule is pointed at or selected).
   - The old viewer's ladder of energies became bars above the slider:
     each frame as high as it is above the lowest, and the chip says by
     how much in kcal/mol. One control serves both a trajectory and a
@@ -329,22 +332,30 @@ Taken while stage 1 was built, on 2026-10-03:
   shows are not undone, save a turn by the selection's handle. They are kept by a copy and by the workspace file,
   so that what is pasted or opened looks as it did.
 - **Saving.**
-  - `.meno` is JSON (`meno-workspace`, version 1).
-  - An SD file holds each 3D molecule as a record in 3D beside the
-    drawing.
-  - With 3D molecules on the canvas, Save offers only what keeps them: a
-    workspace or an SD file.
+  - `.meno` is a zip (since 2026-10-06, #158: docs/FILE-IO.md, *The
+    workspace file*). Its `workspace.json` is the JSON `.meno` was at
+    first (`meno-workspace`, version 1); the outputs, texts, PDFs and
+    pictures it keeps are files beside it (`lib/doc/menoFile.ts`).
+  - Save and Save As write `.meno`, and nothing else (since 2026-10-06,
+    #151; before, with 3D molecules on the canvas, Save offered a
+    workspace or an SD file). Other kinds are written by *Export…*, on
+    the selection's menu: MOL, SDF, RXN, PDB and SVG, by Meno
+    (`lib/io/writers.ts`), and, for molecules in 3D, what the plugins
+    added write. An SD file holds each 3D molecule as a record in 3D
+    beside the drawing, in the frame shown or every frame a record; a PDB
+    file holds the molecules in 3D alone.
 - **Calculation readers** (the maintainer): reading what calculation
   programs write is to be plugins, added and removed online. Meno itself
   reads geometry. The one reader so far, energies on an XYZ file's comment
-  lines (CREST, xtb, ORCA), lives apart in `lib/calc`, and what it finds
-  is plain data on the molecule.
+  lines (CREST, xtb, ORCA), lives apart (`src/utils/xyzEnergies.ts`), and
+  what it finds is plain data on the molecule.
 
 Taken on 2026-10-04:
 
 - **The structure canvas is the workspace** (named Workspace from 2026-10-10), and everything else is to be
   reached from it. The New Tab page is gone: Meno starts on a canvas, "+"
-  makes another, and Open puts a file in a tab of its own. The New… menu
+  makes another, and Open puts a file in a tab of its own (until
+  2026-10-13: Open adds to the workspace in front, below). The New… menu
   goes too, later: the text editor, the Python console and the workflow
   builder are to be reached from the canvas. (Done 2026-10-10: "+" opens
   a workspace and nothing else, and the Python console was removed.)
@@ -358,6 +369,24 @@ Taken on 2026-10-04:
 - **The system's menu bar stays as the system has it.** On a Mac, Meno's
   commands do not go into it. A Mac's window is to get its own controls
   (the close button and its neighbours) at some stage.
+- **The system's right-click menu only where it edits words** (2026-10-13).
+  In a text box - a field in Settings or Quick Add - it gives Cut, Copy and
+  Paste; anywhere else - Settings, the tab bar, a tab, Quick Add's row, a
+  dialog, the column's text, which Meno draws itself - all it gave was the
+  webview's Reload, which starts the whole window afresh, unsaved work and
+  all, so it is kept shut there (`keepSystemMenuShut`, lib/doc/shortcuts).
+  Meno's own menus - the canvas's, a PDF's, a colour set's - open as they
+  do.
+- **Meno's own menu on words written or read in place** (the maintainer,
+  2026-10-13). A right-click on the column's text, on words being written
+  on the page or on an atom's label being written opens a small menu of
+  Meno's, as the canvas's look: Cut, Copy, Paste and Select All, with their
+  keys, each that does not apply now shown but not to be pressed - Cut and
+  Copy with nothing selected, Paste with no text on the clipboard, Cut and
+  Paste on a Markdown text read (`textMenu`, TextEditor). Where nothing is
+  selected, the caret goes where the right-click was first. The words keep
+  the keys while it is open: Escape closes it alone, and a press elsewhere
+  only closes it.
 - **Closing the last tab quits Meno.**
 
 Taken on 2026-10-07:
@@ -381,7 +410,9 @@ Taken on 2026-10-07:
   - since 2026-10-09 it lies over the canvas's right side, the view
     following it, and the PDFs read there are named among its texts
     (docs/PDF.md, step 2).
-  The small previews on the page, decided on 2026-10-04, are not made yet.
+  The small previews on the page, decided on 2026-10-04, are made: each
+  text has a sheet on the page with its first lines and its name under it,
+  coming as an icon (docs/PDF.md, *A text*).
 
 Taken on 2026-10-10 (menus and gestures):
 
@@ -398,22 +429,34 @@ Taken on 2026-10-10 (menus and gestures):
 - **A double-click on the canvas shuts the column** beside it: the work
   comes back to the canvas (docs/PDF.md, *One canvas*).
 
+Taken on 2026-10-13:
+
+- **Open adds to the workspace in front.** A structure's file, a
+  calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
+  workspace in front, as a drop on its canvas adds it: in free space near
+  the middle of the view, one step to undo, an SD file as a stack. Free
+  space is clear of all on the page and of a workflow's sets and steps'
+  cards - a structure put down in a set's frame would be taken as what the
+  set holds - its own labels and "+" signs counted. Only a `.meno` opens a
+  tab of its own, untouched: opened with other files at once, it opens
+  beside the workspace in front, which takes the rest (the maintainer,
+  2026-10-13). A file that cannot be read says so in the workspace, and no
+  tab is made; where a plugin could read it, adding the plugin reads it
+  again there. With no workspace in front, the one last in front is
+  brought forward; with none, a canvas is opened for it.
+
 ## Stage 2, as built
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo drawn without a configuration is ringed on
-  the drawing while Meno asks what to make: every stereoisomer it gives,
-  one, or none for now. Each is made as a conformer set (RDKit's ETKDG,
-  then MMFF94) and comes onto the page as a molecule in 3D, its frames the
-  conformers, lowest first. Of two enantiomers, one is made as the other's
-  mirror image, so the two have the same conformers and shares. Where the
-  structure changes while they are made, or while Meno asks - an undo
-  takes it away - none is added, and Meno says so (`blocksStill`; until
-  2026-10-13 a molecule of the structure undone came, tied to atoms gone,
-  and the undone step could not be redone); edits elsewhere do not count.
-  Meno's question about stereo not drawn goes with the structure it is
-  about, shut by an undo that takes it away.
+  everything selected (Select all first, for everything drawn). Stereo
+  drawn without a configuration is ringed on the drawing while Meno asks
+  what to make: every stereoisomer it gives, one, or none for now. Each is
+  made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
+  chosen - UFF where MMFF has no parameters for the molecule) and comes
+  onto the page as a molecule in 3D, its frames the conformers, lowest
+  first. Of two enantiomers, one is made as the other's mirror image, so
+  the two have the same conformers and shares.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain
@@ -484,10 +527,11 @@ read and attached to its molecule. Agreed with the maintainer on
 - **A reader is a plugin.** Each runs as a worker in a Python environment
   of its own, as RDKit does: set up from a lock that Meno carries, every
   package pinned by its hash, and only when asked for, with the network's
-  consent. Readers are added and removed in Settings, *Calculation
-  readers*; opening a file that no installed reader reads says which
-  would. Which readers there are is Meno's own list for now. A list
-  fetched online needs a way to trust it (signing), and comes later.
+  consent. Readers are added and removed in Settings, *Plugins*, and which
+  reads a kind that several read is chosen in *Files*; opening a file that
+  no reader added reads says which would. Which readers there are is
+  Meno's own list for now. A list fetched online needs a way to trust it
+  (signing), and comes later.
 - **The first reader is cclib** (BSD-3), which reads ORCA, Gaussian, xTB
   and others. It is installed into its plugin's environment as a
   library. Meno does not copy its code, and a reader Meno writes itself is
@@ -550,18 +594,37 @@ Each result says what it belongs to, and Meno puts it there:
 | A list | vibrations, orbitals, NBO's interactions | from the molecule's menu, under the molecule |
 
 - **A value says what quantity it is,** in Meno's unit for it - an energy
-  in hartrees, a charge in e, a wavenumber in cm⁻¹ (an imaginary one
+  in hartrees, a charge in e, a spin population in e (signed, as a charge
+  is), a wavenumber in cm⁻¹ (an imaginary one
   negative), a length in ångströms, a dipole in debye, a number, a text -
   and Meno writes it, the same way whichever plugin gave it. Any other
   gives its unit, and is written with it.
+- **A charged molecule's dipole is taken about its centre of mass**
+  (2026-10-14). An ion's dipole depends on the point it is taken about -
+  H3O+ moved 6 Å from the origin its program took it about reads 28.9 D
+  there, 2.1 D about itself - and programs take it about different points
+  (the origin of the coordinates, the centre of nuclear charge, the centre
+  of mass). So the plugin takes it again about the centre of mass of the
+  geometry it is of, and calls it *Dipole moment about the centre of
+  mass* wherever it is shown. A neutral molecule's is the program's own.
 - **A list's row can point at atoms, a frame or a motion.** Pointed at,
   its atoms are marked; chosen, its frame is shown, or the molecule moves
   in it. Vibrations are a list whose rows move the molecule - no arrows
-  and no spectrum. These are what Meno can do with a row, and more come
+  and no spectrum. Its columns are those the output holds: the reduced
+  masses, IR intensities and Raman activities where it gives them, and
+  no empty column where it does not (2026-10-14). These are what Meno can do with a row, and more come
   as Meno learns them: a surface, for an orbital's row.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
-  after what the calculation was and its energy.
+  after what the calculation was and its energy. One ranked 0 - how the
+  run went, "Run ended with an error" - is said however long the line
+  (2026-10-13). So is what geometries that are no optimisation's are -
+  "Relaxed scan · 5 points" (a rigid one "Scan"), "Reaction path · 21 points" (a Gaussian
+  reaction path's points in the order of its coordinate, as its summary
+  lists them) - none of them called optimised; and "Excited state ·
+  energies not read" where an excited state was optimised, whose energies
+  at each geometry are not the ground state's that the output also gives
+  (2026-10-14).
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
@@ -589,7 +652,9 @@ with that data written by hand.
 ### In order
 
 1. **3a.** The reader plugins: the worker, the environment, Settings'
-   *Calculation readers* with the choice where they overlap, and cclib's.
+   *Calculation readers* with the choice where they overlap, and cclib's
+   (since then, the readers are in Settings' *Plugins* and the choice in
+   *Files*).
    Geometries, an optimisation's steps, energies, and what the chip says.
 2. **3b.** Vibrations.
 3. **3c.** Results in the general form: what the calculation was in
@@ -605,11 +670,12 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
 2026-10-05.
 
 - **Readers.** cclib (1.9rc1) is the first. Settings, *Calculation
-  readers*, adds it - asking first for the network - and takes it away
-  again, its environment and its record with it. A kind of output is told
-  by what its file starts with. Where readers overlap, every one added
-  reads the output and each one's results are kept, its own; the one
-  chosen for that kind gives the geometries and what the calculation was.
+  readers* (now *Plugins*, the choice where readers overlap in *Files*),
+  adds it - asking first for the network - and takes it away again, its
+  environment and its record with it. A kind of output is told by what its
+  file starts with. Where readers overlap, every one added reads the
+  output and each one's results are kept, its own; the one chosen for that
+  kind gives the geometries and what the calculation was.
 - **Opening an output.** It opens on a canvas tab of its own, its last
   geometry shown, an optimisation's steps as its frames. With no reader
   added that reads it, Meno says which to add; an output with no geometry
@@ -814,6 +880,10 @@ slowing it - and in the pictures made of it.
   notice in the corner (*Many atoms on the canvas*) with *Keep them*,
   which sets *Very large drawings* (Settings, every style) to *As set*
   for good. A picture made of it has its shade and shadows all the same.
+  The atoms counted are those drawn and every atom of the residues
+  ribbons stand for (the maintainer's choice, 2026-10-13), so a large
+  protein in ribbons is drawn lighter as it would be as atoms; those a
+  look leaves out otherwise (hydrogens on carbon, water) are not.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -945,7 +1015,7 @@ file are shown the way a molecule's frames are, one at a time.
 - **One shown.** The stack shows one molecule. Its chip, just below it,
   says which of how many and the record's title where its file gives one
   (*3 / 60  aspirin*: an SD record's first line, kept on the molecule as
-  `title`) and, hovered or selected, is a slider
+  `title`) and, clicked, is a slider
   through them, as a molecule's frames' chip is (`StackChip3D`). It is the
   stack's chip, not its molecules', so a drag along it goes on through the
   stack. Which one is shown is the view's (`stacksShown`), as a frame is,
@@ -982,7 +1052,7 @@ same way.
   drawing of its own.
 - **One shown.** The stack shows one record, with the chip a stack of
   molecules has (`StackChips2D`): which of how many and the title, and,
-  the record hovered or selected, a slider. Which is shown is the view's
+  clicked, a slider. Which is shown is the view's
   (`recordsShown`), not an undo step.
 - **What is drawn and what is kept.** The canvas works on the drawing as
   shown: the store's `model` is the records shown and the rest, made from
@@ -1027,11 +1097,19 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 
 - **Said over it.** *No H in file* where the molecule - for a PDB entry,
   its chains while they are drawn as atoms, or a ligand - has no
-  hydrogens and either has carbon, its orders unknown, or has an atom
-  whose valence, its orders known, leaves room for some; *Bond orders
+  hydrogens and either has a carbon whose neighbours leave room for some,
+  its orders unknown (none or one, but for the end of a C≡O or C≡N; two
+  not in a line; three not in a plane: so not C60, carbon dioxide, CCl4
+  or a metal's carbonyls), or has an atom whose valence, its orders
+  known, leaves room for some; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
-  side chains round a ligand, in a look with ribbons, among them). Said as *C–H hidden* is:
+  side chains round a ligand, in a look with ribbons, among them); *3
+  frames left out* where frames of its file were left out as it was read
+  (cut short, or with a place that does not read: never without a word);
+  *Atoms in one place* where atoms of it stood within 0.1 Å of another as
+  it was read - a damaged file, or none of a molecule's - which are given
+  no bond. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,

@@ -12,6 +12,17 @@ type Parts = Pick<
 const has = (items: readonly { id: number }[], id: number | null) => id != null && items.some((x) => x.id === id);
 
 /**
+ * Whether a right-click menu is about the drawing - an atom, a bond, a ring,
+ * or a selection with the drawing in it - so that a change to the drawing
+ * may have taken what it is about. A step's, a set's, a molecule in 3D's or
+ * a page object's menu is not: it goes only when its own part does
+ * (`menuTargetGone`), not with every change to the drawing.
+ */
+export function aboutDrawing(target: MenuTarget): boolean {
+  return target.kind === "atom" || target.kind === "bond" || target.kind === "ring" || (target.selection !== "none" && target.drawing !== false);
+}
+
+/**
  * Whether the part a right-click menu was opened on is no longer there -
  * undone away, deleted by a key, taken by a job's end - so that the menu
  * is not left open over nothing, its commands for what is gone. A menu on

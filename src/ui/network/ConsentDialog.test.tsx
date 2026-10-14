@@ -6,7 +6,7 @@ import { questionKey } from "./questionKey";
 // fades out reaches the question it was drawn for - its `answer`, as the
 // button going out still holds it - and that is what is clicked here.
 
-const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [] });
+const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [], hosts: [] });
 const settle = () => new Promise((go) => setTimeout(go, 0));
 
 describe("the question before using the network", () => {

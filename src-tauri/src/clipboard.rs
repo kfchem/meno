@@ -107,6 +107,13 @@ pub fn from_mdlct(bytes: &[u8]) -> Option<String> {
     mol.contains("M  END").then_some(mol)
 }
 
+/// Text as Windows programs take it off the clipboard: each line ended
+/// "\r\n", as Notepad and Office write it. (Windows only; tested everywhere.)
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn crlf(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\n', "\r\n")
+}
+
 /// Puts `items` on the clipboard, in place of whatever was there.
 #[tauri::command]
 pub fn clipboard_write(items: Vec<ClipItem>) -> Result<(), String> {
@@ -155,7 +162,7 @@ fn embed(items: &[ClipItem], entries: &mut Vec<(&'static str, Payload)>) {
             entries.splice(at..at, [("Embed Source", Payload::Bytes(source)), ("Object Descriptor", Payload::Bytes(descriptor))]);
             entries.retain(|(name, _)| !matches!(*name, "Art::GVML ClipFormat" | "PNG"));
         }
-        Err(e) => eprintln!("{e}"),
+        Err(e) => crate::logfile::logged!("{e}"),
     }
 }
 
@@ -200,7 +207,26 @@ pub enum Board {
 /// The files on the clipboard, copied in the Finder or Explorer, in order:
 /// those that are files, not folders.
 fn clipboard_files() -> Vec<std::path::PathBuf> {
-    platform::files().into_iter().filter(|p| p.is_file()).collect()
+    platform::files_on(Board::Clipboard).into_iter().filter(|p| p.is_file()).collect()
+}
+
+/// The workspace files the clipboard holds, or what was just dropped on the
+/// page (`board`: "clipboard" or "drag") - copied or dragged in the Finder
+/// or Explorer - opened as a workspace file opened from the system is
+/// (opened.rs): the page let read and write each, so that saving it writes
+/// it back, and told. How many there were. A drop on Windows names none:
+/// Meno reads a dropped file there from its bytes.
+#[tauri::command]
+pub fn open_workspaces_from(app: tauri::AppHandle, board: String) -> usize {
+    let board = if board == "drag" { Board::Drag } else { Board::Clipboard };
+    let paths: Vec<String> = platform::files_on(board)
+        .into_iter()
+        .filter(|p| crate::opened::is_workspace(p))
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let n = paths.len();
+    crate::opened::open(&app, paths);
+    n
 }
 
 /// The names of the files on the clipboard - copied in the Finder or
@@ -293,10 +319,15 @@ mod platform {
         Ok(())
     }
 
-    /// The files on the clipboard, copied in the Finder: each item's file
-    /// URL - a file reference URL, as the Finder gives it, read as its path.
-    pub fn files() -> Vec<std::path::PathBuf> {
-        let pb = NSPasteboard::generalPasteboard();
+    /// The files on the clipboard, copied in the Finder, or on the drag
+    /// pasteboard, dragged from it: each item's file URL - a file reference
+    /// URL, as the Finder gives it, read as its path.
+    pub fn files_on(board: Board) -> Vec<std::path::PathBuf> {
+        // SAFETY: the drag pasteboard is a pasteboard like the general one, named by AppKit.
+        let pb = match board {
+            Board::Clipboard => NSPasteboard::generalPasteboard(),
+            Board::Drag => unsafe { NSPasteboard::pasteboardWithName(NSPasteboardNameDrag) },
+        };
         let Some(items) = pb.pasteboardItems() else { return Vec::new() };
         let kind = NSString::from_str("public.file-url");
         items
@@ -330,7 +361,7 @@ mod platform {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{from_mdlct, to_mdlct, Board, Payload};
+    use super::{crlf, from_mdlct, to_mdlct, Board, Payload};
     use std::ptr::null_mut;
     use windows_sys::Win32::Foundation::{GlobalFree, HANDLE};
     use windows_sys::Win32::Graphics::Gdi::{DeleteEnhMetaFile, SetEnhMetaFileBits};
@@ -381,7 +412,7 @@ mod platform {
         match payload {
             Payload::Bytes(bytes) => bytes.clone(),
             Payload::Text(text) => match name {
-                "CF_UNICODETEXT" => text.encode_utf16().chain(Some(0)).flat_map(u16::to_le_bytes).collect(),
+                "CF_UNICODETEXT" => crlf(text).encode_utf16().chain(Some(0)).flat_map(u16::to_le_bytes).collect(),
                 "MDLCT" => to_mdlct(text),
                 _ => text.bytes().chain(Some(0)).collect(),
             },
@@ -466,8 +497,12 @@ mod platform {
     }
 
     /// The files on the clipboard, copied in Explorer: its list of them
-    /// (CF_HDROP), each by its path.
-    pub fn files() -> Vec<std::path::PathBuf> {
+    /// (CF_HDROP), each by its path. Of a drop, none: Meno reads a file
+    /// dropped there from its bytes.
+    pub fn files_on(board: Board) -> Vec<std::path::PathBuf> {
+        if board == Board::Drag {
+            return Vec::new();
+        }
         use std::os::windows::ffi::OsStringExt;
         use windows_sys::Win32::System::Ole::CF_HDROP;
         use windows_sys::Win32::UI::Shell::DragQueryFileW;
@@ -544,7 +579,7 @@ mod platform {
     pub fn read(_: Board, _: &str) -> Result<Option<Vec<u8>>, String> {
         Ok(None)
     }
-    pub fn files() -> Vec<std::path::PathBuf> {
+    pub fn files_on(_: Board) -> Vec<std::path::PathBuf> {
         Vec::new()
     }
 }
@@ -563,6 +598,14 @@ mod tests {
         // not a MOL file
         assert_eq!(from_mdlct(&[3, b'a', b'b']), None);
         assert_eq!(from_mdlct(&to_mdlct("hello\n")), None);
+    }
+
+    #[test]
+    fn text_for_windows_ends_its_lines_crlf() {
+        assert_eq!(crlf("CCO\nc1ccccc1\n"), "CCO\r\nc1ccccc1\r\n");
+        // (lines ended so already: not ended twice)
+        assert_eq!(crlf("a\r\nb\n"), "a\r\nb\r\n");
+        assert_eq!(crlf("CCO"), "CCO");
     }
 
     #[test]

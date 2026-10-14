@@ -1,10 +1,11 @@
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
-import { MENU_ICONS } from "./menuIcons";
+import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
 
@@ -57,6 +58,8 @@ const WIDTH = 240;
 const ITEM = 32;
 /** Each icon's square along the top, as Quick Add's are, in px. */
 const ROW = 36;
+/** A compact row under the icons: the kinds of bond there are besides the common ones. */
+const ROW2 = 28;
 
 /** What the clipboard's items in the menu do. */
 export type MenuClipboard = {
@@ -72,7 +75,7 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void };
+type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
 export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
@@ -134,6 +137,7 @@ export default function PartMenu({
   onCleanUp,
   onMake3d,
   onSelectStructure,
+  bondKind,
   onTurnOver,
   onCharge,
   onRadical,
@@ -181,6 +185,8 @@ export default function PartMenu({
   /** The part's structure made in 3D, or the selection's structures. */
   onMake3d: () => void;
   onSelectStructure: () => void;
+  /** The kind of the bond right-clicked - or of the bonds selected, where it is one of them - and a kind chosen for it (utils/bondKinds); `current` is null where the bond is none of them. */
+  bondKind?: { current: BondKindName | null; choose: (kind: BondKindName) => void };
   /** The selection turned over, left to right or top to bottom. */
   onTurnOver: (axis: "vertical" | "horizontal") => void;
   /** An atom's charge one up or one down. */
@@ -328,6 +334,8 @@ export default function PartMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // a bond's second row of kinds: shown at once where the bond is one of them, else as "more" is pressed
+  const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the width it came out at, so that the whole of it stays in the canvas
   const [width, setWidth] = useState(WIDTH);
   useLayoutEffect(() => {
@@ -511,7 +519,8 @@ export default function PartMenu({
             : []),
           ...(words
             ? [
-                { name: "Superscript", keys: MAC ? "\u21e7\u2318=" : "Ctrl+Shift+=", run: words.onSup, divider: true },
+                // (named by what the keys give, + and =, not where they lie: Shift and = on most keyboards, Shift and ; and Shift and - on a Japanese one)
+                { name: "Superscript", keys: shortcut("+"), run: words.onSup, divider: true },
                 { name: "Subscript", keys: shortcut("="), run: words.onSub },
               ]
             : []),
@@ -670,10 +679,20 @@ export default function PartMenu({
                 { name: "Charge one down", keys: "\u2212", run: () => onCharge(-1), icon: MENU_ICONS.chargeDown },
               ]
             : []),
-          { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
-          { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
-          ...pushFrom,
-          ...colour,
+          ...(target.kind === "bond" && bondKind
+            ? [
+                // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
+                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
+                ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
+              ]
+            : []),
+          ...[
+            { name: "Clean up this structure", keys: keys ? cleanUpKey : "", run: onCleanUp, icon: MENU_ICONS.cleanUp },
+            { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+            ...pushFrom,
+            ...colour,
+          ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
@@ -685,11 +704,13 @@ export default function PartMenu({
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...stackItem,
         ];
-  const row = items.filter((i) => i.icon);
+  const row = items.filter((i) => i.icon && !i.compact);
+  const compact = items.filter((i) => i.icon && i.compact);
+  const row2 = more ? compact : [];
   const list = items.filter((i) => !i.icon);
-  const height = (row.length ? ROW + 9 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
+  const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
-    onClose();
+    if (!item.keep) onClose();
     item.run();
   };
   return (
@@ -787,12 +808,53 @@ export default function PartMenu({
           ))}
         </div>
       )}
+      <AnimatePresence initial={false}>
+      {row2.length > 0 && (
+        <motion.div
+          key="other-kinds"
+          role="group"
+          aria-label="Other kinds"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: ROW2 + 4, opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          className="flex items-center gap-0.5 px-1 overflow-hidden"
+        >
+          {row2.map((item) => (
+            <button
+              key={item.name}
+              role="menuitem"
+              aria-label={item.name}
+              aria-pressed={item.checked}
+              title={item.name}
+              onClick={run(item)}
+              className={`shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              style={{ width: ROW2, height: ROW2 }}
+            >
+              <span className="scale-90">{item.icon}</span>
+            </button>
+          ))}
+        </motion.div>
+      )}
+      </AnimatePresence>
       {list.map((item) => [
         item.divider && <div key={`${item.name}-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button
           key={item.name}
           role="menuitem"
-          onClick={run(item)}
+          // (one begun by its press is not begun again by its click - but by a key, it is)
+          onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
+          onPointerDown={
+            item.press
+              ? (e) => {
+                  if (e.button !== 0) return;
+                  // (a drag from it, let go where it is put down: begun at once, the menu gone)
+                  e.preventDefault();
+                  onClose();
+                  item.press!(e);
+                }
+              : undefined
+          }
           className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none"
         >
           <span>{item.name}</span>

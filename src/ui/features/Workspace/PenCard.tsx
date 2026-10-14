@@ -6,6 +6,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { INK_WIDTHS_PT, markerColour } from "../../../lib/chem/ink";
 import type { InkMode } from "./store/types";
+import { useInFront } from "../../layouts/inFront";
 
 /** Each button's square, in px; each swatch's. */
 const SIZE = 32;
@@ -39,8 +40,10 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
   const palette = set.colours;
   // (going, it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
+  // (Escape is Done while its tab is in front: in another tab it is that tab's, the pen waiting)
+  const inFront = useInFront();
   useEffect(() => {
-    if (leaving) return;
+    if (leaving || !inFront) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -48,7 +51,7 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onDone, leaving]);
+  }, [onDone, leaving, inFront]);
   const writing = mode.tool !== "eraser";
   const marker = mode.tool === "marker";
   const own = marker ? markerColour(set) : "#141414";

@@ -20,6 +20,26 @@ import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw"
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
+/**
+ * How many times as long `run` takes on `large` as on `small`: the least
+ * processor time of five runs of each, taken by turns - so that a machine
+ * busy with other work, or a pause to collect garbage, slows neither alone.
+ */
+function slower<T>(small: T, large: T, run: (x: T) => void): number {
+  const least = [Infinity, Infinity];
+  run(small);
+  run(large);
+  for (let k = 0; k < 5; k++) {
+    [small, large].forEach((x, i) => {
+      const started = process.cpuUsage();
+      run(x);
+      const used = process.cpuUsage(started);
+      least[i] = Math.min(least[i], used.user + used.system);
+    });
+  }
+  return least[1] / least[0];
+}
+
 // a methyl on a wedge from a CH with two more carbons, and apart from them
 // an ethane
 const model: Model = {
@@ -123,6 +143,31 @@ describe("fragmentOf and partOf", () => {
       [1, 2, 3, 4],
     ]);
   });
+
+  it("find the structures of a large drawing in time in step with its size", () => {
+    // (toluenes side by side: each structure found went over every bond of
+    // the drawing again, and each atom asked for was looked for among every
+    // atom - 17 s for a thousand structures. Eight times the structures now
+    // take about eight times as long, not sixty-four)
+    const page = (n: number): Model => {
+      const atoms: Model["atoms"] = [];
+      const bonds: Model["bonds"] = [];
+      for (let m = 0; m < n; m++) {
+        const first = 7 * m + 1;
+        for (let k = 0; k < 7; k++) atoms.push(atom(first + k, 4 * m + Math.cos(k), Math.sin(k)));
+        for (let k = 0; k < 6; k++) bonds.push({ id: 1_000_000 + first + k, a: first + k, b: first + ((k + 1) % 6), order: k % 2 ? 1 : 2 });
+        bonds.push({ id: 1_000_000 + first + 6, a: first, b: first + 6, order: 1 });
+      }
+      return { atoms, bonds };
+    };
+    const found = (m: Model) => {
+      expect(fragmentsOf(m)).toHaveLength(m.atoms.length / 7);
+      const held = fragmentsHolding(m, m.atoms.map((a) => a.id));
+      expect(held).toHaveLength(m.atoms.length / 7);
+      expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
+    };
+    expect(slower(page(250), page(2000), found)).toBeLessThan(24);
+  });
 });
 
 describe("cleanUp", () => {
@@ -174,7 +219,10 @@ describe("cleanUp", () => {
       const s2 = stereo({ atoms: told.atoms.map(({ id, x, y, el }) => atom(id, x, y, el)), bonds: told.bonds as Bond[] });
       for (const [c, t] of s0) expect(sameConfiguration(t, s2.get(c)!), `${name} ${c}, flat`).toBe(true);
     }
-  });
+    // (the whole engine on each of the cages, drawn and read back: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
     // cocaine drawn flat has an H on each bridgehead, to carry its wedge;
@@ -195,6 +243,28 @@ describe("cleanUp", () => {
     expect(laid.atoms.some((a) => a.z != null)).toBe(true);
     const [s0, s1] = [stereo(flat), stereo(laid)];
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!), `${c}`).toBe(true);
+  });
+
+  it("lays out phenyl azide that has just arrived with its azide bent: no cis or trans to keep there", async () => {
+    // RDKit's drawing as it may come, N(-)=N(+)=N off a straight line
+    const ring = Array.from({ length: 6 }, (_, i) => atom(i + 1, 1.8 * Math.cos((i * Math.PI) / 3), 1.8 * Math.sin((i * Math.PI) / 3)));
+    const model: Model = {
+      atoms: [...ring, atom(7, 3.6, 0, "N"), { ...atom(8, 5.2, 0.6, "N"), charge: 1 }, { ...atom(9, 6.8, 0.2, "N"), charge: -1 }],
+      bonds: [
+        ...ring.map((_, i): Bond => ({ id: 100 + i, a: i + 1, b: ((i + 1) % 6) + 1, order: i % 2 ? 1 : 2 })),
+        { id: 106, a: 1, b: 7, order: 1 },
+        { id: 107, a: 7, b: 8, order: 2 },
+        { id: 108, a: 8, b: 9, order: 2 },
+      ],
+    };
+    const laid = await laidOut(model);
+    expect(laid.atoms).toHaveLength(9);
+    // and drawn straight, as an azide is: N-N-N 180 degrees
+    const at = (id: number) => laid.atoms.find((a) => a.id === id)!;
+    const [p, q, r] = [at(7), at(8), at(9)];
+    const cos = ((p.x - q.x) * (r.x - q.x) + (p.y - q.y) * (r.y - q.y)) / Math.hypot(p.x - q.x, p.y - q.y) / Math.hypot(r.x - q.x, r.y - q.y);
+    const t = Math.acos(Math.max(-1, Math.min(1, cos)));
+    expect((t * 180) / Math.PI).toBeGreaterThan(175);
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
@@ -251,7 +321,10 @@ describe("cleanUp", () => {
     // (OBz and OAc side by side on a line, a hair - 0.005 of a bond - within
     // the space reckoned between two names: not letters running together)
     expect(crowding(1) - crowding(0)).toBeLessThan(0.05);
-  });
+    // (the whole engine on taxol, each of its ways of being written: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
 
   it("cleans up taxol drawn any which way with its names and its ring-fusion H clear of one another", async () => {
     // (a drawing a reader cleaned up to find C3's H standing on the A of

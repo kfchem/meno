@@ -6,9 +6,10 @@
  * arrow its conditions, the rest where they stand. Everything stays in the
  * page's points, y down, as the figure was drawn.
  */
+import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 import { figureBond, readFigure, type FigureRead } from "./read";
-import type { GlyphShape } from "./glyphs";
+import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import type { ArrowForm, ArrowWeight } from "../chem/reactionArrow";
 import type { WordsMark, WordsStyle } from "../chem/captions";
 import { marksOf } from "../chem/captions";
@@ -38,10 +39,11 @@ const along = (p: Point, u: Point, t: number): Point => ({ x: p.x + u.x * t, y: 
 type Line = { a: Point; b: Point; w: number; ink?: string; dash: boolean; of: object[] };
 
 /** A head's outline as it may be at a line's end: its points, whether it is drawn open (a chevron), and what it was drawn as. */
-type HeadShape = { pts: Point[]; open: boolean; of: object[] };
+/** What may be a head: its outline's points, whether it is open, what it was drawn as - and, a wedge, from its wide end to its narrow one. */
+type HeadShape = { pts: Point[]; open: boolean; of: object[]; axis?: { base: Point; tip: Point } };
 
-/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, and what it was drawn as. */
-type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[] };
+/** A head found at a line's end: its point, whole or half (and on which side of the line, as the page has it), how long, what it was drawn as, and - filled - its outline. */
+type Head = { tip: Point; side: 0 | 1 | -1; open: boolean; length: number; of: object[]; outline?: Point[] };
 
 /** Points' hull, anticlockwise as the page's y goes down. */
 function hull(pts: readonly Point[]): Point[] {
@@ -127,16 +129,22 @@ function colourOf(ink: string | undefined): string | undefined {
  * outline; or a single barb, a half head's. Its point lies on the line
  * ahead of the end, or at it, and its back by the end.
  */
+/** How nearly along the line a wedge-shaped head points, from its wide end to its narrow one: within 35 degrees (a half head's leans off it by half its width). */
+const HEAD_ALONG = Math.cos((35 * Math.PI) / 180);
+
 function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], barbs: readonly Stroke[], bond: number): Head | null {
   const tol = Math.max(0.06 * bond, 2 * w);
   let best: (Head & { off: number }) | null = null;
   for (const h of shapes) {
+    // (a wedge pointing along the line, its narrow end ahead - not a stereo bond going off the same atom, sideways or straight on)
+    if (h.axis && dot(unit(h.axis.base, h.axis.tip), u) < HEAD_ALONG) continue;
     const ts = h.pts.map((p) => dot(sub(p, e), u));
     const cs = h.pts.map((p) => cross(u, sub(p, e)));
     const i = ts.indexOf(Math.max(...ts));
     const tip = h.pts[i];
     const length = ts[i] - Math.min(...ts);
-    if (length < 0.08 * bond || length > 1.1 * bond) continue;
+    // (a head may be small beside the bonds - RDKit's reaction drawing sets a head a twelfth of a bond long - but not under two of its lines' widths)
+    if (length < Math.min(0.08 * bond, 2 * w) || length > 1.1 * bond) continue;
     // (its point ahead of the end, or at it, on the line; its back by the end)
     if (ts[i] < -tol || Math.min(...ts) > 0.35 * length + tol || ts[i] > 1.4 * length + tol) continue;
     if (Math.abs(cs[i]) > Math.max(0.18 * length, 1.5 * w)) continue;
@@ -149,7 +157,7 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     const wide = side === 0 ? (left + right) / length : Math.max(left, right) / length;
     if (wide < (side === 0 ? 0.33 : 0.15)) continue;
     const off = Math.abs(cs[i]) + Math.abs(ts[i]) * 0.1;
-    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off };
+    if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off, ...(h.open ? {} : { outline: h.pts }) };
   }
   if (best) {
     const { off: _off, ...head } = best;
@@ -204,7 +212,7 @@ function middleOf(path: readonly Point[]): Point {
 function outlineArrow(b: Blob, bond: number): Found | null {
   if (b.parts.length !== 1 || b.pts.length < 5) return null;
   const { u, mid, long, short } = narrowestBox(b.pts);
-  if (long < 1.0 * bond || long < 4 * short) return null;
+  if (long < 1.0 * bond || long < 2.5 * short) return null;
   const pts = b.pts;
   const at = (t: number): [number, number] | null => {
     const cs: number[] = [];
@@ -227,20 +235,35 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   const middle = rows.filter((r) => Math.abs(r.t) < long / 4);
   if (middle.length < 4) return null;
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-  const lo = median(middle.map((r) => r.c[0]));
-  const hi = median(middle.map((r) => r.c[1]));
-  const width = hi - lo;
+  const width = median(middle.map((r) => r.c[1] - r.c[0]));
   if (width > 0.25 * bond) return null;
+  // (the line's middle along it, fitted: the box round the outline may lean a little off the line - fitted to the line's
+  // own rows, as wide as it, a short harpoon's half head reaching into the middle left out)
+  const shaft = rows.filter((r) => Math.abs(r.c[1] - r.c[0] - width) <= 0.25 * width);
+  const fit = shaft.length >= 4 ? shaft : middle;
+  const n0 = fit.length;
+  const mt = fit.reduce((a, r) => a + r.t, 0) / n0;
+  const mc = fit.reduce((a, r) => a + (r.c[0] + r.c[1]) / 2, 0) / n0;
+  const slope = fit.reduce((a, r) => a + (r.t - mt) * ((r.c[0] + r.c[1]) / 2 - mc), 0) / Math.max(1e-9, fit.reduce((a, r) => a + (r.t - mt) ** 2, 0));
+  const centreAt = (t: number) => mc + slope * (t - mt);
+  const hiAt = (t: number) => centreAt(t) + width / 2;
+  const loAt = (t: number) => centreAt(t) - width / 2;
   const reach = Math.max(width, 0.06 * bond);
+  // (across it at its corners too, a hair either side of each: an outline is widest at one - a half head at its back, which rows
+  // a long arrow's length apart may miss)
+  const atCorners = pts
+    .flatMap((p) => [dot(sub(p, mid), u) - 1e-3 * long, dot(sub(p, mid), u) + 1e-3 * long])
+    .map((t) => ({ t, c: at(t) }))
+    .filter((r): r is { t: number; c: [number, number] } => !!r.c);
   // (a head at an end: wider there than the line, on one side or both)
   const headOf = (sign: 1 | -1): { side: 0 | 1 | -1; tip: Point; length: number } | null => {
-    const end = rows.filter((r) => sign * r.t > long / 2 - 0.35 * long);
-    const up = Math.max(...end.map((r) => r.c[1] - hi));
-    const down = Math.max(...end.map((r) => lo - r.c[0]));
+    const end = [...rows, ...atCorners].filter((r) => sign * r.t > long / 2 - 0.35 * long);
+    const up = Math.max(...end.map((r) => r.c[1] - hiAt(r.t)));
+    const down = Math.max(...end.map((r) => loAt(r.t) - r.c[0]));
     if (up < reach && down < reach) return null;
     const ts = pts.map((p) => sign * dot(sub(p, mid), u));
     const tip = pts[ts.indexOf(Math.max(...ts))];
-    const wide = end.filter((r) => r.c[1] - hi > 0.5 * reach || lo - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
+    const wide = end.filter((r) => r.c[1] - hiAt(r.t) > 0.5 * reach || loAt(r.t) - r.c[0] > 0.5 * reach).map((r) => sign * r.t);
     // (as the page has it, the side its point's way: 1 its left)
     const left = sign === 1 ? up : down;
     const right = sign === 1 ? down : up;
@@ -251,10 +274,9 @@ function outlineArrow(b: Blob, bond: number): Found | null {
   if (!ahead && !behind) return null;
   const [front, back, sign] = ahead ? [ahead, behind, 1] : [behind!, null, -1];
   const way = sign === 1 ? u : { x: -u.x, y: -u.y };
-  const centre = (lo + hi) / 2;
-  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centre);
+  const tail = back ? back.tip : along(along(mid, way, -long / 2), { x: -u.y, y: u.x }, centreAt(-sign * long / 2));
   const line: Line = { a: tail, b: front.tip, w: width, ...(b.ink ? { ink: b.ink } : {}), dash: false, of: [b] };
-  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [] });
+  const head = (h: { side: 0 | 1 | -1; tip: Point; length: number }): Head => ({ tip: h.tip, side: h.side, open: false, length: h.length, of: [], outline: pts });
   return { lines: [line], path: [tail, front.tip], head: head(front), tailHead: back ? head(back) : null };
 }
 
@@ -265,12 +287,33 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   const dashed = dashedLines(shapes.strokes, bond);
   const inDashes = new Set(dashed.flatMap((l) => l.of));
   const lines: Line[] = [
-    ...shapes.strokes.filter((s) => !inDashes.has(s) && len(s) > 0.1 * bond).map((s): Line => ({ a: s.a, b: s.b, w: s.w, ...(s.ink ? { ink: s.ink } : {}), dash: !!s.dash, of: [s] })),
+    ...shapes.strokes.filter((s) => !inDashes.has(s) && len(s) > Math.min(0.1 * bond, 2.5 * s.w)).map((s): Line => ({ a: s.a, b: s.b, w: s.w, ...(s.ink ? { ink: s.ink } : {}), dash: !!s.dash, of: [s] })),
     ...dashed,
   ];
+  const near = Math.max(0.06 * bond, 2 * lineWidth);
+  // (whether a point lies on a shape's outline)
+  const onOutline = (p: Point, poly: readonly Point[]) =>
+    poly.some((a, i) => {
+      const b = poly[(i + 1) % poly.length];
+      const l = dist(a, b);
+      if (!(l > 0)) return dist(p, a) < near;
+      const v = unit(a, b);
+      return dist(p, along(a, v, Math.max(0, Math.min(l, dot(sub(p, a), v))))) < near;
+    });
+  // (a stereo bond's wedge: a line ends at its narrow end - its stereocentre's other bond - other than along it, as an arrow's own line under its
+  // head may, or along its own edge, as where a head is stroked as well as filled)
+  const atCentre = (x: Wedge) => {
+    const ax = unit(x.base, x.tip);
+    return shapes.strokes.some((s) =>
+      [
+        [s.a, s.b],
+        [s.b, s.a],
+      ].some(([p, q]) => dist(p, x.tip) < near && Math.abs(cross(ax, unit(q, p))) > Math.sin((20 * Math.PI) / 180) && !(x.outline && onOutline(q, x.outline))),
+    );
+  };
   // what may be a head: filled shapes no longer than a bond - a wedge's outline, a blob of one part - and chevrons of two strokes
   const filled: HeadShape[] = [
-    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x] })),
+    ...shapes.wedges.filter((x: Wedge) => x.outline && dist(x.tip, x.base) < 1.2 * bond && !atCentre(x)).map((x): HeadShape => ({ pts: hull(x.outline!), open: false, of: [x], axis: { base: x.base, tip: x.tip } })),
     ...shapes.blobs
       .filter((b: Blob) => b.parts.length === 1 && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 1.2 * bond && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) > 0.06 * bond)
       .map((b): HeadShape => {
@@ -296,13 +339,42 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const [tip, pf, , qf] = hit;
       const angle = Math.acos(Math.max(-1, Math.min(1, dot(unit(tip, pf), unit(tip, qf)))));
       if (angle < (20 * Math.PI) / 180 || angle > (120 * Math.PI) / 180) continue;
+      // (not two bonds of an atom other bonds end at too: only its own line may, coming to its point from between its strokes)
+      const back = unit({ x: (pf.x + qf.x) / 2, y: (pf.y + qf.y) / 2 }, tip);
+      const atAtom = lines.some((m) => {
+        if (m === p || m === q) return false;
+        const [at, far] = dist(m.a, tip) < dist(m.b, tip) ? [m.a, m.b] : [m.b, m.a];
+        return dist(at, tip) < tol && dot(unit(far, at), back) < Math.cos((20 * Math.PI) / 180);
+      });
+      if (atAtom) continue;
       chevrons.push({ pts: [tip, pf, qf], open: true, of: [...p.of, ...q.of] });
     }
   }
   const heads = [...filled, ...chevrons];
-  const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o));
+  // (a barb ends in the open: a short stroke both of whose ends meet others - or go on across a gap, as a bond broken where another passes
+  // in front of it does - is a bond's)
+  const goesOn = (p: Point, s: Stroke, t: Stroke) => {
+    const out = unit(dist(s.a, p) < dist(s.b, p) ? s.b : s.a, p);
+    if (Math.abs(cross(out, unit(t.a, t.b))) > Math.sin((6 * Math.PI) / 180)) return false;
+    const q = dist(t.a, p) < dist(t.b, p) ? t.a : t.b;
+    const ahead = dot(sub(q, p), out);
+    return ahead > 0 && ahead < 0.4 * bond && Math.abs(cross(out, sub(q, p))) < near;
+  };
+  const meets = (p: Point, s: Stroke) => shapes.strokes.some((t) => t !== s && (dist(t.a, p) < near || dist(t.b, p) < near || goesOn(p, s, t)));
+  const barbs = shortLines.flatMap((l) => l.of.filter((o): o is Stroke => "a" in o && "b" in o)).filter((s) => !(meets(s.a, s) && meets(s.b, s)));
   const taken = (l: Line) => l.of.some((o) => used.has(o));
-  const near = Math.max(0.06 * bond, 2 * lineWidth);
+  // (an open head that another line beside this one ends within too, the other side of its point, this line's end off its middle: a retrosynthesis's, read below)
+  const sharedOpenHead = (l: Line, e: Point, u: Point, head: Head) => {
+    const ce = cross(u, sub(e, head.tip));
+    if (!head.open || Math.abs(ce) < Math.max(l.w, 0.03 * bond)) return false;
+    return lines.some((m) => {
+      if (m === l || taken(m) || len(m) < 0.8 * bond || Math.abs(cross(u, unit(m.a, m.b))) > Math.sin((5 * Math.PI) / 180)) return false;
+      const me = dist(m.a, head.tip) < dist(m.b, head.tip) ? m.a : m.b;
+      const t = dot(sub(head.tip, me), u);
+      const cm = cross(u, sub(me, head.tip));
+      return t > -near && t < head.length + near && cm * ce < 0 && Math.abs(cm) < 2 * Math.abs(ce) + near;
+    });
+  };
 
   // arrows drawn as one outline each
   const found: Found[] = [];
@@ -324,7 +396,10 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const u = unit(from, e);
       const free = heads.filter((h) => !h.of.some((o) => used.has(o) || l.of.includes(o)));
       const head = headAt(e, u, l.w, free, barbs.filter((b) => !used.has(b) && !l.of.includes(b)), bond);
-      if (!head) continue;
+      if (!head || sharedOpenHead(l, e, u, head)) continue;
+      // (nothing but its head where its line ends there - another line ending by it there too: an atom, its bonds a structure's)
+      const own = (m: Line) => head.of.some((o) => m.of.includes(o)) || (!!head.outline && onOutline(m.a, head.outline) && onOutline(m.b, head.outline));
+      if (lines.some((m) => m !== l && !taken(m) && !own(m) && (dist(m.a, e) < near || dist(m.b, e) < near))) continue;
       // (back along it: through a corner where one line, and only one, goes on from its end)
       const chain: Line[] = [l];
       const path: Point[] = [e, from];
@@ -433,7 +508,8 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     const m = middleOf(path);
     const total = path.slice(1).reduce((s, p, i) => s + dist(path[i], p), 0);
     const by = (p: Point) => dist(p, m) < 0.25 * total;
-    const crossing = shortLines.filter((l) => !taken(l) && by({ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 }) && len(l) < 0.7 * bond);
+    // (each stroke short - as Meno draws a cross on an arrow with a wide head, up to most of a bond)
+    const crossing = shortLines.filter((l) => !taken(l) && by({ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 }));
     let marked = false;
     for (let i = 0; i < crossing.length && !marked; i++) {
       for (let j = i + 1; j < crossing.length && !marked; j++) {
@@ -449,7 +525,19 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       }
     }
     if (!marked) {
-      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }));
+      // (a letter x on the line itself, standing alone - not one in words over the arrow, as in 3 x 10 min)
+      const onLine = (l: FigureLetter) => {
+        const c = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
+        const off = Math.min(...path.slice(1).map((q, i) => {
+          const p = path[i];
+          const u = unit(p, q);
+          const t = Math.max(0, Math.min(dist(p, q), dot(sub(c, p), u)));
+          return dist(c, along(p, u, t));
+        }));
+        return off < 0.35 * l.size;
+      };
+      const alone = (l: FigureLetter) => !letters.some((m) => m !== l && Math.abs(baseOf(m) - baseOf(l)) < 0.5 * l.size && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 0.5 * l.size);
+      const x = letters.find((l) => !usedLetters.has(l) && /^[x×✕✗X]$/u.test(l.c) && by({ x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 }) && onLine(l) && alone(l));
       if (x) {
         usedLetters.add(x);
         marked = true;
@@ -457,8 +545,10 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     }
     if (marked) a.form = { ...a.form, kind: "noReaction" };
   }
-  // what the arrows were drawn with, all of it
+  // what the arrows were drawn with, all of it - and the strokes along a filled head's edges, where its path is stroked as well as filled
   for (const f of found) for (const l of f.lines) for (const o of l.of) used.add(o);
+  const outlines = found.flatMap((f) => [f.head.outline, f.tailHead?.outline]).filter((o): o is Point[] => !!o && o.length > 2);
+  for (const s of shapes.strokes) if (!used.has(s) && len(s) < 1.2 * bond && outlines.some((o) => onOutline(s.a, o) && onOutline(s.b, o))) used.add(s);
   return { arrows, used, usedLetters };
 }
 
@@ -482,9 +572,10 @@ export function plusesOf(shapes: Shapes, bond: number, used: ReadonlySet<object>
       const pm = { x: (p.a.x + p.b.x) / 2, y: (p.a.y + p.b.y) / 2 };
       const qm = { x: (q.a.x + q.b.x) / 2, y: (q.a.y + q.b.y) / 2 };
       if (dist(pm, qm) > 0.15 * len(p)) continue;
-      // (nothing else ends by it)
+      // (nothing else ends by it - at its arms' ends, as bonds crossing at their middles have other bonds there; a molecule may stand
+      // a little past them, as RDKit's reaction drawing sets a "+")
       const own = [p.a, p.b, q.a, q.b];
-      const r = 0.6 * Math.max(len(p), len(q)) + 0.15 * bond;
+      const r = 0.65 * Math.max(len(p), len(q));
       if (ends.some((e) => !own.includes(e) && dist(e, pm) < r)) continue;
       taken.add(p);
       taken.add(q);
@@ -522,14 +613,37 @@ type Row = { letters: FigureLetter[]; size: number; base: number; box: Box };
 
 const baseOf = (l: FigureLetter) => l.at?.[1] ?? l.box[3];
 
-/** Letters set in lines - each with its smaller letters set high or low - and lines broken where a gap is wide. */
-function rowsOf(letters: readonly FigureLetter[]): Row[] {
+const boxMiddle = (b: Box): Point => ({ x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2 });
+
+/** Whether two stretches cross each other. */
+function stretchesCross(p: Point, q: Point, a: Point, b: Point): boolean {
+  const pq = sub(q, p);
+  const ab = sub(b, a);
+  return cross(pq, sub(a, p)) * cross(pq, sub(b, p)) < 0 && cross(ab, sub(p, a)) * cross(ab, sub(q, a)) < 0;
+}
+
+/** Whether an arrow's line passes between two points: words on either side of it are not one line, nor one block. */
+function arrowBetween(arrows: readonly SchemeArrow[], p: Point, q: Point): boolean {
+  return arrows.some((a) => {
+    const path = [a.tail, ...a.corners, a.point];
+    return path.slice(1).some((b, i) => stretchesCross(p, q, path[i], b));
+  });
+}
+
+/** Letters set in lines - each with its smaller letters set high or low - and lines broken where a gap is wide, or an arrow's line passes between. */
+function rowsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[] = []): Row[] {
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
   const usual = sizes[Math.floor(sizes.length / 2)] ?? 10;
   const main = letters.filter((l) => l.size >= 0.85 * usual || !letters.some((m) => m !== l && m.size > l.size * 1.15 && Math.abs(baseOf(m) - baseOf(l)) < m.size));
   const rows: Row[] = [];
   for (const l of [...main].sort((p, q) => p.box[0] - q.box[0])) {
-    const r = rows.find((r) => Math.abs(r.base - baseOf(l)) < 0.3 * Math.max(r.size, l.size) && l.box[0] - r.box[2] < 1.2 * Math.max(r.size, l.size) && l.box[0] - r.box[2] > -0.5 * r.size);
+    const r = rows.find(
+      (r) =>
+        Math.abs(r.base - baseOf(l)) < 0.3 * Math.max(r.size, l.size) &&
+        l.box[0] - r.box[2] < 1.2 * Math.max(r.size, l.size) &&
+        l.box[0] - r.box[2] > -0.5 * r.size &&
+        !arrowBetween(arrows, boxMiddle(r.letters[r.letters.length - 1].box), boxMiddle(l.box)),
+    );
     if (r) {
       r.letters.push(l);
       r.size = Math.max(r.size, l.size);
@@ -569,7 +683,10 @@ function rowText(r: Row): { text: string; styles: (WordsStyle | undefined)[] } {
       prev = l;
       continue;
     }
-    if (prev && prev.c.trim() && l.box[0] - prev.box[2] > 0.2 * r.size && !text.endsWith(" ")) {
+    // (a space where the letters stand apart: by how they are set, where the figure says - a 1's ink stands well inside its room - else by their ink)
+    const gap = prev?.loose && l.loose ? l.loose[0] - prev.loose[2] : prev ? l.box[0] - prev.box[2] : 0;
+    const apart = prev?.loose && l.loose ? 0.15 * r.size : 0.2 * r.size;
+    if (prev && prev.c.trim() && gap > apart && !text.endsWith(" ")) {
       text += " ";
       styles.push(undefined);
     }
@@ -591,8 +708,8 @@ function rowText(r: Row): { text: string; styles: (WordsStyle | undefined)[] } {
   return { text: text.trimEnd(), styles: styles.slice(0, text.trimEnd().length) };
 }
 
-/** Lines stacked into blocks: one under another, close, overlapping across. */
-function blocksOf(rows: readonly Row[]): Row[][] {
+/** Lines stacked into blocks: one under another, close, overlapping across - no arrow's line between them. */
+function blocksOf(rows: readonly Row[], arrows: readonly SchemeArrow[] = []): Row[][] {
   const sorted = [...rows].sort((p, q) => p.box[1] - q.box[1]);
   const blocks: Row[][] = [];
   for (const r of sorted) {
@@ -600,7 +717,13 @@ function blocksOf(rows: readonly Row[]): Row[][] {
       const last = b[b.length - 1];
       const gap = r.box[1] - last.box[3];
       const over = Math.min(r.box[2], last.box[2]) - Math.max(r.box[0], last.box[0]);
-      return gap < 0.6 * Math.max(r.size, last.size) && gap > -0.3 * r.size && over > -0.5 * r.size && Math.abs(r.size - last.size) < 0.3 * r.size;
+      return (
+        gap < 0.6 * Math.max(r.size, last.size) &&
+        gap > -0.3 * r.size &&
+        over > -0.5 * r.size &&
+        Math.abs(r.size - last.size) < 0.3 * r.size &&
+        !arrowBetween(arrows, boxMiddle(last.box), boxMiddle(r.box))
+      );
     });
     if (b) b.push(r);
     else blocks.push([r]);
@@ -617,18 +740,20 @@ function wordsStretch(a: SchemeArrow): { a: Point; b: Point } {
 }
 
 /**
- * The words of a scheme: its letters left over, set in lines and blocks;
- * a "+" alone a sign; a block over or under an arrow - within its longest
- * stretch, not across it, near - that arrow's; each written as Meno
- * writes words typed (lib/text/smartWords `writtenAsMeant`).
+ * The words of a scheme: its letters left over, set in lines and blocks -
+ * none across an arrow's line; a "+" alone, as large as the figure's
+ * letters (`usual`, theirs all told: a charge is set smaller), a sign; a
+ * block over or under an arrow - alongside its longest stretch, not
+ * across it, near - that arrow's; each written as Meno writes words typed
+ * (lib/text/smartWords `writtenAsMeant`).
  */
-export function wordsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[]): { words: SchemeWords[]; pluses: Point[] } {
-  const rows = rowsOf(letters);
+export function wordsOf(letters: readonly FigureLetter[], arrows: readonly SchemeArrow[], usual?: number): { words: SchemeWords[]; pluses: Point[] } {
+  const rows = rowsOf(letters, arrows);
   const words: SchemeWords[] = [];
   const pluses: Point[] = [];
   const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
-  const usual = sizes[Math.floor(sizes.length / 2)] ?? 10;
-  for (const block of blocksOf(rows)) {
+  usual ??= sizes[Math.floor(sizes.length / 2)] ?? 10;
+  for (const block of blocksOf(rows, arrows)) {
     const lines = block.map(rowText);
     const text = lines.map((l) => l.text).join("\n");
     if (!text.trim()) continue;
@@ -655,6 +780,9 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
         { x: box[0], y: box[3] },
         { x: box[2], y: box[3] },
       ];
+      // (some of it alongside the stretch: not all of it before its tail or past its point, as a compound's number by it may be)
+      const ts = corners.map((p) => dot(sub(p, s.a), u));
+      if (Math.max(...ts) <= 0 || Math.min(...ts) >= l) return;
       const cs = corners.map((p) => cross(u, sub(p, s.a)));
       if (Math.min(...cs) < 0 && Math.max(...cs) > 0) return;
       const off = Math.min(...cs.map(Math.abs));
@@ -673,29 +801,63 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
   return { words, pluses };
 }
 
+/** What a molecule written as words beside a "+" is marked with. */
+export const WRITTEN_AS_WORDS = 'Written as words beside a "+": read as a molecule.';
+
 /**
  * A figure read as a scheme: its arrows and "+" signs taken out of what it
  * is drawn with, its structures read from the rest (./read), and the
  * letters no structure took read as words - its conditions, its compounds'
- * numbers, and anything else written there.
+ * numbers, and anything else written there. A word that a "+" joins to the
+ * rest on a side of the scheme - over or under no arrow - and that reads as
+ * a whole molecule (`whole`: H2O, HCl, I-) is that molecule, marked as
+ * written as words; words over or under an arrow stay words.
  */
-export function readScheme(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = []): SchemeRead {
+export function readScheme(
+  drawn: FigureDrawn,
+  reads: (label: string) => boolean = () => true,
+  known: readonly GlyphShape[] = [],
+  whole: (label: string) => boolean = () => false,
+): SchemeRead {
   const shapes = shapesOf(drawn);
   // (how long its bonds are drawn: as most of its lines are - unless, its letters telling, those are arrows, there being no structure)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const byLetters = sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 0;
   const byLines = figureBond(shapes, drawn.letters);
-  const bond = byLines && !(byLetters && byLines > 2 * byLetters) ? byLines : byLetters || byLines || 14.4;
+  // (three lines that long or more, each meeting another long line at an end - a structure's bonds at their joints; an arrow's line
+  // meets only its head's short strokes - tell it, however small the letters by them)
+  const long = shapes.strokes.filter((s) => len(s) > 0.5 * byLines);
+  const meetsLong = (s: Stroke) => long.some((t) => t !== s && [t.a, t.b].some((q) => dist(q, s.a) < 0.12 * len(s) || dist(q, s.b) < 0.12 * len(s)));
+  const joints = long.filter((s) => Math.abs(len(s) - byLines) <= byLines / 4 && meetsLong(s)).length;
+  // (but never more than six times as long as its letters are set: lines that long meeting - a page's rules, a graph's frame - are no bonds)
+  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || (joints >= 3 && byLines <= 6 * byLetters)) ? byLines : byLetters || byLines || 14.4;
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;
-  const { arrows, used, usedLetters } = arrowsOf(shapes, drawn.letters, bond, lineWidth);
-  const signs = plusesOf(shapes, bond, used);
+  // (charges drawn in rings, kept from the arrows and the signs: the structure's - lib/figure/charges)
+  const marked = withoutMarks(shapes, chargeMarks(shapes, bond));
+  // (letters drawn as outlines and read surely from their shapes - an S, a C, an N of one part - no arrow's head, however like one)
+  const asLetters = new Set((known.length ? shapeLetters(marked, bond, known) : []).filter((l) => /^[A-Za-z0-9]$/.test(l.c) && sureEnough(l)).flatMap((l) => l.from));
+  const free = asLetters.size ? without(marked, asLetters) : marked;
+  const { arrows, used, usedLetters } = arrowsOf(free, drawn.letters, bond, lineWidth);
+  const signs = plusesOf(free, bond, used);
   for (const o of signs.taken) used.add(o);
   const rest = without(shapes, used);
   const figure = readFigure({ ...drawn, letters: drawn.letters.filter((l) => !usedLetters.has(l)) }, reads, known, rest);
-  const { words, pluses } = wordsOf(figure.left.letters, arrows);
-  return { figure: { ...figure, left: { letters: [] } }, arrows, pluses: [...signs.pluses, ...pluses], words, bond: figure.bond || bond };
+  const { words: all, pluses } = wordsOf(figure.left.letters, arrows, sizes[Math.floor(sizes.length / 2)]);
+  // (a "+" on its line, within a bond of it - or two and a half of its letters' height, where that is further - joins it to the rest)
+  const signed = [...signs.pluses, ...pluses];
+  const atBond = figure.bond || bond;
+  const joined = (w: SchemeWords) =>
+    signed.some((p) => {
+      const h = w.box[3] - w.box[1];
+      return p.y > w.box[1] - 0.3 * h && p.y < w.box[3] + 0.3 * h && Math.max(w.box[0] - p.x, p.x - w.box[2]) < Math.max(atBond, 2.5 * h);
+    });
+  const label = (w: SchemeWords) => w.text.replace(/\s+/g, "").replace(/[\u2212\u2013]/g, "-");
+  const molecules = all.filter((w) => w.arrow == null && !w.text.includes("\n") && joined(w) && whole(label(w)));
+  const written = molecules.map((w) => ({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2, label: label(w), box: w.box, unsure: [WRITTEN_AS_WORDS] }));
+  const words = all.filter((w) => !molecules.includes(w));
+  return { figure: { ...figure, atoms: [...figure.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */

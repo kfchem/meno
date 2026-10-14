@@ -51,6 +51,7 @@ src/
                           and catalogues (guide.ts, guides.ts)
   ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
+  lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
@@ -85,6 +86,7 @@ src-tauri/
   src/fonts.rs            the system's typefaces
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
+  src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
   capabilities/           permission sets for the main window
   resources/py/           the lock files of Meno's own Python profiles (the console's, workflows');
                           uv and pixi are not bundled but fetched the first time an environment
@@ -111,6 +113,11 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. Workflow tabs pass the same flag to
   the canvases embedded in their nodes through `NodeActiveContext`.
+- What is drawn deep in a view and hears keys on the window - a question
+  (`ui/layouts/asking`), a card over the canvas - asks `InFront`
+  (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
+  tab behind waits, unanswered, the keys the tab's in front, Escape too,
+  until its own tab comes back.
 - Because every live canvas holds a WebGL context and browsers keep only about
   16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
   past the limit is refused with a notice rather than silently blanking the
@@ -167,7 +174,8 @@ white - title bar, tabs and all - with no way back but quitting.
 Meno's notices are (`StoppedCard`): what stopped, that what it showed is
 kept, the error in grey beneath, and **Reload**, which makes the part again
 from nothing. Each logs the error with `console.error`, naming the part
-("Meno: the canvas stopped working.") and where in the tree it was.
+("Meno: the canvas stopped working.") and where in the tree it was - into
+Meno's log too (*Meno's log*).
 
 | Part | Where | Its card | Reload also |
 | --- | --- | --- | --- |
@@ -203,13 +211,59 @@ Nothing a part shows lives in the part, so a part made again shows the same:
   being typed, words being carried out of a PDF, Quick Add, a workflow
   menu and a PDF's menu asked for go with it; what is selected (words in
   a PDF and pictures too), how the molecules in 3D are turned and the
-  column stay.
+  column stay. A gesture lost while the canvas stays - the window left,
+  the pointer taken from it - is let go by its own Escape, and the flags
+  it leaves are cleared (`endGestures`, `letLostGesturesGo` in
+  store/gesture): a flag left set would take every undo after it.
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
-there is none yet: its document is kept while Meno runs, but Save is the
-canvas's own (`useFileActions`, `setSaver`), and so is not there until the
-canvas draws again.
+there is none yet, but its document is kept while Meno runs, and Save is
+the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
+`useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
+the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
+the document, and a save that fails says so under the canvas's card.
+
+## Meno's log
+
+A release started from the Finder or Explorer has no terminal, so what
+Meno says of itself is written to a file as well, `<app data>/logs/meno.log`
+(on a Mac in `~/Library/Application Support/com.kfchem.meno/logs/`, on
+Windows in `%APPDATA%\com.kfchem.meno\logs\`). Everything still goes where it
+went before, to stderr and the page's console.
+
+- **What goes in**: a line saying which Meno started (its version, the
+  system and the processor); the backend's own lines (`logfile::logged!`,
+  where `eprintln!` was) and a panic, with where it happened; and the
+  page's `console.error` and `console.warn`, and errors thrown and never
+  caught (`lib/log.ts`, set going by the first module `main.tsx` imports,
+  through `log_page`). Each line has the time in UTC and what it came
+  from: `meno`, `page error` or `page warn`.
+- **Nothing from documents, nor files' names**: a line says what went
+  wrong. Of an error it has the name and the stack's frames; the message
+  only of a `TypeError`, `ReferenceError` or `RangeError` - the engine's,
+  about the code that ran - and of that, what it quotes in double quotes
+  left out, as any other message may quote what was read (a file's text, a
+  SMILES, a name). Of words logged it has only Meno's own messages (`KNOWN`
+  in `lib/log.ts`, a tab's name in them left out), any others as `[text]`;
+  a number as it is; and of any other thing only what it is (`[Object]`,
+  `[Map]`). A message newly logged by Meno's code is added to `KNOWN`.
+- **Under 5 MB**: past that the log is begun again, the one before kept as
+  `meno.log.1`, one only. Where it cannot be moved there it is emptied,
+  and where it cannot be emptied either nothing more is written until Meno
+  starts again. The file is opened for each line and closed, its size read
+  from it each time, as another Meno - one Office started, on Windows - may
+  write to it too. The page sends at most 100 lines a minute; those past
+  that are counted, and the next line says how many were left out. A line
+  from the page is cut at 4000 bytes.
+- The log is begun before Tauri is built, in the data folder as the system
+  says it (its folder for apps' data, and Meno's identifier), so that a
+  panic as Meno starts is in it; where Tauri has the folder elsewhere it
+  carries on there. Lines from before either, in the first moments, are
+  kept, up to 200, and written once it is begun.
+- **Settings > General, *Open log folder*** shows the log in the Finder or
+  Explorer (`log_spot`: the log itself, or its folder, made first where
+  there is none yet), to send with a report. Meno shows no log of its own.
 
 ## How things move
 
@@ -249,6 +303,19 @@ moves together, in the same time and the same way.
   invalidates only while something moves (see *Frame loop*). The drawing
   itself goes from shape to shape in `DrawnLayout` (`utils/glide.ts`), and
   a fit goes there through `components/viewGoal.ts`.
+  A layer of many parts - shapes, writing by hand, words on the page - has
+  one frame callback for them all (`components/partFrames.ts`): a part has
+  work at each frame (`usePartFrame`) only while something of it moves - a
+  light coming and going, a press held (`HeldGlow`) - and none at rest. Its
+  parts are drawn again only as they change (`memo`), share what they draw
+  with where they can (`SQUARE`, `UNSEEN`; the selected shapes' handles in
+  one set of instances), and take a press by the box they give as it comes
+  (`boxRaycast`), at the zoom of the press, not by a plane made again as
+  the view zooms. What of them is sized on the screen - a light, a
+  handle, a caption's edge - is there only while it is shown, and drawn at
+  the zoom the drawing is taken up at (`useDrawnZoom`), so a part at rest
+  is not drawn again as the view zooms. `manyParts.test.tsx` counts what
+  they make.
 
 ## Pointers
 
@@ -260,7 +327,7 @@ what a drag there does, not what grabs it, and none is a hand:
 | Pointer | Where | The system's behind it |
 | --- | --- | --- |
 | `turn`, a ring with its arrowhead | over a molecule in 3D, which a drag turns | `grab` |
-| `turning`, the same in Meno's accent | while it turns | `grabbing` |
+| `turning`, the same in Meno's base colour (#317689) | while it turns | `grabbing` |
 | `move`, four arrowheads | over a molecule in 3D selected, which a drag moves, and while it moves | `move` |
 | `sideways`, a double arrowhead | a slider, and a chip's bars, dragged along | `ew-resize` |
 | `corner-down`, `corner-up`, a double arrowhead aslant | a selected picture's corner, which a drag makes larger or smaller, as the corner points on the screen | `nwse-resize`, `nesw-resize` |
@@ -307,7 +374,12 @@ What is left before the editor counts as finished, and in what order, is in
   `Labels2D`, previews, hover overlays, `PanZoom2D`, `FitToContent2D`, …).
   `DrawnLayoutProvider` lays the drawing out once - the model, with an atom
   being dragged or a bond being drawn out where the gesture has them - and
-  the drawing layers read that one layout (`useDrawnLayout`). The move and
+  the drawing layers read that one layout (`useDrawnLayout`), with the zoom
+  it was laid out at, which changes only as the layout does. The view's
+  zoom is read apart from it (`useDrawnZoom`), each layer taking only what
+  it needs of it - a line kept as wide as the screen's least, say - and
+  drawn again only as that changes: a zoom draws again what it changes, not
+  every layer at every frame of it. The move and
   extend previews only work out where the atom goes and publish it
   (`moveDrag.preview`, `extend.preview`); they draw nothing of the molecule
   themselves, so a gesture looks exactly as its result will. Model bonds
@@ -319,8 +391,15 @@ What is left before the editor counts as finished, and in what order, is in
   bond's neighbours from its atoms' own bonds. A zoom does not lay the
   drawing out again while the layout made at the zoom it was laid out at
   is the same drawing at this one (`sameAtZooms`: world units, lines wider
-  than the least they are kept at, a wave's turns in as many steps). The
-  round caps are one instanced mesh; the hit areas of atoms and bonds are
+  than the least they are kept at, a wave's turns in as many steps). Nor
+  does a change lay out what it does not touch: the drawing is laid out a
+  structure at a time (`lib/chem/layoutStructures.ts`), each atom and bond
+  reaching the layout as the same object while it is unchanged, and what a
+  structure was laid out to is taken again while all of its atoms and bonds
+  are; structures are laid out together where a name's letters, a note on
+  a bond or a bond in perspective reaches from one to the other, and a
+  drawing with a bracket (an S-group) is laid out whole. A glide moves only
+  the structures that changed. The round caps are one instanced mesh; the hit areas of atoms and bonds are
   never drawn (picking does not ask whether a material is); the ring
   circles the canvas offers are found without a second layout
   (`ringCircles`), when the pointer looks for one; R, S, E and Z are placed
@@ -341,6 +420,13 @@ What is left before the editor counts as finished, and in what order, is in
   the pointer (`PartMenu.tsx`), which offers the same actions to the mouse
   alone. Only the main button works atoms and bonds; the other is the
   menu's. Over a button or a card nothing counts as hovered.
+- **A press keeps its hover**: a handler that stops a press lets R3F take
+  back the hover of the object it is on, where the mesh pressed is not the
+  mesh the object was first hovered by - a PDF's page drawn finer since the
+  pointer came to it is another of its meshes - and the object is told the
+  pointer is out. What is pressed is under the pointer, so a PDF pressed is
+  hovered again (`components/keptHover`); its hover goes at the next move
+  unless the canvas hovers it again by then.
 - **Strokes**: bonds drawn in one gesture are a stroke (`utils/stroke.ts`,
   with the angles in `utils/extendSnap.ts`) - a bond, or a chain - held in
   `extend.stroke` while it is drawn. A chain walks a honeycomb
@@ -539,20 +625,37 @@ closes*).
   `work/` - and starts Meno's executable as its runner, `Meno --job
   <folder>`: `run()` hands that to `jobs::job_mode` before anything else, so
   it opens no window and needs no webview. The runner is started in a
-  process group of its own (detached, on Windows) and nothing of Meno's
-  waits on it.
+  process group of its own (detached, on Windows), in the jobs' folder -
+  never Meno's own, which it would hold, nor its job's, which is taken away
+  as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
   it was asked for).
+- **Looked at often while young** (2026-10-13). The runner looks for its
+  turn every 400 ms, and at its program every 200 ms - but every 50 ms
+  for the first 3 s of a program, and of a job at the head of the queue,
+  easing back to its old step by 6 s (`step_at`). The page looks at a
+  run's jobs every 100 ms for its newest run's first 3 s, easing back to
+  once a second by 6 s (`workflow/lookEvery`). A step whose program takes
+  0.2 s is seen done within a few tenths of a second, and what runs on, or
+  waits behind others, is watched no more often than before.
 - **Its program** runs in `work/`, its output and errors in `log.txt` -
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
   process group of its own (macOS, Linux) or a job object that kills what
-  is in it when it closes (Windows), so that *Stop* - a `stop` file the
+  is in it when it closes (Windows; the program started held, put in the
+  job object, then let go, so that nothing it starts at once is outside
+  it - one that cannot be put in a job object is ended before it runs, and
+  its job fails, saying so), so that *Stop* - a `stop` file the
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A finished job's folder is taken away** (*Remove*, *Clear finished
+  jobs' files*) by moving it out of the jobs' way first, under a name no
+  job has (`.taken-…`), then removing it: one a program still holds a file
+  in (Windows) is never left half there as a job - nor read as one in the
+  queue; what was left goes at the next clearing.
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -659,7 +762,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   thing else is a result, in one general form (`lib/calc/results.ts`): it
   belongs to the molecule, each frame, each atom, pairs of atoms or a list;
   it has a group and a name; and its values are numbers or texts, each as a
-  quantity Meno knows - an energy in hartrees, a charge, a wavenumber (an
+  quantity Meno knows - an energy in hartrees, a charge, a spin population
+  (signed, as a charge is), a wavenumber (an
   imaginary one negative), a length, an angle, a dipole - or with its own
   unit. `readResults` keeps those that read as results for the molecule
   (the right count, indices it has, no markup), and `valueText` writes
@@ -716,12 +820,51 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   git ignores - no program's output is committed - and run by hand
   (`scripts/calc/test_reader_cclib.py`); the app's side is tested with the
   plain data written by hand.
+- It reads an output as the program left it (2026-10-13). Gaussian's,
+  ORCA's and xtb's say how the run went, in their own words. One that
+  stopped on an error is read as far as it went, with "Run: ended with an
+  error" first in the chip's line and the program's reason among the
+  results. One with no end written is read the same way, with "Run: did
+  not come to its end" - cut short, or still running. An SCF that did not
+  converge gives no energy ("SCF: not converged"), and where the run
+  stopped, the geometries after the last it worked out an energy for are
+  left out. Where cclib cannot read an output as it is, it is read again
+  with a number that overflowed its field (asterisks) taken as not known,
+  and then as far as it reads - its last lines left off, more each time;
+  where the run itself came to its end, the chip says "Read: only in
+  part".
+  Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
+  not atoms of the molecule and are left out; ORCA's point charges ("Q")
+  are taken out before cclib reads it. An answer never holds a number
+  that is not one (JSON has none). Tested, with cclib, by hand
+  (`scripts/calc/test_reader_cclib_runs.py`).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows; cclib
   from PyPI) is a plugin of its own, sharing no code with another
   (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
   a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. Where an output
+  charges, vibrations and the like it leaves to other readers. A Molden
+  file gives no charge or multiplicity, so they are worked out from its
+  own sections (`species_of`, 2026-10-14), each left unsaid where the file
+  does not settle it. The charge is the nuclei's - each atom's atomic
+  number in [Atoms], or the charge its pseudopotential leaves it where
+  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
+  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
+  neon is there (its inner orbitals cannot be told from another's 1s), or,
+  from lithium to neon, other than one occupied orbital below -2 hartree
+  for each such atom (its 1s; two where alpha and beta are listed apart);
+  unsaid past 8 either way,
+  where the occupations come to no whole number, or where a restricted
+  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
+  Gh) adds none. The multiplicity is one more than
+  the alpha occupations' excess over the beta's; with no Spin= said, a
+  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
+  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
+  and a singlet diradical share; Spin= given for some orbitals only). A
+  file that breaks the format - an occupation that is not a number, [MO]
+  given twice - gives neither, and never fails the read. It is tested alone
+  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
+  Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
   a Molden file (each p shell's functions put in x, y, z order, as ORCA's
   are not) for PySCF to read back, and the orbitals are checked
@@ -827,9 +970,11 @@ they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). Meno lays both
-drawings out again with its own engine; only their stereochemistry and
-scale come from these coordinates.
+seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
+CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
+double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
+lays both drawings out again with its own engine; only their
+stereochemistry and scale come from these coordinates.
 
 The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
 (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
@@ -1019,6 +1164,7 @@ the frames standing where renders will put what they make
 
 | Command | Called from | Purpose |
 | --- | --- | --- |
+| `log_page` | `lib/log.ts` | A line of the page's errors or warnings into Meno's log (`logfile.rs`), cut at 4000 bytes. |
 | `py_env_python_path_uv` | `lib/pyEnv.ts` | Resolve the venv's Python path under app data. |
 | `py_env_setup_uv` | `lib/pyEnv.ts` | Create the venv and install the lock file with `uv`. |
 | `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
@@ -1076,7 +1222,24 @@ started in it (`ext_spawn_sidecar`, which takes an interpreter of
 `<data>/uv` or `<data>/pixi`) is given the variables, and the folders before
 its PATH. The consent says what the lock downloads on the computer - its
 packages, and their size (`lib/pixiLock.ts`) - and from where: pixi, the
-first time, from GitHub; conda-forge (conda.anaconda.org); PyPI. A reader
+first time, from GitHub; conda-forge (conda.anaconda.org); PyPI.
+
+Every consent to set a plugin up names every host the set-up contacts
+(`lib/plugins/setUpSources.ts`): the tool's own (releases.astral.sh for uv
+and the Pythons it installs; github.com for pixi), the index or channel
+its lock takes packages from, each package its lock fixes to a URL of its
+own, and each file besides that it downloads. Each host is named with
+where it hands a fetch on: a repository's archive on github.com goes on to
+codeload.github.com, a release's file to
+release-assets.githubusercontent.com, and a file on huggingface.co to
+Hugging Face's content delivery network (hosts under hf.co). A test reads
+every plugin's lock and downloads and checks that the consent names each
+host they fetch from. Each line is made together with the hosts it names
+(`SetUpReach`), and those go with the set-up (`py_env_setup_uv`,
+`py_env_setup_pixi`) and with the fetch of its files (`plugin_files`): the
+proxy lets each reach those alone (net.rs). Another test reads the hosts
+back from every consent's words and checks they are the ones its task is
+kept to, both ways. A reader
 plugin says it is made so by `env: "pixi"`; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
@@ -1094,6 +1257,12 @@ path it is given:
   app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
+- Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
+  (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
+  system's code page: on Windows that is the ANSI one otherwise, in which a request
+  naming a file in Japanese stopped a worker (English Windows) or came back garbled
+  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
@@ -1114,6 +1283,13 @@ path it is given:
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.
+- A sidecar's stdin is written to with its own lock, the table of
+  sidecars let go first (`write_stdin`), and off the commands' threads.
+  A worker that stops reading holds up only what is written to it until
+  it is killed, which fails the write; every other sidecar is written
+  to, started and stopped meanwhile (2026-10-13: the table was held
+  through the write, and one stuck worker, sent a file bigger than its
+  pipe holds, held up every plugin's).
 
 Adding a new worker or interpreter flag means extending these rules
 (`PYTHON_FLAGS`, the workers directory) together with the unit tests in
@@ -1146,11 +1322,19 @@ to be able to work with nothing going out at all.
   *purpose* (`python-env:console`, `python-code`) and pointed at the proxy
   with the task's token in its proxy credentials. The proxy carries a
   connection only for a task under way, only for a purpose the user has
-  allowed (`python-code`, the user's own code, needs no asking), only over
-  HTTPS, and never in offline mode. Each connection - host, bytes each way,
-  times, outcome - goes to the window as it happens (`net:connection`, every
-  half second while open) and to `network-log.jsonl` in the app's data
-  folder when it ends. A child that may not use the network - another
+  allowed (`python-code`, the user's own code, needs no asking), only to a
+  host the task's consent named, only over HTTPS, and never in offline
+  mode. Each task is begun with the hosts its consent named
+  (`ConsentRequest.hosts`, made with the consent's lines from one list and
+  sent with what begins the task), each exact or with a leading dot for any
+  host under one (`.hf.co`), at HTTPS's port, 443, unless one is named with
+  another (`host:port`); a connection elsewhere is refused (403) and on the
+  record as blocked, "not a host its consent named" or "not a port its
+  consent named". Only the user's own code names none, and reaches any
+  host - at HTTPS's port alone, as everything does. Each connection - host, bytes
+  each way, times, outcome - goes to the window as it happens
+  (`net:connection`, every half second while open) and to
+  `network-log.jsonl` in the app's data folder when it ends. A child that may not use the network - another
   worker, or the console while Meno is offline - is pointed at the proxy
   with no task, so whatever it reaches for is refused and on the record.
   The proxy is bound, and offline mode and the purposes allowed are read
@@ -1216,7 +1400,7 @@ that every kind of these is in this table, by its id, and no other.
 | RXN file | `rxn` | `.rxn` | `$RXN` | Meno, in its worker (`readStructures`) | Export (`reactionFileText`), Copy | a drawing with its arrow and "+" signs |
 | MOL file | `mol` | `.mol` | `V2000` / `V3000`, `M  END` | Meno, in its worker | Export, Copy (`molWriter.ts`) | a drawing; a molecule in 3D where it says it is 3D or spreads in depth |
 | SD file | `sdf` | `.sdf` | the same, and its name | Meno, in its worker | Export: the drawing as one record, each molecule in 3D as one, or each frame | a drawing, and each 3D record a molecule in 3D beside it |
-| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
+| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`: a tenth over, or 0.15 Å, the more; none within 0.1 Å), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |

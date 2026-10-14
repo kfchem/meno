@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import { valueText } from "../../../../lib/calc/results";
 import { knownOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
@@ -256,8 +257,9 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
   if (!frames.length) return "It found no conformer";
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
-  // (the program's own populations, where it gives one for each)
+  // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
+  const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
   const calc = calcOf(out, readers, source);
   return frames.map((f, k) => ({
     ...entry,
@@ -265,6 +267,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),
     ...(shares ? { share: shares[k] } : {}),
+    ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
     ...(k === 0 ? { calc } : {}),
   }));
 }
@@ -295,11 +298,11 @@ export function clock(ms: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
-/** An energy in hartrees as a card says it: −42.10871 Eh. */
-export const hartrees = (e: number) => `${e < 0 ? "−" : ""}${Math.abs(e).toFixed(5)} Eh`;
+/** An energy in hartrees as a card says it, as everywhere Meno writes one: −42.108710 Eh. */
+export const hartrees = (e: number) => valueText(e, { quantity: "energy" });
 
-/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, or how many came out of how many. */
+/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many. */
 export function doneSaid(worked: readonly Worked[], total: number, took: number): string {
-  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · ${hartrees(worked[0].energy)}`;
+  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
   return `${clock(took)} · ${worked.length} of ${total}`;
 }

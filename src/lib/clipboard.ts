@@ -37,6 +37,15 @@ export type Flavor = "meno" | "mol" | "rxn" | "text" | "gvml" | "emf" | "png" | 
 
 export type ClipItem = { flavor: Flavor; text?: string; bytes?: Uint8Array };
 
+/** Whether this is Windows. */
+const IS_WINDOWS = typeof navigator !== "undefined" && /Win/.test(navigator.platform || navigator.userAgent);
+
+/** On Windows, a text's lines ended "\r\n", as Notepad and Office write it and as Meno's own copies give it (clipboard.rs `crlf`); elsewhere, as it is. */
+export function forTheClipboard(text: string, windows = IS_WINDOWS): string {
+  return windows ? text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n") : text;
+}
+
+
 type Wire = { flavor: Flavor; text?: string; base64?: string };
 
 let own: ClipItem[] = [];
@@ -102,6 +111,19 @@ export async function clipboardFiles(): Promise<File[]> {
   if (!isTauri()) return [];
   const names = await invoke<string[]>("clipboard_file_names").catch(() => [] as string[]);
   return Promise.all(names.map(async (name, index) => new File([new Uint8Array(await invoke<ArrayBuffer>("clipboard_file", { index }))], name)));
+}
+
+/**
+ * The workspace files on the clipboard, or in what was just dropped on the
+ * page (`from`) - copied or dragged in the Finder or Explorer - opened by
+ * their paths, as a workspace file opened from the system is, so that
+ * saving one writes it back (src-tauri/src/clipboard.rs
+ * `open_workspaces_from`): how many there were. None where Meno is not
+ * told the paths - outside Tauri, or a drop on Windows.
+ */
+export async function openWorkspacesFrom(from: "clipboard" | "drag"): Promise<number> {
+  if (!isTauri()) return 0;
+  return invoke<number>("open_workspaces_from", { board: from }).catch(() => 0);
 }
 
 /**

@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { addMolecule3d, removeMolecules3d, type WorkspaceDocument } from "../document";
+import { addMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -16,7 +16,7 @@ import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from 
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, GAP, PX } from "./look";
-import { runMeno, type Outcome } from "./meno";
+import { pushTo, runMeno, type Outcome } from "./meno";
 import { addSet, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
@@ -50,7 +50,20 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
   if (!input) return fail("Nothing comes into it");
   const outcome = runMeno(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds, step.options, energiesBy(input.molecules));
-  if (!outcome.ok) return fail(outcome.said);
+  return ranAs(doc, id, outcome, key, w);
+}
+
+/**
+ * `doc` with Meno's step `id` run, its outcome worked out already - in
+ * turns, while the page went on (store `runMenoInTurns`) - on what came in
+ * as `key` says: its results put in, or why not said. As it was where the
+ * step has gone meanwhile; changed since, where what comes in has.
+ */
+export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key: string, w: RunWith): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  if (!step) return doc;
+  const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
+  if (!outcome.ok) return setRan(keepRun(doc, step), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
   return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
 }
 
@@ -263,7 +276,8 @@ export function placeResults(
   const was = resultOf(doc, step.id);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
   const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
-  for (const [i, m] of made.entries()) doc = addMolecule3d(doc, { ...m, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } });
+  // (all put on the page at once: one at a time copied the page's molecules again for each)
+  doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } })));
   const madeBy = { step: step.id, holds };
   if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside);
   const id = doc.nextWorkflowId ?? 1;
@@ -318,11 +332,13 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
     });
   }
   const groups = new Map<number, SetEntry[]>();
-  for (const e of outcome.kept) groups.set(e.compound, [...(groups.get(e.compound) ?? []), e]);
+  for (const e of outcome.kept) pushTo(groups, e.compound, e);
   return [...groups.values()].map((g) => {
     const first = g[0];
     const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
     const shares = g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
+    // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
+    const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
     // (what the calculation was, where a program worked them out: each conformer's results its own, not the compound's)
     const calc = (first as Worked).calc;
     return {
@@ -332,6 +348,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(energies ? { energies } : {}),
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
+      ...(degeneracies ? { degeneracies } : {}),
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : {}),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),

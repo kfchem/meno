@@ -318,13 +318,20 @@ export function Atoms2D() {
   const remountKey = model.atoms.length;
 
   // Initial placement and when model changes
+  // (an atom the same object as before is where it was: at every frame of a
+  // drag, all but the few that moved)
+  const placed = useRef<{ mesh: THREE.InstancedMesh | null; atoms: unknown[] }>({ mesh: null, atoms: [] });
   useEffect(() => {
     if (!inst.current) return;
     const atoms = model.atoms;
     inst.current.count = atoms.length;
     const rWorld = ATOM_PICK_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
+    if (placed.current.mesh !== inst.current) placed.current = { mesh: inst.current, atoms: [] };
+    const was = placed.current.atoms;
     for (let i = 0; i < atoms.length; i++) {
       const a = atoms[i];
+      if (was[i] === a) continue;
+      was[i] = a;
       // Nudge z slightly forward (z=+1e-3) to prioritize atom raycasting over bond hit areas
       tmpM.makeScale(rWorld, rWorld, 1).setPosition(a.x, a.y, 1e-3);
       inst.current.setMatrixAt(i, tmpM);

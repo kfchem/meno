@@ -435,18 +435,38 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
  * through the plane of its three neighbours (`rightCentres`), and eased.
  */
 function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
-  // (found once for a molecule's ring system: it is asked for again and again)
-  const key = atoms.join(",");
-  const cached = solids.get(mol)?.get(key);
+  // (found once for a ring system: it is asked for again and again - and
+  // by what it is found from, not by the molecule object, since a drawing
+  // read back is perceived anew, its cage the same: tetrodotoxin's solid
+  // found anew for each of its read-backs was half its Clean-up)
+  const key = `${contentOf(mol)}|${atoms.join(",")}`;
+  const cached = solids.get(key);
   if (cached) return cached;
   const found = embedAnew(mol, atoms, index);
-  if (!solids.has(mol)) solids.set(mol, new Map());
-  solids.get(mol)!.set(key, found);
+  solids.set(key, found);
+  if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
   return found;
 }
 
-/** Each molecule's solids found so far, by their atoms. */
-const solids = new WeakMap<Molecule, Map<string, Vec3[]>>();
+/** The solids found so far, by what each is found from (`contentOf`) and its system's atoms; the oldest let go first. */
+const solids = new Map<string, Vec3[]>();
+
+/** How many solids are kept (`solids`). */
+const KEPT_SOLIDS = 64;
+
+/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration. */
+function contentOf(mol: Molecule): string {
+  let content = contents.get(mol);
+  if (content == null) {
+    const bond = (b: Molecule["bonds"][number]) => `${b.a}-${b.b}:${b.order}${b.stereo ? `:${b.stereo.refs.join(".")}${b.stereo.cis ? "c" : "t"}` : ""}`;
+    const centre = ([a, t]: [number, { neighbours: readonly number[]; volume: number }]) => `${a}:${t.neighbours.join(".")}:${t.volume}`;
+    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(",")].join("|");
+    contents.set(mol, content);
+  }
+  return content;
+}
+
+const contents = new WeakMap<Molecule, string>();
 
 function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
   const hop = hops(mol, atoms);
@@ -919,7 +939,9 @@ function textbook(
               const hints = exits(mol, atoms, X, index, bonds, pts, pageUp, fit, drawn, axialRings, uprights);
               // the rest of the cage above the ring, where it is looked for,
               // and room for what hangs from it - from the front of the ring
-              // rather than the back, where it would pass behind the cage
+              // rather than the back, where it would pass behind the cage;
+              // and, of views alike, the one that lies level (tetrodotoxin
+              // long, its guanidine ring beside the cage, not under it)
               const behind = [order[5], order[0], order[1]].reduce(
                 (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
                 0,
@@ -929,7 +951,8 @@ function textbook(
                 cost0 +
                 (restUp ? 0 : 0.5) +
                 exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
-                0.25 * behind;
+                0.25 * behind +
+                LEVEL_AXIS * axisTiltOf(pts);
               best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
             }
           }
@@ -1213,6 +1236,29 @@ function exits(
   return hints;
 }
 
+/** What a degree of a template view's long axis off level costs it (`textbook`, `axisTiltOf`). */
+const LEVEL_AXIS = 0.05;
+
+/** How far a drawing's long axis is from level, in degrees, scaled by how much longer than broad it is (as `layoutMetrics` measures it). */
+function axisTiltOf(pts: readonly Point[]): number {
+  const n = pts.length;
+  const cx = pts.reduce((s, p) => s + p.x, 0) / n;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    sxx += (p.x - cx) ** 2;
+    syy += (p.y - cy) ** 2;
+    sxy += (p.x - cx) * (p.y - cy);
+  }
+  const half = (sxx + syy) / 2;
+  const spread = Math.sqrt(Math.max(0, half * half - (sxx * syy - sxy * sxy)));
+  const long = half + spread;
+  const broad = Math.max(0, half - spread);
+  return long > 0 ? Math.abs((0.5 * Math.atan2(2 * sxy, sxx - syy) * 180) / Math.PI) * (1 - Math.sqrt(broad / long)) : 0;
+}
+
 /** How much a cage's bonds out run into it: an end on an atom or a bond, or crossing one. */
 function exitCost(
   pts: Point[],
@@ -1347,44 +1393,152 @@ function drawOn(
     }
   });
   // the rest eased to bonds of one length, each held near where it was put
+  // - and eased again with atoms not bonded to each other kept apart, that
+  // taken where it leaves fewer atoms nearer another than 0.6 of a bond and
+  // reads better by `viewCost` at its defaults (with no depth, as a flat
+  // drawing is weighed against a solid): put where the solid seen from the
+  // template's side has them, one can land on another (scopolamine's
+  // epoxide by its N), where adamantane's back CH2 by a front bridgehead is
+  // how it is always drawn
   const anchor = pts.map((p) => ({ ...p }));
-  for (let it = 0; it < 400; it++) {
-    for (const [a, b] of bonds) {
-      const fa = fixed.has(a);
-      const fb = fixed.has(b);
-      if (fa && fb) continue;
-      const dx = pts[b].x - pts[a].x;
-      const dy = pts[b].y - pts[a].y;
-      const l = Math.hypot(dx, dy) || 1e-9;
-      const f = (l - 1) / l;
-      const share = fa || fb ? 0.5 : 0.25;
-      if (!fa) {
-        pts[a].x += dx * f * share;
-        pts[a].y += dy * f * share;
+  const bonded = new Set(bonds.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
+  const ease = (apart: readonly [number, number][] = []): Point[] => {
+    const q = anchor.map((p) => ({ ...p }));
+    for (let it = 0; it < 400; it++) {
+      for (const [a, b] of bonds) {
+        const fa = fixed.has(a);
+        const fb = fixed.has(b);
+        if (fa && fb) continue;
+        const dx = q[b].x - q[a].x;
+        const dy = q[b].y - q[a].y;
+        const l = Math.hypot(dx, dy) || 1e-9;
+        const f = (l - 1) / l;
+        const share = fa || fb ? 0.5 : 0.25;
+        if (!fa) {
+          q[a].x += dx * f * share;
+          q[a].y += dy * f * share;
+        }
+        if (!fb) {
+          q[b].x -= dx * f * share;
+          q[b].y -= dy * f * share;
+        }
       }
-      if (!fb) {
-        pts[b].x -= dx * f * share;
-        pts[b].y -= dy * f * share;
+      for (const [i, j] of apart) {
+        const dx = q[j].x - q[i].x;
+        const dy = q[j].y - q[i].y;
+        const l = Math.hypot(dx, dy) || 1e-9;
+        if (l >= APART) continue;
+        const f = ((APART - l) / l) * 0.5;
+        const [si, sj] = fixed.has(i) ? [0, 1] : fixed.has(j) ? [1, 0] : [0.5, 0.5];
+        q[i].x -= dx * f * si;
+        q[i].y -= dy * f * si;
+        q[j].x += dx * f * sj;
+        q[j].y += dy * f * sj;
       }
+      // (an upright bond kept upright - its far atom moved only up or down;
+      // the rest held less and less, so that bonds that can all be one
+      // length are)
+      const hold0 = Math.max(0, 1 - it / 300);
+      q.forEach((p, i) => {
+        if (fixed.has(i)) return;
+        if (hold.has(i)) {
+          p.x = anchor[i].x;
+          p.y += (anchor[i].y - p.y) * hold.get(i)!;
+          return;
+        }
+        const w = 0.05 * hold0;
+        p.x += (anchor[i].x - p.x) * w;
+        p.y += (anchor[i].y - p.y) * w;
+      });
     }
-    // (an upright bond kept upright - its far atom moved only up or down;
-    // the rest held less and less, so that bonds that can all be one
-    // length are)
-    const ease = Math.max(0, 1 - it / 300);
-    pts.forEach((p, i) => {
-      if (fixed.has(i)) return;
-      if (hold.has(i)) {
-        p.x = anchor[i].x;
-        p.y += (anchor[i].y - p.y) * hold.get(i)!;
-        return;
-      }
-      const w = 0.05 * ease;
-      p.x += (anchor[i].x - p.x) * w;
-      p.y += (anchor[i].y - p.y) * w;
-    });
-  }
+    return q;
+  };
+  const plain = ease();
+  // (only where some atom is nearer another than the measure allows: else
+  // keeping them apart cannot read better; and only the pairs near enough
+  // to come into it)
+  const crowded = nearPairs(plain, bonds);
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < plain.length; i++)
+    for (let j = i + 1; j < plain.length; j++) {
+      if ((fixed.has(i) && fixed.has(j)) || bonded.has(`${i},${j}`)) continue;
+      if (Math.hypot(plain[j].x - plain[i].x, plain[j].y - plain[i].y) < 1.2) pairs.push([i, j]);
+    }
+  const apart = crowded ? ease(pairs) : plain;
+  // (taken only where fewer atoms are left too near another, and the whole
+  // reads better: bicyclo[2.2.2]octane's back bridge comes as near the back
+  // bridgehead in every view, and eased apart it only comes a little less
+  // near, its bonds uneven)
+  const better =
+    apart !== plain && nearPairs(apart, bonds) < crowded && viewCost(apart, bonds) < viewCost(plain, bonds) - 1e-9 ? apart : plain;
+  better.forEach((p, i) => (pts[i] = p));
+  const toViewer = normalise(crossV([fit.x[0], fit.x[1], fit.x[2]], [fit.y[0], fit.y[1], fit.y[2]]));
+  // (each put back where it was put before the easing: one held upright, upright)
+  putBackTurned(
+    mol,
+    atoms,
+    pts,
+    X.map((p) => dotV(p, toViewer)),
+    anchor,
+    fixed,
+  );
   return { pts, drawn, uprights };
 }
+
+/**
+ * Each stereocentre the easing has turned - its bonds in the system read
+ * the other way round, `depth` saying how near the viewer each atom is -
+ * put back where it was put before the easing (`anchors`: where the solid
+ * seen from that side puts it, or upright above the ring where it was held
+ * so), a centre at a time while any reads wrong: eased, a bridgehead whose
+ * three bonds lie nearly in the page can tip through (aconitine's C13).
+ * A centre already passed is looked at again once another is put back -
+ * that moves its neighbours - but each is put back once at most. Atoms
+ * `fixed` by the template stay. How many were put back.
+ */
+export function putBackTurned(
+  mol: Molecule,
+  atoms: readonly number[],
+  pts: Point[],
+  depth: readonly number[],
+  anchors: readonly Point[],
+  fixed: ReadonlySet<number> = new Set(),
+): number {
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const placed = () => new Map(atoms.map((a, i) => [a, pts[i]]));
+  const near = new Map(atoms.map((a, i) => [a, depth[i]]));
+  const back = new Set<number>();
+  for (let again = true; again; ) {
+    again = false;
+    for (const c of atoms) {
+      const i = index.get(c)!;
+      if (!mol.tetra.has(c) || fixed.has(i) || back.has(i)) continue;
+      if (!turnedConfigurations(mol, atoms, placed(), near)) return back.size;
+      if (!turnedConfigurations(mol, [c, ...mol.neighbours[c].filter((b) => index.has(b))], placed(), near)) continue;
+      pts[i] = { ...anchors[i] };
+      back.add(i);
+      again = true;
+    }
+  }
+  return back.size;
+}
+
+/**
+ * How many atoms not bonded to each other come nearer than `near` of a
+ * mean bond - those `viewCost` counts, at its own `near` and with no depth.
+ */
+function nearPairs(pts: Point[], bonds: [number, number][], near = 0.6): number {
+  const mean = bonds.map(([a, b]) => Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y)).reduce((s, v) => s + v, 0) / bonds.length;
+  const bonded = new Set(bonds.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
+  let n = 0;
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++)
+      if (!bonded.has(`${i},${j}`) && Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) / mean < near) n++;
+  return n;
+}
+
+/** How near, in bonds, two atoms not bonded to each other may come as a cage is eased onto its template (`drawOn`). */
+const APART = 0.7;
 
 /**
  * The solid with each stereocentre it has the wrong way that three of its

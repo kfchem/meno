@@ -15,8 +15,8 @@
  * its own (output.ts) and is no result.
  */
 
-/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
-export const QUANTITIES = ["energy", "charge", "wavenumber", "length", "angle", "dipole", "number"] as const;
+/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
+export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number"] as const;
 export type Quantity = (typeof QUANTITIES)[number];
 
 /** How a value is written: as a quantity Meno knows; or else with the unit given; and to how many decimals, where not as Meno would. */
@@ -312,6 +312,7 @@ export function bySource<R extends Result>(results: readonly R[], nameOf: (from:
 const UNITS: Record<Quantity, string> = {
   energy: "Eh",
   charge: "",
+  spin: "",
   wavenumber: "cm⁻¹",
   length: "Å",
   angle: "°",
@@ -321,6 +322,7 @@ const UNITS: Record<Quantity, string> = {
 const DIGITS: Record<Quantity, number> = {
   energy: 6,
   charge: 3,
+  spin: 3,
   wavenumber: 1,
   length: 3,
   angle: 1,
@@ -331,16 +333,21 @@ const DIGITS: Record<Quantity, number> = {
 const DIGITS_MOST = 4;
 const MINUS = "−";
 
-/** A number as it is written: to `digits` decimals, or at most `DIGITS_MOST` with none left trailing; a true minus. */
-function numberText(v: number, digits?: number): string {
+/** A number as it is written, wherever Meno writes one: to `digits` decimals, or at most `DIGITS_MOST` with none left trailing; a true minus, and never "−0". */
+export function numberText(v: number, digits?: number): string {
   let t = digits != null ? v.toFixed(digits) : v.toFixed(DIGITS_MOST).replace(/\.?0+$/, "");
   if (/^-0(\.0*)?$/.test(t)) t = t.slice(1);
   return t.replace(/^-/, MINUS);
 }
 
+/** An energy above the lowest, in kilocalories per mole, as it is written: "1.23 kcal/mol", "12.3 kcal/mol" - its decimals chosen once it is rounded (9.996 is "10.0", not "10.00"). */
+export function aboveText(kcal: number): string {
+  return `${Math.round(kcal * 100) / 100 < 10 ? numberText(kcal, 2) : numberText(kcal, 1)} kcal/mol`;
+}
+
 /**
  * A value as it is written, with its unit: "−0.412", "+0.213" for a
- * charge, "1650.2 cm⁻¹" - an imaginary wavenumber "120.5i cm⁻¹" - "2.31 D",
+ * charge or a spin population, "1650.2 cm⁻¹" - an imaginary wavenumber "120.5i cm⁻¹" - "2.31 D",
  * "109.5°", "90.31 cal/(mol·K)"; a text as it is; none, a dash.
  */
 export function valueText(v: Cell, m: Measure): string {
@@ -351,7 +358,8 @@ export function valueText(v: Cell, m: Measure): string {
   if (q === "wavenumber" && v < 0) return `${numberText(-v, digits)}i ${UNITS.wavenumber}`;
   const t = numberText(v, digits);
   const unit = q ? UNITS[q] : m.unit;
-  if (q === "charge") return v > 0 && !/^0(\.0*)?$/.test(t) ? `+${t}` : t;
+  // (a charge, or a spin population, signed: +0.520, −0.130)
+  if (q === "charge" || q === "spin") return v > 0 && !/^0(\.0*)?$/.test(t) ? `+${t}` : t;
   if (q === "angle") return `${t}°`;
   return unit ? `${t} ${unit}` : t;
 }
@@ -388,9 +396,11 @@ export const LINE_MOST = 96;
 /**
  * The chip's line: what it says first (what the calculation was, its
  * energy), then the molecule's results its plugin ranked, in their order,
- * as many as the line holds - each its name and value. The plugin is the
- * first, of those that ranked any, in the order the results come (the one
- * chosen for the kind of output first): the line has room for one's.
+ * as many as the line holds - each its name and value - but for one ranked
+ * 0, how the run went ("Run ended with an error"), which it says however
+ * long the line. The plugin is the first, of those that ranked any, in the
+ * order the results come (the one chosen for the kind of output first):
+ * the line has room for one's.
  */
 export function chipLine(first: readonly string[], results: readonly Result[] | undefined, most = LINE_MOST): string {
   const parts = first.filter(Boolean);
@@ -400,7 +410,7 @@ export function chipLine(first: readonly string[], results: readonly Result[] | 
   for (const r of ranked) {
     const part = `${r.label} ${valueText(r.value, r)}`;
     const more = (parts.length ? 3 : 0) + part.length;
-    if (length + more > most) break;
+    if (r.rank !== 0 && length + more > most) break;
     parts.push(part);
     length += more;
   }
