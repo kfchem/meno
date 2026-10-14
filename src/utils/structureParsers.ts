@@ -263,8 +263,9 @@ export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
 
   let i = 0;
   while (i < lines.length) {
-    // (blank lines between frames, as some programs write them: passed over)
-    while (i < lines.length && !lines[i].trim()) i++;
+    // (blank lines between frames, as some programs write them, and a line that is ">" alone, between the
+    // frames of a file of many geometries: passed over)
+    while (i < lines.length && (!lines[i].trim() || lines[i].trim() === ">")) i++;
     if (i >= lines.length) break;
     const atomCount = parseInt(lines[i].trim(), 10);
     if (!(atomCount > 0)) {

@@ -541,8 +541,9 @@ def op_read(m):
     return without(result, ghosts)
 
 
-# a Gaussian route line (it echoes its route section, each line begun by " #")
-GAUSSIAN_ROUTE = re.compile(r"^ #.*$", re.M)
+# a Gaussian route section as it echoes it: begun by " #", over as many lines as it wraps onto, up to the line
+# of dashes after it
+GAUSSIAN_ROUTE = re.compile(r"^ #.*?(?=^ -{5,})", re.M | re.S)
 # ORCA's summary of a reaction path it followed
 ORCA_IRC = "IRC PATH SUMMARY"
 # a point on a Gaussian reaction path: "Point Number:  3          Path Number:   1"
@@ -554,7 +555,7 @@ def path_kind(data, text):
     cclib reads), a Gaussian reaction path's ("irc", by its route); otherwise None."""
     if has(data, "scanenergies") and len(data.scanenergies) > 1:
         return "scan"
-    if any(re.search(r"\bIRC\b", line, re.I) for line in GAUSSIAN_ROUTE.findall(text or "")):
+    if any(re.search(r"\bIRC\b", " ".join(route.split()), re.I) for route in GAUSSIAN_ROUTE.findall(text or "")):
         return "irc"
     return None
 
@@ -571,7 +572,10 @@ def path_said(data, text, frames):
     out = []
     kind = path_kind(data, text)
     if kind == "scan":
-        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Relaxed scan", "value": f"{len(data.scanenergies)} points", "rank": 0})
+        # (relaxed where each point was optimised - more geometries than points; rigid, one geometry a point)
+        points = len(data.scanenergies)
+        label = "Relaxed scan" if frames > points else "Scan"
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": label, "value": f"{points} points", "rank": 0})
     elif kind == "irc":
         out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": f"{frames} points", "rank": 0})
     elif ORCA_IRC in (text or ""):

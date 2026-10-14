@@ -45,8 +45,8 @@ describe("a structure's file, as Meno's own reader gives it", () => {
 
   it("says what follows its frames that is no frame - a separator line, text at the end - as a frame left out, never reading it silently", () => {
     const frame = (e: number, z: number) => `3\nE ${e}\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
-    // (frames with a ">" line between them, as some programs' files of many geometries have: those after it not read)
-    const m = readStructures("xyz", "scan.xyz", frame(-76.1, 0) + frame(-76.2, 0.01) + ">\n" + frame(-76.3, 0.02)).molecules3d![0];
+    // (text after the frames: not read, and said)
+    const m = readStructures("xyz", "scan.xyz", frame(-76.1, 0) + frame(-76.2, 0.01) + "END of the scan\n" + frame(-76.3, 0.02)).molecules3d![0];
     expect(m.frames).toHaveLength(1);
     expect(m.energies).toEqual([-76.1, -76.2]);
     expect(m.framesLeftOut).toBe(1);
@@ -54,6 +54,15 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     expect(readStructures("xyz", "w.xyz", WATER + "\n\n").molecules3d![0].framesLeftOut).toBeUndefined();
     // (no count at all: refused, saying which line)
     expect(() => readStructures("xyz", "x.xyz", "water\n3\n")).toThrow('Line 1 of the XYZ file is not a count of atoms: "water".');
+  });
+
+  it("reads every frame of a file with a \">\" line between its frames, each with its energy", () => {
+    const frame = (e: number, z: number) => `3\nCoordinates E ${e}\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
+    const text = [-76.1, -76.2, -76.3, -76.4, -76.5].map((e, k) => frame(e, k / 100)).join(">\n");
+    const m = readStructures("xyz", "scan.xyz", text).molecules3d![0];
+    expect(m.frames).toHaveLength(4);
+    expect(m.energies).toEqual([-76.1, -76.2, -76.3, -76.4, -76.5]);
+    expect(m.framesLeftOut).toBeUndefined();
   });
 
   it("passes over blank lines between frames, each frame its energy still", () => {

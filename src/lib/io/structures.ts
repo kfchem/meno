@@ -76,8 +76,8 @@ export function xyzComments(text: string): string[] {
   const comments: string[] = [];
   let i = 0;
   while (i < lines.length) {
-    // (blank lines between frames passed over, as xyzFrames passes them)
-    while (i < lines.length && !lines[i].trim()) i++;
+    // (blank lines and ">" lines between frames passed over, as xyzFrames passes them)
+    while (i < lines.length && (!lines[i].trim() || lines[i].trim() === ">")) i++;
     if (i >= lines.length) break;
     const n = parseInt(lines[i].trim(), 10);
     if (!Number.isFinite(n) || n <= 0) break;

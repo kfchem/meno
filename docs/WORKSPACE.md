@@ -593,7 +593,7 @@ Each result says what it belongs to, and Meno puts it there:
   after what the calculation was and its energy. One ranked 0 - how the
   run went, "Run ended with an error" - is said however long the line
   (2026-10-13). So is what geometries that are no optimisation's are -
-  "Relaxed scan · 5 points", "Reaction path · 21 points" (a Gaussian
+  "Relaxed scan · 5 points" (a rigid one "Scan"), "Reaction path · 21 points" (a Gaussian
   reaction path's points in the order of its coordinate, as its summary
   lists them) - none of them called optimised; and "Excited state ·
   energies not read" where an excited state was optimised, whose energies

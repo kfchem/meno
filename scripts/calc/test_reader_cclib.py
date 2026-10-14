@@ -220,6 +220,11 @@ class Paths(unittest.TestCase):
         self.assertIsNone(worker.path_kind(types.SimpleNamespace(), " #p B3LYP/6-31G(d) Opt\n\n IRC-like title\n"))
         said = worker.path_said(scan, "", 28)
         self.assertEqual([(r["label"], r["value"], r["rank"]) for r in said], [("Relaxed scan", "3 points", 0)])
+        # (a rigid scan - a geometry a point - is no relaxed one)
+        self.assertEqual(worker.path_said(scan, "", 3)[0]["label"], "Scan")
+        # (an IRC on the route's wrapped line)
+        wrapped = " #p B3LYP/6-311+G(2d,p) EmpiricalDispersion=GD3BJ SCRF=(SMD,Solvent=Water)\n IRC=(CalcFC,MaxPoints=20)\n ----------------------------\n"
+        self.assertEqual(worker.path_kind(types.SimpleNamespace(), wrapped), "irc")
         self.assertEqual(worker.path_said(types.SimpleNamespace(), route, 21)[0]["value"], "21 points")
         # (and a file's job is said so, not "Optimisation")
         self.assertEqual(worker.job_kind({"optimised": None, "results": said}), "Relaxed scan")
