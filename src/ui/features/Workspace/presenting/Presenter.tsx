@@ -29,6 +29,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { EditorState, Turn3D } from "../store/types";
 import { boxOf, presentAct, slideFit, talkEnd, viewOf, zoomOf } from "./slides";
+import { columnAgain, openColumnAgain, type ColumnWas } from "./columnAgain";
 import { easeInOut, flightMs, zoomPath, type ZoomPath } from "./zoomPath";
 import { bandsAbout, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
@@ -68,7 +69,7 @@ type Run = {
   before: ViewNow;
   canvas: { w: number; h: number };
   turns: EditorState["turns3d"];
-  texts: { open: boolean; pdf: number | null; text: number | null; cover: number };
+  texts: ColumnWas;
   /** Whether the talk made the window full screen (and so puts it back). */
   madeFull: boolean;
   /** The view on its way to a slide; or moved freely by the presenter (`free`, where it is going, eased there); or, neither, at the slide. */
@@ -441,8 +442,8 @@ export default function Presenter() {
       if (!settle) return;
       // (at the last slide shown, as the editing view has it - or, gone, back where it was - less the half of the column the view goes as the column opens again: FollowCover)
       const s = st();
-      const reopens = r.texts.open && ((r.texts.pdf != null && s.pdfs.some((p) => p.id === r.texts.pdf)) || (r.texts.text != null && s.texts.some((t) => t.id === r.texts.text)));
-      const cover = reopens ? r.texts.cover : 0;
+      const again = columnAgain(s, r.texts);
+      const cover = again ? r.texts.cover : 0;
       const slide = last != null ? s.slides[last] : undefined;
       setViewGoal(cam, slide ? talkEnd(slide, r.canvas.w, r.canvas.h, cover) : { ...r.before, x: r.before.x - cover / 2 / r.before.zoom });
       const from = new Map<number, THREE.Quaternion>();
@@ -453,11 +454,8 @@ export default function Presenter() {
         from.set(m.id, now ? new THREE.Quaternion(...now) : new THREE.Quaternion());
       }
       if (from.size) turningBack.current = { from, to: r.turns, start: performance.now() };
-      // (the column as it was: what it read rising into it again)
-      if (r.texts.open) {
-        if (r.texts.pdf != null && s.pdfs.some((p) => p.id === r.texts.pdf)) s.readPdf(r.texts.pdf);
-        else if (r.texts.text != null && s.texts.some((t) => t.id === r.texts.text)) s.showText(r.texts.text);
-      }
+      // (the column as it was, on what it showed - shown there, not flown to: the view stays on its way to the slide)
+      if (again) openColumnAgain(s, again);
       invalidate();
     };
 
