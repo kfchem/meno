@@ -254,7 +254,11 @@ moves together, in the same time and the same way.
   with where they can (`SQUARE`, `UNSEEN`; the selected shapes' handles in
   one set of instances), and take a press by the box they give as it comes
   (`boxRaycast`), at the zoom of the press, not by a plane made again as
-  the view zooms. `manyParts.test.tsx` counts what they make.
+  the view zooms. What of them is sized on the screen - a light, a
+  handle, a caption's edge - is there only while it is shown, and drawn at
+  the zoom the drawing is taken up at (`useDrawnZoom`), so a part at rest
+  is not drawn again as the view zooms. `manyParts.test.tsx` counts what
+  they make.
 
 ## Pointers
 
