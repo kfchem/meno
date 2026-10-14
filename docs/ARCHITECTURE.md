@@ -768,7 +768,28 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   from PyPI) is a plugin of its own, sharing no code with another
   (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
   a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. Where an output
+  charges, vibrations and the like it leaves to other readers. A Molden
+  file gives no charge or multiplicity, so they are worked out from its
+  own sections (`species_of`, 2026-10-14), each left unsaid where the file
+  does not settle it. The charge is the nuclei's - each atom's atomic
+  number in [Atoms], or the charge its pseudopotential leaves it where
+  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
+  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
+  neon is there (its inner orbitals cannot be told from another's 1s), or,
+  from lithium to neon, other than one occupied orbital below -2 hartree
+  for each such atom (its 1s; two where alpha and beta are listed apart);
+  unsaid past 8 either way,
+  where the occupations come to no whole number, or where a restricted
+  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
+  Gh) adds none. The multiplicity is one more than
+  the alpha occupations' excess over the beta's; with no Spin= said, a
+  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
+  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
+  and a singlet diradical share; Spin= given for some orbitals only). A
+  file that breaks the format - an occupation that is not a number, [MO]
+  given twice - gives neither, and never fails the read. It is tested alone
+  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
+  Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
   a Molden file (each p shell's functions put in x, y, z order, as ORCA's
   are not) for PySCF to read back, and the orbitals are checked
