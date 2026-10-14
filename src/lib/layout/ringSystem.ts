@@ -30,6 +30,7 @@ import {
 import { macrocycleShapes } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
 import { ringKey, ringRank } from "./ranks";
+import { flatCost } from "./cage";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
 export const MACROCYCLE = 9;
@@ -122,18 +123,42 @@ export function placeRingSystem(
   // the bridge inside - taxol's A ring, and its eight-membered B
   const bridgedFrom = (r: number[]) =>
     rings.some((q) => q !== r && q.length > r.length && q.filter((a) => r.includes(a)).length >= 3) ? 1 : 0;
-  const ordered = [...rings].sort((p, q) => {
+  // (by structure: the ring with the most bonds out of the system - the
+  // one the rest hangs from - then by its atoms)
+  const inSys = new Set(sys.atoms);
+  const outs = (r: readonly number[]) => r.reduce((n, a) => n + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0);
+  const byKey = (p: readonly number[], q: readonly number[]) => {
+    const o = outs(q) - outs(p);
+    if (o) return o;
+    const kp = ringKey(mol, p);
+    const kq = ringKey(mol, q);
+    return kp < kq ? -1 : kp > kq ? 1 : 0;
+  };
+  const byOrder = (p: number[], q: number[]) => {
     const pm = p.length >= MACROCYCLE ? p.length : 0;
     const qm = q.length >= MACROCYCLE ? q.length : 0;
     if (pm !== qm) return qm - pm;
     if (fit(p) !== fit(q)) return fit(q) - fit(p);
     if (bridgedFrom(p) !== bridgedFrom(q)) return bridgedFrom(q) - bridgedFrom(p);
-    const f = fusedCount(q) - fusedCount(p);
-    if (f) return f;
-    return q.length - p.length;
-  });
+    return fusedCount(q) - fusedCount(p) || q.length - p.length;
+  };
+  // (rings alike in all that by their atoms, never by which is listed first)
+  const ordered = [...rings].sort((p, q) => byOrder(p, q) || byKey(p, q));
   // (or the ring asked for: a bridged system is tried from each)
-  const first = start != null ? mol.rings[start] : hubOf(mol, rings) ?? ordered[0];
+  const hub = start != null ? null : hubOf(mol, rings);
+  // rings alike in all that each tried first, the system that reads best
+  // kept: which was listed first is no reason
+  if (start == null && !hub) {
+    const tied = ordered.filter((r) => r.length < MACROCYCLE && byOrder(r, ordered[0]) === 0);
+    if (tied.length > 1) {
+      const layouts = tied
+        .sort((p, q) => byKey(p, q) || ringRank(mol, p) - ringRank(mol, q))
+        .map((r) => placeRingSystem(mol, sys, variant, sys.rings[rings.indexOf(r)]));
+      return bestOf(mol, sys, layouts);
+    }
+  }
+  const first = start != null ? mol.rings[start] : hub ?? ordered[0];
+  const firstAt = rings.indexOf(first);
 
   // a macrocycle that runs mostly through other rings is a ring of rings,
   // round a circle; one that runs through a ring or two on its way
@@ -149,7 +174,7 @@ export function placeRingSystem(
     // where two sides are as long: the groups on that side face into the
     // ring of rings)
     const barer = alongBarerSides(mol, sys, first, rings);
-    rings[rings.indexOf(first)] = barer;
+    rings[firstAt] = barer;
     ringOfBlocks(mol, barer, rings, pos).forEach((i) => placedRing.add(i));
   } else if (first.length >= MACROCYCLE) {
     const shape = shapes[variant % shapes.length];
@@ -160,7 +185,7 @@ export function placeRingSystem(
     const t0 = squareStart(first.length);
     first.forEach((a, i) => pos.set(a, scale(dir(t0 - (i * 2 * Math.PI) / first.length), r)));
   }
-  placedRing.add(rings.indexOf(first));
+  placedRing.add(firstAt);
 
   // A bridged pair of rings has three bridges between its bridgeheads: the
   // path they share and each one's own. The shortest is drawn inside the
@@ -188,32 +213,72 @@ export function placeRingSystem(
     }),
   );
 
-  while (placedRing.size < rings.length) {
-    // next: the ring most fused to what is placed - on a side before a
-    // bridge, a bridge before one touching at an atom (spiro)
-    let next = -1;
-    let nextRank = -Infinity;
-    rings.forEach((r, i) => {
-      if (placedRing.has(i)) return;
-      const shared = r.filter((a) => pos.has(a)).length;
-      if (!shared) return;
-      const waiting = waitsFor.has(i) && !placedRing.has(waitsFor.get(i)!);
-      const rank =
-        (waiting ? -5000 : 0) +
-        (shared === 2 ? 1000 : shared > 2 ? 500 : 0) +
-        (r.length === 6 ? 50 : 0) +
-        (r.length < MACROCYCLE ? 20 : 0) -
-        r.length;
-      if (rank > nextRank) {
-        nextRank = rank;
-        next = i;
+  const rules = chainRules(mol, sys);
+  // (how many orders of the rings left are tried at most, where rings alike
+  // could each go next)
+  let orders = RING_ORDERS;
+  const placeRest = (pos: Map<number, Point>, placedRing: Set<number>): Map<number, Point> => {
+    while (placedRing.size < rings.length) {
+      // next: the ring most fused to what is placed - on a side before a
+      // bridge, a bridge before one touching at an atom (spiro)
+      let next: number[] = [];
+      let nextRank = -Infinity;
+      rings.forEach((r, i) => {
+        if (placedRing.has(i)) return;
+        const shared = r.filter((a) => pos.has(a)).length;
+        if (!shared) return;
+        const waiting = waitsFor.has(i) && !placedRing.has(waitsFor.get(i)!);
+        const rank =
+          (waiting ? -5000 : 0) +
+          (shared === 2 ? 1000 : shared > 2 ? 500 : 0) +
+          (r.length === 6 ? 50 : 0) +
+          (r.length < MACROCYCLE ? 20 : 0) -
+          r.length;
+        if (rank > nextRank) [nextRank, next] = [rank, [i]];
+        else if (rank === nextRank) next.push(i);
+      });
+      if (!next.length) break;
+      next.sort((i, j) => byKey(rings[i], rings[j]) || ringRank(mol, rings[i]) - ringRank(mol, rings[j]));
+      // rings alike in that could each go next: each tried, the system that
+      // reads best kept (once the orders tried run out, the first by their
+      // atoms, then by the canonical rank)
+      if (next.length > 1 && orders > next.length) {
+        orders -= next.length;
+        return bestOf(
+          mol,
+          sys,
+          next.map((i) => {
+            const p = new Map(pos);
+            placeRing(rings[i], p, rings, rules);
+            return placeRest(p, new Set([...placedRing, i]));
+          }),
+        );
       }
-    });
-    if (next < 0) break;
-    placeRing(rings[next], pos, rings, chainRules(mol, sys));
-    placedRing.add(next);
+      placeRing(rings[next[0]], pos, rings, rules);
+      placedRing.add(next[0]);
+    }
+    return pos;
+  };
+  return placeRest(pos, placedRing);
+}
+
+/** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */
+const RING_ORDERS = 8;
+
+/**
+ * Of a ring system's layouts, the one that reads best flat - its faults,
+ * the room its bonds out have, its rings' shapes - the first of those as
+ * good.
+ */
+function bestOf(mol: Molecule, sys: RingSystem, layouts: Map<number, Point>[]): Map<number, Point> {
+  let best = layouts[0];
+  let least = Infinity;
+  for (const pos of layouts) {
+    if (sys.atoms.some((a) => !pos.has(a))) continue;
+    const c = flatCost(mol, sys, pos, undefined, true) + 20 * misshapen(mol, sys, pos);
+    if (c < least - 1e-9) [best, least] = [pos, c];
   }
-  return pos;
+  return best;
 }
 
 /**
