@@ -36,6 +36,7 @@ import {
 import type { SolidMark } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
 import { bondsByDistance } from "../../../../utils/structureParsers";
+import { least } from "../../../../lib/chem/lists";
 
 /** Two carbons 1.5 Å apart along x, standing at `at`. */
 const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
@@ -306,6 +307,14 @@ describe("molecules turned together, as one body", () => {
     const b = asSeen({ ...ethane({ x: 0, y: 0, z: 3 * WORLD_PER_ANGSTROM } as Molecule3D["at"]) }, undefined, 0, true);
     expect(b[0].z - a[0].z).toBeCloseTo(3, 9);
   });
+
+  it("are turned together past what a call takes as its arguments", () => {
+    // (65,536 in WebKit, about twice that here: so many turned together threw)
+    const many = Array.from({ length: 150_000 }, (_, i) => ({ id: i + 1, at: { x: i % 400, y: Math.floor(i / 400) }, standing: 1 + (i % 3) }));
+    const out = turnedTogether(many, q(1, 0, 0, 1.2));
+    expect(out).toHaveLength(150_000);
+    expect(least(out.map((t, i) => t.at.z - many[i].standing))).toBeCloseTo(0, 6);
+  });
 });
 
 describe("molecules placed in a row", () => {
@@ -566,6 +575,11 @@ describe("coveredLength", () => {
 });
 
 describe("populations", () => {
+  it("are found for more conformers or frames than a call takes as its arguments", () => {
+    const shares = populations(Array.from({ length: 150_000 }, (_, i) => (i === 7 ? -1 : 0)));
+    expect(shares[7]).toBeCloseTo(1, 6);
+  });
+
   const HARTREE = 627.509474;
   it("shares a conformer set by Boltzmann at room temperature, adding up to one", () => {
     expect(populations([0, 0])).toEqual([0.5, 0.5]);

@@ -74,6 +74,8 @@ const SMALL_PT = 18;
 const RULE_THICK_PT = 1.5;
 const RULE_LONG_PT = 150;
 const MOST_OF_PAGE = 0.8;
+/** A shape this much of the width of all on the page, or more - a panel's ground behind a column of words and a figure, across the page - is no part of a figure. */
+const ACROSS_PAGE = 0.95;
 /** How far apart a scanned page's strips may lie, in points, to be one picture of it. */
 const SCAN_GAP_PT = 1;
 /**
@@ -111,6 +113,8 @@ const meet = (a: Box, b: Box) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] &&
 const within = (a: Box, b: Box) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
 const area = (b: Box) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
 const union = (a: Box, b: Box): Box => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+/** Where two boxes overlap - none, an empty box. */
+const overlap = (a: Box, b: Box): Box => [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
 
 /** Boxes joined where they meet, `d` points apart at most, until none meet: each the box round its group. */
 function joined(boxes: Box[], d: number): Box[] {
@@ -166,6 +170,7 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     const h = y1 - y0;
     if (w <= 0 && h <= 0) return false;
     if (Math.min(w, h) <= RULE_THICK_PT && Math.max(w, h) >= RULE_LONG_PT) return false;
+    if (o.kind === "path" && w >= ACROSS_PAGE * (page[2] - page[0]) && h > RULE_THICK_PT) return false;
     return w * h < MOST_OF_PAGE * pageArea;
   });
   const pictures = drawn.filter((o) => o.kind === "image").map((o) => o.box);
@@ -226,7 +231,17 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     for (let pass = 0; pass < 2; pass++) b = words.reduce((acc, w) => (labelOf(g, acc, w) ? union(acc, w) : acc), b);
     return b;
   });
-  return joined(withIons(labelled, labels, charges), 0);
+  // (none that is a page scanned after all - most of the page, most of it
+  // picture, and the page's words within it: its picture in strips further
+  // apart than a scan is told by, the words read over them widening it.
+  // Boxed, it was the whole page, again at every click on it. A figure drawn
+  // with lines as large, on a page cut close round it, is still one)
+  const inText = objects.filter((o) => o.kind === "text").map((o) => o.box);
+  const scanned = (f: Box) =>
+    area(f) >= MOST_OF_PAGE * pageArea &&
+    images.reduce((sum, b) => sum + area(overlap(b, f)), 0) >= MOST_OF_PAGE * area(f) &&
+    inText.filter((w) => within(w, f)).length >= MOST_OF_PAGE * inText.length;
+  return joined(withIons(labelled, labels, charges), 0).filter((f) => !scanned(f));
 }
 
 /**

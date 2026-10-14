@@ -9,6 +9,7 @@ import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
+import { least } from "../../../../lib/chem/lists";
 
 /** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
 export const RIBBON_REACH = 1.3;
@@ -154,8 +155,7 @@ export function labelSpot(
  */
 export function populations(energies: readonly number[], degeneracies?: readonly number[]): number[] {
   if (!energies.length) return [];
-  // (by a loop: spread over a long run of frames, Math.min overruns the stack)
-  const lowest = energies.reduce((a, b) => Math.min(a, b), Infinity);
+  const lowest = least(energies);
   const w = energies.map((e, i) => (degeneracies?.length === energies.length ? degeneracies[i] : 1) * Math.exp(-(e - lowest) / RT_HARTREE));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((x) => x / sum);
@@ -167,6 +167,12 @@ export type Look = Role3D;
 /** The look a molecule is drawn in: its secondary, where it has been switched to it; else the primary. */
 export function lookOf(m: Pick<Molecule3D, "look">): Look {
   return m.look ?? "primary";
+}
+
+/** Molecules in 3D each in the look `looks` gives it, where it gives one - the same list where it gives none. */
+export function withLooks<M extends Pick<Molecule3D, "id" | "look">>(list: readonly M[], looks: Readonly<Record<number, Look>>): M[] {
+  if (!Object.keys(looks).length) return list as M[];
+  return list.map((m) => (looks[m.id] && looks[m.id] !== lookOf(m) ? { ...m, look: looks[m.id] } : m));
 }
 
 /** A molecule in 3D as it is drawn, frame by frame: about its centre, in world units. */
@@ -699,7 +705,7 @@ export function turnedTogether(ms: readonly Turning3D[], q: THREE.Quaternion): (
     const turn = q.clone().multiply(m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion()).normalize();
     return { id: m.id, at: { x: r.x, y: r.y, z: r.z }, turn: turnOf(turn) };
   });
-  const lift = -Math.min(...placed.map((p, i) => p.at.z - ms[i].standing));
+  const lift = -least(placed.map((p, i) => p.at.z - ms[i].standing));
   return placed.map((p) => ({ ...p, at: { ...p.at, z: p.at.z + lift } }));
 }
 

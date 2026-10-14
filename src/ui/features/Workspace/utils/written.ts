@@ -80,26 +80,3 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = curr
   const names = molecules.map((m) => (m.name ? stem(m.name) : "")).filter(Boolean);
   return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}) };
 }
-
-/**
- * A molecule in 3D's formula, its atoms counted - its hydrogens are atoms of
- * its own - in Hill order: C, H, then the rest alphabetically; all of them
- * alphabetically where there is no carbon.
- */
-export function formulaOf(atoms: readonly { el: string }[]): string {
-  const count = new Map<string, number>();
-  for (const a of atoms) count.set(a.el, (count.get(a.el) ?? 0) + 1);
-  const others = [...count.keys()].filter((e) => e !== "C" && e !== "H").sort();
-  const order = count.has("C") ? ["C", ...(count.has("H") ? ["H"] : []), ...others] : [...count.keys()].sort();
-  return order.map((e) => `${e}${count.get(e)! > 1 ? count.get(e) : ""}`).join("");
-}
-
-/**
- * The molecules in 3D on the page as Export names them, where it asks which
- * to write: each by the file it came from and its formula - numbered, where
- * two would read alike.
- */
-export function offeredNames(molecules: readonly { name?: string; atoms: readonly { el: string }[] }[]): string[] {
-  const names = molecules.map((m, i) => `${m.name ?? `Molecule ${i + 1}`} - ${formulaOf(m.atoms)}`);
-  return names.map((n, i) => (names.filter((o) => o === n).length > 1 ? `${n} (${i + 1})` : n));
-}

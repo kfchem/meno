@@ -18,6 +18,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import type { KeptData, MenoFile } from "../doc/menoFile";
 import { readerById, readerIdOfLine, type ReaderPlugin } from "./catalog";
 import { kindOf } from "../io/kinds";
+import { textOf } from "../io/text";
 import type { Reader } from "./client";
 import type { CalcInfo, CalcSource } from "./output";
 import { isAsk, resultKey, resultsOn, type ListResult } from "./results";
@@ -64,7 +65,9 @@ export async function heldOutput(hash: string): Promise<{ name: string; text: st
 
 /** The outputs a workspace file keeps, held for the session as it is opened - each read from it only when wanted. */
 export function holdOutputsOf(file: MenoFile): void {
-  const decoder = new TextDecoder();
+  // (its bytes as they were written, a byte-order mark kept: a text from Notepad
+  // began with one, and without it its SHA-256 was not its own - it was lost)
+  const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   for (const f of file.files) {
     if (!f.media.startsWith("text/") || outputs.has(f.sha256)) continue;
     outputs.set(f.sha256, {
@@ -94,8 +97,8 @@ export type ReadAt = (path: string) => Promise<string | null>;
 
 const readAt: ReadAt = async (path) => {
   if (!isTauri()) return null;
-  // (as Open reads: bytes, as UTF-8)
-  return readFile(path).then((bytes) => new TextDecoder().decode(bytes), () => null);
+  // (as Open reads: bytes, as lib/io/text reads them - the text its hash was taken of)
+  return readFile(path).then((bytes) => textOf(bytes), () => null);
 };
 
 /** An output kept where it was, read again: its text, where it is there and unchanged - the same SHA-256 - and kept for the session; else none. */

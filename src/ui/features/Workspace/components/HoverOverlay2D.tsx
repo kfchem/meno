@@ -82,7 +82,8 @@ export default function HoverOverlay2D() {
     let moving = false;
     const L = NOMINAL_BOND_LENGTH;
     const targetWorld = THICKNESS_RATIO * L;
-    const lineHalf = lineHalfOf(drawn.opts, drawn.zoom);
+    // (as wide as the bonds are drawn: at the zoom they were laid out at)
+    const lineHalf = lineHalfOf(drawn.opts, drawn.laidAt);
     const settledHalf = (targetWorld * SETTLED) / 2;
     const margin = Math.max(0, settledHalf - lineHalf);
     const ext = 0.04 * L;
@@ -121,7 +122,7 @@ export default function HoverOverlay2D() {
       const swing = Math.sin(Math.PI * band.pulse);
       const w = targetWorld * widthAt(band.u) * (1 - 0.25 * swing);
       const opacity = Math.min(1, ALPHA.highlight * easeOutCubic(band.u) * (1 + 0.35 * swing));
-      const key = `${a1.x},${a1.y},${a2.x},${a2.y},${w},${drawn.zoom},${k >= 0 ? JSON.stringify(reach) : ""}`;
+      const key = `${a1.x},${a1.y},${a2.x},${a2.y},${w},${drawn.laidAt},${k >= 0 ? JSON.stringify(reach) : ""}`;
       if (key !== band.drawnAt) {
         band.drawnAt = key;
         const outline = bandAround(

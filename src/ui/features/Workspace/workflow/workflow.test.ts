@@ -6,7 +6,8 @@ import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type Wo
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { KCAL_PER_HARTREE, boltzmann, runMeno } from "./meno";
+import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
+import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
@@ -160,6 +161,87 @@ describe("wires", () => {
 });
 
 describe("Meno's own steps", () => {
+  it("group entries in place - each group the same one as it grows, never a copy for each entry", () => {
+    const groups = new Map<number, number[]>();
+    for (let i = 0; i < 2; i++) pushTo(groups, i % 2, i);
+    const even = groups.get(0);
+    for (let i = 2; i < 6; i++) expect(pushTo(groups, i % 2, i)).toBe(groups);
+    expect(groups.get(0)).toBe(even);
+    expect([...groups.entries()]).toEqual([[0, [0, 2, 4]], [1, [1, 3, 5]]]);
+    // (one compound's 20,000 conformers: each step once copied its group for every entry, and took seconds)
+    const one = setEntries([{ ...bent({ x: 0, y: 0 }, 2, [-76, -76.001]), id: 1, conformerSet: true }], "conformers");
+    const many = Array.from({ length: 20_000 }, (_, k) => ({ ...one[k % 2], number: k + 1, energy: -76 + (k % 97) * 1e-4 }));
+    for (const kind of ["populations", "choose", "energy-window"] as const) expect(runMeno(kind, many, "conformers", kind === "energy-window" ? { window: 3 } : undefined).ok).toBe(true);
+  });
+
+  /** `count` conformers of a chain of twelve atoms, each its atoms shaken by up to `shake` Å from the chain's places - by a fixed sequence, the same each run. */
+  const shaken = (count: number, shake: number) => {
+    let seed = 7;
+    const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+    const chain = Array.from({ length: 12 }, (_, i) => [1.25 * i, (i % 2) * 0.85, 0]);
+    const one = setEntries([{ ...bent({ x: 0, y: 0 }, 2), id: 1, conformerSet: true }], "conformers")[0];
+    return Array.from({ length: count }, (_, k) => ({
+      ...one,
+      atoms: chain.map(() => ({ ...one.atoms[0], el: "C" })),
+      number: k + 1,
+      energy: -100 + k * 1e-5,
+      xyz: chain.flatMap((p) => p.map((v) => v + shake * next())),
+    }));
+  };
+
+  it("keep in Duplicates what laying each over every one kept would keep", () => {
+    // (two hundred conformers, each also there again a hair away: half alike)
+    const some = shaken(200, 0.6);
+    const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
+    const plainly: typeof order = [];
+    for (const e of order) if (!plainly.some((k) => rmsd(k.xyz, e.xyz) <= 0.125)) plainly.push(e);
+    expect(keptApart(order, 0.125)).toEqual(plainly);
+    expect(plainly).toHaveLength(200);
+  });
+
+  it("do Duplicates in turns that let the page go on, saying how far they are - and keep what doing it at once keeps", async () => {
+    // (three thousand conformers, each there again a hair away)
+    const some = shaken(1_500, 0.6);
+    const order = some.flatMap((e) => [e, { ...e, xyz: e.xyz.map((v, i) => v + (i % 3 === 0 ? 0.01 : 0)) }]);
+    const done: number[] = [];
+    let pauses = 0;
+    // (a clock that goes on a millisecond each time it is read: a turn over every few entries)
+    let clock = 0;
+    const now = () => clock++;
+    const out = await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { onDone: (n) => done.push(n), pause: async () => void pauses++, slice: 20, tell: 100, now });
+    expect(pauses).toBeGreaterThan(10);
+    const quick = pauses;
+    // (said far less often than the turns: at most every hundred of the clock's milliseconds)
+    expect(done.length).toBeGreaterThan(1);
+    expect(done.length).toBeLessThan(pauses / 2);
+    // (further each turn, and never all of it before the last)
+    expect(done.every((n, i) => n > (done[i - 1] ?? 0) && n < order.length)).toBe(true);
+    expect(out).toEqual(runMeno("duplicates", order, "conformers"));
+    expect(out?.ok && out.kept).toHaveLength(1_500);
+    // (the other steps, done at once)
+    pauses = 0;
+    await runMenoInTurns("populations", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 0 });
+    expect(pauses).toBe(0);
+    // (the page's own turns long - ten of the clock's milliseconds each: the slices four times as long, and so a quarter as many)
+    let slow = 0;
+    clock = 0;
+    await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void ((clock += 10), slow++), slice: 20, now });
+    expect(slow).toBeLessThan(quick / 1.5);
+    // (stopped: given up at the next turn, nothing kept)
+    pauses = 0;
+    expect(await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 20, now, stopped: () => pauses >= 2 })).toBeNull();
+    expect(pauses).toBe(2);
+  });
+
+  it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {
+    const many = shaken(5_000, 0.6);
+    let laid = 0;
+    const kept = keptApart(many, 0.125, (p, q) => (laid++, rmsd(p, q)));
+    expect(kept).toHaveLength(5_000);
+    // (every one over every one kept before it: 12,497,500)
+    expect(laid).toBeLessThan(50_000);
+  });
+
   const entries = (m: Omit<Molecule3D, "id">, set: "molecules" | "conformers") => setEntries([{ ...m, id: 1 }], set);
 
   it("make a compound set a conformer set by constitution", () => {

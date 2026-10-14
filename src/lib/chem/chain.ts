@@ -13,7 +13,9 @@
  * SO2Me) or the next atom of the chain (the O of CH2OH) - whichever makes
  * every atom's valence one it has, an =O tried first; any other element is
  * the chain's next atom; what parentheses hold, with its count, hangs on
- * the atom before it (CH(CH3)2). Charges, and readings with an atom at a
+ * the atom before it (CH(CH3)2) - an O or an S alone in them an =O, as
+ * one unbracketed may be (C(O)NMe2, C(O)OMe), a group alone in them as
+ * it would unbracketed (N(iPr)2). Charges, and readings with an atom at a
  * valence it does not have - CO, CH2 - are none.
  */
 
@@ -49,7 +51,8 @@ function itemsOf(text: string, groups: GroupsAt): Item[] | null {
       if (j >= text.length) return null;
       const inner = itemsOf(text.slice(i + 1, j), groups);
       if (!inner?.length) return null;
-      found = [{ kind: "branch", items: inner }];
+      // (a group alone in them, with its count, hangs on the atom before as it would unbracketed: the (iPr)2 of N(iPr)2)
+      found = inner.length === 1 && inner[0].kind === "group" ? inner : [{ kind: "branch", items: inner }];
       next = j + 1;
     } else {
       const g = groups.at(text, i);
@@ -97,6 +100,15 @@ function readOn(items: Item[], k: number, r: Read): Read | null {
     // (what parentheses hold, bound to the atom before them by its first atom)
     const first = it.items[0];
     if (first.kind !== "element" || first.el === "H") return null;
+    // (an O or an S alone in them is an =O on the atom before, tried first, as one unbracketed is: the C(O) of C(O)NMe2)
+    if (it.items.length === 1 && OXO.has(first.el) && cur.used + 2 <= Math.max(...VALENCES[cur.el])) {
+      const n = copy(r);
+      n.atoms[n.at].used += 2;
+      n.atoms.push({ el: first.el, hs: 0, used: 2 });
+      n.bonds.push({ a: n.at, b: n.atoms.length - 1, order: 2 });
+      const done = readOn(items, k + 1, n);
+      if (done) return done;
+    }
     const n = copy(r);
     n.atoms[n.at].used += 1;
     n.atoms.push({ el: first.el, hs: 0, used: 1 });

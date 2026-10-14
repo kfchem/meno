@@ -54,7 +54,16 @@ and in particular:
   - **Chains** (agreed 2026-10-03): three clicks on an atom draw a chain,
     and so does Quick Add's *Chain* from empty space - led by a drag, or,
     the last click (or the press on the icon) let go where it was, traced
-    with the button up until a click ends it; Escape lets it go. The third
+    with the button up until a click ends it; Escape lets it go, and so
+    does undo (Cmd/Ctrl+Z) while any gesture is under way - a chain, a
+    shape, an arrow, a stroke of ink, a drag, a box, a handle's resize, a
+    molecule in 3D turned or moved, a measurement's value set - undoing
+    nothing more (the maintainer, 2026-10-14; `gestureUnderWay`,
+    store/gesture). While a label or words on the page are typed, undo is
+    the words' own, as in a text field, and never the document's under
+    them (`wordsUnderWay`). A gesture lost - the window left, the pointer
+    taken from it - is let go the same way, and its flags with it, so that
+    no undo after it is taken for it (`letLostGesturesGo`). The third
     click takes back the bond the double-click drew. (Two clicks on empty
     space drew one until 2026-10-08, when the maintainer gave the
     double-click there to *Quick Add*, below; three did until 2026-10-10,
@@ -158,7 +167,9 @@ by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
 **A click keeps each view's own meaning**: in 2D a click on an atom edits
-its label and a click on a bond changes its kind, as drawing wants; in 3D a
+its label and a click on a bond changes its kind, as drawing wants - and
+the bond's right-click menu chooses its kind outright (the maintainer,
+2026-10-14: both), for every bond selected at once, as one step; in 3D a
 click on an atom chooses it, for a measurement, and a click elsewhere on the
 molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
@@ -173,30 +184,42 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron, expand an abbreviation, select its structure |
-| A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure |
-| An electron-pushing arrow | full head, fishhook (the one it has marked); Delete | lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
-| The selection | cut, copy, paste (opened on empty space), clean up, 3D, colour; Delete | copy as SMILES, export, turn over either way, a slide around it, a box around it, use as input, save as abbreviation |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
+| An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
+| The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text, present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all |
-| A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure, all its conformers, its lists, its output, turn like its drawing, make it again, draw its formula |
+| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
+| A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
 | Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
-| A PDF | read, previous page, next page, an icon or full size; Delete | copy, put on the page, copy picture, spread or gather pages |
+| A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
 | A text's sheet | read, an icon or full size; Delete | |
-| A picture | copy picture; Delete | show in the PDF |
+| A picture | copy picture (not a film); Delete | show in the PDF (one cut out of a PDF), read as structure (not a film), play or pause (a film), save picture or save film |
 | A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, bring to front, send to back |
 | Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
-| A step | run (or stop), run from here, options; Delete | show log, show files, save as procedure |
-| A set, an arrow, a "+", a wire, a measurement | Delete | save as procedure (a set), arrow style (an arrow) |
+| A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
+| An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
+| A measurement | Delete | set its distance, angle or torsion angle |
+| A set, a "+", a wire | Delete | save as procedure (a set) |
 
-The icon that turns a molecule in 3D to its other look is where the
-second 3D style will go (decisions of 2026-10-10: one step from the
-right-click and double-click menus). An item that does not apply now - the
-previous page, on the first - is shown, but cannot be pressed, so that the
-icons keep their places. What Quick Add puts down - an arrow, a "+", words
-- is no longer on the menus on empty space; and what concerns the whole
-workspace is done by selecting all of it first.
+The icon that turns a molecule in 3D to its other look - the second 3D
+style, one step from the right-click menu as from a double-click
+(decisions of 2026-10-10) - is named after the style it goes to and
+drawn as balls or as spheres (docs/WORKSPACE.md, *Styles in 3D*).
+*Render…* is there only where a plugin that renders is added
+(docs/RENDER.md). An icon that does not apply now - the previous page,
+on the first; a slide's *Earlier in the talk*, on the first - is shown,
+but cannot be pressed, so that the icons keep their places. A PDF's page
+arrows are there only while its pages lie stacked, one on top: spread,
+or made an icon, it has none, and the icons after them close up. An
+item listed that does not apply is left out: a molecule's bond orders
+where they are known, say. With no atom or bond in the selection -
+molecules in 3D, words or shapes alone - what only a drawing has is left
+out of its menu: clean up, 3D, colour, copy as SMILES, turning over and
+save as abbreviation. What Quick Add puts down - an arrow, a "+",
+words - is no longer on the menus on empty space; and what concerns the
+whole workspace is done by selecting all of it first.
 
 **Selecting**, the same in both views:
 
@@ -214,7 +237,7 @@ workspace is done by selecting all of it first.
 selection, a structure, words, a picture, a PDF, a slide, a molecule in 3D
 - lines up as it goes with what is near: its edges and middle with theirs,
 and a space in a row or a column with another there, within 6 pixels, a
-thin line in Meno's accent showing each. A slide, a picture or a shape made
+thin line in Meno's attention colour (#cd4560) showing each. A slide, a picture or a shape made
 larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
@@ -256,7 +279,18 @@ led by a drag from the icon or traced with the button up. *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
-wrong is said under the field. A double-click on an atom still draws one
+wrong is said under the field, in a few words about the SMILES itself - a
+formula written for it (each element once, a count after one; a SMILES
+for a halide of one atom then given - "a SMILES for it is
+Cl[Sn](Cl)(Cl)Cl" for SnCl4, a salt of groups 1 and 2 as ions,
+"[Mg+2].[Cl-].[Cl-]", where as many halogens as its charge), a
+ring left open (and which: "1 is opened and not closed"), a ( or [ not
+closed, a symbol that is no element, an element written without its
+brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
+an atom and an aromatic one), an H written as an atom ("H is left out of
+a SMILES"), an atom with more bonds than it can take (which, with its
+charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
+aromatic ring that cannot alternate. A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
@@ -550,10 +584,34 @@ All hover-based, as above.
      it is drawn on the left, comes before any other reading of them (the
      maintainer, 2026-10-12): ho is HO, kept OH, not holmium; mes is MeS,
      kept SMe, not mesityl - Mes typed so is mesityl. A charge typed last
-     stays last: ho- and HO- are OH-, h3n+ NH3+.
-  4. A prefix set in italics gets its hyphen: tbu is t-Bu, co2tbu CO2t-Bu;
-     iPr stays.
+     stays last: ho- and HO- are OH-, h3n+ NH3+. HN typed before a group is
+     NH and the group even where the letters as written read as a whole
+     molecule too: HNiPr and hnipr are NHiPr, not a complex of nickel - a
+     label on a structure stands for part of one.
+  4. A prefix set in italics - n, s, t, sec, tert, o, m, p - gets its
+     hyphen, at a label's start or after an atom, however it was typed:
+     tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
+     hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
+     element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
+     FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
+     italics as a group does: m-CPBA, p-TSA, n-hexane.
   5. What reads as nothing stays exactly as typed - no capital made.
+  6. A reagent's or a ligand's name comes before a metal's formula (the
+     maintainer, 2026-10-13), however many letters it makes capitals. No
+     metal's symbol is read from letters typed small across the name of a
+     group, a reagent or a ligand the same letters spell: tbscl is TBSCl,
+     not terbium's; tmscl TMSCl and tmsotf TMSOTf, not thulium's; tipscl
+     TIPSCl; lah LAH, not LaH; cdi CDI; tbme TBME. Nor holmium's from ho
+     before a group, as rule 3 reads ho: hoac is HOAc, hotf HOTf, homs
+     HOMs, hocl HOCl. Nor two elements' symbols of a letter each from a
+     group's name of two letters typed small: phi is PhI, phio PhIO,
+     phi(oac)2 PhI(OAc)2 - not P and H. Of reagents' names and formulas, a
+     name Meno knows comes first: cpme is CPME, not CpMe. Where no name is
+     spelt, a metal's formula is read as ever: h2zn is H2Zn, pdcl2
+     PdCl2, cocl2 CoCl2, zni2 ZnI2, cp2zrhcl Cp2ZrHCl; and one typed as it
+     is written is that - HoCl3, TbMe. A group's name of one letter, Z (Cbz), is read from z
+     only as part of a structure - co2z is CO2Z, nhz NHZ - never into a
+     metal's formula: nbz stays nbz.
 
   As it is typed, only its letters' case changes, as they are read so far
   - the same letters in the same places, the caret where it was; rules 3
@@ -718,8 +776,8 @@ All hover-based, as above.
   any other, from the system's chooser; the one given now is ringed.
   - **Colour sets** (the maintainer, 2026-10-11), in Settings, General,
     *Colours*, chosen as the drawing style's presets are; the one chosen is
-    the one in use (the card offers only it). Meno's - its base #317689,
-    its accent #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
+    the one in use (the card offers only it). Meno's - its base colour #317689,
+    its attention colour #cd4560, a pale one of each, #b2d9e4 and #ebb3be, for a
     highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
     look right as they are, as colour makes a drawing look cheap easily -
     and Okabe and Ito's, told apart by those who see colours otherwise,
@@ -884,9 +942,12 @@ All hover-based, as above.
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
     it, the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
-    each as fit, each line still centred, a word wider alone on its line, a
-    number or a range never parted from the unit after it (60 °C, 12 h,
-    2 equiv, 0–25 °C); a drag is one undo step. Written anew, they are
+    each as fit, each line still centred, a number or a range never parted
+    from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
+    are wider than the words are made; a word wider than that broken at
+    their edge - after a hyphen, a comma or a closing bracket, or before an
+    opening one, where one fits, as a chemical name is broken (the
+    maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align
@@ -1071,12 +1132,15 @@ traced from reference drawings.
   something to lose. (PR #43) Since 2026-10-06 (docs/FILE-IO.md), Save and
   Save As write the workspace (`.meno`) alone; MOL, SDF, RXN and SVG are
   written by Export; and closing offers Save beside Close without saving.
-- Open (Ctrl/Cmd+O, or the menu on empty space) puts a file in a tab of its own - or
-  in place of a blank canvas - named for the file; text goes into the
-  column of the workspace in front (docs/WORKSPACE.md, *Texts*). The canvas is saved
-  nowhere then: Save asks where, suggesting that name. A save names the
-  tab for its file too. A canvas opened from Word or PowerPoint keeps the
-  document's name either way.
+- Open (Ctrl/Cmd+O, or the menu on empty space) adds a file to the
+  workspace in front, as a drop on its canvas does, in free space near
+  the middle of the view; only a `.meno` opens a tab of its own (the
+  maintainer, 2026-10-13: docs/WORKSPACE.md). Text goes into the column of
+  the workspace in front (docs/WORKSPACE.md, *Texts*). Opened onto a
+  workspace with nothing on it, the workspace is saved nowhere then: Save
+  asks where, suggesting the file's name. A save names the tab for its
+  file too. A canvas opened from Word or PowerPoint keeps the document's
+  name either way.
 - Import that keeps charges, isotopes, radicals, atom lists and S-groups, and
   V3000 reactions.
 - SMILES in and out: in from Quick Add's *SMILES* (2026-10-10; a card on
@@ -1091,9 +1155,9 @@ traced from reference drawings.
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu
   (or Ctrl/Cmd+Shift+K on nothing); a SMILES is drawn from Quick Add.
-  (Meno's menu, from its logo, held them until 2026-10-10.) Open puts a
-  file in a tab of its own, never over what is drawn; a file dropped on
-  the drawing is added to it.
+  (Meno's menu, from its logo, held them until 2026-10-10.) Open adds a
+  file to the workspace in front, never over what is drawn; a file
+  dropped on the drawing is added to it, where it is dropped.
 - The clipboard, for Word and PowerPoint: a vector picture in each platform's
   own form (EMF on Windows, PDF on macOS), PNG and MOL alongside it.
   Agreed 2026-09-29: the structure is re-edited from Office - on Windows by

@@ -25,6 +25,7 @@ import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, orientFor } from "./drawing";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -216,7 +217,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       continue;
     }
     const bond = model.bonds.find((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
-    if (bond) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
+    // (a wedge on a single bond only: one put on a double or triple bond - at an atom with too many bonds, say - is no wedge)
+    if (bond && bond.order === 1) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
   }
   // a ring in perspective (face-on to a metal, or turned on its bond): its
   // near edges bold, a bond toward the viewer a wedge narrow at its far
@@ -361,5 +363,5 @@ function stereoOf(m: Model) {
 
 /** The first id no atom or bond of `model` has. */
 export function nextFree(model: Model): number {
-  return Math.max(0, ...model.atoms.map((a) => a.id), ...model.bonds.map((b) => b.id)) + 1;
+  return Math.max(0, greatest(model.atoms.map((a) => a.id)), greatest(model.bonds.map((b) => b.id))) + 1;
 }
