@@ -8,6 +8,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { CHAIN_EASE, DOUBLE_CLICK_MS } from "../constants";
 import { cellOf, cellsWithin, type Honeycomb } from "../utils/honeycomb";
 import { setLinePoints } from "../utils/linePoints";
+import { trailShown } from "../utils/chain";
 import { follow } from "../../../theme/motion";
 
 /** How far about the chain's end the honeycomb is shown, in bonds, and how long it takes to open out and to fold away, in seconds. */
@@ -143,7 +144,7 @@ export default function ChainGuide2D() {
     }
     shown.current = s && s.open > 0 ? s : null;
     // the trail: where the pointer has been
-    const trail = chain ? chain.trail : [];
+    const trail = chain ? trailShown(chain.trail) : [];
     if (trail.length > 1) {
       setLinePoints(trailLine.geometry, trail, -0.03);
       trailLine.visible = true;
