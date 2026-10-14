@@ -550,8 +550,9 @@ closes*).
   `work/` - and starts Meno's executable as its runner, `Meno --job
   <folder>`: `run()` hands that to `jobs::job_mode` before anything else, so
   it opens no window and needs no webview. The runner is started in a
-  process group of its own (detached, on Windows) and nothing of Meno's
-  waits on it.
+  process group of its own (detached, on Windows), in the jobs' folder -
+  never Meno's own, which it would hold, nor its job's, which is taken away
+  as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
@@ -568,10 +569,18 @@ closes*).
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
   process group of its own (macOS, Linux) or a job object that kills what
-  is in it when it closes (Windows), so that *Stop* - a `stop` file the
+  is in it when it closes (Windows; the program started held, put in the
+  job object, then let go, so that nothing it starts at once is outside
+  it - one that cannot be put in a job object is ended before it runs, and
+  its job fails, saying so), so that *Stop* - a `stop` file the
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A finished job's folder is taken away** (*Remove*, *Clear finished
+  jobs' files*) by moving it out of the jobs' way first, under a name no
+  job has (`.taken-…`), then removing it: one a program still holds a file
+  in (Windows) is never left half there as a job - nor read as one in the
+  queue; what was left goes at the next clearing.
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -1151,6 +1160,12 @@ path it is given:
   app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
+- Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
+  (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
+  system's code page: on Windows that is the ANSI one otherwise, in which a request
+  naming a file in Japanese stopped a worker (English Windows) or came back garbled
+  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
