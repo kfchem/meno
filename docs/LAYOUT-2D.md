@@ -27,12 +27,7 @@ lowest-ranked end atom meets them, as a SMILES string writes them. It
 lays that out, and hands the drawing back in the order it was given -
 from two such walks, one from the lowest-ranked end atom and one from the
 highest, the drawing that reads better kept: one order alone draws some
-molecules worse than another does, as any input order did. The second
-walk is laid out only where the first drawing leaves something to win -
-where it scores a point or more (any fault a reader cannot miss costs
-more than that) - and where it is another order at all (strychnine, with
-one end atom, is walked the same from either end): that depends on the
-first drawing alone, so the result is still the same in any order. The last 64
+molecules worse than another does, as any input order did. The last 64
 molecules laid out are kept by the molecule written in its own order: the
 same molecule again - a label's group drawn out at each relayout, a
 drawing read back - is handed back at once, whatever order it comes in. The benchmark's measure reads a

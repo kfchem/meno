@@ -322,35 +322,6 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   17.80 -> 14.48; nothing worse. Ginkgolide B and paeoniflorin do not
   change: ginkgolide's cage is drawn upright, which no frame turns, and
   paeoniflorin's frame has a six.
-- **The second order only where it can win** (2026-10-14, L8's review).
-  Laid out in two own orders, large molecules took twice main's time or
-  more (aconitine 0.85 s on main, 1.77 s; valinomycin 0.53, 1.18). The
-  second was to be laid out only where the first drawing has faults or
-  ties. Neither tells: the order decides between equals at many points -
-  the atom a ring is put from, the slot each child of an atom takes, the
-  flip untangle tries first - and no near-tie where the frame is chosen
-  foretold a win (the other order drew actinomycin D 5.8 better, its
-  frame having won by 10); the other order drew aspartame 2.7 better,
-  vinblastine 5.5 and sparteine 4.0, all without a fault the first time,
-  and every large molecule's first drawing scores far above any bar that
-  loses none of them (aconitine 21.9, paclitaxel 10.9, valinomycin 1.9).
-  So the second order is laid out where the first drawing scores a point
-  or more - any fault costs more than that, and on both lists no second
-  order bettered a first drawing under 1.07 - and where it is another
-  order (strychnine, nicotine and DABCO are walked the same from either
-  end); no drawing on either list changes for it. The time is won back
-  without changing any drawing. A cage's views were found anew for each
-  pass of the whole - flat, then as a solid - and for each rank asked for
-  (aconitine's core five times a pass): now once, by what they are found
-  from; a ring system is laid out once in each order, however often the
-  whole is drawn; and a frame grown the same as another - a cage drawn
-  upright, which no frame turns - is set right once. Aconitine 1.77 ->
-  1.10 s, tetrodotoxin 0.82 -> 0.60, quinine 0.26 -> 0.22 (least of ten
-  runs on a busy machine; main 0.85, 0.45, 0.13). Valinomycin, paclitaxel
-  and rifampicin stay at about twice main: their time is the measure,
-  called for each move tried (80% of paclitaxel's), twice. (Valinomycin's
-  ranks take a further 0.14 s: its nine isopropyls' alike methyls are
-  tried both ways at every level, and the search runs out of steps.)
 - **A core's view chosen by the system alone** (2026-10-14). Ibogaine's
   isoquinuclidine was seen from the side its ring system alone read best
   from, which stood the indole on top of the cage, the drawing twice as

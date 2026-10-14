@@ -802,10 +802,8 @@ describe("layout2D", () => {
   });
 
   it("leaves paper between pieces whose labels face each other", () => {
-    // ibuprofen, its acid at the right-hand end (0-14), and an ethylene
-    // glycol beside it (15-18): OH and HO face each other, whichever way
-    // round the glycol is drawn (which end of an ethanol faced the acid
-    // was a choice between equals)
+    // ibuprofen, its acid at the right-hand end, and an ethanol beside it
+    // (0-14), whose O comes first (15-17): OH and HO face each other
     const input: LayoutInput = {
       atoms: [
         ...Array.from({ length: 13 }, () => ({ el: "C" })),
@@ -814,24 +812,22 @@ describe("layout2D", () => {
         { el: "O", hs: 1 },
         { el: "C" },
         { el: "C" },
-        { el: "O", hs: 1 },
       ],
       bonds: (
         [
           [0, 1], [1, 2], [1, 3], [3, 4], [4, 5, 2], [5, 6], [6, 7, 2], [7, 8], [8, 9, 2], [9, 4],
-          [7, 10], [10, 11], [10, 12], [12, 13, 2], [12, 14], [15, 16], [16, 17], [17, 18],
+          [7, 10], [10, 11], [10, 12], [12, 13, 2], [12, 14], [15, 16], [16, 17],
         ] as [number, number, number?][]
       ).map(([a, b, order]) => ({ a, b, order: order ?? 1 })),
     };
     const { x } = layout2D(input);
-    const glycol = [15, 16, 17, 18];
-    const ibuprofen = x.map((_, i) => i).filter((i) => !glycol.includes(i));
+    const ethanol = [15, 16, 17];
+    const ibuprofen = x.map((_, i) => i).filter((i) => !ethanol.includes(i));
     expect(Math.max(...ibuprofen.map((i) => x[i]))).toBeCloseTo(x[14], 6);
-    const facing = glycol.reduce((p, q) => (x[q] < x[p] ? q : p));
-    expect([15, 18]).toContain(facing);
+    expect(Math.min(...ethanol.map((i) => x[i]))).toBeCloseTo(x[15], 6);
     // each O's H half a bond beside it, 0.4 of a bond across: more than a
     // bond of paper between the two H's
-    expect(x[facing] - 0.5 - 0.2 - (x[14] + 0.5 + 0.2)).toBeGreaterThan(1);
+    expect(x[15] - 0.5 - 0.2 - (x[14] + 0.5 + 0.2)).toBeGreaterThan(1);
   });
 
   it("keeps two lone ions apart", () => {
