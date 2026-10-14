@@ -761,6 +761,12 @@ As step 7's writer was built - decided with the maintainer on
   they stand on the page, each turned and placed as it is seen, its
   ångströms kept. Export is for the selection (2026-10-10), so there is
   nothing else to ask.
+  - **After a change of the drawing style** (utils/restyle3d
+    `restyled3d`), molecules that touch - a complex put together on the
+    page - are one body, moved as one, and are written in the same
+    ångströms as before. Separate bodies move apart or closer with their
+    places on the page, so the ångströms between them follow the page as
+    it now stands.
 - **The contract** (`lib/io/writers`): a writer, Meno's or a plugin's, is
   one `Writer` - the kind it writes, its name, its files' extensions,
   what it takes, its options in the general form, who writes it. A
