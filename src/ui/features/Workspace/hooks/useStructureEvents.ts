@@ -10,8 +10,8 @@ import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { calculateNewBondPosition } from "../utils/geometry";
 import { clickClock, clickEditHeldOff, doubleClickedSince, noteClick, notePress } from "../utils/clickCount";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
-import { editorModelOf, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
-import { schemeOf, type ImportedScheme } from "../document";
+import { editorModelOf, openedPlace, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
+import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
 import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
 import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
@@ -25,6 +25,7 @@ import type { DropZone, Dropped } from "../../../../lib/drop";
 
 import { readRecord } from "../utils/copyPaste";
 import { kindOf, MARK_REACH, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
+import { headOfFile, textOfFile } from "../../../../lib/io/text";
 import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
 import { anyKindById } from "../../../../lib/calc/catalog";
@@ -184,22 +185,17 @@ export function useStructureEvents(
           kind,
           initialPath,
         );
+        const st = store.getState();
+        const { add, dx, dy } = openedPlace(isBlankDocument(st as unknown as WorkspaceDocument), st.model.atoms, result);
         const shifted = {
-          atoms: result.model.atoms.map((a) => ({
-            ...a,
-            x: a.x - result.centroid.x,
-            y: a.y - result.centroid.y,
-          })),
+          atoms: result.model.atoms.map((a) => ({ ...a, x: a.x + dx, y: a.y + dy })),
           bonds: result.model.bonds,
         };
         // The file the tab was opened with is where its document starts:
-        // nothing to undo, nothing unsaved.
-        store
-          .getState()
-          .openModel(
-            toModel(shifted),
-            importedScheme(result, -result.centroid.x, -result.centroid.y),
-          );
+        // nothing to undo, nothing unsaved - unless the canvas was drawn on
+        // as it was read: then it is added beside that, one step to undo.
+        if (add) st.appendModel(toModel(shifted), importedScheme(result, dx, dy));
+        else st.openModel(toModel(shifted), importedScheme(result, dx, dy));
         if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);
         setImportError(null);
       } catch (e) {
@@ -452,7 +448,7 @@ export function useStructureEvents(
     const at = clientToWorld(x, y) || { x: 0, y: 0 };
     // What a file dropped is, from its start (lib/io/kinds): nothing need be
     // read of a large picture to know it is none of Meno's kinds
-    const head = dropped ? await dropped.slice(0, MARK_REACH).text() : "";
+    const head = dropped ? await headOfFile(dropped, MARK_REACH) : "";
     const kind = dropped ? await kindOfFile(dropped.name, head) : null;
     // None of them: a picture or an object dragged out of Word or
     // PowerPoint, perhaps, whose structure goes where it was dropped,
@@ -484,7 +480,7 @@ export function useStructureEvents(
   const openFilesAt = async (files: File[], at: { x: number; y: number }, again?: () => void, opened?: { path?: string; free?: boolean }): Promise<boolean> => {
     const f = files[0];
     if (!f) return false;
-    const head = await f.slice(0, MARK_REACH).text();
+    const head = await headOfFile(f, MARK_REACH);
     const kind = await kindOfFile(f.name, head);
     // PDFs: held, and put on the page where they were dropped (docs/PDF.md)
     const pdfs = files.filter((g) => /\.pdf$/i.test(g.name) || g.type === "application/pdf");
@@ -519,11 +515,11 @@ export function useStructureEvents(
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
-      store.getState().addTexts([{ name: f.name, text: await f.text() }], at);
+      store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
       setImportError(null);
       return true;
     }
-    const text = await f.text();
+    const text = await textOfFile(f);
     // a record dropped: what it holds, beside what is drawn, selected
     if (kind?.id === MENO_KINDS.record.id) {
       const drawn = readRecord(text);

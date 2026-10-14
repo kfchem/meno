@@ -230,6 +230,21 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         return prev;
       }),
 
+    endGestures: () =>
+      set((prev: EditorState) => ({
+        ...prev,
+        extend: prev.extend.active ? ended : prev.extend,
+        shapeDraft: null,
+        arrowDraft: null,
+        inkDraft: null,
+        // (the electron-pushing mode itself stays: only the arrow begun goes)
+        pushDraw: prev.pushDraw?.from != null ? { ...prev.pushDraw, from: null, pointer: null, to: null } : prev.pushDraw,
+        moveDrag: noMoveDrag,
+        boxSelect: { active: false, kind: "box", points: [] },
+        wireDrag: null,
+        panHold: { active: false, pointerId: null },
+      })),
+
     letGo: () =>
       set((prev: EditorState) => ({
         ...prev,

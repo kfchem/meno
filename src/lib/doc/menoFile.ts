@@ -14,7 +14,7 @@
  * it by. Nothing is ever unpacked to the disk; what the file says of its
  * sizes is held to limits before anything is inflated.
  */
-import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
+import { inflateSync, strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
 
 export const MENO_MEDIA_TYPE = "application/vnd.kfchem.meno+zip";
 
@@ -115,17 +115,84 @@ export function readMenoFile(bytes: Uint8Array): MenoFile {
     // (a list that does not read keeps nothing that can be had)
   }
   const known = new Set(files.map((f) => f.sha256));
+  // (where each file lies in the zip, read from its directory once, as the first file is wanted - not the whole
+  // directory again for each: 9,000 pictures took 20 s)
+  let where: Map<string, Entry> | null | undefined;
   return {
     workspace: strFromU8(json),
     files,
     data: (sha256) => {
       if (!known.has(sha256)) return null;
       const name = `files/${sha256}`;
+      // (a directory that throws as it is read is one this does not read: the zip reader's, below)
+      if (where === undefined) {
+        try {
+          where = entriesOf(bytes);
+        } catch {
+          where = null;
+        }
+      }
       try {
-        return unzipSync(bytes, { filter: (f) => f.name === name && f.originalSize <= MOST_FILE })[name] ?? null;
+        // (a directory this does not read - zip64, say - read as the zip reader reads it)
+        if (!where) return unzipSync(bytes, { filter: (f) => f.name === name && f.originalSize <= MOST_FILE })[name] ?? null;
+        const e = where.get(name);
+        return e && e.size <= MOST_FILE ? entryData(bytes, e) : null;
       } catch {
         return null;
       }
     },
   };
+}
+
+/** A file in a zip, as its directory says: how it is kept (0 stored, 8 deflated), its sizes, and where its local header is. */
+type Entry = { method: number; packed: number; size: number; at: number };
+
+const u16 = (b: Uint8Array, i: number) => b[i] | (b[i + 1] << 8);
+const u32 = (b: Uint8Array, i: number) => (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
+
+/**
+ * The files of a zip by name, read from its central directory (APPNOTE 4.3.12,
+ * 4.3.16): null where it is not one this reads - no end record, or one a
+ * zip64 directory stands behind.
+ */
+function entriesOf(b: Uint8Array): Map<string, Entry> | null {
+  // the end of central directory record: last in the file, before a comment of at most 65,535 bytes
+  let end = -1;
+  for (let i = b.length - 22; i >= 0 && i >= b.length - 22 - 0xffff; i--) {
+    if (u32(b, i) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) return null;
+  const count = u16(b, end + 10);
+  const start = u32(b, end + 16);
+  if (count === 0xffff || start === 0xffffffff) return null;
+  const out = new Map<string, Entry>();
+  let i = start;
+  for (let k = 0; k < count; k++) {
+    if (i + 46 > b.length || u32(b, i) !== 0x02014b50) return null;
+    const packed = u32(b, i + 20);
+    const size = u32(b, i + 24);
+    const nameLength = u16(b, i + 28);
+    const at = u32(b, i + 42);
+    if (packed === 0xffffffff || size === 0xffffffff || at === 0xffffffff) return null;
+    out.set(strFromU8(b.subarray(i + 46, i + 46 + nameLength)), { method: u16(b, i + 10), packed, size, at });
+    i += 46 + nameLength + u16(b, i + 30) + u16(b, i + 32);
+  }
+  return out;
+}
+
+/** A file's bytes, from where its directory says it lies: as kept, or inflated - a copy of its own. */
+function entryData(b: Uint8Array, e: Entry): Uint8Array | null {
+  if (u32(b, e.at) !== 0x04034b50) return null;
+  const from = e.at + 30 + u16(b, e.at + 26) + u16(b, e.at + 28);
+  if (from + e.packed > b.length) return null;
+  const packed = b.subarray(from, from + e.packed);
+  if (e.method === 0) return packed.length === e.size ? packed.slice() : null;
+  if (e.method === 8) {
+    const out = inflateSync(packed, { out: new Uint8Array(e.size) });
+    return out.length === e.size ? out : null;
+  }
+  return null;
 }

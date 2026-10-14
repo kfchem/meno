@@ -120,14 +120,22 @@ export type CtSgroup = {
   /** A contracted abbreviation's crossing bond and the vector to it (SBV, CSTATE). */
   bondVectors?: { bond: number; x: number; y: number }[];
   className?: string;
-  /** A data Sgroup's field, its data and how it is shown. */
+  /**
+   * A data Sgroup's field, its data and how it is shown: its name; its type
+   * (F formatted, N numeric, T text) and its units or format (V2000's
+   * M  SDT; V3000's FIELDINFO where it gives them, as <type><units/format>);
+   * a FIELDINFO that does not, as the program that wrote it wrote it
+   * (`info`: CTfile Formats, chapter 2, the V3000 Sgroup fields - "program-
+   * specific field information"); its display, as the file writes it
+   * (M  SDD, FIELDDISP); and its query's type and operator.
+   */
   field?: {
     name: string;
     type?: string;
     units?: string;
+    info?: string;
     data: string[];
     display?: string;
-    info?: string;
     queryType?: string;
     queryOp?: string;
   };
@@ -162,6 +170,25 @@ export type CtMolecule = {
   chiral: boolean;
   /** Which version the block was written in. */
   version: "V2000" | "V3000";
+  /**
+   * Fewer atoms or bonds in its connection table than its counts line
+   * gives, or an atom with no place - a file cut short, or damaged: what it
+   * holds is not the molecule it says, and is not to be read as one.
+   */
+  cut?: true;
+  /**
+   * What in its connection table is not what it is said to be - an atom
+   * with no symbol, a place or another number that is not one, a bond to
+   * an atom it has not - as the chemist is told: a file damaged, and not to
+   * be read either. The first such found.
+   */
+  damaged?: string;
+  /**
+   * What it says that Meno cannot read, as the chemist is told - a mass
+   * difference on an element whose mass in the periodic table it is a
+   * difference from Meno does not hold: not to be read without it.
+   */
+  unread?: string;
 };
 
 export type CtReaction = {
@@ -169,17 +196,26 @@ export type CtReaction = {
   reactants: CtMolecule[];
   products: CtMolecule[];
   reagents: CtMolecule[];
+  /** Fewer molecules than its counts line gives, or one of them cut short (`CtMolecule.cut`). */
+  cut?: true;
+  /** What is wrong with the first of its molecules that is damaged (`CtMolecule.damaged`). */
+  damaged?: string;
+  /** What the first of its molecules that says something Meno cannot read says (`CtMolecule.unread`). */
+  unread?: string;
 };
 
 // --- shared ------------------------------------------------------------------
 
 const RADICALS: Record<number, Radical> = { 1: "singlet", 2: "doublet", 3: "triplet" };
 const SYMBOL_OF = new Map<number, string>(ELEMENTS.map((e) => [e.number, e.symbol]));
+const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 
 /**
  * The mass the periodic table gives each element, rounded: what a V2000
  * atom block's mass difference is a difference from. (The M  ISO line,
- * which gives the mass itself, supersedes it.)
+ * which gives the mass itself, supersedes it.) Not every element's: a mass
+ * difference on one not here is not guessed at, but its file refused
+ * (`CtMolecule.unread`); an M  ISO line is read for any.
  */
 const TABLE_MASS: Record<string, number> = {
   H: 1, He: 4, Li: 7, Be: 9, B: 11, C: 12, N: 14, O: 16, F: 19, Ne: 20,
@@ -191,13 +227,35 @@ const TABLE_MASS: Record<string, number> = {
   Au: 197, Hg: 201, Tl: 204, Pb: 207, Bi: 209,
 };
 
+/**
+ * A number as a CTfile writes one: a decimal, with an exponent after an E
+ * where it has one - and nothing else, so that "1.19D+01" is not read as
+ * 1.19, nor "0N" as 0.
+ */
+const NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+/** A whole number as a CTfile writes one. */
+const INTEGER = /^[-+]?\d+$/;
+
 const int = (s: string | undefined): number => {
   const n = Number.parseInt((s ?? "").trim(), 10);
   return Number.isFinite(n) ? n : 0;
 };
+/** A number, or NaN where the text is not one. */
 const float = (s: string | undefined): number => {
-  const n = Number.parseFloat((s ?? "").trim());
-  return Number.isFinite(n) ? n : NaN;
+  const t = (s ?? "").trim();
+  return NUMBER.test(t) ? Number(t) : NaN;
+};
+/** A whole number, or NaN where the text is not one. */
+const integer = (s: string | undefined): number => {
+  const t = (s ?? "").trim();
+  return INTEGER.test(t) ? Number.parseInt(t, 10) : NaN;
+};
+/** Whether a field of a line is blank - left at its default - or a whole number. */
+const blankOrInteger = (s: string | undefined) => !(s ?? "").trim() || INTEGER.test((s ?? "").trim());
+
+/** Marks a molecule damaged, saying what by: the first reason found is kept. */
+const damage = (mol: CtMolecule, why: string) => {
+  mol.damaged ??= why;
 };
 
 const lines = (text: string): string[] => text.replace(/\r\n?/g, "\n").split("\n");
@@ -220,8 +278,8 @@ const STEREO_OF_SINGLE: Record<number, CtBond["stereo"]> = { 1: "up", 4: "either
 
 /** A V2000 counts line: atoms, bonds, atom lists, the chiral flag, and its version stamp. */
 function countsV2000(line: string) {
-  let atoms = Number.parseInt(line.slice(0, 3), 10);
-  let bonds = Number.parseInt(line.slice(3, 6), 10);
+  let atoms = integer(line.slice(0, 3));
+  let bonds = integer(line.slice(3, 6));
   if (!Number.isFinite(atoms) || !Number.isFinite(bonds)) {
     // (some writers leave the fixed columns: whatever the numbers are)
     const m = line.trim().match(/^(\d+)\s+(\d+)/);
@@ -249,38 +307,63 @@ function findCounts(ls: string[], from: number): number {
   return -1;
 }
 
-function atomV2000(line: string): CtAtom {
-  let x = float(line.slice(0, 10));
-  let y = float(line.slice(10, 20));
-  let z = float(line.slice(20, 30));
-  let symbol = line.slice(31, 34).trim();
+/**
+ * A V2000 atom line's atom, and what is wrong with the line: `cut` where
+ * there is none, or it places no atom and is no atom's - a bond's, an
+ * M  END: the block ended before its count - and `damaged` where it is an
+ * atom's that does not read as one: a place or a field that is not a
+ * number, or no symbol; and `massUnknown` where it gives a mass difference
+ * on an element whose table mass Meno does not hold (`TABLE_MASS`).
+ */
+function atomV2000(line: string | undefined): { atom: CtAtom; cut?: true; damaged?: string; massUnknown?: true } {
+  const l = line ?? "";
+  let x = float(l.slice(0, 10));
+  let y = float(l.slice(10, 20));
+  let zText = l.slice(20, 30);
+  let symbol = l.slice(31, 34).trim();
   // aaaddcccssshhhbbbvvvHHHrrriiimmmnnneee after the symbol
-  let [dd, ccc, , hhh, bbb, vvv, HHH, , , mmm, nnn, eee] = [
-    line.slice(34, 36),
-    line.slice(36, 39),
-    line.slice(39, 42),
-    line.slice(42, 45),
-    line.slice(45, 48),
-    line.slice(48, 51),
-    line.slice(51, 54),
-    line.slice(54, 57),
-    line.slice(57, 60),
-    line.slice(60, 63),
-    line.slice(63, 66),
-    line.slice(66, 69),
+  let fields = [
+    l.slice(34, 36),
+    l.slice(36, 39),
+    l.slice(39, 42),
+    l.slice(42, 45),
+    l.slice(45, 48),
+    l.slice(48, 51),
+    l.slice(51, 54),
+    l.slice(54, 57),
+    l.slice(57, 60),
+    l.slice(60, 63),
+    l.slice(63, 66),
+    l.slice(66, 69),
   ];
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     // Not in its columns: read it as whitespace-separated fields instead.
-    const t = line.trim().split(/\s+/);
+    const t = l.trim().split(/\s+/);
+    if (!Number.isFinite(float(t[0])) || !Number.isFinite(float(t[1]))) {
+      // (placed neither way: an atom's line, its symbol where one has it, or none)
+      const atomLine = !!symbol || /^[A-Za-z*]/.test(t[3] ?? "");
+      return { atom: { x: 0, y: 0, z: 0, symbol: symbol || "C" }, ...(atomLine ? { damaged: "an atom whose place is not a number" } : { cut: true as const }) };
+    }
     x = float(t[0]);
     y = float(t[1]);
-    z = float(t[2]);
+    zText = t[2] ?? "";
     symbol = t[3] ?? "";
-    [dd, ccc, , hhh, bbb, vvv, HHH, , , mmm, nnn, eee] = t.slice(4);
+    fields = t.slice(4);
   }
-  const atom: CtAtom = { x: x || 0, y: y || 0, z: Number.isFinite(z) ? z : 0, symbol: symbol || "C" };
+  // (z left blank is 0; one written, a number)
+  const z = zText.trim() ? float(zText) : 0;
+  const [dd, ccc, , hhh, bbb, vvv, HHH, , , mmm, nnn, eee] = fields;
+  const damaged = !Number.isFinite(z)
+    ? "an atom whose place is not a number"
+    : !symbol
+      ? "an atom with no symbol"
+      : !fields.every(blankOrInteger)
+        ? "an atom with a field that is not a number"
+        : undefined;
+  const atom: CtAtom = { x, y, z: Number.isFinite(z) ? z : 0, symbol: symbol || "C" };
   const massDiff = int(dd);
   if (massDiff && TABLE_MASS[atom.symbol]) atom.mass = TABLE_MASS[atom.symbol] + massDiff;
+  const massUnknown = !!massDiff && !TABLE_MASS[atom.symbol] && ELEMENT_SYMBOLS.has(atom.symbol);
   const charge = int(ccc);
   if (charge === 4) atom.radical = "doublet";
   else if (charge >= 1 && charge <= 7) atom.charge = 4 - charge;
@@ -297,22 +380,29 @@ function atomV2000(line: string): CtAtom {
   if (ir === 1) atom.invRet = "invert";
   else if (ir === 2) atom.invRet = "retain";
   if (int(eee) === 1) atom.exactChange = true;
-  return atom;
+  return { atom, ...(damaged ? { damaged } : {}), ...(massUnknown ? { massUnknown: true as const } : {}) };
 }
 
-function bondV2000(line: string): CtBond | null {
-  let a1 = Number.parseInt(line.slice(0, 3), 10);
-  let a2 = Number.parseInt(line.slice(3, 6), 10);
-  let type = Number.parseInt(line.slice(6, 9), 10);
-  let [sss, , rrr, ccc] = [line.slice(9, 12), line.slice(12, 15), line.slice(15, 18), line.slice(18, 21)];
+/**
+ * A V2000 bond line's bond - none where the line joins no atoms - and what
+ * makes it damaged, where it joins two but its type or another field is no
+ * number. Which atoms it may join is the table's to say (`ctabV2000`).
+ */
+function bondV2000(line: string): { bond: CtBond | null; damaged?: string } {
+  let a1 = integer(line.slice(0, 3));
+  let a2 = integer(line.slice(3, 6));
+  let type = integer(line.slice(6, 9));
+  let rest = [line.slice(9, 12), line.slice(12, 15), line.slice(15, 18), line.slice(18, 21)];
   if (!Number.isFinite(a1) || !Number.isFinite(a2) || !Number.isFinite(type)) {
     const t = line.trim().split(/\s+/);
-    a1 = Number.parseInt(t[0], 10);
-    a2 = Number.parseInt(t[1], 10);
-    type = Number.parseInt(t[2], 10);
-    [sss, , rrr, ccc] = t.slice(3);
+    a1 = integer(t[0]);
+    a2 = integer(t[1]);
+    type = integer(t[2]);
+    rest = t.slice(3);
   }
-  if (!Number.isFinite(a1) || !Number.isFinite(a2) || !Number.isFinite(type)) return null;
+  if (!Number.isFinite(a1) || !Number.isFinite(a2)) return { bond: null };
+  if (!Number.isFinite(type) || !rest.every(blankOrInteger)) return { bond: null, damaged: "a bond with a field that is not a number" };
+  const [sss, , rrr, ccc] = rest;
   const bond: CtBond = { a1: a1 - 1, a2: a2 - 1, type };
   const stereo = int(sss);
   // single bonds' wedges; a double bond's 3 is cis or trans, not known
@@ -326,23 +416,23 @@ function bondV2000(line: string): CtBond | null {
   else if (topo === 2) bond.topology = "chain";
   const centre = int(ccc);
   if (centre) bond.reactingCentre = centre;
-  return bond;
+  return { bond };
 }
 
-/** The pairs on a V2000 "nn8 aaa vvv ..." line, after its tag. */
+/** The pairs on a V2000 "nn8 aaa vvv ..." line, after its tag: as many as it counts, and holds whole. */
 function pairs(rest: string): [number, number][] {
   const t = rest.trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
   const out: [number, number][] = [];
-  for (let k = 0; k < t[0] && 2 + 2 * k <= t.length; k++) out.push([t[1 + 2 * k], t[2 + 2 * k]]);
+  for (let k = 0; k < t[0] && 2 + 2 * k < t.length; k++) out.push([t[1 + 2 * k], t[2 + 2 * k]]);
   return out;
 }
 
-/** The pairs on a V2000 "nn8 sss ttt ..." line whose second items are words. */
+/** The pairs on a V2000 "nn8 sss ttt ..." line whose second items are words: as many as it counts, and holds whole. */
 function wordPairs(rest: string): [number, string][] {
   const t = rest.trim().split(/\s+/);
   const out: [number, string][] = [];
   const n = Number.parseInt(t[0], 10);
-  for (let k = 0; k < n && 2 + 2 * k <= t.length; k++) out.push([Number.parseInt(t[1 + 2 * k], 10), t[2 + 2 * k]]);
+  for (let k = 0; k < n && 2 + 2 * k < t.length; k++) out.push([Number.parseInt(t[1 + 2 * k], 10), t[2 + 2 * k]]);
   return out;
 }
 
@@ -355,10 +445,27 @@ function ctabV2000(ls: string[], at: number, name: string): { mol: CtMolecule; n
   const mol = emptyMolecule("V2000", name);
   mol.chiral = counts.chiral;
   let i = at + 1;
-  for (let k = 0; k < (counts.atoms || 0); k++, i++) mol.atoms.push(atomV2000(ls[i] ?? ""));
+  // (the atoms whose mass difference Meno cannot read, unless an M  ISO line gives their mass)
+  const massUnknown: number[] = [];
+  // (each line the counts line gives there: the file ending before one, an
+  // atom's line that places no atom - a bond's, an M  END - or a bond's
+  // line that joins none, cut short; an atom's or a bond's that does not
+  // read as one, damaged)
+  for (let k = 0; k < (counts.atoms || 0); k++, i++) {
+    const { atom, cut, damaged, massUnknown: unknown } = atomV2000(ls[i]);
+    if (cut) mol.cut = true;
+    if (damaged) damage(mol, damaged);
+    if (unknown) massUnknown.push(k);
+    mol.atoms.push(atom);
+  }
   for (let k = 0; k < (counts.bonds || 0); k++, i++) {
-    const b = bondV2000(ls[i] ?? "");
-    if (b) mol.bonds.push(b);
+    const { bond, damaged } = bondV2000(ls[i] ?? "");
+    if (damaged) damage(mol, damaged);
+    else if (!bond) mol.cut = true;
+    // (a bond to an atom the table has not - another record's, were it read
+    // on - damaged)
+    else if (!(bond.a1 >= 0 && bond.a2 >= 0 && bond.a1 < mol.atoms.length && bond.a2 < mol.atoms.length)) damage(mol, "a bond to an atom it does not have");
+    else mol.bonds.push(bond);
   }
   // the atom list block: "aaa kSSSSn 111 222 333 444 555", atomic numbers
   for (let k = 0; k < counts.lists; k++, i++) {
@@ -374,6 +481,8 @@ function ctabV2000(ls: string[], at: number, name: string): { mol: CtMolecule; n
     atom.list = { not: l.slice(4, 5) === "T", symbols };
   }
   i = propertiesV2000(ls, i, mol);
+  const unknown = massUnknown.find((k) => mol.atoms[k].mass == null);
+  if (unknown != null) mol.unread = `gives ${mol.atoms[unknown].symbol} a mass difference, and Meno does not know the mass it is a difference from`;
   return { mol, next: i };
 }
 
@@ -414,6 +523,8 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       const p = int(l.slice(6, 9)) - 1;
       const text = (ls[i + 1] ?? "").trim();
       i++;
+      // (an atom the table has not: no group)
+      if (!mol.atoms[a]) continue;
       const side = sideOf(mol, a, p);
       const bond = mol.bonds.findIndex((b) => (b.a1 === a && b.a2 === p) || (b.a1 === p && b.a2 === a));
       const n = Math.max(0, ...sgroups.keys(), ...mol.sgroups.map((g) => g.index)) + 1;
@@ -549,7 +660,7 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       case "SDS": {
         // "M  SDS EXPn15 sss ..."
         const t = l.slice(10).trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
-        for (let k = 0; k < t[0]; k++) sgroup(t[1 + k]).expanded = true;
+        for (let k = 0; k < t[0] && 1 + k < t.length; k++) sgroup(t[1 + k]).expanded = true;
         break;
       }
       case "SAL":
@@ -557,7 +668,9 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
       case "SPA": {
         const t = rest.trim().split(/\s+/).map((s) => Number.parseInt(s, 10));
         const g = sgroup(t[0]);
-        const items = t.slice(2, 2 + t[1]).map((v) => v - 1);
+        // (only those the table has: an atom or a bond past it is no part of the group)
+        const within = tag === "SBL" ? mol.bonds.length : mol.atoms.length;
+        const items = t.slice(2, 2 + t[1]).map((v) => v - 1).filter((v) => v >= 0 && v < within);
         if (tag === "SAL") g.atoms.push(...items);
         else if (tag === "SBL") g.bonds.push(...items);
         else g.patoms = [...(g.patoms ?? []), ...items];
@@ -633,10 +746,10 @@ function propertiesV2000(ls: string[], from: number, mol: CtMolecule): number {
           const e = l.slice(13 + 11 * k, 24 + 11 * k);
           const atom = int(e.slice(1, 4)) - 1;
           const out = int(e.slice(5, 8));
-          if (atom < 0) continue;
+          if (atom < 0 || atom >= mol.atoms.length) continue;
           g.attachments = [
             ...(g.attachments ?? []),
-            { atom, leaving: out > 0 ? out - 1 : null, id: e.slice(9, 11).trim() },
+            { atom, leaving: out > 0 && out <= mol.atoms.length ? out - 1 : null, id: e.slice(9, 11).trim() },
           ];
         }
         break;
@@ -828,12 +941,19 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
   const atomsOf = (value: string | undefined) => list(value).map(atomOf).filter((a) => a >= 0);
   let block = "";
   let defaults: string[] = [];
+  // (what its counts line gives, how many entries its blocks hold - those
+  // that do not read among them - and whether its END CTAB came: fewer, or
+  // none, cut short)
+  let counted: { atoms: number; bonds: number } | null = null;
+  const entries = { atoms: 0, bonds: 0 };
+  let ended = false;
   let i = at + 1;
   for (; i < v.length; i++) {
     const text = v[i];
     const items = v30Items(text);
     const head = (items[0] ?? "").toUpperCase();
     if (head === "END" && (items[1] ?? "").toUpperCase() === "CTAB") {
+      ended = true;
       i++;
       break;
     }
@@ -847,6 +967,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
       continue;
     }
     if (head === "COUNTS") {
+      counted = { atoms: Number.parseInt(items[1] ?? "", 10), bonds: Number.parseInt(items[2] ?? "", 10) };
       mol.chiral = items[5] === "1";
       const kw = keywords(items);
       if (kw.get("NAME")) mol.name = kw.get("NAME")![0];
@@ -866,12 +987,20 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
     const kw = keywords([...defaults, ...items]);
     const one = (k: string) => kw.get(k)?.[kw.get(k)!.length - 1];
     if (block === "ATOM") {
+      entries.atoms++;
       const index = Number.parseInt(items[0], 10);
       const { symbol, list: atomList } = atomType(items[1] ?? "C");
+      // (an entry that stops before its place, cut short; a place written
+      // that is not a number - z too, where it is not left out for the
+      // keywords - or no symbol, damaged)
+      const z = items[4] != null && !items[4].includes("=") ? float(items[4]) : 0;
+      if (items.length < 4) mol.cut = true;
+      else if (!Number.isFinite(float(items[2])) || !Number.isFinite(float(items[3])) || !Number.isFinite(z)) damage(mol, "an atom whose place is not a number");
+      else if (!items[1]) damage(mol, "an atom with no symbol");
       const atom: CtAtom = {
         x: float(items[2]) || 0,
         y: float(items[3]) || 0,
-        z: float(items[4]) || 0,
+        z: z || 0,
         symbol,
         ...(atomList ? { list: atomList } : {}),
       };
@@ -907,10 +1036,16 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
       continue;
     }
     if (block === "BOND") {
+      entries.bonds++;
       const index = Number.parseInt(items[0], 10);
-      const type = Number.parseInt(items[1], 10);
+      const type = integer(items[1]);
       const a1 = atomOf(items[2]);
       const a2 = atomOf(items[3]);
+      // (an entry that stops before its atoms, cut short; a type or an atom
+      // that is not a number, or an atom the table has not, damaged)
+      if (items.length < 4) mol.cut = true;
+      else if (!Number.isFinite(type) || !INTEGER.test(items[2]) || !INTEGER.test(items[3])) damage(mol, "a bond with a field that is not a number");
+      else if (a1 < 0 || a2 < 0) damage(mol, "a bond to an atom it does not have");
       if (!Number.isFinite(type) || a1 < 0 || a2 < 0) continue;
       const bond: CtBond = { a1, a2, type };
       const cfg = Number.parseInt(one("CFG") ?? "0", 10);
@@ -983,7 +1118,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
           name: one("FIELDNAME") ?? "",
           data: kw.get("FIELDDATA") ?? [],
           ...(one("FIELDDISP") ? { display: one("FIELDDISP") } : {}),
-          ...(one("FIELDINFO") ? { info: one("FIELDINFO") } : {}),
+          ...fieldInfo(one("FIELDINFO")),
           ...(one("QUERYTYPE") ? { queryType: one("QUERYTYPE") } : {}),
           ...(one("QUERYOP") ? { queryOp: one("QUERYOP") } : {}),
         };
@@ -1030,6 +1165,7 @@ function ctabV3000(v: string[], at: number, name: string): { mol: CtMolecule; ne
       i++;
     }
   }
+  if (!ended || (counted && (entries.atoms < counted.atoms || entries.bonds < counted.bonds))) mol.cut = true;
   return { mol, next: i };
 }
 
@@ -1108,6 +1244,11 @@ export function readRxnfile(text: string): CtReaction {
         i = next - 1;
       }
     }
+    const said = v30Items(out.find((t) => /^COUNTS\b/i.test(t.trim())) ?? "").slice(1, 3).map((n) => Number.parseInt(n, 10));
+    const all = [...reaction.reactants, ...reaction.products, ...reaction.reagents];
+    if (all.some((m) => m.cut) || reaction.reactants.length < (said[0] || 0) || reaction.products.length < (said[1] || 0)) reaction.cut = true;
+    const hurt = all.find((m) => m.damaged)?.damaged;
+    if (hurt) reaction.damaged = hurt;
     return reaction;
   }
   // V2000: the counts line "rrrpppggg" on the header's fifth line, then
@@ -1129,6 +1270,13 @@ export function readRxnfile(text: string): CtReaction {
     mols.push(m.mol);
     i = m.next - 1;
   }
+  // (fewer than counted, or one cut short: the file ends before its reaction does)
+  if (mols.length < r + p + g || mols.some((m) => m.cut)) reaction.cut = true;
+  // (and one of them damaged, or saying what Meno cannot read: what)
+  const hurt = mols.find((m) => m.damaged)?.damaged;
+  if (hurt) reaction.damaged = hurt;
+  const unread = mols.find((m) => m.unread)?.unread;
+  if (unread) reaction.unread = unread;
   reaction.reactants = mols.slice(0, r);
   reaction.products = mols.slice(r, r + p);
   reaction.reagents = mols.slice(r + p, r + p + g);
@@ -1136,3 +1284,18 @@ export function readRxnfile(text: string): CtReaction {
   if (mols.length > r + p + g) reaction.products.push(...mols.slice(r + p + g));
   return reaction;
 }
+
+/**
+ * What a V3000 data Sgroup's FIELDINFO says: its type and units, where it
+ * reads as <type><units/format> as V2000 has them (F, N or T, then its units
+ * or format - CTfile Formats, chapter 2, the V3000 Sgroup fields); else, as
+ * written, what the program that wrote it meant by it (`info`).
+ */
+export function fieldInfo(text: string | undefined): { type?: string; units?: string; info?: string } {
+  if (!text) return {};
+  const m = /^([FNT])(?: (.*))?$/.exec(text);
+  if (!m) return { info: text };
+  const units = (m[2] ?? "").trim();
+  return { type: m[1], ...(units ? { units } : {}) };
+}
+

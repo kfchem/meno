@@ -104,7 +104,10 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
   };
   // (the whole drawing - every record of each stack of drawings, the one it shows marked: utils/stacks)
   const drawing = carriedDrawing(state.fullModel ?? state.model, state.recordsShown ?? NO_STACKS);
-  const fills = fillsAmong(state.ringFills, new Set(drawing.atoms.map((a) => a.id)));
+  const drawn = new Set(drawing.atoms.map((a) => a.id));
+  const fills = fillsAmong(state.ringFills, drawn);
+  // (whether a ring's circle is drawn, of rings still drawn only: an atom's id is given again once the workspace opens, and a ring of new atoms would take a gone ring's)
+  const aromatic = fillsAmong(state.aromaticRings, drawn);
   return (
     JSON.stringify({
       format: WORKSPACE,
@@ -121,7 +124,7 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.sets?.length || state.steps?.length ? { sets: state.sets ?? [], steps: state.steps ?? [], wires: state.wires ?? [] } : {}),
       ...(state.docStyle ? { style: state.docStyle } : {}),
       ...(state.aromaticEnabled ? { aromaticEnabled: true } : {}),
-      ...(Object.keys(state.aromaticRings).length ? { aromaticRings: state.aromaticRings } : {}),
+      ...(Object.keys(aromatic).length ? { aromaticRings: aromatic } : {}),
       ...(state.texts?.length
         ? { texts: state.texts.map((t, i) => ({ name: t.name, sha256: texts[i], ...(t.at ? { at: t.at } : {}), ...(t.reading === false ? { reading: false } : {}), ...(t.icon ? { icon: true } : {}), ...ofSaved(t.of) })) }
         : {}),
