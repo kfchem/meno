@@ -25,3 +25,26 @@ export function pushAll<T>(into: T[], items: Iterable<T>): T[] {
   for (const item of items) into.push(item);
   return into;
 }
+
+export type Bounds = { x0: number; y0: number; x1: number; y1: number };
+
+/** The box round `points` - their least and greatest x and y - or null, where there are none. */
+export function boundsOf(points: Iterable<{ x: number; y: number }>): Bounds | null {
+  let b: Bounds | null = null;
+  for (const p of points) {
+    if (!b) b = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    else {
+      if (p.x < b.x0) b.x0 = p.x;
+      if (p.x > b.x1) b.x1 = p.x;
+      if (p.y < b.y0) b.y0 = p.y;
+      if (p.y > b.y1) b.y1 = p.y;
+    }
+  }
+  return b;
+}
+
+/** The middle of the box round `points`, or null where there are none. */
+export function middleOfPoints(points: Iterable<{ x: number; y: number }>): { x: number; y: number } | null {
+  const b = boundsOf(points);
+  return b ? { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } : null;
+}

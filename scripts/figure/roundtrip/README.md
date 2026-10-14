@@ -31,6 +31,17 @@ longest arrow's tail, along it and past its point are compared with the
 reactants, agents and products, each side's molecules by canonical SMILES.
 `RT_PRESETS=rdkitrxn,rdkitrxnacs` with `RT_READ=rxn` reads only them.
 
+Many journals print a figure's labels as outlines - each letter a filled
+path, or each word one path of all its letters - and none of these PDFs
+does. `RT_OUTLINE=letter` or `RT_OUTLINE=word` draws every figure's words
+as outlines before it is read (`outline.ts`, from the typeface each letter
+was set in, as this Mac has it), and reads them against the system's
+letters as the app does; `swift scripts/figure/roundtrip/glyphs.swift
+.roundtrip` measures those first, into `.roundtrip/known.json` (without it,
+step 4 reads no outline as a letter: the app draws them on a canvas). With
+`RT_READ=outline-letter` and `RT_READ=outline-word`, these are the round
+trip's stand-in for real papers' figures, which cannot be kept here.
+
 ## What it is for
 
 *Read as structure* (docs/PDF.md, *Stage 5*) has to give back the structure

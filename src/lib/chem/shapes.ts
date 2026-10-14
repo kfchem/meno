@@ -148,11 +148,15 @@ function boxOutline(s: ShapeGeometry, pointPx: number): Vec2[] {
   side("top");
   arc({ x: x0 + r, y: y1 - r }, r, 0.5 * Math.PI, Math.PI, out);
   side("left");
-  // (no point twice over: a square corner's arc is its corner alone)
-  return out.filter((p, i) => {
+  // (no point twice over: a square corner's arc is its corner alone - and
+  // one point kept of a box too small to tell its corners apart, whose
+  // bounds were else no numbers, taking every other part of a picture's
+  // with them)
+  const kept = out.filter((p, i) => {
     const q = out[(i + out.length - 1) % out.length];
     return Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
   });
+  return kept.length ? kept : out.slice(0, 1);
 }
 
 /** The line a shape follows - closed round a box; a line's, from end to end - in page units. */

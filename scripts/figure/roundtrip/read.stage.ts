@@ -12,7 +12,11 @@
  * RT_READ a folder under .roundtrip for what is read, to keep another build's
  * reads beside these; RT_BOX=page a box round all that is on the page, not
  * the figures found - the figure reader measured apart from finding figures;
- * RT_PRESETS=a,b only the drawings in those styles (rdkit_draw.py's too).
+ * RT_PRESETS=a,b only the drawings in those styles (rdkit_draw.py's too);
+ * RT_OUTLINE=letter or =word the figures' words drawn as outlines first, a
+ * path for each letter or for each word, as many journals print a figure's
+ * labels (outline.ts) - read against the system's letters, which
+ * glyphs.swift measures into known.json first.
  *
  * A reaction's drawing (rdkit_draw.py's) is read the same way, and its
  * molecules told apart by where they stand to its longest arrow - before
@@ -28,13 +32,16 @@ import { it } from "vitest";
 import { figuresOf, pageObjectsOf, type Box } from "../../../src/lib/pdf/figures";
 import type { FigureDrawn } from "../../../src/lib/figure/drawn";
 import { structureFileText } from "../../../src/ui/features/Workspace/fileActions";
-import { figureFrom } from "../../../src/ui/features/Workspace/utils/figures";
+import { figureFrom, lettersAsShapes } from "../../../src/ui/features/Workspace/utils/figures";
 import type { Model } from "../../../src/ui/features/Workspace/store/types";
 import { fileName } from "./names";
+import { knownLetters, outlined } from "./outline";
 
 const OUT = resolve(process.cwd(), ".roundtrip");
 const READ = process.env.RT_READ ? resolve(OUT, process.env.RT_READ) : OUT;
 const EXE = process.env.MENO ?? resolve(process.cwd(), "src-tauri/target/release/bundle/macos/Meno.app/Contents/MacOS/Meno");
+/** How the figures' words are drawn before they are read: as letters, as the PDF has them, or as outlines, a path for each letter or each word. */
+const OUTLINE = process.env.RT_OUTLINE === "letter" || process.env.RT_OUTLINE === "word" ? process.env.RT_OUTLINE : null;
 /** How far round the figures found the box goes, in points: as a hand draws one. */
 const PAD_PT = 6;
 
@@ -109,6 +116,9 @@ it("reads every PDF back", async () => {
   const { molecules, reactions = [] } = JSON.parse(readFileSync(resolve(OUT, "corpus.json"), "utf8")) as { molecules: { name: string }[]; reactions?: { name: string }[] };
   const nameOf = new Map([...molecules, ...reactions].map((m) => [fileName(m.name), m.name]));
   const isReaction = new Set(reactions.map((r) => r.name));
+  // (letters drawn as shapes are read against the system's letters, as the app reads them: glyphs.swift measures them - needed for
+  // RT_OUTLINE; without them a figure's outlines are left unread, the app's own being drawn on a canvas)
+  const known = OUTLINE || existsSync(resolve(OUT, "known.json")) ? knownLetters(resolve(OUT, "known.json")) : undefined;
   const cache = resolve(OUT, "cache");
   mkdirSync(cache, { recursive: true });
   // (the reader keeps every PDF it is asked about open: started afresh every so often)
@@ -151,7 +161,9 @@ it("reads every PDF back", async () => {
         if (head.ok === false) throw new Error(String(head.error));
         // (kept, to look into what was read without the reader)
         writeFileSync(resolve(READ, "figures", file.replace(/\.pdf$/, ".json")), JSON.stringify({ box, ...head }));
-        const got = figureFrom(head as unknown as FigureDrawn, sha, 0);
+        // (RT_OUTLINE: its words drawn as outlines first, as a journal may print them - outline.ts - and read against the system's letters)
+        const drawn = OUTLINE ? outlined(head as unknown as FigureDrawn, OUTLINE) : (head as unknown as FigureDrawn);
+        const got = figureFrom(drawn, sha, 0, known && lettersAsShapes(drawn) ? known : undefined);
         if ("none" in got) entry.none = got.none;
         else {
           entry.mol = structureFileText(got.model, "read.mol");

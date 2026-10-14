@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, labelText, readFigure, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
+import atp from "./fixtures/atp-rdkit.json";
 import butene from "./fixtures/butene-rdkitacscg.json";
 import cisplatin from "./fixtures/cisplatin-rdkit.json";
+import cisplatinAcscg from "./fixtures/cisplatin-rdkitacscg.json";
 import cocaine from "./fixtures/cocaine-rdkitacs.json";
 import cortisol from "./fixtures/cortisol-rdkitacs.json";
 import deoxycytidine from "./fixtures/deoxycytidine-acs1996.json";
@@ -15,9 +17,12 @@ import sodiumAcetate from "./fixtures/sodium-acetate-rdkit.json";
 import sodiumAcetateAcs from "./fixtures/sodium-acetate-rdkitacs.json";
 import ribose from "./fixtures/ribose-rdkit.json";
 import sparteine from "./fixtures/sparteine-rdkitacscg.json";
+import strychnine from "./fixtures/strychnine-acs1996serif.json";
 import tempo from "./fixtures/tempo-rdkit.json";
 import junction from "./fixtures/monensin-nature-junction.json";
+import fdg from "./fixtures/fdg-rdkitacscg.json";
 import fructose from "./fixtures/fructose-nature.json";
+import ibogaine from "./fixtures/ibogaine-menoserif.json";
 import glucose from "./fixtures/glucose-rdkit.json";
 import tetrodotoxinMeno from "./fixtures/tetrodotoxin-meno.json";
 import tetrodotoxinNature from "./fixtures/tetrodotoxin-nature.json";
@@ -213,6 +218,53 @@ describe("a figure read as a structure", () => {
       ),
     );
     expect(bondsOf(s)).toEqual(["C-C", "C=O"]);
+  });
+
+  it("reads a double bond drawn short, its second line a quarter of a bond, as a double bond", () => {
+    // (huperzine A's ethylidene C=C as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: 0.6 of a bond, squeezed in)
+    const c: P = [60, 60];
+    const d: P = [60 + 0.6 * L, 60];
+    const s = read(figure([stroke(step(c, 150), c, step(c, 210)), stroke(c, d), stroke(step(d, 30), d, step(d, -30)), stroke([c[0] + 2.2, 62.4], [c[0] + 2.2 + 0.25 * L, 62.4])]));
+    expect(bondsOf(s).filter((b) => b === "C=C")).toHaveLength(1);
+    expect(s.atoms).toHaveLength(6);
+  });
+
+  it("keeps a double bond's end inside a label's box at the label, not carried to a bond's end by it", () => {
+    // (ATP as RDKit draws it by default: a P=O's middle end inside its P's box, a P-OH bond's end 0.23 of a bond off it)
+    const r = readFigure(atp as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(10);
+  });
+
+  it("reads a short hash to an H set close as the H's bond, not its widest stroke as a bond between the H and a label by it", () => {
+    // (strychnine as the round trip prints it in the ACS 1996 style, in Times: an H's hash of two lines and the dots at its
+    // narrow end, its widest line by the H and pointing past it to the N above)
+    const r = readFigure(strychnine as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const h = r.atoms.findIndex((a) => a.label === "H" && a.x < 112);
+    const toH = r.bonds.filter((b) => b.a === h || b.b === h);
+    expect(toH).toHaveLength(1);
+    expect(toH[0].stereo).toBe("down");
+    expect(r.atoms[toH[0].a].label).toBeUndefined();
+  });
+
+  it("gives a bond's end to the label it points at, not to a nearer one by it it points away from", () => {
+    // (ibogaine in Meno's style printed in Times: the indole's C-N bond cut back under its NH, its end by the corner of the
+    // room round the H set under the NH - a stereocentre's - nearer than the NH but pointing away from it)
+    const r = readFigure(ibogaine as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const nh = r.atoms.findIndex((a) => a.label === "NH");
+    expect(r.bonds.filter((b) => b.a === nh || b.b === nh)).toHaveLength(2);
+    expect(r.atoms).toHaveLength(24);
+  });
+
+  it("ends a C=O at its carbon where one of its lines alone runs on past it, to nothing", () => {
+    // (bilobalide's lactone C=O as RDKit draws it from CoordGen's coordinates: the two lines end together at the O, and one runs on
+    // a third of a bond past the carbon)
+    const c: P = [60, 60];
+    const o = step(c, 90);
+    const [ux, uy] = unit(c, o);
+    const side = (p: P, d: number): P => [p[0] - uy * d, p[1] + ux * d];
+    const s = read(figure([stroke(step(c, 210), c, step(c, -30)), stroke(side(along(c, o, 0.05), 1.3), side(along(c, o, 0.75), 1.3)), stroke(side(along(c, o, -0.33), -1.3), side(along(c, o, 0.75), -1.3))], word("O", o)));
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C=O"]);
+    expect(s.atoms).toHaveLength(4);
   });
 
   it("joins a ring's C=O whose two lines run a little past its carbon", () => {
@@ -758,6 +810,17 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
   });
 
+  it("reads a line under three tenths of a bond, from a joint into a label, as the label's bond", () => {
+    // (as RDKit draws a crowded OH by default - ouabain's - its bond cut back at the label to 0.3 of a bond; and in its ACS 1996
+    // mode an amide's C-N into its HN, 0.18 of a bond - microcystin-LR's)
+    const c: P = [60, 60];
+    const o = step(c, -90, 0.6);
+    for (const t of [0.47, 0.3]) {
+      const s = read(figure([stroke(step(c, 150), c, step(c, 30)), stroke(c, along(c, o, t))], word("OH", o)));
+      expect(bondsOf(s), String(t)).toEqual(["C-C", "C-C", "C-O"]);
+    }
+  });
+
   it("reads a short line running straight out of a label to nothing as a bond to a methyl", () => {
     // (cocaine as RDKit's ACS 1996 mode draws it: its bridge's N-methyl squeezed to half a bond, cut back at the N - a quarter
     // of a bond shows)
@@ -774,6 +837,17 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const hs = r.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.label === "H");
     expect(hs).toHaveLength(3);
     for (const { i } of hs) expect(r.bonds.filter((b) => b.a === i || b.b === i).map((b) => !!b.stereo)).toEqual([true]);
+  });
+
+  it("reads a wedge cut back to a triangle of near equal sides, stroked round, as a wedge narrow at the corner a line ends at", () => {
+    // (ibogaine's wedge to an H as RDKit's ACS 1996 mode draws it: three sides of 1.75 points, filled and its outline stroked)
+    const c: P = [60, 60];
+    const h = step(c, 120, 0.45);
+    const [ux, uy] = unit(c, h);
+    const base = along(c, h, (1.75 * 0.866) / (0.45 * L));
+    const corners: P[] = [c, [base[0] - uy * 0.875, base[1] + ux * 0.875], [base[0] + uy * 0.875, base[1] - ux * 0.875]];
+    const s = read(figure([stroke(step(c, 0), c, step(c, 240)), stroke(c, step(c, -60)), filled(...corners), { ...stroke(...corners, corners[0]), width: 0.2 }], word("H", h)));
+    expect(bondsOf(s)).toContain("C-H up");
   });
 
   it("reads a wedge to an H set close, cut back so far it is wider than long, as the H's bond from its stereocentre", () => {
@@ -803,6 +877,18 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     const o = r.atoms.findIndex((a) => a.label === "O");
     expect(r.bonds.filter((b) => b.a === o || b.b === o).map((b) => b.order)).toEqual([2]);
     expect(r.atoms).toHaveLength(11);
+    // (the methyl's end plainly further off than the C=O's: no guess, nothing said)
+    expect(r.atoms[o].unsure).toBeUndefined();
+  });
+
+  it("says so where an O alone has more bonds coming to it than it takes, one let go all but as near as those kept", () => {
+    // (three bonds' ends a little off an O, from three sides, near as far from it as each other - azithromycin's ring O and a
+    // methyl's hash in RDKit's ACS 1996 mode)
+    const o: P = [60, 60];
+    const ends = [90, 210, 330].map((deg, i) => step(o, deg, 0.42 + 0.02 * i));
+    const s = readFigure(figure(ends.map((e, i) => stroke(step(e, [90, 210, 330][i]), e)), word("O", o)));
+    const at = s.atoms.findIndex((a) => a.label === "O");
+    expect(s.atoms[at].unsure).toEqual(["More bonds come to it than it takes: those nearest its letter kept."]);
   });
 
   it("reads two H's drawn over each other, not on one line, as two labels: each its own atom's", () => {
@@ -829,6 +915,23 @@ describe("a figure drawn in colour by another program", () => {
     // (cisplatin as RDKit draws it by default: its Pt's bonds to NH2 and Cl above it end a fifth of a bond apart, short of
     // the Pt - where two bonds' ends meet, a carbon, but for both pointing into the Pt)
     const r = readFigure(cisplatin as unknown as FigureDrawn);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
+    const pt = r.atoms.findIndex((a) => a.label === "Pt");
+    expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
+  });
+
+  it("reads no bond between labels from a line whose ends both come to one word", () => {
+    // (FDG as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: its 18F set beside its carbon, the C-F bond under it)
+    const r = readFigure(fdg as unknown as FigureDrawn, (l) => readDrawnLabel(l, reads).read);
+    const f = r.atoms.findIndex((a) => a.label === "18F");
+    expect(r.bonds.filter((b) => b.a === f || b.b === f)).toHaveLength(1);
+    expect(r.atoms.filter((a) => !a.label)).toHaveLength(6);
+  });
+
+  it("gives a bond so short it lies within its label's box to that label, at the end nearer its element", () => {
+    // (cisplatin as RDKit's ACS 1996 mode draws it from CoordGen's coordinates: its Pt-N a quarter of a bond, both ends in the H2N's
+    // box)
+    const r = readFigure(cisplatinAcscg as unknown as FigureDrawn);
     expect(r.atoms.filter((a) => !a.label)).toHaveLength(0);
     const pt = r.atoms.findIndex((a) => a.label === "Pt");
     expect(r.bonds.filter((b) => b.a === pt || b.b === pt)).toHaveLength(4);
@@ -877,6 +980,16 @@ describe("a figure drawn in colour by another program", () => {
     expect(bondsOf(s)).toEqual(["C-C", "C-O"]);
   });
 
+  it("joins a line's two colours once: an sp carbon's single bond going straight on into its two-colour triple bond stays a bond of its own", () => {
+    // (a nitrile as RDKit draws one by default - ferricyanide's - its C-C black, drawn from the C out, its C#N's lines drawn from
+    // the N, blue to their middles and black on)
+    const [a, c, n]: P[] = [[40, 60], [40 + L, 60], [40 + 2 * L, 60]];
+    const blue = (...pts: P[]): FigurePath => ({ ...stroke(...pts), stroke: "#0000ffff" });
+    const tripleLine = (dy: number): FigurePath[] => [blue([n[0] - 4, n[1] + dy], [c[0] + L / 2, c[1] + dy]), stroke([c[0] + L / 2, c[1] + dy], [c[0], c[1] + dy])];
+    const s = read(figure([...tripleLine(0), ...tripleLine(-2.2), ...tripleLine(2.2), stroke(c, a)], word("N", n)));
+    expect(bondsOf(s)).toEqual(["C-C", "N#C"]);
+  });
+
   it("reads a double bond whose two lines change colour side by side, closer than two of their widths, as one double bond", () => {
     // (a C=O as RDKit draws one by default on a large molecule: each line black to its middle and red on, 1.5 thick, the lines
     // 2.6 apart - each line's colour changes by the other's)
@@ -906,6 +1019,21 @@ describe("a figure's words", () => {
   it("joins letters side by side, a subscript with them, and writes them as a label is typed", () => {
     const ws = wordsOf([...word("CO_2Me", [20, 20]), ...word("OH", [80, 20])]);
     expect(ws.map(labelText).sort()).toEqual(["CO2Me", "OH"]);
+  });
+
+  it("reads two letters as large set over each other, their rooms well into each other, as two words", () => {
+    // (two H's of stereocentres side by side as RDKit's ACS 1996 mode draws estradiol: on one line, a fifth of a letter over each other)
+    const at = (c: string, box: Box, loose: Box): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size: 7.5 });
+    const ws = wordsOf([at("H", [109.87, 74.87, 114.14, 80.25], [109.28, 74.47, 114.69, 81.97]), at("H", [113.92, 75.17, 118.18, 80.55], [113.33, 74.77, 118.74, 82.27])]);
+    expect(ws.map(labelText)).toEqual(["H", "H"]);
+  });
+
+  it("starts a word where a letter as large as the word's own stands off their line, however the word ends", () => {
+    // (as RDKit's ACS 1996 mode sets them: oxytocin's carbonyl O against NH2's 2, five points lower; vancomycin's two H's side by
+    // side, a quarter of a letter apart in height)
+    const at = (c: string, x: number, base: number, size = 7.5): FigureLetter => ({ c, box: [x, base - 0.72 * size, x + 0.6 * size, base], at: [x, base], size });
+    expect(wordsOf([at("N", 100, 102.7), at("H", 104.6, 102.7), at("2", 109.2, 104.4, 4.5), at("O", 112, 107.6)]).map(labelText)).toEqual(["NH2", "O"]);
+    expect(wordsOf([at("H", 208, 138.4), at("H", 214.3, 140.1)]).map(labelText)).toEqual(["H", "H"]);
   });
 
   it("joins letters set side by side as the PDF sets them, however far apart their ink: a 1's ink well inside its room", () => {
@@ -1057,5 +1185,114 @@ describe("a stereocentre whose configuration the figure does not show", () => {
       [...word("Pt", [pt[0] + 3.4, pt[1]]), ...word("Cl", [ends[0][0] + 3.4, ends[0][1]]), ...word("I", ends[1]), ...word("OH", [ends[2][0] + 3.4, ends[2][1]]), ...word("NH3", [ends[3][0] - 6.8, ends[3][1]])],
     );
     expect(marked(metal)).toBe(0);
+  });
+});
+
+describe("lines that are no bonds", () => {
+  /** A ring of six whole bonds from a point, to give the figure its bond length. */
+  const ring = (from: P): FigurePath[] => {
+    const pts: P[] = [from];
+    for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
+    return pts.map((p, k) => stroke(p, pts[(k + 1) % 6]));
+  };
+  const bar = (x0: number, x1: number, y: number) => filled([x0, y - 0.3], [x1, y - 0.3], [x1, y + 0.3], [x0, y + 0.3]);
+  const labelledBonds = (r: ReturnType<typeof readFigure>) => r.bonds.filter((b) => r.atoms[b.a].label || r.atoms[b.b].label).length;
+
+  it("reads the = of a line of text - a caption's 3aa, R = H, 73% - as no bond between its words, its bars long or short", () => {
+    // (its words a space apart, as a caption sets them)
+    const caption = (y: number) => [...word("3aa,", [57, y]), ...word("R", [90, y]), ...word("H,", [104, y]), ...word("73%,", [124, y])];
+    const f = figure(
+      [...ring([60, 60]), bar(94.5, 99.5, 148.5), bar(94.5, 99.5, 151.5), bar(95.5, 98.5, 168.5), bar(95.5, 98.5, 171.5)],
+      [...caption(150), ...caption(170)],
+    );
+    const r = readFigure(f, (l) => readDrawnLabel(l, reads).read);
+    expect(r.bonds).toHaveLength(6);
+    expect(labelledBonds(r)).toBe(0);
+  });
+
+  it("keeps the bonds of a row of labels set on one line - HO-S-O-S-OH - a chain, not a line of text", () => {
+    const y = 150;
+    const f = figure(
+      [...ring([60, 60]), stroke([61.2, y], [67.6, y]), stroke([76.4, y], [83.6, y]), stroke([92.4, y], [99.6, y]), stroke([108.4, y], [117.6, y])],
+      [...word("HO", [50, y]), ...word("S", [72, y]), ...word("O", [88, y]), ...word("S", [104, y]), ...word("OH", [122, y])],
+    );
+    expect(labelledBonds(readFigure(f, (l) => readDrawnLabel(l, reads).read))).toBe(4);
+  });
+
+  it("reads a line more than six bonds long - a table's rule, a graph's axis - as no bond", () => {
+    const r = readFigure(figure([...ring([60, 60]), stroke([20, 150], [20 + 10 * L, 150])]));
+    expect(r.atoms).toHaveLength(6);
+    expect(r.bonds).toHaveLength(6);
+  });
+});
+
+describe("a group's name stacked over an atom's label", () => {
+  /** A five-membered ring, its N at the top labelled, its bonds cut back at the N; and words over the N, a size apart from it. */
+  const ring = (over: string, nBonds = 2): FigureDrawn => {
+    const c: P = [100, 120];
+    const r = L / (2 * Math.sin(Math.PI / 5));
+    const v = Array.from({ length: 5 }, (_, k): P => [c[0] + r * Math.cos(-Math.PI / 2 + (2 * Math.PI * k) / 5), c[1] + r * Math.sin(-Math.PI / 2 + (2 * Math.PI * k) / 5)]);
+    const cut = (p: P, q: P): P => along(p, q, 5 / Math.hypot(q[0] - p[0], q[1] - p[1]));
+    const extra = nBonds > 2 ? [stroke(cut(v[0], step(v[0], 0)), step(v[0], 0))] : [];
+    return figure([stroke(cut(v[0], v[1]), v[1], v[2], v[3], v[4], cut(v[0], v[4])), ...extra], [...word("N", v[0]), ...word(over, [v[0][0] - ((over.length - 1) * 6.8) / 2, v[0][1] - 10])]);
+  };
+  const readsToo = (l: string) => l === "MOM" || l === "Me" || readDrawnLabel(l, reads).read;
+  const bondedTo = (f: FigureDrawn, label: string) => {
+    const r = readFigure(f, readsToo);
+    const k = r.atoms.findIndex((a) => a.label === label);
+    return k < 0 ? null : r.bonds.filter((b) => b.a === k || b.b === k).map((b) => r.atoms[b.a === k ? b.b : b.a].label ?? "C");
+  };
+
+  it("bonds a group's name set right over a heteroatom's label, no bond drawn to it, to that atom: MOM over its N", () => {
+    expect(bondedTo(ring("MOM"), "MOM")).toEqual(["N"]);
+    expect(bondedTo(ring("Me"), "Me")).toEqual(["N"]);
+  });
+
+  it("bonds none to an atom with no bond to spare, and no element's symbol alone so", () => {
+    expect(bondedTo(ring("MOM", 3), "MOM")).toBeNull();
+    expect(bondedTo(ring("Cl"), "Cl")).toBeNull();
+  });
+
+  it("bonds no group's name that is one of its line's words: the Me of an R = Me over the N stays the line's", () => {
+    const f = ring("Me");
+    // (Me set from 6.8 left of the N's middle; R and = before it, a space apart)
+    const [n] = f.letters;
+    const x = (n.box[0] + n.box[2]) / 2;
+    const y = (n.box[1] + n.box[3]) / 2 - 10;
+    const lined: FigureDrawn = { ...f, letters: [...f.letters, ...word("R", [x - 25, y]), ...word("=", [x - 14.2, y])] };
+    expect(bondedTo(lined, "Me")).toBeNull();
+    expect(readFigure(lined, readsToo).left.letters.map((l) => l.c).join("")).toContain("Me");
+  });
+});
+
+describe("a frame, a graph's axes and a page's rules", () => {
+  const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath[] => [stroke([x0, y0], [x1, y0]), stroke([x1, y0], [x1, y1]), stroke([x1, y1], [x0, y1]), stroke([x0, y1], [x0, y0])];
+  const hexagon = (from: P): FigurePath[] => {
+    const pts: P[] = [from];
+    for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
+    return pts.map((p, k) => stroke(p, pts[(k + 1) % 6]));
+  };
+
+  it("reads no structure in a graph: its frame and axes meeting square, its ticks and numbers by them", () => {
+    const ticks = [0, 1, 2, 3, 4].map((k) => stroke([60 + 25 * k, 160], [60 + 25 * k, 156]));
+    const numbers = [0, 1, 2, 3, 4].flatMap((k) => word(`${k}`, [60 + 25 * k, 168]));
+    const r = readFigure(figure([...frame(60, 60, 160, 160), ...ticks], [...numbers, ...word("Yield", [40, 110])]));
+    expect(r.atoms).toHaveLength(0);
+  });
+
+  it("measures a bond by its labels' letters, not a caption's: a chart's long lines beside a small structure, titled large, are none", () => {
+    // (a chain to an OH, and a chart's line of six long steps at angles, its title in 18-point letters)
+    const chain = [stroke([40, 120], step([40, 120], 30), step(step([40, 120], 30), -30), along(step(step([40, 120], 30), -30), step(step(step([40, 120], 30), -30), 30), 0.7))];
+    const oh = word("OH", step(step(step([40, 120], 30), -30), 30));
+    const chart = [stroke([100, 200], [196, 172], [292, 200], [388, 172], [484, 200], [580, 172], [676, 200])];
+    const title = Array.from("Conversion over time", (c, k): FigureLetter => ({ c, box: [120 + 12 * k, 100, 132 + 12 * k, 113], at: [120 + 12 * k, 113], size: 18 }));
+    const f = figure([...chain, ...chart], [...oh, ...title]);
+    expect(figureBond(shapesOf(f), f.letters)).toBeCloseTo(L, 0);
+  });
+
+  it("reads a structure drawn in a frame without the frame: its sides meet only each other, square", () => {
+    const r = readFigure(figure([...hexagon([100, 120]), ...frame(70, 70, 190, 150)], word("L1", [130, 160])));
+    expect(r.atoms).toHaveLength(6);
+    expect(r.bonds).toHaveLength(6);
   });
 });

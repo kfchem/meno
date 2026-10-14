@@ -263,10 +263,22 @@ export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
 
   let i = 0;
   while (i < lines.length) {
+    // (blank lines between frames, as some programs write them, and a line that is ">" alone, between the
+    // frames of a file of many geometries: passed over)
+    while (i < lines.length && (!lines[i].trim() || lines[i].trim() === ">")) i++;
+    if (i >= lines.length) break;
     const atomCount = parseInt(lines[i].trim(), 10);
-    if (!(atomCount > 0)) break;
+    if (!(atomCount > 0)) {
+      // (more after the frames that is no frame - a line between frames that is no count of atoms, text at the
+      // end: not read, and never without a word - a frame left out, as the molecule says over it)
+      if (lines.slice(i).some((line) => line.trim())) {
+        frames.push([]);
+        why?.push(`Line ${i + 1} of the XYZ file is not a count of atoms: "${lines[i].trim().slice(0, 40)}".`);
+      }
+      break;
+    }
     const atomLines = lines.slice(i + 2, i + 2 + atomCount);
-    let damaged = atomLines.length < atomCount ? `The XYZ file ends before its atoms do: it says ${atomCount}, and gives ${atomLines.length}.` : undefined;
+    let damaged = atomLines.length < atomCount ? `its first frame ends before its atoms do (it says ${atomCount}, and gives ${atomLines.length})` : undefined;
 
     frames.push(
       atomLines.map((line, k) => {
@@ -274,7 +286,7 @@ export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
         const [x, y, z] = [0, 1, 2].map((d) => {
           const t = place[d] ?? "";
           if (COORDINATE.test(t)) return Number(t);
-          damaged ??= `Line ${i + 3 + k} of the XYZ file gives ${element} a place that is not a number: "${t}".`;
+          damaged ??= `line ${i + 3 + k} gives ${element} a place that is not a number: "${t}"`;
           return NaN;
         });
         return { el: xyzElement(element ?? ""), x, y, z };
@@ -292,15 +304,17 @@ export function xyzFrames(xyz: string, why?: (string | undefined)[]): Atom[][] {
  * each somewhere - by their places among its frames, and how many it has;
  * the others are left
  * out, to be said in a count (a trajectory still being written, a frame
- * damaged). None whole, the file is refused, saying why of its first
- * frame: "The XYZ file ends before its atoms do: it says 3, and gives 2."
+ * damaged). None whole, the file - `name` - is refused, saying why of its
+ * first frame, as a CTfile cut short is (lib/io/structures): "w.xyz could
+ * not be read: its first frame ends before its atoms do (it says 3, and
+ * gives 2)."
  */
-export function wholeXyzFrames(xyz: string): { frames: Atom[][]; kept: number[]; total: number } {
+export function wholeXyzFrames(xyz: string, name = "The XYZ file"): { frames: Atom[][]; kept: number[]; total: number } {
   const why: (string | undefined)[] = [];
   const frames = xyzFrames(xyz, why);
   const n = frames.find((atoms, i) => atoms.length > 0 && !why[i])?.length ?? 0;
   const kept = frames.flatMap((atoms, i) => (n && !why[i] && atoms.length === n ? [i] : []));
-  if (!kept.length && why[0]) throw new Error(why[0]);
+  if (!kept.length && why[0]) throw new Error(`${name} could not be read: ${why[0]}.`);
   return { frames: kept.map((i) => frames[i]), kept, total: frames.length };
 }
 

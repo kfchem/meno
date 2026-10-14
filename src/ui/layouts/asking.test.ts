@@ -74,6 +74,58 @@ describe("a question asked over the window (ConfirmDiscard, NameDialog, ConsentD
     keys.done();
   });
 
+  it("lets the keys by while its tab is not in front, and has them again, unanswered, when it is", () => {
+    // ("Delete a step that is running?" left open, and another tab chosen:
+    // its fields typed in, its shortcuts acting, Escape its own)
+    let inFront = true;
+    const no = vi.fn();
+    const keys = askKeys(inside, no, () => inFront);
+    inFront = false;
+    const field = { in: "Settings" } as unknown as EventTarget;
+    const acted: string[] = [];
+    const behind = (e: any) => {
+      if (openIntent(e)) acted.push("open");
+      const u = undoIntent(e);
+      if (u) acted.push(u);
+      if (!e.metaKey) acted.push(e.key);
+    };
+    const typed = pressed("a", field, keys, behind);
+    pressed("o", field, keys, behind, { metaKey: true });
+    pressed("z", field, keys, behind, { metaKey: true });
+    pressed("Escape", field, keys, behind);
+    expect(typed.defaultPrevented).toBe(false);
+    expect(acted).toEqual(["a", "open", "undo", "Escape"]);
+    expect(no).not.toHaveBeenCalled();
+    // (its tab in front again: the question waiting there has the keys)
+    inFront = true;
+    acted.length = 0;
+    const away = pressed("Delete", canvas, keys, behind);
+    expect(away.defaultPrevented).toBe(true);
+    expect(acted).toEqual([]);
+    pressed("Escape", canvas, keys, behind);
+    expect(no).toHaveBeenCalledTimes(1);
+    keys.done();
+  });
+
+  it("gives the keys to the question in the tab in front, though one in a tab behind was asked after it", () => {
+    let front = "A";
+    const inA = vi.fn();
+    const inB = vi.fn();
+    const b = askKeys((t) => t === canvas, inB, () => front === "B");
+    const a = askKeys((t) => t === button, inA, () => front === "A");
+    const both = { first: (e: any) => (b.first(e), a.first(e)), last: (e: any) => (b.last(e), a.last(e)) };
+    front = "B";
+    pressed("Escape", canvas, both, () => {});
+    expect(inB).toHaveBeenCalledTimes(1);
+    expect(inA).not.toHaveBeenCalled();
+    front = "A";
+    pressed("Escape", button, both, () => {});
+    expect(inA).toHaveBeenCalledTimes(1);
+    expect(inB).toHaveBeenCalledTimes(1);
+    a.done();
+    b.done();
+  });
+
   it("gives the keys to the question asked last, on top of another", () => {
     const under = vi.fn();
     const over = vi.fn();
