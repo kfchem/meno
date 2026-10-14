@@ -1,3 +1,6 @@
+import { bondPtOf } from "../../restyle";
+import { restyledDrawn } from "../../utils/copyPaste";
+import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -347,7 +350,8 @@ export const createModelSlice = (
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
         },
-        ws.style,
+        // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
+        ws.style ?? useAppSettings.getState().drawingStyle,
       );
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
@@ -421,7 +425,9 @@ export const createModelSlice = (
     }));
   },
 
-  pasteModel: (next: Drawn) => {
+  pasteModel: (given: Drawn) => {
+    // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
+    const next = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
     const carried = next.molecules3d ?? [];
     const flow = next.flow ?? NO_PARTS;
     // (pictures pasted only where they are held: a copy carries them by what they are known by)

@@ -519,7 +519,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
         const drawn = part ?? { ...drawnOf(state), molecules3d: carriedOf(state) };
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
-          const style = styleOf(state.docStyle ?? useAppSettings.getState().drawingStyle);
+          const style = styleOf(state.docStyle);
           await writeTextFile(path, drawingSvg(drawn, state, style, true));
         } else await writeTextFile(path, structureFileText(drawn, path, options));
       }),

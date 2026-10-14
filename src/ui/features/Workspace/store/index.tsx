@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
@@ -398,7 +399,7 @@ export function EditorProvider({
   children: ReactNode;
 }) {
   const doc = useMemo(
-    () => document ?? createWorkspaceDocument(),
+    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle),
     // A different tab identity means a different canvas, so a canvas without a
     // document of its own gets a fresh one rather than keeping the old tab's.
     // eslint-disable-next-line react-hooks/exhaustive-deps

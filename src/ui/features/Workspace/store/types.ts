@@ -596,6 +596,8 @@ export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList; shown?: true };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
 export type Drawn = Model & {
+  /** The bond's printed length in the style of the workspace it was copied from (`bondLengthPt`): pasted where that differs, what it carries is converted (docs/WORKSPACE.md, *Drawing style*). */
+  bondPt?: number;
   pushes?: PushArrow[];
   ringFills?: RingFills;
   arrows?: Arrow[];
@@ -1238,7 +1240,7 @@ export type EditorState = {
   /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
-  docStyle?: StyleChoice;
+  docStyle: StyleChoice;
   labelEdit: {
     active: boolean;
     atomId: number | null;
@@ -1519,7 +1521,10 @@ export type EditorState = {
    * (undefined). Changes sharing `coalesceKey` - a drag along a slider - are
    * one undo step.
    */
-  setDocumentStyle: (style: StyleChoice | undefined, coalesceKey?: string) => void;
+  /** The workspace's drawing style set and its page converted with it, one step; with `coalesceKey`, a slider's ticks, each from the page as the drag began, coalesced. */
+  setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => void;
+  /** A preset chosen in the Drawing style card: the style taken, its bond eased in from the old one, one step (../styleEase). */
+  easeDocumentStyle: (style: StyleChoice) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

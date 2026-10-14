@@ -32,7 +32,6 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { heldEach } from "../utils/heldEach";
 
 
@@ -539,7 +538,7 @@ export function useStructureEvents(
       const result = await processFileContent(f.name, text, kind, opened?.path);
       // (opened rather than dropped: in free space near the middle of the view)
       const st = store.getState();
-      const drawingStyle = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+      const drawingStyle = styleOf(st.docStyle);
       const place = opened?.free ? placeOpened(st, result, importedScheme(result, -result.centroid.x, -result.centroid.y), at, drawingStyle) : at;
       const dx = place.x - result.centroid.x;
       const dy = place.y - result.centroid.y;

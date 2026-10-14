@@ -264,8 +264,8 @@ Taken on 2026-10-03:
     beside them shows the look and can be
     turned, to try the turning. The canvas, the selection's handle, a fit
     and the pictures for other programs all take the look from there. A
-    document of its own look, as a drawing can have its own style, is not
-    there yet.
+    workspace of its own look, as a workspace has its own drawing style, is
+    not there yet.
   - Since 2026-10-10 it is two looks, a primary and a secondary, each a
     style chosen from a list: *Styles in 3D* below.
 

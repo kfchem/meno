@@ -11,7 +11,7 @@ import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
 import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import type { StyleChoice } from "../../../lib/chem/style";
+import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
@@ -59,10 +59,12 @@ export type WorkspaceDocument = {
   molecules3d?: Molecule3D[];
   nextMolecule3dId?: number;
   /**
-   * The document's own drawing style; unset, it is drawn in the
-   * application's. Saving to a MOL or SD file keeps the structure only.
+   * The workspace's drawing style, its one: every structure on it is drawn
+   * in it. Fixed as the workspace is made - Settings' then, which is for
+   * new workspaces only - and changed from its canvas (docs/WORKSPACE.md,
+   * *Drawing style*). Saving to a MOL or SD file keeps the structure only.
    */
-  style?: StyleChoice;
+  style: StyleChoice;
   /**
    * The atoms *Expand abbreviation* drew out last, which the Clean-up
    * straight after it leaves drawn out (chem/cleanUp). Not saved.
@@ -107,8 +109,10 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
   );
 }
 
-export function emptyWorkspaceDocument(): WorkspaceDocument {
+/** An empty workspace in `style` - by default Meno's own, for a document that is only worked on, never shown. */
+export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE): WorkspaceDocument {
   return {
+    style,
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -123,12 +127,13 @@ export function emptyWorkspaceDocument(): WorkspaceDocument {
 }
 
 /**
- * Builds a document for a workspace tab. The tab's data may carry a file to
- * import (`payload`), which the view parses and applies, so the document
- * starts empty here - or files opened as text (`texts`), which it starts
- * holding.
+ * Builds a document for a workspace tab, in `style` - Settings' as it is
+ * made, given by whoever makes it (views/registry): this module reads no
+ * settings. The tab's data may carry a file to import (`payload`), which
+ * the view parses and applies, so the document starts empty here - or
+ * files opened as text (`texts`), which it starts holding.
  */
-export function createWorkspaceDocument(data?: unknown): DocumentStore<WorkspaceDocument> {
+export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -137,7 +142,7 @@ export function createWorkspaceDocument(data?: unknown): DocumentStore<Workspace
   );
   // (PDFs opened on a canvas of their own: in a row from the middle of the page - and pictures likewise)
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
-  let doc = addTexts(emptyWorkspaceDocument(), texts).doc;
+  let doc = addTexts(emptyWorkspaceDocument(style), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
@@ -2099,17 +2104,14 @@ export function setAromaticEnabled(
     : { ...doc, aromaticEnabled: enabled };
 }
 
-/** Gives the document its own drawing style, or (undefined) the application's. */
-export function setDocumentStyle(
-  doc: WorkspaceDocument,
-  style: StyleChoice | undefined,
-): WorkspaceDocument {
-  if (doc.style === style) return doc;
-  if (style === undefined) {
-    const { style: _dropped, ...rest } = doc;
-    return rest;
-  }
-  return { ...doc, style };
+/**
+ * The workspace in drawing style `style`, set as it is - nothing on the page
+ * converted: as a file saved without one is given Settings'. A change of
+ * style from the canvas converts the page with it (./restyle
+ * `restyledDocument`).
+ */
+export function setDocumentStyle(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
+  return doc.style === style ? doc : { ...doc, style };
 }
 
 export function setRingEnabled(
