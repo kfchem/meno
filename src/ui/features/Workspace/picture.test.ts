@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { writeClipboard } from "../../../lib/clipboard";
 import { withText } from "../../../lib/binary/png";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { ACS_1996 } from "../../../lib/chem/style";
+import { ACS_1996, inPoints } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
 import { pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
 import { ballSegmentsFor, tilesOf } from "./render3d";
@@ -19,8 +19,8 @@ const model: Model = {
   ],
   bonds: [{ id: 3, a: 1, b: 2, order: 1, stereo: "none" }],
 };
-/** What a picture of `model` carries back: the structure, and the bond as long as ACS 1996 prints it, so that it is converted where pasted into another style. */
-const carried = { ...model, bondPt: ACS_1996.bondLengthPt };
+/** What a picture of `model` carries back: the structure, and the bond as long as ACS 1996 prints it and its labels as large, so that it is converted where pasted into another style. */
+const carried = { ...model, bondPt: ACS_1996.bondLengthPt, labelPt: inPoints(ACS_1996.fontSize, ACS_1996) };
 const aromatic = { aromaticEnabled: false, aromaticRings: {} };
 const PIXEL = Uint8Array.from(
   atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"),

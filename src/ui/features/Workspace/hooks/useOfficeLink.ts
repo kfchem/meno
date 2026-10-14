@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { styleOf } from "../../../../lib/chem/style";
+import { labelPtOf } from "../restyle";
 import { sendToOffice } from "../../../../lib/ole";
 import { drawnOf } from "../fileActions";
 import { structurePicture } from "../picture";
@@ -18,7 +19,7 @@ const FIT_AFTER_MS = 300;
 
 /** Everything on the canvas, as a copy carries it: the drawing, and the molecules in 3D turned and shown as they are. */
 // (its record with the bond's printed length of its style, as a copy's has)
-const contentOf = (s: EditorState) => ({ ...drawnOf(s), molecules3d: carriedOf(s), bondPt: styleOf(s.docStyle).bondLengthPt });
+const contentOf = (s: EditorState) => ({ ...drawnOf(s), molecules3d: carriedOf(s), bondPt: styleOf(s.docStyle).bondLengthPt, labelPt: labelPtOf(s.docStyle) });
 
 /** What the document's picture is drawn from: its content and how it is drawn. */
 const pictureKeyOf = (s: EditorState) =>

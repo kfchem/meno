@@ -155,6 +155,7 @@ export function recordText(part: Drawn): string {
     format: RECORD,
     version: VERSION,
     ...(part.bondPt ? { bondPt: part.bondPt } : {}),
+    ...(part.labelPt ? { labelPt: part.labelPt } : {}),
     atoms: part.atoms,
     bonds: part.bonds,
     ...(part.pushes?.length ? { pushes: part.pushes } : {}),
@@ -208,7 +209,7 @@ export function readRecord(text: string): Drawn | null {
   } catch {
     return null;
   }
-  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown; bondPt?: unknown };
+  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown; bondPt?: unknown; labelPt?: unknown };
   if (r?.format !== RECORD || r.version !== VERSION) return null;
   const drawn = readDrawn(data);
   if (!drawn) return null;
@@ -221,7 +222,8 @@ export function readRecord(text: string): Drawn | null {
   );
   // (the bond's printed length in the style it was copied in, where it says: a record without one pastes as it is)
   const bondPt = isNum(r.bondPt) && r.bondPt > 0 ? r.bondPt : undefined;
-  return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
+  const labelPt = isNum(r.labelPt) && r.labelPt > 0 ? r.labelPt : undefined;
+  return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(labelPt ? { labelPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
 
 /**

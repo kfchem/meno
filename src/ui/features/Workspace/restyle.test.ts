@@ -195,6 +195,10 @@ describe("a change of drawing style", () => {
     const now = restyledDocument({ ...was, style: { preset: "meno", changes: {} } }, { preset: "nature", changes: {} });
     expect(now.captions![0].size).toBe(10);
     expect(now.captions![1].size).toBe(14);
+    // (and changed back, given none again: no size of their own left behind)
+    const back = restyledDocument(now, { preset: "meno", changes: {} });
+    expect(back.captions![0].size).toBeUndefined();
+    expect(back.captions![1].size).toBe(14);
     // (a style whose labels are as large leaves them following the labels)
     expect(restyledDocument({ ...was, style: { preset: "meno", changes: {} } }, ACS).captions![0].size).toBeUndefined();
   });

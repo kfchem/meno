@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import { clipboardFiles, copying, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { styleOf } from "../../../lib/chem/style";
+import { labelPtOf } from "./restyle";
 import { chemMolblock } from "../../../lib/roles/molblock";
 import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
@@ -115,7 +116,7 @@ export function useClipboardActions(
     if (!taken || busy()) return false;
     const state0 = store.getState();
     // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
-    const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt };
+    const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt, labelPt: labelPtOf(state0.docStyle) };
     try {
       const state = store.getState();
       // (the structure is copied, pictures or no: the drawing's and the
@@ -220,7 +221,7 @@ export function useClipboardActions(
         if (!p) return;
         try {
           const png = await picturePng(p);
-          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
+          await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt, labelPt: labelPtOf(store.getState().docStyle) }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
         } catch (e) {
           onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
         }

@@ -133,4 +133,22 @@ describe("a paste from a workspace in another style", () => {
     // (one copied in this style, or one that says no style: as it is)
     for (const same of [pasted(12.2), pasted()]) expect(same.shapes[0].x1 - same.shapes[0].x0).toBe(20);
   });
+
+  it("keeps its words as large in print: those given no size at the labels' size it was copied in", () => {
+    const part = { atoms: [], bonds: [], captions: [{ id: 1, x: 0, y: 0, text: "heat" }, { id: 2, x: 0, y: 5, text: "Title", size: 14 }] };
+    const pasted = (labelPt?: number) => {
+      const doc = createWorkspaceDocument(undefined, RSC);
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      store.getState().pasteModel(readRecord(recordText(labelPt ? { ...part, labelPt } : part))!);
+      return store.getState().captions;
+    };
+    // (copied where labels are 10 pt, pasted where they are 7 pt - RSC's)
+    expect(readRecord(recordText({ ...part, labelPt: 10 }))?.labelPt).toBe(10);
+    const [words, title] = pasted(10);
+    expect(words.size).toBe(10);
+    expect(title.size).toBe(14);
+    // (a copy that says no labels' size, or this style's: as it is)
+    for (const same of [pasted(), pasted(7)]) expect(same[0].size).toBeUndefined();
+  });
 });

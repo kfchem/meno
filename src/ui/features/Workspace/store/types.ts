@@ -598,6 +598,8 @@ export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number
 export type Drawn = Model & {
   /** The bond's printed length in the style of the workspace it was copied from (`bondLengthPt`): pasted where that differs, what it carries is converted (docs/WORKSPACE.md, *Drawing style*). */
   bondPt?: number;
+  /** How large the style it was copied in set its labels, in pt (restyle `labelPtOf`): words given no size are kept that large where pasted. */
+  labelPt?: number;
   pushes?: PushArrow[];
   ringFills?: RingFills;
   arrows?: Arrow[];

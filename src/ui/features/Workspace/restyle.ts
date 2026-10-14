@@ -101,12 +101,35 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
 export function restyledDocument(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
   const k = doc.style ? bondPtOf(doc.style) / bondPtOf(style) : 1;
   const out = restyled({ ...doc, style }, k);
-  // (words given no size of their own were at the old style's labels' size: they keep it, now as their own, so that they print as before - a style changes no words' size)
   if (!doc.style || !out.captions?.length) return out;
-  const label = (s: StyleChoice) => inPoints(styleOf(s).fontSize, styleOf(s));
-  const was = label(doc.style);
-  if (Math.abs(was - label(style)) < 1e-9) return out;
-  return { ...out, captions: out.captions.map((c) => (c.size != null ? c : { ...c, size: was })) };
+  const captions = wordsKept(out.captions, labelPtOf(doc.style), labelPtOf(style));
+  return captions === out.captions ? out : { ...out, captions };
+}
+
+/** How large a style sets its labels, in pt - and words given no size of their own. */
+export function labelPtOf(style: StyleChoice): number {
+  const s = styleOf(style);
+  return inPoints(s.fontSize, s);
+}
+
+/**
+ * Words as large in print where the labels' size goes from `from` pt to
+ * `to` - a change of style, or a paste from a workspace in another (the
+ * maintainer's rule: a style changes no words' size). Those given no size
+ * were at the labels' size, and keep it as their own; those whose own size
+ * is the new labels' size are given none again, so that going over and back
+ * leaves them as they were. Where the labels are as large, the very words.
+ */
+export function wordsKept<C extends { size?: number }>(words: C[], from: number, to: number): C[] {
+  if (Math.abs(from - to) < 1e-9) return words;
+  return words.map((c) => {
+    if (c.size == null) return { ...c, size: from };
+    if (Math.abs(c.size - to) < 1e-9) {
+      const { size: _, ...rest } = c;
+      return rest as C;
+    }
+    return c;
+  });
 }
 
 /**

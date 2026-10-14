@@ -1,4 +1,4 @@
-import { bondPtOf } from "../../restyle";
+import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -429,7 +429,9 @@ export const createModelSlice = (
 
   pasteModel: (given: Drawn) => {
     // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
-    const next = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
+    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
+    // (and its words as large in print: those given no size at the labels' size it was copied in)
+    const next = converted.labelPt && converted.captions?.length ? { ...converted, captions: wordsKept(converted.captions, converted.labelPt, labelPtOf(get().docStyle)) } : converted;
     const carried = next.molecules3d ?? [];
     const flow = next.flow ?? NO_PARTS;
     // (pictures pasted only where they are held: a copy carries them by what they are known by)
