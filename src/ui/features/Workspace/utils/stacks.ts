@@ -225,13 +225,32 @@ export function seenDrawing<M extends Drawing<any>>(drawn: M): M {
 export function recordDrawings<M extends Drawing<any>>(drawn: M): { loose: M; stacked: { model: M; title?: string }[] } {
   const atoms = drawn.atoms as StackedAtom[];
   if (!atoms.some((a) => a.stack)) return { loose: drawn, stacked: [] };
-  const only = (ids: ReadonlySet<number>) =>
-    ({ ...drawn, atoms: atoms.filter((a) => ids.has(a.id)), bonds: drawn.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }) as M;
-  const stacks = [...new Set(atoms.flatMap((a) => (a.stack ? [a.stack.id] : [])))].sort((p, q) => p - q);
-  return {
-    loose: only(new Set(atoms.filter((a) => !a.stack).map((a) => a.id))),
-    stacked: stacks.flatMap((stack) => recordsOf(drawn, stack).map((r) => ({ model: only(new Set(r.atoms)), ...(r.title ? { title: r.title } : {}) }))),
-  };
+  // (each atom put with its record, and each bond with its atoms' - once,
+  // not every atom and bond looked through again for every record)
+  type Part = { stack: number; record: number; title?: string; atoms: M["atoms"]; bonds: M["bonds"] };
+  const loose: Part = { stack: -Infinity, record: 0, atoms: [], bonds: [] };
+  const records = new Map<number, Map<number, Part>>();
+  const partOf = new Map<number, Part>();
+  for (const a of atoms) {
+    const s = a.stack;
+    let part = loose;
+    if (s) {
+      let stack = records.get(s.id);
+      if (!stack) records.set(s.id, (stack = new Map()));
+      let r = stack.get(s.record);
+      if (!r) stack.set(s.record, (r = { stack: s.id, record: s.record, ...(s.title ? { title: s.title } : {}), atoms: [], bonds: [] }));
+      part = r;
+    }
+    part.atoms.push(a);
+    partOf.set(a.id, part);
+  }
+  for (const b of drawn.bonds) {
+    const part = partOf.get(b.a);
+    if (part && partOf.get(b.b) === part) part.bonds.push(b);
+  }
+  const model = (p: Part) => ({ ...drawn, atoms: p.atoms, bonds: p.bonds }) as M;
+  const stacked = [...records.values()].flatMap((stack) => [...stack.values()]).sort((p, q) => p.stack - q.stack || p.record - q.record);
+  return { loose: model(loose), stacked: stacked.map((r) => ({ model: model(r), ...(r.title ? { title: r.title } : {}) })) };
 }
 
 /** Which record each stack carried shows, as its atoms are marked: by the stack's id. */

@@ -34,8 +34,13 @@ import {
 
 /** Logical units to the pixel: coordinates are whole numbers, so they are kept fine. */
 const S = 20;
-/** The reference device: 96 pixels to the inch. */
-const DEVICE = { px: [1920, 1080], mm: [508, 286], um: [508000, 285750] } as const;
+/**
+ * The reference device: 96 pixels to the inch, and so in its whole
+ * millimetres on both axes - 1440 pixels are 381 mm, where 1080 would be
+ * 285.75, written 286, and a reader going by millimetres drew the picture
+ * 0.09% short.
+ */
+const DEVICE = { px: [1920, 1440], mm: [508, 381], um: [508000, 381000] } as const;
 
 const EMR = {
   HEADER: 1,

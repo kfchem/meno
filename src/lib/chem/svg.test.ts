@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSVG,
+  fontStack,
   layoutMolecule,
   placeLabel,
   type Atom,
@@ -77,6 +78,15 @@ describe("createSVG", () => {
       box[2] * zoom,
       6,
     );
+  });
+
+  it("names, after a typeface, the nearest most readers have - IBM Plex Sans, which Meno carries, Arial or Helvetica", () => {
+    expect(fontStack("IBM Plex Sans")).toBe("'IBM Plex Sans', Arial, Helvetica, 'IBM Plex Sans JP', sans-serif");
+    expect(fontStack("Arial")).toBe("Arial, Helvetica, 'IBM Plex Sans JP', sans-serif");
+    expect(fontStack("Helvetica")).toBe("Helvetica, Arial, 'IBM Plex Sans JP', sans-serif");
+    const o = opts({ fontFamily: "IBM Plex Sans", labelSet: { ...opts().labelSet, fontFamily: "IBM Plex Sans" } });
+    const svg = createSVG(layoutMolecule(atoms, bonds, o, 60), o);
+    expect(svg).toContain(`font-family="'IBM Plex Sans', Arial, Helvetica, 'IBM Plex Sans JP', sans-serif"`);
   });
 
   it("sets a label as the canvas does: in Arial, run by run, on its baseline", () => {

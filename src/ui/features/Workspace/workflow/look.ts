@@ -11,6 +11,38 @@ export const PX = PAGE_PX;
 /** drei's Html, drawing a pixel as `PX` world units (it draws one as distanceFactor / 400). */
 export const HTML_DISTANCE = PX * 400;
 
+/**
+ * Where a set or a step lies on the workflow's layer of HTML, its top left
+ * at (x, y) on the page - and, `above`, over the parts drawn after it: a
+ * step's card opened, its form growing down over the cards below it, which
+ * are drawn later and so over it otherwise.
+ */
+export const onLayer = (x: number, y: number, above = false): { position: "absolute"; left: number; top: number; zIndex?: number } => ({
+  position: "absolute",
+  left: x / PX,
+  top: -y / PX,
+  ...(above ? { zIndex: 1 } : {}),
+});
+
+/**
+ * The card just shut, kept over the others while it shrinks back (`ms`,
+ * `DURATION.base`) rather than dropped under the card below mid-way: told
+ * each card opened in turn (`open`), it says which card is shutting
+ * (`onShutting`) - null once that one is down.
+ */
+export function shuttingCard(onShutting: (id: number | null) => void, ms: number): (open: number | null) => void {
+  let was: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return (open) => {
+    if (open === was) return;
+    const shut = was;
+    was = open;
+    clearTimeout(timer);
+    onShutting(shut);
+    if (shut != null) timer = setTimeout(() => onShutting(null), ms);
+  };
+}
+
 /** A step's card: how wide, and how tall closed, about. */
 export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;

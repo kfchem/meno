@@ -111,6 +111,11 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. Workflow tabs pass the same flag to
   the canvases embedded in their nodes through `NodeActiveContext`.
+- What is drawn deep in a view and hears keys on the window - a question
+  (`ui/layouts/asking`), a card over the canvas - asks `InFront`
+  (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
+  tab behind waits, unanswered, the keys the tab's in front, Escape too,
+  until its own tab comes back.
 - Because every live canvas holds a WebGL context and browsers keep only about
   16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
   past the limit is refused with a notice rather than silently blanking the
@@ -207,9 +212,11 @@ Nothing a part shows lives in the part, so a part made again shows the same:
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
-there is none yet: its document is kept while Meno runs, but Save is the
-canvas's own (`useFileActions`, `setSaver`), and so is not there until the
-canvas draws again.
+there is none yet, but its document is kept while Meno runs, and Save is
+the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
+`useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
+the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
+the document, and a save that fails says so under the canvas's card.
 
 ## How things move
 

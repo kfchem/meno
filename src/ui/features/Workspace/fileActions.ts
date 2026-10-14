@@ -34,6 +34,7 @@ import { readerClient } from "../../../lib/calc/workers";
 import { writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
+import { greatest, least } from "../../../lib/chem/lists";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -253,8 +254,9 @@ export function drawingLayout(
   const take = (xs: number[], ys: number[]) => {
     const { min, max } = layout.bounds;
     layout.bounds = {
-      min: { x: Math.min(drawn ? min.x : Infinity, ...xs), y: Math.min(drawn ? min.y : Infinity, ...ys) },
-      max: { x: Math.max(drawn ? max.x : -Infinity, ...xs), y: Math.max(drawn ? max.y : -Infinity, ...ys) },
+      // (not spread into one call: a molecule in 3D's atoms and bonds may be more than a call takes - lib/chem/lists)
+      min: { x: Math.min(drawn ? min.x : Infinity, least(xs)), y: Math.min(drawn ? min.y : Infinity, least(ys)) },
+      max: { x: Math.max(drawn ? max.x : -Infinity, greatest(xs)), y: Math.max(drawn ? max.y : -Infinity, greatest(ys)) },
     };
     drawn = true;
   };
@@ -526,6 +528,9 @@ export function useFileActions(nameTab?: (label: string) => void) {
 
   return { save, saveAs, exportAs, error, dismissError: () => setError(null) };
 }
+
+/** A workspace's Save, Save As and Export, and what went wrong with one (useFileActions). */
+export type FileActions = ReturnType<typeof useFileActions>;
 
 const NO_RECORDS: Record<number, number> = {};
 
