@@ -291,6 +291,9 @@ export type StrokeTarget = {
   turn?: 1 | -1;
 };
 
+/** The angle each stroke's bond was last held at (`snapBond`), for as long as the stroke is the same. */
+const lastSnap = new WeakMap<Stroke, number>();
+
 /** The bond the pointer is leading, not yet laid down. */
 export function strokeTarget(
   model: StrokeModel,
@@ -308,7 +311,8 @@ export function strokeTarget(
   if (s.free) {
     end = pointer;
   } else {
-    const b = snapBond(t.tip, t.neighbours, pointer, length);
+    const b = snapBond(t.tip, t.neighbours, pointer, length, lastSnap.get(s));
+    lastSnap.set(s, b.angle);
     end = b.end;
     trigonalTo = b.trigonalTo;
   }

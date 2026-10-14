@@ -84,6 +84,15 @@ describe("createSVG", () => {
     );
   });
 
+  it("names, after a typeface, the nearest most readers have - IBM Plex Sans, which Meno carries, Arial or Helvetica", () => {
+    expect(fontStack("IBM Plex Sans")).toBe("'IBM Plex Sans', Arial, Helvetica, 'IBM Plex Sans JP', sans-serif");
+    expect(fontStack("Arial")).toBe("Arial, Helvetica, 'IBM Plex Sans JP', sans-serif");
+    expect(fontStack("Helvetica")).toBe("Helvetica, Arial, 'IBM Plex Sans JP', sans-serif");
+    const o = opts({ fontFamily: "IBM Plex Sans", labelSet: { ...opts().labelSet, fontFamily: "IBM Plex Sans" } });
+    const svg = createSVG(layoutMolecule(atoms, bonds, o, 60), o);
+    expect(svg).toContain(`font-family="'IBM Plex Sans', Arial, Helvetica, 'IBM Plex Sans JP', sans-serif"`);
+  });
+
   it("sets a label as the canvas does: in Arial, run by run, on its baseline", () => {
     const o = opts();
     const layout = layoutMolecule(atoms, bonds, o, 60);
@@ -229,7 +238,7 @@ describe("an SVG of what a document gives it", () => {
     expect(fontStack("O'Neil Sans")).toBe(`'O\\'Neil Sans', 'IBM Plex Sans JP', sans-serif`);
   });
 
-  it("leaves out what XML cannot hold - controls, a surrogate alone, U+FFFE and U+FFFF - and keeps the rest", () => {
+  it("draws what XML cannot hold - controls, a surrogate alone, U+FFFE and U+FFFF - as the replacement character, and keeps the rest", () => {
     // as words pasted from elsewhere bring them
     const pasted = "a\x00b\x01c\x0Bd\x0Ce\x1Bf\u{FFFE}g\u{FFFF}h\u{D83D}i\u{DE00}j\u{1F600}k\tl";
     const o = opts();
@@ -240,7 +249,7 @@ describe("an SVG of what a document gives it", () => {
       { ...o, labelSet: { ...o.labelSet!, fontFamily: "Arial\x01Black" } },
     );
     expect(xmlProblems(svg, SVG_ELEMENTS)).toEqual([]);
-    expect(svg).toContain(">abcdefghij\u{1F600}k\tl</text>");
-    expect(svg).toContain(`font-family="'ArialBlack', `);
+    expect(svg).toContain(">a\u{FFFD}b\u{FFFD}c\u{FFFD}d\u{FFFD}e\u{FFFD}f\u{FFFD}g\u{FFFD}h\u{FFFD}i\u{FFFD}j\u{1F600}k\tl</text>");
+    expect(svg).toContain(`font-family="'Arial\u{FFFD}Black', `);
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { useInFront } from "./inFront";
 
 /**
  * The keys while a question is asked over the window - a box that waits
@@ -10,6 +11,11 @@ import { useEffect, useRef, type RefObject } from "react";
  *
  * Where one question is asked over another, the one asked last - on top -
  * has the keys.
+ *
+ * A question asked in a tab waits while another tab is in front: the keys
+ * are that tab's - typed in its fields, its shortcuts acting, Escape its
+ * own - and the question has them again, still unanswered, when its tab
+ * comes back (./inFront).
  */
 
 type Key = {
@@ -20,8 +26,8 @@ type Key = {
   stopImmediatePropagation: () => void;
 };
 
-/** The questions being asked, the last asked last. */
-const asked: object[] = [];
+/** The questions being asked, the last asked last: each with whether its tab is in front. */
+const asked: { inFront: () => boolean }[] = [];
 
 export type AskedKeys = {
   /** For the window, before anything else has a key: Escape answers no; a key pressed away from the question is for nothing. */
@@ -32,11 +38,18 @@ export type AskedKeys = {
   done: () => void;
 };
 
-/** Keys held for a question: `inside`, whether a key is pressed in it; `no`, its answer to Escape. */
-export function askKeys(inside: (target: EventTarget | null) => boolean, no: () => void): AskedKeys {
-  const me = {};
+/**
+ * Keys held for a question: `inside`, whether a key is pressed in it; `no`,
+ * its answer to Escape; `inFront`, whether its tab is in front.
+ */
+export function askKeys(inside: (target: EventTarget | null) => boolean, no: () => void, inFront: () => boolean = () => true): AskedKeys {
+  const me = { inFront };
   asked.push(me);
-  const onTop = () => asked[asked.length - 1] === me;
+  // (the one asked last of those whose tab is in front: one in a tab behind lets the keys by)
+  const onTop = () => {
+    const facing = asked.filter((q) => q.inFront());
+    return facing[facing.length - 1] === me;
+  };
   return {
     first: (e) => {
       if (!onTop()) return;
@@ -62,14 +75,22 @@ export function askKeys(inside: (target: EventTarget | null) => boolean, no: () 
   };
 }
 
-/** A question's keys, while it is shown (`on`): `box`, the question; `no`, what Escape answers. */
+/** A question's keys, while it is shown (`on`) and its tab is in front: `box`, the question; `no`, what Escape answers. */
 export function useAskedKeys(box: RefObject<HTMLElement | null>, no: () => void, on = true): void {
   // (the answer as last given: asked once, however often the question is drawn)
   const answer = useRef(no);
   answer.current = no;
+  // (and whether its tab is in front, as last drawn: ./inFront)
+  const inFront = useInFront();
+  const front = useRef(inFront);
+  front.current = inFront;
   useEffect(() => {
     if (!on) return;
-    const keys = askKeys((t) => t instanceof Node && !!box.current?.contains(t), () => answer.current());
+    const keys = askKeys(
+      (t) => t instanceof Node && !!box.current?.contains(t),
+      () => answer.current(),
+      () => front.current,
+    );
     window.addEventListener("keydown", keys.first, true);
     document.addEventListener("keydown", keys.last);
     return () => {

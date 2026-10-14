@@ -449,7 +449,8 @@ export default function Pdfs2D() {
     }
     const box = st.pdfBox;
     if (spot && box?.id === p.id && inBox(box, spot.page, spot.x, spot.y)) {
-      lift(p, ev, (screen) => void dragBox(store, p, box, { x: ev.clientX, y: ev.clientY }, screen), () => {});
+      // (carried out by a drag; a click lets it go, as one on words selected does - it held the page else, every click on it in it)
+      lift(p, ev, (screen) => void dragBox(store, p, box, { x: ev.clientX, y: ev.clientY }, screen), () => store.getState().setPdfBox(null));
       return;
     }
     const off = { x: p.x - q.x, y: p.y - q.y };

@@ -17,6 +17,8 @@ describe("a caption's words", () => {
 
   it("set a prefix in italics only at a word's start, and a sign at a formula's end as its charge", () => {
     expect(shown("t-BuOK, THF")).toBe("/t/|-BuOK, THF");
+    expect(shown("m-CPBA, CH2Cl2")).toBe("/m/|-CPBA, CH|_2|Cl|_2");
+    expect(shown("n-hexane")).toBe("/n/|-hexane");
     expect(shown("co-solvent")).toBe("co-solvent");
     expect(shown("NH4+")).toBe("NH|_4|^+");
     expect(shown("BF4-")).toBe("BF|_4|^−");
@@ -65,18 +67,103 @@ describe("a caption made as wide as something", () => {
     for (const l of lines) expect(runsWidth(captionRuns(l), 1)).toBeLessThanOrEqual(12 + 1e-9);
     // (each line as full as it can be: the next word would not have fitted)
     for (let i = 0; i < lines.length - 1; i++) expect(runsWidth(captionRuns(`${lines[i]} ${lines[i + 1].split(" ")[0]}`), 1)).toBeGreaterThan(12);
-    // (a word wider than it alone on its line; a line typed kept a line of its own; none, as typed)
-    expect(captionLines("a conformationally b", 1, undefined, 2)).toEqual(["a", "conformationally", "b"]);
+    // (a line typed kept a line of its own; none, as typed)
     expect(captionLines("one two\nthree", 1, undefined, 100)).toEqual(["one two", "three"]);
     expect(captionLines("one two\nthree", 1)).toEqual(["one two", "three"]);
-    // (a number and the unit after it kept together)
-    for (const width of [3, 4, 5, 6, 7, 8]) {
+    // (a number and the unit after it kept together - where the two fit)
+    for (const width of [4, 5, 6, 7, 8]) {
       const lines = captionLines("K2CO3, DMF, 60 °C, 12 h, then 2 equiv of base", 1, undefined, width);
       expect(lines.some((l) => /(^|\s)60$/.test(l) || /(^|\s)12$/.test(l) || /(^|\s)2$/.test(l))).toBe(false);
     }
-    expect(captionLines("60 °C", 1, undefined, 0.5)).toEqual(["60 °C"]);
-    expect(captionLines("−78–0 °C, 1–2 h", 1, undefined, 0.5)).toEqual(["−78–0 °C,", "1–2 h"]);
-    expect(captionLines("aged 3 days", 1, undefined, 0.5)).toEqual(["aged", "3 days"]);
+    expect(captionLines("60 °C", 1, undefined, 3)).toEqual(["60 °C"]);
+    expect(captionLines("−78–0 °C, 1–2 h", 1, undefined, 4)).toEqual(["−78–0", "°C,", "1–2 h"]);
+    expect(captionLines("aged 3 days", 1, undefined, 3)).toEqual(["aged", "3 days"]);
+    // (but where the two are wider than it: parted at the space between them, not in a word)
+    expect(captionLines("60 °C", 1, undefined, 1.5)).toEqual(["60", "°C"]);
+    expect(captionLines("aged 3 days", 1, undefined, 2.5)).toEqual(["aged", "3", "days"]);
+  });
+
+  it("breaks a word wider than it at its edge - after a hyphen, a comma or a closing bracket, or before an opening one, where one fits (the maintainer, 2026-10-13)", () => {
+    const name = "2-amino-3-(4-hydroxyphenyl)propanoic acid";
+    expect(captionLines(name, 1, undefined, 7)).toEqual(["2-amino-3-(4-", "hydroxyphenyl)", "propanoic acid"]);
+    expect(captionLines(name, 1, undefined, 5).slice(0, 2)).toEqual(["2-amino-3-", "(4-"]);
+    for (const width of [2, 3, 5, 7]) {
+      const lines = captionLines(name, 1, undefined, width);
+      // (no letter lost or added: a word's pieces end to end, words a space apart)
+      expect(lines.join("").replace(/ /g, "")).toBe(name.replace(/ /g, ""));
+      // (each line as it is set - a broken word's ends as typed - no wider than it)
+      for (const t of captionSet(name, 0, 0, 1, undefined, width).items) expect(runsWidth(t.runs!, 1)).toBeLessThanOrEqual(width + 1e-9);
+    }
+    // (none to break at: at the edge, as much on each line as fits; the last piece goes on with the words after it)
+    const lines = captionLines("a conformationally b", 1, undefined, 2);
+    expect(lines[0]).toBe("a");
+    expect(lines[lines.length - 1].endsWith(" b")).toBe(true);
+    expect(lines.join("").replace(/ /g, "")).toBe("aconformationallyb");
+    for (const l of lines) expect(runsWidth(captionRuns(l), 1)).toBeLessThanOrEqual(2 + 1e-9);
+    expect(captionLines("x".repeat(20), 1, undefined, 3)).toEqual(["xxxxxx", "xxxxxx", "xxxxxx", "xx"]);
+    // (a letter alone wider than it: a line of its own, and no line left empty)
+    expect(captionLines("aged", 1, undefined, 0.5)).toEqual(["a", "g", "e", "d"]);
+    // (a list's bullet kept with the first piece of its word)
+    expect(captionLines("• Pneumonoultramicroscopic", 1, undefined, 4)[0].startsWith("• P")).toBe(true);
+  });
+
+  it("breaks a word of thousands of letters - formulas among its pieces - as it breaks a short one", () => {
+    const piece = "CH3,C12H22O11,NH4+;Cl−/(S)-BINAP-";
+    const long = piece.repeat(120);
+    for (const width of [1.5, 4, 9]) {
+      const lines = captionLines(long, 1, undefined, width);
+      expect(lines.join("")).toBe(long);
+      for (const t of captionSet(long, 0, 0, 1, undefined, width).items) expect(runsWidth(t.runs!, 1)).toBeLessThanOrEqual(width + 1e-9);
+      // (each piece breaks as it does alone)
+      const alone = captionLines(piece.repeat(3), 1, undefined, width);
+      expect(lines.slice(0, alone.length - 1)).toEqual(alone.slice(0, -1));
+    }
+  });
+
+  it("sets the ends of a word it broke as typed - a hyphen at a break no charge, a locant no count", () => {
+    const set = captionSet("2-amino-3-(4-hydroxyphenyl)propanoic acid", 0, 0, 1, undefined, 7);
+    expect(set.items.map((t) => t.text)).toEqual(["2-amino-3-(4-", "hydroxyphenyl)", "propanoic acid"]);
+    for (const t of set.items) expect(t.runs!.some((r) => r.sup || r.sub)).toBe(false);
+    expect(captionSet("N,N-diisopropylethylamine", 0, 0, 1, undefined, 4).items[0].runs).toEqual([{ text: "N,N-" }]);
+    // (a formula whole on its line still set as one)
+    expect(captionSet("K2CO3 in water", 0, 0, 1, undefined, 4).items[0].runs!.some((r) => r.sub)).toBe(true);
+  });
+
+  it("leaves no line of a space alone, nor one ending in it, where a bullet is wider than the room", () => {
+    expect(captionLines("– e", 1, undefined, 0.7)).toEqual(["–", "e"]);
+    expect(captionLines("53. O", 1, undefined, 2)).toEqual(["53.", "O"]);
+  });
+
+  it("keeps a list's lines in the width however deep the list, and a justified item's bullet where it begins", () => {
+    const deep = captionWords("\t\t\t\t\t• abc def", 0, 0, 1, undefined, 3, "left");
+    for (const w of deep.words) {
+      expect(w.x).toBeGreaterThanOrEqual(-1.5 - 1e-9);
+      expect(w.x + w.w).toBeLessThanOrEqual(1.5 + 1e-9);
+    }
+    const item = captionWords("• aaa bbb ccc ddd eee fff ggg hhh", 0, 0, 1, undefined, 6, "justify");
+    // (the bullet at the edge; the first word where the lines under it hang)
+    expect(item.words[0].x).toBeCloseTo(-3, 9);
+    const hangs = item.words.filter((w) => w.y < item.words[0].y - 1e-9)[0].x;
+    expect(item.words[1].x).toBeCloseTo(hangs, 9);
+  });
+
+  it("puts no caret inside a letter as the reader sees it - an emoji's halves", () => {
+    const places = captionPlaces("x😀y", 0, 0, 1);
+    expect(places.at.map((a) => !!a.inside)).toEqual([false, false, true, false, false]);
+    // (a click on the emoji's right half: after it, not between its halves)
+    expect(captionPlaceAt(places, { x: places.at[3].x - 0.01, y: places.lines[0].y })).toBe(3);
+  });
+
+  it("has a place for the caret at every letter of a word it broke, on the line it fell on", () => {
+    const text = "a conformationally b";
+    const places = captionPlaces(text, 0, 0, 1, undefined, 2);
+    expect(places.at).toHaveLength(text.length + 1);
+    expect(places.lines).toHaveLength(captionLines(text, 1, undefined, 2).length);
+    // (the word's letters on the lines after the first, in order down them)
+    const lines = places.at.slice(2, 18).map((p) => p.line);
+    expect(lines[0]).toBe(1);
+    expect(lines.every((l, i) => i === 0 || l >= lines[i - 1])).toBe(true);
+    expect(lines[lines.length - 1]).toBeGreaterThan(1);
   });
 
   it("reaches as wide as it was made, and as tall as its lines, each centred", () => {

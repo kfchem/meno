@@ -1,7 +1,8 @@
 /**
  * A molecule in 3D moving in one of its vibrations, as a calculation gave
- * them (lib/calc): how a frequency is written, and how far each atom is
- * from rest at a moment of it - pure, over the molecule's own places.
+ * them (lib/calc): how far each atom is from rest at a moment of it -
+ * pure, over the molecule's own places. (Its frequency is written as
+ * every wavenumber is, lib/calc/results `valueText`.)
  */
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 
@@ -9,11 +10,6 @@ import { WORLD_PER_ANGSTROM } from "./molecule3d";
 export const VIBRATION_PEAK = 0.3;
 /** One period of the motion on the screen, in seconds, whatever the vibration's own frequency. */
 export const VIBRATION_PERIOD = 1.2;
-
-/** A frequency as it is written: "1650.2 cm⁻¹"; an imaginary one - given negative - "120.5i cm⁻¹". */
-export function frequencyText(f: number): string {
-  return f < 0 ? `${(-f).toFixed(1)}i cm⁻¹` : `${f.toFixed(1)} cm⁻¹`;
-}
 
 /**
  * Each atom's offset from rest (world units, x, y, z of each) in a

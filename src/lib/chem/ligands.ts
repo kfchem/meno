@@ -416,6 +416,19 @@ const METALS = new Set(
 );
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
+/** Whether a metal's symbol is written anywhere in `text`: what any complex's formula has. */
+function hasMetal(text: string): boolean {
+  for (const m of METALS) if (text.includes(m)) return true;
+  return false;
+}
+
+/**
+ * The longest a part of a formula outside brackets is tried as one ligand,
+ * group or counter-anion - longer than any of them is written: past it, a
+ * label of a metal and a long run of letters was tried at every length.
+ */
+const LONGEST_PART = 32;
+
 /**
  * A complex's counter-anions, written after its brackets, that no rule
  * reads: BArF names its aryl groups by no formula. BF4, PF6, SbF6, ClO4
@@ -469,8 +482,50 @@ function closing(text: string, i: number): number {
   return -1;
 }
 
-/** What a complex's formula may name: groups bound by one bond (OAc, OTf, Me), and ligands of its own. */
-type Names = { groupOf: (label: string) => GroupStructure | null; local: Readonly<Record<string, Ligand>> };
+/**
+ * What a complex's formula may name: groups bound by one bond (OAc, OTf,
+ * Me), ligands of its own, and counter-anions where they may be read
+ * (`counters`) - with, where it has no ligands of its own, what each text
+ * was read as before by the same groups (`seen`).
+ */
+type Names = {
+  groupOf: GroupOf;
+  local: Readonly<Record<string, Ligand>>;
+  counters: boolean;
+  seen: Readings | null;
+};
+
+type GroupOf = (label: string) => GroupStructure | null;
+/** What texts were read as: each as a metal, a ligand, a halide or a group (`plain`); each as a counter-anion. */
+type Readings = { plain: Map<string, Item | null>; counters: Map<string, Item | null> };
+/**
+ * What each text was read as, by the groups it was read with. A label is
+ * read in many writings as it is typed (./smartLabel), and each part of
+ * each tried at every length: the same texts again and again. Forgotten as
+ * the user's own abbreviations change (`forgetComplexReadings`).
+ */
+let readings = new WeakMap<GroupOf, Readings>();
+/** The most texts kept for one way of reading groups, before they are forgotten and read again. */
+const MOST_READINGS = 20_000;
+
+/** Forgets what each text of a complex's formula was read as: the groups read in it may have changed. */
+export function forgetComplexReadings(): void {
+  readings = new WeakMap();
+}
+
+/** What texts were read as with `groupOf`, kept from now on. */
+function readingsOf(groupOf: GroupOf): Readings {
+  let seen = readings.get(groupOf);
+  if (!seen || seen.plain.size + seen.counters.size >= MOST_READINGS) readings.set(groupOf, (seen = { plain: new Map(), counters: new Map() }));
+  return seen;
+}
+
+/** `read()`, kept in `seen` - where there is one - and given from it after. */
+function kept(seen: Map<string, Item | null> | undefined, t: string, read: () => Item | null): Item | null {
+  if (!seen) return read();
+  if (!seen.has(t)) seen.set(t, read());
+  return seen.get(t)!;
+}
 
 /**
  * What a complex's formula is made of, in order, or null where any of it
@@ -499,7 +554,7 @@ function itemsOf(text: string, names: Names): Item[] | null {
       // the longest token from here, up to the next bracket
       const stop = text.slice(i).search(/[[(]/);
       const rest = stop < 0 ? text.slice(i) : text.slice(i, i + stop);
-      for (let len = rest.length; len > 0 && !item; len--) {
+      for (let len = Math.min(rest.length, LONGEST_PART); len > 0 && !item; len--) {
         const t = token(rest.slice(0, len), names);
         if (t) {
           item = t;
@@ -510,7 +565,8 @@ function itemsOf(text: string, names: Names): Item[] | null {
     if (!item) return null;
     const count = /^\d+/.exec(text.slice(i));
     if (count) {
-      item.n = Number(count[0]);
+      // (a copy counted: what a text was read as is kept as it was read)
+      item = { ...item, n: Number(count[0]) };
       i += count[0].length;
     }
     out.push(item);
@@ -518,11 +574,25 @@ function itemsOf(text: string, names: Names): Item[] | null {
   return out;
 }
 
+/** A bridging ligand's mark: μ-Cl, μ-dvtms. */
+const MU = /^(?:μ|mu)2?-(.+)$/;
+
+/** What `t` is in a complex's formula, or null: a counter-anion only where one may be read. */
 function token(t: string, names: Names): Item | null {
+  const plain = kept(names.seen?.plain, t, () => plainToken(t, names));
+  if (plain || !names.counters || MU.test(t)) return plain;
+  return kept(names.seen?.counters, t, () => {
+    const counter = counterIon(t, names.groupOf);
+    return counter ? { kind: "counter", ...counter, n: 1 } : null;
+  });
+}
+
+/** What `t` is as a metal, a ligand, a halide, a hydride or a group bound by one bond - a bridging one marked so - or null. */
+function plainToken(t: string, names: Names): Item | null {
   // a bridging ligand: μ-Cl, μ-dvtms
-  const mu = /^(?:μ|mu)2?-(.+)$/.exec(t);
+  const mu = MU.exec(t);
   if (mu) {
-    const bridge = token(mu[1], names);
+    const bridge = plainToken(mu[1], names);
     return bridge && (bridge.kind === "ligand" || bridge.kind === "x") ? { ...bridge, bridging: true } : null;
   }
   if (METALS.has(t)) return { kind: "metal", el: t, n: 1 };
@@ -532,8 +602,6 @@ function token(t: string, names: Names): Item | null {
   const ligand = namedLigand(t, true);
   if (ligand) return { kind: "ligand", ...ligand, n: 1 };
   if (["F", "Cl", "Br", "I", "H"].includes(t) || names.groupOf(t)) return { kind: "x", label: t, n: 1 };
-  const counter = counterIon(t, names.groupOf);
-  if (counter) return { kind: "counter", ...counter, n: 1 };
   return null;
 }
 
@@ -562,7 +630,16 @@ export function complexStructure(
   groupOf: (label: string) => GroupStructure | null,
   local: Readonly<Record<string, Ligand>> = {},
 ): (GroupStructure & { name: string }) | null {
-  const items = itemsOf(label, { groupOf, local });
+  // (no metal's symbol in it, no complex: a long label - OTBS forty times,
+  // a long chain written out - was read at every length of every part of it,
+  // for seconds, before it was found to be none)
+  if (!hasMetal(label)) return null;
+  // (no part in brackets, no counter-anion it may have: read first with none
+  // tried - most of the cost of reading what is no complex - and, where it
+  // reads so, again as it always was, a counter-anion making it none)
+  const names: Names = { groupOf, local, counters: label.includes("["), seen: Object.keys(local).length ? null : readingsOf(groupOf) };
+  let items = itemsOf(label, names);
+  if (items && !names.counters) items = itemsOf(label, { ...names, counters: true });
   if (!items) return null;
   const atoms: SmilesAtom[] = [];
   const bonds: StructureBond[] = [];

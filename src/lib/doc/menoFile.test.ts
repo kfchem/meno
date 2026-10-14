@@ -68,6 +68,24 @@ describe("a workspace file", () => {
     expect(file.data("0".repeat(64))).toBeNull();
   });
 
+  it("gives each of thousands of files kept, as it was, without reading the zip's directory again for each", () => {
+    // (pictures stored, texts deflated: 9,000 took 20 s, the directory read again for every one)
+    const kept = Array.from({ length: 5000 }, (_, k) => {
+      const text = k % 3 === 0;
+      const data = text ? strToU8(`output ${k}\n`.repeat(50)) : Uint8Array.from({ length: 64 }, (_, i) => (i < 2 ? (k >> (8 * i)) & 0xff : (k * 31 + i) % 256));
+      return { sha256: createHash("sha256").update(data).digest("hex"), name: `f${k}`, media: text ? "text/plain" : "image/png", data };
+    });
+    const file = readMenoFile(menoFileBytes("{}", kept));
+    expect(file.files).toHaveLength(5000);
+    // (the reads alone timed: each compared after)
+    const t = performance.now();
+    const read = kept.map((k) => file.data(k.sha256));
+    const took = performance.now() - t;
+    expect(read.every((d, i) => d != null && Buffer.from(d).equals(kept[i].data))).toBe(true);
+    expect(took).toBeLessThan(1500);
+    expect(file.data("0".repeat(64))).toBeNull();
+  });
+
   it("is written the same off the page", async () => {
     const written = await writeMenoFile(WORKSPACE, [{ sha256: sha(output), name: "job.log", media: "text/plain", data: output }]);
     expect(readMenoFile(written).data(sha(output))).toEqual(output);

@@ -390,3 +390,18 @@ describe("a workspace with what is no entry in its lists", () => {
     expect(threw).toEqual([]);
   }, 60_000);
 });
+
+describe("a ring's circle, saved", () => {
+  it("is saved only for a ring still drawn: a gone ring's would come back on a ring of new atoms given its atoms' ids", () => {
+    const { st } = canvas();
+    const ring = [0, 1, 2, 3, 4, 5].map((k) => st().addAtom(Math.cos((k * Math.PI) / 3), Math.sin((k * Math.PI) / 3), "C"));
+    ring.forEach((a, k) => st().addBond(a, ring[(k + 1) % 6], 1));
+    const key = [...ring].sort((a, b) => a - b).join("-");
+    st().setRingEnabled(key, true);
+    // (and one of atoms no longer drawn)
+    st().setRingEnabled("901-902-903-904-905-906", true);
+    const saved = JSON.parse(workspaceText(st())) as { aromaticRings?: Record<string, boolean> };
+    expect(saved.aromaticRings).toEqual({ [key]: true });
+  });
+});
+
