@@ -1157,6 +1157,12 @@ workspace holds.
     neither could (where only one could, it is that one);
   - more bonds meeting at a carbon than it has;
   - a bond drawn twice over;
+  - a stereocentre whose configuration the figure does not show - no
+    wedge or hash narrow at it, as a cage drawn in perspective has none -
+    four groups about it each other than the rest, its hydrogens one at
+    most, a P=O's or an S=O's too, as Meno takes a stereocentre, but never
+    a metal's: none is read, and none guessed ("A stereocentre whose
+    configuration is not drawn: none is read.");
   - an O alone, or a label with its hydrogens written, with more bonds
     coming to it than it takes, where one let go was all but as near as
     those kept ("More bonds come to it than it takes: those nearest its
