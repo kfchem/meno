@@ -366,7 +366,8 @@ describe("a label, written", () => {
     } finally {
       setCustomAbbreviations([]);
     }
-    expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Np", "e"]);
+    // (with it gone, a word Meno does not know is read whole, as any is)
+    expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Npe"]);
   });
 
   it("reads outward from its bond when that comes in from the right (IUPAC GR-2.3)", () => {
@@ -377,6 +378,38 @@ describe("a label, written", () => {
     expect(reversedLabel("CH(CH3)2")).toBe("(H3C)2HC");
     expect(reversedLabel("Bpin")).toBe("pinB");
     expect(reversedLabel("NO2")).toBe("O2N");
+  });
+
+  it("keeps a word it does not know whole: Alk on a bond's left is Alk, not klA", () => {
+    // (read letter by letter, such a word was turned round: OAlk was written klAO, an Xx from a file xX)
+    expect(labelUnits("Alk")).toEqual(["Alk"]);
+    expect(reversedLabel("OAlk")).toBe("AlkO");
+    expect(reversedLabel("Xx")).toBe("Xx");
+    // (an element's two letters first, and no further than a group's name or a prefix)
+    expect(labelUnits("SnBu3")).toEqual(["Sn", "Bu3"]);
+    expect(labelUnits("Bpin")).toEqual(["B", "pin"]);
+    expect(labelUnits("OiPr")).toEqual(["O", "iPr"]);
+    expect(labelUnits("Ot-Bu")).toEqual(["O", "t-Bu"]);
+  });
+
+  it("knows the symbols for a kind of group as names, as TBS: never turned round on a bond's left", () => {
+    // (the maintainer, 2026-10-13: read letter by letter, OPG was written GPO there, NHPG GPHN)
+    expect(labelUnits("OPG")).toEqual(["O", "PG"]);
+    for (const [label, drawn] of [
+      ["OPG", "PGO"], ["NHPG", "PGHN"], ["OLG", "LGO"], ["CH2EWG", "EWGH2C"], ["CH2EDG", "EDGH2C"],
+      ["ONu", "NuO"], ["CH2E", "EH2C"], ["CH2Hal", "HalH2C"], ["CH2Het", "HetH2C"],
+    ]) {
+      expect(reversedLabel(label), label).toBe(drawn);
+      // (and back: drawn on the left, read from its bond)
+      expect(reversedLabel(drawn), drawn).toBe(label);
+    }
+    // (only where its word ends - NHallyl is NH and allyl, PGe P and Ge - and E, one letter, is no unit before europium's Eu)
+    expect(labelUnits("NHallyl")).toEqual(["N", "H", "allyl"]);
+    expect(labelUnits("PGe")).toEqual(["P", "Ge"]);
+    expect(labelUnits("Eu")).toEqual(["Eu"]);
+    // (and none of the user's own)
+    expect(labelProblem("PG")).toBe("PG already means a protecting group.");
+    expect(labelProblem("E")).toBe("E already means an electrophile.");
   });
 
   it("sets counts as subscripts and an ending charge as a superscript", () => {

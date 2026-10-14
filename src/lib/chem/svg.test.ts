@@ -6,8 +6,12 @@ import {
   placeLabel,
   type Atom,
   type Bond,
+  type Layout,
+  type MeasureMark,
 } from "./layout2d";
-import { acsWorldOptions } from "./acs";
+import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "./acs";
+import { ACS_1996, layoutOptionsFor } from "./style";
+import { arrowSampleSvg } from "./styleSamples";
 
 const atoms: Atom[] = [
   { id: 1, x: 0, y: 0, el: "C" },
@@ -132,5 +136,120 @@ describe("the drawing's bounds", () => {
     const wedge: Bond[] = [{ a1: 0, a2: 1, order: 1, stereo: "up" }];
     const w = layoutMolecule(a, wedge, o, 60);
     expect(w.bounds.max.y).toBeGreaterThanOrEqual(o.wedgeWidthPx / 2 - 1e-9);
+  });
+});
+
+/** The elements an SVG is written with. */
+const SVG_ELEMENTS: ReadonlySet<string> = new Set(["svg", "defs", "radialGradient", "stop", "path", "line", "circle", "ellipse", "rect", "text", "image"]);
+
+/**
+ * What keeps `xml` from being a well-formed document of `elements` alone -
+ * nothing, where it is one: a character XML cannot hold, an & that is no
+ * reference, a tag that does not read (an attribute unquoted, a < in a
+ * value) or is not closed in order, an element or an event handler the
+ * writer never writes.
+ */
+function xmlProblems(xml: string, elements: ReadonlySet<string>): string[] {
+  const problems: string[] = [];
+  if (/[^\t\n\r\u{20}-\u{D7FF}\u{E000}-\u{FFFD}\u{10000}-\u{10FFFF}]/u.test(xml)) problems.push("a character XML cannot hold");
+  if (xml.replace(/&(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);/g, "").includes("&")) problems.push("an & that is no reference");
+  const token = /<(\/?)([A-Za-z][\w:-]*)((?:\s+[\w:-]+="[^"<]*")*)\s*(\/?)>|[^<]+/y;
+  const open: string[] = [];
+  let roots = 0;
+  while (token.lastIndex < xml.length) {
+    const at = token.lastIndex;
+    const m = token.exec(xml);
+    if (!m) {
+      problems.push(`markup that does not read: ${xml.slice(at, at + 40)}`);
+      break;
+    }
+    const [, closing, name, attributes = "", empty] = m;
+    if (!name) {
+      if (!open.length) problems.push("text outside the root");
+      continue;
+    }
+    if (!elements.has(name)) problems.push(`a <${name}>`);
+    const names = [...attributes.matchAll(/\s+([\w:-]+)="/g)].map((a) => a[1]);
+    if (new Set(names).size !== names.length) problems.push(`an attribute twice in a <${name}>`);
+    if (names.some((n) => /^on/i.test(n))) problems.push(`an event handler on a <${name}>`);
+    if (closing) {
+      if (names.length || empty) problems.push(`</${name}> with more in it`);
+      if (open.pop() !== name) problems.push(`</${name}> closing what is not open`);
+    } else {
+      if (!open.length) roots++;
+      if (!empty) open.push(name);
+    }
+  }
+  if (open.length) problems.push(`<${open[open.length - 1]}> left open`);
+  if (roots !== 1) problems.push(`${roots} roots`);
+  return problems;
+}
+
+/** An attribute's value as a reader takes it back. */
+const unescaped = (value: string) =>
+  value.replace(/&(amp|lt|gt|quot|apos);/g, (_, n: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" })[n]!);
+
+/** A value that would close the attribute it is written into, then its tag, and add its own. */
+const HOSTILE = `x" onload="alert(1)"/><script>alert(2)</script><text a='\\&amp;`;
+
+const measure: MeasureMark = {
+  lines: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]],
+  width: 0.05,
+  fan: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }]],
+  fanOpacity: 0.2,
+  label: { x: 0.5, y: 0.5 },
+  text: "1.50 Å",
+  size: 0.4,
+  color: "#336699",
+};
+
+describe("an SVG of what a document gives it", () => {
+  it("writes every value into its attribute escaped - a typeface's name, a colour, an image - so nothing is added to the markup", () => {
+    // as a file's own style, or a typeface picked, might hold them, unchecked
+    const style = { ...ACS_1996, fontFamily: HOSTILE, bondColor: HOSTILE, labelColor: HOSTILE };
+    const o = layoutOptionsFor(style, NOMINAL_BOND_LENGTH);
+    const layout: Layout = {
+      ...layoutMolecule(atoms, bonds, o, 60),
+      measures: [{ ...measure, text: `1.50 Å <b>"&"</b>`, color: HOSTILE }],
+      solids: [
+        { kind: "ball", c: { x: 0, y: 0 }, r: 0.3, color: HOSTILE },
+        { kind: "stick", a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, width: 0.1, color: HOSTILE },
+      ],
+    };
+    layout.texts.push({ x: 0, y: 2, text: "a", fontPx: o.fontPx, runs: [{ text: "a", color: HOSTILE }], color: HOSTILE });
+    const marks = createSVG(layout, o);
+    const image = createSVG({ ...layout, solidsImage: { href: HOSTILE, bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } } } }, o);
+    for (const svg of [marks, image, arrowSampleSvg(style)]) {
+      expect(xmlProblems(svg, SVG_ELEMENTS)).toEqual([]);
+      expect(svg).not.toContain("<script");
+    }
+    // and each reads back as it was given: the typeface's name in its stack
+    const families = [...marks.matchAll(/font-family="([^"]*)"/g)].map((m) => unescaped(m[1]));
+    expect(families.length).toBeGreaterThan(1);
+    for (const f of families) expect(f).toBe(fontStack(HOSTILE));
+    const colours = [...marks.matchAll(/ (?:fill|stroke|stop-color)="([^"]*)"/g)].map((m) => unescaped(m[1]));
+    expect(colours).toContain(HOSTILE);
+    expect(unescaped(/ href="([^"]*)"/.exec(image)![1])).toBe(HOSTILE);
+    // (the measurement's value, as text)
+    expect(marks).toContain(">1.50 Å &lt;b&gt;&quot;&amp;&quot;&lt;/b&gt;</text>");
+  });
+
+  it("quotes a typeface's name with an apostrophe in it as CSS reads it", () => {
+    expect(fontStack("O'Neil Sans")).toBe(`'O\\'Neil Sans', 'IBM Plex Sans JP', sans-serif`);
+  });
+
+  it("draws what XML cannot hold - controls, a surrogate alone, U+FFFE and U+FFFF - as the replacement character, and keeps the rest", () => {
+    // as words pasted from elsewhere bring them
+    const pasted = "a\x00b\x01c\x0Bd\x0Ce\x1Bf\u{FFFE}g\u{FFFF}h\u{D83D}i\u{DE00}j\u{1F600}k\tl";
+    const o = opts();
+    const layout = layoutMolecule(atoms, bonds, o, 60);
+    layout.texts.push({ x: 0, y: 2, text: pasted, fontPx: o.fontPx, runs: [{ text: pasted }] });
+    const svg = createSVG(
+      { ...layout, measures: [{ ...measure, text: pasted }] },
+      { ...o, labelSet: { ...o.labelSet!, fontFamily: "Arial\x01Black" } },
+    );
+    expect(xmlProblems(svg, SVG_ELEMENTS)).toEqual([]);
+    expect(svg).toContain(">a\u{FFFD}b\u{FFFD}c\u{FFFD}d\u{FFFD}e\u{FFFD}f\u{FFFD}g\u{FFFD}h\u{FFFD}i\u{FFFD}j\u{1F600}k\tl</text>");
+    expect(svg).toContain(`font-family="'Arial\u{FFFD}Black', `);
   });
 });

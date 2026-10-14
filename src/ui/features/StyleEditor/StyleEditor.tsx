@@ -350,7 +350,8 @@ function Preview({
           mag === "fit" && (compact ? "[&>svg]:max-h-40" : "[&>svg]:max-h-64"),
         )}
         style={{ minHeight: compact ? 120 : 200 }}
-        // The SVG comes from our own layout, not from outside.
+        // The SVG comes from our own layout, not from outside; what a
+        // document's style gives it - a typeface's name - is escaped there.
         dangerouslySetInnerHTML={{ __html: molecule }}
       />
       {compact && (

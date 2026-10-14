@@ -109,7 +109,6 @@ export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
     turns3d: {},
     frames3d: {},
     lists3d: {},
-    docStyle: undefined,
     aromaticEnabled: false,
     aromaticRings: {},
     sets: parts.sets,

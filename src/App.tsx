@@ -42,6 +42,8 @@ import { showGuidesDue, useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
 import { stopJob } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
+import { madeStoreOf } from "./ui/features/Workspace/store";
+import { stopRenders } from "./ui/features/Workspace/render/renders";
 import ConfirmDiscard from "./ui/layouts/ConfirmDiscard";
 import { ErrorBoundary, StoppedCard } from "./ui/layouts/ErrorBoundary";
 import { loadAppSettings, useAppSettings } from "./lib/settings/appSettings";
@@ -184,18 +186,27 @@ export default function App() {
     return () => window.removeEventListener("contextmenu", keepSystemMenuShut, true);
   }, []);
 
-  // The last tab closed, Meno goes with it. (Destroyed, not closed: what
-  // was unsaved has been asked about already.)
-  const closeTab = (id: string) => {
+  // A tab's document let go of - its tab closed, or another put in its
+  // place: a workspace's renders stopped with it, since what they make
+  // would come to no page (render/renders). Resolved once they are asked.
+  const letGoOf = (id: string): Promise<void> => {
+    const held = documentsRef.current.get(id);
     documentsRef.current.delete(id);
     forgetFiles(id);
+    const store = held?.kind === "workspace" ? madeStoreOf(held.doc as DocumentStore<WorkspaceDocument>) : undefined;
+    return store ? stopRenders(store) : Promise.resolve();
+  };
+
+  // The last tab closed, Meno goes with it - once its renders are asked to
+  // stop. (Destroyed, not closed: what was unsaved has been asked about
+  // already.)
+  const closeTab = (id: string) => {
+    const stopped = letGoOf(id);
     const last = stateRef.current.tabOrder.every((x) => x === id);
     act({ type: "CLOSE_TAB", id });
-    if (last) {
-      try {
-        void getCurrentWindow().destroy().catch(() => {});
-      } catch {}
-    }
+    // (asked within 2 s at most: a backend that does not answer keeps no window open)
+    const asked = Promise.race([stopped.catch(() => {}), new Promise<void>((done) => setTimeout(done, 2000))]);
+    if (last) void asked.then(() => getCurrentWindow().destroy()).catch(() => {});
   };
 
   // A canvas nothing is drawn on, nor opened into: what a file opened takes
@@ -221,8 +232,7 @@ export default function App() {
     const made = viewRegistry[opened.kind].create(opened.label);
     const tab = { ...made, content: { ...made.content, data: opened.data } } as TabInstance;
     if (blank) {
-      documentsRef.current.delete(blank);
-      forgetFiles(blank);
+      void letGoOf(blank);
       act({ type: "REPLACE_TAB", id: blank, tab });
     } else act({ type: "ADD_TAB", tab });
     return true;

@@ -23,7 +23,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, PdfFlight, PdfItem, PictureFlight as PictureFlightState, WordsFlight as WordsFlightState, WorkspaceText } from "../store/types";
-import { pdfRoom, shownSheet, topSheet } from "../../../../lib/pdf/layout";
+import { pdfRoom, pointOf, scaleOf, shownSheet, topSheet } from "../../../../lib/pdf/layout";
 import { columnWidthFor } from "../utils/texts";
 import { viewBesideColumn } from "./coverLayer";
 import { setViewGoal, viewGoalOf } from "./viewGoal";
@@ -40,7 +40,7 @@ import ColumnText from "./ColumnText";
 import MarkdownText from "./MarkdownText";
 import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
-import { drawnSheetBox, iconScaleOf, sheetOf } from "../utils/textSheets";
+import { drawnSheetBox, iconScaleOf, sheetOfText } from "../utils/textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { currentStyle3D } from "../style3d";
 import { CARD_H, CARD_W } from "../workflow/look";
@@ -468,7 +468,7 @@ function ColumnPass({
     if (!b) return null;
     const c = camera as THREE.OrthographicCamera;
     const z = c.zoom || 1;
-    const s = sheetOf(flownText.text, flownText.name);
+    const s = sheetOfText(flownText);
     const onPage = { x: size.width / 2 + (b.x0 - c.position.x) * z, y: size.height / 2 - (b.y1 - c.position.y) * z, w: (b.x1 - b.x0) * z, h: (b.y1 - b.y0) * z };
     // (from a molecule or a step, not a sheet: coming up out of it, and going down into it, fading)
     const outOfBody = !flownText.at;
@@ -504,7 +504,7 @@ function ColumnPass({
       );
     }
     // (from an icon, its lines as small as it shows them)
-    const set = outOfBody ? columnSettingAt(onPage.w, inColumn) : sheetSetting(z * (flownText.icon ? iconScaleOf(s) : 1));
+    const set = outOfBody ? columnSettingAt(onPage.w, inColumn) : sheetSetting(z * (flownText.icon ? iconScaleOf(s, scaleOf(flownText)) : 1), pointOf(flownText));
     return <TextFlight key={flightStart} sheet={onPage} column={inColumn} set={set} k={k} lift={Math.sin(Math.PI * t)} seen={seen} lines={s.lines} onReady={onReady} />;
   })();
 

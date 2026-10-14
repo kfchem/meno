@@ -38,6 +38,8 @@ import {
   pdfRoom,
   placedOwn,
   POINT,
+  pointOf,
+  scaleOf,
   rowSheets,
   shownSheet,
   spreadOrder,
@@ -288,7 +290,7 @@ export default function Pdfs2D() {
         // (the page's units a point, as it is drawn)
         const unit = s.w / p.pages[page][0];
         // (its letters, and its figures, ready for a press on them, where they can be read)
-        if (!p.icon && want >= READABLE_PX_PER_PT * dpr) {
+        if (!p.icon && cam.zoom * pointOf(p) >= READABLE_PX_PER_PT) {
           textHad(p.sha256, page);
           figuresHad(p.sha256, page);
         }
@@ -323,11 +325,11 @@ export default function Pdfs2D() {
     const cam = camera as THREE.OrthographicCamera;
     const rect = (gl.domElement as HTMLCanvasElement).getBoundingClientRect();
     return {
-      pxPerPoint: cam.zoom * POINT,
+      pxPerPoint: cam.zoom * pointOf(p),
       at: (page, x, y) => {
         const s = shownSheet(p, page) ?? topSheet(p);
-        const wx = s.x - s.w / 2 + x * POINT;
-        const wy = s.y + s.h / 2 - y * POINT;
+        const wx = s.x - s.w / 2 + x * pointOf(p);
+        const wy = s.y + s.h / 2 - y * pointOf(p);
         return { x: rect.left + rect.width / 2 + (wx - cam.position.x) * cam.zoom, y: rect.top + rect.height / 2 - (wy - cam.position.y) * cam.zoom };
       },
     };
@@ -371,7 +373,7 @@ export default function Pdfs2D() {
     const hit = sheetUnder(p, q);
     if (!hit) return null;
     const links = linksOf(p.sha256, hit.page, invalidate);
-    return links ? linkAt(links, (q.x - (hit.s.x - hit.s.w / 2)) / POINT, (hit.s.y + hit.s.h / 2 - q.y) / POINT) : null;
+    return links ? linkAt(links, (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p)) : null;
   };
   /**
    * The words, if any can be read there, under a point of the page on a
@@ -385,10 +387,10 @@ export default function Pdfs2D() {
   };
   /** The page, and the point of it in points from its top left, under a point of the page on a PDF - at a size its words can be read. */
   const spotOn = (p: PdfItem, q: { x: number; y: number }): { page: number; x: number; y: number; sheet: Sheet } | null => {
-    if (p.icon || (camera as THREE.OrthographicCamera).zoom * POINT < READABLE_PX_PER_PT) return null;
+    if (p.icon || (camera as THREE.OrthographicCamera).zoom * pointOf(p) < READABLE_PX_PER_PT) return null;
     const hit = sheetUnder(p, q);
     if (!hit) return null;
-    return { page: hit.page, x: (q.x - (hit.s.x - hit.s.w / 2)) / POINT, y: (hit.s.y + hit.s.h / 2 - q.y) / POINT, sheet: hit.s };
+    return { page: hit.page, x: (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), y: (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p), sheet: hit.s };
   };
   /** Over a link on a PDF, the system's hand (its words are selected by a long press, not the text cursor's drag). */
   const hoverAt = (p: PdfItem | null, q?: { x: number; y: number }) => {
@@ -398,7 +400,7 @@ export default function Pdfs2D() {
     // (over where an atom read from a figure was drawn: that atom lit in the drawing)
     const hit = p && q ? sheetUnder(p, q) : null;
     const st = store.getState();
-    st.setFigureLit(p && q && hit ? atomAtSpot(st.model, p.sha256, hit.page, (q.x - (hit.s.x - hit.s.w / 2)) / POINT, (hit.s.y + hit.s.h / 2 - q.y) / POINT) : null);
+    st.setFigureLit(p && q && hit ? atomAtSpot(st.model, p.sha256, hit.page, (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p)) : null);
   };
 
   /** Whether a point of a PDF is on its rim: not well inside a page of it - by its edges, on the pages under it, or its name. */
@@ -459,7 +461,7 @@ export default function Pdfs2D() {
     const page = p.spread && !p.icon ? spreadPageAt(p, q) : null;
     const pageSheet = page != null ? spreadSheets(p)[page] : null;
     const pageOff = pageSheet ? { x: pageSheet.x - q.x, y: pageSheet.y - q.y } : null;
-    const readable = (camera as THREE.OrthographicCamera).zoom * POINT >= READABLE_PX_PER_PT;
+    const readable = (camera as THREE.OrthographicCamera).zoom * pointOf(p) >= READABLE_PX_PER_PT;
     // what a hold there does: take hold of it, or begin a selection; an icon is moved at once
     const takes = !p.icon && (onRim(p, q) || !readable);
     // (in a figure, its labels too, or where there are no words: a hold draws a box - in a figure, the figure's)
@@ -528,8 +530,8 @@ export default function Pdfs2D() {
         // (from where it was pressed to the pointer, on that page)
         const r = toWorld(m.clientX, m.clientY);
         const [pw, ph] = p.pages[spot.page] ?? [0, 0];
-        const x = Math.min(Math.max((r.x - (spot.sheet.x - spot.sheet.w / 2)) / POINT, 0), pw);
-        const y = Math.min(Math.max((spot.sheet.y + spot.sheet.h / 2 - r.y) / POINT, 0), ph);
+        const x = Math.min(Math.max((r.x - (spot.sheet.x - spot.sheet.w / 2)) / pointOf(p), 0), pw);
+        const y = Math.min(Math.max((spot.sheet.y + spot.sheet.h / 2 - r.y) / pointOf(p), 0), ph);
         if (!boxDrawn && Math.hypot(m.clientX - ev.clientX, m.clientY - ev.clientY) < CLICK_PX) return;
         boxDrawn = true;
         store.getState().setPdfBox({ id: p.id, page: spot.page, box: [Math.min(spot.x, x), Math.min(spot.y, y), Math.max(spot.x, x), Math.max(spot.y, y)] });
@@ -538,8 +540,8 @@ export default function Pdfs2D() {
       if (mode === "selecting" && selecting && w) {
         // (by letters, beyond the word first selected)
         const r = toWorld(m.clientX, m.clientY);
-        const x = (r.x - (w.sheet.x - w.sheet.w / 2)) / POINT;
-        const y = (w.sheet.y + w.sheet.h / 2 - r.y) / POINT;
+        const x = (r.x - (w.sheet.x - w.sheet.w / 2)) / pointOf(p);
+        const y = (w.sheet.y + w.sheet.h / 2 - r.y) / pointOf(p);
         const place: WordPlace = { page: w.page, at: placeAt(w.t, x, y) };
         const [a, b] = selecting.first;
         const within = !placeBefore(place, a) && placeBefore(place, b);
@@ -719,7 +721,7 @@ function PdfStack(props: {
   const nameY = showSpread ? Math.min(...(inRows.length ? inRows : [0]).map((i) => drawn[i].y - drawn[i].h / 2)) : b.y0;
   const nameSize = 12 * px * (1 - iconness) + props.type.size * iconness;
   const nameGap = 14 * px * (1 - iconness) + 0.4 * props.type.size * iconness;
-  const nameWidth = Math.max(120 * px, top.w) * (1 - iconness) + ICON_NAME_WIDTH * iconness;
+  const nameWidth = Math.max(120 * px, top.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(p) * iconness;
   const name = (
     <group position={[nameX, nameY - nameGap, 0.01]}>
       {/* (troika takes a share of the text's width as its anchor; drei's types do not say so) */}

@@ -1123,6 +1123,71 @@ describe("a figure's charges drawn in rings", () => {
   });
 });
 
+describe("a stereocentre whose configuration the figure does not show", () => {
+  const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
+  /** CH(OH)(Cl)CH3, its centre at (100, 100): the OH up, the Cl down right, the methyl down left - its bond to the Cl a wedge, or not. */
+  const drawn = (wedged: boolean, cl = "Cl") => {
+    const c: P = [100, 100];
+    const [o, x, me] = [step(c, 90), step(c, -30), step(c, 210)];
+    return figure([stroke(c, along(c, o, 0.7)), wedged ? wedge(c, along(c, x, 0.7)) : stroke(c, along(c, x, 0.7)), stroke(c, me)], [...word("OH", [o[0] + 3.4, o[1]]), ...word(cl, [x[0] + 3.4, x[1]])]);
+  };
+  const marked = (f: FigureDrawn) => read(f).atoms.filter((a) => a.unsure?.includes(NOT_DRAWN)).length;
+
+  it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
+    expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {
+    expect(marked(drawn(true))).toBe(0);
+    // (CH(OH)(CH3)2: its two methyls alike, no stereocentre)
+    const c: P = [100, 100];
+    expect(marked(figure([stroke(c, along(c, step(c, 90), 0.7)), stroke(c, step(c, -30)), stroke(c, step(c, 210))], word("OH", [step(c, 90)[0] + 3.4, step(c, 90)[1]])))).toBe(0);
+  });
+
+  it("is not marked where a wavy bond meets it - either configuration, drawn so - and is where only a wedge's wide end does", () => {
+    const c: P = [100, 100];
+    const [o, x, me] = [step(c, 90), step(c, -30), step(c, 210)];
+    const to = along(c, x, 0.7);
+    const [ux, uy] = unit(c, to);
+    const wavy: FigurePath = {
+      fill: null,
+      stroke: "#000000ff",
+      width: 0.6,
+      d: Array.from({ length: 25 }, (_, k): PathStep => {
+        const t = k / 24;
+        const off = 1.5 * Math.sin(t * 8 * Math.PI);
+        return [k ? "C" : "M", c[0] + (to[0] - c[0]) * t - uy * off, c[1] + (to[1] - c[1]) * t + ux * off];
+      }),
+    };
+    const labels = [...word("OH", [o[0] + 3.4, o[1]]), ...word("Cl", [x[0] + 3.4, x[1]])];
+    expect(marked(figure([stroke(c, along(c, o, 0.7)), wavy, stroke(c, me)], labels))).toBe(0);
+    // (a wedge narrow at the Cl, its wide end at the centre: it says nothing of the centre)
+    expect(marked(figure([stroke(c, along(c, o, 0.7)), wedge(to, c), stroke(c, me)], labels))).toBe(1);
+  });
+
+  it("is marked at an S of four groups with its double bonds - an S(=O)(=NH) - as Meno takes a stereocentre, and never at a metal", () => {
+    const s: P = [100, 100];
+    const [o, n, me, et] = [step(s, 90), step(s, -90), step(s, 180), step(s, 0)];
+    const twice = (p: P, q: P): FigurePath[] => {
+      const [ux, uy] = unit(p, q);
+      return [-1, 1].map((k) => stroke([p[0] - uy * k + ux * 5, p[1] + ux * k + uy * 5], [q[0] - uy * k - ux * 5, q[1] + ux * k - uy * 5]));
+    };
+    const sulfur = figure(
+      [...twice(s, o), ...twice(s, n), stroke(along(s, me, 0.35), me), stroke(along(s, et, 0.35), et, step(et, 30))],
+      [...word("S", s), ...word("O", o), ...word("NH", [n[0] + 3.4, n[1]])],
+    );
+    expect(marked(sulfur)).toBe(1);
+    // (a platinum with four ligands each other than the rest: no stereocentre's mark)
+    const pt: P = [100, 100];
+    const ends = [step(pt, 90), step(pt, 0), step(pt, -90), step(pt, 180)];
+    const metal = figure(
+      ends.map((e) => stroke(along(pt, e, 0.35), along(pt, e, 0.7))),
+      [...word("Pt", [pt[0] + 3.4, pt[1]]), ...word("Cl", [ends[0][0] + 3.4, ends[0][1]]), ...word("I", ends[1]), ...word("OH", [ends[2][0] + 3.4, ends[2][1]]), ...word("NH3", [ends[3][0] - 6.8, ends[3][1]])],
+    );
+    expect(marked(metal)).toBe(0);
+  });
+});
+
 describe("lines that are no bonds", () => {
   /** A ring of six whole bonds from a point, to give the figure its bond length. */
   const ring = (from: P): FigurePath[] => {

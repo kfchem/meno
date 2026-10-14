@@ -7,6 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { reversedLabel } from "../chem/abbreviations";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens, type Radical } from "../chem/molecule";
+import { isMetal } from "../layout/perceive";
 import type { FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
@@ -133,5 +134,54 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     }
     return out;
   });
+  // a stereocentre whose configuration the figure does not show - no wedge or hash narrow at it, as a cage drawn in
+  // perspective has none - is unsure: none is read, none guessed
+  const shown = new Set(bonds.filter((b) => b.stereo === "up" || b.stereo === "down").map((b) => b.a));
+  const wavy = new Set(bonds.filter((b) => b.stereo === "wavy").flatMap((b) => [b.a, b.b]));
+  const around: number[][] = atoms.map(() => []);
+  bonds.forEach((b) => {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  });
+  // (an H drawn as an atom of its own, at the end of a bond, counted with its atom's hydrogens - an O's drawn apart from it, as its OH)
+  const lone = (n: number) => els[n] === "H" && around[n].length === 1;
+  const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
+  const kinds = atomKinds(atoms, bonds, hs, lone);
+  atoms.forEach((a, i) => {
+    // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
+    if (isMetal(els[i]) || shown.has(i) || wavy.has(i)) return;
+    // (four groups, each other than the rest: its hydrogens one group at most)
+    const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
+    if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
+    (a.unsure ??= []).push("A stereocentre whose configuration is not drawn: none is read.");
+  });
   return { atoms, bonds };
+}
+
+/**
+ * Which atoms are alike where they stand in the structure, as a number for
+ * each: their element, charge, isotope, hydrogens (an H drawn apart, `lone`,
+ * counted with them) and bonds, and then their
+ * neighbours' alike, round by round until no more are told apart - two
+ * atoms placed alike in the structure, as a ring's on either side of a
+ * group, alike.
+ */
+function atomKinds(atoms: readonly StructureAtom[], bonds: readonly StructureBond[], hs: readonly number[], lone: (i: number) => boolean): number[] {
+  const around: { n: number; order: number }[][] = atoms.map(() => []);
+  bonds.forEach((b) => {
+    if (lone(b.a) || lone(b.b)) return;
+    around[b.a].push({ n: b.b, order: b.order });
+    around[b.b].push({ n: b.a, order: b.order });
+  });
+  const number = (keys: string[]) => {
+    const order = [...new Set(keys)].sort();
+    return keys.map((k) => order.indexOf(k));
+  };
+  let kinds = number(atoms.map((a, i) => [a.el, a.charge ?? 0, a.isotope ?? 0, a.radical ?? "", hs[i], around[i].map((x) => x.order).sort().join(".")].join("|")));
+  for (let round = 0; round < atoms.length; round++) {
+    const next = number(kinds.map((k, i) => `${k}:${around[i].map((x) => `${x.order}-${kinds[x.n]}`).sort().join(",")}`));
+    if (new Set(next).size === new Set(kinds).size) break;
+    kinds = next;
+  }
+  return kinds;
 }
