@@ -398,7 +398,7 @@ once (*Several at once*).
 | Ready | none, grey words | *Ready* |
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
 | Running | turning, the accent | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
-| Done | a tick, the accent | *2:03 · −42.10871 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
+| Done | a tick, the accent | *2:03 · E −42.108710 Eh* (its electronic energy), or *81 of 81*, or *23 kept* - how long, and the number the step is for |
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
@@ -1007,9 +1007,9 @@ same (B3LYP-D3BJ/6-31G(d)), the four queued one at a time.
 What was seen, and what was put right:
 
 - **ORCA**: both ran and were read back as designed - *Optimise* in about
-  12 s, -115.56885 Eh, its path of 7 frames on the frames chip;
+  12 s, −115.568850 Eh, its path of 7 frames on the frames chip;
   *Frequencies* in 10 s, its 12 vibrations in the molecule's list (330.5
-  to 3819.7 cm-1, none imaginary), its partial charges by pointing at an
+  to 3819.7 cm⁻¹, none imaginary), its partial charges by pointing at an
   atom, and what the calculation was on the chip.
 - **Gaussian's output went to a file nobody followed.** Run as `g16
   input`, Gaussian writes `input.log`, and what it printed - nothing - was

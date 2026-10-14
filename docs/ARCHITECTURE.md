@@ -678,7 +678,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   thing else is a result, in one general form (`lib/calc/results.ts`): it
   belongs to the molecule, each frame, each atom, pairs of atoms or a list;
   it has a group and a name; and its values are numbers or texts, each as a
-  quantity Meno knows - an energy in hartrees, a charge, a wavenumber (an
+  quantity Meno knows - an energy in hartrees, a charge, a spin population
+  (signed, as a charge is), a wavenumber (an
   imaginary one negative), a length, an angle, a dipole - or with its own
   unit. `readResults` keeps those that read as results for the molecule
   (the right count, indices it has, no markup), and `valueText` writes
