@@ -1,3 +1,4 @@
+import { GUIDE_LAYER } from "./layers";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
@@ -46,8 +47,8 @@ export default function GuideCard() {
           <motion.div
             key="ring"
             aria-hidden
-            className="fixed z-[90] pointer-events-none rounded-lg"
-            style={{ boxShadow: "0 0 0 2px var(--color-accel-base), 0 0 0 6px rgb(49 118 137 / 0.15)" }}
+            className="fixed pointer-events-none rounded-lg"
+            style={{ zIndex: GUIDE_LAYER, boxShadow: "0 0 0 2px var(--color-accel-base), 0 0 0 6px rgb(49 118 137 / 0.15)" }}
             initial={{ opacity: 0, left: part.left - 4, top: part.top - 4, width: part.width + 8, height: part.height + 8 }}
             animate={{ opacity: 1, left: part.left - 4, top: part.top - 4, width: part.width + 8, height: part.height + 8 }}
             exit={FADE.exit}
@@ -63,8 +64,8 @@ export default function GuideCard() {
             role="dialog"
             aria-label={shown.plugin.name}
             aria-describedby="guide-text"
-            className="fixed z-[90] rounded-lg border border-gh-line bg-white p-4 text-sm text-gh-black shadow-lg"
-            style={{ width }}
+            className="fixed rounded-lg border border-gh-line bg-white p-4 text-sm text-gh-black shadow-lg"
+            style={{ zIndex: GUIDE_LAYER, width }}
             initial={{ opacity: 0, left: where.left, top: where.top + 4 }}
             animate={{ opacity: 1, left: where.left, top: where.top }}
             exit={FADE.exit}
