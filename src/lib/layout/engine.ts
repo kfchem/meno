@@ -80,9 +80,9 @@ export function layout2D(input: LayoutInput): Layout2D {
   // can still crowd what hangs from it (ginkgolide B's OHs).
   // And the other way: one drawn flat with a fault, where a solid would do,
   // is drawn as the solid too, and that kept where it reads better.
-  const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set() };
+  const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set(), whole: new Set() };
   for (;;) {
-    const { out, mol, solidToo } = laidOut(input, redo);
+    const { out, mol, solidToo, wholeToo } = laidOut(input, redo);
     const wrong = [...misread(input, mol, out)].filter((i) => !redo.flat.has(i));
     if (wrong.length) {
       for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
@@ -104,6 +104,18 @@ export function layout2D(input: LayoutInput): Layout2D {
       const solid = laidOut(input, { ...redo, solid: new Set(solids) });
       const score = drawingScore(input, mol, solid.out);
       if (!misread(input, solid.mol, solid.out).size && score < bestScore - 1e-9) [best, bestScore] = [solid.out, score];
+      wholeToo.push(...solid.wholeToo.filter((i) => !wholeToo.includes(i)));
+    }
+    // And a cage with rings fused to it drawn as one whole solid, where its
+    // core was drawn in perspective with those rings flat onto it, or the
+    // system flat: which reads better goes by the whole drawing, not by the
+    // system's own measure - scopolamine's epoxide flat onto its tropane
+    // crowded the ester hung from it.
+    const wholes = wholeToo.filter((i) => !redo.flat.has(i));
+    if (wholes.length) {
+      const whole = laidOut(input, { ...redo, solid: new Set([...redo.solid, ...wholes]), whole: new Set(wholes) });
+      const score = drawingScore(input, mol, whole.out);
+      if (!misread(input, whole.mol, whole.out).size && score < bestScore - 1e-9) [best, bestScore] = [whole.out, score];
     }
     return best;
   }
@@ -169,10 +181,14 @@ function drawingFaults(input: LayoutInput, mol: Molecule, out: Layout2D): number
 /** How much better another view of a cage must read than its best textbook view to be taken instead. */
 const CAGE_VIEW_MARGIN = 3;
 
-/** The ring systems drawn again: without their view from the other side, flat, or as a solid where they would be flat. */
-type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number> };
+/**
+ * The ring systems drawn again: without their view from the other side,
+ * flat, as a solid where they would be flat, or as one whole solid where
+ * a cage's core would be drawn in perspective with the rest flat onto it.
+ */
+type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number>; whole: Set<number> };
 
-function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[] } {
+function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[]; wholeToo: number[] } {
   const mol = perceive(input);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
@@ -193,8 +209,10 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // a cage seen from each of its best few sides, chosen among as a
   // macrocycle's shapes are, by what hangs from it (quinine's quinuclidine)
   const cageViews = new Map<number, CageView[]>();
-  // (the systems drawn flat that a solid would do for too)
+  // (the systems drawn flat that a solid would do for too, and those that
+  // could be drawn as one whole solid instead)
   const solidToo: number[] = [];
+  const wholeToo: number[] = [];
   const variantsOf = (i: number) => {
     const e = etaOf.get(i);
     const u = unitOf.get(i);
@@ -224,8 +242,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   };
   mol.systems.forEach((sys, i) => {
     if (etaOf.has(i) || unitOf.has(i)) return setVariant(i, 0);
-    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i));
+    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i), redo.whole.has(i));
     if (laid.solidToo) solidToo.push(i);
+    if (laid.wholeToo) wholeToo.push(i);
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
     laid.hints?.forEach((m, a) => hints.set(a, m));
@@ -548,7 +567,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const ms = u.cluster.metals;
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
-  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo };
+  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo, wholeToo };
 }
 
 /**
@@ -732,9 +751,11 @@ type SystemLayout = {
   views?: CageView[];
   /** Drawn flat with a fault, where a solid would do as well: to be tried as that. */
   solidToo?: boolean;
+  /** A cage with rings fused to it, not drawn as one whole solid where it could be: to be tried as that. */
+  wholeToo?: boolean;
 };
 
-function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
+function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false): SystemLayout {
   const sys = mol.systems[i];
   // a cage - norbornane, tropane, quinuclidine, adamantane - is drawn in
   // perspective, the way it always is; anything else flat
@@ -893,10 +914,13 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // gelsemine's oxindole, its benzene ring otherwise foreshortened)
   const flatOutside = rings.some((r) => !r.every((a) => coreAtoms.has(a)) && r.some((a, k) => orderOf(mol, a, r[(k + 1) % r.length]) === 2));
   const wholeAllowed = !(flatOutside && perspFaults < Infinity);
-  if (whole && wholeAllowed && (asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
+  if (whole && wholeAllowed && (asWhole || ((asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3))) return { ...whole, solid: true };
+  // (and not where a ring fused onto the cage is drawn as the chair the
+  // solid has it as: that is how the fusion is drawn)
+  const wholeToo = !!whole && wholeAllowed && !perspChairs;
   if (perspFaults >= flatFaults - 1 && !(asSolid && perspFaults < Infinity)) {
     if (asSolid && whole && wholeAllowed) return { ...whole, solid: true };
-    return { ...flat, solidToo: !!whole || perspFaults < Infinity };
+    return { ...flat, solidToo: !!whole || perspFaults < Infinity, wholeToo };
   }
   // (an atom of the cage bonded to a ring fused flat onto it shows its
   // configuration by a wedge, as a flat ring's atoms do: its bond into that
@@ -916,7 +940,7 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
     { ...persp, ...(other && shows(other) ? { other } : {}) },
     ...ties.map((t) => ({ ...t.p, ...otherOf(t), tied: true as const })),
   ];
-  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}) };
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}), wholeToo };
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */

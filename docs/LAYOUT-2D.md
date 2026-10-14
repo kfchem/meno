@@ -31,7 +31,12 @@ another order. Where the rules below leave a tie, it is settled so:
   the macrocycle, then how fused it is; a chain's longest path from a
   carbon end; a ring system hung from a bond with its first ring
   neighbour by class on the left of the bond; a macrocycle's chain run
-  from the end with more bonds of its own still to place.
+  from the end with more bonds of its own still to place; a cage's solid,
+  found from how far apart its bonds put its atoms, and the views of it,
+  each worked out atom by atom and bond by bond in the order the
+  structure gives - its scatter starts and easing, a stereocentre's three
+  neighbours it is held by, which of two bonds out of an atom takes which
+  corner of the tetrahedron.
 - **By trying each.** Rings tied in rank are each placed first, or next,
   and the system that reads best flat is kept (up to eight layouts a
   system); ring systems as near the middle of the molecule and as large -
@@ -282,7 +287,12 @@ they hang from.
   flat drawing with a fault a reader cannot miss - an atom on another,
   bonds crossing - is drawn as the solid too, and that kept where it reads
   better (aconitine). A clean flat drawing is not given up for a solid the
-  measure merely prefers (scopolamine). A ring with a double bond in it
+  measure merely prefers. Where the cage alone was drawn in perspective
+  with the rest flat onto it, or the system flat, the whole drawn as one
+  solid is tried too, and kept where the whole drawing reads better - not
+  where a ring fused onto the cage is drawn as the chair the solid has it
+  as: scopolamine's epoxide flat onto its tropane crowded the ester hung
+  from it, its whole solid did not. A ring with a double bond in it
   is drawn flat: where the cage alone can be drawn in perspective with
   such rings flat onto it, the whole is not drawn as a solid (gelsemine's
   oxindole, its benzene ring otherwise foreshortened). A solid is taken

@@ -22,6 +22,7 @@
 import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
+import { byStructure } from "./ranks";
 
 export type Vec3 = [number, number, number];
 
@@ -183,6 +184,25 @@ function leastAxis(us: readonly Vec3[]): Vec3 {
   return v;
 }
 
+/**
+ * A stereocentre's configuration with its neighbours in the order the
+ * structure gives (`byStructure`), an H last, and its volume turned with
+ * them: which three of them a solid is checked and held by is then the
+ * same in any order of the atoms.
+ */
+function orderedCentre(mol: Molecule, c: number): { neighbours: number[]; volume: number } | undefined {
+  const t = mol.tetra.get(c);
+  if (!t) return undefined;
+  const same = byStructure(mol);
+  const at = t.neighbours.map((_, k) => k).sort((p, q) => {
+    const [a, b] = [t.neighbours[p], t.neighbours[q]];
+    return a < 0 || b < 0 ? (a < 0 ? 1 : 0) - (b < 0 ? 1 : 0) : same(a, b);
+  });
+  let sign = 1;
+  for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) if (at[i] > at[j]) sign = -sign;
+  return { neighbours: at.map((k) => t.neighbours[k]), volume: t.volume * sign };
+}
+
 /** A stereocentre held the way round it is given while a solid is eased: its index, three neighbours' and the sign of the volume they span from it. */
 type Held = { c: number; three: [number, number, number]; sign: number };
 
@@ -276,13 +296,16 @@ function bicycleAxes(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<numbe
   const [r1, r2] = sys.rings.map((i) => mol.rings[i]);
   const shared = r1.filter((a) => r2.includes(a));
   if (shared.length < 3) return null;
-  const ends = shared.filter((a) => mol.neighbours[a].filter((b) => shared.includes(b)).length === 1);
+  // (its ends, and bridges as long, in the order the structure gives)
+  const same = byStructure(mol);
+  const ends = shared.filter((a) => mol.neighbours[a].filter((b) => shared.includes(b)).length === 1).sort(same);
   if (ends.length !== 2) return null;
+  const first = (b: number[]) => [...b].sort(same)[0];
   const bridges = [
     shared.filter((a) => !ends.includes(a)),
     r1.filter((a) => !shared.includes(a)),
     r2.filter((a) => !shared.includes(a)),
-  ].sort((p, q) => p.length - q.length);
+  ].sort((p, q) => p.length - q.length || same(first(p), first(q)));
   const at = (a: number) => X[index.get(a)!];
   const b1 = at(ends[0]);
   const b2 = at(ends[1]);
@@ -405,7 +428,10 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
   for (const bond of mol.bonds) {
     if (bond.order !== 2 || !inside(bond.a) || !inside(bond.b)) continue;
     const [a, b] = [bond.a, bond.b];
-    const group = [...new Set([a, b, ...mol.neighbours[a], ...mol.neighbours[b]])].filter(inside).map((v) => index.get(v)!);
+    const group = [...new Set([a, b, ...mol.neighbours[a], ...mol.neighbours[b]])]
+      .filter(inside)
+      .map((v) => index.get(v)!)
+      .sort((p, q) => p - q);
     if (group.length >= 4) planes.push(group);
     for (const x of mol.neighbours[a]) {
       if (x === b || !inside(x)) continue;
@@ -427,6 +453,12 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
       }
     }
   }
+  // (drawn into their planes one after another in the order of their
+  // atoms, not of the bonds)
+  planes.sort((p, q) => {
+    for (let k = 0; k < Math.min(p.length, q.length); k++) if (p[k] !== q[k]) return p[k] - q[k];
+    return p.length - q.length;
+  });
   return { d, w, least, planes };
 }
 
@@ -434,24 +466,32 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
  * A ring system's solid: placed roughly by its distances (classical
  * scaling, stress majorisation), taken the way round its stereocentres
  * say rather than as its mirror image, each centre the wrong way put
- * through the plane of its three neighbours (`rightCentres`), and eased.
+ * through the plane of its three neighbours (`rightCentres`), and eased -
+ * all with its atoms in the order the structure gives, so the same solid
+ * comes out in any order of the atoms.
  */
-function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
+function embed(mol: Molecule, atoms: number[]): Vec3[] {
   // (found once for a ring system: it is asked for again and again - and
   // by what it is found from, not by the molecule object, since a drawing
   // read back is perceived anew, its cage the same: tetrodotoxin's solid
   // found anew for each of its read-backs was half its Clean-up)
-  const key = `${contentOf(mol)}|${atoms.join(",")}`;
-  const cached = solids.get(key);
-  if (cached) return cached;
-  const found = embedAnew(mol, atoms, index);
-  solids.set(key, found);
-  if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
-  return found;
+  const key = `${contentOf(mol)}|${[...atoms].sort((p, q) => p - q).join(",")}`;
+  let solid = solids.get(key);
+  if (!solid) {
+    // (found with the atoms in the order the structure gives - its scatter
+    // starts and its easing go atom by atom - and handed back in the
+    // caller's: the same solid whatever order the atoms come in)
+    const canon = [...atoms].sort(byStructure(mol));
+    const found = embedAnew(mol, canon, new Map(canon.map((a, i) => [a, i])));
+    solid = new Map(canon.map((a, i) => [a, found[i]]));
+    solids.set(key, solid);
+    if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
+  }
+  return atoms.map((a) => solid.get(a)!);
 }
 
 /** The solids found so far, by what each is found from (`contentOf`) and its system's atoms; the oldest let go first. */
-const solids = new Map<string, Vec3[]>();
+const solids = new Map<string, Map<number, Vec3>>();
 
 /** How many solids are kept (`solids`). */
 const KEPT_SOLIDS = 64;
@@ -516,9 +556,30 @@ function miss(X: Vec3[], T: Targets): number {
 
 /** The solid a cage system is taken to be: its atoms' places in three dimensions. */
 export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
-  const index = new Map(sys.atoms.map((a, i) => [a, i]));
-  const X = embed(mol, sys.atoms, index);
+  const X = embed(mol, sys.atoms);
   return new Map(sys.atoms.map((a, i) => [a, X[i]]));
+}
+
+/**
+ * A ring system with its atoms in the order the structure gives
+ * (`byStructure`): a cage's views are worked out atom by atom and bond by
+ * bond, and eased in that order, so the views come out the same whatever
+ * order the atoms are listed in.
+ */
+function inStructureOrder(mol: Molecule, sys: RingSystem): RingSystem {
+  return { ...sys, atoms: [...sys.atoms].sort(byStructure(mol)) };
+}
+
+/** The bonds between atoms of `index`, by their places in it, in the order of those places. */
+function bondsWithin(mol: Molecule, index: Map<number, number>): [number, number][] {
+  const bonds: [number, number][] = [];
+  for (const [k] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (!index.has(a) || !index.has(b)) continue;
+    const [i, j] = [index.get(a)!, index.get(b)!];
+    bonds.push(i < j ? [i, j] : [j, i]);
+  }
+  return bonds.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
 }
 
 /**
@@ -533,15 +594,12 @@ export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
  * offers them all, to choose among by what is fused to it and hangs from
  * it. Empty where the cage is not drawn by the template.
  */
-export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
+export function tiedViews(mol: Molecule, given: RingSystem): CageView[] {
+  const sys = inStructureOrder(mol, given);
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
-  const bonds: [number, number][] = [];
-  for (const [k] of mol.bondIndex) {
-    const [a, b] = k.split(",").map(Number);
-    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
-  }
-  const X = embed(mol, atoms, index);
+  const bonds = bondsWithin(mol, index);
+  const X = embed(mol, atoms);
   if (twinChairs(mol, sys, X, index, bonds)) return [];
   const tied: CageView[] = [];
   const best = textbook(mol, sys, X, index, bonds, 0, tied);
@@ -550,15 +608,12 @@ export function tiedViews(mol: Molecule, sys: RingSystem): CageView[] {
 
 export function projectCage(mol: Molecule, sys: RingSystem): CageView;
 export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
-export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView | null {
+export function projectCage(mol: Molecule, given: RingSystem, rank = 0): CageView | null {
+  const sys = inStructureOrder(mol, given);
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
-  const bonds: [number, number][] = [];
-  for (const [k] of mol.bondIndex) {
-    const [a, b] = k.split(",").map(Number);
-    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
-  }
-  const X = embed(mol, atoms, index);
+  const bonds = bondsWithin(mol, index);
+  const X = embed(mol, atoms);
 
   // a bicyclo[3.3.1] cage as 9-BBN is drawn: its two chairs stood on end
   const twin = twinChairs(mol, sys, X, index, bonds);
@@ -649,15 +704,18 @@ export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView 
     // (kept)
   } else if (axes) {
     const { e1, e2, e3 } = axes;
-    for (const elev of [15, 20, 25, 30, 40]) {
-      for (const az of [0, 10, -10, 20, -20, 30, -30]) {
-        const ce = Math.cos((elev * Math.PI) / 180);
-        const se = Math.sin((elev * Math.PI) / 180);
-        const ca = Math.cos((az * Math.PI) / 180);
-        const sa = Math.sin((az * Math.PI) / 180);
-        const toViewer = normalise([0, 1, 2].map((i) => ce * (ca * e2[i] + sa * e1[i]) + se * e3[i]) as Vec3);
-        // a little above and to the side reads best; straight on hides the back
-        consider(look(X, toViewer, e3), 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15));
+    // (with either of its other two bridges in front)
+    for (const front of [1, -1]) {
+      for (const elev of [15, 20, 25, 30, 40]) {
+        for (const az of [0, 10, -10, 20, -20, 30, -30]) {
+          const ce = Math.cos((elev * Math.PI) / 180);
+          const se = Math.sin((elev * Math.PI) / 180);
+          const ca = Math.cos((az * Math.PI) / 180);
+          const sa = Math.sin((az * Math.PI) / 180);
+          const toViewer = normalise([0, 1, 2].map((i) => ce * (ca * front * e2[i] + sa * e1[i]) + se * e3[i]) as Vec3);
+          // a little above and to the side reads best; straight on hides the back
+          consider(look(X, toViewer, e3), 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15));
+        }
       }
     }
   } else {
@@ -1532,7 +1590,7 @@ function drawOn(
  */
 function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number, number>, X: Vec3[], T: Targets): Vec3[] {
   const fixed = (c: number) => {
-    const t = mol.tetra.get(c);
+    const t = orderedCentre(mol, c);
     if (!t) return null;
     const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
     return known.length >= 3 ? { t, known } : null;
@@ -1564,7 +1622,7 @@ function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number
 /** Every stereocentre with three bonds or more in the system, to be held the way round it is given while the solid eases. */
 function holds(mol: Molecule, atoms: readonly number[], index: Map<number, number>): Held[] {
   return atoms.flatMap((c) => {
-    const t = mol.tetra.get(c);
+    const t = orderedCentre(mol, c);
     if (!t) return [];
     const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
     if (known.length < 3) return [];
@@ -1582,7 +1640,7 @@ function holds(mol: Molecule, atoms: readonly number[], index: Map<number, numbe
 function handedness(mol: Molecule, atoms: number[], index: Map<number, number>, X: Vec3[]): number {
   let vote = 0;
   atoms.forEach((a, i) => {
-    const t = mol.tetra.get(a);
+    const t = orderedCentre(mol, a);
     if (!t) return;
     const inside = mol.neighbours[a].filter((b) => index.has(b));
     if (inside.length < 3) return;
@@ -1683,7 +1741,29 @@ function outward(
     return bi != null && mol.bonds[bi].order === 2;
   });
   if (double) return out.map(() => away);
-  if (out.length >= 2) return out.map((_, k2) => corners[k2 % 2]);
+  if (out.length >= 2) {
+    // (which goes to which corner by the structure - the corners told apart
+    // by which side of the plane of its first two neighbours inside they
+    // lie - and, at a stereocentre, as its configuration asks)
+    const same = byStructure(mol);
+    const [p, q] = [...inside].sort(same).map(unit);
+    const [c1, c2] = [...corners].sort((u, v) => Math.sign(dotV(crossV(p, q), v)) - Math.sign(dotV(crossV(p, q), u)));
+    const [o1, o2] = [...out].sort(same);
+    let pick = new Map([
+      [o1, c1],
+      [o2, c2],
+    ]);
+    const t = orderedCentre(mol, a);
+    if (t && out.length === 2) {
+      const dirOf = (n: number): Vec3 => (pick.has(n) ? pick.get(n)! : unit(n));
+      const v = t.neighbours.slice(0, 3).map(dirOf);
+      if (Math.sign(dotV(v[0], crossV(v[1], v[2]))) !== t.volume) pick = new Map([
+        [o1, c2],
+        [o2, c1],
+      ]);
+    }
+    return out.map((b) => pick.get(b) ?? away);
+  }
   // one bond out and an H: the corner the configuration asks for
   const t = mol.tetra.get(a);
   if (!t) return [away];

@@ -22,13 +22,8 @@ export const NOT_YET_ORDER_FREE: ReadonlySet<string> = new Set([
   "Morphine",
   "Strychnine",
   "Quinine",
-  "Cocaine",
   "Nicotine",
-  "Camphor",
-  "Adamantane",
-  "Norbornane",
   "Cubane",
-  "DABCO",
   "Artemisinin",
   "Paclitaxel",
   "Griseofulvin",
@@ -82,7 +77,6 @@ export const NOT_YET_ORDER_FREE: ReadonlySet<string> = new Set([
   "Kanamycin A",
   "Actinomycin D",
   "Microcystin-LR",
-  "Tetrodotoxin",
   "Saxitoxin",
   "Leukotriene B4",
   "Shikimic acid",
@@ -90,7 +84,6 @@ export const NOT_YET_ORDER_FREE: ReadonlySet<string> = new Set([
   "Curcumin",
   // the cages ranks leave alike
   "cuneane",
-  "basketane",
 ]);
 
 /**
