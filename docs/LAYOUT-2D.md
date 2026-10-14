@@ -34,7 +34,12 @@ another order. Where the rules below leave a tie, it is settled so:
   from the end with more bonds of its own still to place.
 - **By trying each.** Rings tied in rank are each placed first, or next,
   and the system that reads best flat is kept (up to eight layouts a
-  system); a macrocycle's chain run with ends alike in that is looked
+  system); ring systems as near the middle of the molecule and as large -
+  lactose's two rings, NAD+'s two riboses - are each grown from, every
+  frame of each tried; a frame that lies on the lattice no way round
+  (fives and sevens) is set with each of its atoms that has bonds out in
+  turn straight up, since the bonds out of one atom alone can lie on the
+  lattice; a macrocycle's chain run with ends alike in that is looked
   for from both; each round of the steps that set a drawing right -
   turning bonds the other way round (`improve`), turning a part about
   its join (`rejoin`), turning or stretching a branch out of the way

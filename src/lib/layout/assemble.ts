@@ -23,10 +23,21 @@ import {
 import { metalSlots } from "./hapto";
 import { isMetal, key, METAL_BOND, orderOf, type Molecule } from "./perceive";
 import { MACROCYCLE } from "./ringSystem";
-import { byStructure } from "./ranks";
+import { byStructure, ringKey, ringRank } from "./ranks";
 
 /** How the frame is set: turned by a multiple of 60 degrees, and mirrored or not. */
-export type Frame = { turn: number; mirrored: boolean };
+/**
+ * A way of setting a piece's frame down: turned, mirrored, and - where
+ * the piece's root could be either of two ring systems alike in how
+ * central and large they are - which one (`rootSystems`).
+ */
+export type Frame = {
+  turn: number;
+  mirrored: boolean;
+  root?: number;
+  /** For a root system that lies on the lattice no way round: its atom set straight up before the turn (`framesFor`). */
+  ref?: number;
+};
 
 export const FRAMES: Frame[] = [false, true].flatMap((mirrored) =>
   [0, 1, 2, 3, 4, 5].map((k) => ({ turn: (k * Math.PI) / 3, mirrored })),
@@ -139,7 +150,7 @@ export function grow(
   // a complex is grown from its metal, its ligands round it as the metal's
   // slots have them (section 7)
   const centre = metalCentre(mol, piece);
-  const root = centre == null ? rootSystem(mol, piece) : -1;
+  const root = centre == null ? (frame.root ?? rootSystem(mol, piece)) : -1;
   if (centre != null) {
     pos.set(centre, { x: 0, y: 0 });
     const weight = (l: number) => sides.get(`${centre}>${l}`) ?? 1;
@@ -150,8 +161,13 @@ export function grow(
   } else if (root >= 0) {
     const L = local.get(root)!;
     const c = centroid([...L.values()]);
+    // (a frame that lies on the lattice no way round turned first so that
+    // the atom the frame names points straight up, not wherever its ring's
+    // first atom was put: the frames are turned from there)
+    const ref = frame.ref ?? -1;
+    const base = ref >= 0 ? Math.PI / 2 - angleOf(sub(L.get(ref)!, c)) : 0;
     // a cage drawn in perspective stays upright, as it was drawn
-    const set = upright.has(root) ? (p: Point) => p : setFrame;
+    const set = upright.has(root) ? (p: Point) => p : (p: Point) => setFrame(rotate(p, base));
     transforms.set(root, (p) => set(sub(p, c)));
     for (const [a, p] of L) pos.set(a, set(sub(p, c)));
     queue.push(...mol.systems[root].atoms);
@@ -283,8 +299,18 @@ function metalCentre(mol: Molecule, piece: number[]): number | undefined {
  * those the largest; -1 for a piece with no ring.
  */
 export function rootSystem(mol: Molecule, piece: number[]): number {
+  return rootSystems(mol, piece)[0] ?? -1;
+}
+
+/**
+ * The ring systems a piece may be grown from: the one nearest all the
+ * rest, then the largest - and, where two or more are as near and as
+ * large and not alike (`ringKey`), each of them, the frames tried from
+ * each (`framesFor`); of systems alike, the one first by canonical rank.
+ */
+export function rootSystems(mol: Molecule, piece: number[]): number[] {
   const systemsHere = [...new Set(piece.map((a) => mol.systemOf[a]).filter((s) => s >= 0))];
-  if (!systemsHere.length) return -1;
+  if (!systemsHere.length) return [];
   const reach = (s: number) => {
     const d = new Map<number, number>();
     const q = [...mol.systems[s].atoms];
@@ -300,13 +326,36 @@ export function rootSystem(mol: Molecule, piece: number[]): number {
     return Math.max(...d.values());
   };
   const far = new Map(systemsHere.map((s) => [s, reach(s)]));
-  return systemsHere.sort(
-    (p, q) =>
-      far.get(p)! - far.get(q)! ||
-      mol.systems[q].atoms.length - mol.systems[p].atoms.length ||
-      mol.systems[q].rings.length - mol.systems[p].rings.length,
-  )[0];
+  const rank = (p: number, q: number) =>
+    far.get(p)! - far.get(q)! ||
+    mol.systems[q].atoms.length - mol.systems[p].atoms.length ||
+    mol.systems[q].rings.length - mol.systems[p].rings.length;
+  const keyOf = (s: number) => ringKey(mol, mol.systems[s].atoms);
+  const sorted = systemsHere.sort(
+    (p, q) => rank(p, q) || (keyOf(p) < keyOf(q) ? -1 : keyOf(p) > keyOf(q) ? 1 : ringRank(mol, mol.systems[p].atoms) - ringRank(mol, mol.systems[q].atoms)),
+  );
+  const out: number[] = [];
+  for (const s of sorted) {
+    if (rank(s, sorted[0]) !== 0) break;
+    if (!out.some((o) => keyOf(o) === keyOf(s))) out.push(s);
+  }
+  return out;
 }
+
+/**
+ * Whether a piece's root system lies on the lattice no way round - its
+ * rings all fives and sevens, proline's pyrrolidine - with no metal to
+ * set it (`framesFor`).
+ */
+function offLattice(mol: Molecule, piece: number[], root: number): boolean {
+  const sys = mol.systems[root];
+  return (
+    sys.rings.every((r) => mol.rings[r].length === 5 || mol.rings[r].length === 7) &&
+    metalCentre(mol, piece) == null &&
+    !sys.atoms.some((a) => isMetal(mol.el[a]) || mol.el[a] === "*")
+  );
+}
+
 
 /**
  * The ways of setting a piece's frame down: turned by sixty degrees at a
@@ -314,27 +363,37 @@ export function rootSystem(mol: Molecule, piece: number[]): number {
  * penam), by thirty degrees at a time, the square's sides able to lie
  * level and upright either way round. So too for a frame of rings that
  * lie on the lattice no way round - fives and sevens, proline's
- * pyrrolidine - set on it only by its bonds out: turned by sixty degrees
- * from where its ring's first atom was put, its bonds out lie at angles
- * that atom decides, and proline's carboxyl, off that atom, never lay
- * level. (Not where a metal sets the frame: a complex grown from its
- * metal, or a frame with a metal in it - PdCl2(dppf)'s.)
+ * pyrrolidine - set on it only by its bonds out: the bonds out of one
+ * atom alone can lie on the lattice, so it is set with each atom that has
+ * bonds out in turn straight up (`ref`), and turned by thirty degrees from
+ * there - not from where its ring's first atom was put, which went by the
+ * order of the atoms (proline's carboxyl, off another atom, never lay
+ * level). (Not where a metal sets the frame: a complex grown from its
+ * metal, or a frame with a metal in it - PdCl2(dppf)'s.) And from each
+ * root system there may be (`rootSystems`).
  */
 export function framesFor(mol: Molecule, piece: number[]): Frame[] {
-  const root = rootSystem(mol, piece);
-  if (root < 0) return FRAMES;
-  const sys = mol.systems[root];
-  const sizes = sys.rings.map((r) => mol.rings[r].length);
-  const squares = sizes.includes(4) && !sizes.includes(6);
-  // (a three lies on the lattice as a six does; an eight and a macrocycle are shaped on it)
-  const offLattice =
-    sizes.every((n) => n === 5 || n === 7) &&
-    metalCentre(mol, piece) == null &&
-    !sys.atoms.some((a) => isMetal(mol.el[a]) || mol.el[a] === "*");
-  if (!squares && !offLattice) return FRAMES;
-  return [false, true].flatMap((mirrored) =>
-    Array.from({ length: 12 }, (_, k) => ({ turn: (k * Math.PI) / 6, mirrored })),
-  );
+  const roots = rootSystems(mol, piece);
+  if (!roots.length) return FRAMES;
+  return roots.flatMap((root) => {
+    const sys = mol.systems[root];
+    const sizes = sys.rings.map((r) => mol.rings[r].length);
+    const squares = sizes.includes(4) && !sizes.includes(6);
+    // (a three lies on the lattice as a six does; an eight and a macrocycle are shaped on it)
+    const off = offLattice(mol, piece, root);
+    const frames =
+      squares || off
+        ? [false, true].flatMap((mirrored) => Array.from({ length: 12 }, (_, k) => ({ turn: (k * Math.PI) / 6, mirrored })))
+        : FRAMES;
+    // (a frame that lies on the lattice no way round set with each atom
+    // that has bonds out of it in turn straight up - the bonds out of one
+    // atom alone can lie on the lattice - rather than wherever its ring's
+    // first atom was put)
+    const inSys = new Set(sys.atoms);
+    const refs = off ? sys.atoms.filter((a) => mol.neighbours[a].some((v) => !inSys.has(v))) : [];
+    const each = refs.length ? refs.flatMap((ref) => frames.map((f) => ({ ...f, ref }))) : off ? frames.map((f) => ({ ...f, ref: [...sys.atoms].sort(byStructure(mol))[0] })) : frames;
+    return roots.length > 1 ? each.map((f) => ({ ...f, root })) : each;
+  });
 }
 
 function setFrameAngle(frame: Frame, t: number): number {
