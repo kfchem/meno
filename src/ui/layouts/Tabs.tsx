@@ -1,14 +1,17 @@
 import { AnimatePresence, Reorder, motion } from "motion/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
-import { useRef, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, FADE, LEAVE } from "../theme/motion";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
 
 /**
  * The tabs in the title bar, in their order: dragged sideways to reorder,
- * pressed to choose, and closed by their ×.
+ * pressed to choose, and closed by their ×. More than the bar has room for
+ * - sixteen in a window at its least - and they go on past its end, the
+ * chosen one brought into view; a tab too narrow for its name and its ×
+ * shows what it can of its name, the chosen one keeping both.
  */
 export function TabStrip({
   tabOrder,
@@ -26,12 +29,34 @@ export function TabStrip({
   close: (id: string) => void;
 }) {
   const draggingRef = useRef(false);
+  const stripRef = useRef<HTMLUListElement>(null);
+  // (the chosen tab in view: once there were more than the bar holds, the
+  // ones past its end were cut off, the chosen one too)
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || !activeId) return;
+    const bring = () =>
+      strip.querySelector<HTMLElement>(`[data-tab="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    // (once laid out - a tab just added has its place the frame after, and
+    // its coming in stops a scroll begun meanwhile - and again as the bar narrows)
+    const frame = requestAnimationFrame(() => requestAnimationFrame(bring));
+    const after = window.setTimeout(bring, DURATION.base * 1000 + 40);
+    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(bring);
+    watch?.observe(strip);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(after);
+      watch?.disconnect();
+    };
+  }, [activeId, tabOrder.length]);
   return (
     <Reorder.Group
+      ref={stripRef}
       axis="x"
       values={tabOrder}
       onReorder={reorder}
-      className="flex h-full items-end space-x-1 flex-1 px-1.5 overflow-hidden relative"
+      layoutScroll
+      className="flex h-full items-end space-x-1 flex-1 min-w-0 px-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
       data-tauri-drag-region
     >
       {/* A tab comes in rising, and closed goes the same way, the others
@@ -68,6 +93,7 @@ function Tab({
   return (
     <Reorder.Item
       value={tab.id}
+      data-tab={tab.id}
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0, transition: { duration: DURATION.base, ease: EASE } }}
       exit={{ opacity: 0, y: 20, transition: LEAVE }}
@@ -78,7 +104,9 @@ function Tab({
       // with its white and its corners turn out into it, and a tab not
       // chosen is clear, so the line runs on under it unbroken.
       className={clsx(
-        "relative rounded-t-lg w-48 h-8.5 text-xs flex justify-between items-top0 min-w-8 transition-[background-color,border-color,color] duration-150 ease-meno",
+        "@container relative rounded-t-lg w-48 h-8.5 text-xs flex justify-between items-top0 transition-[background-color,border-color,color] duration-150 ease-meno",
+        // (the chosen tab wide enough for its name; the others as narrow as there is room for, and past that the bar goes on)
+        selected ? "min-w-24" : "min-w-8",
         selected
           ? "bg-white text-gh-black border border-gh-line border-b-transparent"
           : "bg-transparent text-gh-gray border border-transparent"
@@ -122,7 +150,11 @@ function Tab({
             e.stopPropagation();
             onClose();
           }}
-          className="h-4 w-4 rounded-full p-0.5 transition-colors duration-150 ease-meno hover:bg-gh-line shrink-0"
+          className={clsx(
+            "h-4 w-4 rounded-full p-0.5 transition-colors duration-150 ease-meno hover:bg-gh-line shrink-0",
+            // (a tab not chosen, too narrow for its name and its ×, its name; chosen, it has both)
+            !selected && "@max-[5rem]:hidden",
+          )}
           aria-label="Close tab"
           title="Close"
         >

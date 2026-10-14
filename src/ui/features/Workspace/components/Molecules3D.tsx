@@ -187,6 +187,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // going over to another, the one let go of drawn as it goes (`receding`), the next as it comes (`arriving`)
   const stacksShown = useEditor((s) => s.stacksShown);
   const hiddenStacked = useMemo(() => hiddenInStacks(molecules, stacksShown), [molecules, stacksShown]);
+  // (each molecule made from the drawing, whether the drawing has changed since: worked out as either changes,
+  // not at every render - a pointer moving over the drawing renders this - for every one of them)
+  const changedSince = useMemo(() => new Set(molecules.filter((m) => m.drawnFrom && linkOf(m, drawing) === "changed").map((m) => m.id)), [molecules, drawing]);
   const [receding, setReceding] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number; start: number }[]>([]);
   const arriving = useRef(new Map<number, number>());
   const showingBefore = useRef<{ shown: Map<number, number>; turns: typeof turns; frames: typeof frames } | null>(null);
@@ -427,6 +430,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           } catch {}
           const start = valueOf(placesOf(m, frame), x.atoms);
           scrub.current = { ...label, pointerId: e.pointerId, sx: e.clientX, start, kind: kindOf(x.atoms), key: `set-measure-${label.id}-${x.id}-${e.timeStamp}`, moved: false };
+          // (a press held: the store sees it, and undo lets it be - store/gesture)
+          st.beginPanHold(e.pointerId);
           setScrubbing(label);
           return;
         }
@@ -467,6 +472,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         setHold({ id: m.id, from, start: performance.now() });
       }
       gesture.current = { ...press, kind: "press", held: false, timer };
+      st.beginPanHold(e.pointerId);
     };
 
     const onUp = (e: PointerEvent) => {
@@ -477,6 +483,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           dom.releasePointerCapture(e.pointerId);
         } catch {}
         scrub.current = null;
+        store.getState().endPanHold(e.pointerId);
         setScrubbing(null);
         swallowClick();
         // (the moves went to the value set: what is under the pointer is found once it is let go)
@@ -491,6 +498,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         dom.releasePointerCapture(e.pointerId);
       } catch {}
       gesture.current = null;
+      store.getState().endPanHold(e.pointerId);
       if (g.kind === "move") g.guide.end();
       setActive(null);
       setHold(null);
@@ -555,6 +563,9 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     dom.addEventListener("pointerleave", onLeave);
     dom.addEventListener("dblclick", onDouble);
     return () => {
+      // (a press held as the listening goes: let be)
+      const held = scrub.current?.pointerId ?? gesture.current?.pointerId;
+      if (held != null) store.getState().endPanHold(held);
       dom.removeEventListener("dblclick", onDouble);
       dom.removeEventListener("pointermove", onMove);
       dom.removeEventListener("pointerdown", onDown);
@@ -692,7 +703,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             overlay={!!overlay[m.id]}
             linkedAtom={hoveredDrawn != null && m.drawnFrom ? (m.drawnFrom.indexOf(hoveredDrawn) >= 0 ? m.drawnFrom.indexOf(hoveredDrawn) : null) : null}
             onHoverAtom={(atom) => store.getState().setHoveredAtom3d(m.id, atom)}
-            onRemake={remake && linkOf(m, drawing) === "changed" ? () => remake(m.id) : undefined}
+            onRemake={remake && changedSince.has(m.id) ? () => remake(m.id) : undefined}
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}

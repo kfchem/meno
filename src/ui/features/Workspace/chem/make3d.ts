@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Style3D } from "../../../../lib/chem/style3d";
+import type { DrawingStyle } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
 import { chemMolblock, molIndex } from "../../../../lib/roles/molblock";
@@ -19,6 +20,7 @@ import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -77,6 +79,8 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
     atoms: c.atoms.map((a, i) => ({
       el: a.el,
       ...(a.charge ? { charge: a.charge } : {}),
+      // (a radical as drawn: the plugin's answer says none, and a triplet is no singlet)
+      ...(i < block.part.atoms.length && block.part.atoms[i].radical ? { radical: block.part.atoms[i].radical } : {}),
       x: first[3 * i] ?? 0,
       y: first[3 * i + 1] ?? 0,
       z: first[3 * i + 2] ?? 0,
@@ -171,9 +175,8 @@ export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style
 /** Where a drawn structure is on the page: its atoms' box, a little round them. */
 export function boxOf(part: Model): Box {
   const pad = 0.4 * NOMINAL_BOND_LENGTH;
-  const xs = part.atoms.map((a) => a.x);
-  const ys = part.atoms.map((a) => a.y);
-  return { x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad, y0: Math.min(...ys) - pad, y1: Math.max(...ys) + pad };
+  const b = boundsOf(part.atoms) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  return { x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad };
 }
 
 const inside = (b: Box, view: Box) => b.x0 >= view.x0 && b.x1 <= view.x1 && b.y0 >= view.y0 && b.y1 <= view.y1;
@@ -365,17 +368,18 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * A molecule in 3D drawn as a formula, by Meno's own engine (as a SMILES is):
  * the frame it shows, its heavy atoms, wedged as it is in 3D - its bonds'
  * orders found where it has none (all single, as a file of coordinates
- * gives them). And which of the formula's atoms each of its atoms is: none
+ * gives them) - laid out in the style of the drawing it goes into, where
+ * one is given. And which of the formula's atoms each of its atoms is: none
  * for a hydrogen; and whether its orders, wanted, are still unknown - not
  * found (no hydrogens, say), and so drawn single.
  */
-export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
+export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const xyz = frame > 0 && m.frames?.[frame - 1] ? m.frames[frame - 1] : m.atoms.flatMap((a) => [a.x, a.y, a.z]);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
   const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
-  const model = await laidOut(drawn).catch(() => drawn);
+  const model = await laidOut(drawn, style).catch(() => drawn);
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
@@ -386,6 +390,6 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number):
 export function formulaPlace(m: Molecule3D, formula: Model, style: Style3D): { x: number; y: number } {
   const solid = solidOf(m, style);
   const xs = formula.atoms.map((a) => a.x);
-  const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+  const width = xs.length ? greatest(xs) - least(xs) : 0;
   return { x: m.at.x - solid.reach[lookOf(m)] - GAP - width / 2, y: m.at.y };
 }

@@ -25,6 +25,7 @@ import {
 import { readRxnfile } from "../lib/chem/ctfile";
 import { ARROW_LENGTH_BONDS } from "../lib/chem/reactionScheme";
 import { ELEMENTS } from "../lib/chem/elements";
+import { pushAll } from "../lib/chem/lists";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), and where it is. */
 export type EditorAtom = AtomChem & {
@@ -93,8 +94,6 @@ export type RXNLayout = {
   /** The "+" signs between the molecules on either side of the arrow: their middles. */
   pluses: { x: number; y: number }[];
   centroid: { x: number; y: number };
-  /** One of its molecules ends before its atoms and bonds do (lib/chem/ctfile's `cutShort`): a file cut short. */
-  cutShort?: true;
 };
 
 /**
@@ -123,13 +122,12 @@ export function parseRXNGroups(text: string): RXNGroups {
 export function buildEditorModelFromRXN(text: string): RXNLayout {
   const groups = parseRXNGroups(text);
   const allMols = [...groups.reactants, ...groups.products, ...groups.agents];
-  if (!allMols.length || allMols.some((m) => m.ct?.cutShort))
+  if (!allMols.length)
     return {
       model: { atoms: [], bonds: [] },
       arrow: null,
       pluses: [],
       centroid: { x: 0, y: 0 },
-      ...(allMols.length ? { cutShort: true as const } : {}),
     };
   const scale = computeScaleForMols(allMols);
   const conv = allMols.map((m) => convertMolToEditorModel(m, scale));
@@ -386,6 +384,10 @@ function markSgroups(
                 data: g.field.data,
                 ...(g.field.units ? { units: g.field.units } : {}),
                 ...(g.field.type ? { type: g.field.type } : {}),
+                ...(g.field.info ? { info: g.field.info } : {}),
+                ...(g.field.display ? { display: g.field.display } : {}),
+                ...(g.field.queryType ? { queryType: g.field.queryType } : {}),
+                ...(g.field.queryOp ? { queryOp: g.field.queryOp } : {}),
               },
             }
           : {}),
@@ -600,8 +602,9 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     const theirBonds = bonds.splice(bonds.length - m.bonds.length);
     contractAbbreviations(mine, theirBonds, m, (i) => base + i);
     idCounter = markSgroups(mine, theirBonds, m, (i) => base + i, (i) => base + m.atoms.length + i, idCounter);
-    atoms.push(...mine);
-    bonds.push(...theirBonds);
+    // (not spread into one call: a record of 50 000 atoms is more than a worker's stack takes - lib/chem/lists)
+    pushAll(atoms, mine);
+    pushAll(bonds, theirBonds);
     const title = m.ct?.name.trim();
     records.push({ atoms: mine.map((a) => a.id), ...(title ? { title } : {}) });
   }

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/input/wheel";
 import { useEditor, useEditorStore } from "../store";
-import { letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
+import { setViewPanning, letViewGoalGo, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
@@ -88,6 +88,9 @@ export function PanZoom2D() {
   // where the pointer rests over the canvas, and whether something has moved
   // under it; and the view as last drawn
   const pointer = useRef(stillPointer());
+  // (a timer for a finding under the still pointer put off: stillPointer `wait`)
+  const findLater = useRef(0);
+  useEffect(() => () => window.clearTimeout(findLater.current), []);
   const seenView = useRef<View | null>(null);
   // the page point a press held now began on, to tell whether the view has moved under it
   const pressPage = useRef<{ x: number; y: number } | null>(null);
@@ -128,6 +131,7 @@ export function PanZoom2D() {
         return;
       }
       dragging.current = false;
+        setViewPanning(false);
       maybe.current = {
         active: true,
         x: e.clientX,
@@ -144,6 +148,7 @@ export function PanZoom2D() {
         // If we enter extend mode, cancel any pending drag
         maybe.current.active = false;
         dragging.current = false;
+        setViewPanning(false);
         return;
       }
       // Skip pan while panHold is active
@@ -154,6 +159,7 @@ export function PanZoom2D() {
       if (store.getState().moveDrag.active) {
         maybe.current.active = false;
         dragging.current = false;
+        setViewPanning(false);
         return;
       }
       if (!dragging.current) {
@@ -165,6 +171,7 @@ export function PanZoom2D() {
         if (dist2 < THRESH2) return;
         // Engage dragging now
         dragging.current = true;
+        setViewPanning(true);
         try {
           dom.setPointerCapture(maybe.current.id ?? e.pointerId);
         } catch {}
@@ -197,6 +204,7 @@ export function PanZoom2D() {
         invalidate();
       }
       dragging.current = false;
+        setViewPanning(false);
       maybe.current.active = false;
       if (
         dblHold.current.active &&
@@ -330,6 +338,11 @@ export function PanZoom2D() {
     };
     const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
     for (const name of HEARD) dom.addEventListener(name, heard);
+    // (a pan lost - the pointer taken, its capture lost, the window left, the view gone: no pan any more, or undo would be taken for it)
+    const lostPan = () => setViewPanning(false);
+    dom.addEventListener("pointercancel", lostPan);
+    dom.addEventListener("lostpointercapture", lostPan);
+    window.addEventListener("blur", lostPan);
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
@@ -360,6 +373,10 @@ export function PanZoom2D() {
     layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
+      dom.removeEventListener("pointercancel", lostPan);
+      dom.removeEventListener("lostpointercapture", lostPan);
+      window.removeEventListener("blur", lostPan);
+      setViewPanning(false);
       for (const name of HEARD) dom.removeEventListener(name, heard);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointermove", onMove);
@@ -392,7 +409,10 @@ export function PanZoom2D() {
     // Keep a synchronous ref via zustand subscribe to avoid event timing issues
     const unsub = store.subscribe((s) => {
       extendRef.current = s.extend.active;
-      if (s.extend.active) dragging.current = false;
+      if (s.extend.active) {
+        dragging.current = false;
+        setViewPanning(false);
+      }
     });
     return () => unsub();
   }, [store]);
@@ -427,7 +447,16 @@ export function PanZoom2D() {
     // areas are too. (A drag of the view keeps the page under the pointer:
     // nothing to find till it is let go.)
     if (tookMovedUnderPointer(camera)) pointer.current.moved();
-    const at = dragging.current ? null : pointer.current.findAgain();
+    const now = performance.now();
+    const at = dragging.current ? null : pointer.current.findAgain(now);
+    // (a finding put off - found a moment ago - comes in a frame of its own once due, the view still or not)
+    const wait = at || dragging.current ? null : pointer.current.wait(now);
+    if (wait != null && !findLater.current) {
+      findLater.current = window.setTimeout(() => {
+        findLater.current = 0;
+        invalidate();
+      }, wait + 1);
+    }
     // (and a press held still that the view has moved under is neither a
     // click nor a long press: said before the press's handlers hear the move)
     const was = pressPage.current;

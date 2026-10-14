@@ -190,34 +190,48 @@ describe("a V2000 molfile", () => {
     expect(mol.sgroups).toEqual([{ type: "SUP", index: 1, atoms: [2], bonds: [1], brackets: [], label: "Me" }]);
   });
 
+  it("keeps of an Sgroup only the atoms and bonds the table has, and of a line shorter than its count only the pairs it holds whole", () => {
+    const two = (...props: string[]) => readMolfile(["", "", "", counts(2, 1), atomLine(0, 0, "C"), atomLine(1, 0, "O"), bondLine(1, 2, 1), ...props, "M  END"].join("\n"))!;
+    const sup = two("M  STY  1   1 SUP", "M  SAL   1  2   2   5", "M  SBL   1  2   1   9", "M  SAP   1  2   2   1 Al   7   1 Br", "M  SMT   1 OMe").sgroups[0];
+    expect(sup).toMatchObject({ atoms: [1], bonds: [0], attachments: [{ atom: 1, leaving: 0, id: "Al" }] });
+    const mul = two("M  STY  1   1 MUL", "M  SAL   1  2   1   2", "M  SPA   1  2   1   3").sgroups[0];
+    expect(mul.patoms).toEqual([0]);
+    // (an old group abbreviation on an atom the table has not: none)
+    expect(two("G    5  1", "Me").sgroups).toEqual([]);
+    // (two Sgroups counted, one given; a connectivity counted, none given; a parent's pair half given)
+    expect(two("M  STY  2   1 SUP   2").sgroups.map((g) => [g.index, g.type])).toEqual([[1, "SUP"]]);
+    expect(two("M  STY  1   1 SRU", "M  SCN  1   1").sgroups.map((g) => [g.type, g.connect])).toEqual([["SRU", undefined]]);
+    const parents = two("M  STY  2   1 SRU   2 SRU", "M  SPL  2   2   1   3", "M  SDS EXP  2   1").sgroups;
+    expect(parents.map((g) => [g.index, g.parent, g.expanded])).toEqual([
+      [1, undefined, true],
+      [2, 1, undefined],
+    ]);
+  });
+
+  it("reads a number only as the whole of its field - an E exponent's too - and marks a line that does not read damaged", () => {
+    const two = (second: string, bond = bondLine(1, 2, 1)) => readMolfile(["", "", "", counts(2, 1), atomLine(0, 0, "C"), second, bond, "M  END"].join("\n"))!;
+    expect(two("1.1900E+01  -2.5e-01    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0").atoms[1]).toMatchObject({ x: 11.9, y: -0.25 });
+    expect(two(atomLine(1.19, 0, "O")).damaged).toBeUndefined();
+    expect(two("  1.19D+01    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0").damaged).toBe("an atom whose place is not a number");
+    expect(two("    1.1900    0.0000").damaged).toBe("an atom with no symbol");
+    // (a bond to an atom it has not is not kept, nor its record read)
+    const far = two(atomLine(1.19, 0, "O"), bondLine(1, 4, 1));
+    expect([far.damaged, far.bonds]).toEqual(["a bond to an atom it does not have", []]);
+    // (a line that is no atom's where an atom's should be: the block ended - cut short, not damaged)
+    const short = readMolfile(["", "", "", counts(2, 0), atomLine(0, 0, "C"), "M  END"].join("\n"))!;
+    expect([short.cut, short.damaged]).toEqual([true, undefined]);
+  });
+
   it("skips what S  SKP says to, and keeps the chiral flag", () => {
     const mol = readMolfile(["", "", "", counts(1, 0, 0, 1), atomLine(0, 0, "C"), "S  SKP  1", "M  CHG  1   1   1", "M  END"].join("\n"))!;
     expect(mol.atoms[0].charge).toBeUndefined();
     expect(mol.chiral).toBe(true);
-  });
-
-  it("cut short - ending before the atoms and bonds its counts line gives - is what it has, and says so", () => {
-    // (it was read on from what was not there: a carbon at 0, 0 for every atom to come)
-    const whole = ["cut", "  Meno", "", counts(3, 2), atomLine(0, 0, "C"), atomLine(1.5, 0, "C"), atomLine(2.25, 1.3, "O"), bondLine(1, 2, 1), bondLine(2, 3, 1), "M  END"];
-    const read = (n: number) => readMolfile(whole.slice(0, n).join("\n"))!;
-    expect(read(whole.length).cutShort).toBeUndefined();
-    expect(read(6)).toMatchObject({ cutShort: true, atoms: [{ symbol: "C" }, { symbol: "C" }], bonds: [] });
-    expect(read(8)).toMatchObject({ cutShort: true, atoms: { length: 3 }, bonds: { length: 1 } });
-    // (its M  END come too soon, or a blank line where an atom should be)
-    expect(readMolfile([...whole.slice(0, 6), "M  END"].join("\n"))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
-    expect(readMolfile([...whole.slice(0, 6), "", ...whole.slice(6)].join("\n"))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
   });
 });
 
 describe("a V3000 molfile", () => {
   const v3 = (...body: string[]) =>
     ["v3000", "  Meno", "", "  0  0  0     0  0            999 V3000", ...body.map((l) => `M  V30 ${l}`), "M  END"].join("\n");
-
-  it("cut short - with no END CTAB - says so", () => {
-    const table = ["BEGIN CTAB", "COUNTS 2 1 0 0 0", "BEGIN ATOM", "1 C 0 0 0 0", "2 O 1.5 0 0 0", "END ATOM", "BEGIN BOND", "1 1 1 2", "END BOND", "END CTAB"];
-    expect(readMolfile(v3(...table))!.cutShort).toBeUndefined();
-    expect(readMolfile(v3(...table.slice(0, 5)))).toMatchObject({ cutShort: true, atoms: { length: 2 } });
-  });
 
   it("reads atoms by their own indices, with every keyword, across continued lines", () => {
     const mol = readMolfile(

@@ -245,14 +245,14 @@ pub fn start(app: &AppHandle) {
     // single-threaded apartment; OLE on top of it is what serving needs.
     unsafe {
         if let Err(e) = OleInitialize(None) {
-            eprintln!("OLE could not be started: {e}");
+            crate::logfile::logged!("OLE could not be started: {e}");
             return;
         }
         let factory: IClassFactory = Factory.into();
         match CoRegisterClassObject(&CLSID_STRUCTURE, &factory, CLSCTX_LOCAL_SERVER, REGCLS_MULTIPLEUSE) {
             // (kept for the life of the process, as Meno serves until it quits)
             Ok(_) => std::mem::forget(factory),
-            Err(e) => eprintln!("Meno structures cannot be served to Office: {e}"),
+            Err(e) => crate::logfile::logged!("Meno structures cannot be served to Office: {e}"),
         }
     }
 }

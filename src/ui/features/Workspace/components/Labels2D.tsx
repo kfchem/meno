@@ -1,23 +1,19 @@
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { TAU, follow } from "../../../theme/motion";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
 import { fadeLetters } from "./labelFade";
+import { BOLD, ITALIC_SLANT, TextBatch, type BatchRun } from "./textBatch";
 
-/**
- * How far an italic run leans: about the slant of a sans-serif's italic.
- * The canvas leans the label's own letters; a picture asks for the
- * typeface's italic.
- */
-const ITALIC_SLANT = Math.tan((12 * Math.PI) / 180);
-/** How much a bold run's letters are thickened, as a share of their size: Markdown's strong words' (components/MarkdownRows). */
-const BOLD = "3.5%";
+// (how far an italic run leans - about a sans-serif italic's slant: the canvas leans the label's own
+// letters, a picture asks for the typeface's italic - and how much a bold run's letters are thickened, as
+// Markdown's strong words are, components/MarkdownRows: ./textBatch)
 
 /** A run at (x, y), its baseline, leaning to the right above it. */
 function slanted(x: number, y: number): THREE.Matrix4 {
@@ -58,15 +54,7 @@ const setting = (o: Setting) => !!(o._needsSync || o._isSyncing);
  * soon as they are drawn. `onDrawn` is told the texts once every letter of
  * them is set (troika sets them a frame or two after it is given them).
  */
-export function Texts2D({
-  texts: items,
-  moved,
-  shadow,
-  renderOrder = 30,
-  fade = true,
-  onDrawn,
-  keyOf,
-}: {
+type TextsProps = {
   texts: readonly TextItem[];
   moved?: boolean;
   shadow?: string;
@@ -75,17 +63,36 @@ export function Texts2D({
   onDrawn?: (texts: readonly TextItem[]) => void;
   /** What each text is drawn by, from one set to the next: by default its place in the set. */
   keyOf?: (t: TextItem, i: number) => string;
-}) {
-  const { opts, zoom } = useDrawnLayout();
+};
+
+export function Texts2D(props: TextsProps) {
+  // (drawn a few draw calls in all where they stand still and the renderer
+  // takes float textures, troika's batch needs them - not one each: a page
+  // at its whole had tens of thousands; carried or shadowed - a few words -
+  // one by one, as ever)
+  const batchable = useThree((st) => st.gl.capabilities.isWebGL2);
+  return !props.shadow && !props.moved && batchable ? <BatchedTexts2D {...props} /> : <EachText2D {...props} />;
+}
+
+function EachText2D({
+  texts: items,
+  moved,
+  shadow,
+  renderOrder = 30,
+  fade = true,
+  onDrawn,
+  keyOf,
+}: TextsProps) {
+  const { opts } = useDrawnLayout();
 
   // Set in the style's typeface, where the layout has placed each run: the
   // font the layout measures in is the one drawn with, so nothing needs
   // measuring here. Until the font is known nothing is drawn, rather than a
   // label in some other font that then jumps.
   const family = opts.fontFamily ?? "Arial";
-  const texts = items.map((t) => t.text);
   // (a letter no typeface of Meno's has drawn as a white square - as the layout measured it: lib/chem/labelFonts `STAND_IN`)
-  const font = useLabelFontUrl(family, needsFallback(texts));
+  const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
+  const font = useLabelFontUrl(family, fallback);
   // Once the font is in, the labels fade in (TAU.quick) rather than appear:
   // each label's own opacity brought up a frame at a time, not the labels
   // drawn again - a drawing can have thousands.
@@ -125,18 +132,29 @@ export function Texts2D({
     invalidate();
   });
   // (labels sized in the drawing's own units are the same at any zoom: the
-  // view zooming leaves them as they are)
-  const labelZoom = opts.units === "px" ? zoom : null;
+  // view zooming leaves them as they are, and draws none of them again)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const labelColor = opts.labelColor ?? "black";
+  // (each text drawn as it was while it is the same object, drawn the same
+  // way: a structure the layout did not lay out again keeps its labels, and
+  // React passes them by - not a thousand labels drawn again at every frame
+  // of a drag)
+  const made = useRef<{ under: unknown[]; texts: WeakMap<TextItem, { key: string; label: ReactElement }> }>({ under: [], texts: new WeakMap() });
   const labels = useMemo(() => {
     if (font === null) return null;
     const set = labelSetOf(opts);
     const glyphs = labelFont(set.fontFamily);
     const fill = shadow || moved ? 0 : seen.current.level;
+    const under = [opts, labelZoom, labelColor, font, moved, shadow, renderOrder, fill];
+    if (under.some((v, k) => v !== made.current.under[k])) made.current = { under, texts: new WeakMap() };
+    const kept = made.current.texts;
     return items.map((t, i) => {
+      const key = keyOf ? keyOf(t, i) : `txt-${i}`;
+      const was = kept.get(t);
+      if (was && was.key === key) return was.label;
       const fontWorld = labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx;
-      return (
-        <group key={keyOf ? keyOf(t, i) : `txt-${i}`}>
+      const label = (
+        <group key={key}>
           {/* (a mark - a charge's circle, a radical's dot - is drawn with the lines) */}
           {placeLabel(t, fontWorld, set).map((run, k) => run.mark ? null : (
             // (an italic run - the t of t-Bu - slanted about its baseline)
@@ -155,21 +173,100 @@ export function Texts2D({
                     ? // (bold: the letters thickened by an outline of their own colour, as Markdown's are - one face of each)
                       { outlineWidth: BOLD, outlineColor: run.color ?? t.color ?? labelColor, outlineOpacity: fill }
                     : {})}
-                material-toneMapped={false}
-                material-depthTest={false}
-                material-depthWrite={false}
               >
                 {glyphs.shown(run.text)}
+                {/* (its own material, not `material-*` props: an outlined text's material is two - its outline's
+                    and its letters' - and those props went to neither, so a bold run was drawn tone mapped, darker) */}
+                <meshBasicMaterial side={THREE.DoubleSide} transparent toneMapped={false} depthTest={false} depthWrite={false} />
               </Text>
             </group>
           ))}
         </group>
       );
+      kept.set(t, { key, label });
+      return label;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
   }, [items, opts, labelZoom, labelColor, font, moved, shadow, renderOrder]);
   if (font === null) return null;
   return <group ref={group}>{labels}</group>;
+}
+
+/**
+ * The texts of `Texts2D` that stand still, drawn by a batch (./textBatch):
+ * no element for each run, and a few draw calls in all. Each label kept
+ * while it is the same item, faded in as the font comes, told when drawn -
+ * as `EachText2D` draws them one by one.
+ */
+function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf }: TextsProps) {
+  const { opts } = useDrawnLayout();
+  const family = opts.fontFamily ?? "Arial";
+  const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
+  const font = useLabelFontUrl(family, fallback);
+  const seen = useRef<{ font: string | null; level: number }>({ font: null, level: 0 });
+  if (seen.current.font !== font) seen.current = { font, level: fade ? 0 : 1 };
+  // (one batch for a typeface and the order it is drawn in; made again as either changes)
+  const invalidate = useThree((st) => st.invalidate);
+  const batch = useMemo(() => (font === null ? null : new TextBatch(font, renderOrder, () => invalidate())), [font, renderOrder, invalidate]);
+  useEffect(() => () => batch?.dispose(), [batch]);
+  // (as `EachText2D`: labels in the drawing's own units are not set again as the view zooms)
+  const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
+  const labelColor = opts.labelColor ?? "black";
+  const under = useRef<unknown[]>([]);
+  useLayoutEffect(() => {
+    const b = batch;
+    if (!b) return;
+    const set = labelSetOf(opts);
+    const glyphs = labelFont(set.fontFamily);
+    // (what every label is drawn by: all of them set again where it changes)
+    const now = [opts, labelZoom, labelColor, b];
+    if (now.some((v, k) => v !== under.current[k])) {
+      under.current = now;
+      b.keepOnly(new Set());
+    }
+    const keep = new Set<string>();
+    items.forEach((t, i) => {
+      const key = keyOf ? keyOf(t, i) : `txt-${i}`;
+      keep.add(key);
+      if (b.has(key, t)) return;
+      const fontWorld = labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx;
+      const runs: BatchRun[] = placeLabel(t, fontWorld, set)
+        .filter((run) => !run.mark)
+        .map((run) => ({ text: glyphs.shown(run.text), x: run.x, y: run.y, size: run.size, color: run.color ?? t.color ?? labelColor, italic: !!run.italic, bold: !!run.bold }));
+      b.set(key, t, runs, seen.current.level);
+    });
+    b.keepOnly(keep);
+    invalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
+  }, [items, opts, labelZoom, labelColor, batch, invalidate]);
+  // (told once every letter is set - after the batch has set them)
+  useLayoutEffect(() => {
+    const b = batch;
+    if (!onDrawn || !b) return;
+    let told = false;
+    const check = () => {
+      if (told || b.setting()) return;
+      told = true;
+      onDrawn(items);
+    };
+    const stop = b.onSynced(check);
+    check();
+    return () => {
+      told = true;
+      stop();
+    };
+  });
+  useFrame((_, dt) => {
+    const s = seen.current;
+    const b = batch;
+    if (s.font === null || s.level === 1 || !b) return;
+    const n = follow(s.level, 1, Math.min(dt, 1 / 20), TAU.quick);
+    s.level = n > 0.99 ? 1 : n;
+    for (const t of b.members()) fadeLetters(t, s.level);
+    invalidate();
+  });
+  if (!batch) return null;
+  return <primitive object={batch.root} />;
 }
 
 /**

@@ -18,7 +18,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 - **RDKit is a plugin of its own**, independent like the others.
 - **Nothing is kept running ahead of need.** Every plugin starts when it
   is first needed and stays for the session, as RDKit does now. More
-  plugins kept running would only take more memory.
+  plugins kept running would only take more memory. (Since 2026-10-13, a
+  worker unused for 15 minutes is stopped: *When plugins run*.)
 - **A fingerprint might lead into a workflow**, and so might other such
   results.
 - **Plugins are completely independent, and Meno builds only a general
@@ -155,7 +156,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `reads` | ids | The kinds it reads: its own, or Meno's. |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
-| `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's. `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
+| `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, the loader's variables, the network's way out, or the threads Meno sets. Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
@@ -186,7 +187,9 @@ page itself.
   window is built: `page`, `quick-add` (once open), `structure` (the one
   selected, else the last drawn), `menu` (a right-click menu, once open),
   `save`, `settings`. None, or a part not there now, and the card sits
-  low in the middle of the page.
+  low in the middle of the page. A step that points at a part, while
+  neither it nor any page is seen (Settings the tab in front), waits out
+  of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened,
   a structure `selected`, a `menu` opened. A moment after the chemist does
   it, the guide goes on by itself; Next does as well.
@@ -285,9 +288,11 @@ plugin up says it - its name, its licence, its size and where it comes
 from. It is checked against its SHA-256; unpacked by what the system has -
 a disk image mounted read-only and the app copied out of it as it is, its
 signature kept (macOS: `hdiutil`, `ditto`); a zip or a tar.xz opened by
-the system's own `tar` - into `files/<archive's name>` in the plugin's
-data folder, a stamp beside it saying it is whole; and the archive thrown
-away. A job runs the program from there (`src-tauri/src/jobs.rs`,
+the system's own `tar`, which shows no console on Windows - into
+`files/<archive's name>` in the plugin's data folder, what was there taken
+away first (tried again for a few seconds, where a virus checker holds a
+file in it), a stamp written last saying it is whole - one cut short has
+none, and is unpacked again; and the archive thrown away. A job runs the program from there (`src-tauri/src/jobs.rs`,
 `plugin_program`), and from nowhere else: no copy installed on the
 computer is looked for - not where the system finds programs, not where
 programs are usually installed - and there is no *Locate…*. Such a plugin
@@ -367,8 +372,25 @@ fills.
   structure is drawn, since the chemical checks run by themselves once
   it is at hand (`useChemMarks`, `chemAtHand`). Its first import may
   take a while; up to 90 s is allowed.
-- **Keeping it.** It is then kept for the session. If it stops, the next
+- **Keeping it.** It is then kept while it is used. If it stops, the next
   request starts it again.
+- **Stopped when unused** (the maintainer, 2026-10-13;
+  `lib/plugins/idle.ts`). A worker that has gone 15 minutes unused is
+  stopped, and started again when next needed, so that a plugin holding a
+  large model does not keep its memory all day. Unused means:
+  - no request unanswered: each request asked holds the clock, and the
+    last one answered (or given up on) starts it again;
+  - nothing heard from the worker: each line it says starts the clock
+    again;
+  - no job of its plugin waiting or running (`liveJobsOf`). A worker kept
+    for a job is looked at again after another 15 minutes.
+
+  The stop is no one's error: nothing waits on the worker, and nothing
+  says it stopped. Settings, *Chemistry* says again that the plugin is
+  set up and starts when a structure is drawn, as before its first start.
+  The next request waits for the worker to start, as a session's first
+  request does: a role says "Starting RDKit…" meanwhile, and a file's
+  reading or a step waits as on its first use.
 - **Held on a request.** A worker answers one request at a time, in the
   order asked. If the request it is on is not answered in that request's
   time, the worker is stopped, and the next request starts it afresh
@@ -389,7 +411,7 @@ fills.
   name and description from its manifest; no code of Meno's names it.
 
 The calculation readers start the same way, on first use, and are stopped
-only when taken away or when Meno quits. Every plugin's environment is
+the same way: unused for 15 minutes, taken away, or when Meno quits. Every plugin's environment is
 named for it, `plugin-<id>` (the maintainer, 2026-10-06); those made before
 under other names are left where they were.
 
@@ -410,8 +432,9 @@ no plugin is kept running ahead of need):
   alone: Meno's proxy refuses any other (docs/ARCHITECTURE.md, *The
   network*).
 - **Started** the first time it is asked for. Nothing starts with Meno.
-- **Kept** for the session, and started again if it stops.
-- **Stopped** when it is taken away, or when Meno quits.
+- **Kept** while it is used, and started again if it stops.
+- **Stopped** when it has gone 15 minutes unused (the maintainer,
+  2026-10-13), when it is taken away, or when Meno quits.
 
 RDKit is an ordinary plugin. It is in use all day only because, by
 default, it fills the core roles, and so it is asked for as soon as a
@@ -508,6 +531,24 @@ The same for every plugin and for Meno's own parts:
   isotope and radical, the bonds by index with their orders, a name
   (FILE-IO.md, *As step 7's writer was built*); a reader gives back
   Meno's own plain data, checked by Meno on the way in.
+- **A file of several jobs, one after another** (the maintainer,
+  2026-10-13) - Gaussian's Link1 jobs, ORCA's `$new_job` - is read by a
+  reader that tells them apart as one output for each job, in order,
+  under `jobs`, each saying which it is and what it did - `job: {number,
+  of, kind}`, its kind in words ("Optimisation", "Single point") - and
+  each its own atoms, geometries, energies, method and basis, charge and
+  multiplicity, and results. The answer's own fields are its last job's,
+  so that what knows nothing of jobs reads the file's end. Each job
+  opens as a molecule of its own, side by side; nothing of one job is
+  put with another's. A job of one route that runs in steps - Gaussian's
+  Opt Freq - is one job. Only the reader knows its programs; Meno takes
+  `jobs` from any. A reader chosen to read the file as well joins each
+  job's molecule with what it read of that job, where it read the file
+  job by job; where it read it as one, it joins the last job's alone.
+  (Each job's record - its geometry, its charge and multiplicity, as the
+  file says them, its energy with its method and basis, the file and the
+  job it came from - is what an entry of the rebuilt workflow is to
+  carry.)
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**
@@ -553,7 +594,8 @@ The same for every plugin and for Meno's own parts:
 By the maintainer, 2026-10-06:
 
 1. **No plugin is kept running ahead of need.** Every plugin runs as RDKit
-   does now: started when first needed, kept for the session.
+   does now: started when first needed, kept for the session. (Revised
+   2026-10-13: kept while it is used, stopped once unused for 15 minutes.)
 2. **The other roles are chosen where they are used** (*Chemistry*,
    *Molecules in 3D*, a workflow step), not in the Plugins tab. The
    Plugins tab says what each plugin offers.

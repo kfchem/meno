@@ -157,10 +157,11 @@ and what it holds.
 As Meno's own things look (decided: 15), not as the figures here do:
 
 - **Colours** from Meno's palette only: its greys for frames, lines and
-  words; the accent (`accel-base`) for what is done or chosen; the
-  attention colour (`accel-accent`) for what failed; the canvas's own
-  hover blue for what is under the pointer on the canvas, as an atom or
-  an arrow is lit.
+  words; Meno's base colour (#317689, `COLORS.base`, `accel-base` in the
+  styles) for what is done or chosen; the attention colour (#cd4560,
+  `COLORS.attention`, `accel-accent` in the styles) for what failed; the
+  canvas's own hover blue for what is under the pointer on the canvas,
+  as an atom or an arrow is lit.
 - **Lines** as fine as Meno's cards' and chips' borders - a hair on the
   screen, at any zoom - and wires no heavier than they.
 - **Cards** as Meno's chips and cards are: white, rounded, a hairline
@@ -238,9 +239,9 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
-| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way - as conformers of one compound |
+| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
 
 The first five run a program; the last five work on a set's entries
@@ -296,7 +297,7 @@ one of the kinds of calculation it does (decided: 16):
 
 - **Drawn** from a port that gives to one that takes, or the other way: a
   press on a port and a drag. While it is drawn, the ports that would
-  take it are lit in the accent; the others stay as they are.
+  take it are lit in the base colour; the others stay as they are.
 - **What may join**: what a port gives to a port that takes it (*Kinds of
   step*). Nothing is converted on the way: a set of structures does not
   go into *Optimise* - *Conformers* and *Choose one* go between, on the
@@ -326,7 +327,7 @@ frames chip opens to its slider:
   share kept as they were;
 - *Show log* and *Show files* once it has run.
 
-Another click on its title, Escape, or a press elsewhere closes it. The
+Another click on its title, its *Close*, or Escape closes it; a press elsewhere does not - the page is worked on (panned, scrolled, other cards) while its options stay open (2026-10-14). The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
@@ -397,11 +398,11 @@ once (*Several at once*).
 | --- | --- | --- |
 | Ready | none, grey words | *Ready* |
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
-| Running | turning, the accent | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
-| Done | a tick, the accent | *2:03 · −42.10871 Eh*, or *81 of 81*, or *23 kept* - how long, and the number the step is for |
+| Running | turning, the base colour | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
+| Done | a tick, the base colour | *2:03 · E −42.108710 Eh* (its electronic energy), or *81 of 81*, or *23 kept* - how long, and the number the step is for |
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
 | Stopped | a stop, grey | *Stopped after 0:31* |
-| Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it, changed since its run; its results stay as they are |
+| Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
 
 ### The log
 
@@ -433,6 +434,18 @@ of the step, wired from it (decided):
 They are calculation results as Meno knows them: the frames chip,
 pointing at atoms, the lists. The set's port feeds the next step.
 
+Meno's own steps take no time to speak of and are done at once, all but
+Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
+so it works in turns that let the page go on. Its card says it is
+running, and how many of its entries it has been through, and its results
+go in at the end as one edit. Stop, from its menu, gives it up at its
+next turn ("Stopped after m:ss"); where what comes in changes meanwhile
+(an edit, an undo, its set deleted), nothing of the old is put in, and it
+says so, changed, to be run again. It lays a conformer only over those kept
+that could be alike: their radii of gyration, and each atom's distance
+from the middle, within the RMSD asked. Those are bounds the RMSD never
+falls below, so it keeps what laying each over every one would.
+
 Run again, a step replaces its result set's entries with the new run's,
 gliding to where they now are; earlier runs are kept in the step (*Runs*,
 under its options: when, with what options, how long, the number it
@@ -461,7 +474,9 @@ gave), and one can be shown again.
 - **Opened again**, a workspace looks at its jobs: done - their results
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was
-  restarted, say) - *Stopped*, with their logs.
+  restarted, say) - *Stopped*, with their logs. Where some are gone and
+  others done, those done come in and the others are counted failed:
+  *1 of 3 failed · It stopped without finishing*.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
@@ -771,7 +786,12 @@ Decided while building it, for the maintainer to confirm:
 - **Deleting a running step asks first** - and so does an undo or a redo
   that would take one away (*Undo*); deleted, a step's jobs are
   stopped and their folders taken away. Undone, the step comes back
-  without them; its results keep its logs.
+  without them; its results keep its logs. Deleted while its jobs are
+  still being started (a long conformer set, Run just pressed), it starts
+  no more, and those it started are stopped and taken away the same.
+- **Failed entries are counted as entries**: a job for several entries
+  that failed counts each of them (*2 of 3 failed*), and where its runner
+  said why (*xtb could not be started*) that is the reason given.
 - **Show log** opens each job's log as a text of the workspace, *Optimise
   log* (*Optimise log 2*, ... where there are several), following the
   job while it runs; a text that grows at its end keeps its last lines in
@@ -842,7 +862,8 @@ Decided while building it, for the maintainer to confirm:
 
 - **RDKit's conformer search in a step is the one *3D structures* makes
   on the canvas** - ETKDG v3, then MMFF94, MMFF94s or UFF - with the same
-  options, run as a job: RDKit's own Python runs a script of the plugin's
+  options, starting from those chosen in Settings, *Molecules in 3D*
+  (2026-10-13), run as a job: RDKit's own Python runs a script of the plugin's
   on the molecule written into the job's folder, so that a long search
   goes on when Meno closes, as any job does. The stereo is kept as the
   entry's 3D structure has it.
@@ -994,9 +1015,9 @@ same (B3LYP-D3BJ/6-31G(d)), the four queued one at a time.
 What was seen, and what was put right:
 
 - **ORCA**: both ran and were read back as designed - *Optimise* in about
-  12 s, -115.56885 Eh, its path of 7 frames on the frames chip;
+  12 s, −115.568850 Eh, its path of 7 frames on the frames chip;
   *Frequencies* in 10 s, its 12 vibrations in the molecule's list (330.5
-  to 3819.7 cm-1, none imaginary), its partial charges by pointing at an
+  to 3819.7 cm⁻¹, none imaginary), its partial charges by pointing at an
   atom, and what the calculation was on the chip.
 - **Gaussian's output went to a file nobody followed.** Run as `g16
   input`, Gaussian writes `input.log`, and what it printed - nothing - was

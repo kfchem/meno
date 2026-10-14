@@ -42,6 +42,22 @@ export function condensedStructure(
   return moleculeOf(parts) ?? saltOf(parts);
 }
 
+/**
+ * An anion written alone, its charge last - PF6-, BF4-, SbF6-, AlCl4-,
+ * ClO4- - as `anionOf` reads one in a salt (NaBF4), or null.
+ */
+export function anionStructure(
+  label: string,
+  labels: readonly string[],
+  groupOf: (label: string) => GroupStructure | null,
+): (GroupStructure & { name: string }) | null {
+  const m = /^(.+?)[-\u2212]$/.exec(label);
+  const parts = m && partsOf(m[1], (text, i) => labels.find((l) => text.startsWith(l, i)), groupOf);
+  if (!parts || parts.length < 2) return null;
+  const ion = anionOf(parts, 1);
+  return ion && { ...ion, name: label };
+}
+
 /** Parts as one molecule: a centre and its valence's parts, or two univalent parts. */
 function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
   const valence = (p: Part) => (p.kind === "element" ? VALENCE[p.el] : 1);

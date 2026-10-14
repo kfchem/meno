@@ -79,9 +79,17 @@ they hang from.
   among the few that lie well, for the room it leaves inside. A ring fused
   on its side sits where the shape turns (both ends of that side corners
   pointing out), a ring it runs through at three atoms stands outside a
-  corner pointing in, and every double bond in it keeps its cis or trans.
-  A macrolide has its lactone at the lower left, the ring numbered from
-  its carbonyl carbon counterclockwise - C2 to its right along the bottom,
+  corner pointing in, and every double bond in it keeps its cis or trans:
+  a cis one at a corner, a trans one along a zigzag. Where none of the
+  shapes offered has corners and zigzags at the places two of them need
+  (a cyclohexadecadiene's, a bond apart), the shapes of the size that lie
+  less well are looked through, best first and each once, those with a
+  dent or two among them (two turns inward together, for rings of up to
+  24), and the best few that keep them all are offered instead; for an
+  odd ring, the rings one larger, each drawn together where that eases
+  best of the places that keep them. A macrolide has its lactone at the
+  lower left, the ring numbered from its carbonyl carbon
+  counterclockwise - C2 to its right along the bottom,
   the ring O last, above it - as erythromycin and epothilone are drawn: of
   the ways of fitting the ring to its shape that put the heavy groups
   outside, the one that does so. A ring of up to fifteen, seven bonds a
@@ -152,7 +160,20 @@ they hang from.
   bridge between two of them hanging from them however it must;
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
-  eased into place. Adamantane is then a chair with its three axial bonds
+  eased into place - its bonds toward one length, each atom held near
+  where the solid seen from that side puts it - and eased again with
+  atoms not bonded to each other kept 0.7 of a bond apart. That is taken
+  only where it leaves fewer pairs of atoms nearer than 0.6 of a bond and
+  reads better by the measure a flat drawing and a solid are weighed by
+  (`viewCost` at its defaults, with no depth): where the solid seen so
+  puts one atom on another (scopolamine's epoxide by its N), not where a
+  near pair is the drawing's own (adamantane's back CH2 by a front
+  bridgehead; bicyclo[2.2.2]octane's back bridge by its back bridgehead,
+  which eased apart only comes a little less near, its bonds uneven). A
+  stereocentre the easing turns - a bridgehead whose three bonds lie
+  nearly in the page can tip through - goes back where it was put (one
+  stood upright on the ring, upright still), and the others are looked at
+  again. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
   is drawn broken there. Bonds out of the ring follow it - an equatorial
@@ -416,8 +437,15 @@ much else a crossing would clear.
 And last, room for the H of every label: the drawing writes it beside the
 symbol on the side the bonds leave free (OH, or HO where they leave to the
 right; under or over the symbol only between bonds on both sides, as in a
-chain's NH). Where it - or its count, NH2's 2 after it and set lower -
-would run into another label, an atom or a bond, the
+chain's NH, and only where that line is clearer of the bonds than the row
+beside the symbol, by more than a band of 10 degrees - two bonds nearly
+in a line, steep, leave the row open and the line above or below on a
+bond, as tetrodotoxin's guanidine NH; nearer even, it stays stacked. On
+the row so, it goes on the row's clearer side - a borate's BH- with a
+bond straight right is written HB- - and, the two sides alike, after the
+symbol: NH. lib/layout/names `rowClearer`, `clearRowSide`, which the
+drawing and the engine share). Where it - or its count, NH2's 2 after it
+and set lower - would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
@@ -440,6 +468,18 @@ way a molecule is turned comes first, and in full last, when room is made
 for them as for an H, by the same small moves (wider turns of a name's own
 bond). Two names one over the other keep a line's space between them, a
 quarter of a bond: with less, taxol's AcO sat on its OBz.
+
+- Two labels share a bond's length: together they may take nine tenths of
+  it (`labelShareMax`), each giving up its share past that - and, drawn,
+  never more than two thirds, whatever the labels: a third of a bond is
+  always seen, its end touching a label's letters or digits (13C's) where
+  it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
+  2026-10-14). Where one of
+  them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
+  long enough for the two to keep their margins, in the drawing's style -
+  measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,
+  `Workspace/chem/engineLayout.ts` `roomForLabels`). The engine knows
+  nothing of a style's letters; a bond drawn by hand keeps its length.
 
 ## 6. Stereochemistry that reads
 

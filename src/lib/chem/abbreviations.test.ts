@@ -4,6 +4,7 @@ import {
   abbreviationOf,
   abbreviationStructure,
   labelRuns,
+  labelUnitNames,
   labelUnits,
   labelProblem,
   namesRingFirst,
@@ -356,6 +357,19 @@ describe("a label, written", () => {
     expect(labelUnits("SiMe3")).toEqual(["Si", "Me3"]);
   });
 
+  it("finds each name it reads into by the letter it starts with - the user's own too, and none left of them once taken away", () => {
+    for (const u of labelUnitNames()) if (!u.startsWith("(")) expect(labelUnits(u)).toEqual([u]);
+    const npe = { label: "Npe", name: "2-(4-nitrophenyl)ethyl", smiles: "*CCc1ccc([N+](=O)[O-])cc1" };
+    try {
+      setCustomAbbreviations([npe]);
+      expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Npe"]);
+    } finally {
+      setCustomAbbreviations([]);
+    }
+    // (with it gone, a word Meno does not know is read whole, as any is)
+    expect(labelUnits("CO2Npe")).toEqual(["C", "O2", "Npe"]);
+  });
+
   it("reads outward from its bond when that comes in from the right (IUPAC GR-2.3)", () => {
     expect(reversedLabel("OTBS")).toBe("TBSO");
     expect(reversedLabel("CO2Me")).toBe("MeO2C");
@@ -417,6 +431,11 @@ describe("a label, written", () => {
     expect(labelRuns("p-Ts")).toEqual([{ text: "p", italic: true }, { text: "-Ts" }]);
     expect(labelRuns("p-ClBn")).toEqual([{ text: "p", italic: true }, { text: "-ClBn" }]);
     expect(labelRuns("CO2t-Bu")).toEqual([{ text: "CO" }, { text: "2", sub: true }, { text: "t", italic: true }, { text: "-Bu" }]);
+    // (a reagent's name too, its digits still no counts: m-CPBA as smart labels write mcpba)
+    expect(labelRuns("m-CPBA")).toEqual([{ text: "m", italic: true }, { text: "-CPBA" }]);
+    expect(labelRuns("p-TSA")).toEqual([{ text: "p", italic: true }, { text: "-TSA" }]);
+    expect(labelRuns("n-hexane")).toEqual([{ text: "n", italic: true }, { text: "-hexane" }]);
+    expect(labelRuns("T3P")).toEqual([{ text: "T3P" }]);
     // a ring's positions are no counts
     expect(labelRuns("2,6-Me2C6H3")).toEqual([
       { text: "2,6-Me" },
@@ -428,3 +447,41 @@ describe("a label, written", () => {
     ]);
   });
 });
+
+describe("an atom with a group on it, its other bonds the drawing's", () => {
+  it("reads an N or a P written with one group as that atom carrying it - NBoc, NMOM, NTs, NMe - and turned round as drawn on the left", () => {
+    expect(abbreviationOf("NBoc")?.smiles).toBe("*N(C(=O)OC(C)(C)C)");
+    expect(abbreviationOf("NMOM")?.smiles).toBe("*N(COC)");
+    expect(abbreviationOf("NMe")?.smiles).toBe("*N(C)");
+    expect(abbreviationOf("NTs")).toBeDefined();
+    expect(reversedLabel("BocN")).toBe("NBoc");
+    expect(reversedLabel("MOMN")).toBe("NMOM");
+  });
+
+  it("reads an O or an S with an alkali metal on it as an ion pair, as NaOMe's is: ONa, OK", () => {
+    expect(abbreviationOf("ONa")?.smiles).toBe("*[O-].[Na+]");
+    expect(abbreviationOf("OK")?.smiles).toBe("*[O-].[K+]");
+    expect(reversedLabel("NaO")).toBe("ONa");
+  });
+
+  it("reads none with a group's name of one letter, nor what a name already is: NZ, BArF", () => {
+    expect(abbreviationOf("NZ")).toBeUndefined();
+    expect(abbreviationOf("BArF")?.smiles ?? "").not.toMatch(/^\*B\(/);
+  });
+});
+
+describe("a long label", () => {
+  it("is told to be no abbreviation at once: not tried as a complex's formula at every length of every part", () => {
+    // (OTBS forty times took 32 s to draw, a chain of sixty CH2 15 s; with a metal's symbol in it, half a second)
+    for (const label of ["OTBS".repeat(40), "CH2".repeat(60), "OTBS".repeat(40) + "Pd", "Pd" + "CH2".repeat(60)]) {
+      const t = performance.now();
+      expect(abbreviationOf(label), label.slice(0, 12)).toBeUndefined();
+      expect(abbreviationStructure(label)).toBeNull();
+      expect(performance.now() - t, label.slice(0, 12)).toBeLessThan(2000);
+    }
+    // (a complex's formula still reads)
+    expect(abbreviationOf("Pd(PPh3)4")?.kind).toBe("complex");
+    expect(abbreviationStructure("RuCl2[(S)-BINAP][(S,S)-DPEN]")?.atoms.length).toBeGreaterThan(40);
+  });
+});
+

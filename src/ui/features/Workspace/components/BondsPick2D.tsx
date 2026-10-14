@@ -197,6 +197,10 @@ export default function BondsPick2D() {
   }
 
   const { atoms, bonds } = model;
+  // (what each hit area was placed from: a bond whose bond and atoms are the
+  // objects they were is where it was - at every frame of a drag, all but
+  // the few that moved)
+  const placed = useRef<{ mesh: THREE.InstancedMesh | null; from: unknown[] }>({ mesh: null, from: [] });
   useEffect(() => {
     const m = inst.current;
     if (!m) return;
@@ -205,11 +209,19 @@ export default function BondsPick2D() {
     // (each atom by its id, looked up once rather than searched for at each bond)
     const byId = new Map<number, (typeof atoms)[number]>();
     for (const a of atoms) if (!byId.has(a.id)) byId.set(a.id, a);
+    if (placed.current.mesh !== m) placed.current = { mesh: m, from: [] };
+    const from = placed.current.from;
+    let moved = false;
     for (let i = 0; i < bonds.length; i++) {
       const b = bonds[i];
       const a1 = byId.get(b.a);
       const a2 = byId.get(b.b);
       if (!a1 || !a2) continue;
+      if (from[3 * i] === b && from[3 * i + 1] === a1 && from[3 * i + 2] === a2) continue;
+      from[3 * i] = b;
+      from[3 * i + 1] = a1;
+      from[3 * i + 2] = a2;
+      moved = true;
       const dx = a2.x - a1.x,
         dy = a2.y - a1.y;
       const len = Math.hypot(dx, dy);
@@ -222,7 +234,7 @@ export default function BondsPick2D() {
       );
       m.setMatrixAt(i, tmpM);
     }
-    commitInstanceMatrices(m);
+    if (moved) commitInstanceMatrices(m);
   }, [atoms, bonds, tmpM, tmpQ]);
 
   return (

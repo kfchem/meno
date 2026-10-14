@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import type { Open } from "./chem/make3d";
+import { useInFront } from "../../layouts/inFront";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -23,8 +24,15 @@ export default function Ask3D({
   onCancel: () => void;
 }) {
   const allRef = useRef<HTMLButtonElement>(null);
+  // (the keys given to All as it opens, once: not again each time the canvas
+  // round it is drawn, which took them from wherever they had been put)
   useEffect(() => {
     allRef.current?.focus();
+  }, []);
+  // (Escape cancels while its tab is in front: in another tab it is that tab's, the card waiting)
+  const inFront = useInFront();
+  useEffect(() => {
+    if (!inFront) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -32,7 +40,7 @@ export default function Ask3D({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, inFront]);
   const centres = open.reduce((n, o) => n + o.atoms.length, 0);
   const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
   const isomers = open.reduce((n, o) => n + o.isomers, 0);

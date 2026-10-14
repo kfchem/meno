@@ -62,6 +62,16 @@ describe("layout2D", () => {
     expect(m.tilt).toBeCloseTo(0, 6);
   });
 
+  it("lays a macrocycle with nothing on it wide, in the shape that lies best", () => {
+    // (cyclotetracosane's shapes read alike on the measure, and the one the
+    // rounding of a sum favoured was a triangle, as tall as wide)
+    const n = 24;
+    const { x, y } = layout2D(carbons(n, ring(0, n)));
+    const w = Math.max(...x) - Math.min(...x);
+    const h = Math.max(...y) - Math.min(...y);
+    expect(h / w).toBeLessThan(0.6);
+  });
+
   it("draws a double bond cis or trans as it is", () => {
     for (const cis of [true, false]) {
       const butene = carbons(4, [[0, 1], [1, 2, 2], [2, 3]], [
@@ -75,6 +85,53 @@ describe("layout2D", () => {
       expect(side(0) === side(3)).toBe(cis);
     }
   });
+
+  it("draws both double bonds of a macrocycle cis or trans as they are, where no shape offered has room for both", () => {
+    // cyclotetradeca-, cyclohexadeca- and cyclooctadecadienes: two double
+    // bonds the shapes offered for the size put a corner and a zigzag at the
+    // wrong places for
+    for (const [n, k, cis0, cisK] of [
+      [14, 7, true, false],
+      [16, 2, true, true],
+      [16, 8, true, true],
+      [18, 9, true, false],
+    ] as const) {
+      const bonds = ring(0, n).map(([a, b], i): [number, number, number] => [a, b, i === 0 || i === k ? 2 : 1]);
+      const extra = bonds.map((_, i) =>
+        i === 0 ? { stereo: { refs: [n - 1, 2] as [number, number], cis: cis0 } } : i === k ? { stereo: { refs: [k - 1, k + 2] as [number, number], cis: cisK } } : {},
+      );
+      const { x, y } = layout2D(carbons(n, bonds, extra));
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      expect(side(n - 1, 0, 1) === side(2, 0, 1), `${n} bond 0`).toBe(cis0);
+      expect(side(k - 1, k, k + 1) === side(k + 2, k, k + 1), `${n} bond ${k}`).toBe(cisK);
+    }
+  });
+
+  it("draws every double bond of an odd macrocycle, or of one with two trans, cis or trans as it is", () => {
+    // [size, each double bond's place and whether it is cis]: a
+    // cyclotricosa-1,3-diene, Z,Z, and cyclopentadeca-1,3,8- and
+    // 1,4,12-trienes, all E and Z,E,E - odd, each drawn as a ring one
+    // larger with two atoms drawn together, where the bonds stay as they
+    // are - and a cyclooctadeca-1,3,10-triene, Z,E,E
+    for (const [n, doubles] of [
+      [23, [[0, true], [2, true]]],
+      [15, [[0, false], [2, false], [7, false]]],
+      [15, [[0, true], [3, false], [11, false]]],
+      [18, [[0, true], [2, false], [9, false]]],
+    ] as [number, [number, boolean][]][]) {
+      const cisAt = new Map(doubles);
+      const bonds = ring(0, n).map(([a, b], i): [number, number, number] => [a, b, cisAt.has(i) ? 2 : 1]);
+      const extra = bonds.map((_, i) => {
+        const cis = cisAt.get(i);
+        return cis == null ? {} : { stereo: { refs: [(i - 1 + n) % n, (i + 2) % n] as [number, number], cis } };
+      });
+      const { x, y } = layout2D(carbons(n, bonds, extra));
+      const side = (p: number, u: number, v: number) => Math.sign((x[v] - x[u]) * (y[p] - y[u]) - (y[v] - y[u]) * (x[p] - x[u]));
+      for (const [i, cis] of doubles) {
+        expect(side((i - 1 + n) % n, i, i + 1) === side((i + 2) % n, i, i + 1), `${n} bond ${i}`).toBe(cis);
+      }
+    }
+  }, 30_000);
 
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line

@@ -45,11 +45,12 @@ function molecule(kind: "pdb" | "xyz", text: string) {
 
 /** The value as written, rounded by decimal arithmetic; null where it lies too near a tie to say. */
 function written(kind: "distance" | "angle" | "torsion", v: number): string | null {
-  const k = kind === "distance" ? 100 : 10;
+  // (a distance to three decimals, as a length a calculation gives; an angle to one)
+  const k = kind === "distance" ? 1000 : 10;
   const x = v * k;
   if (Math.abs(Math.abs(x - Math.trunc(x)) - 0.5) < 1e-6) return null;
   const r = Math.round(Math.abs(x)) / k;
-  const n = r.toFixed(kind === "distance" ? 2 : 1);
+  const n = r.toFixed(kind === "distance" ? 3 : 1);
   const s = v < 0 && r !== 0 ? `−${n}` : n;
   return kind === "distance" ? `${s} Å` : `${s}°`;
 }
@@ -97,8 +98,8 @@ describe("a measurement in 3D", () => {
     const together = w([1, 0, 0, 0, 0, 0, 0, 0, 0]);
     expect(measureValue(together, [0, 1, 2])).toBeNaN();
     expect(measureText("angle", NaN)).toBe("–");
-    // (a distance is always one: two atoms in one place are 0.00 Å apart)
-    expect(measureText("distance", measureValue(together, [1, 2]))).toBe("0.00 Å");
+    // (a distance is always one: two atoms in one place are 0.000 Å apart)
+    expect(measureText("distance", measureValue(together, [1, 2]))).toBe("0.000 Å");
   });
 
   it("gives a torsion IUPAC's sign, and writes a true minus and no −0.0", () => {
@@ -108,6 +109,6 @@ describe("a measurement in 3D", () => {
     expect(measureValue(places, [0, 1, 2, 3])).toBeCloseTo(-90, 9);
     expect(measureText("torsion", -60.24)).toBe("−60.2°");
     expect(measureText("torsion", -0.04)).toBe("0.0°");
-    expect(measureText("distance", 1.5349)).toBe("1.53 Å");
+    expect(measureText("distance", 1.5349)).toBe("1.535 Å");
   });
 });

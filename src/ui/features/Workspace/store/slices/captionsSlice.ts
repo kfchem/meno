@@ -79,7 +79,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       ),
     // (all the letters of the words `ids` set otherwise, as one step: in a colour, or none of their own; bold, italic, raised or lowered - or, all of them so, not)
     colourWords: (ids: number[], color: string | null, gesture?: string) =>
-      doc.edit("colour text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, { color })), gesture ? { coalesceKey: `colour-words:${gesture}` } : undefined),
+      doc.edit("colour text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, { color })), gesture ? gestureStep(`colour-words:${gesture}`) : undefined),
     styleWords: (ids: number[], side: "bold" | "italic" | "sup" | "sub") => {
       const take = new Set(ids);
       const all = doc.getState().captions?.filter((c) => take.has(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks)) ?? [];
