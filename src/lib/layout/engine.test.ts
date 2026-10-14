@@ -10,6 +10,7 @@ import { shownBySolid, solidOf } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
+import { fromSmiles } from "./testdata/fromSmiles";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -468,6 +469,26 @@ describe("layout2D", () => {
       expect(Math.hypot(h.at.x - x[a] - k * vx, h.at.y - y[a] - k * vy)).toBeGreaterThan(0.4);
     }
   });
+
+  it("runs a ring of sugars along each sugar's barer side, its secondary OHs outside", () => {
+    // alpha-cyclodextrin: through each glucose by its ring O and C5 (one
+    // group, the CH2OH, inside), not by C2 and C3 (two OHs each inside)
+    const g = fromSmiles(
+      "C([C@@H]1[C@@H]2[C@@H]([C@H]([C@H](O1)O[C@@H]3[C@H](O[C@@H]([C@@H]([C@H]3O)O)O[C@@H]4[C@H](O[C@@H]([C@@H]([C@H]4O)O)O[C@@H]5[C@H](O[C@@H]([C@@H]([C@H]5O)O)O[C@@H]6[C@H](O[C@@H]([C@@H]([C@H]6O)O)O[C@@H]7[C@H](O[C@H](O2)[C@@H]([C@H]7O)O)CO)CO)CO)CO)CO)O)O)O",
+    );
+    const { x, y } = layout2D(g);
+    const macro = perceive(g).rings.reduce((p, q) => (q.length > p.length ? q : p));
+    const inside = (a: number) => {
+      let odd = false;
+      for (let i = 0, j = macro.length - 1; i < macro.length; j = i++) {
+        const [p, q] = [macro[i], macro[j]];
+        if (y[p] > y[a] !== y[q] > y[a] && x[a] < ((x[q] - x[p]) * (y[a] - y[p])) / (y[q] - y[p]) + x[p]) odd = !odd;
+      }
+      return odd;
+    };
+    const ohs = g.atoms.flatMap((a, i) => (a.el === "O" && (a.hs ?? 0) > 0 ? [i] : []));
+    expect(ohs.filter(inside)).toHaveLength(6);
+  }, 30_000);
 
   it("draws macrocycles strung through benzene rings as chains, never round", () => {
     // a benzene hub, a macrocycle through it and each of two more benzenes
