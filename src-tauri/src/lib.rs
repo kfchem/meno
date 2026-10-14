@@ -17,6 +17,7 @@ mod fonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
+mod logfile;
 mod pdf;
 mod net;
 mod opened;
@@ -801,7 +802,7 @@ fn drop_catch(app: AppHandle, x: f64, y: f64, width: f64, height: f64) -> bool {
         // hands drags to)
         let _ = app.run_on_main_thread(move || {
             if let Err(e) = drop::catch(area) {
-                eprintln!("drags cannot be taken from the page: {e}");
+                logfile::logged!("drags cannot be taken from the page: {e}");
             }
         });
         true
@@ -890,6 +891,8 @@ pub fn run() {
     if let Some(code) = registration_asked() {
         std::process::exit(code);
     }
+    // a panic into Meno's log too (logfile.rs)
+    logfile::catch_panics();
     #[allow(unused_mut)]
     let mut context = tauri::generate_context!();
     // A Meno Windows starts for Office opens unseen: it shows itself when a
@@ -927,6 +930,10 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .setup(|app| {
+            // Meno's log, in its data folder (logfile.rs)
+            if let Ok(data) = app.path().app_data_dir() {
+                logfile::start(&data.join("logs"), &app.package_info().version.to_string());
+            }
             net::start(app.handle());
             // a workspace file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
@@ -943,6 +950,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the page's errors and warnings, into Meno's log
+            logfile::log_page,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
             pdf::pdf_bytes,
