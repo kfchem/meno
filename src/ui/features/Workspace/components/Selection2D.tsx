@@ -27,7 +27,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { hiddenInStacks } from "../utils/stacks";
 import SelectionShade2D from "./SelectionShade2D";
 import { pressMovedUnder } from "./viewGoal";
-import { least, most } from "../../../../lib/extremes";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
 const HANDLE_ABOVE = 0.75;
@@ -89,8 +89,8 @@ function selectionExtent(
   }
   if (!xs.length) return null;
   // (the drawing alone: its atoms' middle, as ever)
-  const mid = sel3d.size || pictures.length ? { x: (least(xs) + most(xs)) / 2, y: (least(ys) + most(ys)) / 2 } : middleOf(model, atoms);
-  return mid ? { mid, top: most(ys) } : null;
+  const mid = sel3d.size || pictures.length ? { x: (least(xs) + greatest(xs)) / 2, y: (least(ys) + greatest(ys)) / 2 } : middleOf(model, atoms);
+  return mid ? { mid, top: greatest(ys) } : null;
 }
 
 /**

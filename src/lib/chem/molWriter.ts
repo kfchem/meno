@@ -4,7 +4,7 @@ import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem } from "./molecule";
 import { ELEMENTS } from "./elements";
-import { most } from "../extremes";
+import { greatest, least } from "./lists";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number };
@@ -138,7 +138,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   const bonds = model.bonds.map((b) => ({ ...b }));
   const sups: Sup[] = [];
   const aliases = new Map<number, string>();
-  let nextId = Math.max(0, most(model.atoms.map((a) => a.id))) + 1;
+  let nextId = Math.max(0, greatest(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
     // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)
@@ -267,7 +267,7 @@ function bracketsOf(model: WriterModel, g: Group, scale: number): { x1: number; 
     const xs = ats.map((a) => a.x);
     const ys = ats.map((a) => a.y);
     const pad = NOMINAL_BOND_LENGTH * 0.5;
-    const [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
+    const [x0, x1, y0, y1] = [least(xs) - pad, greatest(xs) + pad, least(ys) - pad, greatest(ys) + pad];
     out.push({ x1: x0 * scale, y1: y0 * scale, x2: x0 * scale, y2: y1 * scale });
     out.push({ x1: x1 * scale, y1: y0 * scale, x2: x1 * scale, y2: y1 * scale });
   }

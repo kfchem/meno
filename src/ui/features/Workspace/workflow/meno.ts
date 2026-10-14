@@ -10,7 +10,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
-import { least } from "../../../../lib/extremes";
+import { least } from "../../../../lib/chem/lists";
 
 /** Kilocalories per mole in a hartree (CODATA 2018). */
 export const KCAL_PER_HARTREE = 627.5094740631;

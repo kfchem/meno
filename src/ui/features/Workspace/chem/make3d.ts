@@ -19,7 +19,7 @@ import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
-import { boundsOf, least, most } from "../../../../lib/extremes";
+import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -388,6 +388,6 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number):
 export function formulaPlace(m: Molecule3D, formula: Model, style: Style3D): { x: number; y: number } {
   const solid = solidOf(m, style);
   const xs = formula.atoms.map((a) => a.x);
-  const width = xs.length ? most(xs) - least(xs) : 0;
+  const width = xs.length ? greatest(xs) - least(xs) : 0;
   return { x: m.at.x - solid.reach[lookOf(m)] - GAP - width / 2, y: m.at.y };
 }

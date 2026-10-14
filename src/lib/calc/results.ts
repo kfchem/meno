@@ -388,9 +388,11 @@ export const LINE_MOST = 96;
 /**
  * The chip's line: what it says first (what the calculation was, its
  * energy), then the molecule's results its plugin ranked, in their order,
- * as many as the line holds - each its name and value. The plugin is the
- * first, of those that ranked any, in the order the results come (the one
- * chosen for the kind of output first): the line has room for one's.
+ * as many as the line holds - each its name and value - but for one ranked
+ * 0, how the run went ("Run ended with an error"), which it says however
+ * long the line. The plugin is the first, of those that ranked any, in the
+ * order the results come (the one chosen for the kind of output first):
+ * the line has room for one's.
  */
 export function chipLine(first: readonly string[], results: readonly Result[] | undefined, most = LINE_MOST): string {
   const parts = first.filter(Boolean);
@@ -400,7 +402,7 @@ export function chipLine(first: readonly string[], results: readonly Result[] | 
   for (const r of ranked) {
     const part = `${r.label} ${valueText(r.value, r)}`;
     const more = (parts.length ? 3 : 0) + part.length;
-    if (length + more > most) break;
+    if (r.rank !== 0 && length + more > most) break;
     parts.push(part);
     length += more;
   }

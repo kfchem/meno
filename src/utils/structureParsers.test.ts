@@ -39,6 +39,22 @@ describe("parseXYZ", () => {
   });
 });
 
+describe("parseXYZ, on a file as it may be left", () => {
+  const frame = (z: string) => `2\nE = -1.0\nC 0 0 0\nC 1.54 0 ${z}`;
+
+  it("leaves out a frame the file ends in the middle of, but for the first", () => {
+    expect(parseXYZ(`${frame("0")}\n${frame("0")}\n2\nE = -1.0\nC 0 0 0`)).toHaveLength(2);
+    expect(() => parseXYZ("3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("The XYZ file ends before its atoms do: it says 3, and gives 2.");
+  });
+
+  it("reads no place that is not a number - Fortran's D exponent, nan, infinity, a missing one - and says which line", () => {
+    expect(parseXYZ(frame("1.5e-1"))[0].atoms[1].z).toBe(0.15);
+    expect(() => parseXYZ(frame("1.19D-01"))).toThrow('Line 4 of the XYZ file gives C a place that is not a number: "1.19D-01".');
+    for (const z of ["nan", "Infinity", "0x10"]) expect(() => parseXYZ(frame(z))).toThrow(/Line 4 .* not a number/);
+    expect(() => parseXYZ("2\nc\nC 0 0 0\nC 1.54 0")).toThrow('Line 4 of the XYZ file gives C a place that is not a number: "".');
+  });
+});
+
 describe("bondsByDistance", () => {
   it("finds the same bonds, in the same order, cube by cube in a big structure as pair by pair", () => {
     // (a lattice of carbons, oxygens and hydrogens 1 to 1.6 apart, shaken)

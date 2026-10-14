@@ -16,7 +16,7 @@ import { pdfRoom } from "../../../../lib/pdf/layout";
 import { sheetOf } from "./textSheets";
 import { cornersOf } from "./selection";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
-import { middleOfPoints } from "../../../../lib/extremes";
+import { middleOfPoints } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 type Axis = "vertical" | "horizontal";

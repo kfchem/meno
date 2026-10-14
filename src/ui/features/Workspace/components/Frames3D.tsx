@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentProps, type Rea
 import { chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
-import { least, most } from "../../../../lib/extremes";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Kilocalories per mole in a hartree. */
 const KCAL_PER_HARTREE = 627.509474;
@@ -139,7 +139,7 @@ export function FramesChip({
   }, [expanded]);
   const lowest = energies ? least(energies) : 0;
   const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
-  const highest = above ? Math.max(most(above), 1e-9) : 1;
+  const highest = above ? Math.max(greatest(above), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)
   const width = count > MANY ? WIDE : WIDTH;

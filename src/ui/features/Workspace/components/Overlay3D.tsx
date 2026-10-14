@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import type { Solid } from "../utils/molecule3d";
-import { most as mostOf } from "../../../../lib/extremes";
+import { greatest } from "../../../../lib/chem/lists";
 
 /** How thick the other frames' bonds are, as the molecule's own; how they come and go. */
 const THIN = 0.55;
@@ -51,7 +51,7 @@ export default function Overlay3D({
     const mid = new THREE.Vector3();
     const s = new THREE.Vector3();
     const colour = new THREE.Color();
-    const most = weights ? Math.max(mostOf(weights), 1e-12) : 1;
+    const most = weights ? Math.max(greatest(weights), 1e-12) : 1;
     let k = 0;
     for (const f of others) {
       const p = solid.frames[f];

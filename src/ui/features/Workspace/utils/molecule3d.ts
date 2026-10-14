@@ -9,7 +9,7 @@ import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
-import { least } from "../../../../lib/extremes";
+import { least } from "../../../../lib/chem/lists";
 
 /** How far a ribbon reaches about its chain's backbone, at the most - a strand's arrowhead's half width - in ångströms. */
 export const RIBBON_REACH = 1.3;

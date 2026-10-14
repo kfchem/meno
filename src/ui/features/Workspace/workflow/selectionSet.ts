@@ -11,7 +11,7 @@ import type { Model, Molecule3D, Turn3D } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { framesOf, structuresOf, type Frame } from "./entries";
 import { SET_PAD, SET_TOP, CHIP } from "./look";
-import { least, most } from "../../../../lib/extremes";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Whether a molecule in 3D shows a frames chip below it (Molecule3DView): it has frames, or a calculation it was read from. */
 export const hasChip = (m: Pick<Molecule3D, "frames" | "calc">) => framesOf(m) > 1 || !!m.calc;
@@ -81,5 +81,5 @@ export function selectionFrame(
     ys.push(b.minY - SET_PAD - chip, b.maxY + SET_PAD);
   }
   if (!xs.length) return null;
-  return { x0: least(xs), x1: most(xs), y0: least(ys), y1: most(ys) + SET_TOP - SET_PAD };
+  return { x0: least(xs), x1: greatest(xs), y0: least(ys), y1: greatest(ys) + SET_TOP - SET_PAD };
 }

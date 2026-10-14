@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formulaOf, offeredNames, writtenOf } from "./written";
+import { writtenOf } from "./written";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 import type { Carried3D } from "../store/types";
 
@@ -45,14 +45,5 @@ describe("molecules in 3D as a writer is given them", () => {
     // and their centres 4 Å apart, as they stand
     const centre = (from: number) => m.atoms.slice(from, from + 3).reduce((c, a) => ({ x: c.x + a.x / 3, y: c.y + a.y / 3, z: c.z + a.z / 3 }), { x: 0, y: 0, z: 0 });
     expect(dist(centre(0), centre(3))).toBeCloseTo(4, 9);
-  });
-});
-
-describe("molecules in 3D as Export names them", () => {
-  it("are by their file and formula, in Hill order, numbered where two read alike", () => {
-    expect(formulaOf(water().atoms)).toBe("H2O");
-    expect(formulaOf([{ el: "C" }, { el: "O" }, { el: "H" }, { el: "H" }, { el: "Cl" }])).toBe("CH2ClO");
-    expect(formulaOf([{ el: "Na" }, { el: "Cl" }])).toBe("ClNa");
-    expect(offeredNames([water(), water({ name: undefined }), water()])).toEqual(["water.xyz - H2O (1)", "Molecule 2 - H2O", "water.xyz - H2O (3)"]);
   });
 });

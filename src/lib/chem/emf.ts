@@ -20,7 +20,7 @@
  * multiple of four, which PowerPoint's reader is strict about.
  */
 import { labelFont } from "./labelFonts";
-import { least, most } from "../extremes";
+import { greatest, least } from "./lists";
 import {
   BALL_SHADE,
   circlePoints,
@@ -35,8 +35,13 @@ import {
 
 /** Logical units to the pixel: coordinates are whole numbers, so they are kept fine. */
 const S = 20;
-/** The reference device: 96 pixels to the inch. */
-const DEVICE = { px: [1920, 1080], mm: [508, 286], um: [508000, 285750] } as const;
+/**
+ * The reference device: 96 pixels to the inch, and so in its whole
+ * millimetres on both axes - 1440 pixels are 381 mm, where 1080 would be
+ * 285.75, written 286, and a reader going by millimetres drew the picture
+ * 0.09% short.
+ */
+const DEVICE = { px: [1920, 1440], mm: [508, 381], um: [508000, 381000] } as const;
 
 const EMR = {
   HEADER: 1,
@@ -255,8 +260,8 @@ export function layoutEmf(
     const ys = pts.map((p) => p[1]);
     v.setInt32(0, least(xs), true);
     v.setInt32(4, least(ys), true);
-    v.setInt32(8, most(xs), true);
-    v.setInt32(12, most(ys), true);
+    v.setInt32(8, greatest(xs), true);
+    v.setInt32(12, greatest(ys), true);
   };
   const poly = (type: number, pts: readonly (readonly [number, number])[]) =>
     w.add(type, 20 + 8 * pts.length, (v) => {

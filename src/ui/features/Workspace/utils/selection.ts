@@ -11,7 +11,7 @@
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
-import { middleOfPoints } from "../../../../lib/extremes";
+import { middleOfPoints } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 
