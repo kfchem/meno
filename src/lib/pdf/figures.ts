@@ -74,6 +74,8 @@ const SMALL_PT = 18;
 const RULE_THICK_PT = 1.5;
 const RULE_LONG_PT = 150;
 const MOST_OF_PAGE = 0.8;
+/** A shape this much of the width of all on the page, or more - a panel's ground behind a column of words and a figure, across the page - is no part of a figure. */
+const ACROSS_PAGE = 0.95;
 /** How far apart a scanned page's strips may lie, in points, to be one picture of it. */
 const SCAN_GAP_PT = 1;
 /**
@@ -168,6 +170,7 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     const h = y1 - y0;
     if (w <= 0 && h <= 0) return false;
     if (Math.min(w, h) <= RULE_THICK_PT && Math.max(w, h) >= RULE_LONG_PT) return false;
+    if (o.kind === "path" && w >= ACROSS_PAGE * (page[2] - page[0]) && h > RULE_THICK_PT) return false;
     return w * h < MOST_OF_PAGE * pageArea;
   });
   const pictures = drawn.filter((o) => o.kind === "image").map((o) => o.box);

@@ -36,6 +36,13 @@ describe("a PDF page's figures", () => {
     expect(figures[0]).toEqual([91, 300, 180, 328]);
   });
 
+  it("leave out a panel's ground drawn across the page behind a figure and a column of words", () => {
+    const panel = path([1.5, 270, 605.5, 360]);
+    const column = [text([51, 280, 290, 290]), text([51, 292, 290, 302]), text([51, 304, 290, 314])];
+    const figures = figuresOf([panel, ...column, ...structureAt(400, 300), text([51, 60, 555, 70])]);
+    expect(figures).toEqual([[391, 300, 480, 328]]);
+  });
+
   it("are each their own where they lie apart; a picture, however small, is one", () => {
     const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 100, 316, 112] }]);
     expect(figures).toHaveLength(3);
