@@ -14,7 +14,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { greatest, least, pushAll } from "./lists";
-import { namesLaid } from "../layout/names";
+import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
 
@@ -2448,7 +2448,14 @@ export function buildTextLabels(
     // and above it when they fall - on the side further from every bond, so
     // that three bonds evenly spread, one of them straight down (a borate's
     // BH), keep the line clear of it; where neither is, as the bonds lean.
-    if (leftward.has(i) && rightward.has(i)) {
+    // (and only where the line above or below is clearer of the bonds
+    // than the row beside the symbol: two bonds nearly in a line, steep -
+    // tetrodotoxin's guanidine NH - leave the sides open and the line
+    // above or below on a bond)
+    // (lib/layout/names `rowClearer`, as the engine reckons where the H goes)
+    const dirs = (ways.get(i) ?? []).map((w) => w.dir);
+    const onRow = leftward.has(i) && rightward.has(i) && rowClearer(dirs);
+    if (leftward.has(i) && rightward.has(i) && !onRow) {
       const rise = Math.max(...(ways.get(i) ?? []).map((w) => w.dir.y));
       const fall = Math.max(...(ways.get(i) ?? []).map((w) => -w.dir.y));
       const stack = rise < fall - 1e-6 ? "above" : fall < rise - 1e-6 ? "below" : toward.y >= 0 ? "below" : "above";
@@ -2470,9 +2477,12 @@ export function buildTextLabels(
     // go where its formula is written with them - first for oxygen and the
     // halogens and their groups, H2O, H2S, HCl, H3O+; after the symbol for
     // the rest, NH3, CH4, PH3.
-    const neighboursRight = bonded.has(i)
+    let neighboursRight = bonded.has(i)
       ? toward.x > Math.hypot(toward.x, toward.y) * band
       : HYDROGENS_FIRST.has(a.el);
+    // (on the row because it is clearer than the line above or below: on its
+    // clearer side - NH, or HN - and, the two alike, after the symbol)
+    if (onRow) neighboursRight = clearRowSide(dirs) === "before";
     // (the charge after all of it where the H follow the symbol: NH3+; after
     // the symbol where they come first: H3N+)
     const runs = neighboursRight
