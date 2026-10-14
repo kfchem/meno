@@ -68,6 +68,11 @@ describe("a render", () => {
   it("is as far as its job last said, in lines of its log", () => {
     expect(progressOf("Blender 5.2\nprogress 0/240\nFra:1\nprogress 12/240\nFra:13 Mem: 30M\n")).toEqual({ done: 12, total: 240 });
     expect(progressOf("progress 1/1\n")).toEqual({ done: 1, total: 1 });
+    // (as a Windows pipe leaves its lines - \r\n - and as a program's own redraw does - a lone \r)
+    expect(progressOf("Blender 5.2\r\nprogress 3/100\r\nFra: 1 | Sample 4/64\r\nprogress 7/100\r\n")).toEqual({ done: 7, total: 100 });
+    expect(progressOf("Fra: 1 | Sample 4/64\rprogress 42/100\rFra: 1 | Sample 9/64\r")).toEqual({ done: 42, total: 100 });
+    // (not a line that only ends with it, nor Blender's own sample lines)
+    expect(progressOf("Rendering progress 5/10 samples\nFra: 1 | Sample 9/64\n")).toBeNull();
     // (nothing said, or what is not how far)
     expect(progressOf("Rendering\n")).toBeNull();
     expect(progressOf("progress 5/0\nprogress 9/4\n")).toBeNull();

@@ -31,7 +31,8 @@ extensions too - and, for a film, its animation), lights the world evenly
 as Meno's light all round is, sets the render engine, its samples and
 noise removal, the colour transform and the background, and renders the
 picture, or each frame of the film into a video - saying how far it is, a
-line at a time: "progress <done>/<all>".
+line at a time: "progress <done>/<all>" - as hundredths of the whole, the samples of a
+picture, or of each frame of a film, moving it, from Blender's own render statistics.
 
 The settings (all checked by the worker that wrote them):
 
@@ -52,6 +53,7 @@ import glob
 import json
 import math
 import os
+import re
 import sys
 
 import bpy
@@ -152,7 +154,10 @@ def engine(scene, s):
     scene.render.engine = "CYCLES"
     scene.cycles.samples = s["samples"]
     scene.cycles.use_denoising = s["denoise"]
-    scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+    on_gpu = s["gpu"] and gpu_ready()
+    scene.cycles.device = "GPU" if on_gpu else "CPU"
+    # (said, in the log, which it is: a graphics processor asked for and none found falls back to the processor)
+    say("Rendering on the graphics processor" if on_gpu else ("Rendering on the processor (no graphics processor Blender can use)" if s["gpu"] else "Rendering on the processor"))
 
 
 def output(scene, s):
@@ -182,24 +187,60 @@ def frames_of(scene, count):
     scene.frame_end = first + count - 1
 
 
+# How far a frame's samples are, as Blender says it in its render statistics
+# (the string `bpy.app.handlers.render_stats` is given): Cycles - "... | Sample 12/128" -
+# and EEVEE - "Rendering 12 / 128 samples"
+SAMPLES = re.compile(r"(?:\bSample\s+(\d+)\s*/\s*(\d+)|Rendering\s+(\d+)\s*/\s*(\d+)\s+samples)")
+
+
+class Progress:
+    """The picture's or the film's progress, said as "progress <done>/<all>": each frame as many parts as it has samples, those it has done and the frames before - never back, and not a line for each sample, but for each hundredth of the whole (a bar moves as it is told, and is not jumped)."""
+
+    PARTS = 100
+
+    def __init__(self, frames):
+        self.frames = frames
+        self.frame = 0
+        self.said = -1
+
+    def say_at(self, done, total):
+        # (a hundredth of the whole at least, or the last)
+        mark = (done * self.PARTS) // total
+        if mark > self.said or done >= total:
+            if done >= total and self.said >= self.PARTS:
+                return
+            self.said = max(self.said, mark)
+            say(f"progress {self.said}/{self.PARTS}")
+
+    def stats(self, text, *_):
+        m = SAMPLES.search(text or "")
+        if not m:
+            return
+        at, of = (int(m.group(1)), int(m.group(2))) if m.group(1) else (int(m.group(3)), int(m.group(4)))
+        if of <= 0:
+            return
+        # (the frame's samples as a share of the film; the last sample's frame is told done when it is written)
+        whole = (self.frame + min(at, of) / of) / self.frames
+        self.say_at(int(whole * self.PARTS * 0.999), self.PARTS)
+
+    def frame_done(self):
+        self.frame += 1
+        self.say_at(int((self.frame / self.frames) * self.PARTS), self.PARTS)
+
+
 def render(scene, s, folder):
-    """Each frame rendered, saying how far it is: the frames' files, in order."""
+    """Each frame rendered, saying how far it is: the frames' files, in order. A picture's samples move the bar; a film's, its frames' samples and its frames."""
+    progress = Progress(1 if not s["film"] else s["frames"])
+    bpy.app.handlers.render_stats.append(progress.stats)
+    bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
+    say("progress 0/100")
     if not s["film"]:
         scene.render.filepath = os.path.join(folder, "frame.png")
-        say("progress 0/1")
         bpy.ops.render.render(write_still=True)
-        say("progress 1/1")
+        say("progress 100/100")
         return [os.path.join(folder, "frame.png")]
     frames_of(scene, s["frames"])
-    done = [0]
-
-    def each(_scene, _depsgraph=None):
-        done[0] += 1
-        say(f"progress {done[0]}/{s['frames']}")
-
-    bpy.app.handlers.render_post.append(each)
     scene.render.filepath = os.path.join(folder, "frames", "####")
-    say(f"progress 0/{s['frames']}")
     bpy.ops.render.render(animation=True)
     made = sorted(glob.glob(os.path.join(folder, "frames", "*.png")))
     if len(made) != s["frames"]:

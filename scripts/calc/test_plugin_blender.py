@@ -14,6 +14,7 @@ at; elsewhere that test is skipped.
 
 import importlib.util
 import json
+import re
 import os
 import pathlib
 import shutil
@@ -177,12 +178,33 @@ class Renders(unittest.TestCase):
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
             run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
             self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
-            self.assertIn("progress 1/1", run.stdout)
+            self.assertIn("progress 100/100", run.stdout)
+            # (never back: each line at least the one before)
+            marks = [int(m) for m in re.findall(r"^progress (\d+)/100$", run.stdout, re.M)]
+            self.assertEqual(marks, sorted(marks))
+            self.assertGreater(len(marks), 2, "the samples moved it")
             png = (pathlib.Path(d) / "picture.png").read_bytes()
             self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
             # (its size: the PNG's header, width and height)
             self.assertEqual((int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")), (320, 240))
 
+
+    def test_a_film_moves_its_progress_by_its_frames_samples_and_never_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
+            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 3, "fps": 3, "width": 64, "height": 48}], options={"samples": 8, "background": "white", "gpu": False})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            marks = [int(m) for m in re.findall(r"^progress (\d+)/100$", run.stdout, re.M)]
+            self.assertEqual(marks, sorted(marks))
+            # (a third done after the first frame, two thirds after the second: not only at the frames' ends)
+            self.assertTrue(any(30 <= m <= 40 for m in marks), marks)
+            self.assertTrue(any(60 <= m <= 70 for m in marks), marks)
+            self.assertEqual(marks[-1], 100)
+            self.assertIn("Rendering on the processor", run.stdout)
 
     def test_colours_a_surface_by_its_points_colours(self):
         # (a ball each of whose points is red, over a white material: COLOR_0 multiplies the base colour - glTF 3.9.2)
