@@ -208,7 +208,7 @@ fn clipboard_files() -> Vec<std::path::PathBuf> {
 /// or Explorer - opened as a workspace file opened from the system is
 /// (opened.rs): the page let read and write each, so that saving it writes
 /// it back, and told. How many there were. A drop on Windows names none:
-/// the webview keeps a dropped file's path from Meno.
+/// Meno reads a dropped file there from its bytes.
 #[tauri::command]
 pub fn open_workspaces_from(app: tauri::AppHandle, board: String) -> usize {
     let board = if board == "drag" { Board::Drag } else { Board::Clipboard };
@@ -490,8 +490,8 @@ mod platform {
     }
 
     /// The files on the clipboard, copied in Explorer: its list of them
-    /// (CF_HDROP), each by its path. Of a drop, none: the webview keeps
-    /// what is dropped from Meno.
+    /// (CF_HDROP), each by its path. Of a drop, none: Meno reads a file
+    /// dropped there from its bytes.
     pub fn files_on(board: Board) -> Vec<std::path::PathBuf> {
         if board == Board::Drag {
             return Vec::new();
