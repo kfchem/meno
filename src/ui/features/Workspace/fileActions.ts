@@ -179,7 +179,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
 export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}): string {
   if (!molecules.length) throw new Error("There are no molecules in 3D to write: a PDB file holds no drawing.");
   const framesOf = (m: Carried3D) => 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
-  const count = options.frames === "all" ? Math.max(...molecules.map(framesOf)) : 1;
+  const count = options.frames === "all" ? greatest(molecules.map(framesOf)) : 1;
   const models = Array.from({ length: count }, (_, i) =>
     molecules.map((m) => ({
       atoms: frameAtoms(m, options.frames === "all" && i < framesOf(m) ? i : m.frame),

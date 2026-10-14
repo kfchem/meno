@@ -4,6 +4,7 @@ import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from
 import { KCAL_PER_HARTREE } from "../workflow/meno";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -137,9 +138,9 @@ export function FramesChip({
   }, [opened]);
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
-  const lowest = energies ? Math.min(...energies) : 0;
+  const lowest = energies ? least(energies) : 0;
   const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
-  const highest = above ? Math.max(...above, 1e-9) : 1;
+  const highest = above ? Math.max(greatest(above), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)
   const width = count > MANY ? WIDE : WIDTH;
