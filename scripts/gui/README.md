@@ -80,10 +80,16 @@ landed on an authorization prompt that something else had left up. So every
 input verb also lists the windows on screen first (`Find-SystemWindow`; the
 list is taken again at most every 200 ms, under 2 ms when it is), and if one
 of those is up the run stops, naming it, with nothing sent. A click, a drag,
-a wheel turn or a swipe also checks that its point lies on Meno's own window,
-the one in front there (`Find-WindowAt`), and stops if it does not; a
-pointer only moved may go anywhere. The Window Server's own small marks - the
-recording dot, the cursor's - are no such window. The two checks have tests
+a wheel turn or a swipe also checks that its point lies on Meno's own window
+and stops if it does not; a pointer only moved may go anywhere. The point is
+asked of Accessibility (`[MacGui]::PidAt`), which sees through windows that
+clicks go by - Notification Center keeps an empty one over the whole screen,
+in front of every app's - and takes a web view's content process for the app
+it draws for; where Accessibility cannot say, the window in front there
+(`Find-WindowAt`, which leaves such a host out). Windows are matched by their
+owners' executables, not their names, which are in the user's language
+("通知センター"). The Window Server's own small marks - the recording dot,
+the cursor's - are no such window. The two checks have tests
 of their own, run by hand on a Mac with no app started:
 `pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1`.
 
