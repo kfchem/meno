@@ -23,6 +23,7 @@ import {
 import { metalSlots } from "./hapto";
 import { isMetal, key, METAL_BOND, orderOf, type Molecule } from "./perceive";
 import { MACROCYCLE } from "./ringSystem";
+import { byStructure } from "./ranks";
 
 /** How the frame is set: turned by a multiple of 60 degrees, and mirrored or not. */
 export type Frame = { turn: number; mirrored: boolean };
@@ -59,9 +60,14 @@ export function sidesOf(mol: Molecule): Map<string, number> {
   return out;
 }
 
-/** The middle atom of a piece's longest path: where a structure with no ring starts. */
+/**
+ * The middle atom of a piece's longest path: where a structure with no ring
+ * starts. Of paths as long, the one with carbon chain ends before a
+ * heteroatom's, then by its ends' structure - never by which atom is listed
+ * first; walked from its carbon end, else the end the structure puts first.
+ */
 function middleOfLongestPath(mol: Molecule, piece: number[]): { middle: number; path: number[] } {
-  const far = (s: number) => {
+  const bfs = (s: number) => {
     const d = new Map([[s, 0]]);
     const parent = new Map<number, number>();
     const q = [s];
@@ -74,20 +80,31 @@ function middleOfLongestPath(mol: Molecule, piece: number[]): { middle: number; 
         }
       }
     }
-    // the furthest; among those, a carbon chain's end before a heteroatom's
-    let best = s;
-    for (const v of q) {
-      const better =
-        d.get(v)! > d.get(best)! ||
-        (d.get(v)! === d.get(best)! && mol.el[v] === "C" && mol.el[best] !== "C");
-      if (better) best = v;
-    }
-    const path = [best];
-    while (parent.has(path[path.length - 1])) path.push(parent.get(path[path.length - 1])!);
-    return { end: best, path };
+    return { d, parent };
   };
-  const a = far(piece[0]).end;
-  const { path } = far(a);
+  const same = byStructure(mol);
+  const carbon = (v: number) => (mol.el[v] === "C" ? 1 : 0);
+  let best: { a: number; b: number; length: number; parent: Map<number, number> } | null = null;
+  for (const u of piece) {
+    const { d, parent } = bfs(u);
+    for (const [v, length] of d) {
+      if (v === u) continue;
+      // (each pair once, from a carbon end, as a chain is read - then the
+      // end the structure puts first)
+      const [a, b] = carbon(u) - carbon(v) > 0 || (carbon(u) === carbon(v) && same(u, v) < 0) ? [u, v] : [v, u];
+      if (a !== u) continue;
+      const better =
+        !best ||
+        length > best.length ||
+        (length === best.length &&
+          (carbon(a) + carbon(b) - carbon(best.a) - carbon(best.b) || same(best.a, a) || same(best.b, b)) > 0);
+      if (better) best = { a, b, length, parent };
+    }
+  }
+  if (!best) return { middle: piece[0], path: [piece[0]] };
+  const path = [best.b];
+  while (best.parent.has(path[path.length - 1])) path.push(best.parent.get(path[path.length - 1])!);
+  path.reverse();
   return { middle: path[Math.floor((path.length - 1) / 2)], path };
 }
 
@@ -126,7 +143,7 @@ export function grow(
   if (centre != null) {
     pos.set(centre, { x: 0, y: 0 });
     const weight = (l: number) => sides.get(`${centre}>${l}`) ?? 1;
-    const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || p - q);
+    const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || byStructure(mol)(p, q));
     const placed: [number, number][] = [[first, setFrameAngle(frame, 0)], ...atMetal(mol, sides, centre, first, setFrameAngle(frame, 0), rest)];
     for (const [child, t] of placed) placeChild(mol, pos, local, queue, centre, child, t, transforms, hints, upright);
     queue.push(centre);
@@ -257,7 +274,7 @@ function metalCentre(mol: Molecule, piece: number[]): number | undefined {
     mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
   return piece
     .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
-    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
+    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || byStructure(mol)(p, q))[0];
 }
 
 /**
@@ -385,7 +402,11 @@ function assign(
   const at = pos.get(a)!;
   const k = children.length;
   const weight = (c: number) => sides.get(`${a}>${c}`) ?? 1;
-  const byWeight = [...children].sort((p, q) => weight(q) - weight(p) || p - q);
+  // (the heaviest first; of branches as heavy, by structure - a single bond
+  // before a double one, then by what the atoms are - never by which is
+  // listed first: improve tries the other way round)
+  const same = byStructure(mol);
+  const byWeight = [...children].sort((p, q) => weight(q) - weight(p) || orderOf(mol, a, p) - orderOf(mol, a, q) || same(p, q));
 
   if (isMetal(mol.el[a]) && mol.systemOf[a] < 0 && placed.length === 1) {
     return atMetal(mol, sides, a, placed[0], taken[0], children);
@@ -432,8 +453,8 @@ function assign(
       // a cross: the chain straight through it - a single bond before a
       // double one where it ends - and a double-bonded O above it
       const order = (c: number) => orderOf(mol, a, c);
-      const [first, ...rest] = [...children].sort((u, v) => weight(v) - weight(u) || order(u) - order(v) || u - v);
-      const [hi, lo] = rest.sort((u, v) => order(v) - order(u) || u - v);
+      const [first, ...rest] = [...children].sort((u, v) => weight(v) - weight(u) || order(u) - order(v) || same(u, v));
+      const [hi, lo] = rest.sort((u, v) => order(v) - order(u) || same(u, v));
       const up = Math.sin(slots[1]) >= Math.sin(slots[2]) ? slots[1] : slots[2];
       return [
         [first, slots[0]],
@@ -770,7 +791,15 @@ function placeChild(
   // have something there; mirrored across the bond, if not
   const place = (p: Point) => add(at, rotate(sub(p, c0), turn));
   const mirrored = (p: Point) => add(at, rotate(reflect(sub(p, c0), slot), turn));
-  const T = sides && biarylSyn(mol, pos, sides, a, child, L, place) ? mirrored : place;
+  // (and otherwise the way round the structure gives - its first ring
+  // neighbour of `child` on the left of the bond in - not the way the ring
+  // system happened to be laid out, by the order of its atoms: a phenyl's
+  // double bonds, a ring's groups either side of the bond)
+  const from = pos.get(a)!;
+  const leftOf = (T: (p: Point) => Point, v: number) => cross(sub(at, from), sub(T(L.get(v)!), at));
+  const lead = [...ringNb].sort(byStructure(mol)).find((v) => Math.abs(leftOf(place, v)) > 1e-6);
+  const [base, other] = lead == null || leftOf(place, lead) > 0 ? [place, mirrored] : [mirrored, place];
+  const T = sides && biarylSyn(mol, pos, sides, a, child, L, base) ? other : base;
   transforms.set(s, T);
   for (const [v, p] of L) {
     if (pos.has(v)) continue;
