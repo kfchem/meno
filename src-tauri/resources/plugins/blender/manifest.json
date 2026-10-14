@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Renders pictures and films of molecules in 3D with Blender 5.2.2 LTS - its official build, under its own licence, fetched by Meno as the plugin is set up and kept for Meno's own use.",
   "licence": "GPL-3.0-or-later",
   "homepage": "https://www.blender.org",
@@ -20,6 +20,10 @@
       "role": "render",
       "programs": ["blender"],
       "options": [
+        {"id": "look", "label": "Look", "type": "choice", "choices": [{"value": "realistic", "label": "Realistic"}, {"value": "cartoon", "label": "Cartoon: lit in a band, outlined (Cycles)"}], "default": "realistic"},
+        {"id": "band", "label": "Cartoon: size of the lit band", "type": "number", "default": 0.5, "min": 0.05, "max": 1, "step": 0.05},
+        {"id": "outline", "label": "Cartoon: outline width", "type": "number", "default": 2, "min": 0.5, "max": 20, "step": 0.5, "unit": "px"},
+        {"id": "outline_colour", "label": "Cartoon: outline colour", "type": "choice", "choices": [{"value": "black", "label": "Black"}, {"value": "white", "label": "White"}, {"value": "grey", "label": "Grey"}], "default": "black"},
         {"id": "engine", "label": "Renderer", "type": "choice", "choices": [{"value": "cycles", "label": "Cycles: light traced, true shadows"}, {"value": "eevee", "label": "EEVEE: fast"}], "default": "cycles"},
         {"id": "samples", "label": "Samples for each pixel", "type": "number", "default": 128, "min": 1, "max": 4096, "step": 1},
         {"id": "denoise", "label": "Remove noise", "type": "switch", "default": true},

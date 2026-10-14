@@ -46,6 +46,10 @@ The settings (all checked by the worker that wrote them):
     key, ambient   the key light's and the light all round's strengths, as factors of Meno's
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
+    look        "realistic", or "cartoon": each material a Toon BSDF in its base colour - lit in
+                one band, `band` its size - and the shapes' outlines drawn by Freestyle, `outline`
+                pixels wide, in `outline_colour` ("black", "white" or "grey"); Cycles, which draws
+                the Toon BSDF's band as a band
 """
 
 import glob
@@ -62,6 +66,7 @@ import bpy
 SUN_STRENGTH = 3.0
 WORLD_STRENGTH = 0.6
 
+OUTLINES = {"black": (0.0, 0.0, 0.0), "white": (1.0, 1.0, 1.0), "grey": (0.5, 0.5, 0.5)}
 BACKGROUNDS = {"white": (1.0, 1.0, 1.0), "black": (0.0, 0.0, 0.0), "grey": (0.5, 0.5, 0.5)}
 TRANSFORMS = {"neutral": "Khronos PBR Neutral", "agx": "AgX", "standard": "Standard"}
 QUALITIES = {"high": "HIGH", "medium": "MEDIUM", "lossless": "PERC_LOSSLESS"}
@@ -127,6 +132,54 @@ def light(scene, s, ambient):
     scene.render.film_transparent = True
 
 
+def cartoon(scene, s):
+    """The look of a drawing: each material's surface a Toon BSDF in the colour the material had - its colour attribute's, where it took one - lit in one band; a surface that let light through still does, by its alpha; and the shapes' silhouettes, borders and creases outlined by Freestyle (Blender's manual, Render > Freestyle; Shader Nodes > Toon BSDF)."""
+    for mat in bpy.data.materials:
+        if not mat.use_nodes or mat.node_tree is None:
+            continue
+        nt = mat.node_tree
+        principled = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        out = next((n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"), None)
+        if principled is None or out is None:
+            continue
+        toon = nt.nodes.new("ShaderNodeBsdfToon")
+        toon.component = "DIFFUSE"
+        toon.inputs["Size"].default_value = s["band"]
+        toon.inputs["Smooth"].default_value = 0.0
+        colour = principled.inputs["Base Color"]
+        if colour.links:
+            nt.links.new(colour.links[0].from_socket, toon.inputs["Color"])
+        else:
+            toon.inputs["Color"].default_value = colour.default_value
+        surface = toon.outputs["BSDF"]
+        alpha = principled.inputs["Alpha"]
+        if alpha.links or alpha.default_value < 1.0:
+            clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+            mix = nt.nodes.new("ShaderNodeMixShader")
+            if alpha.links:
+                nt.links.new(alpha.links[0].from_socket, mix.inputs["Fac"])
+            else:
+                mix.inputs["Fac"].default_value = alpha.default_value
+            nt.links.new(clear.outputs["BSDF"], mix.inputs[1])
+            nt.links.new(toon.outputs["BSDF"], mix.inputs[2])
+            surface = mix.outputs["Shader"]
+        nt.links.new(surface, out.inputs["Surface"])
+    scene.render.use_freestyle = True
+    scene.render.line_thickness_mode = "ABSOLUTE"
+    scene.render.line_thickness = s["outline"]
+    layer = scene.view_layers[0]
+    layer.use_freestyle = True
+    lines = layer.freestyle_settings.linesets
+    lineset = lines[0] if len(lines) else lines.new("Meno outline")
+    if lineset.linestyle is None:
+        lineset.linestyle = bpy.data.linestyles.new("Meno outline")
+    lineset.select_silhouette = True
+    lineset.select_border = True
+    lineset.select_crease = True
+    lineset.linestyle.color = OUTLINES[s["outline_colour"]]
+    lineset.linestyle.thickness = s["outline"]
+
+
 def gpu_ready():
     """Whether Blender has a graphics processor to render on, as its Cycles preferences say: the first kind it has, all of its devices on."""
     prefs = bpy.context.preferences.addons["cycles"].preferences
@@ -145,6 +198,13 @@ def gpu_ready():
 
 
 def engine(scene, s):
+    # (the cartoon look's band is the Toon BSDF's: Cycles draws it as one, and its noise is not removed, which would soften the band's edge)
+    if s["look"] == "cartoon":
+        scene.render.engine = "CYCLES"
+        scene.cycles.samples = s["samples"]
+        scene.cycles.use_denoising = False
+        scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+        return
     if s["engine"] == "eevee":
         scene.render.engine = "BLENDER_EEVEE"
         scene.eevee.taa_render_samples = s["samples"]
@@ -284,6 +344,8 @@ def main():
     camera_of(scene, gltf)
     light(scene, s, float(meno.get("ambientLight", 1.0)))
     engine(scene, s)
+    if s["look"] == "cartoon":
+        cartoon(scene, s)
     output(scene, s)
     assemble(render(scene, s, folder), s, folder)
     say(f"Rendered {s['out']}")

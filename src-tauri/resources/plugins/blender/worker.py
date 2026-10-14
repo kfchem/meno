@@ -40,7 +40,7 @@ import os
 import re
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 SETTINGS = "render.json"
@@ -51,6 +51,8 @@ ENGINES = {"cycles", "eevee"}
 BACKGROUNDS = {"transparent", "white", "black", "grey"}
 COLOURS = {"neutral", "agx", "standard"}
 QUALITIES = {"high", "medium", "lossless"}
+LOOKS = {"realistic", "cartoon"}
+OUTLINES = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
@@ -113,6 +115,10 @@ def settings_of(entry, options):
         "ambient": number(options.get("ambient", 1), "The light all round", 0, 10),
         "softness": number(options.get("softness", 10), "The shadows' softness", 0, 90),
         "quality": one_of(options.get("quality", "high"), "film quality", QUALITIES),
+        "look": one_of(options.get("look", "realistic"), "look", LOOKS),
+        "band": number(options.get("band", 0.5), "The lit band's size", 0.05, 1),
+        "outline": number(options.get("outline", 2), "The outline's width", 0.5, 20),
+        "outline_colour": one_of(options.get("outline_colour", "black"), "outline colour", OUTLINES),
     }
 
 

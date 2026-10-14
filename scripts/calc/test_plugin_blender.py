@@ -57,6 +57,15 @@ class Prepare(unittest.TestCase):
         self.assertEqual((settings["width"], settings["height"], settings["engine"], settings["samples"]), (320, 240, "cycles", 128))
         self.assertEqual(job["reads"], [])
 
+    def test_the_cartoon_look_and_its_choices_are_written_as_settings(self):
+        said = ask("prepare", step="render", entries=[SCENE], options={"look": "cartoon", "band": 0.3, "outline": 4, "outline_colour": "white"})
+        settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
+        self.assertEqual((settings["look"], settings["band"], settings["outline"], settings["outline_colour"]), ("cartoon", 0.3, 4, "white"))
+        # (the realistic look, as before, and the cartoon's defaults: a band of a half, 2 px, black)
+        plain = ask("prepare", step="render", entries=[SCENE], options={})
+        plain = json.loads({f["name"]: f["text"] for f in plain["result"]["jobs"][0]["files"]}["render.json"])
+        self.assertEqual((plain["look"], plain["band"], plain["outline"], plain["outline_colour"]), ("realistic", 0.5, 2, "black"))
+
     def test_a_film_is_written_as_one(self):
         said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 240, "fps": 30}], options={"quality": "lossless", "background": "black"})
         settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
@@ -75,6 +84,11 @@ class Prepare(unittest.TestCase):
             (SCENE, {"denoise": "yes"}),
             (SCENE, {"key": float("nan")}),
             (SCENE, {"softness": 120}),
+            (SCENE, {"look": "sketch"}),
+            (SCENE, {"outline": 0}),
+            (SCENE, {"outline": 50}),
+            (SCENE, {"band": 0}),
+            (SCENE, {"outline_colour": "#000000"}),
         ]:
             said = ask("prepare", step="render", entries=[entry], options=options)
             self.assertFalse(said["ok"], (entry, options))
@@ -107,7 +121,7 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "look", "band", "outline", "outline_colour"})
 
 
 def blender():
@@ -183,6 +197,29 @@ class Renders(unittest.TestCase):
             # (its size: the PNG's header, width and height)
             self.assertEqual((int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")), (320, 240))
 
+
+    def test_the_cartoon_look_outlines_a_ball_and_lights_it_in_one_band(self):
+        # (white background; a ball of the base colour red, lit by Meno's key light: pixels of its outline are black, its lit part flat red, the rest of the ball darker)
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh()}
+            scene["materials"] = [{"pbrMetallicRoughness": {"baseColorFactor": [1, 0, 0, 1], "metallicFactor": 0, "roughnessFactor": 1}}]
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "gpu": False, "look": "cartoon", "outline": 4})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            png = (pathlib.Path(d) / "picture.png").read_bytes()
+            width, height = int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
+            row = [png_pixel(png, x, height // 2) for x in range(width)]
+            black = [p for p in row if max(p[:3]) < 40]
+            self.assertTrue(black, "no outline pixel on the middle row")
+            # (a ball of one colour in few bands: three colours - the white behind, the outline's black, the red's one band - make up
+            # nearly the whole row, but for the edges' anti-aliasing)
+            from collections import Counter
+            top = sum(n for _, n in Counter(tuple(p[:3]) for p in row).most_common(3))
+            self.assertGreater(top, 0.8 * width)
 
     def test_colours_a_surface_by_its_points_colours(self):
         # (a ball each of whose points is red, over a white material: COLOR_0 multiplies the base colour - glTF 3.9.2)

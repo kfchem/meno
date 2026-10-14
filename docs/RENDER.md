@@ -204,7 +204,13 @@ uv, no package), and the script Blender runs, `render.py`.
   (transparent - a film's then white - white, black or grey), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
-  the shadows' softness, and a film's quality.
+  the shadows' softness, and a film's quality; and its *look*: realistic,
+  or **cartoon** (2026-10-15) - each material a Toon BSDF in the colour
+  it had, lit in one band whose size is chosen, and the shapes outlined by
+  Freestyle, an outline of a width in pixels and a colour (black, white or
+  grey). Cartoon is drawn by Cycles, which draws the Toon BSDF's band as
+  one, and without noise removal, which would soften its edge; the
+  picture's place and size are as the realistic look's.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
