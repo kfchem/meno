@@ -80,6 +80,24 @@ const esterification = [
   ...molBlock("water", [[0, 0, "O"]], []),
 ].join("\n");
 
+describe("a large drawing on import", () => {
+  it("reads a 2D file of 130 000 atoms, more than one call's arguments can be", () => {
+    // (a chain, in V3000: where the importer spread a record's atoms into
+    // one push, a record this large threw - in a worker of WebKit's, past
+    // about 48 000 atoms)
+    const n = 130_000;
+    const lines = ["chain", "  Meno            2D", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", `M  V30 COUNTS ${n} ${n - 1} 0 0 0`, "M  V30 BEGIN ATOM"];
+    for (let i = 1; i <= n; i++) lines.push(`M  V30 ${i} C ${(i * 0.866).toFixed(4)} ${i % 2 ? "0.5000" : "0.0000"} 0 0`);
+    lines.push("M  V30 END ATOM", "M  V30 BEGIN BOND");
+    for (let i = 1; i < n; i++) lines.push(`M  V30 ${i} 1 ${i} ${i + 1}`);
+    lines.push("M  V30 END BOND", "M  V30 END CTAB", "M  END", "");
+    const { model } = moleculesToEditorModel(readMoleculesFromText(lines.join("\n"), "mol"));
+    expect(model.atoms).toHaveLength(n);
+    expect(model.bonds).toHaveLength(n - 1);
+    expect(new Set(model.atoms.map((a) => a.id)).size).toBe(n);
+  }, 60_000);
+});
+
 describe("parseRXNGroups", () => {
   it("splits the RXN samples by their counts line", () => {
     const g1 = parseRXNGroups(sampleRxn);

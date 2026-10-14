@@ -13,6 +13,7 @@ import {
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
+import { greatest, least, pushAll } from "./lists";
 import { namesLaid } from "../layout/names";
 
 export { implicitHydrogens };
@@ -3480,8 +3481,20 @@ export function buildAllPrimitives(
   // the rings' circles, and the bonds they stand in for - in the colour of
   // the ring's bonds where they are all given one
   const ringed = ringCircles(atoms, bonds, opts, adjBonds);
+  // (a ring's bonds found from its own atoms' bonds - not every bond tried
+  // again for every circle)
+  const indexOfId = ringed.circles.length ? new Map(atoms.map((a, i) => [a.id, i])) : null;
+  const ringBonds = (key: string): Bond[] => {
+    const ids = new Set(key.split("-").map(Number));
+    const out: Bond[] = [];
+    for (const id of ids) {
+      const i = indexOfId!.get(id);
+      for (const b of i == null ? [] : (adjBonds.get(i) ?? [])) if (b.a1 === i && ids.has(atoms[b.a2].id)) out.push(b);
+    }
+    return out;
+  };
   for (const c of ringed.circles) {
-    const color = c.key ? sameColor(bonds.filter((b) => c.key!.split("-").includes(String(atoms[b.a1].id)) && c.key!.split("-").includes(String(atoms[b.a2].id)))) : undefined;
+    const color = c.key ? sameColor(ringBonds(c.key)) : undefined;
     circles.push(color ? { ...c, color } : c);
   }
   const aromaticEdges = ringed.edges;
@@ -3557,7 +3570,7 @@ export function buildAllPrimitives(
   }
   // a ring in perspective: where its bold edges and wedges meet, the outer
   // corner filled to a point
-  polys.push(...perspectiveCorners(atoms, bonds, opts, zoom, deg, rWorld));
+  pushAll(polys, perspectiveCorners(atoms, bonds, opts, zoom, deg, rWorld));
   // Every end and corner the joins at atoms have not already seen to:
   // rounded all, or squared all. Two lines of neighbouring double bonds run
   // on to the same point, but a point is all they share, so the corner they
@@ -4051,8 +4064,8 @@ function structureNotes(atoms: Atom[], notes: { atoms: number[]; text: string }[
     const ys = n.atoms.map((i) => atoms[i].y);
     const bond = typicalBond(atoms, n.atoms);
     return {
-      x: (Math.min(...xs) + Math.max(...xs)) / 2,
-      y: Math.min(...ys) - bond * 0.6 - font,
+      x: (least(xs) + greatest(xs)) / 2,
+      y: least(ys) - bond * 0.6 - font,
       text: n.text,
       fontPx: opts.fontPx,
       runs: [{ text: n.text }],
@@ -4144,7 +4157,7 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
     const ys = [...members].map((i) => atoms[i].y);
     if (mark.type === "DAT") {
       const text = [...(mark.field?.data ?? []), mark.field?.units ?? ""].filter(Boolean).join(" ");
-      if (text) note({ x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...ys) - L * (0.6 + 0.35 * dataRow++) - font * 0.5 }, text);
+      if (text) note({ x: (least(xs) + greatest(xs)) / 2, y: least(ys) - L * (0.6 + 0.35 * dataRow++) - font * 0.5 }, text);
       continue;
     }
     if (mark.type === "MUL" || mark.type === "SUP") continue;
@@ -4164,10 +4177,10 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
     }
     if (!brackets.length) {
       const pad = L * 0.4 + font * 0.5;
-      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const half = (Math.max(...ys) - Math.min(...ys)) / 2 + pad;
-      brackets.push({ c: { x: Math.min(...xs) - pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: 1, y: 0 }, half });
-      brackets.push({ c: { x: Math.max(...xs) + pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: -1, y: 0 }, half });
+      const cy = (least(ys) + greatest(ys)) / 2;
+      const half = (greatest(ys) - least(ys)) / 2 + pad;
+      brackets.push({ c: { x: least(xs) - pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: 1, y: 0 }, half });
+      brackets.push({ c: { x: greatest(xs) + pad, y: cy }, n: { x: 0, y: 1 }, inward: { x: -1, y: 0 }, half });
     }
     const tick = L * 0.1;
     for (const k of brackets) {
@@ -4215,9 +4228,10 @@ export function layoutMolecule(
   const prim = buildAllPrimitives(atoms, bonds, opts, zoom, labels);
   // what is said about bonds, atoms and whole structures (IUPAC GR-11)
   const groups = centresLabelled(atoms, bonds);
-  prim.lines.push(...centreStrokes(atoms, bonds, opts, zoom));
+  // (each list put on as it is, not spread into one call: one may be as long as the drawing's atoms - lib/chem/lists)
+  pushAll(prim.lines, centreStrokes(atoms, bonds, opts, zoom));
   const sgroups = sgroupDrawing(atoms, bonds, opts, zoom);
-  prim.lines.push(...sgroups.lines);
+  pushAll(prim.lines, sgroups.lines);
   const texts = [
     ...sgroups.texts,
     ...labels,
@@ -4230,9 +4244,9 @@ export function layoutMolecule(
   const units = opts.units ?? "px";
   const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
   const marks = labelMarks(texts, toWorld(opts.fontPx, zoom, opts.units), labelSetOf(opts), pxToWorld(lwPx, zoom), lwPx);
-  prim.lines.push(...marks.lines);
-  prim.polys.push(...marks.polys);
-  prim.fills.push(...marks.fills);
+  pushAll(prim.lines, marks.lines);
+  pushAll(prim.polys, marks.polys);
+  pushAll(prim.fills, marks.fills);
   // behind it all, the rings' fills and the parts' highlights
   const under = underOf(atoms, bonds, labels, opts, zoom);
   // A label hangs off its atom, so the drawing is wider than the atoms are:
@@ -4268,15 +4282,32 @@ export function layoutMolecule(
 /** How far a part's highlight reaches either side of its bonds and round its atoms, in ems of the labels. */
 const HIGHLIGHT_REACH = 0.4;
 
+/** What finding rings by their keys looks up: the atoms' indices by id, and each atom's bonds by their indices - made once, for every ring. */
+type RingLookup = { index: Map<number, number>; bondsAt: Map<number, number[]> };
+
+function ringLookup(atoms: readonly Atom[], bonds: readonly Bond[]): RingLookup {
+  const bondsAt = new Map<number, number[]>();
+  bonds.forEach((b, k) => {
+    for (const i of b.a1 === b.a2 ? [b.a1] : [b.a1, b.a2]) {
+      const here = bondsAt.get(i);
+      if (here) here.push(k);
+      else bondsAt.set(i, [k]);
+    }
+  });
+  return { index: new Map(atoms.map((a, i) => [a.id, i])), bondsAt };
+}
+
 /** A ring's atoms by index, in order round it, from its key (`LayoutOptions.ringFills`); null where they are not one ring of bonds. */
-export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string): number[] | null {
+export function ringOfKey(atoms: readonly Atom[], bonds: readonly Bond[], key: string, lookup: RingLookup = ringLookup(atoms, bonds)): number[] | null {
   const ids = key.split("-").map(Number);
-  const index = new Map(atoms.map((a, i) => [a.id, i]));
-  const ring = ids.map((id) => index.get(id));
+  const ring = ids.map((id) => lookup.index.get(id));
   if (ring.length < 3 || ring.some((i) => i == null)) return null;
   const inRing = new Set(ring as number[]);
+  // (the bonds at its atoms, each once - from its first atom - in the
+  // drawing's order, as the whole list would give them)
+  const among = [...inRing].flatMap((i) => (lookup.bondsAt.get(i) ?? []).filter((k) => bonds[k].a1 === i)).sort((p, q) => p - q);
   const next = new Map<number, number[]>();
-  for (const b of bonds) {
+  for (const b of among.map((k) => bonds[k])) {
     if (b.endpoints?.length || !inRing.has(b.a1) || !inRing.has(b.a2) || b.a1 === b.a2) continue;
     next.set(b.a1, [...(next.get(b.a1) ?? []), b.a2]);
     next.set(b.a2, [...(next.get(b.a2) ?? []), b.a1]);
@@ -4336,8 +4367,11 @@ function roundedBox(left: number, bottom: number, right: number, top: number, r:
  */
 function underOf(atoms: Atom[], bonds: Bond[], labels: readonly TextItem[], opts: LayoutOptions, zoom: number): Under[] {
   const out: Under[] = [];
-  for (const [key, color] of Object.entries(opts.ringFills ?? {})) {
-    const ring = ringOfKey(atoms, bonds, key);
+  const fills = Object.entries(opts.ringFills ?? {});
+  // (looked up in once for every ring, not made again for each)
+  const lookup = fills.length ? ringLookup(atoms, bonds) : null;
+  for (const [key, color] of fills) {
+    const ring = ringOfKey(atoms, bonds, key, lookup!);
     // (in the colour given, exactly - the maintainer, 2026-10-11)
     if (ring) out.push({ points: ring.map((i) => ({ x: atoms[i].x, y: atoms[i].y })), color });
   }
