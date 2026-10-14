@@ -1352,6 +1352,8 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
+  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
+  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (

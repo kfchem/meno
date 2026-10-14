@@ -167,7 +167,9 @@ by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
 **A click keeps each view's own meaning**: in 2D a click on an atom edits
-its label and a click on a bond changes its kind, as drawing wants; in 3D a
+its label and a click on a bond changes its kind, as drawing wants - and
+the bond's right-click menu chooses its kind outright (the maintainer,
+2026-10-14: both), for every bond selected at once, as one step; in 3D a
 click on an atom chooses it, for a measurement, and a click elsewhere on the
 molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
@@ -183,7 +185,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Right-clicked | Icons | Listed |
 |---|---|---|
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
-| A bond | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | select its structure, lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
