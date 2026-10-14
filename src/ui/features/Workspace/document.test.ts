@@ -6,25 +6,6 @@ import type { Model } from "./store/types";
 
 const doc = () => emptyWorkspaceDocument();
 
-/**
- * How many times as long `run` takes on `large` as on `small`: the least of
- * five runs of each, taken by turns - so that a machine busy with other
- * work, or a pause to collect garbage, slows neither alone.
- */
-function slower<T>(small: T, large: T, run: (x: T) => void): number {
-  const least = [Infinity, Infinity];
-  run(small);
-  run(large);
-  for (let k = 0; k < 5; k++) {
-    [small, large].forEach((x, i) => {
-      const started = performance.now();
-      run(x);
-      least[i] = Math.min(least[i], performance.now() - started);
-    });
-  }
-  return least[1] / least[0];
-}
-
 /** Two bonded carbons, as a starting point. */
 function ethane(): WorkspaceDocument {
   return ops.addBondedPair(doc(), { x: 0, y: 0 }, { x: 1.5, y: 0 });
@@ -107,27 +88,23 @@ describe("structure document operations", () => {
     expect(ops.deleteParts(d, [99], [98])).toBe(d);
   });
 
-  it("deletes everything selected in a large drawing in time in step with its size", () => {
-    // (rings of six carbons side by side, all selected: each bond's ends were
-    // looked for among every atom - 10.5 s for 28 000 atoms. Eight times the
-    // rings now take about eight times as long, not sixty-four)
-    const page = (rings: number): WorkspaceDocument => {
-      const atoms: Model["atoms"] = [];
-      const bonds: Model["bonds"] = [];
-      for (let r = 0; r < rings; r++) {
-        for (let k = 0; k < 6; k++) {
-          const id = 6 * r + k + 1;
-          atoms.push({ id, x: 3 * r + Math.cos(k), y: Math.sin(k), r: 0.9, el: "C" });
-          bonds.push({ id: 1_000_000 + id, a: id, b: 6 * r + ((k + 1) % 6) + 1, order: 1 });
-        }
+  it("deletes everything selected in a large drawing looking at each atom a few times, not once for every bond", () => {
+    // (a hundred rings of six carbons side by side, all selected)
+    const atoms: Model["atoms"] = [];
+    const bonds: Model["bonds"] = [];
+    for (let r = 0; r < 100; r++) {
+      for (let k = 0; k < 6; k++) {
+        const id = 6 * r + k + 1;
+        atoms.push({ id, x: 3 * r + Math.cos(k), y: Math.sin(k), r: 0.9, el: "C" });
+        bonds.push({ id: 1_000_000 + id, a: id, b: 6 * r + ((k + 1) % 6) + 1, order: 1 });
       }
-      return { ...doc(), model: { atoms, bonds } };
-    };
-    const deleted = (d: WorkspaceDocument) => {
-      const next = ops.deleteParts(d, d.model.atoms.map((a) => a.id), d.model.bonds.map((b) => b.id));
-      expect(next.model.atoms).toHaveLength(0);
-    };
-    expect(slower(page(250), page(2000), deleted)).toBeLessThan(24);
+    }
+    const seen = counted(atoms);
+    const next = ops.deleteParts({ ...doc(), model: { atoms: seen.list, bonds } }, atoms.map((a) => a.id), bonds.map((b) => b.id));
+    expect(next.model.atoms).toHaveLength(0);
+    // (where each bond's ends were looked for among every atom, it was some
+    // 360 000 reads: 10.5 s for 28 000 atoms)
+    expect(seen.reads()).toBeLessThan(20 * atoms.length);
   });
 
   it("lays some of the structure out afresh in one operation", () => {
@@ -581,3 +558,14 @@ describe("what readers reading an output as well found", () => {
   });
 });
 
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}
