@@ -317,7 +317,14 @@ function schemesOf(parts: readonly Box[], arrows: readonly Box[], pluses: readon
   return [...boxes.values()];
 }
 
-/** The figure, if any, a point of a page lies in, in points from its top left. */
-export function figureAt(figures: readonly Box[], x: number, y: number): Box | null {
-  return figures.find(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1) ?? null;
+/**
+ * The figure, if any, a point of a page lies in, in points from its top
+ * left. Of a page `page` points wide and high, given, none that is most of
+ * the page: that is the page itself - a page scanned, its picture and the
+ * words over it taken for one figure - not a figure on it. A click on such
+ * a page boxed all of it, again at each click, so that nothing let it go.
+ */
+export function figureAt(figures: readonly Box[], x: number, y: number, page?: readonly [number, number]): Box | null {
+  const most = page ? MOST_OF_PAGE * page[0] * page[1] : Infinity;
+  return figures.find((f) => x >= f[0] && x <= f[2] && y >= f[1] && y <= f[3] && area(f) < most) ?? null;
 }

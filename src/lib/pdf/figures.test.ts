@@ -107,6 +107,23 @@ describe("a PDF page's figures", () => {
     expect(figuresOf([...panels, text([72, 300, 520, 310]), text([72, 700, 520, 710])])).toEqual([[72, 100, 328, 200]]);
   });
 
+  it("at a point: none that is most of its page - a page scanned, its picture and words over it read as one - but a figure on it", () => {
+    // (a page scanned in three strips a few points apart, its words read over them: taken for figures, the strips widened by the words)
+    const page: [number, number] = [612, 842];
+    const strips: PageObject[] = [0, 1, 2].map((i) => ({ kind: "image", box: [6, 10 + i * 275, 606, 10 + i * 275 + 270] }));
+    const words = Array.from({ length: 40 }, (_, i) => text([60, 20 + i * 20, 560, 28 + i * 20]));
+    const whole: Box = [6, 10, 606, 830];
+    expect(figureAt([whole], 300, 400, page)).toBeNull();
+    expect(figureAt([whole], 300, 400)).toEqual(whole);
+    // (a figure on a page, found as before)
+    expect(figureAt([[100, 100, 200, 200]], 150, 150, page)).toEqual([100, 100, 200, 200]);
+    for (const f of figuresOf([...strips, ...words])) {
+      const [x0, y0, x1, y1] = f;
+      const most = (x1 - x0) * (y1 - y0) >= 0.8 * page[0] * page[1];
+      expect(figureAt([f], (x0 + x1) / 2, (y0 + y1) / 2, page)).toEqual(most ? null : f);
+    }
+  });
+
   it("take a reaction scheme whole: its arrow joins the compounds beyond its ends, a + joins those beside it, and its conditions and numbers are its", () => {
     // (two compounds and a "+", an arrow 20 points on - its line straight and long, its head - and a product 20 points beyond)
     const plus: PageObject = { kind: "plus", box: [192, 305, 199, 312] };

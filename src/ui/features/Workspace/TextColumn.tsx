@@ -627,7 +627,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       // was pressed, the figure's (two clicks and three are words', its labels' too)
       const sha = shaOf();
       const figures = q.on && sha ? figuresHad(sha, q.page, () => reader.redraw()) : null;
-      const fig = figures ? figureAt(figures, q.x, q.y) : null;
+      const pages = () => store.getState().pdfs.find((x) => x.id === id)?.pages;
+      const fig = figures ? figureAt(figures, q.x, q.y, pages()?.[q.page]) : null;
       if (q.on && clicks.n === 1 && (fig || letter == null)) {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
@@ -663,10 +664,14 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         if (!lifted.carried) store.getState().setPdfSel(null);
         return;
       }
-      // (a box pressed and let go where it was: it stays)
+      // (a box pressed and let go where it was: let go, as words selected are - kept, it held a page
+      // boxed whole, every click in it pressing the box)
       const carried = carrying;
       carrying = null;
-      if (carried) return;
+      if (carried) {
+        if (!carried.carried) store.getState().setPdfBox(null);
+        return;
+      }
       const boxed = boxing;
       boxing = null;
       if (boxed?.moved) {
@@ -677,7 +682,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       }
       // (let go where it was pressed, in a figure - its figures come since, if they had not - its box; on a link, the link followed)
       const sha = shaOf();
-      const fig = boxed && !linkUnder(e) ? (boxed.fig ?? (sha ? figureAt(figuresHad(sha, boxed.page) ?? [], boxed.x, boxed.y) : null)) : null;
+      const pages = store.getState().pdfs.find((x) => x.id === id)?.pages;
+      const fig = boxed && !linkUnder(e) ? (boxed.fig ?? (sha ? figureAt(figuresHad(sha, boxed.page) ?? [], boxed.x, boxed.y, pages?.[boxed.page]) : null)) : null;
       if (boxed && fig) {
         store.getState().setPdfBox({ id, page: boxed.page, box: fig });
         return;
