@@ -385,6 +385,11 @@ describe("a label, written", () => {
     expect(labelRuns("p-Ts")).toEqual([{ text: "p", italic: true }, { text: "-Ts" }]);
     expect(labelRuns("p-ClBn")).toEqual([{ text: "p", italic: true }, { text: "-ClBn" }]);
     expect(labelRuns("CO2t-Bu")).toEqual([{ text: "CO" }, { text: "2", sub: true }, { text: "t", italic: true }, { text: "-Bu" }]);
+    // (a reagent's name too, its digits still no counts: m-CPBA as smart labels write mcpba)
+    expect(labelRuns("m-CPBA")).toEqual([{ text: "m", italic: true }, { text: "-CPBA" }]);
+    expect(labelRuns("p-TSA")).toEqual([{ text: "p", italic: true }, { text: "-TSA" }]);
+    expect(labelRuns("n-hexane")).toEqual([{ text: "n", italic: true }, { text: "-hexane" }]);
+    expect(labelRuns("T3P")).toEqual([{ text: "T3P" }]);
     // a ring's positions are no counts
     expect(labelRuns("2,6-Me2C6H3")).toEqual([
       { text: "2,6-Me" },

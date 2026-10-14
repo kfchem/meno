@@ -571,7 +571,8 @@ All hover-based, as above.
      tbu is t-Bu, co2tbu CO2t-Bu, kotbu KOt-Bu, hntbu and HNt-Bu NHt-Bu,
      hnsecbu NHsec-Bu, mcpba m-CPBA, p(otol)3 P(o-Tol)3. Not inside an
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
-     FmBoc stay. iPr stays upright.
+     FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
+     italics as a group does: m-CPBA, p-TSA, n-hexane.
   5. What reads as nothing stays exactly as typed - no capital made.
   6. A reagent's or a ligand's name comes before a metal's formula (the
      maintainer, 2026-10-13), however many letters it makes capitals. No
