@@ -102,7 +102,8 @@ async function start(plugin: PythonPlugin): Promise<ChemClient> {
   if (takenAway(plugin) && !(await pyEnvReady(plugin.profile))) {
     throw new TakenAway(`${plugin.name} was taken away: add it in Settings, Plugins.`);
   }
-  useChem.setState({ state: "setting-up", plugin: plugin.name, id: plugin.id });
+  // (said to be setting up only where there is something to set up: one set up already is starting at once)
+  if (!(await pyEnvReady(plugin.profile))) useChem.setState({ state: "setting-up", plugin: plugin.name, id: plugin.id });
   await ensurePyEnv(plugin.profile);
   useChem.setState({ state: "starting", plugin: plugin.name });
   const worker = await workerOf(plugin);

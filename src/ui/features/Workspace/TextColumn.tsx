@@ -663,10 +663,14 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         if (!lifted.carried) store.getState().setPdfSel(null);
         return;
       }
-      // (a box pressed and let go where it was: it stays)
+      // (a box pressed and let go where it was: let go, as words selected are - kept, it held a page
+      // boxed whole, every click in it pressing the box)
       const carried = carrying;
       carrying = null;
-      if (carried) return;
+      if (carried) {
+        if (!carried.carried) store.getState().setPdfBox(null);
+        return;
+      }
       const boxed = boxing;
       boxing = null;
       if (boxed?.moved) {

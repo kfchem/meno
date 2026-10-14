@@ -187,7 +187,9 @@ page itself.
   window is built: `page`, `quick-add` (once open), `structure` (the one
   selected, else the last drawn), `menu` (a right-click menu, once open),
   `save`, `settings`. None, or a part not there now, and the card sits
-  low in the middle of the page.
+  low in the middle of the page. A step that points at a part, while
+  neither it nor any page is seen (Settings the tab in front), waits out
+  of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened,
   a structure `selected`, a `menu` opened. A moment after the chemist does
   it, the guide goes on by itself; Next does as well.
