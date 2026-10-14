@@ -365,13 +365,15 @@ function turnedBox(b: Box, turn: (p: Point) => Point): Box {
 /**
  * A figure whose words read other than left to right as the page shows it
  * - a scheme printed sideways, a page turned a quarter - turned so that
- * they do: by the quarter most of its letters read, turned back; and how a
- * point of the turned figure is taken back to the page. A figure whose
- * words read left to right, or that has none, is as it was.
+ * they do: by the quarter most of its letters read, turned back (or by
+ * `given`, a quarter found otherwise); and how a point of the turned figure
+ * is taken back to the page. A figure whose words read left to right, or
+ * that has none, is as it was.
  */
-export function uprightOf(drawn: FigureDrawn): { drawn: FigureDrawn; back: (p: Point) => Point; quarters: number } {
+export function uprightOf(drawn: FigureDrawn, given?: number): { drawn: FigureDrawn; back: (p: Point) => Point; quarters: number } {
   const votes = [0, 0, 0, 0];
   for (const l of drawn.letters) if (l.dir != null && Number.isFinite(l.dir)) votes[(((Math.round(l.dir / (Math.PI / 2)) % 4) + 4) % 4)]++;
+  if (given) votes[given % 4] = Infinity;
   const quarters = votes.indexOf(Math.max(...votes));
   if (!quarters || !votes[quarters]) return { drawn, back: (p) => p, quarters: 0 };
   const a = -(quarters * Math.PI) / 2;

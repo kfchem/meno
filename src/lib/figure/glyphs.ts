@@ -109,15 +109,19 @@ const NEAR = 0.08;
 /**
  * Letters read from shapes drawn as letters: the figure's filled shapes
  * as tall as letters are beside its bonds (a fifth to a whole bond), their
- * holes and dots with them, and bars as thick as a letter's stem beside
+ * holes and dots with them - a word drawn as one shape, letter by letter - and bars as thick as a letter's stem beside
  * them - each matched against `known`, the shapes of the letters as a
  * typeface draws them. A shape no letter matches well is left out.
  */
 export function shapeLetters(shapes: Shapes, bond: number, known: readonly GlyphShape[], taken: ReadonlySet<object> = new Set()): ShapeLetter[] {
   if (!known.length) return [];
-  const sized = (b: Box) => b[3] - b[1] >= 0.18 * bond && b[3] - b[1] <= 1.1 * bond && b[2] - b[0] <= 1.1 * bond;
-  const outlines = shapes.blobs.filter((b) => !taken.has(b) && sized(b.box)).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
-  const glyphs = lettersDrawn(outlines);
+  const tall = (b: Box) => b[3] - b[1] >= 0.18 * bond && b[3] - b[1] <= 1.1 * bond;
+  const sized = (b: Box) => tall(b) && b[2] - b[0] <= 1.1 * bond;
+  // (a word drawn as one shape - its letters each an outline of one path, as some typesetters set a label: Boc, MeO - as tall as a
+  // letter however wide, its letters each sized on their own)
+  const word = new Set<object>(shapes.blobs.filter((b) => !taken.has(b) && !sized(b.box) && tall(b.box) && b.parts.length > 1));
+  const outlines = shapes.blobs.filter((b) => !taken.has(b) && (sized(b.box) || word.has(b))).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
+  const glyphs = lettersDrawn(outlines).filter((g) => !g.from.some((f) => word.has(f)) || sized(g.box));
   // bars that are letters: a stem - an l, an I, a 1 - upright, as tall as a letter and thicker than a
   // bond's line, beside the letters or touching no bond; a minus, short and level, set high beside a letter
   const widths = shapes.strokes.map((s) => s.w).sort((a, b) => a - b);
@@ -178,6 +182,25 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
         .filter((c, i, all) => c !== best.k.c && all.indexOf(c) === i),
       from: g.from,
     });
+  }
+  // (a letter whose small form is its capital made smaller - c C, o O, s S, v V, w W, x X, z Z - is told by the capitals beside it on its
+  // line, of shapes of their own: as tall as they, a capital; well under, a small letter - the c of a Boc)
+  const alike2 = "cosvwxz";
+  for (const l of out) {
+    if (!alike2.includes(l.c.toLowerCase())) continue;
+    const h = l.box[3] - l.box[1];
+    const beside = out.filter((m) => {
+      const mh = m.box[3] - m.box[1];
+      return m !== l && /[A-Z]/.test(m.c) && !alike2.includes(m.c.toLowerCase()) && Math.abs(m.box[3] - l.box[3]) < 0.2 * mh && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 1.5 * mh;
+    });
+    if (!beside.length) continue;
+    const small = h < 0.85 * Math.max(...beside.map((m) => m.box[3] - m.box[1]));
+    const c = small ? l.c.toLowerCase() : l.c.toUpperCase();
+    if (c === l.c) continue;
+    const k = known.find((g) => g.c === c);
+    l.alts = [l.c, ...l.alts.filter((a) => a !== c)];
+    l.c = c;
+    if (k) l.size = Math.min(h / Math.max(k.height, 0.2), tallest * 1.2) / 0.72;
   }
   return out;
 }

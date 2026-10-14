@@ -1044,10 +1044,20 @@ workspace holds.
   bond, a short level bar set high beside a letter a minus) is laid on a
   grid and matched against the letters as the system's own typefaces draw
   them - a sans serif and a serif, drawn by the window when first wanted:
-  no letter's shape is carried in Meno. A letter that could be another
-  (l or I, O or 0) is read as the one that makes its label read; one that
-  matched weakly is marked ("Its letters are drawn as shapes: read as
-  "Cl".").
+  no letter's shape is carried in Meno. A word drawn as one shape, all
+  its letters one path (Boc, MeO), is read letter by letter, each sized on
+  its own. A letter whose small form is its capital made smaller (c C,
+  o O, s S, v V, w W, x X, z Z) is told by the capitals beside it on its
+  line: as tall as they, a capital; well under, small. A letter that could
+  be another (l or I, O or 0) is read as the one that makes its label
+  read; one that matched weakly is marked ("Its letters are drawn as
+  shapes: read as "Cl"."). A letter read surely from its shape is no
+  arrow's head, however like one an S or an N of one part is. A figure is
+  taken to draw its letters so where it has a shape filled in several
+  parts, or curved, or with many corners (an N, an H, of straight lines
+  alone); one with no letter written, turned a quarter as a page set
+  sideways is, is turned upright the way its outlines read best as
+  letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
   from two sides; and an end by both ends of a bond shorter than ends lie
