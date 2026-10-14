@@ -314,17 +314,37 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     }
     return w;
   });
+  // (a wedge cut back so far its three sides are near as long - a filled triangle, no way of its own - is narrow at the one corner a
+  // line ends at: its stereocentre)
+  out.blobs = out.blobs.filter((b) => {
+    const corners = b.pts.filter((p, i) => !b.pts.slice(0, i).some((q) => dist(p, q) < 1e-3));
+    if (b.curved || b.parts.length !== 1 || corners.length !== 3) return true;
+    const sides = [0, 1, 2].map((i) => dist(corners[(i + 1) % 3], corners[(i + 2) % 3]));
+    if (Math.max(...sides) > 1.15 * Math.min(...sides)) return true;
+    const near = Math.min(...sides) / 4;
+    // (not its own edges, stroked round it)
+    const edge = (st: Stroke) => [st.a, st.b].every((e) => corners.some((c) => dist(c, e) < near));
+    const lineEnds = out.strokes.filter((st) => !edge(st)).flatMap((st) => [st.a, st.b]);
+    const at = corners.filter((c) => lineEnds.some((e) => dist(c, e) < near));
+    if (at.length !== 1) return true;
+    const [p, q] = corners.filter((c) => c !== at[0]);
+    out.wedges.push({ tip: at[0], base: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, w: dist(p, q), outline: b.pts, ...(b.ink ? { ink: b.ink } : {}) });
+    return false;
+  });
   // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
   const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
   // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
   // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  // (once: a line so joined is a bond whole - an sp carbon's single bond going straight on into its triple bond's middle line is
+  // another)
+  const twoTone = new Set<Stroke>();
   for (let merged = true; merged; ) {
     merged = false;
     for (let i = 0; i < out.strokes.length && !merged; i++) {
       for (let j = 0; j < out.strokes.length && !merged; j++) {
         const [s, t] = [out.strokes[i], out.strokes[j]];
-        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline) continue;
+        if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline || twoTone.has(s) || twoTone.has(t)) continue;
         const w = Math.max(s.w, t.w);
         if (dist(s.b, t.a) > w) continue;
         const ls = dist(s.a, s.b), lt = dist(t.a, t.b);
@@ -339,6 +359,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
         const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o));
         if (others.length) continue;
         out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
+        twoTone.add(out.strokes[i]);
         out.strokes.splice(j, 1);
         merged = true;
       }

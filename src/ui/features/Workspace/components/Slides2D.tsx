@@ -36,7 +36,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf } from "../presenting/slides";
 
@@ -72,7 +72,8 @@ export default function Slides2D() {
   const presenting = useEditor((s) => s.presenting != null);
   const store = useEditorStore();
   const { camera, gl, invalidate } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`, while there are slides)
+  const zoom = useDrawnZoom((z) => (slides.length ? z : 1));
   const px = 1 / zoom;
   // (the number in the drawing's type, as a PDF's name is)
   const { opts } = useDrawnLayout();

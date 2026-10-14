@@ -105,6 +105,19 @@ export async function clipboardFiles(): Promise<File[]> {
 }
 
 /**
+ * The workspace files on the clipboard, or in what was just dropped on the
+ * page (`from`) - copied or dragged in the Finder or Explorer - opened by
+ * their paths, as a workspace file opened from the system is, so that
+ * saving one writes it back (src-tauri/src/clipboard.rs
+ * `open_workspaces_from`): how many there were. None where Meno is not
+ * told the paths - outside Tauri, or a drop on Windows.
+ */
+export async function openWorkspacesFrom(from: "clipboard" | "drag"): Promise<number> {
+  if (!isTauri()) return 0;
+  return invoke<number>("open_workspaces_from", { board: from }).catch(() => 0);
+}
+
+/**
  * The first of `flavors` in what was just dropped on the page - a picture or
  * an object dragged out of Word or PowerPoint - read as the clipboard is: on
  * a Mac, off the drag pasteboard; on Windows, what Meno read of a drag it

@@ -10,7 +10,7 @@ import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { pushShapes, pushTargetAt } from "../utils/pushes";
 import { useDrawingStyle } from "../useDrawingStyle";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
 
 type P = { x: number; y: number };
@@ -167,7 +167,8 @@ export default function PushArrows2D() {
   });
   useEffect(() => invalidate(), [hoveredPush, invalidate]);
 
-  const k = HANDLE_PX / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6);
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`, while there are arrows)
+  const k = HANDLE_PX / Math.max(useDrawnZoom((z) => (drawn.length ? z : 1)), 1e-6);
   return (
     <group>
       {drawn.map(({ color, geometry }) => (

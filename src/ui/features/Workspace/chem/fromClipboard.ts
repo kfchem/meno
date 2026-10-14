@@ -1,9 +1,11 @@
+import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readClipboard, readDrop, type ClipItem, type Flavor } from "../../../../lib/clipboard";
 import { structureInPicture } from "../picture";
 import type { Drawn } from "../store/types";
 import { looksLikeSmiles, readRecord } from "../utils/copyPaste";
 import { drawnOf, processFileContent } from "../utils/io";
 import { readWorkspace } from "../utils/workspace";
+import { kindOfFile } from "../../../../lib/calc/probe";
 import { kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { structureFromSmiles } from "./fromSmiles";
 
@@ -20,8 +22,8 @@ import { structureFromSmiles } from "./fromSmiles";
  *   file, a calculation's output, Meno's own record - or else as a SMILES.
  * Null when there is nothing that reads as a structure.
  */
-export async function structureOnClipboard(): Promise<Drawn | null> {
-  return structureIn(readClipboard, true);
+export async function structureOnClipboard(style?: DrawingStyle): Promise<Drawn | null> {
+  return structureIn(readClipboard, true, style);
 }
 
 /**
@@ -36,6 +38,7 @@ export async function structureInDrop(): Promise<Drawn | null> {
 async function structureIn(
   read: (flavors: Flavor[]) => Promise<ClipItem | null>,
   withText: boolean,
+  style?: DrawingStyle,
 ): Promise<Drawn | null> {
   const own = await read(["meno", "embed"]);
   const record = own?.text != null ? readRecord(own.text) : null;
@@ -58,10 +61,12 @@ async function structureIn(
   const item = await read(["mol", "text"]);
   const text = item?.text;
   if (!item || text == null) return null;
-  // (a MOL file's flavour holding an RXN file is read as one: it starts $RXN)
-  const kind = kindOf("", text) ?? (item.flavor === "mol" ? MENO_KINDS.mol : null);
+  // (a MOL file's flavour holding an RXN file is read as one: it starts $RXN;
+  // told as Open and a drop tell it - a calculation's output a plugin not
+  // added reads named so, to be added)
+  const kind = (await kindOfFile("", text)) ?? (item.flavor === "mol" ? MENO_KINDS.mol : null);
   if (kind) return asKind(text, kind, "clipboard");
-  if (looksLikeSmiles(text)) return structureFromSmiles(text.trim());
+  if (looksLikeSmiles(text)) return structureFromSmiles(text.trim(), style);
   return null;
 }
 

@@ -187,7 +187,9 @@ page itself.
   window is built: `page`, `quick-add` (once open), `structure` (the one
   selected, else the last drawn), `menu` (a right-click menu, once open),
   `save`, `settings`. None, or a part not there now, and the card sits
-  low in the middle of the page.
+  low in the middle of the page. A step that points at a part, while
+  neither it nor any page is seen (Settings the tab in front), waits out
+  of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened,
   a structure `selected`, a `menu` opened. A moment after the chemist does
   it, the guide goes on by itself; Next does as well.
@@ -285,9 +287,11 @@ plugin up says it - its name, its licence, its size and where it comes
 from. It is checked against its SHA-256; unpacked by what the system has -
 a disk image mounted read-only and the app copied out of it as it is, its
 signature kept (macOS: `hdiutil`, `ditto`); a zip or a tar.xz opened by
-the system's own `tar` - into `files/<archive's name>` in the plugin's
-data folder, a stamp beside it saying it is whole; and the archive thrown
-away. A job runs the program from there (`src-tauri/src/jobs.rs`,
+the system's own `tar`, which shows no console on Windows - into
+`files/<archive's name>` in the plugin's data folder, what was there taken
+away first (tried again for a few seconds, where a virus checker holds a
+file in it), a stamp written last saying it is whole - one cut short has
+none, and is unpacked again; and the archive thrown away. A job runs the program from there (`src-tauri/src/jobs.rs`,
 `plugin_program`), and from nowhere else: no copy installed on the
 computer is looked for - not where the system finds programs, not where
 programs are usually installed - and there is no *Locate…*. Such a plugin

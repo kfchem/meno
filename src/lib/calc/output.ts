@@ -205,7 +205,7 @@ export function calcLine(c: CalcInfo): string {
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
   const method = [c.method, c.basis].filter(Boolean).join("/");
   const state = [
-    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${c.charge}` : null,
+    c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
   ]
     .filter(Boolean)

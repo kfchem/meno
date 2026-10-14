@@ -13,7 +13,7 @@ import type { Caption } from "../store/types";
 import { guideMove, guideWidth } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { arrowsBeside } from "./drawnArrows";
 import { heldShows, type Held } from "./held";
 import { HeldLight } from "./HeldLight";
@@ -341,7 +341,8 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
   const { camera, gl } = useThree();
-  const px = 1 / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6);
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const px = 1 / Math.max(useDrawnZoom(), 1e-6);
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
     const p = pageAt(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), camera);
