@@ -28,7 +28,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
@@ -131,7 +131,6 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
   const b = useMemo(() => strokesBounds(k.strokes, width / 2) ?? { x0: 0, y0: 0, x1: 0, y1: 0 }, [k.strokes, width]);
   const m = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
   const raycast = useMemo(() => boxRaycast(camera, () => b, EDGE_PX), [camera, b]);
-  const slack = EDGE_PX * pixelNow(camera);
   const drawingHas = () => {
     const st = store.getState();
     return st.hovered.atomId != null || st.hovered.bondId != null || st.hovered3d != null || st.hoveredArrow != null || st.hoveredPlus != null || st.hoveredCaption != null || st.hoveredMark != null || st.hoveredSlide != null || st.inkMode != null;
@@ -216,14 +215,21 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
       )}
       <StrokesLook look={k} strokes={k.strokes} pointPx={pointPx} ink={ink} />
       <mesh args={[SQUARE, UNSEEN]} position={[0, 0, Z_STEP / 2]} raycast={raycast} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown} />
-      {held && (
-        <group position={[m.x, m.y, 0]}>
-          <HeldGlow held={held} b={{ x0: b.x0 - slack - m.x, x1: b.x1 + slack - m.x, y0: b.y0 - slack - m.y, y1: b.y1 + slack - m.y }} at={held} z={Z_STEP / 3} gone={() => setHeld(null)} />
-        </group>
-      )}
+      {held && <InkHeld held={held} b={b} gone={() => setHeld(null)} />}
     </group>
   );
 });
+
+/** A press held on a piece: its light over the box round its strokes, as far again as a press may miss by at the zoom the drawing is taken up at. */
+function InkHeld({ held, b, gone }: { held: Held & Pt; b: { x0: number; y0: number; x1: number; y1: number }; gone: () => void }) {
+  const slack = EDGE_PX / useDrawnZoom();
+  const m = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
+  return (
+    <group position={[m.x, m.y, 0]}>
+      <HeldGlow held={held} b={{ x0: b.x0 - slack - m.x, x1: b.x1 + slack - m.x, y0: b.y0 - slack - m.y, y1: b.y1 + slack - m.y }} at={held} z={Z_STEP / 3} gone={gone} />
+    </group>
+  );
+}
 
 /**
  * The light round a piece's strokes: coming as it is lit (`to`) and going
@@ -231,18 +237,16 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
  * any zoom, made again as the view zooms while it is there.
  */
 function LightRound({ k, pointPx, to, gone }: { k: Ink; pointPx: number; to: number; gone: () => void }) {
-  const camera = useThree((st) => st.camera);
   const invalidate = useThree((st) => st.invalidate);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);
   useEffect(() => () => material.dispose(), [material]);
-  const [px, setPx] = useState(() => pixelNow(camera));
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const px = 1 / useDrawnZoom();
   const width = inkWidth(k, pointPx) + 2 * LIT_PX * px;
   const marker = k.pen === "marker";
   const geometry = useMemo(() => strokesGeometry(k.strokes, width, !marker), [k.strokes, width, marker]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  usePartFrame((pxNow, dt) => {
-    // (a hundredth of a zoom's change makes nothing again)
-    if (Math.abs(pxNow / px - 1) > 0.01) setPx(pxNow);
+  usePartFrame((_, dt) => {
     if (Math.abs(material.opacity - to) < 1e-3) {
       material.opacity = to;
       if (to === 0) gone();

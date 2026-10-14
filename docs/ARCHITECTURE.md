@@ -111,6 +111,11 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. Workflow tabs pass the same flag to
   the canvases embedded in their nodes through `NodeActiveContext`.
+- What is drawn deep in a view and hears keys on the window - a question
+  (`ui/layouts/asking`), a card over the canvas - asks `InFront`
+  (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
+  tab behind waits, unanswered, the keys the tab's in front, Escape too,
+  until its own tab comes back.
 - Because every live canvas holds a WebGL context and browsers keep only about
   16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
   past the limit is refused with a notice rather than silently blanking the
@@ -207,9 +212,11 @@ Nothing a part shows lives in the part, so a part made again shows the same:
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
-there is none yet: its document is kept while Meno runs, but Save is the
-canvas's own (`useFileActions`, `setSaver`), and so is not there until the
-canvas draws again.
+there is none yet, but its document is kept while Meno runs, and Save is
+the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
+`useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
+the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
+the document, and a save that fails says so under the canvas's card.
 
 ## How things move
 
@@ -306,7 +313,12 @@ What is left before the editor counts as finished, and in what order, is in
   `Labels2D`, previews, hover overlays, `PanZoom2D`, `FitToContent2D`, …).
   `DrawnLayoutProvider` lays the drawing out once - the model, with an atom
   being dragged or a bond being drawn out where the gesture has them - and
-  the drawing layers read that one layout (`useDrawnLayout`). The move and
+  the drawing layers read that one layout (`useDrawnLayout`), with the zoom
+  it was laid out at, which changes only as the layout does. The view's
+  zoom is read apart from it (`useDrawnZoom`), each layer taking only what
+  it needs of it - a line kept as wide as the screen's least, say - and
+  drawn again only as that changes: a zoom draws again what it changes, not
+  every layer at every frame of it. The move and
   extend previews only work out where the atom goes and publish it
   (`moveDrag.preview`, `extend.preview`); they draw nothing of the molecule
   themselves, so a gesture looks exactly as its result will. Model bonds
@@ -552,8 +564,9 @@ closes*).
   `work/` - and starts Meno's executable as its runner, `Meno --job
   <folder>`: `run()` hands that to `jobs::job_mode` before anything else, so
   it opens no window and needs no webview. The runner is started in a
-  process group of its own (detached, on Windows) and nothing of Meno's
-  waits on it.
+  process group of its own (detached, on Windows), in the jobs' folder -
+  never Meno's own, which it would hold, nor its job's, which is taken away
+  as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
@@ -570,10 +583,18 @@ closes*).
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
   process group of its own (macOS, Linux) or a job object that kills what
-  is in it when it closes (Windows), so that *Stop* - a `stop` file the
+  is in it when it closes (Windows; the program started held, put in the
+  job object, then let go, so that nothing it starts at once is outside
+  it - one that cannot be put in a job object is ended before it runs, and
+  its job fails, saying so), so that *Stop* - a `stop` file the
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A finished job's folder is taken away** (*Remove*, *Clear finished
+  jobs' files*) by moving it out of the jobs' way first, under a name no
+  job has (`.taken-…`), then removing it: one a program still holds a file
+  in (Windows) is never left half there as a job - nor read as one in the
+  queue; what was left goes at the next clearing.
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -680,7 +701,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   thing else is a result, in one general form (`lib/calc/results.ts`): it
   belongs to the molecule, each frame, each atom, pairs of atoms or a list;
   it has a group and a name; and its values are numbers or texts, each as a
-  quantity Meno knows - an energy in hartrees, a charge, a wavenumber (an
+  quantity Meno knows - an energy in hartrees, a charge, a spin population
+  (signed, as a charge is), a wavenumber (an
   imaginary one negative), a length, an angle, a dipole - or with its own
   unit. `readResults` keeps those that read as results for the molecule
   (the right count, indices it has, no markup), and `valueText` writes
@@ -760,7 +782,28 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   from PyPI) is a plugin of its own, sharing no code with another
   (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
   a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. Where an output
+  charges, vibrations and the like it leaves to other readers. A Molden
+  file gives no charge or multiplicity, so they are worked out from its
+  own sections (`species_of`, 2026-10-14), each left unsaid where the file
+  does not settle it. The charge is the nuclei's - each atom's atomic
+  number in [Atoms], or the charge its pseudopotential leaves it where
+  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
+  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
+  neon is there (its inner orbitals cannot be told from another's 1s), or,
+  from lithium to neon, other than one occupied orbital below -2 hartree
+  for each such atom (its 1s; two where alpha and beta are listed apart);
+  unsaid past 8 either way,
+  where the occupations come to no whole number, or where a restricted
+  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
+  Gh) adds none. The multiplicity is one more than
+  the alpha occupations' excess over the beta's; with no Spin= said, a
+  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
+  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
+  and a singlet diradical share; Spin= given for some orbitals only). A
+  file that breaks the format - an occupation that is not a number, [MO]
+  given twice - gives neither, and never fails the read. It is tested alone
+  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
+  Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
   a Molden file (each p shell's functions put in x, y, z order, as ORCA's
   are not) for PySCF to read back, and the orbitals are checked
@@ -1152,6 +1195,12 @@ path it is given:
   app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
+- Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
+  (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
+  system's code page: on Windows that is the ANSI one otherwise, in which a request
+  naming a file in Japanese stopped a worker (English Windows) or came back garbled
+  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the

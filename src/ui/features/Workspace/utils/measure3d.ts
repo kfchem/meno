@@ -64,10 +64,10 @@ export function measureValue(places: ArrayLike<number>, atoms: number[]): number
   return THREE.MathUtils.radToDeg(Math.atan2(b2.clone().normalize().dot(n1.clone().cross(n2)), n1.dot(n2)));
 }
 
-/** A measurement as it is written: "1.54 Å", "109.5°", "−60.2°" - and "–" where it has none (measureValue). */
+/** A measurement as it is written: "1.535 Å" - three decimals, as a length a calculation gives (lib/calc/results) - "109.5°", "−60.2°"; and "–" where it has none (measureValue). */
 export function measureText(kind: MeasureKind, value: number): string {
   if (!Number.isFinite(value)) return "–";
-  const n = kind === "distance" ? value.toFixed(2) : value.toFixed(1);
+  const n = kind === "distance" ? value.toFixed(3) : value.toFixed(1);
   // (a true minus sign, and no "-0.0")
   const signed = /^-0\.0+$/.test(n) ? n.slice(1) : n.replace(/^-/, "−");
   return kind === "distance" ? `${signed} Å` : `${signed}°`;

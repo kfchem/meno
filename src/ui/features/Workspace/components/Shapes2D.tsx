@@ -50,7 +50,7 @@ import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
 import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
@@ -373,11 +373,11 @@ const ShapeItem = memo(function ShapeItem({
  * screen at any zoom, made again as the view zooms while it is there.
  */
 function LightAlong({ s, pointPx, to, gone }: { s: Shape; pointPx: number; to: number; gone: () => void }) {
-  const camera = useThree((st) => st.camera);
   const invalidate = useThree((st) => st.invalidate);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);
   useEffect(() => () => material.dispose(), [material]);
-  const [px, setPx] = useState(() => pixelNow(camera));
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const px = 1 / useDrawnZoom();
   const key = JSON.stringify(s);
   const band = useMemo(
     () => shapeGeometry(lines([outlineOf(s, pointPx)], lineWidthOf(s, pointPx) + 2 * LIT_PX * px)),
@@ -386,9 +386,7 @@ function LightAlong({ s, pointPx, to, gone }: { s: Shape; pointPx: number; to: n
     [key, pointPx, px],
   );
   useEffect(() => () => band.dispose(), [band]);
-  usePartFrame((pxNow, dt) => {
-    // (a hundredth of a zoom's change makes nothing again: the band a hundredth wider or narrower)
-    if (Math.abs(pxNow / px - 1) > 0.01) setPx(pxNow);
+  usePartFrame((_, dt) => {
     if (Math.abs(material.opacity - to) < 1e-3) {
       material.opacity = to;
       if (to === 0) gone();
@@ -423,13 +421,14 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
   const gl = useThree((st) => st.gl);
   const camera = useThree((st) => st.camera);
   const invalidate = useThree((st) => st.invalidate);
+  // (the view's zoom as the drawing takes it up: laid again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const px = 1 / useDrawnZoom();
   const all = useMemo<HandleOf[]>(() => chosen.flatMap(({ s, z }) => handlesOf(s).map(({ handle, at }) => ({ s, z, handle, at }))), [chosen]);
   // each handle an instance - what a press takes, never drawn; its white; its ring - room kept for more as more are selected
   const room = 2 ** Math.ceil(Math.log2(Math.max(8, all.length)));
   const hit = useRef<THREE.InstancedMesh>(null);
   const fill = useRef<THREE.InstancedMesh>(null);
   const ring = useRef<THREE.InstancedMesh>(null);
-  const laidAt = useRef(0);
   const lay = useCallback(
     (px: number) => {
       const meshes = [hit.current, fill.current, ring.current];
@@ -446,16 +445,12 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         mesh.computeBoundingSphere();
       }
-      laidAt.current = px;
       invalidate();
     },
     [all, invalidate],
   );
-  // (laid before they are first drawn, and again as the zoom changes)
-  useLayoutEffect(() => lay(pixelNow(camera)), [lay, room, camera]);
-  usePartFrame((px) => {
-    if (px !== laidAt.current) lay(px);
-  });
+  // (laid before they are first drawn, and again as the zoom is taken up)
+  useLayoutEffect(() => lay(px), [lay, room, px]);
   const start = ({ s, handle: h }: HandleOf, ev: PointerEvent) => {
     const px = pixelNow(camera);
     if (isBox(s.kind) && ev.timeStamp - (clicks.get(s.id) ?? 0) < DOUBLE_CLICK_MS) {

@@ -319,8 +319,10 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const back = await processFileContent("oh.sdf", text);
     expect(back.molecules3d).toHaveLength(3);
     expect(back.molecules3d![2].atoms[1]).toMatchObject({ el: "H", x: 0.98 });
-    // (the frame shown, unless asked)
-    expect(structureFileText({ atoms: [], bonds: [], molecules3d: [conformers] }, "/tmp/oh.sdf").match(/\$\$\$\$/g)).toHaveLength(1);
+    // (the frame shown, unless asked - with its energy)
+    const shown = structureFileText({ atoms: [], bonds: [], molecules3d: [conformers] }, "/tmp/oh.sdf");
+    expect(shown.match(/\$\$\$\$/g)).toHaveLength(1);
+    expect(shown).toContain("> <Energy (Eh)>\n-75.39\n");
   });
 
   it("writes molecules in 3D as a PDB file - each a residue, the frame shown or a model for each frame - which reads back as they were", async () => {

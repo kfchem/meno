@@ -11,7 +11,7 @@ import { act, type ReactNode } from "react";
 import { _roots, advance, createRoot, extend } from "@react-three/fiber";
 import { EditorProvider, storeOf } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { DrawnLayoutContext, type DrawnLayout } from "./drawnLayoutContext";
+import { DrawnLayoutContext, DrawnZoomContext, drawnZoomOf, type DrawnLayout } from "./drawnLayoutContext";
 import { editorLayoutOptions } from "../layoutOptions";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { partFramesRegistered, SQUARE, UNSEEN } from "./partFrames";
@@ -53,12 +53,15 @@ async function drawn(layer: ReactNode) {
   const canvas = { style: {}, width: 800, height: 600, addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as HTMLCanvasElement;
   const root = createRoot(canvas);
   const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
-  const layout: DrawnLayout = { atoms: [], bonds: [], opts, layout: {} as DrawnLayout["layout"], zoom: 1 };
+  const layout: DrawnLayout = { atoms: [], bonds: [], opts, layout: {} as DrawnLayout["layout"], laidAt: 1 };
+  const zoom = drawnZoomOf(1);
   await act(async () => {
     await root.configure({ gl: nothingDrawn() as never, size: { width: 800, height: 600, top: 0, left: 0 }, frameloop: "never", orthographic: true, camera: { zoom: 1, position: [0, 0, 100] } });
     root.render(
       <EditorProvider tabId="t" document={doc}>
-        <DrawnLayoutContext.Provider value={layout}>{layer}</DrawnLayoutContext.Provider>
+        <DrawnLayoutContext.Provider value={layout}>
+          <DrawnZoomContext.Provider value={zoom}>{layer}</DrawnZoomContext.Provider>
+        </DrawnLayoutContext.Provider>
       </EditorProvider>,
     );
   });
@@ -150,8 +153,8 @@ describe("many shapes on the page", () => {
     await p.change(() => p.st().selectShapes(p.st().shapes.map((s) => s.id)));
     const c = p.counts();
     expect(c.callbacks).toBe(1);
-    // (a light each, and the handles' one)
-    expect(c.parts).toBe(N + 1);
+    // (a light each; the handles laid as the zoom is taken up, with no work at each frame)
+    expect(c.parts).toBe(N);
     // (each its line, its light, what a press takes; the handles' three)
     expect(c.meshes).toBe(3 * N + 3);
   });
