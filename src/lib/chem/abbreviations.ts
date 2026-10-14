@@ -736,10 +736,13 @@ export function unitRuns(units: readonly string[], italic: readonly boolean[] = 
       if (group[2]) push(group[2], true);
       return;
     }
-    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
-    if (REAGENT_NAMES.has(unit)) return push(unit);
-    // a group's own prefix: the t of t-Bu, the p of p-Ts
+    // a group's own prefix, or a reagent's: the t of t-Bu, the p of p-Ts, the m of m-CPBA
     const prefixed = /^(sec|tert|[nistomp])(-.+)$/.exec(unit);
+    // a reagent's name: its digits are no counts (T3P, XPhos Pd G3)
+    if (REAGENT_NAMES.has(unit)) {
+      if (prefixed) push(prefixed[1], false, true);
+      return push(prefixed ? prefixed[2] : unit);
+    }
     if (prefixed) {
       push(prefixed[1], false, true);
       unit = prefixed[2];
