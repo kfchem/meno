@@ -1,7 +1,6 @@
 import type { EditorStore } from "../store";
 import { IS_MAC } from "../../../../lib/doc/shortcuts";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { GUIDE_PX, guided, nearOf, sidesLike, sizedLike, widthLike, type Box, type GuideMarks } from "../presenting/guides";
 import { besidesBoxes, selectedBox } from "./extent";
 
@@ -15,7 +14,7 @@ const NEAR_PX = 200;
 
 /** The style the canvas is drawn in: the document's own, or the app's. */
 function styleNow(store: EditorStore): DrawingStyle {
-  return styleOf(store.getState().docStyle ?? useAppSettings.getState().drawingStyle);
+  return styleOf(store.getState().docStyle);
 }
 
 /** How long a pixel of the screen is on the page, about `at`. */

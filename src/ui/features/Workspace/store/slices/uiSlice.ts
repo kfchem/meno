@@ -9,6 +9,8 @@ import type { StyleChoice } from "../../../../../lib/chem/style";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
 import { abbreviationOf } from "../../../../../lib/chem/abbreviations";
+import { restyledDocument } from "../../restyle";
+import { easeStyle } from "../../styleEase";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -21,6 +23,12 @@ export function createUiSlice(
   set: SetState,
   get: GetState,
 ) {
+  // A slider's drag in the Drawing style card, by its key: the workspace as
+  // the drag began, each tick converted from it - the starting style to the
+  // current one, never tick upon tick, so no error builds up - and the
+  // workspace the last tick left, to tell a drag gone on from one begun
+  // after another edit (docs/WORKSPACE.md, *Drawing style*).
+  let drag: { key: string; start: WorkspaceDocument; last: WorkspaceDocument } | null = null;
   return {
     setCover: (px: number) => {
       if (Math.abs(get().cover - px) > 0.25) set({ cover: px });
@@ -122,10 +130,26 @@ export function createUiSlice(
       doc.edit("aromatic circles", (d) => ops.setAromaticEnabled(d, v));
     },
 
-    setDocumentStyle: (style: StyleChoice | undefined, coalesceKey?: string) => {
-      doc.edit("drawing style", (d) => ops.setDocumentStyle(d, style), {
-        coalesceKey,
-      });
+    setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => {
+      // (once: the style set and the page converted with it, one step)
+      if (!coalesceKey) {
+        drag = null;
+        doc.edit("drawing style", (d) => restyledDocument(d, style));
+        return;
+      }
+      // (a slider's tick: from the workspace as its drag began; a new drag,
+      // or one after another edit, begins again from the workspace as it is)
+      const now = doc.getState();
+      if (!drag || drag.key !== coalesceKey || drag.last !== now) drag = { key: coalesceKey, start: now, last: now };
+      const start = drag.start;
+      doc.edit("drawing style", () => restyledDocument(start, style), { coalesceKey });
+      drag.last = doc.getState();
+    },
+
+    easeDocumentStyle: (style: StyleChoice) => {
+      // (a preset chosen: its bond eased in, one step - ./styleEase)
+      drag = null;
+      easeStyle(doc, style);
     },
 
     toggleAromatic: () => {
