@@ -737,6 +737,111 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
    Settings, and cube files.
 3. **3d-3.** The PySCF plugin.
 
+## Drawing style
+
+Planned on 2026-10-14 from the maintainer's decision, to be built in one
+pull request (`agent/style-one-per-workspace`): L8 the change of style and
+what it converts, hunter C the style's place and its card, hunter A the
+molecules in 3D.
+
+- **One style to a workspace.** The page's unit is the bond. A bond is 1.8
+  units (`NOMINAL_BOND_LENGTH`) in every style, and the style says how long
+  it prints (`bondLengthPt`), so a point is 1.8 / `bondLengthPt` units
+  (`pointPx`): 0.125 in ACS 1996's 14.4 pt, more in a style of shorter
+  bonds. Every structure in a workspace is drawn in its one style; no
+  structure has a style of its own.
+- **Fixed as the workspace is made.** A new workspace takes the style
+  Settings has then, and keeps it; Settings' style is for new workspaces
+  only. The fallback that let a workspace without a style follow Settings
+  as it changed (`docStyle ?? drawingStyle`) goes: `style` is always set,
+  in the document, the store and the saved file.
+- **A change of style is one command,** from the canvas's Drawing style
+  card. It sets the style and converts the page with it, so that every
+  object on the page keeps its printed size and its place, and only the
+  structures grow or shrink. With k = old bond pt / new bond pt:
+
+  | On the page | Kept in units | How it converts |
+  |---|---|---|
+  | A structure in 2D: atoms joined by bonds, a stack's records as one | atoms' x, y | its middle (of its box) times k; its atoms keep their offsets from it, so it keeps its size in units and its bonds print at the new length. Bonds, abbreviations, brackets, ring circles and electron arrows go with its atoms |
+  | A molecule in 3D | `at`, `turn` | bodies - molecules whose seen spheres touch, or that share a turned-together height - move by their middle times k, keeping their offsets, heights and turns; a molecule keeps its size in units (1.5 Å is a drawn bond in every style) |
+  | A reaction arrow | x, y, length, corners' `across` | times k; its heads, weight and stroke are the style's as it is drawn |
+  | A "+" | x, y | times k; its size is the style's |
+  | Words | x, y, `width` | times k; their size in pt is kept |
+  | A slide, a picture | x, y, w, h | times k; a picture's turn is kept |
+  | A PDF | x, y; its own pages' places | times k; its pages are drawn at the workspace's point (below); ink on its pages is in its own points and kept |
+  | A text's sheet on the page | `at` | times k; drawn at the workspace's point |
+  | A shape | x0, y0, x1, y1, a callout's tail | times k; its weight in pt is kept |
+  | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
+  | A workflow step | x, y | times k |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A print frame (later) | its frame | times k |
+
+  What is given in points - words' and labels' sizes, line weights, ink
+  widths, a PDF's page sizes - is kept as it is: drawn at the new point,
+  it prints as before.
+- **The page holds still on the screen.** The view follows every change of
+  the bond's printed length - the command, its undo, its redo: the camera's
+  place times k and its zoom divided by k. Slides, words and pictures stay
+  where they are on the screen while the structures grow or shrink about
+  their middles.
+- **PDFs and texts at the workspace's point.** A PDF's pages and a text's
+  sheet are drawn at ACS's point in every style today (`POINT`, 1.8 / 14.4);
+  they go over to the workspace's point (`pointPx`), so a PDF prints at its
+  own size in any style and keeps it through a change.
+- **One undo step.** The style and the converted page go together, in one
+  edit ("drawing style"); a preset chosen is one step. A slider in the card
+  converts live at every tick, always from the page as it was when the drag
+  began (the starting style to the current one, never tick upon tick, so no
+  error builds up), and the ticks coalesce into one step as it is let go.
+  Slides and words stay still while the structures change, with no jump on
+  release; undo gives the page back exactly as it was.
+- **Pasted from a workspace in another style.** A copy's record
+  (`meno-structure`, still version 1) carries its style's bond in pt.
+  Pasted where that differs, what it carries converts as above by k = its
+  bond pt / this workspace's, about its middle, before it is put down: its
+  structures keep their size in units, so they print at this workspace's
+  bond, and words, shapes and pictures with them keep their size in pt. A
+  record without it pastes as it is.
+- **Structures can come closer.** In a style of longer bonds, the middles
+  of structures come closer in units while the structures keep their size,
+  so structures drawn close together may overlap after a change. Meno does
+  not push them apart, which would be a jump; the chemist can, or undo.
+- **Exports.** `exportPxPerWorld(style)` stays the style's bond at 96 px to
+  the inch over 1.8. A unit prints `bondLengthPt` / 1.8 pt, so page objects
+  export at their sizes in pt and structures at the style's bond: after a
+  change, a slide or a picture exports as large as before, its structures
+  at the new bond.
+- **Office re-edit.** A structure placed in Word or PowerPoint keeps its
+  record, now with its style. Opened from the document again, it opens in
+  that style - not Settings' - so its picture comes back as it was. A
+  record without a style opens in Settings' style, fixed into it then.
+- **Files from before** (pre-alpha: no shims, the break noted).
+  - A workspace saved without a style takes Settings' style as it is
+    opened, kept from then on, without marking the tab changed. It looks
+    different from when it was drawn if Settings has changed since.
+  - In a workspace whose style is not ACS 1996, PDFs and texts' sheets now
+    print at their own size, so they change size on the page.
+  - Copies made before carry no style and paste unconverted.
+- **Magnified display, later.** A per-object display state (100% being true
+  size, an "n%" mark, Back to 100%): a transform after the layout in 2D and
+  after `solidOf` in 3D that never enters the document's units, Å readouts
+  or writers. A change of style keeps each object's magnification: the
+  conversion moves an object's middle and leaves its factor alone.
+- **The functions.** `restyle.ts` (L8): `bondPtOf(style: StyleChoice)`, and
+  `restyled(parts, k, about = { x: 0, y: 0 })`, which converts whatever
+  page parts it is given - a whole document or a copy's parts, the fields
+  of `WorkspaceDocument` that are there - and gives them back unchanged
+  where k is 1. Molecules in 3D go through A's
+  `restyled3d(molecules, k, about)`, called from it. `setDocumentStyle(doc,
+  style)` (document.ts) converts by k = `bondPtOf(doc.style)` /
+  `bondPtOf(style)`; the store's action keeps the document as a slider's
+  drag began and converts from it at each tick (C).
+- **Tested by** a change and back giving the same page (to 1e-9); every
+  page object's box in pt kept, and every structure's middle in pt kept and
+  its size in units; undo exact; a slider's ticks converting from the
+  start; a paste across styles; bodies in 3D kept together; page objects
+  exporting at the same size.
+
 ## Styles in 3D
 
 Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
