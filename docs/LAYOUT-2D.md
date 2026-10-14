@@ -35,10 +35,13 @@ another order. Where the rules below leave a tie, it is settled so:
 - **By trying each.** Rings tied in rank are each placed first, or next,
   and the system that reads best flat is kept (up to eight layouts a
   system); a macrocycle's chain run with ends alike in that is looked
-  for from both; each round of turning bonds the other way round
-  (`improve`) tries every move from the drawing as it stands and takes
-  the best, moves as good by their atoms' classes, then the canonical
-  rank.
+  for from both; each round of the steps that set a drawing right -
+  turning bonds the other way round (`improve`), turning a part about
+  its join (`rejoin`), turning or stretching a branch out of the way
+  (`untangle`), turning a sugar to its face, making room for an H,
+  settling a fan of methyls - tries every move from the drawing as it
+  stands and takes the best, moves as good by their kind, their atoms'
+  classes, then the canonical rank.
 - **By the canonical rank, last.** Only between atoms or rings the
   structure leaves alike - the drawings either way the same, or mirror
   images.
@@ -352,7 +355,10 @@ they hang from.
   single bond - a sugar on its glycosidic oxygen, taxol's side chain on
   its ester - each is drawn well on its own and then joined, the angle at
   the join giving way to them. So too a long chain hung from a branch (a
-  lipid's acyl chains on its glycerol): drawn straight, then joined.
+  lipid's acyl chains on its glycerol): drawn straight, then joined. A
+  sugar's ring may also be turned right round on its own atom at the join,
+  or seen from its other face, to face the way a sugar is drawn; any other
+  ring keeps its bond in along its own line but for that give.
 
 ## 3. Square to the page
 
@@ -390,7 +396,9 @@ the drawing takes the one that reads best (section 4).
   bond, where both have something beside the bond, is hung the way round
   that puts the heavier of each on opposite sides - BINOL's two OH, BINAP's
   two PPh2: grown the other way, BINAP's phenyls fell on its other
-  naphthalene.
+  naphthalene. No step that sets the drawing right afterwards turns them
+  syn. Where two things beside the bond on one ring are as heavy, neither
+  side is the heavier, and the rule does not apply.
 - **A benzene ring at the left of its ring system**, where reading
   begins: indole, quinoline and coumarin with their benzene rings on the
   left, estradiol's aromatic A ring, griseofulvin's, reserpine's indole at
@@ -472,7 +480,8 @@ When parts clash, in this order:
    is tried with what hangs on it turned back as well: tryptophan's side
    chain turned down, its NH2 below, its carboxyl's C=O still up.
 2. **Turn** a substituent off its ideal angle, as little as will do.
-3. **Stretch** a bond, only if the clash is still there.
+3. **Stretch** a bond, only if the clash is still there, and by at most
+   0.6 of a bond in all.
 
 None of these ends with bonds crossing that did not cross before, however
 much else a crossing would clear.
@@ -579,7 +588,8 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   metal is, and with no metal at all (a ligand's picture) - each atom as
   near as it is across the ring's axis. What hangs from it lies in its
   plane, pointing out from its centre and foreshortened as the ring is
-  (Cp*'s methyls). The ring may be spun about its axis: where its first
+  (Cp*'s methyls); to clear a clash it is moved out along its bond, never
+  turned off that line. The ring may be spun about its axis: where its first
   substituent points - to either side, or away from the metal - is tried
   each way, and the one that reads best kept; a ring with nothing hanging
   from it, seen with a corner nearest, is spun half a step to have an edge

@@ -818,7 +818,8 @@ function reflect(v: Point, t: number): Point {
  * Whether a ring system hung from ring atom `a` by its atom `child`, set
  * down by `place`, has the heavier of what hangs beside `child` on the same
  * side of the bond as the heavier of what hangs beside `a`: false where
- * either has nothing there, or `a` is in no ring.
+ * either has nothing there, or two things as heavy (`besideBond`), or `a`
+ * is in no ring.
  */
 function biarylSyn(
   mol: Molecule,
@@ -831,28 +832,63 @@ function biarylSyn(
 ): boolean {
   const sa = mol.systemOf[a];
   if (sa < 0) return false;
-  /** The ring neighbour of `x` (not `other`) with the most hanging beside it outside its system, and that much. */
-  const heaviest = (x: number, other: number, inSystem: (v: number) => boolean) => {
-    let best: number | null = null;
-    let most = 0;
-    for (const n of mol.neighbours[x]) {
-      if (n === other || !inSystem(n)) continue;
-      const out = mol.neighbours[n].filter((v) => v !== x && !inSystem(v));
-      const w = out.reduce((t, v) => t + (sides.get(`${n}>${v}`) ?? 1), 0);
-      if (w > most) {
-        most = w;
-        best = n;
-      }
-    }
-    return best;
-  };
-  const ha = heaviest(a, child, (v) => mol.systemOf[v] === sa);
-  const hc = heaviest(child, a, (v) => L.has(v));
+  const ha = besideBond(mol, sides, a, child, (v) => mol.systemOf[v] === sa);
+  const hc = besideBond(mol, sides, child, a, (v) => L.has(v));
   if (ha == null || hc == null || !pos.has(ha)) return false;
   const pa = pos.get(a)!;
   const along = sub(place(L.get(child)!), pa);
   const side = (p: Point) => Math.sign(along.x * (p.y - pa.y) - along.y * (p.x - pa.x));
   return side(pos.get(ha)!) === side(place(L.get(hc)!));
+}
+
+/**
+ * The ring neighbour of `x` (not `other`, in its system by `inSystem`)
+ * with the most hanging beside it outside the system - null where none
+ * has anything, or two have as much: then neither side of the bond is the
+ * heavier, whichever neighbour is listed first.
+ */
+function besideBond(mol: Molecule, sides: Map<string, number>, x: number, other: number, inSystem: (v: number) => boolean): number | null {
+  let best: number | null = null;
+  let most = 0;
+  let tied = false;
+  for (const n of mol.neighbours[x]) {
+    if (n === other || !inSystem(n)) continue;
+    const out = mol.neighbours[n].filter((v) => v !== x && !inSystem(v));
+    const w = out.reduce((t, v) => t + (sides.get(`${n}>${v}`) ?? 1), 0);
+    if (w > most) {
+      most = w;
+      best = n;
+      tied = false;
+    } else if (w > 0 && w === most) tied = true;
+  }
+  return tied ? null : best;
+}
+
+/**
+ * Whether a drawing keeps each biaryl's groups beside its bond anti, as
+ * the structure sets them when the second ring is hung (`placeChild`,
+ * `biarylSyn`): BINOL's OH, BINAP's PPh2 either side of the bond. The
+ * steps that set a drawing right after it is grown keep them so.
+ */
+export function antiKept(mol: Molecule, sides: Map<string, number>): (pos: Grown) => boolean {
+  const pairs: [number, number, number, number][] = [];
+  for (const b of mol.bonds) {
+    const [a, c] = [b.a, b.b];
+    const [sa, sc] = [mol.systemOf[a], mol.systemOf[c]];
+    if (b.order !== 1 || sa < 0 || sc < 0 || sa === sc) continue;
+    const ha = besideBond(mol, sides, a, c, (v) => mol.systemOf[v] === sa);
+    const hc = besideBond(mol, sides, c, a, (v) => mol.systemOf[v] === sc);
+    if (ha != null && hc != null) pairs.push([a, c, ha, hc]);
+  }
+  return (pos) =>
+    pairs.every(([a, c, ha, hc]) => {
+      const pa = pos.get(a);
+      const pc = pos.get(c);
+      if (!pa || !pc) return true;
+      const along = sub(pc, pa);
+      const side = (p: Point) => Math.sign(along.x * (p.y - pa.y) - along.y * (p.x - pa.x));
+      return side(pos.get(ha)!) !== side(pos.get(hc)!);
+    });
 }
 
 /**
