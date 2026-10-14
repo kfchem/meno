@@ -50,7 +50,7 @@ import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
 
 /** Where shapes lie: under the drawing and its fills (-0.05), over the pictures (Pictures2D's -0.3); each a little over the one before. */
@@ -197,8 +197,9 @@ function ShapeItem({
   toWorld: (cx: number, cy: number) => Pt;
 }) {
   const store = useEditorStore();
-  const { camera, invalidate } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+  const { invalidate } = useThree();
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const px = 1 / zoom;
   // the light along its line, under the pointer or selected, coming and going
   const light = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);

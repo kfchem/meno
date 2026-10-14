@@ -39,8 +39,8 @@ describe("a structure's file, as Meno's own reader gives it", () => {
     // (and says so: never without a word)
     expect(m.framesLeftOut).toBe(2);
     // (none whole: the file refused, saying why of its first frame)
-    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow('Line 4 of the XYZ file gives H a place that is not a number: "0.7x".');
-    expect(() => readStructures("xyz", "t.xyz", "3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("The XYZ file ends before its atoms do: it says 3, and gives 2.");
+    expect(() => readStructures("xyz", "t.xyz", "2\n\nO 0 0 0\nH 0.7x 0.59 0\n")).toThrow('t.xyz could not be read: line 4 gives H a place that is not a number: "0.7x".');
+    expect(() => readStructures("xyz", "t.xyz", "3\nwater\nO 0 0 0\nH 0.76 0.59 0")).toThrow("t.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).");
   });
 
   it("leaves out a first frame with a place that does not read, says so, and is the first whole one", () => {
@@ -219,3 +219,128 @@ describe("a PDB file, as Meno's own reader gives it", () => {
     expect(() => readStructures("pdb", "x.pdb", "REMARK   1\nEND\n")).toThrow(/No molecules found in x.pdb/);
   });
 });
+
+describe("a structure's file cut short or damaged, as Meno's own reader gives it", () => {
+  const cut = (text: string, share: number) => text.slice(0, Math.floor(text.length * share));
+  const lines = (text: string, share: number) => text.split("\n").slice(0, Math.floor(text.split("\n").length * share)).join("\n");
+
+  it("is refused, saying so, where it ends before the atoms and bonds its counts line gives - not read as atoms at the origin", () => {
+    // (read anyway, a MOL file cut after its first atom was 62 atoms, 61 of them carbons at the origin, and no bonds)
+    for (const share of [0.02, 0.3, 0.7]) expect(() => readStructures("sdf", "c.sdf", cut(sampleSdf, share)), `cut at ${share}`).toThrow(/c.sdf could not be read: it ends before the atoms and bonds it says it has/);
+    for (const share of [0.02, 0.3, 0.7]) expect(() => readStructures("rxn", "e.rxn", cut(sampleRxn, share)), `cut at ${share}`).toThrow(/e.rxn could not be read: it ends before/);
+    // (a reaction cut at its second molecule was read as its first, saying nothing)
+    expect(() => readStructures("rxn", "e.rxn", lines(sampleRxn, 0.5))).toThrow(/e.rxn could not be read/);
+    // a counts line giving more than the file holds, or an atom's line with no place
+    expect(() => readStructures("sdf", "c.sdf", sampleSdf.replace(/^(.*\n.*\n.*\n)\s*\d+\s+\d+/, "$1999 30"))).toThrow(/could not be read/);
+    expect(() => readStructures("sdf", "c.sdf", sampleSdf.replace(/-?\d+\.\d{4}/, "abc"))).toThrow(/could not be read/);
+    // (a whole file still reads, its SD data items cut or not)
+    expect(readStructures("sdf", "c.sdf", sampleSdf.replace(/\$\$\$\$\s*$/, "")).model.atoms.length).toBeGreaterThan(20);
+    expect(readStructures("sdf", "c.sdf", sampleSdf.replace(/\r?\n/g, "\r\n")).model.atoms.length).toBeGreaterThan(20);
+  });
+
+  it("opens the records of an SD file before one cut short, naming it as left out (the maintainer, 2026-10-14)", () => {
+    const record = (title: string) =>
+      [title, "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000",
+        "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+        "    1.5000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+        "  1  2  1  0", "M  END", "$$$$"].join("\n");
+    const two = `${record("one")}\n${record("two")}`;
+    const read = readStructures("sdf", "two.sdf", two.slice(0, two.lastIndexOf("  1  2  1  0")));
+    expect(read.model.atoms.map((a) => a.el)).toEqual(["C", "O"]);
+    expect(read.recordsLeftOut).toEqual([{ record: 2, why: "ends before the atoms and bonds it says it has" }]);
+    expect(checkedStructures(read, "two.sdf")).toBe(read);
+    // (its only record cut short: refused, as ever)
+    expect(() => readStructures("mol", "one.mol", record("one").slice(0, record("one").lastIndexOf("  1  2  1  0")))).toThrow(/one.mol could not be read: it ends before/);
+  });
+
+  /** A V2000 molfile of the atom and bond lines given, its counts line saying how many - or `counts`. */
+  const v2000 = (atoms: string[], bonds: string[], counts = [atoms.length, bonds.length]) =>
+    ["", "  Meno            2D", "", `${String(counts[0]).padStart(3)}${String(counts[1]).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`, ...atoms, ...bonds, "M  END"].join("\n") + "\n";
+  /** A V2000 atom line, its fields in the format's columns. */
+  const atom = (x: number, y: number, el: string) => `${x.toFixed(4).padStart(10)}${y.toFixed(4).padStart(10)}    0.0000 ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`;
+  /** A V3000 molfile of the atom and bond entries given. */
+  const v3000 = (atoms: string[], bonds: string[]) =>
+    ["", "  Meno            2D", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", `M  V30 COUNTS ${atoms.length} ${bonds.length} 0 0 0`, "M  V30 BEGIN ATOM", ...atoms.map((a) => `M  V30 ${a}`), "M  V30 END ATOM", "M  V30 BEGIN BOND", ...bonds.map((b) => `M  V30 ${b}`), "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n") + "\n";
+
+  it("leaves out a record with a bond to an atom it has not, naming it - not read as a bond to another record's atom - and refuses a file of no record that reads", () => {
+    // (read anyway, record 1's carbon, given a bond to its atom 4, was bonded to record 2's nitrogen; an atom 0, to the record before's)
+    const sd = (first: string, second: string) => `${v2000([atom(0, 0, "C"), atom(1.5, 0, "O")], [first])}$$$$\n${v2000([atom(5, 0, "N"), atom(6.5, 0, "S")], [second])}$$$$\n`;
+    const first = readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  1  2  1  0"));
+    expect(first.model.atoms.map((a) => a.el)).toEqual(["N", "S"]);
+    expect(first.recordsLeftOut).toEqual([{ record: 1, why: "has a bond to an atom it does not have" }]);
+    expect(readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  0  1  1  0")).recordsLeftOut).toEqual([{ record: 2, why: "has a bond to an atom it does not have" }]);
+    // (none reads: refused, its first record named)
+    expect(() => readStructures("sdf", "two.sdf", sd("  1  4  1  0", "  0  1  1  0"))).toThrow("two.sdf could not be read: its record 1 has a bond to an atom it does not have. It may be damaged.");
+    expect(() => readStructures("mol", "v3.mol", v3000(["1 C 0 0 0 0", "2 O 1.5 0 0 0"], ["1 1 1 4"]))).toThrow("v3.mol could not be read: it has a bond to an atom it does not have.");
+    // (and the same records whole read as before)
+    expect(readStructures("sdf", "two.sdf", sd("  1  2  1  0", "  1  2  1  0")).model.bonds).toHaveLength(2);
+  });
+
+  it("refuses a benzene whose counts line gives an atom too few - its last atom's line taken for a bond - rather than fail on it", () => {
+    // (read anyway, an aromatic bond to the sixth atom it had not failed as its rings were made Kekulé)
+    const ring = [[0, 1.4], [1.212, 0.7], [1.212, -0.7], [0, -1.4], [-1.212, -0.7], [-1.212, 0.7]].map(([x, y]) => atom(x, y, "C"));
+    const bonds = [1, 2, 3, 4, 5, 6].map((k) => `${String(k).padStart(3)}${String((k % 6) + 1).padStart(3)}  4  0  0  0  0`);
+    expect(() => readStructures("mol", "b.mol", v2000(ring, bonds, [5, 6]))).toThrow(/^b.mol could not be read: /);
+    expect(readStructures("mol", "b.mol", v2000(ring, bonds)).model.bonds).toHaveLength(6);
+  });
+
+  it("refuses an atom with no symbol, rather than read it as carbon", () => {
+    expect(() => readStructures("mol", "n.mol", v2000([atom(0, 0, "O"), "    1.2990    0.7500    0.0000"], ["  1  2  1  0"]))).toThrow("n.mol could not be read: it has an atom with no symbol. It may be damaged.");
+    expect(() => readStructures("mol", "n.mol", v3000(["1 O 0 0 0 0", '2 "" 1.299 0.75 0 0'], ["1 1 1 2"]))).toThrow("n.mol could not be read: it has an atom with no symbol.");
+  });
+
+  it("refuses a place or another number that is not one - Fortran's D exponent, 0N - rather than read its first digits", () => {
+    // (read anyway, "1.19D+01" - 11.9 - was 1.19, and "0N" 0)
+    const o = (line: string) => v2000([atom(0, 0, "C"), line], ["  1  2  1  0"]);
+    expect(() => readStructures("mol", "d.mol", o("  1.19D+01    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0"))).toThrow("d.mol could not be read: it has an atom whose place is not a number. It may be damaged.");
+    expect(() => readStructures("mol", "d.mol", o("1.19D+01 0.0 0.0 O 0 0"))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", o("    1.1900    0.0000        0N O   0  0  0  0  0  0  0  0  0  0  0  0"))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", o("    1.1900    0.0000    0.0000 O   0 0N  0  0  0  0  0  0  0  0  0  0"))).toThrow(/it has an atom with a field that is not a number/);
+    expect(() => readStructures("mol", "d.mol", v2000([atom(0, 0, "C"), atom(1.19, 0, "O")], ["  1  2 1x  0  0  0  0"]))).toThrow(/it has a bond with a field that is not a number/);
+    expect(() => readStructures("mol", "d.mol", v3000(["1 C 0 0 0 0", "2 O 1.19D+01 0 0 0"], ["1 1 1 2"]))).toThrow(/it has an atom whose place is not a number/);
+    expect(() => readStructures("mol", "d.mol", v3000(["1 C 0 0 0 0", "2 O 1.19 0 0 0"], ["1 1x 1 2"]))).toThrow(/it has a bond with a field that is not a number/);
+    // (an E exponent is a number's: read as one)
+    expect(readStructures("mol", "e.mol", o("1.1900E+00    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0")).model.atoms).toHaveLength(2);
+  });
+
+  it("reads an abbreviation naming an atom the file has not as the atoms it has, and a property line shorter than its count as far as it goes - rather than fail on either", () => {
+    // (read before, both failed with a TypeError)
+    const co = (...props: string[]) => ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000", atom(0, 0, "C"), atom(1.5, 0, "O"), "  1  2  1  0", ...props, "M  END"].join("\n") + "\n";
+    expect(readStructures("mol", "s.mol", co("M  STY  1   1 SUP", "M  SAL   1  2   2   5", "M  SMT   1 OMe")).model.atoms.map((a) => a.el)).toEqual(["C", "OMe"]);
+    const v3 = (sgroup: string) => v3000(["1 C 0 0 0 0", "2 O 1.5 0 0 0"], ["1 1 1 2"]).replace("M  V30 END CTAB", `M  V30 BEGIN SGROUP\nM  V30 ${sgroup}\nM  V30 END SGROUP\nM  V30 END CTAB`);
+    expect(readStructures("mol", "s.mol", v3("1 SUP 0 ATOMS=(2 2 5) XBONDS=(2 1 9) LABEL=OMe")).model.atoms.map((a) => a.el)).toEqual(["C", "OMe"]);
+    expect(readStructures("mol", "s.mol", co("M  STY  2   1 SUP   2")).model.atoms).toHaveLength(2);
+    expect(readStructures("mol", "s.mol", co("M  STY  1   1 SRU", "M  SCN  1   1")).model.atoms).toHaveLength(2);
+  });
+
+  it("refuses a mass difference on an element whose table mass Meno does not hold - W, U - rather than drop it; its mass given itself is read", () => {
+    // (read anyway, the tungsten and the uranium were of no isotope, saying nothing)
+    const heavy = (el: string, iso: string[] = []) =>
+      ["", "  Meno            2D", "", "  2  1  0  0  0  0  0  0  0  0999 V2000", atom(0, 0, "C"), `    1.9000    0.0000    0.0000 ${el.padEnd(3)} 1  0  0  0  0  0  0  0  0  0  0  0`, "  1  2  1  0", ...iso, "M  END"].join("\n") + "\n";
+    expect(() => readStructures("mol", "w.mol", heavy("W"))).toThrow("w.mol could not be read: it gives W a mass difference, and Meno does not know the mass it is a difference from.");
+    expect(() => readStructures("mol", "u.mol", heavy("U"))).toThrow(/it gives U a mass difference/);
+    expect(readStructures("mol", "u.mol", heavy("U", ["M  ISO  1   2 235"])).model.atoms[1]).toMatchObject({ el: "U", isotope: 235 });
+    // (one whose table mass Meno holds: the isotope it means)
+    expect(readStructures("mol", "c.mol", heavy("C")).model.atoms[1]).toMatchObject({ el: "C", isotope: 13 });
+  });
+
+  it("refuses an XYZ file whose first frame is cut short, and leaves out a trajectory's last frame, cut short as it is still written - saying how many it left out", () => {
+    expect(() => readStructures("xyz", "w.xyz", WATER.split("\n").slice(0, 4).join("\n"))).toThrow(/w.xyz could not be read: its first frame ends before/);
+    const frames = `${WATER}${WATER}${WATER.split("\n").slice(0, 3).join("\n")}`;
+    const read = readStructures("xyz", "w.xyz", frames);
+    const m = read.molecules3d![0];
+    expect(m.atoms).toHaveLength(3);
+    expect(m.frames).toHaveLength(1);
+    // (never silently: how many frames were left out is said)
+    expect(m.framesLeftOut).toBe(1);
+    expect(checkedStructures(read, "w.xyz")).toBe(read);
+    expect(readStructures("xyz", "w.xyz", `${WATER}${WATER}`).molecules3d![0].framesLeftOut).toBeUndefined();
+  });
+
+  it("reads a PDB file with a byte-order mark, or lines ended by CR alone, as it reads the file", () => {
+    const n = readStructures("pdb", "c.pdb", samplePdb).molecules3d![0].atoms.length;
+    expect(readStructures("pdb", "c.pdb", "\uFEFF" + samplePdb).molecules3d![0].atoms).toHaveLength(n);
+    expect(readStructures("pdb", "c.pdb", samplePdb.replace(/\r?\n/g, "\r")).molecules3d![0].atoms).toHaveLength(n);
+  });
+});
+

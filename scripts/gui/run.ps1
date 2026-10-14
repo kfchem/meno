@@ -200,12 +200,12 @@ function Invoke-MenoQuickAdd {
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes", "Calculations")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
         [int] $CalcMost = 4
     )
     # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes")
+    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y

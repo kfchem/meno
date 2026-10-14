@@ -305,7 +305,13 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         // (a cage's textbook view kept unless another reads clearly better:
         // camphor as it is always drawn, not the other way round)
         const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (cageViews.has(i) && v ? CAGE_VIEW_MARGIN : 0);
-        if (s < bestScore) {
+        // (only where clearly better: whatever is tried here - a
+        // macrocycle's shapes, a cage's views, the spins of a ring bound
+        // face-on to a metal - those alike on the measure keep the order
+        // they are offered in, not the one the rounding of a sum favoured:
+        // a ring with nothing on it reads as well in each shape, and takes
+        // the one that lies best, offered first)
+        if (s < bestScore - 1e-9) {
           bestScore = s;
           best = v;
         }

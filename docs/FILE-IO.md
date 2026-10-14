@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) | |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); none whole, the file refused, saying why of its first frame ("The XYZ file ends before its atoms do: it says 3, and gives 2.", "Line 4 of the XYZ file gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -338,6 +338,22 @@ How these behave:
   says which plugin the catalogue suggests, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
+- **A file's text is read as its bytes are written** (2026-10-13,
+  `lib/io/text.ts`). Open, a drop, a file pasted and an output read again
+  all read it so:
+  - as UTF-8;
+  - as UTF-16 where a byte order mark says so, either way round, or
+    with no mark where every other byte of its start is NUL (the high
+    byte of Latin letters and digits);
+  - bytes that are not UTF-8, as Shift_JIS, which Windows in Japanese
+    writes text in;
+  - those that are not Shift_JIS either, as Windows-1252.
+
+  A text is held with its lines ended "\n", however its file ended them.
+  Text Meno puts on the clipboard on Windows has them ended "\r\n", as
+  Windows programs take it. Export writes a text beside its original as
+  UTF-8, its lines ended "\n" and with no byte order mark, whatever its
+  file was written in: Meno holds the text, not the bytes it was read from.
 - **Office's record is handed to the canvas as the record**, not under a
   made-up name.
 

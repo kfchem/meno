@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { frequencyText, VIBRATION_PEAK, vibrationOffsets } from "./vibration3d";
+import { VIBRATION_PEAK, vibrationOffsets } from "./vibration3d";
+import { valueText } from "../../../../lib/calc/results";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 
 describe("a vibration", () => {
   it("is written by its frequency, an imaginary one with an i", () => {
-    expect(frequencyText(1650.24)).toBe("1650.2 cm⁻¹");
-    expect(frequencyText(-120.46)).toBe("120.5i cm⁻¹");
+    expect(valueText(1650.24, { quantity: "wavenumber" })).toBe("1650.2 cm⁻¹");
+    expect(valueText(-120.46, { quantity: "wavenumber" })).toBe("120.5i cm⁻¹");
   });
 
   it("moves its atoms along its displacements, the one that moves most as far as the peak", () => {

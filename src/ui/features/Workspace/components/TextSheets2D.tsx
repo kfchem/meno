@@ -26,7 +26,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { DEFAULT_LABEL_FAMILY, labelFont } from "../../../../lib/chem/labelFonts";
-import { useDrawnLayout } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { pageAt } from "../utils/page";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
@@ -104,8 +104,9 @@ function Sheet({
   toWorld: (cx: number, cy: number) => Pt;
 }) {
   const store = useEditorStore();
-  const { camera, invalidate } = useThree();
-  const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+  const { invalidate } = useThree();
+  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
+  const zoom = useDrawnZoom();
   const px = 1 / zoom;
   // (kept by its text - a Markdown text's laid out again once its type has come)
   useMarkdownType();

@@ -217,7 +217,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       continue;
     }
     const bond = model.bonds.find((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
-    if (bond) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
+    // (a wedge on a single bond only: one put on a double or triple bond - at an atom with too many bonds, say - is no wedge)
+    if (bond && bond.order === 1) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
   }
   // a ring in perspective (face-on to a metal, or turned on its bond): its
   // near edges bold, a bond toward the viewer a wedge narrow at its far

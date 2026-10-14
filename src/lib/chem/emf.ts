@@ -255,6 +255,7 @@ export function layoutEmf(
     return h;
   };
   const points = (pts: { x: number; y: number }[]) => pts.map((p) => [X(p.x), Y(p.y)] as const);
+  // (by a loop, not spread into one call: a long outline overran the stack)
   const bounds = (pts: readonly (readonly [number, number])[], v: DataView) => {
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
