@@ -24,7 +24,8 @@ import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { keepRun, laidOver, LAID_OVER, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { energiesBy, keepRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { runMenoInTurns } from "../../workflow/meno";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
 import { askOf } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
@@ -119,6 +120,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const key = inputKey(d, step, by);
     const why = whyNot(d, step, by);
     if (why) return void fail(id, why, at, key);
+    if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
@@ -126,6 +128,53 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (step.kind === "render") return renderEach(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
     return runAtOnce(id, plugin, at);
+  }
+
+  /** Meno's steps working in turns asked to stop: given up at their next turn. */
+  const menoStops = new Set<number>();
+
+  /**
+   * Meno's Duplicates, worked out in turns that let the page go on - a
+   * window that freezes for the seconds thousands of conformers alike
+   * take is none - its card saying how many entries it has been through,
+   * and its results put in at the end as one edit, as Meno's other steps'.
+   */
+  async function menoInTurns(id: number, at: number): Promise<void> {
+    // (working already: Run pressed again meanwhile starts nothing)
+    if (get().menoWorking[id]) return;
+    menoStops.delete(id);
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, "meno");
+    const input = inputOf(d, id)!;
+    const entries = setEntries(input.molecules, input.holds as "molecules" | "conformers");
+    const working = (patch: { done: number } | null) =>
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        if (patch) rest[id] = { since: at, total: entries.length, ...patch };
+        else delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    working({ done: 0 });
+    let outcome;
+    try {
+      outcome = await runMenoInTurns(step.kind, entries, input.holds, step.options, energiesBy(input.molecules), { onDone: (done) => working({ done }), stopped: () => menoStops.has(id) });
+    } finally {
+      working(null);
+      menoStops.delete(id);
+    }
+    const now = doc.getState();
+    const still = stepOf(now, id);
+    // (deleted meanwhile: nothing to put in)
+    if (!still) return;
+    const took = Date.now() - at;
+    const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
+    if (!outcome) return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+    // (what came in changed meanwhile - an edit, an undo, its set deleted: results of what came in before are none of its own - it says so, and runs again when asked)
+    if (inputKey(now, still, "meno") !== key) return void fail(id, "What came into it changed while it ran", at, key);
+    // (how long it took said first, as a program's step says it: it may take seconds)
+    const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
+    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
   }
 
   /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */
@@ -852,6 +901,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   return {
     jobsSeen: {} as Record<string, JobSeen>,
+    menoWorking: {} as Record<number, { since: number; done: number; total: number }>,
     runStep: (id: number) => runSteps([id]),
     runFrom: (id: number) => runSteps([id, ...after(doc.getState(), id)]),
     runAll: () => {
@@ -860,10 +910,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return runSteps((d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id));
     },
     stopStep: (id: number) => {
+      if (get().menoWorking[id]) menoStops.add(id);
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },
     stopAll: () => {
+      for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));
       for (const s of doc.getState().steps ?? []) for (const j of s.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },

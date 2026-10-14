@@ -111,6 +111,11 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. Workflow tabs pass the same flag to
   the canvases embedded in their nodes through `NodeActiveContext`.
+- What is drawn deep in a view and hears keys on the window - a question
+  (`ui/layouts/asking`), a card over the canvas - asks `InFront`
+  (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
+  tab behind waits, unanswered, the keys the tab's in front, Escape too,
+  until its own tab comes back.
 - Because every live canvas holds a WebGL context and browsers keep only about
   16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
   past the limit is refused with a notice rather than silently blanking the
@@ -207,9 +212,11 @@ Nothing a part shows lives in the part, so a part made again shows the same:
 
 A part that fails again as it is made shows its card again. The column's
 Hide is the way on when the column itself is what fails. For the canvas
-there is none yet: its document is kept while Meno runs, but Save is the
-canvas's own (`useFileActions`, `setSaver`), and so is not there until the
-canvas draws again.
+there is none yet, but its document is kept while Meno runs, and Save is
+the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
+`useFileActions`, `setSaver`, Ctrl/Cmd+S): while the canvas is stopped,
+the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
+the document, and a save that fails says so under the canvas's card.
 
 ## How things move
 
@@ -543,8 +550,9 @@ closes*).
   `work/` - and starts Meno's executable as its runner, `Meno --job
   <folder>`: `run()` hands that to `jobs::job_mode` before anything else, so
   it opens no window and needs no webview. The runner is started in a
-  process group of its own (detached, on Windows) and nothing of Meno's
-  waits on it.
+  process group of its own (detached, on Windows), in the jobs' folder -
+  never Meno's own, which it would hold, nor its job's, which is taken away
+  as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
   (`File::lock`): the earliest asked for among those waiting starts when
   fewer are running than it allows (`slots`, Settings' *Jobs at once* when
@@ -561,10 +569,18 @@ closes*).
   given one of its input files as what it reads, where its plugin says so
   (`stdin`: Gaussian's, run as `g16 <input`), else nothing - in a
   process group of its own (macOS, Linux) or a job object that kills what
-  is in it when it closes (Windows), so that *Stop* - a `stop` file the
+  is in it when it closes (Windows; the program started held, put in the
+  job object, then let go, so that nothing it starts at once is outside
+  it - one that cannot be put in a job object is ended before it runs, and
+  its job fails, saying so), so that *Stop* - a `stop` file the
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A finished job's folder is taken away** (*Remove*, *Clear finished
+  jobs' files*) by moving it out of the jobs' way first, under a name no
+  job has (`.taken-…`), then removing it: one a program still holds a file
+  in (Windows) is never left half there as a job - nor read as one in the
+  queue; what was left goes at the next clearing.
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -671,7 +687,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   thing else is a result, in one general form (`lib/calc/results.ts`): it
   belongs to the molecule, each frame, each atom, pairs of atoms or a list;
   it has a group and a name; and its values are numbers or texts, each as a
-  quantity Meno knows - an energy in hartrees, a charge, a wavenumber (an
+  quantity Meno knows - an energy in hartrees, a charge, a spin population
+  (signed, as a charge is), a wavenumber (an
   imaginary one negative), a length, an angle, a dipole - or with its own
   unit. `readResults` keeps those that read as results for the molecule
   (the right count, indices it has, no markup), and `valueText` writes
@@ -728,6 +745,24 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   git ignores - no program's output is committed - and run by hand
   (`scripts/calc/test_reader_cclib.py`); the app's side is tested with the
   plain data written by hand.
+- It reads an output as the program left it (2026-10-13). Gaussian's,
+  ORCA's and xtb's say how the run went, in their own words. One that
+  stopped on an error is read as far as it went, with "Run: ended with an
+  error" first in the chip's line and the program's reason among the
+  results. One with no end written is read the same way, with "Run: did
+  not come to its end" - cut short, or still running. An SCF that did not
+  converge gives no energy ("SCF: not converged"), and where the run
+  stopped, the geometries after the last it worked out an energy for are
+  left out. Where cclib cannot read an output as it is, it is read again
+  with a number that overflowed its field (asterisks) taken as not known,
+  and then as far as it reads - its last lines left off, more each time;
+  where the run itself came to its end, the chip says "Read: only in
+  part".
+  Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
+  not atoms of the molecule and are left out; ORCA's point charges ("Q")
+  are taken out before cclib reads it. An answer never holds a number
+  that is not one (JSON has none). Tested, with cclib, by hand
+  (`scripts/calc/test_reader_cclib_runs.py`).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows; cclib
   from PyPI) is a plugin of its own, sharing no code with another
@@ -1125,6 +1160,12 @@ path it is given:
   app data dir; relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
+- Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
+  (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
+  system's code page: on Windows that is the ANSI one otherwise, in which a request
+  naming a file in Japanese stopped a worker (English Windows) or came back garbled
+  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script inside `resources/workers/` or `resources/plugins/`; later arguments go to the
@@ -1145,6 +1186,13 @@ path it is given:
 - A lock with hashes (`--hash=`) is installed with `--require-hashes`.
 - Sidecars are reaped when their stdout closes or on `ext_kill`, and all of
   them are killed when the app exits.
+- A sidecar's stdin is written to with its own lock, the table of
+  sidecars let go first (`write_stdin`), and off the commands' threads.
+  A worker that stops reading holds up only what is written to it until
+  it is killed, which fails the write; every other sidecar is written
+  to, started and stopped meanwhile (2026-10-13: the table was held
+  through the write, and one stuck worker, sent a file bigger than its
+  pipe holds, held up every plugin's).
 
 Adding a new worker or interpreter flag means extending these rules
 (`PYTHON_FLAGS`, the workers directory) together with the unit tests in

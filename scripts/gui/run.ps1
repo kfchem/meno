@@ -162,11 +162,13 @@ function Open-MenoFile {
       app takes no file on its command line yet; if it ever does, this becomes
       one argument to Start-Meno and the most brittle step in the harness goes
       away.
+
+      With -All (macOS), every file in that file's folder is opened at once.
     #>
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [switch] $All)
     $full = (Resolve-Path $Path).Path
     Send-MenoShortcut O
-    Complete-FileDialog -Path $full
+    if ($All) { Complete-FileDialog -Path $full -All } else { Complete-FileDialog -Path $full }
     # The dialog took the foreground with it; take it back.
     Get-MenoWindow -ProcessName Meno -TimeoutSec 10 | Out-Null
     Set-MenoWindow -Width $Width -Height $Height
@@ -198,12 +200,12 @@ function Invoke-MenoQuickAdd {
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes", "Calculations")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
         [int] $CalcMost = 4
     )
     # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Shapes")
+    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes")
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y
