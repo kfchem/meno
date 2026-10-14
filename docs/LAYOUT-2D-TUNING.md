@@ -227,8 +227,9 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   before - and are fixed one at a time after (the maintainer,
   2026-10-13). One lesson on the way: `untangle` takes the first move that
   reads better, and in the new order that move turned bilobalide's C4 OH
-  into its ring - every bond of C4 in one half of the page, which RDKit
-  read the other way. It never leaves a stereocentre so now.
+  into its ring - every bond of C4 in one half of the page, where no wedge
+  shows the centre one way, so the drawing no longer showed the molecule
+  given. It never leaves a stereocentre so now.
 - **A measure that read the order of the atoms** (2026-10-13). The room
   left for a bond out of a ring atom was read against the rings of the
   smallest set through it, but a cage can have more than one set as
