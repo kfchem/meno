@@ -1,11 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { Text } from "troika-three-text";
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
 import { BATCH_MOST, PACKED_COLOUR, TextBatch, type BatchRun } from "./textBatch";
 
 const run = (text: string, more: Partial<BatchRun> = {}): BatchRun => ({ text, x: 1, y: 2, size: 0.5, color: "#141414", italic: false, bold: false, ...more });
 
+// (troika's own setting of letters, which loads the typeface in a page, left out: here, that it is asked for is what counts)
+let sync: MockInstance;
+beforeEach(() => {
+  sync = vi.spyOn(Text.prototype, "sync").mockImplementation(function (this: Text) {
+    return this;
+  });
+});
+afterEach(() => sync.mockRestore());
+
 describe("texts drawn as a batch", () => {
+  it("sets a label's letters as it is given them, not only as the batch is drawn, and says so shown or not", () => {
+    const b = new TextBatch("font.ttf", 30);
+    b.root.visible = false;
+    let told = 0;
+    const stop = b.onSynced(() => told++);
+    b.set("a", {}, [run("1. Aspirin", { size: 2.3 })], 1);
+    expect(sync).toHaveBeenCalledTimes(1);
+    // (its letters set: those waiting on the batch told, though nothing of it is drawn)
+    [...b.members()][0].dispatchEvent({ type: "synccomplete" } as never);
+    expect(told).toBe(1);
+    stop();
+    [...b.members()][0].dispatchEvent({ type: "synccomplete" } as never);
+    expect(told).toBe(1);
+    b.dispose();
+  });
+
   it("holds each label's runs by key, kept while it is the same item, and lets go of those not kept", () => {
     const b = new TextBatch("font.ttf", 30);
     const oh = {};
