@@ -13,7 +13,7 @@ import { shapePlace, type MarkPlaces } from "../document";
 import { isBox, middleOf as shapeMiddle, moved as shapeMoved } from "../../../../lib/chem/shapes";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { pdfRoom } from "../../../../lib/pdf/layout";
-import { sheetOf } from "./textSheets";
+import { sheetOfText } from "./textSheets";
 import { cornersOf } from "./selection";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { middleOfPoints } from "../../../../lib/chem/lists";
@@ -33,7 +33,7 @@ export function mirroredAbout(about: Pt, axis: Axis): (p: Pt) => Pt {
 function sheetsOf(st: EditorState): { id: number; x: number; y: number; w: number; h: number }[] {
   return st.texts.flatMap((t) => {
     if (!t.at || !st.selTexts.has(t.id)) return [];
-    const s = sheetOf(t.text, t.name);
+    const s = sheetOfText(t);
     return [{ id: t.id, x: t.at.x + s.w / 2, y: t.at.y - s.h / 2, w: s.w, h: s.h }];
   });
 }

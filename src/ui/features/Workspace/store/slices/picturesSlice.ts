@@ -1,4 +1,5 @@
 import { gestureStep } from "../../../../../lib/doc/document";
+import { pointOfStyle } from "../../restyle";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -27,7 +28,7 @@ export function createPicturesSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       }),
     addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just = false) => {
       // (clear of what lies there already, not over it - unless put down just there)
-      const inRow = ops.picturesInRow(pictures, at);
+      const inRow = ops.picturesInRow(pictures, at, pointOfStyle(doc.getState().style));
       const row = just ? inRow : ops.clearOfPictures(inRow, doc.getState());
       if (!row.length) return [];
       const first = doc.getState().nextPictureId ?? 1;

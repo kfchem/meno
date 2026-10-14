@@ -4,7 +4,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { ALPHA, COLORS } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { ATOM_HOVER_RING_RADIUS_RATIO, LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
+import { ATOM_HOVER_RING_RADIUS_RATIO } from "../constants";
+import { holdProgress } from "./held";
 import { SELECTION_SHADE } from "./selectionShade";
 
 /** How quickly what a hold showed goes once it is let go, or done, in seconds. */
@@ -49,7 +50,8 @@ export default function HoldProgress2D() {
     return { level, deepest };
   }, [hold?.atomId, model.bonds]);
   // what is shown, kept to fade once the hold is over
-  const shown = useRef<{ hold: NonNullable<typeof hold>; reach: typeof reach; fade: number } | null>(null);
+  // (and when the hold was over: let go early, what it showed stays as it was then, fading - a click shows nothing)
+  const shown = useRef<{ hold: NonNullable<typeof hold>; reach: typeof reach; fade: number; ended?: number } | null>(null);
   const atomMeshes = useRef(new Map<number, THREE.Mesh>());
   const bondMeshes = useRef(new Map<number, THREE.Mesh>());
   const ring = useRef<THREE.Mesh>(null!);
@@ -58,9 +60,11 @@ export default function HoldProgress2D() {
   useFrame((_, dt) => {
     const s = shown.current;
     if (!s) return;
-    if (!hold || hold !== s.hold) s.fade = Math.max(0, s.fade - Math.min(dt, 1 / 30) / FADE_S);
-    const t = (performance.now() - s.hold.start - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS);
-    const u = Math.min(1, Math.max(0, t));
+    if (!hold || hold !== s.hold) {
+      s.ended ??= performance.now();
+      s.fade = Math.max(0, s.fade - Math.min(dt, 1 / 30) / FADE_S);
+    }
+    const u = holdProgress(s.hold.start, performance.now(), s.ended);
     if (s.reach) {
       // (the farthest atoms reached just as the hold is done)
       const front = u * (s.reach.deepest + 1);

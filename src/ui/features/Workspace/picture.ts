@@ -28,7 +28,7 @@ import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
 import { currentStyle3D } from "./style3d";
-import type { DrawingStyle } from "../../../lib/chem/style";
+import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout } from "./fileActions";
 import type { Drawn, EditorState } from "./store/types";
@@ -74,7 +74,8 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
-  const record = recordText(part);
+  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
+  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
   const drawing = seenDrawing(part);
   const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
@@ -124,7 +125,7 @@ export async function structureInPicture(item: ClipItem): Promise<Drawn | null> 
   if (item.flavor === "png") return fromPng(item.bytes);
   if (item.flavor === "object") return fromObject(item.bytes);
   if (item.flavor !== "gvml") return null;
-  for (const { name, data } of await gvmlImages(item.bytes)) {
+  for (const { name, data } of gvmlImages(item.bytes)) {
     const found = /\.emf$/i.test(name) ? fromEmf(data) : /\.png$/i.test(name) ? fromPng(data) : null;
     if (found) return found;
   }

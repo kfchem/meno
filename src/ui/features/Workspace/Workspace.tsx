@@ -110,6 +110,7 @@ import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -150,6 +151,8 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
+import { FollowStyle } from "./components/FollowStyle";
+import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
 import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
@@ -271,7 +274,7 @@ function WorkspaceContent({
     const middle = viewMiddle();
     if (!rooms.length) return middle;
     const foot = { x0: Math.min(...rooms.map((r) => r.x0)), y0: Math.min(...rooms.map((r) => r.y0)), x1: Math.max(...rooms.map((r) => r.x1)), y1: Math.max(...rooms.map((r) => r.y1)) };
-    return freePlace(pageBoxes(st, styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle)), foot, middle, NOMINAL_BOND_LENGTH);
+    return freePlace(pageBoxes(st, styleOf(st.docStyle)), foot, middle, NOMINAL_BOND_LENGTH);
   };
   // (how files opened are put on the page: as a drop puts them, in free space near the middle of the view - this render's)
   const openedFiles = useRef<(files: OpenedFile[]) => Promise<void>>(async () => {});
@@ -301,7 +304,7 @@ function WorkspaceContent({
     () =>
       ownTab && officeId == null
         ? setTextTaker(tabId, (texts) => {
-            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState()).flatMap((t) => sheetRoom(t) ?? []);
+            const rooms = textsInRow(texts, { x: 0, y: 0 }, store.getState(), pointOfStyle(store.getState().docStyle)).flatMap((t) => sheetRoom(t) ?? []);
             store.getState().addTexts(texts, freeNear.current(rooms));
           })
         : undefined,
@@ -309,14 +312,14 @@ function WorkspaceContent({
   );
   // (and PDFs and pictures opened, on its page where it is looked at: docs/PDF.md)
   useEffect(
-    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }).map(pdfRoom)))) : undefined),
+    () => (ownTab && officeId == null ? setPdfTaker(tabId, (pdfs) => store.getState().addPdfs(pdfs, freeNear.current(pdfsInRow(pdfs, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map(pdfRoom)))) : undefined),
     [ownTab, officeId, tabId, store],
   );
   useEffect(
     () =>
       ownTab && officeId == null
         ? setPictureTaker(tabId, (pictures) => {
-            const rooms = picturesInRow(pictures, { x: 0, y: 0 }).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
+            const rooms = picturesInRow(pictures, { x: 0, y: 0 }, pointOfStyle(store.getState().docStyle)).map((p) => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 }));
             void store.getState().addPictures(pictures, freeNear.current(rooms));
           })
         : undefined,
@@ -518,7 +521,7 @@ function WorkspaceContent({
       setChemError(null);
       try {
         // (laid out in the drawing's style, as Clean-up lays it out)
-        const style = styleOf(st.docStyle ?? useAppSettings.getState().drawingStyle);
+        const style = styleOf(st.docStyle);
         const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
         const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
         store.getState().drawFormula3d(id, placed, link);
@@ -1267,7 +1270,7 @@ function WorkspaceContent({
     chemWorker("checks").catch((e: unknown) => {
       setChemistry({ ...useAppSettings.getState().chemistry, stereoLabels: false });
       setChemError(
-        `R and S cannot be shown: ${e instanceof Error ? e.message : String(e)}`,
+        `${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`,
       );
     });
   };
@@ -1278,7 +1281,6 @@ function WorkspaceContent({
     : files.error
       ? files.dismissError
       : () => setChemError(null);
-  const ownStyle = useEditor((s) => s.docStyle != null);
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1359,7 +1361,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    { name: chemistry.stereoLabels ? "Hide R and S" : "Show R and S", keys: "", run: toggleStereoLabels },
+    { name: chemistry.stereoLabels ? STEREO_LABELS.hide : STEREO_LABELS.show, keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
       ? [
           textsOpen
@@ -1378,7 +1380,7 @@ function WorkspaceContent({
         ]
       : []),
     ...(pdfsHeld ? [{ name: "Find in PDF…", keys: shortcutLabel("F"), run: openFind }] : []),
-    { name: ownStyle ? "Drawing style (its own)…" : "Drawing style…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
+    { name: "Drawing style…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
@@ -2140,6 +2142,7 @@ function WorkspaceContent({
         <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
+        <FollowStyle />
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}

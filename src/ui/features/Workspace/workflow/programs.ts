@@ -7,6 +7,7 @@
  */
 import { valueText } from "../../../../lib/calc/results";
 import { knownOf, type WrittenMolecule } from "../../../../lib/io/writers";
+import { isotopeMass } from "../../../../lib/chem/isotopes";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -19,7 +20,8 @@ import type { StepKind } from "./kinds";
  * their orders; its name - and its charge and spin multiplicity, as Export
  * reads them (lib/io/writers `knownOf`).
  */
-export type PluginEntry = WrittenMolecule & { charge: number; multiplicity: number; files?: EntryFile[] };
+/** An entry as a plugin is given it: its molecule - each isotope's mass with it, in daltons, where Meno knows it - its charge and multiplicity, and its files. */
+export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[] };
 
 /** A file an entry is given besides its geometry (a step's `files`): its kind, by id, its name and its text - the output its molecule was read from. */
 export type EntryFile = { kind: string; name: string; text: string };
@@ -59,9 +61,14 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     })),
     bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
   };
+  // (an isotope's mass with it, where NIST gives a measured one: what a program's input takes - ORCA's "M =")
+  const atoms = molecule.atoms.map((a) => {
+    const mass = a.isotope ? isotopeMass(a.el, a.isotope) : undefined;
+    return mass != null ? { ...a, mass } : a;
+  });
   const known = knownOf(molecule);
   // (a molecule read from a calculation: the state it was in there; else what its atoms say)
-  return { ...molecule, charge: e.charge ?? Number(known.charge), multiplicity: e.multiplicity ?? Number(known.multiplicity) };
+  return { ...molecule, atoms, charge: e.charge ?? Number(known.charge), multiplicity: e.multiplicity ?? Number(known.multiplicity) };
 }
 
 /**

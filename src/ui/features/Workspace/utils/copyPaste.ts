@@ -20,7 +20,8 @@ import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../..
 import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
-import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import { restyled } from "../restyle";
 import { asSeen } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
@@ -166,6 +167,8 @@ export function recordText(part: Drawn): string {
   return JSON.stringify({
     format: RECORD,
     version: VERSION,
+    ...(part.bondPt ? { bondPt: part.bondPt } : {}),
+    ...(part.labelPt ? { labelPt: part.labelPt } : {}),
     atoms: part.atoms,
     bonds: part.bonds,
     ...(part.pushes?.length ? { pushes: part.pushes } : {}),
@@ -189,6 +192,8 @@ export function recordText(part: Drawn): string {
 export const hasFlow = (part: Pick<Drawn, "flow">) => !!(part.flow?.sets.length || part.flow?.steps.length);
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** Whether an entry of a list a record holds is an object, as each must be to be read at all - not null, a list, a number, a string or true or false. */
+const isEntry = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v);
 /** A colour as Meno keeps one: #rrggbb. */
 export const isColour = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
@@ -241,7 +246,7 @@ export function readRecord(text: string): Drawn | null {
   } catch {
     return null;
   }
-  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown };
+  const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown; bondPt?: unknown; labelPt?: unknown };
   if (r?.format !== RECORD || r.version !== VERSION) return null;
   const drawn = readDrawn(data);
   if (!drawn) return null;
@@ -252,7 +257,10 @@ export function readRecord(text: string): Drawn | null {
       ? [{ id: i + 1, name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }]
       : [],
   );
-  return { ...drawn, ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
+  // (the bond's printed length in the style it was copied in, where it says: a record without one pastes as it is)
+  const bondPt = isNum(r.bondPt) && r.bondPt > 0 ? r.bondPt : undefined;
+  const labelPt = isNum(r.labelPt) && r.labelPt > 0 ? r.labelPt : undefined;
+  return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(labelPt ? { labelPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
 
 /**
@@ -281,18 +289,18 @@ export function readDrawn(data: unknown): Drawn | null {
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
   const bonds = r.bonds as Partial<Bond>[];
-  // (an entry that is no object - null, in a damaged file - reads as nothing, as one missing its place does)
-  if (!atoms.every((a) => !!a && isNum(a.id) && isNum(a.x) && isNum(a.y) && typeof a.el === "string")) return null;
+  // (an atom or a bond that is no object - null, a number - reads no more than one whose fields do not)
+  if (!atoms.every((a) => isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && typeof a.el === "string")) return null;
   const ids = new Set(atoms.map((a) => a.id));
-  if (!bonds.every((b) => !!b && isNum(b.id) && ids.has(b.a) && ids.has(b.b) && [1, 2, 3].includes(b.order as number))) {
+  if (!bonds.every((b) => isEntry(b) && isNum(b.id) && ids.has(b.a) && ids.has(b.b) && [1, 2, 3].includes(b.order as number))) {
     return null;
   }
   // (arrows and pluses that do not read are left out, not the structure)
   const arrows = (Array.isArray(r.arrows) ? (r.arrows as Partial<Arrow>[]) : [])
-    .filter((a) => !!a && isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
+    .filter((a) => isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
     .map((a) => withArrowForm(a as Arrow));
   const pluses = (Array.isArray(r.pluses) ? (r.pluses as Partial<Plus>[]) : []).filter(
-    (p) => !!p && isNum(p.id) && isNum(p.x) && isNum(p.y),
+    (p) => isEntry(p) && isNum(p.id) && isNum(p.x) && isNum(p.y),
   ) as Plus[];
   // (words over an arrow that is not there are over none; in a shape that is not there, in none)
   const arrowIds = new Set(arrows.map((a) => a.id));
@@ -302,7 +310,7 @@ export function readDrawn(data: unknown): Drawn | null {
   });
   const shapeIds = new Set(shapes.filter((x) => isBox(x.kind)).map((x) => x.id));
   const captions = (Array.isArray(r.captions) ? (r.captions as Partial<Caption>[]) : []).flatMap((c): Caption[] => {
-    if (!c || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
+    if (!isEntry(c) || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
     const from = wordsFromOf(c.from);
     return [
       {
@@ -366,7 +374,7 @@ export function readDrawn(data: unknown): Drawn | null {
     return null;
   };
   const pushes = (Array.isArray(r.pushes) ? (r.pushes as Partial<PushArrow>[]) : []).flatMap((p): PushArrow[] => {
-    if (!p) return [];
+    if (!isEntry(p)) return [];
     const from = endOf(p.from);
     const to = endOf(p.to);
     if (!isNum(p.id) || !from || !to) return [];
@@ -544,10 +552,10 @@ export function readCarried3D(given: unknown): Carried3D | null {
   if (!m || !Array.isArray(m.atoms) || !Array.isArray(m.bonds) || !m.at) return null;
   const atoms = m.atoms as Partial<Carried3D["atoms"][number]>[];
   const n = atoms.length;
-  if (!n || !atoms.every((a) => !!a && typeof a.el === "string" && isNum(a.x) && isNum(a.y) && isNum(a.z))) return null;
+  if (!n || !atoms.every((a) => isEntry(a) && typeof a.el === "string" && isNum(a.x) && isNum(a.y) && isNum(a.z))) return null;
   const index = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
   const bonds = m.bonds as Partial<Carried3D["bonds"][number]>[];
-  if (!bonds.every((b) => !!b && index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
+  if (!bonds.every((b) => isEntry(b) && index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
   const at = m.at as Partial<Pt & { z: number }>;
   if (!isNum(at.x) || !isNum(at.y)) return null;
   // (what does not read is left out, not the molecule)
@@ -556,7 +564,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
   );
   const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
   const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
-    (x): x is Measure3D => !!x && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
+    (x): x is Measure3D => isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
   );
   const turn = Array.isArray(m.turn) && m.turn.length === 4 && m.turn.every(isNum) ? (m.turn as Turn3D) : undefined;
   // what ties it to the drawing it was made from: the drawing's atom each
@@ -660,9 +668,10 @@ export function pastePlace(last: PastesAt | null, at: Pt): { place: Pt; pastes: 
 }
 
 /** `drawn` moved so that the middle of the box round it - its arrows and pluses too, and a workflow's sets and steps - is at `p`. */
-export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
+/** The points that bound what a copy carries - its atoms, arrows, words, pictures, frames - for its middle. */
+function boundingPoints(drawn: Drawn): Pt[] {
   const flow = drawn.flow ? partsBounds(drawn.flow) : null;
-  const points = [
+  return [
     ...drawn.atoms,
     ...(drawn.arrows ?? []).flatMap((a) => arrowPoints(a)),
     ...(drawn.pluses ?? []),
@@ -678,11 +687,69 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
       { x: b.x1, y: b.y1 },
     ]),
   ];
-  if (!points.length) return drawn;
+}
+
+/** The middle of what a copy carries (of the box round it), or null where it carries nothing. */
+function middleOf(drawn: Drawn): Pt | null {
+  const points = boundingPoints(drawn);
+  if (!points.length) return null;
   const xs = points.map((a) => a.x);
   const ys = points.map((a) => a.y);
-  const dx = p.x - (least(xs) + greatest(xs)) / 2;
-  const dy = p.y - (least(ys) + greatest(ys)) / 2;
+  return { x: (least(xs) + greatest(xs)) / 2, y: (least(ys) + greatest(ys)) / 2 };
+}
+
+/**
+ * What a copy carries, converted as a change of style converts a page
+ * (../restyle `restyled`) by k = the bond's printed length where it was
+ * copied over this workspace's, about its middle: its structures keep their
+ * size in units, so they print at this workspace's bond, and its words,
+ * shapes and pictures keep their size in pt (docs/WORKSPACE.md, *Drawing
+ * style*). As it is, where k is one.
+ */
+export function restyledDrawn(drawn: Drawn, k: number): Drawn {
+  const about = middleOf(drawn);
+  if (k === 1 || !about) return drawn;
+  const parts = restyled(
+    {
+      model: { atoms: drawn.atoms, bonds: drawn.bonds },
+      ...(drawn.arrows ? { arrows: drawn.arrows } : {}),
+      ...(drawn.pluses ? { pluses: drawn.pluses } : {}),
+      ...(drawn.captions ? { captions: drawn.captions } : {}),
+      ...(drawn.molecules3d ? { molecules3d: drawn.molecules3d as unknown as Molecule3D[] } : {}),
+      ...(drawn.pictures ? { pictures: drawn.pictures } : {}),
+      ...(drawn.pdfs ? { pdfs: drawn.pdfs } : {}),
+      ...(drawn.sheets ? { texts: drawn.sheets } : {}),
+      ...(drawn.slides ? { slides: drawn.slides } : {}),
+      ...(drawn.shapes ? { shapes: drawn.shapes } : {}),
+      ...(drawn.inks ? { inks: drawn.inks } : {}),
+      ...(drawn.flow ? { sets: drawn.flow.sets, steps: drawn.flow.steps } : {}),
+    },
+    k,
+    about,
+  );
+  return {
+    ...drawn,
+    atoms: parts.model!.atoms,
+    bonds: parts.model!.bonds,
+    ...(parts.arrows ? { arrows: parts.arrows } : {}),
+    ...(parts.pluses ? { pluses: parts.pluses } : {}),
+    ...(parts.captions ? { captions: parts.captions } : {}),
+    ...(parts.molecules3d ? { molecules3d: parts.molecules3d as unknown as Carried3D[] } : {}),
+    ...(parts.pictures ? { pictures: parts.pictures } : {}),
+    ...(parts.pdfs ? { pdfs: parts.pdfs } : {}),
+    ...(parts.texts ? { sheets: parts.texts } : {}),
+    ...(parts.slides ? { slides: parts.slides } : {}),
+    ...(parts.shapes ? { shapes: parts.shapes } : {}),
+    ...(parts.inks ? { inks: parts.inks } : {}),
+    ...(drawn.flow ? { flow: { ...drawn.flow, sets: parts.sets ?? drawn.flow.sets, steps: parts.steps ?? drawn.flow.steps } } : {}),
+  };
+}
+
+export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
+  const middle = middleOf(drawn);
+  if (!middle) return drawn;
+  const dx = p.x - middle.x;
+  const dy = p.y - middle.y;
   const moved = <T extends Pt>(t: T): T => ({ ...t, x: t.x + dx, y: t.y + dy });
   return {
     ...drawn,

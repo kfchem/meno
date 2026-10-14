@@ -93,7 +93,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
-  /** The steps to run to run `id`, in order: those before it that have not run, or have changed, or are running - and it. */
+  /** The steps to run to run `id`, in order: those before it back to one that is done - each not run, changed, failed, stopped or running - and it. */
   const chainTo = (d: WorkspaceDocument, id: number): number[] => {
     const out = [id];
     for (let prior = before(d, id); prior && out.length < 200; prior = before(d, prior.id)) {
@@ -732,10 +732,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         const log = await wholeLog(j.id);
         const files: Record<string, string> = {};
+        let unread: string | undefined;
         // (what it wrote, ended well or not: a program may say why it failed in its output - Gaussian does)
         if (record.state === "done" || record.state === "failed") {
           const there = new Set(await jobFiles(j.id).catch(() => []));
-          for (const name of j.reads) if (there.has(name)) files[name] = await readJobFile(j.id, name).catch(() => "");
+          for (const name of j.reads) {
+            if (!there.has(name)) continue;
+            try {
+              files[name] = await readJobFile(j.id, name);
+            } catch (e) {
+              unread ??= message(e);
+            }
+          }
+        }
+        // (one there that could not be read - past the size Meno reads, say - said so, not taken for one written empty)
+        if (unread) {
+          fails(j.entries.length, unread);
+          continue;
         }
         let said;
         try {
@@ -906,7 +919,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     runFrom: (id: number) => runSteps([id, ...after(doc.getState(), id)]),
     runAll: () => {
       const d = doc.getState();
-      // (every step that has not run or has changed - one with nothing coming in left as it is)
+      // (every step that is not done - not run, changed, failed or stopped - or is running; one with nothing coming in left as it is)
       return runSteps((d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id));
     },
     stopStep: (id: number) => {

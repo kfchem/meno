@@ -29,11 +29,21 @@ else:
 
 - a simple input line, begun by "!": the method and basis set, a
   dispersion correction (D3BJ, D4), the run - SP, OPT or FREQ - and, for
-  implicit solvation, CPCM(solvent) or SMD(solvent);
+  implicit solvation, CPCM(solvent) or SMD(solvent). What is typed into
+  it - the method, the basis set, the keywords - stays on that line, with
+  no "#", which begins a comment, and no "%", which begins a block: the
+  manual names a file or a program only in a block, in quotes (%MOInp
+  "file", %method ProgExt "path"), so a step's text names neither - a
+  workspace's steps may come from someone else, and run where it is
+  opened;
 - %pal nprocs, the processes a run uses, where it may use more than one;
   %maxcore, the memory for each, in MB;
 - the coordinates, "* xyz charge multiplicity", an atom a line - its
-  element and x, y, z in angstroms - and "*" at their end.
+  element and x, y, z in angstroms, and an isotope's mass after them,
+  "M = 2.01410177812" ("Coordinate input": non-standard isotopes are
+  "specified with the statements M = ... after the atomic coordinate
+  definition"), the mass Meno gives with the entry (NIST's) - and "*" at
+  their end.
 
 A lone atom - an ion of a salt, say - asked to be optimised is run as SP:
 it has no geometry to optimise, and ORCA, given OPT for one atom, warns
@@ -112,6 +122,20 @@ def elements_of(entry):
     return out
 
 
+def mass_of(el, atom):
+    """An isotope's mass, as the manual has it written after the atom's
+    coordinates ("M = ..."), from what Meno gives with the entry; nothing for
+    an atom of no isotope. One Meno gives no mass for - none measured - is
+    refused, naming it, rather than given as the element's natural mass."""
+    iso = atom.get("isotope")
+    if not iso:
+        return ""
+    mass = atom.get("mass")
+    if isinstance(mass, bool) or not isinstance(mass, (int, float)) or not math.isfinite(mass) or mass <= 0:
+        raise Refused(f"Meno knows no measured mass for {iso}{el}: ORCA would be given {el} of natural mass")
+    return f"  M = {mass:.15g}"
+
+
 def orca_input(step, entry, options, cores):
     """An entry's input, as ORCA's manual lays it out."""
     run = RUNS.get(step)
@@ -149,7 +173,7 @@ def orca_input(step, entry, options, cores):
         x, y, z = (float(a.get(k, 0.0)) for k in ("x", "y", "z"))
         if not all(math.isfinite(v) for v in (x, y, z)):
             raise Refused("an atom has no place")
-        lines.append(f"{el:<3}{x:>18.10f}{y:>18.10f}{z:>18.10f}")
+        lines.append(f"{el:<3}{x:>18.10f}{y:>18.10f}{z:>18.10f}" + mass_of(el, a))
     lines.append("*")
     return "\n".join(lines) + "\n"
 

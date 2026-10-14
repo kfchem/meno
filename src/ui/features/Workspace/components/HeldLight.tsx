@@ -2,9 +2,8 @@ import * as THREE from "three";
 import { useEffect, useMemo, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { ALPHA, COLORS } from "../../../theme/colors";
-import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { SHADE } from "./selectionShade";
-import { HELD_FADE_MS, heldShows, type Held } from "./held";
+import { HELD_FADE_MS, heldShows, holdProgress, type Held } from "./held";
 import { usePartFrame } from "./partFrames";
 
 // language=GLSL
@@ -64,7 +63,7 @@ export function HeldLight({ b, at, held, now, z = 0.45 }: { b: { x0: number; x1:
   useEffect(() => () => material.dispose(), [material]);
   // (the farthest of it reached just as it is taken hold of)
   const far = Math.max(...[b.x0, b.x1].flatMap((x) => [b.y0, b.y1].map((y) => Math.hypot(x - at.x, y - at.y))));
-  const u = held.done ? 1 : Math.min(1, Math.max(0, (now - held.start - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS)));
+  const u = held.done ? 1 : holdProgress(held.start, now, held.let);
   const soft = 0.12 * far;
   const fade = held.let == null ? 1 : Math.max(0, 1 - (now - held.let) / HELD_FADE_MS);
   const middle = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };

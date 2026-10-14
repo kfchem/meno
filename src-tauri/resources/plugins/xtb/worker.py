@@ -168,6 +168,19 @@ def lone(entry):
     return len(elements_of(entry)) == 1
 
 
+def refuse_isotopes(entry):
+    """Frequencies of an entry with an isotope, refused, naming it: xtb (6.7.1)
+    says it takes an atom's mass (xcontrol(7): $hess, "isotope", "element
+    mass") and that it changed it, but its frequencies and thermochemistry
+    come out as they would of the natural element - a deuterium as an H.
+    Geometries and energies do not depend on the masses: those are run."""
+    for a in entry.get("atoms") or []:
+        iso = a.get("isotope")
+        if iso:
+            el = a.get("el")
+            raise Refused(f"xTB's frequencies here take no isotope's mass: {iso}{el} would be given as {el} of natural mass")
+
+
 def args_for(step, options, entry, cores):
     method = METHODS.get(options.get("method", "gfn2"))
     if method is None:
@@ -188,6 +201,7 @@ def args_for(step, options, entry, cores):
         if not lone(entry):
             args += ["--opt", level]
     elif step == "frequencies":
+        refuse_isotopes(entry)
         args += ["--hess"]
     args += method[0] + ["--chrg", str(charge), "--uhf", str(multiplicity - 1)]
     if solvent != "none":

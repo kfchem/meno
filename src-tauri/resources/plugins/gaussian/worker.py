@@ -45,7 +45,16 @@ and from nothing else:
   may use, %Mem its memory, a number of 8-byte words or with a unit.
 - The route section, begun by "#", ended by a blank line: the method and
   basis set, empirical dispersion (the "EmpiricalDispersion" keyword: GD2,
-  GD3 or GD3BJ), the job (SP, Opt, Freq) and any keywords besides.
+  GD3 or GD3BJ), the job (SP, Opt, Freq) and any keywords besides. What
+  is typed into it - the method, the basis set, the keywords - names no
+  program and no file: a workspace's steps may come from someone else,
+  and run when its Run is pressed. So it holds no External, the keyword
+  that runs a program the input names (gaussian.com, "External":
+  External="RunTink Amber", or in an ONIOM layer), however shortened; no
+  "@", which places a file's contents in the input ("About Gaussian 16
+  Input": @filename); no "%", which begins a Link 0 command, no "#",
+  which begins a route line, no "!", which begins a comment, and no
+  double quotes, in which a name is given.
 - The title section, ended by a blank line: at most five lines, none of
   the characters the reference says to avoid (@ # ! an en dash _ \\ and
   control characters).
@@ -85,6 +94,8 @@ DISPERSIONS = {"none": "", "GD2": "EmpiricalDispersion=GD2", "GD3": "EmpiricalDi
 MEMORY = re.compile(r"^\d+(KB|MB|GB|TB|KW|MW|GW|TW)?$", re.IGNORECASE)
 # What the title section should not hold: these, control characters, and (the input being ASCII) anything else.
 TITLE_AVOID = re.compile(r"[@#!–_\\\x00-\x1f\x7f]|[^\x00-\x7f]")
+# What the route section's typed text may not hold: a file's contents placed (@), a Link 0 command (%), a route line (#), a comment (!), a name given ("").
+ROUTE_AVOID = re.compile(r'[@%#!"]')
 
 
 class Refused(Exception):
@@ -96,6 +107,18 @@ def one_line(value, what):
     if not isinstance(value, str):
         raise Refused(f"{what} is not text")
     return " ".join(value.split())
+
+
+def route_words(value, what):
+    """Text typed into the route section: one line, naming no program and no file - no External, however shortened, and none of ROUTE_AVOID."""
+    text = one_line(value, what)
+    if ROUTE_AVOID.search(text):
+        raise Refused(f"{what} may hold no @, %, #, ! or double quotes: Gaussian reads them as a file, a Link 0 command, a route line, a comment or a name")
+    for word in re.findall(r"[A-Za-z][A-Za-z0-9]*", text):
+        w = word.lower()
+        if w.startswith("external") or (len(w) >= 3 and "external".startswith(w)):
+            raise Refused(f'{what} may not hold "{word}": External runs a program the input names, and a step\'s input runs on whichever computer its workspace is opened on')
+    return text
 
 
 def whole(value, what, least=None):
@@ -170,8 +193,8 @@ def gaussian_input(name, molecule, options):
         lines.append(f"%Mem={memory}")
 
     # the route section
-    method = one_line(options.get("method", ""), "The method")
-    basis = one_line(options.get("basis", ""), "The basis set")
+    method = route_words(options.get("method", ""), "The method")
+    basis = route_words(options.get("basis", ""), "The basis set")
     chemistry = "/".join(p for p in (method, basis) if p)
     job = JOBS.get(options.get("job", "sp"))
     if job is None:
@@ -179,7 +202,7 @@ def gaussian_input(name, molecule, options):
     dispersion = DISPERSIONS.get(options.get("dispersion", "none"))
     if dispersion is None:
         raise Refused(f"no empirical dispersion is called {options.get('dispersion')!r}")
-    more = one_line(options.get("keywords", ""), "The keywords")
+    more = route_words(options.get("keywords", ""), "The keywords")
     lines.append(" ".join(p for p in ("#", chemistry, dispersion, job, more) if p))
     lines.append("")
 

@@ -1,4 +1,5 @@
 import type { StoreApi } from "zustand";
+import { pointOfStyle } from "../../restyle";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
@@ -16,7 +17,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
     addTexts: (texts: Parameters<EditorState["addTexts"]>[0], onPage?: { x: number; y: number }) => {
       if (!texts.length) return;
       // (each a sheet on the page too, where it is to lie: a row of them there, clear of what lies there)
-      const placed = onPage ? ops.textsInRow(texts, onPage, doc.getState()) : texts;
+      const placed = onPage ? ops.textsInRow(texts, onPage, doc.getState(), pointOfStyle(doc.getState().style)) : texts;
       const { doc: next, last } = ops.addTexts(doc.getState(), placed);
       // (one with a sheet: into the column from its sheet, as it opens)
       const lastSheet = onPage && last != null && next.texts?.find((t) => t.id === last)?.at;

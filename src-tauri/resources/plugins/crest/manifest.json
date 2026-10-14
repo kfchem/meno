@@ -3,7 +3,7 @@
   "name": "CREST",
   "version": "2.12",
   "description": "Searches for a molecule's conformers in 3D, by metadynamics with the GFN methods of xtb, from the Grimme group.",
-  "licence": "LGPL-3.0",
+  "licence": "LGPL-3.0-or-later",
   "homepage": "https://crest-lab.github.io/crest-docs",
   "systems": ["macos", "linux"],
   "environment": "pixi",

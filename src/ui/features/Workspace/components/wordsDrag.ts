@@ -8,7 +8,7 @@
 import type { EditorStore } from "../store";
 import type { Caption, PdfItem, PdfSelection, WordsFlight, WordsFrom } from "../store/types";
 import { blockOf, marksBetween, textOf, wordBoxesBetween, type Block, type PageText } from "../../../../lib/pdf/text";
-import { POINT } from "../../../../lib/pdf/layout";
+import { POINT, pointOf } from "../../../../lib/pdf/layout";
 import { onPage, ordered, selectedWords } from "../utils/pdfSelection";
 
 /** Where the canvas is, and the page under a point of the window: what words let go are put down by. */
@@ -47,9 +47,9 @@ export function onSelected(t: PageText, sel: PdfSelection, page: number, x: numb
  * the lines about them did (lib/pdf/text `blockOf`) - from one line, as they
  * come, on one line.
  */
-export function setAsTheyWere(block: Block, pages: number): { width?: number; align?: Caption["align"] } {
+export function setAsTheyWere(block: Block, pages: number, point = POINT): { width?: number; align?: Caption["align"] } {
   if (block.lines < 2 && pages < 2) return {};
-  return { width: (block.x1 - block.x0) * POINT, ...(block.align !== "center" ? { align: block.align } : {}) };
+  return { width: (block.x1 - block.x0) * point, ...(block.align !== "center" ? { align: block.align } : {}) };
 }
 
 /** Where a point of a PDF's page lies in the window, in its pixels: where the words are drawn, on the stack or in the column. */
@@ -64,7 +64,7 @@ export type OnScreen = { at: (page: number, x: number, y: number) => { x: number
  * anywhere else, or on the PDF they came from, they go back down onto the
  * words they were.
  */
-export async function dragWords(store: EditorStore, pdf: Pick<PdfItem, "id" | "sha256">, sel: PdfSelection, at: { x: number; y: number }, screen: OnScreen): Promise<void> {
+export async function dragWords(store: EditorStore, pdf: Pick<PdfItem, "id" | "sha256" | "point">, sel: PdfSelection, at: { x: number; y: number }, screen: OnScreen): Promise<void> {
   // (the pointer followed from the first, in case it is let go before the words are read)
   let pointer = { x: at.x, y: at.y };
   let letGo: PointerEvent | null = null;
@@ -101,7 +101,7 @@ export async function dragWords(store: EditorStore, pdf: Pick<PdfItem, "id" | "s
     stop();
     return;
   }
-  const set = setAsTheyWere(block, to.page - from.page + 1);
+  const set = setAsTheyWere(block, to.page - from.page + 1, pointOf(pdf));
   const first = marksBetween(t, range[0], range[1])[0];
   const corner = set.width != null ? screen.at(from.page, block.x0, block.y0) : screen.at(from.page, first[0], first[1]);
   const boxes = wordBoxesBetween(t, range[0], range[1]).map((b) => {
@@ -133,7 +133,7 @@ export async function dragWords(store: EditorStore, pdf: Pick<PdfItem, "id" | "s
     text: words,
     ...set,
     boxes,
-    from: { left: corner.x, top: corner.y, k: screen.pxPerPoint / POINT },
+    from: { left: corner.x, top: corner.y, k: screen.pxPerPoint / pointOf(pdf) },
     grab: { x: at.x, y: at.y },
     start: performance.now(),
     now: { x: pointer.x, y: pointer.y, over: overCanvasAt(store, pointer.x, pointer.y), held: null, end: null },
