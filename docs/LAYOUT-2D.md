@@ -18,7 +18,27 @@ point and keeping the best; which atom, bond or ring happens to be listed
 first never decides it. Laying a molecule out in several orders and
 keeping the best is no answer: the result still depends on the orders
 tried. `npm run layout-order` lists the molecules still drawn otherwise in
-another order. The benchmark's measure reads a drawing the same way
+another order. Where the rules below leave a tie, it is settled so:
+
+- **By structure.** Each atom is classed by what it is and what it is
+  bonded to, refined through its neighbours, each stereocentre and each
+  double bond (`ranks.ts`): atoms of one class are alike in everything
+  the layout looks at. A branch's slots go by the weight of what hangs,
+  then a single bond before a double one, then by class; the ring a
+  system is started from, and each ring after it, by the rings' ranks,
+  then the one with the most bonds out of the system, then by its atoms'
+  classes; the block a macrocycle starts from by the atoms it shares with
+  the macrocycle, then how fused it is; a chain's longest path from a
+  carbon end; a ring system hung from a bond with its first ring
+  neighbour by class on the left of the bond.
+- **By trying each.** Rings tied in rank are each placed first, or next,
+  and the system that reads best flat is kept (up to eight layouts a
+  system); a macrocycle's chain run is looked for from both ends.
+- **By the canonical rank, last.** Only between atoms or rings the
+  structure leaves alike - the drawings either way the same, or mirror
+  images.
+
+The benchmark's measure reads a drawing the same way
 however its atoms are listed: in a bridged system it reads every ring as
 small as one of its smallest set, not the set alone - quinuclidine has
 three six-membered cycles, and which two make the set goes by the order
