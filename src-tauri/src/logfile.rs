@@ -114,6 +114,27 @@ pub fn catch_panics() {
     }));
 }
 
+/// What Settings shows of the log (Settings > General): the log itself where
+/// it is kept, else its folder - in the data folder, made first, so that
+/// there is one to show.
+#[tauri::command]
+pub fn log_spot(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let kept = state().log.as_ref().and_then(|log| log.path.parent().map(Path::to_path_buf));
+    let dir = match kept {
+        Some(dir) => dir,
+        None => app.path().app_data_dir().map_err(|e| e.to_string())?.join("logs"),
+    };
+    spot_in(&dir).map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+/// The log in `dir` where there is one, else `dir` itself, made where it was not.
+fn spot_in(dir: &Path) -> std::io::Result<PathBuf> {
+    fs::create_dir_all(dir)?;
+    let file = dir.join("meno.log");
+    Ok(if file.is_file() { file } else { dir.to_path_buf() })
+}
+
 /// The page's errors and warnings (`lib/log.ts`), each cut to `PAGE_MOST`;
 /// off the main thread, as it writes a file.
 #[tauri::command(async)]
@@ -314,5 +335,16 @@ mod tests {
         }
         assert_eq!(state.early.len(), EARLY);
         assert_eq!(state.early[0], "0\n");
+    }
+
+    #[test]
+    fn the_log_shown_is_the_file_or_its_folder_made() {
+        let dir = std::env::temp_dir().join(format!("meno-log-spot-{}", uuid::Uuid::new_v4())).join("logs");
+        assert!(!dir.exists());
+        assert_eq!(spot_in(&dir).unwrap(), dir);
+        assert!(dir.is_dir());
+        fs::write(dir.join("meno.log"), "a line\n").unwrap();
+        assert_eq!(spot_in(&dir).unwrap(), dir.join("meno.log"));
+        let _ = fs::remove_dir_all(dir.parent().unwrap());
     }
 }

@@ -956,6 +956,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // the page's errors and warnings, into Meno's log
             logfile::log_page,
+            logfile::log_spot,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
             pdf::pdf_bytes,

@@ -258,7 +258,9 @@ went before, to stderr and the page's console.
   panic as Meno starts is in it; where Tauri has the folder elsewhere it
   carries on there. Lines from before either, in the first moments, are
   kept, up to 200, and written once it is begun.
-- Meno shows no log of its own yet: the file is found in its folder.
+- **Settings > General, *Open log folder*** shows the log in the Finder or
+  Explorer (`log_spot`: the log itself, or its folder, made first where
+  there is none yet), to send with a report. Meno shows no log of its own.
 
 ## How things move
 
