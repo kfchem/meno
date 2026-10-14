@@ -19,6 +19,7 @@
     "layout-labels": "tsx scripts/layout/labels.ts",
     "layout-compare": "tsx scripts/layout/compare.ts",
     "layout-stereo": "tsx scripts/layout/stereo.ts",
+    "layout-order": "tsx scripts/layout/order.ts",
     "roundtrip": "vitest run --config scripts/figure/roundtrip/vitest.config.ts",
     "tauri": "tauri"
   },
