@@ -33,6 +33,7 @@ import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from ".
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
+import { atomClasses, byStructure, canonicalRanks } from "./ranks";
 
 export type { LayoutInput } from "./perceive";
 
@@ -1003,9 +1004,10 @@ export function inkReach(mol: Molecule, a: number, pos: ReadonlyMap<number, Poin
  * Tries each single bond the other way round, and the two groups on a ring
  * atom (`swaps`: the atom, then each group's first atom) each the other's
  * way, keeping what scores better, until nothing does - erythromycin's
- * tertiary OH turned up out of its sugar's way, its methyl across. Then,
- * `deep`, each small side turned over is tried
- * with each bond within it turned back as well: what hangs on it - a
+ * tertiary OH turned up out of its sugar's way, its methyl across. Each
+ * round tries every move from the drawing as it stands and takes the best
+ * (`bestMove`). Then, `deep`, each small side turned over is tried with
+ * each bond within it turned back as well: what hangs on it - a
  * carboxyl's C=O, up - set right again, where turning the side alone would
  * put it wrong; and if that helps, single bonds again.
  */
@@ -1021,20 +1023,20 @@ export function improve(
 ): { pos: Grown; score: number } {
   let pos = start;
   let current = startScore;
+  const order = byMove(mol);
+  const pair = pairByStructure(mol);
+  const flipKeys = flips.map(([a, b]) => ({ kind: 0, atoms: pair(a, b), step: 0 }));
+  const swapKeys = swaps.map(([a, b, c]) => ({ kind: 1, atoms: [a, ...pair(b, c)], step: 0 }));
   const singly = () => {
-    for (let pass = 0; pass < 4; pass++) {
-      let better = false;
-      for (const [a, b] of flips) {
+    for (let round = 0; round < MOVE_ROUNDS; round++) {
+      const best = bestMove(order);
+      flips.forEach(([a, b], k) => {
         const trial = new Map(pos);
         flip(mol, trial, a, b, sides);
         const s = score(trial);
-        if (s < current - 1e-6) {
-          pos = trial;
-          current = s;
-          better = true;
-        }
-      }
-      for (const [a, b, c] of swaps) {
+        if (s < current - 1e-6) best.offer(trial, s, flipKeys[k]);
+      });
+      swaps.forEach(([a, b, c], k) => {
         const trial = new Map(pos);
         const at = trial.get(a)!;
         const tb = angleOf(sub(trial.get(b)!, at));
@@ -1044,43 +1046,97 @@ export function improve(
         turnSide(trial, sb, at, tc - tb);
         turnSide(trial, sc, at, tb - tc);
         const s = score(trial);
-        if (s < current - 1e-6) {
-          pos = trial;
-          current = s;
-          better = true;
-        }
-      }
-      if (!better) break;
+        if (s < current - 1e-6) best.offer(trial, s, swapKeys[k]);
+      });
+      const found = best.found();
+      if (!found) break;
+      pos = found.pos;
+      current = found.score;
     }
   };
   // a side turned over and a bond within it turned back: the best pair
   const doubly = () => {
-    let found: Grown | null = null;
-    for (const [a, b] of flips) {
+    const best = bestMove(order);
+    flips.forEach(([a, b], k) => {
       const beyondB = sides.get(`${a}>${b}`) ?? 0;
       const beyondA = sides.get(`${b}>${a}`) ?? 0;
-      if (Math.min(beyondA, beyondB) > SMALL_SIDE) continue;
+      if (Math.min(beyondA, beyondB) > SMALL_SIDE) return;
       const [from, to] = beyondB <= beyondA ? [a, b] : [b, a];
       const moved = new Set(sideAtoms(mol, from, to));
       const trial = new Map(pos);
       flip(mol, trial, a, b, sides);
-      for (const [c, d] of flips) {
-        if ((c === a && d === b) || !moved.has(c) || !moved.has(d)) continue;
+      flips.forEach(([c, d], j) => {
+        if ((c === a && d === b) || !moved.has(c) || !moved.has(d)) return;
         const again = new Map(trial);
         flip(mol, again, c, d, sides);
         const s = score(again);
-        if (s < current - 1e-6) {
-          current = s;
-          found = again;
-        }
-      }
+        if (s < current - 1e-6) best.offer(again, s, { kind: 2, atoms: [...flipKeys[k].atoms, ...flipKeys[j].atoms], step: 0 });
+      });
+    });
+    const found = best.found();
+    if (found) {
+      pos = found.pos;
+      current = found.score;
     }
-    if (found) pos = found;
     return found != null;
   };
   singly();
   for (let round = 0; deep && round < 2 && doubly(); round++) singly();
   return { pos, score: current };
+}
+
+/** How many moves a drawing is set right by at most, one a round (`improve`, `untangle`, `roomForHydrogens`). */
+const MOVE_ROUNDS = 60;
+
+/** How much two scores may differ and still be as good: a drawing measures the same in any order of its atoms only to rounding. */
+const AS_GOOD = 1e-9;
+
+/**
+ * A move by what it does, to tell moves as good apart: its kind, the atoms
+ * it moves about (a bond's two either way round sorted by structure; the
+ * end turned about first, where it matters), and the step it takes.
+ */
+type MoveKey = { kind: number; atoms: readonly number[]; step: number };
+
+/**
+ * Moves as good compared by what they do: their kind, then their atoms'
+ * classes (ranks.ts), then their step, and last their atoms' canonical
+ * ranks - never by the order the bonds and atoms are listed in.
+ */
+function byMove(mol: Molecule): (p: MoveKey, q: MoveKey) => number {
+  const c = atomClasses(mol);
+  let canon: number[] | null = null;
+  return (p, q) => {
+    if (p.kind !== q.kind) return p.kind - q.kind;
+    if (p.atoms.length !== q.atoms.length) return p.atoms.length - q.atoms.length;
+    for (let i = 0; i < p.atoms.length; i++) if (c[p.atoms[i]] !== c[q.atoms[i]]) return c[p.atoms[i]] - c[q.atoms[i]];
+    if (p.step !== q.step) return p.step - q.step;
+    canon ??= canonicalRanks(mol);
+    for (let i = 0; i < p.atoms.length; i++) if (canon[p.atoms[i]] !== canon[q.atoms[i]]) return canon[p.atoms[i]] - canon[q.atoms[i]];
+    return 0;
+  };
+}
+
+/** Two atoms either way round, sorted by structure. */
+function pairByStructure(mol: Molecule): (a: number, b: number) => [number, number] {
+  const same = byStructure(mol);
+  return (a, b) => (same(a, b) <= 0 ? [a, b] : [b, a]);
+}
+
+/**
+ * The best of the moves tried from one drawing: the one that scores
+ * lowest, moves as good by `order` - each round of a step that sets a
+ * drawing right takes it, rather than the first that helps, which would
+ * go by the order the bonds are listed in.
+ */
+function bestMove(order: (p: MoveKey, q: MoveKey) => number) {
+  let found: { pos: Grown; score: number; key: MoveKey } | null = null;
+  return {
+    offer(pos: Grown, score: number, key: MoveKey): void {
+      if (!found || score < found.score - AS_GOOD || (score <= found.score + AS_GOOD && order(key, found.key) < 0)) found = { pos, score, key };
+    },
+    found: () => found,
+  };
 }
 
 /** The most atoms a side turned over may have and still be set right within. */

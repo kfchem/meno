@@ -35,7 +35,10 @@ another order. Where the rules below leave a tie, it is settled so:
 - **By trying each.** Rings tied in rank are each placed first, or next,
   and the system that reads best flat is kept (up to eight layouts a
   system); a macrocycle's chain run with ends alike in that is looked
-  for from both.
+  for from both; each round of turning bonds the other way round
+  (`improve`) tries every move from the drawing as it stands and takes
+  the best, moves as good by their atoms' classes, then the canonical
+  rank.
 - **By the canonical rank, last.** Only between atoms or rings the
   structure leaves alike - the drawings either way the same, or mirror
   images.
