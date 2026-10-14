@@ -111,6 +111,8 @@ const meet = (a: Box, b: Box) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] &&
 const within = (a: Box, b: Box) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
 const area = (b: Box) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
 const union = (a: Box, b: Box): Box => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+/** Where two boxes overlap - none, an empty box. */
+const overlap = (a: Box, b: Box): Box => [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
 
 /** Boxes joined where they meet, `d` points apart at most, until none meet: each the box round its group. */
 function joined(boxes: Box[], d: number): Box[] {
@@ -226,7 +228,17 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
     for (let pass = 0; pass < 2; pass++) b = words.reduce((acc, w) => (labelOf(g, acc, w) ? union(acc, w) : acc), b);
     return b;
   });
-  return joined(withIons(labelled, labels, charges), 0);
+  // (none that is a page scanned after all - most of the page, most of it
+  // picture, and the page's words within it: its picture in strips further
+  // apart than a scan is told by, the words read over them widening it.
+  // Boxed, it was the whole page, again at every click on it. A figure drawn
+  // with lines as large, on a page cut close round it, is still one)
+  const inText = objects.filter((o) => o.kind === "text").map((o) => o.box);
+  const scanned = (f: Box) =>
+    area(f) >= MOST_OF_PAGE * pageArea &&
+    images.reduce((sum, b) => sum + area(overlap(b, f)), 0) >= MOST_OF_PAGE * area(f) &&
+    inText.filter((w) => within(w, f)).length >= MOST_OF_PAGE * inText.length;
+  return joined(withIons(labelled, labels, charges), 0).filter((f) => !scanned(f));
 }
 
 /**
@@ -317,14 +329,7 @@ function schemesOf(parts: readonly Box[], arrows: readonly Box[], pluses: readon
   return [...boxes.values()];
 }
 
-/**
- * The figure, if any, a point of a page lies in, in points from its top
- * left. Of a page `page` points wide and high, given, none that is most of
- * the page: that is the page itself - a page scanned, its picture and the
- * words over it taken for one figure - not a figure on it. A click on such
- * a page boxed all of it, again at each click, so that nothing let it go.
- */
-export function figureAt(figures: readonly Box[], x: number, y: number, page?: readonly [number, number]): Box | null {
-  const most = page ? MOST_OF_PAGE * page[0] * page[1] : Infinity;
-  return figures.find((f) => x >= f[0] && x <= f[2] && y >= f[1] && y <= f[3] && area(f) < most) ?? null;
+/** The figure, if any, a point of a page lies in, in points from its top left. */
+export function figureAt(figures: readonly Box[], x: number, y: number): Box | null {
+  return figures.find(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1) ?? null;
 }

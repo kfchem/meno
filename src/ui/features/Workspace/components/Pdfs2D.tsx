@@ -464,7 +464,7 @@ export default function Pdfs2D() {
     const takes = !p.icon && (onRim(p, q) || !readable);
     // (in a figure, its labels too, or where there are no words: a hold draws a box - in a figure, the figure's)
     const figures = !p.icon && !takes && spot ? figuresHad(p.sha256, spot.page, invalidate) : null;
-    const fig = figures && spot ? figureAt(figures, spot.x, spot.y, p.pages[spot.page]) : null;
+    const fig = figures && spot ? figureAt(figures, spot.x, spot.y) : null;
     const letter = !p.icon && !takes && !fig && w ? letterNear(w.t, w.x, w.y) : null;
     const boxes = !p.icon && !takes && !!spot && (!!fig || letter == null);
     let mode: "pressed" | "moving" | "selecting" | "boxing" | "panned" = p.icon ? "moving" : "pressed";
@@ -504,7 +504,7 @@ export default function Pdfs2D() {
         mode = "boxing";
         holdPan();
         // (the page's figures, if they have come since the press)
-        const f = fig ?? figureAt(figuresHad(p.sha256, spot.page) ?? [], spot.x, spot.y, p.pages[spot.page]);
+        const f = fig ?? figureAt(figuresHad(p.sha256, spot.page) ?? [], spot.x, spot.y);
         if (f) store.getState().setPdfBox({ id: p.id, page: spot.page, box: f });
       }, LONG_PRESS_MS);
     } else if (w && letter != null) {
