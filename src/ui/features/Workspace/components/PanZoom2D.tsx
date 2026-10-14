@@ -338,6 +338,11 @@ export function PanZoom2D() {
     };
     const HEARD = ["pointermove", "pointerdown", "pointerup", "pointerleave", "pointercancel"] as const;
     for (const name of HEARD) dom.addEventListener(name, heard);
+    // (a pan lost - the pointer taken, its capture lost, the window left, the view gone: no pan any more, or undo would be taken for it)
+    const lostPan = () => setViewPanning(false);
+    dom.addEventListener("pointercancel", lostPan);
+    dom.addEventListener("lostpointercapture", lostPan);
+    window.addEventListener("blur", lostPan);
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
@@ -368,6 +373,10 @@ export function PanZoom2D() {
     layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
+      dom.removeEventListener("pointercancel", lostPan);
+      dom.removeEventListener("lostpointercapture", lostPan);
+      window.removeEventListener("blur", lostPan);
+      setViewPanning(false);
       for (const name of HEARD) dom.removeEventListener(name, heard);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointermove", onMove);
@@ -400,8 +409,10 @@ export function PanZoom2D() {
     // Keep a synchronous ref via zustand subscribe to avoid event timing issues
     const unsub = store.subscribe((s) => {
       extendRef.current = s.extend.active;
-      if (s.extend.active) dragging.current = false;
+      if (s.extend.active) {
+        dragging.current = false;
         setViewPanning(false);
+      }
     });
     return () => unsub();
   }, [store]);

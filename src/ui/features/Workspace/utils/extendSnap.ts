@@ -52,6 +52,7 @@ export type SnappedBond = {
 /**
  * A single bond out of `tip`, which already has bonds to `neighbours`,
  * toward `pointer`, `length` long. `held` is the angle it was last at, kept
+ * - in the tie only, the two angles either side of a bond at the atom -
  * while it is no farther from the pointer than `KEEP` more than the
  * angle it would go to, and no nearer another bond than one may be.
  */
@@ -70,6 +71,9 @@ export function snapBond(
     .map((n) => toward(tip, n));
   if (between(held, found.angle) < 1e-9) return found;
   if (taken.some((a) => between(a, held) < CROWDED)) return found;
+  // only the tie: the angle it was at and the one it goes to are the two either side of a bond at the atom,
+  // as near each other as the grid's steps - a 120-degree snap or a grid angle elsewhere is not held
+  if (!taken.some((a) => between(a, held) <= 2 * GRID + 1e-6 && between(a, found.angle) <= 2 * GRID + 1e-6 && between(held, found.angle) > 1e-9)) return found;
   if (between(held, want) > between(found.angle, want) + KEEP) return found;
   const from = taken.find((a) => [TRIGONAL, -TRIGONAL].some((turn) => between(norm(a + turn), held) < 1e-6));
   return { end: out(tip, held, length), angle: norm(held), ...(from != null ? { trigonalTo: from } : {}) };

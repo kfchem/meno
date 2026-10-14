@@ -74,4 +74,14 @@ describe("keeping bonds apart", () => {
     const crossed = snapBond(tip, n, at(-50), 1, held);
     expect(Math.sin(crossed.angle)).toBeLessThan(0);
   });
+
+  it("holds only in that tie: a 120-degree snap is as wide as ever", () => {
+    // a bond to the left (180 degrees); 120 degrees from it is 60
+    const tip = { x: 0, y: 0 };
+    const left = [{ x: -1, y: 0 }];
+    const at = (d: number) => ({ x: Math.cos((d * Math.PI) / 180), y: Math.sin((d * Math.PI) / 180) });
+    // held at 60, the pointer 22 degrees off it: past its reach, the grid's 30, not held on
+    const b = snapBond(tip, left, at(38), 1, (60 * Math.PI) / 180);
+    expect(deg(b.angle)).toBeCloseTo(30, 6);
+  });
 });
