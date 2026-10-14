@@ -30,10 +30,12 @@ another order. Where the rules below leave a tie, it is settled so:
   classes; the block a macrocycle starts from by the atoms it shares with
   the macrocycle, then how fused it is; a chain's longest path from a
   carbon end; a ring system hung from a bond with its first ring
-  neighbour by class on the left of the bond.
+  neighbour by class on the left of the bond; a macrocycle's chain run
+  from the end with more bonds of its own still to place.
 - **By trying each.** Rings tied in rank are each placed first, or next,
   and the system that reads best flat is kept (up to eight layouts a
-  system); a macrocycle's chain run is looked for from both ends.
+  system); a macrocycle's chain run with ends alike in that is looked
+  for from both.
 - **By the canonical rank, last.** Only between atoms or rings the
   structure leaves alike - the drawings either way the same, or mirror
   images.
@@ -139,8 +141,13 @@ they hang from.
   each macrocycle is a zigzag from ring to ring, turning as a hexagon
   does where it runs through one, so that the ring comes out regular,
   and kept clear of where the rest of that ring will fall, and of the
-  two atoms it runs between - looked for from each of them, the better
-  kept. Any macrocycle passing a ring by two ways round as long runs
+  two atoms it runs between. The search sets a run's first bond where it
+  likes and closes onto its far end where it must, the angles giving
+  there; so it starts from the end whose atom has more bonds of its own
+  still to place, which need the room the closing would take
+  (rifampicin's ansa chain from its ketal carbon, which carries a methyl,
+  closing onto the naphthalene carbon of its amide). Ends alike in that
+  are each searched from, the better kept. Any macrocycle passing a ring by two ways round as long runs
   along the outer side, whose atoms are in fewer of the system's other
   rings: rifampicin's ansa chain along its naphthalene's free edge, not
   across the junction into the next ring.

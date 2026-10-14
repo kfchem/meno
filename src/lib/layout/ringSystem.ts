@@ -29,7 +29,7 @@ import {
 } from "./geometry";
 import { macrocycleShapes } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
-import { ringKey, ringRank } from "./ranks";
+import { byStructure, ringKey, ringRank } from "./ranks";
 import { flatCost } from "./cage";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
@@ -665,7 +665,13 @@ type ChainCis = (x: number, u: number, v: number, y: number) => boolean | null;
  * placed atoms, by how big each is, to leave outside the ring it closes
  * rather than shut in it (`loads`, read when the chain is drawn).
  */
-type ChainRules = { cis: ChainCis; neighbours: readonly (readonly number[])[]; loads: (pos: Map<number, Point>) => { at: Point; weight: number }[] };
+type ChainRules = {
+  cis: ChainCis;
+  neighbours: readonly (readonly number[])[];
+  loads: (pos: Map<number, Point>) => { at: Point; weight: number }[];
+  /** Two atoms by their structure (`byStructure`): which end a run is drawn from, where nothing else tells. */
+  before: (p: number, q: number) => number;
+};
 
 function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
   const inSys = new Set(sys.atoms);
@@ -690,7 +696,7 @@ function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
       }
       return weight ? [{ at: pos.get(a)!, weight }] : [];
     });
-  return { cis: chainCis(mol), neighbours: mol.neighbours, loads };
+  return { cis: chainCis(mol), neighbours: mol.neighbours, loads, before: byStructure(mol) };
 }
 
 function chainCis(mol: Molecule): ChainCis {
@@ -728,19 +734,41 @@ function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = 
       run.push(ring[j]);
       j = (j + 1) % n;
     }
-    // a macrocycle's run is a chain, drawn as one: a zigzag, never an arc -
-    // looked for from either end, the better kept (which end it was looked
-    // for from went by the order of the ring's atoms, and from one end the
-    // way round that clears the rest can be cut before it is reached)
-    if (n >= MACROCYCLE && run.length >= 3) {
-      const there = new Map(pos);
-      const back = new Map(pos);
-      const thereCost = placeChainRun(ring[i], ring[j], run, there, rings, rules);
-      const backCost = placeChainRun(ring[j], ring[i], [...run].reverse(), back, rings, rules);
-      const kept = backCost < thereCost - 1e-9 ? back : there;
-      for (const v of run) pos.set(v, kept.get(v)!);
-    } else placeRun(ring[i], ring[j], run, n, pos);
+    // a macrocycle's run is a chain, drawn as one: a zigzag, never an arc
+    if (n >= MACROCYCLE && run.length >= 3) placeChainFrom(ring[i], ring[j], run, pos, rings, rules);
+    else placeRun(ring[i], ring[j], run, n, pos);
   }
+}
+
+/**
+ * A macrocycle's run between placed atoms `p` and `q` drawn as a chain
+ * (`placeChainRun`), from one end or the other. The search sets the
+ * chain's first bond where it likes and closes onto the far end where it
+ * must, its angles giving there. So it starts from the end whose atom has
+ * more bonds of its own still to place - a group hung from it, a ring yet
+ * to come - which need the room the closing would take: rifampicin's ansa
+ * chain from its ketal carbon, which carries a methyl, not from the
+ * naphthalene carbon its amide closes onto. Ends alike in that are each
+ * searched from and the better kept; searches as good go by the ends'
+ * structure. The order of the ring's atoms never decides.
+ */
+function placeChainFrom(p: number, q: number, run: number[], pos: Map<number, Point>, rings: number[][], rules?: ChainRules): void {
+  const back = [...run].reverse();
+  const own = (end: number, first: number) => (rules ? rules.neighbours[end].filter((v) => v !== first && !pos.has(v)).length : 0);
+  const fromP = own(p, run[0]);
+  const fromQ = own(q, back[0]);
+  if (fromP !== fromQ) {
+    if (fromP > fromQ) placeChainRun(p, q, run, pos, rings, rules);
+    else placeChainRun(q, p, back, pos, rings, rules);
+    return;
+  }
+  const there = new Map(pos);
+  const other = new Map(pos);
+  const thereCost = placeChainRun(p, q, run, there, rings, rules);
+  const otherCost = placeChainRun(q, p, back, other, rings, rules);
+  const first = Math.abs(thereCost - otherCost) > 1e-9 ? thereCost < otherCost : !rules || rules.before(p, q) <= 0;
+  const kept = first ? there : other;
+  for (const v of run) pos.set(v, kept.get(v)!);
 }
 
 /**
