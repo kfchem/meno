@@ -661,9 +661,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // that turn how far its parts are askew.
   const fitsLattice = new Set<number>();
   const offLattice = new Set<number>();
-  const square = (r: readonly number[]) =>
-    (r.length === 4 || r.length === 6) &&
-    rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2);
+  // (each ring's once: a ring of rings has many)
+  const squareRing = new Map(
+    rings.map((r) => [r, (r.length === 4 || r.length === 6) && rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2)]),
+  );
+  const square = (r: readonly number[]) => squareRing.get(r as number[])!;
   for (const r of rings) {
     const fits = square(r);
     r.forEach((a, i) => {
@@ -700,16 +702,16 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       : true;
     latticeDirs.push({ t: deg(Math.atan2(y[b] - y[a], x[b] - x[a])), frame, step: squareBonds.has(k) ? 90 : 30 });
   }
+  // (the frame's own bonds picked out once: the tilt is sought among 300 turns)
+  const frameDirs = latticeDirs.filter((d) => d.frame);
   const offBy = (turn: number, frameOnly: boolean) => {
+    const dirs = frameOnly ? frameDirs : latticeDirs;
     let sum = 0;
-    let count = 0;
-    for (const { t, frame, step } of latticeDirs) {
-      if (frameOnly && !frame) continue;
+    for (const { t, step } of dirs) {
       const u = t - turn;
       sum += Math.abs(u - step * Math.round(u / step));
-      count++;
     }
-    return count ? sum / count : 0;
+    return dirs.length ? sum / dirs.length : 0;
   };
   let turn = 0;
   let best = offBy(0, true);
