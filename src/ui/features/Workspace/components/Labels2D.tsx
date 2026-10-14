@@ -166,11 +166,11 @@ export function Texts2D({
                     ? // (bold: the letters thickened by an outline of their own colour, as Markdown's are - one face of each)
                       { outlineWidth: BOLD, outlineColor: run.color ?? t.color ?? labelColor, outlineOpacity: fill }
                     : {})}
-                material-toneMapped={false}
-                material-depthTest={false}
-                material-depthWrite={false}
               >
                 {glyphs.shown(run.text)}
+                {/* (its own material, not `material-*` props: an outlined text's material is two - its outline's
+                    and its letters' - and those props went to neither, so a bold run was drawn tone mapped, darker) */}
+                <meshBasicMaterial side={THREE.DoubleSide} transparent toneMapped={false} depthTest={false} depthWrite={false} />
               </Text>
             </group>
           ))}
