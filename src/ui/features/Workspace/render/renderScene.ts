@@ -47,7 +47,19 @@ export type RenderAsk = {
 /** How a picture is shaded - lit as the renderer lights it, or in one band of toon shading - and its outlines. */
 export type Shading = "lit" | "toon";
 export type Outlines = "none" | "thin" | "outer" | "mixed";
-export type Finish = { look: string; shading: Shading; outlines: Outlines; outline: number; outlineColour: "black" | "white" | "grey"; band: number };
+export type Finish = {
+  look: string;
+  shading: Shading;
+  outlines: Outlines;
+  outline: number;
+  outlineColour: "black" | "white" | "grey";
+  band: number;
+  /** In a look that is seen through: its sticks as they are, running on inside the balls, or stopped at the balls' surfaces. */
+  sticks?: Sticks;
+};
+export type Sticks = "shown" | "stopped";
+/** The looks that are seen through, so that what is inside a ball shows: made of glass; and those a renderer's own looks make (ice, a soap bubble, slime, X-ray). */
+export const SEE_THROUGH_LOOKS: readonly string[] = ["glass", "bubble", "slime", "ice", "xray"];
 
 /** A molecule in 3D as it is shown: carried as a copy carries it, the surface it shows - placed about its shown frame's centre, in ångströms - and the vibration it shows, each atom's displacement. */
 export type Shown3D = { m: Carried3D; surfaces?: { plus: Mesh; minus: Mesh | null }; move?: readonly number[] };
@@ -92,12 +104,14 @@ const RATIOS: Record<Exclude<Shape, "fit">, number> = { "16:9": 16 / 9, "4:3": 4
  */
 type Sample = { places: Float32Array; turn: THREE.Quaternion; presence: Float32Array | null };
 
-/**
- * Whether the molecules are seen through, so that what is inside a ball shows: made of glass. A renderer's own looks
- * that see through (ice, a soap bubble, slime, X-ray) are added here by the look that makes them.
- */
-export function seesThrough(ask: Pick<RenderAsk, "molecules">): boolean {
-  return ask.molecules === "glass";
+/** Whether the molecules are seen through, so that what is inside a ball shows: made of glass, or in a look that is. */
+export function seesThrough(ask: Pick<RenderAsk, "molecules" | "finish">): boolean {
+  return ask.molecules === "glass" || (ask.finish != null && SEE_THROUGH_LOOKS.includes(ask.finish.look));
+}
+
+/** Whether the sticks of a see-through look stop at the balls' surfaces: where it is asked, and else - nothing said - they do. */
+export function sticksStopped(ask: Pick<RenderAsk, "molecules" | "finish">): boolean {
+  return seesThrough(ask) && (ask.finish?.sticks ?? "stopped") === "stopped";
 }
 
 /**
@@ -260,7 +274,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const stick = shapeIn("stick", material(drawn.bondColor, drawn));
       // (which bond each line is of, a bond's lines side by side)
       const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
-      const seeThrough = seesThrough(ask);
+      const seeThrough = sticksStopped(ask);
       const linesAt = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
         bondLines({ ...molecule, bonds }, x.places, bondR).map((l, li) => {

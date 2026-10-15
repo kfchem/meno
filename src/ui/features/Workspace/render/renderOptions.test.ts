@@ -46,4 +46,16 @@ describe("Render's look: one choice, a bundle of parts", () => {
     expect(goldAsk.molecules).toBe("meno");
     expect(finishEntry(goldAsk.finish).look).toBe("gold");
   });
+
+  it("offers where sticks stop only for the looks seen through, with a default for each by what reads best", () => {
+    const sticks = renderOptions("picture", [], false).find((o) => o.id === "sticks") as unknown as { when: { id: string; in: string[] } };
+    expect(sticks.when.id).toBe("look");
+    expect(sticks.when.in.sort()).toEqual(["bubble", "glass", "ice", "slime", "xray"]);
+    const by = (id: string) => LOOKS.find((l) => l.id === id)!.parts.sticks;
+    expect(["glass", "xray"].map(by)).toEqual(["shown", "shown"]);
+    expect(["ice", "bubble", "slime"].map(by)).toEqual(["stopped", "stopped", "stopped"]);
+    expect(by("meno")).toBe("shown");
+    const ask = askOf("picture", { width: 900, shape: "fit", look: "ice", ...LOOKS.find((l) => l.id === "ice")!.parts });
+    expect(ask.finish?.sticks).toBe("stopped");
+  });
 });

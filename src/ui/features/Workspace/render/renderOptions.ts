@@ -9,7 +9,7 @@
  * under it and are the chemist's to change for the one render.
  */
 import type { Option, OptionValues } from "../../../../lib/options";
-import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, SurfaceMaterial } from "./renderScene";
+import { SEE_THROUGH_LOOKS, type Finish, type Motion, type MoleculeMaterial, type Outlines, type RenderAsk, type Shading, type Shape, type Sticks, type SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
 export type Kind = RenderAsk["kind"];
@@ -43,6 +43,10 @@ const SHADINGS: { value: Shading; label: string }[] = [
   { value: "lit", label: "Lit: light and shadow as a renderer finds them" },
   { value: "toon", label: "Toon: one lit band and one in shade" },
 ];
+const STICKS: { value: Sticks; label: string }[] = [
+  { value: "shown", label: "Shown, running on" },
+  { value: "stopped", label: "Stopped at the surface" },
+];
 const OUTLINES: { value: Outlines; label: string }[] = [
   { value: "none", label: "None" },
   { value: "thin", label: "Thin, on every line" },
@@ -56,9 +60,11 @@ const OUTLINE_COLOURS = [
 ];
 
 /** What a look is made of: each of its parts. */
-export type LookParts = { molecules: MoleculeMaterial; surfaces: SurfaceMaterial; shading: Shading; outlines: Outlines; outline: number; outline_colour: "black" | "white" | "grey"; band: number };
+export type LookParts = { molecules: MoleculeMaterial; surfaces: SurfaceMaterial; shading: Shading; outlines: Outlines; outline: number; outline_colour: "black" | "white" | "grey"; band: number; sticks: Sticks };
 
-const PLAIN = { shading: "lit" as const, outlines: "none" as const, outline: 3, outline_colour: "black" as const, band: 0.5 };
+const PLAIN = { shading: "lit" as const, outlines: "none" as const, outline: 3, outline_colour: "black" as const, band: 0.5, sticks: "shown" as const };
+/** Where the sticks of a look that is seen through read best: glass and X-ray show them running on; ice, a bubble and slime are clearer without. */
+const STOPPED = new Set(["ice", "bubble", "slime"]);
 
 /**
  * The looks Meno knows, in the order they are offered: each a bundle of
@@ -91,7 +97,7 @@ export const LOOKS: readonly { id: string; label: string; parts: LookParts }[] =
       ["xray", "X-ray: layers that add up"],
       ["fur", "Fur: long, or short and dense as velvet"],
     ] as const
-  ).map(([id, label]) => ({ id, label, parts: { ...PLAIN, molecules: "meno" as const, surfaces: "meno" as const } })),
+  ).map(([id, label]) => ({ id, label, parts: { ...PLAIN, molecules: "meno" as const, surfaces: "meno" as const, sticks: STOPPED.has(id) ? ("stopped" as const) : ("shown" as const) } })),
 ];
 
 /** The ids of the looks Meno knows. */
@@ -125,6 +131,7 @@ export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: 
     { id: "look", label: "Look", type: "choice", choices, default: choices[0]?.value ?? "meno" },
     { id: "molecules", label: "Molecules made of", type: "choice", choices: MOLECULES, default: "meno", group: adjust },
     ...(surfaces ? [{ id: "surfaces", label: "Surfaces made of", type: "choice" as const, choices: SURFACES, default: "meno", group: adjust }] : []),
+    { id: "sticks", label: "Sticks inside the balls", type: "choice", choices: STICKS, default: "shown", group: adjust, when: { id: "look", in: [...SEE_THROUGH_LOOKS] } },
     { id: "shading", label: "Shading", type: "choice", choices: SHADINGS, default: "lit", group: adjust },
     { id: "band", label: "Size of the lit band", type: "number", default: 0.5, min: 0.05, max: 1, step: 0.05, group: adjust, when: { id: "shading", in: ["toon"] } },
     { id: "outlines", label: "Outlines", type: "choice", choices: OUTLINES, default: "none", group: adjust },
@@ -142,6 +149,7 @@ export function finishOf(v: OptionValues): Finish {
     outline: Number(v.outline ?? 3),
     outlineColour: (v.outline_colour as Finish["outlineColour"]) ?? "black",
     band: Number(v.band ?? 0.5),
+    sticks: v.sticks === "stopped" ? "stopped" : "shown",
   };
 }
 

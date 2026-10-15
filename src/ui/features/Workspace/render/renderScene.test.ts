@@ -185,6 +185,11 @@ describe("molecules in 3D written as a scene to render", () => {
       }
     });
 
+    it("leaves them where they run on inside, where the look is asked to show them", () => {
+      const shown = parts({ ...PICTURE, molecules: "glass", finish: { look: "glass", shading: "lit", outlines: "none", outline: 3, outlineColour: "black", band: 0.5, sticks: "shown" } });
+      expect(shown.sticks.map((n: Json) => +n.scale[1].toFixed(3)).sort()).toEqual(solid.sticks.map((n: Json) => +n.scale[1].toFixed(3)).sort());
+    });
+
     it("keeps the balls as they are", () => {
       expect(glass.balls.map((n: Json) => n.scale)).toEqual(solid.balls.map((n: Json) => n.scale));
     });
