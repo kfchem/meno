@@ -12,8 +12,8 @@ import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
 export type MoleculeLook = {
-  /** Balls and sticks, or space-filling: each atom at its van der Waals radius. */
-  atoms: "balls" | "space";
+  /** Balls and sticks; sticks alone, each atom a ball as thick as a stick (licorice); or space-filling, each atom at its van der Waals radius. */
+  atoms: "balls" | "sticks" | "space";
   /** A ball's radius, as a fraction of its atom's van der Waals radius. */
   ballScale: number;
   /** A bond's radius, in ångströms. */
@@ -191,7 +191,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     id: "glossy",
     name: "Glossy",
     description: "Shiny balls and grey bonds.",
-    look: { ...BALL_AND_STICK, roughness: 0.25, metalness: 0.1, bondColor: "#6b7280" },
+    look: { ...BALL_AND_STICK, ballScale: 0.18, roughness: 0.25, metalness: 0.1, bondColor: "#6b7280" },
   },
   {
     id: "outlined",
@@ -199,7 +199,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     description: "Glossy balls with thin dark circles crossing on each, thin near-black sticks, each drawn round with a dark line; what lies further back fades toward the page.",
     look: {
       ...BALL_AND_STICK,
-      ballScale: 0.25,
+      ballScale: 0.15,
       bondRadius: 0.07,
       bondColor: "#2a2a2a",
       roughness: 0.3,
@@ -214,6 +214,41 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       ballLinesColor: "#161616",
       colourSet: "bright",
     },
+  },
+  {
+    id: "print",
+    name: "Print",
+    description: "Matt balls in greys, black sticks and a dark line round each, the back fading: for figures printed in black and white.",
+    look: {
+      ...BALL_AND_STICK,
+      ballScale: 0.18,
+      bondRadius: 0.08,
+      bondColor: "#141414",
+      roughness: 0.85,
+      occlusion: 0.5,
+      outline: 1.25,
+      outlineColor: "#000000",
+      depthFade: 0.45,
+      colourSet: "greys",
+    },
+  },
+  {
+    id: "pastel",
+    name: "Pastel",
+    description: "Soft matt balls in pale colours and light grey sticks, the hollows gently shaded.",
+    look: { ...BALL_AND_STICK, ballScale: 0.18, bondRadius: 0.09, bondColor: "#b4b4b4", roughness: 1, occlusion: 0.45, colourSet: "pastel" },
+  },
+  {
+    id: "modelKit",
+    name: "Model kit",
+    description: "Glossy plastic balls and thick sticks, each half in its atom's colour.",
+    look: { ...BALL_AND_STICK, ballScale: 0.18, bondRadius: 0.14, bondColouring: "byAtom", roughness: 0.18, metalness: 0, occlusion: 0.4, colourSet: "bright" },
+  },
+  {
+    id: "licorice",
+    name: "Sticks",
+    description: "Sticks alone, as thick as they are round each atom, each half in its atom's colour.",
+    look: { ...BALL_AND_STICK, atoms: "sticks", bondRadius: 0.16, bondColouring: "byAtom", roughness: 0.45, metalness: 0, occlusion: 0.5 },
   },
   {
     id: "space",
@@ -291,6 +326,7 @@ const colour = new Map<string, string>();
 /** An atom's radius as a look draws it, in ångströms. */
 export function atomRadius(el: string, look: MoleculeLook): number {
   if (!vdw.has(el)) vdw.set(el, vdwRadius(el));
+  if (look.atoms === "sticks") return look.bondRadius;
   return vdw.get(el)! * (look.atoms === "space" ? 1 : look.ballScale);
 }
 
@@ -306,6 +342,13 @@ export type ColourSet3D = { id: string; name: string; description: string; colou
 function jmolColour(el: string): string {
   if (!colour.has(el)) colour.set(el, elementColour(el));
   return colour.get(el)!;
+}
+
+/** A colour taken `share` of the way to white, #rrggbb. */
+export function paler(hex: string, share: number): string {
+  const v = parseInt(hex.slice(1), 16);
+  const to = (c: number) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0");
+  return `#${to((v >> 16) & 255)}${to((v >> 8) & 255)}${to(v & 255)}`;
 }
 
 /** A colour as a grey as light as it is (its relative luminance, as sRGB weighs it), #rrggbb. */
@@ -334,6 +377,7 @@ export const COLOUR_SETS_3D: readonly ColourSet3D[] = [
     colour: (el) => BRIGHT_COLOURS[el] ?? jmolColour(el),
   },
   { id: "greys", name: "Greys", description: "Each element a grey as light as its Jmol colour: for black and white.", colour: (el) => greyOf(jmolColour(el)) },
+  { id: "pastel", name: "Pastel", description: "Each element's Jmol colour taken two fifths of the way to white.", colour: (el) => paler(jmolColour(el), 0.4) },
 ];
 
 /** The colour set with this id, or Jmol's. */
@@ -493,10 +537,11 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     key: "atoms",
     group: "Atoms and bonds",
     label: "Atoms",
-    description: "Balls joined by sticks, or each atom as large as it is.",
+    description: "Balls joined by sticks, sticks alone, or each atom as large as it is.",
     kind: "choice",
     options: [
       { value: "balls", label: "Ball and stick" },
+      { value: "sticks", label: "Sticks" },
       { value: "space", label: "Space-filling" },
     ],
   },

@@ -6,6 +6,7 @@ import {
   greyOf,
   ballCircles,
   linedBall,
+  paler,
   FADE_MOST,
   fadeAt,
   lookOfStyle,
@@ -181,7 +182,7 @@ describe("the 3D style as chosen", () => {
         primary: "glossy",
         secondary: "nonesuch",
         looks: {
-          glossy: { ballScale: 0.3, bondRadius: 9, bondColor: "#ABCDEF", atoms: "sticks", roughness: "matt", ballSegments: 3, hydrogens: "carbonHidden" },
+          glossy: { ballScale: 0.3, bondRadius: 9, bondColor: "#ABCDEF", atoms: "tubes", roughness: "matt", ballSegments: 3, hydrogens: "carbonHidden" },
           nonesuch: { ballScale: 0.3 },
           space: { keyLight: 2 },
         },
@@ -205,7 +206,7 @@ describe("the 3D style as chosen", () => {
       const read = acceptStyle3dChoice({ primary: p.id, secondary: p.id === "balls" ? "space" : "balls", looks: { [p.id]: p.look } });
       const { colours, ...rest } = p.look;
       expect(read.looks[p.id]).toEqual({
-        ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, typeof v === "string" ? v.toLowerCase() : v])),
+        ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, typeof v === "string" && v.startsWith("#") ? v.toLowerCase() : v])),
         ...(Object.keys(colours).length ? { colours } : {}),
       });
     }
@@ -221,7 +222,7 @@ describe("the outlined style, and what it is made of", () => {
     expect(look.bondColouring).toBe("single");
     expect(look.depthFade).toBeGreaterThan(0);
     expect(look.roughness).toBeLessThan(0.5);
-    // (hydrogen's ball smaller than carbon's, both a quarter of their size)
+    // (hydrogen's ball smaller than carbon's)
     expect(atomRadius("H", look)).toBeLessThan(atomRadius("C", look));
     expect(atomColour("H", look)).toBe("#ffffff");
     // (a bright red)
@@ -306,7 +307,7 @@ describe("lines on the balls", () => {
 
 describe("the colour sets", () => {
   it("are Jmol's - the elements' own - Bright over Jmol's, and Greys as light as Jmol's", () => {
-    expect(COLOUR_SETS_3D.map((c) => c.id)).toEqual(["jmol", "bright", "greys"]);
+    expect(COLOUR_SETS_3D.map((c) => c.id)).toEqual(["jmol", "bright", "greys", "pastel"]);
     expect(colourSet3d("jmol").name).toBe("Jmol");
     expect(atomColour("N")).toBe(elementColour("N"));
     expect(colourSet3d("bright").colour("O")).toBe("#ff1f1f");
@@ -328,5 +329,39 @@ describe("the colour sets", () => {
     expect(choice.looks.balls).toEqual({ colourSet: "greys" });
     expect(look3dPreset("outlined").look.colourSet).toBe("bright");
     expect(look3dPreset("balls").look.colourSet).toBe("jmol");
+  });
+});
+
+describe("the styles built in", () => {
+  it("draw balls a fifth of each atom's size in Meno's own, 18% in the other balls and sticks, 15% in Outlined", () => {
+    const scale = Object.fromEntries(LOOK_3D_PRESETS.filter((p) => p.look.atoms === "balls").map((p) => [p.id, p.look.ballScale]));
+    expect(scale).toEqual({ balls: 0.2, glossy: 0.18, outlined: 0.15, print: 0.18, pastel: 0.18, modelKit: 0.18 });
+    expect(LOOK_3D_PRESETS.map((p) => p.name)).toEqual(["Ball and stick", "Glossy", "Outlined", "Print", "Pastel", "Model kit", "Sticks", "Space-filling"]);
+  });
+
+  it("draw sticks alone with every atom as thick as a stick, and its sticks", () => {
+    const sticks = look3dPreset("licorice").look;
+    expect(sticks.atoms).toBe("sticks");
+    for (const el of ["H", "C", "Br"]) expect(atomRadius(el, sticks)).toBe(sticks.bondRadius);
+    expect(bondRadiusOf(sticks)).toBe(sticks.bondRadius);
+    expect(sticks.bondColouring).toBe("byAtom");
+  });
+
+  it("print in greys, and Pastel's colours are Jmol's two fifths of the way to white", () => {
+    expect(look3dPreset("print").look.colourSet).toBe("greys");
+    expect(paler("#000000", 0.4)).toBe("#666666");
+    expect(colourSet3d("pastel").colour("O")).toBe(paler(elementColour("O").toLowerCase(), 0.4));
+  });
+
+  it("let every setting be changed in every one of them - none hidden, none fixed", () => {
+    for (const p of LOOK_3D_PRESETS) {
+      for (const f of LOOK_3D_FIELDS) {
+        const now = p.look[f.key];
+        const other =
+          f.kind === "choice" ? f.options.find((o) => o.value !== now)!.value : f.kind === "number" ? (now === f.max ? f.min : f.max) : now === "#123456" ? "#654321" : "#123456";
+        const read = acceptStyle3dChoice(withLookSetting(DEFAULT_STYLE_3D_CHOICE, p.id, f.key, other as never));
+        expect([p.id, f.key, read.looks[p.id]?.[f.key]]).toEqual([p.id, f.key, other]);
+      }
+    }
   });
 });

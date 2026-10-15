@@ -179,7 +179,7 @@ export function rendered3d(
       // its atoms, one ball each (none, for one its look leaves out), and
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
-      const bonds = drawn.atoms === "balls" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
+      const bonds = drawn.atoms !== "space" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
       const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM);
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };

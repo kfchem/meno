@@ -962,7 +962,8 @@ function WorkspaceContent({
     ? {
         otherLook: (() => {
           const other = lookOf(menuMolecule) === "primary" ? "secondary" : "primary";
-          return { name: styleNames3d[other], atoms: style3d[other].atoms, run: () => store.getState().switchLook3d(menuMolecule.id) };
+          // (sticks alone drawn as balls and sticks are, in the icon)
+          return { name: styleNames3d[other], atoms: style3d[other].atoms === "space" ? ("space" as const) : ("balls" as const), run: () => store.getState().switchLook3d(menuMolecule.id) };
         })(),
         chosen: chosen3d?.id === menuMolecule.id ? (chosenPath(menuMolecule, chosen3d)?.length ?? 0) : 0,
         onMeasure: () => store.getState().measureChosen3d(),

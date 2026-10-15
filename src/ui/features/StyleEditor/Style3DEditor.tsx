@@ -108,8 +108,8 @@ export default function Style3DEditor({
                   was={{ value: edited.look[f.key], from: edited.name }}
                   onSet={(v) => setLook(f.key, v as never)}
                   warn={f.key === "hydrogens" && look.hydrogens === "carbonHidden"}
-                  // (what space-filling has none of: there, but faint)
-                  faint={look.atoms === "space" && STICKS_ONLY.has(f.key)}
+                  // (what space-filling has none of, or sticks alone: there, but faint)
+                  faint={(look.atoms === "space" && STICKS_ONLY.has(f.key)) || (look.atoms === "sticks" && f.key === "ballScale")}
                   // (what another setting makes moot - how deep a shade there is none of)
                   off={!!f.unless && look[f.unless.key as keyof typeof look] === f.unless.is}
                 />

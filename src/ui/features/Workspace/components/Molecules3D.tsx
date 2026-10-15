@@ -452,7 +452,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       const pose = poseNow(m);
       const atom = atomAt(pose, eyeOf(camera), p.x, p.y);
       const look = lookOf(m);
-      const bond = atom == null && style[look].atoms === "balls" ? bondAt(m, pose, eyeOf(camera), p.x, p.y, style[look].bondRadius) : null;
+      const bond = atom == null && style[look].atoms !== "space" ? bondAt(m, pose, eyeOf(camera), p.x, p.y, style[look].bondRadius) : null;
       const press: Press = { id: m.id, group: [m.id], pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, atom, bond, add: addsToSelection(e), moved: false };
       // held still, it selects the molecule - spreading out from the atom pressed on
       const selected = st.sel3d.has(m.id);

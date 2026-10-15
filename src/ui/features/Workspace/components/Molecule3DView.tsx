@@ -1471,7 +1471,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             els={els}
             frame={frameOf(solid, frame)}
             on={!!props.overlay}
-            radius={(style[look].atoms === "balls" ? style[look] : style.primary).bondRadius * WORLD_PER_ANGSTROM}
+            radius={(style[look].atoms !== "space" ? style[look] : style.primary).bondRadius * WORLD_PER_ANGSTROM}
             weights={shares}
           />
         )}

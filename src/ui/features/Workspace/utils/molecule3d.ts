@@ -803,7 +803,7 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   const left = solid.hidden[look];
   const shown = balls.filter((_, i) => !left[i]);
   const marks: (SolidMark & { z: number })[] = [...shown];
-  if (drawn.atoms === "balls") {
+  if (drawn.atoms !== "space") {
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
     const bonds = bondsAt(m, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);

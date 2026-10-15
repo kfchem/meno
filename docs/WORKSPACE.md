@@ -895,9 +895,11 @@ in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
 
 - **A list of styles.** Ball and stick (the 3D viewer's look, Meno's
-  first), Glossy, Outlined and Space-filling. Each is set on its own in
-  Settings, under Molecules in 3D: whether it draws balls and sticks or
-  space-filling, ball size, bond thickness, its sticks in one colour or
+  first), Glossy, Outlined, Print, Pastel, Model kit, Sticks and
+  Space-filling. Each is set on its own in Settings, under Molecules in
+  3D, every setting in every style (none is hidden or fixed by a style;
+  one another setting makes moot is greyed out while it does): whether it
+  draws balls and sticks, sticks alone or space-filling, ball size, bond thickness, its sticks in one colour or
   coloured by their atoms, its lines, the surface, whether the hydrogens
   on carbon are shown, and its atoms' colours. Changes are kept per style,
   marked, and taken back one at a time or all at once.
@@ -926,10 +928,23 @@ space-filling side by side is better science than either alone.
   in the ball's shader from its normal, which in the molecule's frame is
   the ball's own (a ball is never turned on its own): no geometry, and
   nothing on the CPU for each atom.
-- **Outlined.** Glossy balls a quarter of each atom's size - hydrogen's
-  small - with three thin dark circles on every one, thin near-black
-  sticks, each ball and stick drawn round with a 1.5-pixel near-black
-  line, the back fading by half, in the Bright colours.
+- **Ball sizes** (the maintainer, 2026-10-15). Ball and stick's balls
+  are a fifth of each atom's van der Waals size, Outlined's 15%, and the
+  other balls and sticks' - Glossy, Print, Pastel and Model kit - 18%.
+- **Outlined.** Glossy balls - hydrogen's small - with three thin dark
+  circles on every one, thin near-black sticks, each ball and stick drawn
+  round with a 1.5-pixel near-black line, the back fading by half, in the
+  Bright colours.
+- **Print.** Matt balls in Greys, black sticks, a 1.25-pixel black line
+  round each and the back fading: for figures printed in black and white.
+- **Pastel.** Soft matt balls in the Pastel colours, light grey sticks,
+  the hollows gently shaded.
+- **Model kit.** Glossy plastic balls in the Bright colours and thick
+  sticks, each half in its atom's colour.
+- **Sticks.** Sticks alone: each atom a ball exactly as thick as its
+  sticks, so that they join smoothly, each half of a stick in its atom's
+  colour. Its ball size is moot, and shown faint. Picked, measured and
+  drawn in pictures as balls and sticks are.
 - **Colour sets** (the maintainer, 2026-10-15: "each style decides a
   colour set"). A style draws its atoms in one set of element colours,
   chosen under it in Settings: *Jmol* - Jmol's default element colours
@@ -938,7 +953,9 @@ space-filling side by side is better science than either alone.
   carbon a mid grey, oxygen a bright red, sulfur yellow, fluorine and
   chlorine light green, the alkali metals lavender, the others as Jmol's -
   and *Greys*, each element a grey as light as its Jmol colour (its
-  relative luminance), for figures printed in black and white. Over the
+  relative luminance), for figures printed in black and white - and
+  *Pastel*, each element's Jmol colour taken two fifths of the way to
+  white. Over the
   set, any element can be given a colour of its own, marked, and set back
   to the set's one at a time. A style's sticks coloured by their atoms
   take each half's colour from its atom.
