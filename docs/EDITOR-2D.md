@@ -189,7 +189,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
+| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
 | Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
@@ -708,8 +708,9 @@ All hover-based, as above.
   drawn, not the way it was - each structure where it was.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
-  and E/Z from a button on the canvas; both in Settings › Chemistry, and
-  never in an exported picture.)
+  and E/Z from a button on the canvas, later shown on what they are asked
+  for on; valence warnings in Settings › Chemistry; neither in an exported
+  picture.)
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
@@ -743,11 +744,21 @@ All hover-based, as above.
     they look further off at that, and the maintainer asked for them
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
-  - Hidden unless asked for, on the drawing and in 3D (the maintainer,
-    2026-10-10): *Show R/S and E/Z* (the menu, or Settings › Chemistry;
-    named for both, the maintainer, 2026-10-13) shows them; making every stereoisomer a drawing leaves open shows each
-    one's open centres, to tell them apart (docs/WORKSPACE.md, *Told
-    apart*).
+  - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
+    before, one switch showed them all). Hidden unless asked for. The
+    right-click menu of an atom that can be a stereocentre says *Show
+    R/S*, of a double bond *Show E/Z*, of a structure's selection or a
+    molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
+    already (named for what they show, the maintainer, 2026-10-13). On a
+    molecule in 3D, the atom under the pointer where it has a label, else
+    what is chosen in it, else all of it. Kept in the document - each
+    atom's and bond's own, `stereoShown`, on a drawing; a molecule in 3D's
+    `stereo.shown` - as one undo step, in the workspace's file and in a
+    copy; a drawing and the molecule in 3D made from it each keep their
+    own. A molecule in 3D made with the other stereoisomers its drawing
+    leaves open shows its open centres until it is asked otherwise, to
+    tell them apart (docs/WORKSPACE.md, *Told apart*). Settings no longer
+    has a switch for them; one in an old settings file is not read.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -1232,8 +1243,9 @@ traced from reference drawings.
   drawn in - and PNG. The SVG export draws what the canvas draws (PR #36),
   at ACS 1996's own size (PR #43); PNG to come.
 - No buttons on the canvas (2026-10-04): Open (Ctrl/Cmd+O), Save As, New
-  text, Fit to content (Ctrl/Cmd+1), R/S and E/Z and Drawing style are on the
-  right-click menu on empty space; Save is a button in the title bar, by
+  text, Fit to content (Ctrl/Cmd+1) and Drawing style are on the
+  right-click menu on empty space (R/S and E/Z on the menus of what they
+  are shown on); Save is a button in the title bar, by
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu
   (or Ctrl/Cmd+Shift+K on nothing); a SMILES is drawn from Quick Add.

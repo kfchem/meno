@@ -135,10 +135,8 @@ export type UpdateSettings = {
 
 /** What the plugin that does the checks points out on a structure as it is drawn. */
 export type ChemistrySettings = {
-  /** Atoms with more bonds than they can have. */
+  /** Atoms with more bonds than they can have. (R and S, E and Z are shown on what they are asked for on, and kept in the document: docs/EDITOR-2D.md, *R and S*.) */
   valenceWarnings: boolean;
-  /** R and S at stereocentres, E and Z at double bonds. */
-  stereoLabels: boolean;
 };
 
 export type NetworkSettings = {
@@ -152,7 +150,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   drawingStyle: DEFAULT_STYLE_CHOICE,
   style3d: DEFAULT_STYLE_3D_CHOICE,
   network: { offline: false, granted: [] },
-  chemistry: { valenceWarnings: true, stereoLabels: false },
+  chemistry: { valenceWarnings: true },
   updates: { asked: false },
   options: {},
   abbreviations: [],
@@ -318,12 +316,10 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, stereoLabels } = raw as Record<string, unknown>;
+  const { valenceWarnings } = raw as Record<string, unknown>;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
-    stereoLabels:
-      typeof stereoLabels === "boolean" ? stereoLabels : d.stereoLabels,
   };
 }
 
