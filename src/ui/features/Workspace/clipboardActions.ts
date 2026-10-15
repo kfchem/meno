@@ -17,6 +17,7 @@ import { bondsAmong } from "./utils/selection";
 import { carriedOf } from "./utils/workspace";
 import { setMembers } from "./workflow/entries";
 import { partsOf } from "./workflow/parts";
+import { carriedByCycle, cycleThings } from "./utils/cycles";
 
 type Pt = { x: number; y: number };
 
@@ -73,8 +74,12 @@ export function useClipboardActions(
     words.push(...state.captions.filter((c) => c.arrow != null && lone.some((a) => a.id === c.arrow) && !words.some((w) => w.id === c.id)));
     // (and the writing by hand selected, each piece whole)
     const inks = only != null ? [] : state.inks.filter((k) => state.selInks.has(k.id));
-    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length + inks.length > 0;
-    const heldAtoms = new Set(held.flatMap((h) => h.structures.flat()));
+    // (and the catalytic cycles selected, with what lies on them and the words of their arrows coming in and going out)
+    const cycles = only != null ? [] : state.cycles.filter((c) => state.selCycles.has(c.id));
+    const onCycles = cycles.length ? cycles.map((c) => carriedByCycle(c, cycleThings(model, state.captions, styleOf(state.docStyle)))) : [];
+    words.push(...state.captions.filter((c) => onCycles.some((o) => o.captions.includes(c.id)) && !words.some((w) => w.id === c.id)));
+    const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length + inks.length + cycles.length > 0;
+    const heldAtoms = new Set([...held.flatMap((h) => h.structures.flat()), ...onCycles.flatMap((o) => o.atoms)]);
     const sel = heldAtoms.size
       ? { atoms: new Set([...state.sel.atoms, ...heldAtoms]), bonds: new Set([...state.sel.bonds, ...bondsAmong(model, heldAtoms)]) }
       : state.sel;
@@ -107,6 +112,7 @@ export function useClipboardActions(
         ...(slides.length ? { slides } : {}),
         ...(shapes.length ? { shapes } : {}),
         ...(inks.length ? { inks } : {}),
+        ...(cycles.length ? { cycles } : {}),
       },
       ids3d: molecules3d.filter((m) => ids3d.includes(m.id)).map((m) => m.id),
     };

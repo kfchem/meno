@@ -21,6 +21,7 @@ import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../.
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
@@ -181,6 +182,7 @@ export function recordText(part: Drawn): string {
     ...(part.slides?.length ? { slides: part.slides } : {}),
     ...(part.shapes?.length ? { shapes: part.shapes } : {}),
     ...(part.inks?.length ? { inks: part.inks } : {}),
+    ...(part.cycles?.length ? { cycles: part.cycles } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
     ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
     ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
@@ -284,6 +286,7 @@ export function readDrawn(data: unknown): Drawn | null {
     slides?: unknown;
     shapes?: unknown;
     inks?: unknown;
+    cycles?: unknown;
   };
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
@@ -432,6 +435,13 @@ export function readDrawn(data: unknown): Drawn | null {
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
     ...(() => {
+      const cycles = (Array.isArray(r.cycles) ? r.cycles : []).flatMap((c): Cycle[] => {
+        const read = readCycle(c);
+        return read ? [read] : [];
+      });
+      return cycles.length ? { cycles } : {};
+    })(),
+    ...(() => {
       const inks = (Array.isArray(r.inks) ? r.inks : []).flatMap((k): Ink[] => {
         const read = readInk(k);
         return read ? [read] : [];
@@ -453,6 +463,22 @@ const COLOUR = /^#[0-9a-f]{6}$/i;
 const TITLE_MOST = 400;
 
 /** A shape as a copy or a workspace carries it, where it reads: its kind and where it lies, its tail, and its look - what does not read left as a shape has it unsaid. */
+/** A catalytic cycle read from a record: its middle, radius, way and arrows coming in and going out - those that do not read left out; none, where its place does not read. */
+function readCycle(raw: unknown): Cycle | null {
+  const c = raw as Partial<Record<keyof Cycle, unknown>> | null;
+  if (!c || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || !isNum(c.r) || !(c.r > 0)) return null;
+  const branches = (Array.isArray(c.branches) ? (c.branches as Partial<CycleBranch>[]) : []).filter((b): b is CycleBranch => isEntry(b) && isNum(b.at) && (b.way === "in" || b.way === "out"));
+  return {
+    id: c.id,
+    x: c.x,
+    y: c.y,
+    r: c.r,
+    ...(c.ccw === true ? { ccw: true as const } : {}),
+    ...(branches.length ? { branches: branches.map((b) => ({ at: b.at, way: b.way })) } : {}),
+    ...(typeof c.color === "string" && /^#[0-9a-f]{6}$/i.test(c.color) ? { color: c.color } : {}),
+  };
+}
+
 function readShape(raw: unknown): Shape | null {
   const s = raw as Partial<Record<keyof Shape, unknown>> | null;
   if (!s || !isNum(s.id) || !SHAPE_KINDS.includes(s.kind as ShapeKind) || !isNum(s.x0) || !isNum(s.y0) || !isNum(s.x1) || !isNum(s.y1)) return null;
@@ -693,7 +719,7 @@ function boundingPoints(drawn: Drawn): Pt[] {
       { x: p.x - p.w / 2, y: p.y - p.h / 2 },
       { x: p.x + p.w / 2, y: p.y + p.h / 2 },
     ]),
-    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? []), ...(drawn.inks ?? []).flatMap((k) => strokesBounds(k.strokes, 0) ?? [])].flatMap((b) => [
+    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? []), ...(drawn.cycles ?? []).map((c) => ({ x0: c.x - c.r, y0: c.y - c.r, x1: c.x + c.r, y1: c.y + c.r })), ...(drawn.inks ?? []).flatMap((k) => strokesBounds(k.strokes, 0) ?? [])].flatMap((b) => [
       { x: b.x0, y: b.y0 },
       { x: b.x1, y: b.y1 },
     ]),
@@ -733,6 +759,7 @@ export function restyledDrawn(drawn: Drawn, k: number): Drawn {
       ...(drawn.slides ? { slides: drawn.slides } : {}),
       ...(drawn.shapes ? { shapes: drawn.shapes } : {}),
       ...(drawn.inks ? { inks: drawn.inks } : {}),
+      ...(drawn.cycles ? { cycles: drawn.cycles } : {}),
       ...(drawn.flow ? { sets: drawn.flow.sets, steps: drawn.flow.steps } : {}),
     },
     k,
@@ -752,6 +779,7 @@ export function restyledDrawn(drawn: Drawn, k: number): Drawn {
     ...(parts.slides ? { slides: parts.slides } : {}),
     ...(parts.shapes ? { shapes: parts.shapes } : {}),
     ...(parts.inks ? { inks: parts.inks } : {}),
+    ...(parts.cycles ? { cycles: parts.cycles } : {}),
     ...(drawn.flow ? { flow: { ...drawn.flow, sets: parts.sets ?? drawn.flow.sets, steps: parts.steps ?? drawn.flow.steps } } : {}),
   };
 }
@@ -773,6 +801,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.slides ? { slides: drawn.slides.map(moved) } : {}),
     ...(drawn.shapes ? { shapes: drawn.shapes.map((x) => shapeMoved(x, { x: dx, y: dy })) } : {}),
     ...(drawn.inks ? { inks: drawn.inks.map((k) => ({ ...k, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })) } : {}),
+    ...(drawn.cycles ? { cycles: drawn.cycles.map(moved) } : {}),
     ...(drawn.pdfs ? { pdfs: drawn.pdfs.map(moved) } : {}),
     ...(drawn.sheets ? { sheets: drawn.sheets.map((t) => (t.at ? { ...t, at: moved(t.at) } : t)) } : {}),
     ...(drawn.flow

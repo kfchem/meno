@@ -1,9 +1,11 @@
-import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
+import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
+import type { Cycle } from "../../../../lib/chem/cycle";
+export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
@@ -630,6 +632,8 @@ export type Drawn = Model & {
   shapes?: Shape[];
   /** Writing by hand carried, each piece whole (docs/PRESENTING.md, *Handwriting*). */
   inks?: Ink[];
+  /** Catalytic cycles carried (lib/chem/cycle). */
+  cycles?: Cycle[];
 };
 
 export type EditorState = {
@@ -1029,6 +1033,17 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
+  cycles: Cycle[];
+  selCycles: Set<number>;
+  hoveredCycle: number | null;
+  setHoveredCycle: (id: number | null) => void;
+  selectCycles: (ids: Iterable<number>, add?: boolean) => void;
+  /** A cycle put on the page, as one step; its id, or null where none was. */
+  addCycle: (cycle: Omit<Cycle, "id">) => number | null;
+  /** A cycle turned round, given arrows coming in and going out, or a colour: one step, or one a gesture's changes make together. */
+  updateCycle: (id: number, patch: CyclePatch, gesture?: string) => void;
+  removeCycle: (id: number) => void;
   /**
    * The arrows and "+" signs selected for themselves - one standing alone,
    * pointing at something on a slide - beside those a selection carries as

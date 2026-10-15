@@ -10,6 +10,7 @@ import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strok
 import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
+import { arrowsOfCycles, cycleThings } from "./utils/cycles";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
@@ -291,7 +292,9 @@ export function drawingLayout(
   // (each arrow as long as the words over it and under it need, as on the canvas)
   const set = labelSetOf(opts);
   const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
-  const pieces = schemePieces({ ...model, arrows }, style, NOMINAL_BOND_LENGTH);
+  // (and the catalytic cycles' arrows, as reaction arrows are drawn: lib/chem/cycle)
+  const cycled = model.cycles?.length ? arrowsOfCycles(model.cycles, cycleThings(model, model.captions ?? [], style)) : [];
+  const pieces = schemePieces({ ...model, arrows: [...arrows, ...cycled] }, style, NOMINAL_BOND_LENGTH);
   if (pieces.length) {
     const points = pieces.flatMap((o) => o.points);
     layout.polys.push(...pieces.map((o) => ({ points: o.points, ...(o.color ? { color: o.color } : {}) })));
@@ -545,7 +548,7 @@ export type FileActions = ReturnType<typeof useFileActions>;
 const NO_RECORDS: Record<number, number> = {};
 
 /** Everything the canvas draws: its structures - their electron-pushing arrows and their rings' fills with them - arrows and "+" signs, words, and shapes. */
-export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks" | "fullModel" | "recordsShown">>): Drawn {
+export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" | "captions"> & Partial<Pick<EditorState, "pushes" | "ringFills" | "shapes" | "inks" | "cycles" | "fullModel" | "recordsShown">>): Drawn {
   return {
     // (every record of each stack of drawings, the one it shows marked: utils/stacks)
     ...carriedDrawing(state.fullModel ?? state.model, state.recordsShown ?? NO_RECORDS),
@@ -556,5 +559,6 @@ export function drawnOf(state: Pick<EditorState, "model" | "arrows" | "pluses" |
     captions: state.captions,
     ...(state.shapes?.length ? { shapes: state.shapes } : {}),
     ...(state.inks?.length ? { inks: state.inks } : {}),
+    ...(state.cycles?.length ? { cycles: state.cycles } : {}),
   };
 }
