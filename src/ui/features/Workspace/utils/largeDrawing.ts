@@ -29,3 +29,25 @@ export function lighterText(shadows: boolean, screen: boolean): string | null {
   if (screen) return "Hollows shaded per atom, so that turning stays smooth.";
   return null;
 }
+
+/**
+ * How many segments round each ball of a molecule on a canvas drawn
+ * lighter, by how many pixels across its largest ball is on the screen: 32
+ * from about 40, down to 8 under about 8 - finer than the eye can tell at
+ * that size, and costing the graphics card for nothing (the maintainer,
+ * 2026-10-13: 100 000 atoms turned at 183 ms a frame with 32, 17 with 8).
+ * Under 40 pixels, a ball's outline is within about 0.3 of a pixel of a
+ * circle at each (half its width times one less the cosine of half a
+ * segment's angle), so that going from one to another is not seen. Never
+ * more than the style's own (`most`).
+ */
+export function ballSegmentsFor(acrossPx: number, most: number): number {
+  const segments = acrossPx >= 40 ? 32 : acrossPx >= 24 ? 24 : acrossPx >= 16 ? 16 : acrossPx >= 8 ? 12 : 8;
+  return Math.min(most, segments);
+}
+
+/** How long the view stays within a hundredth of one zoom before a lighter molecule's balls are given fewer segments, their size on the screen having shrunk, in ms. */
+export const BALLS_SETTLE_MS = 150;
+/** How near, as a share, a zoom is to another for the balls to count it as the same. */
+export const BALLS_NEAR = 0.01;
+

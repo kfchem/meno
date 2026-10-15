@@ -354,6 +354,27 @@ describe("a molecule in 3D as a molfile", () => {
     expect(m.atoms[0]).toMatchObject({ el: "N", charge: 1, isotope: 15 });
     expect(m.bonds).toHaveLength(4);
   });
+
+  it("writes its radicals as the format codes them - M  RAD lines in V2000, RAD on the atoms in V3000 - and is read back with them", () => {
+    // (a methyl radical, and a carbon-13 carbene beside it, a triplet)
+    const atoms: Atom3D[] = [
+      { el: "C", x: 0, y: 0, z: 0, radical: "doublet" },
+      { el: "H", x: 1.08, y: 0, z: 0 },
+      { el: "H", x: -0.54, y: 0.94, z: 0 },
+      { el: "H", x: -0.54, y: -0.94, z: 0 },
+      { el: "C", x: 4, y: 0, z: 0, radical: "triplet", isotope: 13 },
+    ];
+    const bonds: Bond3D[] = [1, 2, 3].map((i) => ({ a1: 0, a2: i, order: 1 }));
+    const v2000 = writeMolfile3d(atoms, bonds);
+    expect(v2000).toContain("M  RAD  2   1   2   5   3\nM  ISO  1   5  13\n");
+    const v3000 = writeMolfile3d(atoms, bonds, { version: "V3000" });
+    expect(v3000).toContain("M  V30 1 C 0.0000 0.0000 0.0000 0 RAD=2\n");
+    expect(v3000).toContain("M  V30 5 C 4.0000 0.0000 0.0000 0 RAD=3 MASS=13\n");
+    for (const text of [v2000, v3000]) {
+      const [m] = readMoleculesFromText(text, "mol");
+      expect(m.atoms.map((a) => a.radical)).toEqual(["doublet", undefined, undefined, undefined, "triplet"]);
+    }
+  });
 });
 
 describe("past what V2000 holds", () => {

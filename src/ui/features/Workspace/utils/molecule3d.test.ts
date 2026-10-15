@@ -28,6 +28,7 @@ import {
   RIBBON_REACH,
   coveredLength,
   labelSpot,
+  notesOf,
   populations,
   widestWay,
   type Turning3D,
@@ -49,6 +50,13 @@ const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
 });
 
 describe("a molecule in 3D as it is drawn", () => {
+  it("says over it how many of its file's atoms it leaves out, where it leaves out any", () => {
+    const notes = (m: Molecule3D) => notesOf(m, solidOf(m, STYLE_3D), "primary").filter((n) => n.endsWith("left out"));
+    expect(notes(ethane())).toEqual([]);
+    expect(notes({ ...ethane(), atomsLeftOut: 1 })).toEqual(["1 atom left out"]);
+    expect(notes({ ...ethane(), atomsLeftOut: 3 })).toEqual(["3 atoms left out"]);
+  });
+
   it("is laid about its centre, a bond of 1.5 Å as long as a drawn one", () => {
     const s = solidOf(ethane(), STYLE_3D);
     expect(Array.from(s.frames[0])).toEqual([-0.75 * WORLD_PER_ANGSTROM, 0, 0, 0.75 * WORLD_PER_ANGSTROM, 0, 0].map((v) => expect.closeTo(v, 6)));
@@ -580,6 +588,11 @@ describe("populations", () => {
     expect(low / high).toBeCloseTo(10, 1);
     expect(low + high).toBeCloseTo(1, 12);
     expect(populations([])).toEqual([]);
+  });
+
+  it("of a long run of frames - three hundred thousand energies - without overrunning the stack", () => {
+    const shares = populations(Array.from({ length: 300_000 }, (_, i) => (i % 5) / HARTREE));
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
   });
 });
 

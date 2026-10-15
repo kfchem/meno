@@ -341,6 +341,20 @@ describe("Meno's own steps", () => {
     // (and the canvas's own shares, where no step found them)
     near(populations(m.energies!, m.degeneracies));
   });
+
+  it("give no populations at 0 K or below - none to give, rather than NaN or the highest energy the most", () => {
+    for (const temperature of [0, -5]) {
+      const out = runMeno("populations", entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers"), "conformers", { temperature });
+      expect(out.ok).toBe(false);
+    }
+  });
+
+  it("give shares of a long run of energies - three hundred thousand - without overrunning the stack", () => {
+    const many = Array.from({ length: 300_000 }, (_, i) => kcal(i % 7));
+    const w = boltzmann(many, 298.15);
+    expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
+    expect(w[0]).toBeGreaterThan(w[1]);
+  });
 });
 
 describe("running", () => {

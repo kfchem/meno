@@ -431,6 +431,12 @@ export type Molecule3D = {
    */
   bondsFrom?: "distance";
   /**
+   * How many of its file's atoms it leaves out, their element not read - a
+   * PDB entry's unknown atom (X, UNX), say: said over it (utils/molecule3d
+   * `notesOf`).
+   */
+  atomsLeftOut?: number;
+  /**
    * Its stereocentres' and double bonds' CIP labels, by atom and bond index;
    * and which of them its drawing left open - one stereoisomer of several
    * made from it - so that it is told apart from the others.

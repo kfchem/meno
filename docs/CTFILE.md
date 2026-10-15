@@ -501,10 +501,11 @@ and what is sent to the RDKit plugin to draw as a formula or to find bond
 orders and hydrogens for - is written by `writeMolfile3d`, its header
 saying 3D: V2000 wherever it can be, and V3000 past 999 atoms or bonds, a
 coordinate or a symbol wider than V2000's field, or a coordination or
-hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
-atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
-such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
-quote, a double quote, "=", "(" or ")" are written in double quotes, and
-so are those that end in "-", which at a line's end continues it: a
-counter-anion's label beside a complex, Nu- or OTf-, read back as "NuEND"
-when written bare.
+hydrogen bond (types 9 and 10). V3000 gives a charge, a radical and an
+isotope on the atom (CHG=, RAD=, MASS=) where V2000 has M  CHG, M  RAD and
+M  ISO lines, a radical coded as the format codes it: 1 singlet, 2
+doublet, 3 triplet. A PDB entry such as 1STP, 1001 atoms, is past 999.
+V3000 strings that hold a blank, a quote, a double quote, "=", "(" or ")"
+are written in double quotes, and so are those that end in "-", which at a
+line's end continues it: a counter-anion's label beside a complex, Nu- or
+OTf-, read back as "NuEND" when written bare.
