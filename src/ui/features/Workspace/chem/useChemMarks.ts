@@ -11,18 +11,21 @@ const SETTLE_MS = 150;
 
 /**
  * The marks the plugin that does the checks (lib/plugins/roles) puts on a
- * structure, as far as the settings ask for them, brought up to date a
- * moment after it stops changing. Only while the plugin can be had without
+ * structure, as far as they are asked for - valence warnings by the
+ * settings, each R or S and E or Z by its atom or bond (`stereoShown`) -
+ * brought up to date a moment after it stops changing. Only while the plugin can be had without
  * asking: a structure being drawn never sets it up by itself. Marks for an
  * earlier version stay up until the new ones come, so nothing flickers.
  */
 export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
-  const { valenceWarnings, stereoLabels } = useAppSettings((s) => s.chemistry);
+  const { valenceWarnings } = useAppSettings((s) => s.chemistry);
+  // (any R or S, E or Z asked for on the drawing)
+  const stereoAsked = useMemo(() => model.atoms.some((a) => a.stereoShown) || model.bonds.some((b) => b.stereoShown), [model]);
   const chem = useChem();
   const [atHand, setAtHand] = useState(false);
   const [marks, setMarks] = useState<ChemMarks | null>(null);
   const wanted =
-    active && (valenceWarnings || stereoLabels) && model.atoms.length > 0;
+    active && (valenceWarnings || stereoAsked) && model.atoms.length > 0;
   const ready = chem.state === "ready";
   const failed = chem.state === "failed";
 
@@ -67,12 +70,16 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
       wanted && marks
         ? {
             valence: valenceWarnings ? marks.valence : NO_MARKS.valence,
-            centres: stereoLabels ? marks.centres : NO_MARKS.centres,
-            doubleBonds: stereoLabels
-              ? marks.doubleBonds
-              : NO_MARKS.doubleBonds,
+            centres: stereoAsked ? shownOnly(marks.centres, model.atoms) : NO_MARKS.centres,
+            doubleBonds: stereoAsked ? shownOnly(marks.doubleBonds, model.bonds) : NO_MARKS.doubleBonds,
           }
         : null,
-    [wanted, marks, valenceWarnings, stereoLabels],
+    [wanted, marks, valenceWarnings, stereoAsked, model],
   );
+}
+
+/** The marks of those parts - atoms, or bonds - whose R or S, E or Z is shown. */
+function shownOnly<T>(marks: Map<number, T>, parts: readonly { id: number; stereoShown?: true }[]): Map<number, T> {
+  const shown = new Set(parts.filter((p) => p.stereoShown).map((p) => p.id));
+  return new Map([...marks].filter(([id]) => shown.has(id)));
 }

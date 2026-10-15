@@ -40,9 +40,10 @@ import os
 import re
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.4.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
+LOOKS_SCRIPT = "looks.py"
 SETTINGS = "render.json"
 PICTURE = "picture.png"
 FILM = "film.mp4"
@@ -51,7 +52,19 @@ ENGINES = {"cycles", "eevee"}
 BACKGROUNDS = {"transparent", "white", "black", "grey"}
 COLOURS = {"neutral", "agx", "standard"}
 QUALITIES = {"high", "medium", "lossless"}
+SHADINGS = {"lit", "toon"}
+OUTLINES = {"none", "thin", "outer", "mixed"}
+OUTLINE_COLOURS = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
+# the looks render.py (looks.py) makes with materials of its own
+OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "clay"}
+LOOKS = {"meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"} | OWN_LOOKS
+FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
+WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
+MARBLES = {"carrara", "swirl"}
+PILES = {"long", "short"}
+CLAYS = {"terracotta", "elements"}
+PORCELAINS = {"porcelain", "pearl"}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
 
@@ -113,12 +126,27 @@ def settings_of(entry, options):
         "ambient": number(options.get("ambient", 1), "The light all round", 0, 10),
         "softness": number(options.get("softness", 10), "The shadows' softness", 0, 90),
         "quality": one_of(options.get("quality", "high"), "film quality", QUALITIES),
+        # (how it is shaded and outlined: the look's, which Meno gives with the entry)
+        "shading": one_of(entry.get("shading", "lit"), "shading", SHADINGS),
+        "band": number(entry.get("band", 0.5), "The lit band's size", 0.05, 1),
+        "outlines": one_of(entry.get("outlines", "none"), "outlines", OUTLINES),
+        "outline": number(entry.get("outline", 3), "The outline's width", 0.5, 20),
+        "outline_colour": one_of(entry.get("outline_colour", "black"), "outline colour", OUTLINE_COLOURS),
+        # (the look's name, and the choices that adjust it)
+        "look": one_of(entry.get("look", "meno"), "look", LOOKS),
+        "silver_finish": one_of(options.get("silver-finish", "mirror"), "silver finish", FINISHES["silver-finish"]),
+        "copper_finish": one_of(options.get("copper-finish", "brushed"), "copper finish", FINISHES["copper-finish"]),
+        "wood": one_of(options.get("wood", "oak"), "wood", WOODS),
+        "marble": one_of(options.get("marble", "carrara"), "marble pattern", MARBLES),
+        "pile": one_of(options.get("pile", "long"), "pile", PILES),
+        "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
+        "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
     }
 
 
-def script_text():
-    """render.py, as this plugin carries it: copied into the job's folder, so that the job holds all it runs."""
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), SCRIPT), encoding="utf-8") as f:
+def script_text(name=SCRIPT):
+    """A script, as this plugin carries it (render.py, looks.py): copied into the job's folder, so that the job holds all it runs."""
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), encoding="utf-8") as f:
         return f.read()
 
 
@@ -141,6 +169,7 @@ def op_prepare(m):
             "args": args,
             "files": [
                 {"name": SCRIPT, "text": script_text()},
+                {"name": LOOKS_SCRIPT, "text": script_text(LOOKS_SCRIPT)},
                 {"name": SETTINGS, "text": json.dumps(settings, indent=1) + "\n"},
             ],
             "reads": [],
