@@ -4,6 +4,8 @@ import { selectionScheme } from "./selectionScheme";
 import { guideMove, type Held } from "./guiding";
 import { shapePlace } from "../document";
 import { strokeMoved } from "../../../../lib/chem/ink";
+import { styleOf } from "../../../../lib/chem/style";
+import { carriedByCycle, cycleThings, snapToCycles } from "./cycles";
 
 type Pt = { x: number; y: number };
 
@@ -18,7 +20,7 @@ export const selectionMoving = { active: false };
  * The selection dragged, from the press at `from` (on the screen): moved by
  * as much as the pointer goes, off the grid, with the arrows, "+" signs and
  * words among it, the molecules in 3D, pictures, texts' sheets, PDFs, slides and shapes selected with it, and a
- * workflow's sets - with what they hold - and steps selected, as one undo step - one
+ * workflow's sets - with what they hold - catalytic cycles with what lies on them, and steps selected, as one undo step - one
  * move a frame, as every move lays the drawing out again. Escape lets it go:
  * all of it back where it was, as if it had not been dragged (the
  * maintainer, 2026-10-12). `toWorld` takes a point of the screen to the
@@ -35,12 +37,16 @@ export function dragSelection(
   // (a set selected takes what it holds along, selected or not)
   const sets = st.sets.filter((b) => st.selFlow.sets.has(b.id));
   const held = sets.map((b) => setMembers(st, b));
-  const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat())]);
+  // (a catalytic cycle selected takes what lies on it along, and the words of its arrows coming in and going out)
+  const cycles = st.cycles.filter((c) => st.selCycles.has(c.id));
+  const things = cycleThings(st.model, st.captions, styleOf(st.docStyle));
+  const onCycles = cycles.map((c) => carriedByCycle(c, things));
+  const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat()), ...onCycles.flatMap((o) => o.atoms)]);
   const takenSolids = new Set([...st.sel3d, ...held.flatMap((h) => h.molecules)]);
   const atoms = st.model.atoms.filter((a) => takenAtoms.has(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
   // (the arrows, "+" signs and words among them, and those selected for themselves - each once)
   const among = selectionScheme(st, takenAtoms);
-  const words = among.captions;
+  const words = [...among.captions, ...st.captions.filter((c) => onCycles.some((o) => o.captions.includes(c.id)) && !among.captions.some((w) => w.id === c.id)).map((c) => ({ id: c.id, x: c.x, y: c.y }))];
   const solids = st.molecules3d.filter((m) => takenSolids.has(m.id)).map((m) => ({ id: m.id, at: m.at }));
   const steps = st.steps.filter((s) => st.selFlow.steps.has(s.id)).map((s) => ({ id: s.id, x: s.x, y: s.y }));
   // (a set's pictures - a Render step's - with it)
@@ -78,7 +84,28 @@ export function dragSelection(
       slides: slides.map(by),
       shapes: shapes.map((s) => shapePlace(s, { x: dx, y: dy })),
       inks: inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })),
+      cycles: cycles.map((c) => ({ id: c.id, x: c.x + dx, y: c.y + dy })),
     });
+  };
+  /**
+   * A structure alone, or words alone, let go near a catalytic cycle's line -
+   * one not moving with it: put on the line, in the same step (lib/chem/cycle).
+   */
+  const ontoCycle = () => {
+    const s = store.getState();
+    if (cycles.length || !s.cycles.length) return;
+    const now = cycleThings(s.model, s.captions, styleOf(s.docStyle));
+    const moved = now.filter((t) => (t.atoms ? t.atoms.some((id) => takenAtoms.has(id)) : words.some((w) => w.id === t.caption)));
+    if (moved.length !== 1 || (moved[0].atoms && moved[0].atoms.some((id) => !takenAtoms.has(id)))) return;
+    const by = snapToCycles(s.cycles, moved[0].box);
+    if (!by) return;
+    const t = moved[0];
+    const at = new Map(s.model.atoms.map((a) => [a.id, a]));
+    s.moveAtoms(
+      (t.atoms ?? []).flatMap((id) => (at.has(id) ? [{ id, x: at.get(id)!.x + by.x, y: at.get(id)!.y + by.y }] : [])),
+      gesture,
+      t.caption != null ? { captions: s.captions.filter((c) => c.id === t.caption).map((c) => ({ id: c.id, x: c.x + by.x, y: c.y + by.y })) } : {},
+    );
   };
   const onMove = (ev: PointerEvent) => {
     last = toWorld(ev.clientX, ev.clientY);
@@ -113,6 +140,7 @@ export function dragSelection(
     }
     guide.end();
     selectionMoving.active = false;
+    if (last.x !== p0.x || last.y !== p0.y) ontoCycle();
     done(ev, last.x !== p0.x || last.y !== p0.y);
   };
   window.addEventListener("pointermove", onMove);

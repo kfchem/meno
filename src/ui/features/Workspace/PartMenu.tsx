@@ -18,7 +18,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -171,6 +171,7 @@ export default function PartMenu({
   slide,
   onSlideAround,
   shape,
+  cycle,
   onBoxAround,
   canvas = [],
   clipboard,
@@ -321,6 +322,8 @@ export default function PartMenu({
     onFront: () => void;
     onBack: () => void;
   };
+  /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
+  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void };
   /** A rounded rectangle made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -605,6 +608,14 @@ export default function PartMenu({
         ]
       : target.kind === "ink"
       ? [...colour, del("Delete writing")]
+      : target.kind === "cycle" && cycle
+      ? [
+          { name: "Arrow coming in", keys: "", run: cycle.onIn },
+          { name: "Arrow going out", keys: "", run: cycle.onOut },
+          ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),
+          { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
+          del("Delete cycle"),
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -766,6 +777,8 @@ export default function PartMenu({
                       ? "Shape"
                     : target.kind === "ink"
                       ? "Writing"
+                    : target.kind === "cycle"
+                      ? "Catalytic cycle"
                       : "Canvas"
       }
       tabIndex={-1}

@@ -11,7 +11,7 @@ import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shap
 import { swallowPress, togglesOn } from "./utils/press";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
@@ -92,6 +92,19 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
       <>
         <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
         <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+      </>
+    ),
+  },
+  {
+    id: "cycle",
+    name: "Catalytic cycle",
+    // (a circle of curved arrows, as a cycle is drawn)
+    icon: (
+      <>
+        <path d="M10 3.5 A6.5 6.5 0 0 1 16.2 12" />
+        <path d="M14.4 11.2 L16.6 14.1 L17.9 10.7 Z" fill="currentColor" />
+        <path d="M14 15.6 A6.5 6.5 0 0 1 4.2 13.2" />
+        <path d="M3.8 9.4 A6.5 6.5 0 0 1 7 4.2" />
       </>
     ),
   },

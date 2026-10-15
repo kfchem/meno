@@ -166,6 +166,9 @@ import { PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
+import Cycles2D from "./components/Cycles2D";
+import { cyclePointed } from "./utils/cycles";
+import { branchPath, CYCLE_RADIUS } from "../../../lib/chem/cycle";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
@@ -1199,6 +1202,18 @@ function WorkspaceContent({
       else if (!r?.moved) setMenu(target);
       return;
     }
+    // likewise a catalytic cycle, on its line, unless it is selected with more (lib/chem/cycle)
+    const { hoveredCycle, cycles, selCycles } = store.getState();
+    const cycleWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selCycles: new Set() }).any || selCycles.size > 1;
+    })();
+    if (!kind && hoveredCycle != null && cycles.some((x) => x.id === hoveredCycle) && !(selCycles.has(hoveredCycle) && cycleWithMore)) {
+      const target: MenuTarget = { kind: "cycle", id: hoveredCycle, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
     // likewise a shape, unless it is selected with more (docs/PRESENTING.md, *Shapes*)
     const { hoveredShape, shapes, selShapes } = store.getState();
     const shapeWithMore = (() => {
@@ -1598,6 +1613,14 @@ function WorkspaceContent({
                 st.addBondedPair({ x: at.x - dx, y: at.y - dy }, { x: at.x + dx, y: at.y + dy });
               } else if (what === "text") st.setCaptionEdit({ id: null, at });
               else if (what === "arrow") st.addArrow(at.x, at.y);
+              // (a catalytic cycle, a circle with nothing on it yet, about where Quick Add was opened, selected: lib/chem/cycle)
+              else if (what === "cycle") {
+                const id = st.addCycle({ x: at.x, y: at.y, r: CYCLE_RADIUS * NOMINAL_BOND_LENGTH });
+                if (id != null) {
+                  st.clearSel();
+                  st.selectCycles([id]);
+                }
+              }
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
@@ -1682,6 +1705,7 @@ function WorkspaceContent({
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
             else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
+            else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
             else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
@@ -1830,6 +1854,28 @@ function WorkspaceContent({
                 st.updateSlide(s.id, { w: r.w, h: r.h });
               },
               onSelectOn: () => st.selectOnSlide(s.id),
+            };
+          })()}
+          cycle={(() => {
+            const st = store.getState();
+            const cy = menu.kind === "cycle" ? st.cycles.find((x) => x.id === menu.id) : undefined;
+            if (!cy) return undefined;
+            // (where on its line it was right-clicked: an arrow put there; one there already, near it, can be taken away)
+            const at = cyclePointed.id === cy.id ? cyclePointed.angle : 0;
+            const branches = cy.branches ?? [];
+            const near = branches.findIndex((b) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < (12 * Math.PI) / 180);
+            const add = (way: "in" | "out") => {
+              st.updateCycle(cy.id, { branches: [...branches, { at, way }] });
+              // (its words written at once where its far end is: Escape, or nothing written, leaves it without)
+              const label = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH).label;
+              st.setCaptionEdit({ id: null, at: label });
+            };
+            return {
+              onIn: () => add("in"),
+              onOut: () => add("out"),
+              ...(near >= 0 ? { onRemoveArrow: () => st.updateCycle(cy.id, { branches: branches.filter((_, i) => i !== near) }) } : {}),
+              ccw: !!cy.ccw,
+              onTurn: () => st.updateCycle(cy.id, { ccw: !cy.ccw }),
             };
           })()}
           shape={(() => {
@@ -2136,6 +2182,7 @@ function WorkspaceContent({
           <HoverOverlay2D />
           {/* A reaction scheme's arrows and "+" signs */}
           <Arrows2D />
+          <Cycles2D />
           <Pluses2D />
           {/* Words on the page: a reaction's reagents and conditions, or anything else */}
           <Suspense fallback={null}>
