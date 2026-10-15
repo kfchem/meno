@@ -13,7 +13,7 @@
 import * as THREE from "three";
 import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style3D } from "../../../../lib/chem/style3d";
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
-import { unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
+import { tubeAlong, unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
 import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
@@ -301,7 +301,27 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const piecesOf = linesIn(samples[0]).map((p) => p.length);
       const lineBond = lineOf.flatMap((b, l) => Array<number>(piecesOf[l]).fill(b));
       const each = samples.map(linesAt);
+      // (a line that bends, in a render that does not move: one smooth tube along its curve, not straight pieces end to end)
+      const perLine = linesIn(samples[0]);
+      const pieceOfBent = !animated ? perLine.flatMap((p) => Array<boolean>(p.length).fill(p.length > 1)) : [];
+      if (!animated) {
+        const mat = meshes[stick].material;
+        perLine.forEach((pcs, li) => {
+          if (pcs.length < 2) return;
+          const there = samples[0].presence ? samples[0].presence![lineOf[li]] : 1;
+          const r = pcs[0].r * there;
+          if (r <= 0) return;
+          const tube = tubeAlong([pcs[0].a, ...pcs.map((q) => q.b)], r, 24);
+          if (!tube.indices.length) return;
+          const mesh = meshes.length;
+          meshes.push({ name: `stick ${materials[mat].name}`, positions: tube.positions, normals: tube.normals, indices: tube.indices, material: mat });
+          const node = nodes.length;
+          nodes.push({ mesh });
+          children.push(node);
+        });
+      }
       for (let l = 0; l < each[0].length; l++) {
+        if (pieceOfBent[l]) continue;
         const at = (s: number) => {
           const x = each[s][l];
           const there = samples[s].presence ? samples[s].presence![lineBond[l]] : 1;
