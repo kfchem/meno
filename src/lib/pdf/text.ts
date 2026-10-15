@@ -344,6 +344,40 @@ export function wordsBetween(t: PageText, a: number, b: number): string {
 }
 
 /**
+ * The text from letter `a` to before `b` as Copy puts it on the clipboard,
+ * as a PDF viewer copies it: each of the page's lines on a line of its own
+ * - a word broken by PDFium's hyphen at a line's end whole - and a blank
+ * line where the next line stands further below than a line is tall: a
+ * paragraph's end, a heading set apart.
+ */
+export function textBetween(t: PageText, a: number, b: number): string {
+  const lines = linesOf(t);
+  const lineAt = (i: number) => lines.find((l) => i >= l.start && i < l.end);
+  const end = Math.min(b, t.codes.length);
+  let out = "";
+  for (let i = Math.max(0, a); i < end; i++) {
+    const c = t.codes[i];
+    const lineEnd = (k: number) => t.codes[k] === RETURN || t.codes[k] === LINE_END;
+    if (c === BROKEN) {
+      while (i + 1 < end && lineEnd(i + 1)) i++;
+      continue;
+    }
+    if (lineEnd(i)) {
+      while (i + 1 < end && lineEnd(i + 1)) i++;
+      out = out.replace(/[ \t]+$/, "");
+      if (!out || out.endsWith("\n")) continue;
+      const here = lineAt(i);
+      const next = lineAt(i + 1);
+      const apart = !!here && !!next && next.y0 - here.y1 > here.y1 - here.y0;
+      out += apart ? "\n\n" : "\n";
+      continue;
+    }
+    out += String.fromCodePoint(c);
+  }
+  return out.trim();
+}
+
+/**
  * Where each word copied from letter `a` to before `b` (`wordsBetween`,
  * split at its spaces) lies on the page: the box round its letters - left,
  * top, right, bottom, in points - on the line it starts on (a word broken

@@ -534,6 +534,257 @@ def reflected(entry):
     }
 
 
+# --- the same atoms, the same places: conformers of equivalent branches ---------------------------------
+
+#: How many whole branches a group may have for every way of laying them out to be tried (4! = 24).
+MOST_BRANCHES = 4
+#: The largest pendant ring turned about its bond, and how many of its symmetries are tried.
+MOST_RING_ATOMS = 16
+MOST_SYMMETRIES = 64
+
+
+def settle_equivalents(mol, cids):
+    """Conformers of one molecule made by RDKit, their equivalent branches given the same places as in the
+    first. RDKit's embedding takes no account of which of a CH2's two hydrogens, or of an isopropyl's two methyls,
+    is which: one index can be on one side in one conformer and on the other in the next, and switching between
+    them moves them across each other. Here each equivalent group - neighbours of one atom of the same rank in
+    the graph (no chirality), each the root of a branch that joins the rest only through it: H's, a methyl, a
+    t-butyl, CF3, an oxygen of a nitro group - is laid out as it is in the first conformer, as the whole branches
+    permute (an atom with its branch, its atoms by their ranks), whichever way fits best in the parent's frame:
+    the sum of squared distances, the parent and the atoms about it laid over the first's. A pendant ring that
+    is symmetric about its bond (phenyl) may flip likewise. Went from the molecule's centre outward, so that a
+    branch's own groups are settled after the branch is. Local and greedy: no automorphism of the whole molecule
+    is searched for. Only heavy atoms of whole branches move, and only to places an equivalent branch had.
+    The first conformer is the reference and is not touched; `mol`'s conformers `cids` are changed in place."""
+    import itertools
+    import numpy as np
+
+    if len(cids) < 2:
+        return
+    n = mol.GetNumAtoms()
+    nbrs = [[x.GetIdx() for x in a.GetNeighbors()] for a in mol.GetAtoms()]
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=False))
+    # from the centre outward: the atom of the least eccentricity, the lowest index of them
+    def distances(src):
+        d = {src: 0}
+        order = [src]
+        for a in order:
+            for b in nbrs[a]:
+                if b not in d:
+                    d[b] = d[a] + 1
+                    order.append(b)
+        return d, order
+
+    best = None
+    for a in range(n):
+        d, _ = distances(a)
+        if len(d) != n:
+            return  # (more than one molecule: left as it is)
+        ecc = max(d.values())
+        if best is None or ecc < best[0]:
+            best = (ecc, a)
+    depth, order = distances(best[1])
+    parent = {best[1]: None}
+    for a in order:
+        for b in nbrs[a]:
+            if b not in parent and depth[b] == depth[a] + 1:
+                parent[b] = a
+
+    def branch_of(p, c):
+        """The atoms hanging from p by c alone - None where c's side joins the rest of the molecule another way."""
+        seen = {c}
+        stack = [c]
+        while stack:
+            a = stack.pop()
+            for b in nbrs[a]:
+                if b == p:
+                    if a != c:
+                        return None
+                    continue
+                if b not in seen:
+                    seen.add(b)
+                    stack.append(b)
+        return seen
+
+    def symmetries(root, bset):
+        """The maps of a pendant ring's atoms onto themselves that keep its root, by ranks and bonds."""
+        atoms = sorted(bset, key=lambda a: (depth[a], a))
+        found = []
+
+        def extend(i, m, used):
+            if len(found) >= MOST_SYMMETRIES:
+                return
+            if i == len(atoms):
+                found.append(dict(m))
+                return
+            a = atoms[i]
+            if a == root:
+                m[a] = a
+                used.add(a)
+                extend(i + 1, m, used)
+                used.discard(a)
+                return
+            for t in sorted(bset):
+                if t in used or ranks[t] != ranks[a] or len(nbrs[t]) != len(nbrs[a]):
+                    continue
+                if all((m[b] in nbrs[t]) == (b in nbrs[a]) for b in m if b in bset):
+                    m[a] = t
+                    used.add(t)
+                    extend(i + 1, m, used)
+                    used.discard(t)
+                    del m[a]
+
+        extend(0, {}, set())
+        return found
+
+    groups = []  # (p, [branches as lists of atoms, root first], whether more than one)
+    ambiguous = set()
+    for p in order:
+        pend = {}
+        for c in nbrs[p]:
+            bset = branch_of(p, c)
+            if bset is not None:
+                pend[c] = bset
+        by_rank = {}
+        for c in pend:
+            by_rank.setdefault(ranks[c], []).append(c)
+        for roots in by_rank.values():
+            roots.sort()
+            if len(roots) > 1 and len(roots) <= MOST_BRANCHES:
+                groups.append((p, roots, pend))
+                for c in roots:
+                    ambiguous |= pend[c]
+            elif len(roots) == 1:
+                bset = pend[roots[0]]
+                bonds_inside = sum(1 for a in bset for b in nbrs[a] if b in bset) // 2
+                if bonds_inside >= len(bset) and len(bset) <= MOST_RING_ATOMS:
+                    moved = symmetries(roots[0], bset)
+                    if len(moved) > 1:
+                        groups.append((p, roots, pend))
+                        # (atoms every symmetry keeps - the root, the para atom - stay where the frame can lean on them)
+                        ambiguous |= {a for a in bset if any(m[a] != a for m in moved)}
+
+    def pair_up(ra, rb, bset_a, bset_b):
+        """A map of one branch onto an equivalent one - a parallel walk, equal ranks at each step, bonds kept - or None."""
+        m = {ra: rb}
+        queue = [(ra, rb)]
+        for a, b in queue:
+            ca = sorted((x for x in nbrs[a] if x in bset_a and x not in m), key=lambda x: (ranks[x], x))
+            cb = sorted((x for x in nbrs[b] if x in bset_b and x not in m.values()), key=lambda x: (ranks[x], x))
+            if len(ca) != len(cb) or [ranks[x] for x in ca] != [ranks[x] for x in cb]:
+                return None
+            for x, y in zip(ca, cb):
+                m[x] = y
+                queue.append((x, y))
+        if len(m) != len(bset_a) or len(set(m.values())) != len(m):
+            return None
+        for a in bset_a:
+            for b in nbrs[a]:
+                if b in bset_a and m[b] not in nbrs[m[a]]:
+                    return None
+        return m
+
+    def handedness(roots_at, anchors_at, centre):
+        """The signs of the triple products of the vectors from the centre to the roots and to the atoms about it, each triple with a root."""
+        vs = [np.asarray(x) - centre for x in roots_at + anchors_at]
+        k = len(roots_at)
+        out = []
+        for i, j, l in itertools.combinations(range(len(vs)), 3):
+            if min(i, j, l) < k:
+                out.append(1 if float(np.linalg.det(np.array([vs[i], vs[j], vs[l]]))) > 0 else -1)
+        return tuple(out)
+
+    settled = set(range(n)) - ambiguous
+    seen_roots = {}
+    for p, roots, pend in groups:
+        key = (p, tuple(roots))
+        if key in seen_roots:
+            continue
+        seen_roots[key] = True
+        branches = [pend[c] for c in roots]
+        inside = set().union(*branches)
+        # candidate re-labellings of the branches' atoms: new place of a <- old place of m[a]
+        cands = []
+        if len(roots) > 1:
+            maps = {}
+            ok = True
+            for i, ri in enumerate(roots):
+                for j, rj in enumerate(roots):
+                    mm = pair_up(ri, rj, branches[i], branches[j])
+                    if mm is None:
+                        ok = False
+                    maps[(i, j)] = mm
+            if not ok:
+                continue
+            for perm in itertools.permutations(range(len(roots))):
+                cand = {}
+                for i, j in enumerate(perm):
+                    cand.update(maps[(i, j)])
+                cands.append(cand)
+        else:
+            cands = symmetries(roots[0], branches[0])
+            if len(cands) < 2:
+                continue
+        # the parent's frame: it and the atoms about it, outside the branches - those settled; where they are too few
+        # or lie in a line, those of an equivalent pair too, which a flip of theirs may still turn
+        shell = {p}
+        for x in nbrs[p]:
+            if x not in inside:
+                shell.add(x)
+                shell.update(y for y in nbrs[x] if y not in inside)
+        if len(roots) == 1:
+            shell.add(roots[0])
+        reference = mol.GetConformer(cids[0])
+
+        def usable(atoms):
+            pts = np.array([list(reference.GetAtomPosition(x)) for x in atoms])
+            return len(atoms) >= 3 and np.linalg.matrix_rank(pts - pts.mean(axis=0), tol=1e-3) >= 2
+
+        frame = sorted(x for x in shell if x in settled or x == p or (len(roots) == 1 and x == roots[0]))
+        if not usable(frame):
+            frame = sorted(shell)
+            if not usable(frame):
+                continue
+        anchors = sorted(x for x in nbrs[p] if x not in inside)[:2]
+        ref = {x: np.array(mol.GetConformer(cids[0]).GetAtomPosition(x)) for x in set(frame) | inside | {p} | set(anchors)}
+        for cid in cids[1:]:
+            conf = mol.GetConformer(cid)
+            now = {a: np.array(conf.GetAtomPosition(a)) for a in range(n)}
+            P = np.array([now[x] for x in frame])
+            Q = np.array([ref[x] for x in frame])
+            pc, qc = P.mean(axis=0), Q.mean(axis=0)
+            u, _, vt = np.linalg.svd((P - pc).T @ (Q - qc))
+            d = np.sign(np.linalg.det(vt.T @ u.T)) or 1.0
+            rot = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+            def placed(x):
+                return rot @ (now[x] - pc) + qc
+            scored = []
+            for cand in cands:
+                cost = sum(float(np.sum((placed(cand[a]) - ref[a]) ** 2)) for a in inside)
+                scored.append(cost)
+            identity = next((k for k, c in enumerate(cands) if all(c[a] == a for a in inside)), 0)
+            # (first its handedness: the roots and the atoms about their parent keep the sense they have in the first - a CH2's hydrogens
+            # keep their sides, a methyl's its cyclic order - and then the fit)
+            keep = list(range(len(cands)))
+            if len(roots) > 1 and len(roots) + len(anchors) >= 3:
+                p_now = now[p]
+                want = handedness([ref[r] for r in roots], [ref[x] for x in anchors], ref[p])
+                same = [
+                    k for k, cand in enumerate(cands)
+                    if handedness([now[cand[r]] for r in roots], [now[x] for x in anchors], p_now) == want
+                ]
+                if same:
+                    keep = same
+            pick = min(keep, key=lambda k: scored[k] if k != identity else scored[k] - 1e-9)
+            if pick != identity and (identity not in keep or scored[pick] < scored[identity] - 1e-6):
+                chosen = cands[pick]
+                for a in inside:
+                    x = now[chosen[a]]
+                    conf.SetAtomPosition(a, Point3D(float(x[0]), float(x[1]), float(x[2])))
+        settled |= inside
+
+
+
 def conformers_of(iso, how, made):
     """A stereoisomer's conformers. Of two enantiomers, the one whose SMILES
     comes first is made, and the other is its mirror image: the same shapes
@@ -593,6 +844,8 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
             ):
                 continue
         kept.append(cid)
+    # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
+    settle_equivalents(mol, kept)
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {

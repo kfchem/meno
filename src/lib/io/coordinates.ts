@@ -1,0 +1,494 @@
+/**
+ * Coordinates as a paper's supporting information prints them (docs/FILE-IO.md,
+ * *Coordinates in a text*): each structure's atoms, an element and where it
+ * stands, set among what a printed page sets about them - a name over each,
+ * its charge and multiplicity, its energies, the page's numbers and running
+ * heads - and broken wherever the page or the viewer copying it broke the
+ * lines. Read from the words in turn, not the lines, so that a line broken
+ * anywhere is read as if it were whole.
+ *
+ * An atom is an element - its symbol, or its atomic number - and three
+ * numbers written with a decimal point (or an exponent), as Gaussian's
+ * manual has a molecule specification's line: `C 1.2 3.4 5.6`, a label of
+ * up to four letters and digits (`C1`), a freeze code between (`C 0 x y z`,
+ * `C -1 x y z`), its items set apart by spaces, tabs or commas. Besides:
+ * `1 C x y z`, numbered; and Gaussian's table of an orientation, a row of
+ * the atom's number, its atomic number, its type and x, y, z.
+ *
+ * A structure's atoms run on until something other than an atom comes -
+ * words, a name - and that begins the next; a page's number, set among
+ * them, does not. Its name is the first line before it that is no note:
+ * an energy, a frequency, a method are notes, kept with it. A charge and a
+ * multiplicity ("0 1") set before its atoms are its; so is a count of its
+ * atoms, said ("52 atoms") or set alone as an XYZ file sets it. Lengths are
+ * in ångströms, or in bohr where the text says so (and turned into
+ * ångströms).
+ */
+import { ELEMENTS } from "../chem/elements";
+import { bondsByDistance } from "../../utils/structureParsers";
+
+/** One bohr, in ångströms (CODATA 2018). */
+export const BOHR = 0.529177210903;
+
+export type CoordinateAtom = { el: string; x: number; y: number; z: number };
+
+/** A structure read from a text: its name, what was said of it, its atoms (in ångströms) and what looks wrong about them. */
+export type CoordinateStructure = {
+  name: string;
+  notes: string[];
+  charge?: number;
+  multiplicity?: number;
+  /** How many atoms the text says it has. */
+  stated?: number;
+  /** Whether the text gave its lengths in bohr. */
+  bohr: boolean;
+  atoms: CoordinateAtom[];
+  /** What looks wrong, said as the user is shown it. */
+  warnings: string[];
+  /** Its atoms came mixed with another's - two columns read across - and could not be told apart: not to be placed. */
+  mixed?: true;
+};
+
+const SYMBOL = new Map(ELEMENTS.map((e) => [e.symbol.toLowerCase(), e.symbol]));
+const BY_NUMBER = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
+
+/** A number with a decimal point or an exponent - a coordinate (D for an exponent, as Fortran writes one). */
+const DECIMAL = /^[+-]?(?:\d+\.\d*|\.\d+|\d+(?=[eEdD]))(?:[eEdD][+-]?\d+)?$/;
+const INTEGER = /^[+-]?\d+$/;
+
+/**
+ * An element's symbol from a label: the symbol, as it is written (C, Cl - a
+ * TS1 names a structure), with a number and up to two letters or digits more
+ * after it (C1, C12, H1A): Gaussian's labels are four long at most.
+ */
+function elementOfLabel(t: string): string | null {
+  const m = /^([A-Z][a-z]?)(?:\d[0-9A-Za-z']{0,2})?$/.exec(t);
+  return m ? (SYMBOL.get(m[1].toLowerCase()) ?? null) : null;
+}
+
+const num = (t: string) => Number(t.replace(/[dD]/, "e"));
+
+/** A word of the text, and the line it is on. */
+type Token = { t: string; line: number };
+
+/** An atom as written: where it begins and ends among the words, the line it begins on, its number where it is numbered. */
+type Rec = CoordinateAtom & { from: number; to: number; line: number; end: number; index?: number; slot: number };
+
+/** The atom written from word `i`, or none. */
+function recordAt(ts: readonly Token[], i: number): Omit<Rec, "slot"> | null {
+  const t = (k: number) => ts[i + k]?.t ?? "";
+  const dec = (k: number) => DECIMAL.test(t(k));
+  const int = (k: number) => INTEGER.test(t(k));
+  const three = (k: number) => dec(k) && dec(k + 1) && dec(k + 2);
+  const at = (el: string, k: number, index?: number) => ({ el, x: num(t(k)), y: num(t(k + 1)), z: num(t(k + 2)), from: i, to: i + k + 3, line: ts[i].line, end: ts[i + k + 2].line, ...(index != null ? { index } : {}) });
+  // (a number before the element, on its line: the atom's own - a "0 1" on the line before is the charge's)
+  const sameLine = ts[i + 1]?.line === ts[i].line;
+  // (a table of an orientation: centre, atomic number, type, x y z)
+  if (sameLine && int(0) && int(1) && int(2) && three(3)) {
+    const el = BY_NUMBER.get(Number(t(1)));
+    return el ? at(el, 3, Number(t(0))) : null;
+  }
+  // (numbered: 1 C x y z)
+  if (sameLine && int(0) && three(2)) {
+    const el = elementOfLabel(t(1));
+    if (el) return at(el, 2, Number(t(0)));
+  }
+  const el = elementOfLabel(t(0)) ?? (sameLine && /^\d+$/.test(t(0)) ? (BY_NUMBER.get(Number(t(0))) ?? null) : null);
+  if (!el) return null;
+  // (a freeze code between: C 0 x y z)
+  if (sameLine && int(1) && three(2)) return at(el, 2);
+  if (three(1)) return at(el, 1);
+  return null;
+}
+
+/** A line of a page's own, not the text's: its number, alone ("S12", "Page 3 of 40", "- 4 -", "3/40"). */
+const PAGE_MARK = /^(?:S-?\d+|page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\/\s*\d+|[-\u2013\u2014]\s*\d+\s*[-\u2013\u2014]|S\d+\s+of\s+S?\d+)$/i;
+/** A note of a structure's: an energy, a frequency, a correction, its method. */
+const NOTE =
+  /energ|hartree|kcal|kj\s*\/?\s*mol|\bscf\b|\bzpe\b|zero[- ]point|enthalp|gibbs|frequenc|imaginary|\be\s*\(|\b[eGH]\s*=|\bdelta\b|thermal|correction|b3lyp|m06|wb97|pbe|def2|6-31|6-311|cc-pv|\btzvp|\bsvp\b|level of theory/i;
+/** A line saying what follows, not naming it: a table's heads, "Cartesian coordinates", rules. */
+const HEADING_ONLY =
+  /^(?:cartesian\s+coordinates?|coordinates?|xyz\s+coordinates?|optimi[sz]ed\s+(?:geometry|coordinates|structure)|standard orientation|input orientation|z-matrix orientation|center\s+atomic|number\s+number|atom\b|symbol\b|element\b|x\s+y\s+z|[-=_\s]+$|\(?(?:å|angstroms?|a\.?u\.?|bohr)\)?:?$)/i;
+/** A note within a longer line: an energy ("E = -1234.5678 Hartree", "E(RB3LYP) = -1234.5 A.U."), a count of imaginary frequencies. */
+const FRAGMENT = /\b(?:E|G|H|ZPE)(?:\s*\([^)]*\))?\s*=\s*[-+]?\d+\.\d+(?:\s*(?:hartrees?|a\.u\.|au|eh|kcal\s*\/?\s*mol))?|imaginary frequenc(?:y|ies)\s*:?\s*\d+/i;
+const STATED = /(\d+)\s*atoms\b|\batoms?\s*[:=]\s*(\d+)|number of atoms\s*[:=]?\s*(\d+)/i;
+const SAYS_BOHR = /\bbohrs?\b|\ba\.\s*u\.|\batomic units\b|units\s*=\s*(?:bohr|au)\b/i;
+const SAYS_ANGSTROM = /\u00e5|\u00e5ngstr\u00f6m|angstr[o\u00f6]m|\bunits\s*=\s*ang/i;
+
+/** The text's lines, a minus however printed made one, page marks and running heads and feet - lines set again and again, words only - left out. */
+function linesOf(text: string): string[] {
+  const lines = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u2212\u2012\u2013\u2014\ufe63\uff0d](?=\s*[\d.])/g, "-")
+    .replace(/\u00a0/g, " ")
+    .split("\n")
+    .map((l) => l.trim());
+  const count = new Map<string, number>();
+  for (const l of lines) count.set(l, (count.get(l) ?? 0) + 1);
+  return lines.map((l) => {
+    if (PAGE_MARK.test(l)) return "";
+    // (a line set twice or more that is words, no atom nor a number alone - a journal's foot, a running head - is the page's; a table's heads are said once each structure and left out anyway)
+    if ((count.get(l) ?? 0) >= 2 && l.length >= 6 && /[A-Za-z]{3}/.test(l) && !NOTE.test(l) && !STATED.test(l) && !SAYS_BOHR.test(l) && !SAYS_ANGSTROM.test(l) && !wordsOf([l]).some((_, i, ts) => recordAt(ts, i)))
+      return "";
+    return l;
+  });
+}
+
+function wordsOf(lines: readonly string[]): Token[] {
+  const out: Token[] = [];
+  lines.forEach((l, line) => {
+    for (const raw of l.split(/[\s,;]+/)) {
+      if (!raw) continue;
+      // (a number set close against the one before - 1.234-5.678 - two)
+      for (const t of raw.split(/(?<=\d)(?=[+-]\d|[+-]\.\d)/)) out.push({ t, line });
+    }
+  });
+  return out;
+}
+
+/** What lies between two runs of atoms, line by line: the words on each line not an atom's. */
+function gapLines(ts: readonly Token[], from: number, to: number, lines: readonly string[]): string[] {
+  const on = new Map<number, string[]>();
+  for (let k = from; k < to; k++) on.set(ts[k].line, [...(on.get(ts[k].line) ?? []), ts[k].t]);
+  // (a line all of it between them as it was written - its spaces kept, two columns' names set apart by them - else its words)
+  const whole = (line: number) => (from === 0 || ts[from - 1].line !== line) && (to >= ts.length || ts[to].line !== line);
+  return [...on].map(([line, words]) => (whole(line) ? lines[line] : words.join(" ")));
+}
+
+/** A run of atoms with what was written before it. */
+type Run = { recs: Rec[]; before: string[]; after: string[] };
+
+/** A line of numbers alone: a charge and a multiplicity, or a count. */
+const NUMBERS_ONLY = /^[+-]?\d+(?:[\s,]+[+-]?\d+)?$/;
+/** A line that may name a structure: no note, no table's head, no numbers alone, no count. */
+const naming = (l: string) => !NOTE.test(l) && !HEADING_ONLY.test(l) && !NUMBERS_ONLY.test(l) && /[A-Za-z0-9]/.test(nameOf(l)) && l.length <= 80;
+/** A line as a name: its count of atoms, where it says one ("TS1 (52 atoms)"), and the units its lengths are in ("coordinates in bohr"), left out. */
+const nameOf = (l: string) =>
+  l
+    .replace(STATED, "")
+    // (and a charge and multiplicity after it, the lines' ends made spaces)
+    .replace(/\s+[+-]?\d+[\s,]+\d+$/, "")
+    .replace(/[,;:]?\s*\(?\s*(?:(?:cartesian\s+)?coordinates\s+)?in\s+(?:bohrs?|a\.\s*u\.|atomic units|\u00e5|\u00e5ngstr\u00f6ms?|angstroms?)\s*\)?/i, "")
+    .replace(/[\s,;:]*\(\s*\)|[\s,;:]+$/g, "")
+    .trim();
+
+/**
+ * The structures written in a text, in the order they come: each with its
+ * name, its notes, its charge and multiplicity and the count of its atoms
+ * where the text gives them, and what looks wrong.
+ */
+export function readCoordinates(text: string): CoordinateStructure[] {
+  const lines = linesOf(text);
+  const ts = wordsOf(lines);
+  const bohrAll = SAYS_BOHR.test(text) && !SAYS_ANGSTROM.test(text);
+  // every atom written, in turn
+  const recs: Rec[] = [];
+  for (let i = 0; i < ts.length; ) {
+    const r = recordAt(ts, i);
+    if (r) {
+      const slot = recs.filter((q) => q.line === r.line).length;
+      recs.push({ ...r, slot });
+      i = r.to;
+    } else i++;
+  }
+  // (a number before an atom's element, the atoms after it not numbered on - "0 1 C x y z" on one line, a text whose lines'
+  // ends were made spaces - is no atom's: the multiplicity's)
+  for (let k = 0; k < recs.length; k++) {
+    const r = recs[k];
+    const numbered = (q: Rec | undefined) => q?.index != null && (q.to === r.from || q.from === r.to);
+    if (r.index != null && !numbered(recs[k - 1]) && !numbered(recs[k + 1]) && elementOfLabel(ts[r.from + 1]?.t ?? "")) {
+      const { index: _index, ...rest } = r;
+      recs[k] = { ...rest, from: r.from + 1 };
+    }
+  }
+  // runs: atoms one after another, nothing between - or a page's number alone, unless it counts the atoms after it
+  const runs: Run[] = [];
+  let last = 0;
+  for (let k = 0; k < recs.length; k++) {
+    const r = recs[k];
+    const gap = ts.slice(last, r.from).map((x) => x.t);
+    const prev = runs[runs.length - 1];
+    const count = gap.length === 1 && /^\d+$/.test(gap[0]) ? Number(gap[0]) : null;
+    const counts = count != null && count > 0 && k + count <= recs.length && (k + count === recs.length || recs[k + count - 1].to !== recs[k + count].from);
+    // (numbered atoms: the count begun again - a new structure)
+    const renumbered = r.index === 1 && prev != null && prev.recs[prev.recs.length - 1].index != null;
+    if (prev && !renumbered && (gap.length === 0 || (count != null && !counts))) prev.recs.push(r);
+    else runs.push({ recs: [r], before: gapLines(ts, last, r.from, lines), after: [] });
+    last = r.to;
+  }
+  if (runs.length) runs[runs.length - 1].after = gapLines(ts, last, ts.length, lines);
+  // (a structure broken by a page's foot or head said once, no charge nor count after it: one, where its two parts together
+  // bond and no atom of one stands in another's place - two structures each about the origin stand in each other's)
+  for (let k = 1; k < runs.length; k++) {
+    const [a, b] = [runs[k - 1], runs[k]];
+    if (b.before.some((l) => NUMBERS_ONLY.test(l) || STATED.test(l) || NOTE.test(l))) continue;
+    const pa = atomsOfRecs(a.recs, 1);
+    const pb = atomsOfRecs(b.recs, 1);
+    if (pieces([...pa, ...pb]) < pieces(pa) + pieces(pb) && !crowds(pa, pb)) {
+      a.recs.push(...b.recs);
+      a.after = b.after;
+      runs.splice(k--, 1);
+    }
+  }
+  // (a run of one atom written by its atomic number alone - a row of some other table's numbers - is none)
+  const kept = runs.filter((r) => r.recs.length > 1 || elementOfLabel(ts[r.recs[0].from].t) != null);
+  const out: CoordinateStructure[] = [];
+  kept.forEach((run, n) => {
+    // (the words between two structures: the notes said after the first, then - from the first line that may name one - the next's)
+    let first = run.before.findIndex(naming);
+    // (a count set alone just before its name, as an XYZ file sets it, the structure's too)
+    while (first > 0 && NUMBERS_ONLY.test(run.before[first - 1])) first--;
+    const own = first < 0 ? run.before : run.before.slice(first);
+    if (out.length && first > 0) out[out.length - 1].notes.push(...run.before.slice(0, first).filter((l) => NOTE.test(l)));
+    out.push(...structureOf(run, own, bohrAll, n + 1));
+  });
+  if (out.length) out[out.length - 1].notes.push(...kept[kept.length - 1].after.filter((l) => NOTE.test(l)));
+  return out.map(checked);
+}
+
+const atomsOfRecs = (recs: readonly Rec[], scale: number): CoordinateAtom[] => recs.map((r) => ({ el: r.el, x: r.x * scale, y: r.y * scale, z: r.z * scale }));
+
+/** Whether an atom of `a` stands where one of `b` does: closer than any bond. */
+function crowds(a: readonly CoordinateAtom[], b: readonly CoordinateAtom[]): boolean {
+  return a.some((p) => b.some((q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < TOO_NEAR));
+}
+
+/** The structure, or structures, a run of atoms is - two read across two columns, told apart where they can be - with what was said before it. */
+function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: number): CoordinateStructure[] {
+  // (named by the line nearest its atoms that may name it - or, its lines' ends made spaces, by what comes before its first note
+  // on the line before its atoms, where that may name it: "TS-1 E = -76.4 Hartree 0 1")
+  const last = (said[said.length - 1] ?? "").replace(/(?:^|\s)[+-]?\d+[\s,]+\d+$/, "");
+  const before = FRAGMENT.exec(last) ? last.slice(0, last.search(FRAGMENT)).trim() : "";
+  const named = [...said].reverse().find(naming) ?? (before && naming(before) ? before : undefined);
+  // (a note on a line with more before it - the lines' ends made spaces, its name before it: its energies and frequencies alone)
+  const notes = said.filter((l) => NOTE.test(l)).flatMap((l) => (l.search(FRAGMENT) > 0 ? [...l.matchAll(new RegExp(FRAGMENT.source, "gi"))].map((m) => m[0].trim()) : [l]));
+  // (a charge and a multiplicity on a line of their own - or, the lines' ends made spaces, the last two numbers before the atoms)
+  const pair = [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l)) ?? /(?:^|\s)([+-]?\d+)[\s,]+(\d+)$/.exec(said[said.length - 1] ?? "")?.slice(1).join(" ");
+  const [charge, multiplicity] = pair ? pair.split(/[\s,]+/).map(Number) : [];
+  const stated = said.map((l) => STATED.exec(l)).find((m) => m) ?? null;
+  const alone = said.find((l) => /^\d+$/.test(l));
+  const count = stated ? Number(stated[1] ?? stated[2] ?? stated[3]) : alone ? Number(alone) : undefined;
+  const bohr = said.some((l) => SAYS_BOHR.test(l)) || (bohrAll && !said.some((l) => SAYS_ANGSTROM.test(l)));
+  const base = {
+    name: named ? nameOf(named) : `Structure ${n}`,
+    notes,
+    ...(pair && multiplicity >= 1 ? { charge, multiplicity } : {}),
+    ...(count != null ? { stated: count } : {}),
+    bohr,
+  };
+  const scale = bohr ? BOHR : 1;
+  const atomsOf = (recs: readonly Rec[]) => atomsOfRecs(recs, scale);
+  // (two atoms on most lines: two columns read across, each its own)
+  const lines = new Map<number, Rec[]>();
+  for (const r of run.recs) lines.set(r.line, [...(lines.get(r.line) ?? []), r]);
+  // (two on a line, each whole on it - not a line broken through an atom, the next begun on it)
+  const twos = [...lines.values()].filter((l) => l.length === 2 && l.every((r) => r.end === r.line)).length;
+  if (twos >= 2) {
+    // (an atom alone on its line - one column run on past the other's end - is the column's it bonds to, where it bonds to one
+    // only as an atom can - two structures written about the origin stand in each other's way: an H bonded twice, two atoms
+    // closer than any bond, are none's; to both, or neither, it cannot be told)
+    const paired = (r: Rec) => lines.get(r.line)!.length === 2;
+    const cols = [0, 1].map((s) => run.recs.filter((r) => paired(r) && r.slot === s));
+    let told = true;
+    for (const r of run.recs.filter((q) => !paired(q))) {
+      const joins = cols.map((c) => pieces(atomsOf([...c, r])) === pieces(atomsOf(c)) && likely(atomsOf([...c, r])));
+      if (joins[0] === joins[1]) told = false;
+      else cols[joins[0] ? 0 : 1].push(r);
+    }
+    const parts = (named ?? "").split(/\s{2,}|\t/);
+    if (told && cols.every((c) => c.length && pieces(atomsOf(c)) === 1)) {
+      return cols.map((c, s) => ({ ...base, name: parts.length === 2 ? parts[s] : `${base.name} (${s + 1})`, notes: [...notes], atoms: atomsOf(c), warnings: [] }));
+    }
+    return [{ ...base, atoms: atomsOf(run.recs), warnings: [], mixed: true }];
+  }
+  // (the atoms of two structures taken in turn, a line of each: every other one makes each whole)
+  const atoms = atomsOf(run.recs);
+  if (atoms.length >= 6 && pieces(atoms) > 1 && turns(atoms) > atoms.length / 3) {
+    const halves = [0, 1].map((h) => run.recs.filter((_, i) => i % 2 === h));
+    if (halves.every((c) => pieces(atomsOf(c)) === 1)) {
+      return halves.map((c, h) => ({ ...base, name: `${base.name} (${h + 1})`, notes: [...notes], atoms: atomsOf(c), warnings: [] }));
+    }
+    return [{ ...base, atoms, warnings: [], mixed: true }];
+  }
+  return [{ ...base, atoms, warnings: [] }];
+}
+
+/** Whether atoms could be one structure's: no H bonded twice, no two closer than any bond. */
+function likely(atoms: readonly CoordinateAtom[]): boolean {
+  const n = atoms.map(() => 0);
+  for (const b of bondsByDistance(atoms)) {
+    n[b.a1]++;
+    n[b.a2]++;
+  }
+  return !atoms.some((a, i) => a.el === "H" && n[i] > 1) && !atoms.some((a, i) => atoms.some((b, j) => j > i && Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < TOO_NEAR));
+}
+
+/** How many pieces atoms make, bonded by distance. */
+function pieces(atoms: readonly CoordinateAtom[]): number {
+  return pieceOf(atoms).count;
+}
+
+function pieceOf(atoms: readonly CoordinateAtom[]): { of: number[]; count: number } {
+  const of = atoms.map((_, i) => i);
+  const root = (i: number): number => (of[i] === i ? i : (of[i] = root(of[i])));
+  for (const b of bondsByDistance(atoms)) of[root(b.a1)] = root(b.a2);
+  const roots = new Set(atoms.map((_, i) => root(i)));
+  return { of: atoms.map((_, i) => root(i)), count: roots.size };
+}
+
+/** How often, atom to atom in turn, the piece changes: a structure's pieces are written one after another, two taken in turn every time. */
+function turns(atoms: readonly CoordinateAtom[]): number {
+  const { of } = pieceOf(atoms);
+  let n = 0;
+  for (let i = 1; i < of.length; i++) if (of[i] !== of[i - 1]) n++;
+  return n;
+}
+
+/** Nearer than this, in ångströms, two atoms cannot stand: H2's bond, the shortest, is 0.74. */
+const TOO_NEAR = 0.6;
+/** Further than this from every other, in ångströms, an atom stands apart. */
+const APART = 4;
+
+/** A structure with what looks wrong about it said. */
+function checked(s: CoordinateStructure): CoordinateStructure {
+  const warnings = [...s.warnings];
+  if (s.mixed) warnings.push("Two columns came mixed together here: copy or select one column at a time.");
+  if (s.stated != null && s.stated !== s.atoms.length) warnings.push(`The text gives ${s.stated} atoms; ${s.atoms.length} are here.`);
+  const d = (a: CoordinateAtom, b: CoordinateAtom) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  let near = false;
+  let apart = false;
+  if (s.atoms.length <= 3000) {
+    for (let i = 0; i < s.atoms.length; i++) {
+      let least = Infinity;
+      for (let j = 0; j < s.atoms.length; j++) {
+        if (i === j) continue;
+        const e = d(s.atoms[i], s.atoms[j]);
+        if (e < least) least = e;
+      }
+      if (least < TOO_NEAR) near = true;
+      if (s.atoms.length > 2 && least > APART) apart = true;
+    }
+  }
+  if (near) warnings.push("Two atoms stand closer than any bond.");
+  if (apart) warnings.push("An atom stands far from all the others.");
+  return { ...s, warnings };
+}
+
+/** A structure's formula, as Hill writes one: C, then H, then the rest by their symbols; none of them, every element by its symbol. */
+export function formulaOf(atoms: readonly { el: string }[]): string {
+  const n = new Map<string, number>();
+  for (const a of atoms) n.set(a.el, (n.get(a.el) ?? 0) + 1);
+  const els = [...n.keys()].sort();
+  const order = n.has("C") ? ["C", ...(n.has("H") ? ["H"] : []), ...els.filter((e) => e !== "C" && e !== "H")] : els;
+  return order.map((e) => `${e}${n.get(e)! > 1 ? n.get(e) : ""}`).join("");
+}
+
+/** A word of a PDF's page and the box round it - left, top, right, bottom, in points from the page's top left. */
+export type PlacedWord = { text: string; box: readonly [number, number, number, number] };
+/** A page's words taken, and how large the page is. */
+export type PlacedPage = { words: readonly PlacedWord[]; width: number; height: number };
+
+/** How far down a page, or up from its foot, a running head or foot is set: a fourteenth of it. */
+const MARGIN = 1 / 14;
+
+/**
+ * Words taken from a PDF's pages, where each lies, as the text they make
+ * read as the page is read: line by line, a page's two columns one after
+ * the other - where the words either side of a gap between them each make
+ * whole atoms on their lines - and its running heads and feet left out:
+ * those set again on another page, as near its top or foot, the page's
+ * numbers changing.
+ */
+export function textOfPages(pages: readonly PlacedPage[]): string {
+  const linesOfPage = pages.map((p) => lineUp(p.words));
+  // (a head or foot: a line near the page's top or foot, its digits aside, set so on another page too)
+  const banded = (p: PlacedPage, l: PlacedLine) => l.top < p.height * MARGIN || l.bottom > p.height * (1 - MARGIN);
+  const key = (l: PlacedLine) => l.words.map((w) => w.text).join(" ").replace(/\d+/g, "#");
+  const seen = new Map<string, number>();
+  linesOfPage.forEach((ls, i) => new Set(ls.filter((l) => banded(pages[i], l)).map(key)).forEach((k) => seen.set(k, (seen.get(k) ?? 0) + 1)));
+  const out: string[] = [];
+  linesOfPage.forEach((ls, i) => {
+    const kept = ls.filter((l) => !(banded(pages[i], l) && ((seen.get(key(l)) ?? 0) >= 2 || PAGE_MARK.test(textOfLine(l)))));
+    const split = gutterOf(kept, pages[i].width);
+    if (split == null) out.push(...kept.map(textOfLine));
+    else {
+      const side = (left: boolean) => kept.map((l) => ({ ...l, words: l.words.filter((w) => (w.box[2] <= split) === left) })).filter((l) => l.words.length);
+      out.push(...side(true).map(textOfLine), ...side(false).map(textOfLine));
+    }
+  });
+  return out.join("\n");
+}
+
+type PlacedLine = { words: PlacedWord[]; top: number; bottom: number };
+
+const textOfLine = (l: PlacedLine) => l.words.map((w) => w.text).join(" ");
+
+/**
+ * Words set on lines: each with those whose middle lies level with the
+ * first word of a line - not with the line as it has grown, which one word
+ * standing taller than its line would stretch over the next - left to
+ * right; the lines top to bottom.
+ */
+function lineUp(words: readonly PlacedWord[]): PlacedLine[] {
+  const lines: (PlacedLine & { band: readonly [number, number] })[] = [];
+  for (const w of [...words].sort((a, b) => a.box[1] - b.box[1] || a.box[0] - b.box[0])) {
+    const mid = (w.box[1] + w.box[3]) / 2;
+    const l = lines.find((q) => mid > q.band[0] && mid < q.band[1]);
+    if (l) {
+      l.words.push(w);
+      l.top = Math.min(l.top, w.box[1]);
+      l.bottom = Math.max(l.bottom, w.box[3]);
+    } else lines.push({ words: [w], top: w.box[1], bottom: w.box[3], band: [w.box[1], w.box[3]] });
+  }
+  for (const l of lines) l.words.sort((a, b) => a.box[0] - b.box[0]);
+  return lines.sort((a, b) => a.top - b.top).map(({ words: ws, top, bottom }) => ({ words: ws, top, bottom }));
+}
+
+/** Whether a line's words are one atom, whole. */
+function wholeAtom(words: readonly PlacedWord[]): boolean {
+  const ts = wordsOf([words.map((w) => w.text).join(" ")]);
+  const r = ts.length ? recordAt(ts, 0) : null;
+  return !!r && r.to === ts.length;
+}
+
+/** Whether a line's words are part of an atom cut short: an element and one or two of its numbers, or one or two numbers alone. */
+function cutAtom(words: readonly PlacedWord[]): boolean {
+  const nums = words.filter((w) => DECIMAL.test(w.text)).length;
+  const rest = words.filter((w) => !DECIMAL.test(w.text));
+  return nums > 0 && nums < 3 && (rest.length === 0 || (rest.length === 1 && rest[0] === words[0] && elementOfLabel(rest[0].text) != null));
+}
+
+/**
+ * Where a page's two columns part: a gap no line's word crosses, in the
+ * page's middle half, with lines of whole atoms either side of it - two at
+ * least on each - and none of the lines cut short there; the widest such.
+ * None, for a page of one column (the gap between an atom's x and its y
+ * leaves no atom whole either side).
+ */
+function gutterOf(lines: readonly PlacedLine[], width: number): number | null {
+  const spans = lines
+    .flatMap((l) => l.words.map((w) => [w.box[0], w.box[2]] as const))
+    .sort((a, b) => a[0] - b[0]);
+  const gaps: { at: number; wide: number }[] = [];
+  let reach = -Infinity;
+  for (const [x0, x1] of spans) {
+    if (reach > -Infinity && x0 > reach) gaps.push({ at: (reach + x0) / 2, wide: x0 - reach });
+    reach = Math.max(reach, x1);
+  }
+  for (const g of gaps.filter((q) => q.at > width / 4 && q.at < (3 * width) / 4).sort((a, b) => b.wide - a.wide)) {
+    let left = 0;
+    let right = 0;
+    let cut = 0;
+    for (const l of lines) {
+      const a = l.words.filter((w) => w.box[2] <= g.at);
+      const b = l.words.filter((w) => w.box[0] >= g.at);
+      for (const part of [a, b]) {
+        if (!part.length) continue;
+        if (wholeAtom(part)) part === a ? left++ : right++;
+        else if (cutAtom(part)) cut++;
+      }
+    }
+    if (left >= 2 && right >= 2 && cut <= (left + right) / 10) return g.at;
+  }
+  return null;
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { WordsEditor } from "../Workspace/utils/wordsEditor";
-import { fieldTarget, runTextMenu, textMenuItems, type TextMenuTarget } from "./textMenu";
+import { fieldTarget, runTextMenu, structuresIn, textMenuItems, type TextMenuTarget } from "./textMenu";
 
 // (the maintainer, 2026-10-13: where the system's menu is kept shut - the
 // column's text, words on the page - a right-click opens Meno's own: Cut,
@@ -57,5 +57,25 @@ describe("the right-click menu on words", () => {
     await runTextMenu("copy", { ...fieldTarget(ed, () => null), after: () => told++ });
     await runTextMenu("selectAll", { ...fieldTarget(ed, () => null), after: () => told++ });
     expect(told).toBe(2);
+  });
+});
+
+describe("3D structures, on a text in the column", () => {
+  // (made up: a water, under its name)
+  const text = ["Notes", "Water", "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n");
+  const target = (selected: string, inColumn = true): TextMenuTarget => ({
+    selected: () => selected,
+    hasText: () => true,
+    selectAll: () => {},
+    ...(inColumn ? { text: { whole: () => text, name: "notes.txt" } } : {}),
+  });
+
+  it("reads what is selected, or the whole text where nothing is", () => {
+    expect(structuresIn(target("")).map((s) => s.name)).toEqual(["Water"]);
+    expect(structuresIn(target("Notes"))).toEqual([]);
+  });
+
+  it("reads nothing of words that are no column's text - a label, words on the page", () => {
+    expect(structuresIn(target("", false))).toEqual([]);
   });
 });
