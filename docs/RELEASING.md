@@ -101,6 +101,41 @@ cannot be passed off as a newer one. The Tauri CLI writes that version
 from 2.12 on; an update signed without it is refused by every Meno from
 0.1.1 on, which is what each job's last step guards against.
 
+## The Windows installer
+
+The installer is Tauri's default NSIS template with Meno's changes
+(`src-tauri/windows/installer.nsi`, named as `bundle.windows.nsis.template`
+in `tauri.windows.conf.json`; the changes are listed at its top and marked
+where they are):
+
+- Opened, it asks nothing. One small window - no title bar, the corners
+  and shadow Windows 11 gives a window it is asked to round, Meno's
+  wordmark, a bar in Meno's colours and *Installing Meno…* - shows while
+  it installs Meno for the user (where Meno was, or `%LOCALAPPDATA%\Meno`),
+  then says *Starting Meno…* and opens it. In the taskbar it is *Meno*,
+  with Meno's icon (`installerIcon`).
+- An installation already there is installed over, as an update is,
+  not uninstalled first; a desktop shortcut is made, as the finish page
+  used to by default.
+- If Meno is running, it asks to close it before its window shows;
+  declined, it ends having done nothing.
+- Quiet runs - an update's `/S /UPDATE`, with `/R` and `/ARGS` to start
+  Meno again - show nothing and do what Tauri's do. The uninstaller is
+  Tauri's, its page asking whether to delete Meno's data included.
+
+The wordmark is drawn from `site/assets/wordmark-light.svg` into bitmaps,
+one for each display scale (`src-tauri/windows/installer/logo-*.bmp`, by
+`pwsh scripts/icons/installer-logo.ps1` on Windows); a new wordmark means
+running it again.
+
+The template names the tauri-cli whose default it was made from, and
+`npm run check:tauri` fails when `@tauri-apps/cli` is another version: take
+the default `installer.nsi` of both versions from Tauri's repository
+(`crates/tauri-bundler/src/bundle/windows/nsis/`, at each version's tag),
+carry what changed between them into Meno's, and change the version at its
+top. Then build the installer and try it: opened, over an earlier Meno and
+as an update (`/S /UPDATE`), and uninstalled.
+
 ## The Mac
 
 The workflow builds Meno for Apple silicon only. Meno carries no `uv`: it
