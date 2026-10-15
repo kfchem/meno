@@ -188,7 +188,14 @@ words, a width they break into lines at, and how their lines lie.
   drawing's lengths and angles.
 - **Held off** while Cmd (Mac) or Ctrl (Windows) is held during the drag;
   Shift keeps the move across or up and down.
-- **Fading in and out**, as everything in Meno does.
+- **Fading in and out** (the maintainer, 2026-10-15: they flickered):
+  each guide fades in over 100 ms and out over 150 ms; one that is there
+  for less than 80 ms - an alignment passed in a fast drag - is not shown
+  at all, the snap itself not affected; one that moves to another line
+  glides there, not away and back (`presenting/guideFade`). A guide once
+  taken is held to 10 pixels, not 6, so that it does not come and go as
+  the pointer passes the edge; and a line goes 12 pixels past what it
+  joins, at each end, to read as a line.
 
 ## Handwriting
 

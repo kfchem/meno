@@ -1,7 +1,7 @@
 import type { EditorStore } from "../store";
 import { IS_MAC } from "../../../../lib/doc/shortcuts";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
-import { GUIDE_PX, guided, nearOf, sidesLike, sizedLike, widthLike, type Box, type GuideMarks } from "../presenting/guides";
+import { GUIDE_HOLD_PX, GUIDE_PX, guided, nearOf, sidesLike, sizedLike, widthLike, type Box, type GuideMarks } from "../presenting/guides";
 import { besidesBoxes, selectedBox } from "./extent";
 
 type Pt = { x: number; y: number };
@@ -45,16 +45,23 @@ export function guideMove(store: EditorStore, toWorld: (cx: number, cy: number) 
   const px = pixelOn(toWorld, from);
   const moving = selectedBox(st, style, 1 / px, undefined, true);
   const others = moving ? nearOf(moving, besidesBoxes(st, style), NEAR_SIDES * Math.max(moving.x1 - moving.x0, moving.y1 - moving.y0) + NEAR_PX * px) : [];
+  // (an axis it is snapped on is held to a longer distance than takes it: no flicker as it passes the edge)
+  let heldX = false;
+  let heldY = false;
   const step = (dx: number, dy: number, keys: Held): Pt => {
     // (Shift: across, or up and down, the way it has gone most)
     const axis = keys.shiftKey ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : undefined;
     const kx = axis === "y" ? 0 : dx;
     const ky = axis === "x" ? 0 : dy;
     if (!moving || !others.length || off(keys)) {
+      heldX = heldY = false;
       showGuides(store, null);
       return { x: kx, y: ky };
     }
-    const g = guided(moving, kx, ky, others, GUIDE_PX * px, axis);
+    const hold = GUIDE_HOLD_PX * px;
+    const g = guided(moving, kx, ky, others, GUIDE_PX * px, axis, { ...(heldX ? { x: hold } : {}), ...(heldY ? { y: hold } : {}) });
+    heldX = g.dx !== kx;
+    heldY = g.dy !== ky;
     showGuides(store, g.lines.length || g.marks.length ? { lines: g.lines, marks: g.marks } : null);
     return { x: g.dx, y: g.dy };
   };
