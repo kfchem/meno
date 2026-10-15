@@ -150,7 +150,8 @@ describe("molecules in 3D written as a scene to render", () => {
       };
     };
     const solid = parts(PICTURE);
-    const glass = parts({ ...PICTURE, molecules: "glass" });
+    const STOPPED = { look: "glass", shading: "lit", outlines: "none", outline: 3, outlineColour: "black", band: 0.5, sticks: "stopped" } as const;
+    const glass = parts({ ...PICTURE, molecules: "glass", finish: STOPPED });
 
     it("leaves the sticks of an opaque look from atom to atom", () => {
       expect(solid.sticks).toHaveLength(6);

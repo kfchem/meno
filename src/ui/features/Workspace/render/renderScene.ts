@@ -58,8 +58,6 @@ export type Finish = {
   sticks?: Sticks;
 };
 export type Sticks = "shown" | "stopped";
-/** The looks that are seen through, so that what is inside a ball shows: made of glass; and those a renderer's own looks make (ice, a soap bubble, slime, X-ray). */
-export const SEE_THROUGH_LOOKS: readonly string[] = ["glass", "bubble", "slime", "ice", "xray"];
 
 /** A molecule in 3D as it is shown: carried as a copy carries it, the surface it shows - placed about its shown frame's centre, in ångströms - and the vibration it shows, each atom's displacement. */
 export type Shown3D = { m: Carried3D; surfaces?: { plus: Mesh; minus: Mesh | null }; move?: readonly number[] };
@@ -104,14 +102,9 @@ const RATIOS: Record<Exclude<Shape, "fit">, number> = { "16:9": 16 / 9, "4:3": 4
  */
 type Sample = { places: Float32Array; turn: THREE.Quaternion; presence: Float32Array | null };
 
-/** Whether the molecules are seen through, so that what is inside a ball shows: made of glass, or in a look that is. */
-export function seesThrough(ask: Pick<RenderAsk, "molecules" | "finish">): boolean {
-  return ask.molecules === "glass" || (ask.finish != null && SEE_THROUGH_LOOKS.includes(ask.finish.look));
-}
-
-/** Whether the sticks of a see-through look stop at the balls' surfaces: where it is asked, and else - nothing said - they do. */
-export function sticksStopped(ask: Pick<RenderAsk, "molecules" | "finish">): boolean {
-  return seesThrough(ask) && (ask.finish?.sticks ?? "stopped") === "stopped";
+/** Whether a see-through look's sticks stop at the balls' surfaces: where the look - or the choice - says so. */
+export function sticksStopped(ask: Pick<RenderAsk, "finish">): boolean {
+  return ask.finish?.sticks === "stopped";
 }
 
 /**

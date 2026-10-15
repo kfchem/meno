@@ -135,8 +135,12 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
 
   it("leaves a step whose plugin declares options of its own for it as it was", () => {
     expect(optionsFor("conformers", "crest").map((o) => o.id)).not.toContain("seed");
-    // (Render: Meno's own choices first, then the role's)
-    expect(optionsFor("render", "blender").slice(0, (kindInfo("render").own ?? []).length)).toEqual(kindInfo("render").own ?? []);
+    // (Render: Meno's own choices first, then the role's; the look choice offering the canvas's and those the plugin declares)
+    const own = kindInfo("render").own ?? [];
+    const given = optionsFor("render", "blender");
+    expect(given.slice(0, own.length).map((o) => o.id)).toEqual(own.map((o) => o.id));
+    const look = given.find((o) => o.id === "look") as unknown as { choices: { value: string }[] };
+    expect(look.choices.map((c) => c.value).slice(0, 3)).toEqual(["meno", "glossy", "matte"]);
   });
 
   it("says the structures not made, one or several", () => {
