@@ -24,6 +24,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
+import { partsBounds } from "../workflow/parts";
 
 export default function FitToContent2D({
   paddingPx = 48,
@@ -43,6 +44,8 @@ export default function FitToContent2D({
   const shapes = useEditor((s) => s.shapes);
   const inks = useEditor((s) => s.inks);
   const texts = useEditor((s) => s.texts);
+  const sets = useEditor((s) => s.sets);
+  const steps = useEditor((s) => s.steps);
   const store = useEditorStore();
   const style = useDrawingStyle();
   const { camera, size, invalidate } = useThree();
@@ -65,7 +68,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && inks.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && inks.length === 0 && sets.length === 0 && steps.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -141,6 +144,12 @@ export default function FitToContent2D({
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0 - (t.icon ? 0 : NOMINAL_BOND_LENGTH)) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
+    // and a workflow's sets and steps: their frames, and the cards closed
+    const flow = partsBounds({ sets, steps, wires: [] });
+    if (flow) {
+      bounds.min = { x: Math.min(bounds.min.x, flow.x0), y: Math.min(bounds.min.y, flow.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, flow.x1), y: Math.max(bounds.max.y, flow.y1) };
+    }
     // and the molecules in 3D, as each is turned and shown now, as the
     // camera sees them: straight from above, by an orthographic camera (the
     // canvas's); in perspective, first from straight above each, then - as
@@ -206,6 +215,8 @@ export default function FitToContent2D({
     shapes,
     inks,
     texts,
+    sets,
+    steps,
     style,
     camera,
     size.width,

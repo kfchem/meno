@@ -1183,6 +1183,13 @@ export type EditorState = {
    */
   wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
+  /**
+   * The result sets whose molecules no longer fit them, as the 3D look in
+   * Settings draws them, laid out again (workflow/run `fitResultSets`):
+   * in every state the history holds, with no step of its own and the
+   * document as saved as it was - the look is Settings', not the document's.
+   */
+  fitResultSets: () => void;
   /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
   forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran" | "runs">) => void;
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
@@ -1351,6 +1358,8 @@ export type EditorState = {
    */
   /** An atom's charge one up (+1) or one down (-1), as one undo step. */
   stepCharge: (id: number, step: 1 | -1) => void;
+  /** Each atom's charge stepped by one, as one undo step: the selection's, by + or -. */
+  stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
   deleteAtom: (id: number) => void;
@@ -1433,7 +1442,8 @@ export type EditorState = {
   pressHold: { atomId?: number; at?: { x: number; y: number }; start: number } | null;
   setPressHold: (h: EditorState["pressHold"]) => void;
   /** The bond a double-click on an atom drew, which a third click takes back to draw a chain instead. */
-  doubleClickBond: { atomId: number; depth: number; at: number } | null;
+  /** (`state`: the document as the bond left it - its depth in the history stays the same once the history is full, so it is told by this) */
+  doubleClickBond: { atomId: number; state: object; at: number } | null;
   noteDoubleClickBond: (atomId: number) => void;
   /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
   takeBackDoubleClickBond: (atomId: number) => void;

@@ -5,6 +5,8 @@ import { useThree, type ThreeEvent } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { dragSelection } from "../utils/dragSelection";
+import { onChord } from "../utils/press";
+import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
@@ -462,12 +464,21 @@ export function Atoms2D() {
         store.getState().selectStructure(a.id);
         store.getState().setPressHold(null);
       }, LONG_PRESS_MS);
+      // (another button pressed with it: no press at all - utils/press#onChord)
+      let chorded = false;
+      const offChord = onChord(1, () => {
+        chorded = true;
+        letGo();
+        cancelPendingEdit();
+        forgetPresses();
+      });
       const letGo = () => {
         window.clearTimeout(hold);
+        offChord();
         store.getState().setPressHold(null);
       };
       const onFirstMove = (ev: PointerEvent) => {
-        if (!cand.current.active || cand.current.started) return;
+        if (chorded || !cand.current.active || cand.current.started) return;
         if (Math.hypot(ev.clientX - cx, ev.clientY - cy) < MOV_PX) return;
         window.removeEventListener("pointermove", onFirstMove);
         window.removeEventListener("pointerup", onEarlyUp, true);
@@ -476,7 +487,7 @@ export function Atoms2D() {
         // a drag is not the first click of a double-click
         forgetPresses();
         const st = store.getState();
-        const withSelection = held || (st.sel.atoms.has(a.id) && st.sel.atoms.size > 1);
+        const withSelection = held || dragsSelection(st, a.id);
         if (withSelection) selectionMoveGesture(pid);
         else moveGesture(idx, ev, pid);
       };
@@ -486,8 +497,8 @@ export function Atoms2D() {
         letGo();
         resetCand();
         endPanHold(ev.pointerId ?? null);
-        // (a long press: the structure is selected, and that is all)
-        if (held) {
+        // (a long press: the structure is selected, and that is all - and a chord, nothing)
+        if (held || chorded) {
           suppressDoubleClick?.(DOUBLE_CLICK_MS);
           return;
         }

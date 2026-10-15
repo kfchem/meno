@@ -1,4 +1,5 @@
-import type { WrittenAtom, WrittenMolecule } from "../../../../lib/io/writers";
+import { knownOf, type WrittenAtom, type WrittenMolecule } from "../../../../lib/io/writers";
+import type { Known } from "../../../../lib/options";
 import type { Carried3D } from "../store/types";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D } from "../style3d";
@@ -79,4 +80,21 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = curr
   }
   const names = molecules.map((m) => (m.name ? stem(m.name) : "")).filter(Boolean);
   return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}) };
+}
+
+/**
+ * What Meno knows of molecules in 3D as one is written, which a writer's
+ * options start from (lib/io/writers `knownOf`): its charge and spin
+ * multiplicity as its atoms say them - or, one molecule read from a
+ * calculation, as that calculation said them, the state it was in there
+ * (an output's atoms carry no charges of their own) - and its name.
+ */
+export function knownOfMolecules(molecules: readonly Carried3D[], style?: Style3D): Record<Known, string | number> {
+  const known = knownOf(writtenOf(molecules, style));
+  const calc = molecules.length === 1 ? molecules[0].calc : undefined;
+  return {
+    ...known,
+    ...(Number.isInteger(calc?.charge) ? { charge: calc!.charge! } : {}),
+    ...(Number.isInteger(calc?.multiplicity) && calc!.multiplicity! > 0 ? { multiplicity: calc!.multiplicity! } : {}),
+  };
 }

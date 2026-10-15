@@ -3,6 +3,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
+import { TAU } from "../../../theme/motion";
+import { buttonHeld } from "./buttonHeld";
 import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
@@ -71,7 +73,7 @@ const blue = (k: number) => WHITE.clone().lerp(HIGHLIGHT, k);
  * shrinking, its bonds thickening or giving way, its finish changing.
  */
 const OUTLINE_TAU = 0.07;
-const PLACE_TAU = 0.08;
+const PLACE_TAU = TAU.place;
 const FRAME_TAU = 0.06;
 /** How quickly a vibration's swing eases in, and out as it comes to rest, in seconds. */
 const VIBRATION_TAU = 0.25;
@@ -111,19 +113,6 @@ const SWAP_DEPTH = 1.5;
 /** The most dashes and arc steps one molecule's measurements are drawn with. */
 const MEASURE_PIECES = 2048;
 
-/**
- * Whether a pointer button is held down anywhere in the window: what moves
- * then is being dragged, and is followed at once rather than gone over to.
- */
-let held = 0;
-if (typeof window !== "undefined") {
-  window.addEventListener("pointerdown", () => (held += 1), true);
-  const up = () => (held = Math.max(0, held - 1));
-  window.addEventListener("pointerup", up, true);
-  window.addEventListener("pointercancel", up, true);
-  window.addEventListener("blur", () => (held = 0));
-}
-const buttonHeld = () => held > 0;
 
 /** One step of a spring towards `to`, which says whether it is still moving. */
 function spring(s: { v: number; vel: number; to: number }, dt: number): boolean {
