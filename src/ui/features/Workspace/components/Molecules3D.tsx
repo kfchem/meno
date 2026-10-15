@@ -17,7 +17,6 @@ import { hiddenInStacks, placeInStack, STACK_SWAP_MS } from "../utils/stacks";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { eyeOf, pageAt } from "../utils/page";
 import { guideMove } from "../utils/guiding";
 import { selectionScheme } from "../utils/selectionScheme";
@@ -29,6 +28,7 @@ import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "
 import { titled } from "../../../../lib/calc/sources";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import Molecule3DView, { type Split3D } from "./Molecule3DView";
+import { stereoShownOf } from "../document";
 import { viewBack, viewShowingCopy } from "../utils/copySeen";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import StackChip3D from "./StackChip3D";
@@ -150,7 +150,6 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const drawing = useEditor((s) => s.fullModel);
   const remake = useContext(Remake3D);
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
-  const stereoLabels = useAppSettings((s) => s.chemistry.stereoLabels);
   // (R and S on them as large as on the drawing, and written as it writes them)
   const drawingStyle = useDrawingStyle();
   const stereoFont = useMemo(() => {
@@ -765,7 +764,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             rising={rising[m.id]}
             split={splits[m.id]}
             onRisen={() => store.getState().risen3d(m.id)}
-            stereoShown={stereoLabels ? "all" : m.stereo?.chosen ? "chosen" : null}
+            stereoShown={stereoShownOf(m)}
             stereoFont={stereoFont}
             overlay={!!overlay[m.id]}
             linkedAtom={hoveredDrawn != null && m.drawnFrom ? (m.drawnFrom.indexOf(hoveredDrawn) >= 0 ? m.drawnFrom.indexOf(hoveredDrawn) : null) : null}

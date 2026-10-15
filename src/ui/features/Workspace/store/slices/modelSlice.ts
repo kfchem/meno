@@ -220,6 +220,10 @@ export const createModelSlice = (
       doubleClickBond: { atomId, depth: doc.history().undoDepth, at: performance.now() },
     })),
 
+  setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {
+    doc.edit(show ? "show R/S" : "hide R/S", (d) => ops.setStereoShown(d, of, show));
+  },
+
   takeBackDoubleClickBond: (atomId: number) => {
     const d = get().doubleClickBond;
     set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));

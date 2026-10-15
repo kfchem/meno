@@ -188,8 +188,8 @@ export type Molecule3DViewProps = {
   onRemake?: () => void;
   /** Its other frames - conformers - drawn over the one it shows. */
   overlay?: boolean;
-  /** Its stereocentres' and double bonds' labels shown: all, only those its drawing left open, or none. */
-  stereoShown: "all" | "chosen" | null;
+  /** Its stereocentres' and double bonds' labels shown, by atom and bond index (document `stereoShownOf`); none, none. */
+  stereoShown: { atoms: readonly number[]; bonds: readonly number[] } | null;
   /**
    * R and S as the drawing writes them: as large as its R and S, on the
    * page or on the screen; in its typeface; in parentheses or not; and how
@@ -402,19 +402,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
   const stereoMarks = useMemo(() => {
     const st = m.stereo;
-    if (!st || !props.stereoShown) return [];
-    const only = props.stereoShown === "chosen" ? st.chosen : null;
-    if (props.stereoShown === "chosen" && !only) return [];
+    const only = props.stereoShown;
+    if (!st || !only) return [];
     // (with the atoms whose ways out it keeps clear of: a centre's
     // neighbours, a double bond's two and theirs)
     const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
     const out: { key: string; atoms: number[]; around: number[]; text: string }[] = [];
     for (const [i, text] of Object.entries(st.atoms)) {
-      if (!only || only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
+      if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
     }
     for (const [i, text] of Object.entries(st.bonds)) {
       const b = m.bonds[Number(i)];
-      if (b && (!only || only.bonds.includes(Number(i))))
+      if (b && only.bonds.includes(Number(i)))
         out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
     }
     return out;

@@ -354,13 +354,15 @@ export function readDrawn(data: unknown): Drawn | null {
     const q = p as { x?: unknown; y?: unknown } | undefined;
     return q && isNum(q.x) && isNum(q.y) && Math.hypot(q.x, q.y) < MARK_REACH ? { x: q.x, y: q.y } : undefined;
   };
-  const withMarks = <T extends { chargeAt?: unknown; stereoAt?: unknown }>(x: T, keys: readonly ("chargeAt" | "stereoAt")[]): T => {
+  const withMarks = <T extends { chargeAt?: unknown; stereoAt?: unknown; stereoShown?: unknown }>(x: T, keys: readonly ("chargeAt" | "stereoAt")[]): T => {
     const out = { ...x };
     for (const k of keys) {
       const at = markAt(x[k]);
       if (at) out[k] = at;
       else delete out[k];
     }
+    // (its R or S - E or Z - shown: only where it says so plainly)
+    if (x.stereoShown !== true) delete out.stereoShown;
     return out;
   };
   // (electron-pushing arrows whose ends read, on atoms and bonds it has)
@@ -613,8 +615,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
 }
 
 /**
- * A molecule's CIP labels, by atom and bond index, and which of them its
- * drawing left open - where they read: every index one of its own.
+ * A molecule's CIP labels, by atom and bond index, which of them its
+ * drawing left open, and which are shown - where they read: every index one
+ * of its own.
  */
 function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["stereo"] | undefined {
   const s = given as { atoms?: unknown; bonds?: unknown; chosen?: unknown } | null | undefined;
@@ -634,9 +637,14 @@ function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["st
   if (!a || !b) return undefined;
   const within = (v: unknown, n: number): v is number[] =>
     Array.isArray(v) && v.every((i) => Number.isInteger(i) && i >= 0 && i < n);
-  const c = s.chosen as { atoms?: unknown; bonds?: unknown } | undefined;
-  const chosen = c && within(c.atoms, atoms) && within(c.bonds, bonds) ? { atoms: c.atoms, bonds: c.bonds } : undefined;
-  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}) };
+  const pair = (v: unknown) => {
+    const c = v as { atoms?: unknown; bonds?: unknown } | undefined;
+    return c && within(c.atoms, atoms) && within(c.bonds, bonds) ? { atoms: c.atoms, bonds: c.bonds } : undefined;
+  };
+  const chosen = pair(s.chosen);
+  // (those shown, as asked for on it)
+  const shown = pair((s as { shown?: unknown }).shown);
+  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}), ...(shown ? { shown } : {}) };
 }
 
 /**
