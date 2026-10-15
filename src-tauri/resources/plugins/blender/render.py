@@ -47,6 +47,12 @@ The settings (all checked by the worker that wrote them):
     key, ambient   the key light's and the light all round's strengths, as factors of Meno's
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
+    look        the look's name; those with materials and light of their own (looks.py) are made by it
+    silver_finish, copper_finish, wood, marble, pile, clay_colour, porcelain_finish   the choices that adjust them
+    shading     "lit", as a renderer lights it, or "toon": each material a Toon BSDF in the colour it had,
+                lit in one band - `band` its size - which Cycles draws as a band, without noise removal
+    outlines    "none", "thin" (Freestyle's lines, one pixel), "outer" (the picture's silhouette grown
+                by `outline` pixels) or "mixed" (both); `outline_colour`: "black", "white" or "grey"
 """
 
 import glob
@@ -58,12 +64,16 @@ import sys
 
 import bpy
 
+sys.path.insert(0, os.getcwd())
+import looks  # noqa: E402 - beside this script, in the job's folder
+
 # What a factor of 1 of Meno's lights is, in Blender's units: Meno's key
 # light, a sun of this many watts a square metre; its light all round, a
 # world this bright.
 SUN_STRENGTH = 3.0
 WORLD_STRENGTH = 0.6
 
+OUTLINES = {"black": (0.0, 0.0, 0.0), "white": (1.0, 1.0, 1.0), "grey": (0.5, 0.5, 0.5)}
 BACKGROUNDS = {"white": (1.0, 1.0, 1.0), "black": (0.0, 0.0, 0.0), "grey": (0.5, 0.5, 0.5)}
 TRANSFORMS = {"neutral": "Khronos PBR Neutral", "agx": "AgX", "standard": "Standard"}
 QUALITIES = {"high": "HIGH", "medium": "MEDIUM", "lossless": "PERC_LOSSLESS"}
@@ -129,6 +139,77 @@ def light(scene, s, ambient):
     scene.render.film_transparent = True
 
 
+def toon(scene, s):
+    """Toon shading: each material's surface a Toon BSDF in the colour the material had - its colour attribute's, where it took one - lit in one band, `band` its size; a surface that let light through still does, by its alpha (Blender's manual, Shader Nodes > Toon BSDF)."""
+    for mat in bpy.data.materials:
+        if mat.node_tree is None:
+            continue
+        nt = mat.node_tree
+        principled = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        out = next((n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"), None)
+        if principled is None or out is None:
+            continue
+        toon_node = nt.nodes.new("ShaderNodeBsdfToon")
+        toon_node.component = "DIFFUSE"
+        toon_node.inputs["Size"].default_value = s["band"]
+        toon_node.inputs["Smooth"].default_value = 0.0
+        colour = principled.inputs["Base Color"]
+        if colour.links:
+            nt.links.new(colour.links[0].from_socket, toon_node.inputs["Color"])
+        else:
+            toon_node.inputs["Color"].default_value = colour.default_value
+        surface = toon_node.outputs["BSDF"]
+        alpha = principled.inputs["Alpha"]
+        if alpha.links or alpha.default_value < 1.0:
+            clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+            mix = nt.nodes.new("ShaderNodeMixShader")
+            if alpha.links:
+                nt.links.new(alpha.links[0].from_socket, mix.inputs["Fac"])
+            else:
+                mix.inputs["Fac"].default_value = alpha.default_value
+            nt.links.new(clear.outputs["BSDF"], mix.inputs[1])
+            nt.links.new(toon_node.outputs["BSDF"], mix.inputs[2])
+            surface = mix.outputs["Shader"]
+        nt.links.new(surface, out.inputs["Surface"])
+
+
+def lines(scene, s):
+    """Outlines. Freestyle (Blender's manual, Render > Freestyle) draws the shapes' silhouettes, borders and creases: every line at one pixel - "thin" - or, where the outer edge is thick, the inner lines at one pixel. The outer edge - "outer", "mixed" - is the picture's own silhouette grown by the width, in the outline's colour, under the picture: one edge round the molecule, however its shapes overlap, which Freestyle's own external contour is not (it is each shape's)."""
+    colour = OUTLINES[s["outline_colour"]]
+    if s["outlines"] in ("thin", "mixed"):
+        scene.render.use_freestyle = True
+        scene.render.line_thickness_mode = "ABSOLUTE"
+        scene.render.line_thickness = 1.0
+        layer = scene.view_layers[0]
+        layer.use_freestyle = True
+        sets = layer.freestyle_settings.linesets
+        lineset = sets[0] if len(sets) else sets.new("Meno outline")
+        lineset.linestyle = bpy.data.linestyles.new("Meno outline")
+        lineset.select_silhouette = True
+        lineset.select_border = True
+        lineset.select_crease = True
+        lineset.linestyle.color = colour
+        lineset.linestyle.thickness = 1.0
+    if s["outlines"] in ("outer", "mixed"):
+        group = bpy.data.node_groups.new("Meno outline", "CompositorNodeTree")
+        group.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        nodes, links = group.nodes, group.links
+        seen = nodes.new("CompositorNodeRLayers")
+        grown = nodes.new("CompositorNodeDilateErode")
+        grown.inputs["Size"].default_value = int(round(s["outline"]))
+        shape = nodes.new("CompositorNodeSetAlpha")
+        shape.inputs["Image"].default_value = (colour[0], colour[1], colour[2], 1.0)
+        over = nodes.new("CompositorNodeAlphaOver")
+        out = nodes.new("NodeGroupOutput")
+        links.new(seen.outputs["Alpha"], grown.inputs["Mask"])
+        links.new(grown.outputs["Mask"], shape.inputs["Alpha"])
+        links.new(shape.outputs["Image"], over.inputs["Background"])
+        links.new(seen.outputs["Image"], over.inputs["Foreground"])
+        links.new(over.outputs["Image"], out.inputs["Image"])
+        scene.compositing_node_group = group
+        scene.render.use_compositing = True
+
+
 def gpu_ready():
     """Whether Blender has a graphics processor to render on, as its Cycles preferences say: the first kind it has, all of its devices on."""
     prefs = bpy.context.preferences.addons["cycles"].preferences
@@ -147,6 +228,13 @@ def gpu_ready():
 
 
 def engine(scene, s):
+    # (the cartoon look's band is the Toon BSDF's: Cycles draws it as one, and its noise is not removed, which would soften the band's edge)
+    if s["shading"] == "toon":
+        scene.render.engine = "CYCLES"
+        scene.cycles.samples = s["samples"]
+        scene.cycles.use_denoising = False
+        scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+        return
     if s["engine"] == "eevee":
         scene.render.engine = "BLENDER_EEVEE"
         scene.eevee.taa_render_samples = s["samples"]
@@ -158,6 +246,19 @@ def engine(scene, s):
     scene.cycles.device = "GPU" if on_gpu else "CPU"
     # (said, in the log, which it is: a graphics processor asked for and none found falls back to the processor)
     say("Rendering on the graphics processor" if on_gpu else ("Rendering on the processor (no graphics processor Blender can use)" if s["gpu"] else "Rendering on the processor"))
+
+
+def own_look(scene, s):
+    """A look with materials and light of its own (looks.py): Cycles, the world and panels it brings, its materials on the molecules; what reflections find is never seen by the camera."""
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = s["samples"]
+    scene.cycles.use_denoising = s["denoise"] and s["shading"] != "toon"
+    scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+    camera = scene.camera
+    looks.apply(scene, camera, s["look"], {"silver_finish": s["silver_finish"], "copper_finish": s["copper_finish"], "wood": s["wood"], "marble": s["marble"], "pile": s["pile"],
+         "clay-colour": s["clay_colour"], "porcelain-finish": s["porcelain_finish"]}, s["background"])
+    looks.settle_denoising(scene)
+    scene.render.film_transparent = True
 
 
 def output(scene, s):
@@ -325,6 +426,11 @@ def main():
     camera_of(scene, gltf)
     light(scene, s, float(meno.get("ambientLight", 1.0)))
     engine(scene, s)
+    if s["look"] in looks.IDS:
+        own_look(scene, s)
+    if s["shading"] == "toon":
+        toon(scene, s)
+    lines(scene, s)
     output(scene, s)
     assemble(render(scene, s, folder), s, folder)
     say(f"Rendered {s['out']}")

@@ -19,9 +19,16 @@ export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= 
 /** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
 export function structuresOf(model: Model): number[][] {
   const around = new Map<number, number[]>();
+  const join = (p: number, q: number) => {
+    around.set(p, [...(around.get(p) ?? []), q]);
+    around.set(q, [...(around.get(q) ?? []), p]);
+  };
   for (const b of model.bonds) {
-    around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
-    around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
+    join(b.a, b.b);
+    // (a haptic bond's ring with its metal and star, as fragmentOf has them:
+    // walked by its bonds alone, the metal and the star were a structure
+    // without the ring)
+    for (const e of b.endpoints ?? []) join(b.a, e);
   }
   const seen = new Set<number>();
   const out: number[][] = [];
@@ -45,9 +52,8 @@ export function structuresOf(model: Model): number[][] {
   return out;
 }
 
-/** The middle of a structure's atoms. */
-export function middleOfAtoms(model: Model, ids: readonly number[]): Pt {
-  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+/** The middle of a structure's atoms, found in `byId`: the page's atoms by their ids. */
+export function middleOfAtoms(byId: ReadonlyMap<number, Pt>, ids: readonly number[]): Pt {
   let x = 0;
   let y = 0;
   for (const id of ids) {
@@ -58,13 +64,29 @@ export function middleOfAtoms(model: Model, ids: readonly number[]): Pt {
   return { x: x / ids.length, y: y / ids.length };
 }
 
+/**
+ * The structures drawn, each with its middle: worked out once for each
+ * drawing - a drawing changed is a new one - as every set asks on every
+ * edit, of pages of thousands of atoms (the atoms by id made once, not for
+ * each structure).
+ */
+const drawnAt = new WeakMap<Model, { ids: number[]; at: Pt }[]>();
+function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
+  let found = drawnAt.get(model);
+  if (!found) {
+    const byId = new Map(model.atoms.map((a) => [a.id, a]));
+    found = structuresOf(model).map((ids) => ({ ids, at: middleOfAtoms(byId, ids) }));
+    drawnAt.set(model, found);
+  }
+  return found;
+}
+
 /** Whether `p` lies before `q`: higher on the page, or - about level, within half a bond's height - to its left. */
 const before = (p: Pt, q: Pt) => (Math.abs(p.y - q.y) > 0.9 ? q.y - p.y : p.x - q.x);
 
 /** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
 export function setMembers(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
-  const structures = structuresOf(page.model)
-    .map((ids) => ({ ids, at: middleOfAtoms(page.model, ids) }))
+  const structures = drawnIn(page.model)
     .filter((s) => inside(set, s.at))
     .sort((p, q) => before(p.at, q.at))
     .map((s) => s.ids);
@@ -129,6 +151,13 @@ export type SetEntry = {
   xyz: readonly number[];
   /** In hartrees, where it has one. */
   energy?: number;
+  /**
+   * Its charge and spin multiplicity, where the calculation it was read
+   * from said them: the state it was in, which a step given it keeps -
+   * an output's atoms carry no charges of their own.
+   */
+  charge?: number;
+  multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
@@ -155,6 +184,11 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   molecules.forEach((m, i) => {
     const n = framesOf(m);
     const energies = m.energies?.length === n ? m.energies : undefined;
+    // (the state its calculation was in, where one said it)
+    const state = {
+      ...(Number.isInteger(m.calc?.charge) ? { charge: m.calc!.charge! } : {}),
+      ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
+    };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
@@ -165,6 +199,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz: frameXyz(m, f),
         ...(energies ? { energy: energies[f] } : {}),
+        ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         from: m.id,

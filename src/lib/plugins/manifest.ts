@@ -95,7 +95,13 @@ export type WriteDecl = {
 };
 
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
-export type RoleDecl = { role: RoleId; programs: string[]; options: Option[] };
+export type RoleDecl = {
+  role: RoleId;
+  programs: string[];
+  options: Option[];
+  /** The looks it can make, by their ids, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
+  looks?: string[];
+};
 
 /**
  * A kind of step a plugin fills (docs/WORKFLOWS.md, *What changes in the
@@ -556,7 +562,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
           if (typeof r?.role !== "string" || !isRole(r.role)) return null;
           const programs = [...new Set(list(r.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
           // (options only for a role that takes them)
-          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [] };
+          const looks = [...new Set(list(r.looks).filter((l): l is string => typeof l === "string" && /^[a-z][a-z0-9-]{0,39}$/.test(l)))].slice(0, 40);
+          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}) };
         },
         (r) => r.role,
       )

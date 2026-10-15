@@ -60,10 +60,10 @@ import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
 import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
 import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from "./workflow/procedures";
-import { knownOf, pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
+import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
-import { writtenOf } from "./utils/written";
+import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
@@ -111,6 +111,7 @@ import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
+import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -150,7 +151,7 @@ import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
-import { FollowCover, PageHtmlLayer } from "./components/coverLayer";
+import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -168,8 +169,10 @@ import Ask3D from "./Ask3D";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
-import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
+import { useNotices } from "../../notices";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { putDownSmiles } from "./utils/quickAddSmiles";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -344,9 +347,7 @@ function WorkspaceContent({
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
   const readUnsure = useMemo(() => readMarks(model), [model]);
-  const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
-  const setChemistry = useAppSettings((s) => s.setChemistry);
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)
   const chemShare = useDownloads((s) => (chem.state === "setting-up" ? s[chem.id] : undefined));
@@ -389,6 +390,11 @@ function WorkspaceContent({
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
+  // (the question goes with its structure: an undo taking it away shuts it,
+  // as a colour card or a panel goes with what it is for)
+  useEffect(() => {
+    if (ask3d && !blocksStill(ask3d.blocks, model)) setAsk3d(null);
+  }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
   // a molecule's bond orders sought from its shape as it comes in, where they
@@ -463,6 +469,11 @@ function WorkspaceContent({
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
           );
         }
+        // (the structure changed meanwhile - an undo took it away - nothing is added)
+        if (!blocksStill(blocks, store.getState().model)) {
+          setChemError("The drawing changed while its 3D structure was being made, so none was added.");
+          return;
+        }
         store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
         // (with no room for them in view, the view takes them in)
         if (!allInView) requestFit();
@@ -477,11 +488,18 @@ function WorkspaceContent({
   const make3d = useCallback(
     async (around: Iterable<number>, replacing?: Molecule3D) => {
       // (made again: what the drawing leaves open, as the one before has it)
-      const blocks = blocksOf(store.getState().model, around).map((b) =>
+      const model = store.getState().model;
+      const blocks = blocksOf(model, around).map((b) =>
         replacing ? { ...b, like: likeOf(b, replacing) } : b,
       );
-      if (!blocks.length) return;
+      // (a bare atom - Na+, Cl- - left out, and the chemist told: alone, that it has none; beside others made, which)
+      const bare = bareAtomsOf(model, around);
+      if (!blocks.length) {
+        if (bare.length) setChemError(bareWords(bare, false));
+        return;
+      }
       setChemError(null);
+      if (bare.length) useNotices.getState().show({ id: "bare-3d", title: "3D structure", text: bareWords(bare, true) });
       try {
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(
@@ -797,6 +815,10 @@ function WorkspaceContent({
           const next = pdf.page + (e.key === "ArrowRight" || e.key === "PageDown" ? 1 : -1);
           if (next >= 0 && next < pdf.pages.length) st.turnPdf(pdf.id, next);
         }
+      } else if (chargeStep(e) && sel.atoms.size > 0 && !busy) {
+        // (on the selection's atoms, once there is one, as the other keys act on it: one step)
+        e.preventDefault();
+        st.stepCharges(sel.atoms, chargeStep(e) as 1 | -1);
       } else if (chargeStep(e) && kind === "atom" && id != null) {
         e.preventDefault();
         chargeAtom(id, chargeStep(e) as 1 | -1);
@@ -1261,17 +1283,14 @@ function WorkspaceContent({
     if (r?.down) r.pending = target; // macOS: open on the way up
     else if (!r?.moved) setMenu(target); // Windows, or a Ctrl-click on a Mac
   };
-  const toggleStereoLabels = () => {
-    const stereoLabels = !chemistry.stereoLabels;
-    setChemistry({ ...chemistry, stereoLabels });
-    if (!stereoLabels) return;
-    // asked for: what labels them set up now, if it has not been
+  // R and S, E and Z shown on what was asked (utils/stereoShown) - or hidden; shown on the drawing, what labels them set up
+  // now, if it has not been
+  const showStereo = (item: StereoItem) => {
+    store.getState().setStereoShown(item.of, item.show);
+    if (!item.show || (!item.of.atoms.length && !item.of.bonds.length)) return;
     setChemError(null);
     chemWorker("checks").catch((e: unknown) => {
-      setChemistry({ ...useAppSettings.getState().chemistry, stereoLabels: false });
-      setChemError(
-        `${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setChemError(`${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`);
     });
   };
 
@@ -1361,7 +1380,6 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    { name: chemistry.stereoLabels ? STEREO_LABELS.hide : STEREO_LABELS.show, keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
       ? [
           textsOpen
@@ -1513,7 +1531,7 @@ function WorkspaceContent({
             known={(ids) => {
               const state = store.getState();
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
-              return chosen.length ? knownOf(writtenOf(chosen)) : {};
+              return chosen.length ? knownOfMolecules(chosen) : {};
             }}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {
@@ -1565,12 +1583,9 @@ function WorkspaceContent({
               shapeFrom(store, press, at, kind, clientToWorld);
             }}
             onSmiles={async (smiles) => {
-              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles, style);
-              const st = store.getState();
-              const { at } = quickAdd;
-              st.setQuickAdd(null);
-              st.pasteModel(centredAt(drawn, at));
+              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is;
+              // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
+              putDownSmiles(store, quickAdd, await structureFromSmiles(smiles, style));
             }}
             onChoose={(what) => {
               const st = store.getState();
@@ -1906,6 +1921,11 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          stereo={(() => {
+            const st = store.getState();
+            const item = stereoItemFor(st, menu);
+            return item ? { name: item.name, run: () => showStereo(item) } : undefined;
+          })()}
           onTurnOver={(axis) => store.getState().turnSelectionOver(axis)}
           onCharge={(step) => {
             if (menu.kind === "atom" && menu.id != null) chargeAtom(menu.id, step);
@@ -2146,7 +2166,7 @@ function WorkspaceContent({
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={{ clipPath: cover > 0 ? `inset(0 ${cover}px 0 0)` : undefined }} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={pageHtmlLayerStyle(cover)} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
       {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}
@@ -2377,6 +2397,8 @@ export default function Workspace({
                 <ArrowStylePanel arrowId={panel.arrow} onClose={() => setPanel(null)} />
               ) : (
                 <SaveAbbreviationPanel
+                  // (opened anew for another group: a panel of its own, with its own group to keep to)
+                  key={panel.abbreviation.ids.join(",")}
                   ids={panel.abbreviation.ids}
                   smiles={panel.abbreviation.smiles}
                   onClose={() => setPanel(null)}

@@ -189,7 +189,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
+| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
 | Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
@@ -244,14 +244,20 @@ atom dragged alone snaps as before, to the drawing's lengths and angles.
 
 **A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
 first press only: the second of a double-click held still waits to be
-dragged. It is counted while the button is held, so a click's label edit,
+dragged - on a bond as on an atom or empty space (until 2026-10-13 a
+bond's second press began one: `pressOnBond`). It is counted while the button is held, so a click's label edit,
 which waits for DOUBLE_CLICK_MS after the button comes up, is unaffected.
 As it is held, the selection's shade spreads out from the atom along the
 bonds, reaching the whole structure as it is selected; on empty space a
 ring opens where the box will begin (`HoldProgress2D`). Let go early, it
 goes again. Let go where it was held, the long press has selected and
 that is all: the click its release makes edits no label, being held off
-as it comes (`suppressDoubleClick`), not when the edit would begin. On a
+as it comes (`suppressDoubleClick`), not when the edit would begin.
+Another button pressed with it, on an atom or a bond, makes it no press
+at all - nothing selected, no label edited on release, no drag - as the
+menu opens none for such a chord (`onChord`, utils/press; the command
+centre, 2026-10-14: before, the long press went on and selected the
+structure the right-click had been meant for). On a
 trackpad that taps to click, a long press is a press of
 the pad held.
 
@@ -271,11 +277,17 @@ ellipse, a line and a callout - each drawn from where the double-click
 was by a drag from its icon, or traced with the button up until a click
 (docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
-it. It opens as the second click's button comes up: a third click asks
+it. Going, it does nothing more as it fades - nor does the right-click
+menu: an icon double-clicked put its choice down once, not a second time
+on the first (theme/leaving.ts) - and a press elsewhere as it fades is
+the next thing done, not one to close it. It opens as the second click's button comes up: a third click asks
 for nothing more (the chain is Quick Add's own since 2026-10-10 - before,
 Quick Add waited 0.28 s for a third click that would draw one, and the
 maintainer found it slow). *Chain* begins one where the double-click was,
-led by a drag from the icon or traced with the button up. *SMILES* opens a
+led by a drag from the icon or traced with the button up - the icon
+double-clicked too: the second press, as the trace begins and where it
+began, is not the click that ends it (`traceEndedBy`, utils/press;
+before, it ended the chain at its first bond). *SMILES* opens a
 field below the row: Enter draws what is typed there, laid out by Meno's
 engine, centred where the double-click was and selected, as a paste is -
 the first time, once the plugin that reads SMILES is set up; what went
@@ -290,12 +302,17 @@ brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
 an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
-aromatic ring that cannot alternate. A double-click on an atom still draws one
+aromatic ring that cannot alternate. Drawn once however fast Enter is pressed
+again, and not at all should Quick Add be closed while it is read -
+Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 `chainFrom`). With the column open beside the canvas (PDF.md, *One
 canvas*), a double-click on empty space shuts it instead - the work comes
 back to the canvas (the maintainer, 2026-10-10) - and the next opens
 Quick Add.
+*SMILES*, *Shapes* and *Calculations* open and shut their panels a click
+at a time - a double-click's second click not counted (`togglesOn`,
+utils/press; double-clicked, a panel opened and shut again at once).
 After a thin rule, one more button - *Calculations* - opens below the
 row to the kinds of step a workflow can have (WORKFLOWS.md, *A step: from
 Quick Add*); a wire let go on empty space opens Quick Add at those alone.
@@ -305,15 +322,22 @@ A box or a lasso drawn with Ctrl (⌘) held adds what it takes to the
 selection; drawn without, it replaces it.
 
 **What is done to a selection** (2D, PR #66). It is shaded in the hover
-highlight's colour, under the drawing, and a small handle stands above it.
+highlight's colour, under the drawing, and a small handle stands above it
+where there is something to turn about its middle: two atoms or more, a
+molecule in 3D or a picture.
 
 - Dragging any of its atoms moves the whole of it, off the grid, as one undo
-  step; an atom that is not selected moves on its own as before.
+  step - an atom selected alone with a picture, a shape, words or a
+  molecule in 3D too (until 2026-10-13 it went off alone:
+  `dragsSelection`); an atom that is not selected, or is selected alone,
+  moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
   freely after a pause - one undo step.
 - The keys that act on what is under the pointer act on the selection
-  instead, once there is one: Delete or Backspace deletes it, and
-  Ctrl/⌘+Shift+K cleans up every structure it is in.
+  instead, once there is one: Delete or Backspace deletes it,
+  Ctrl/⌘+Shift+K cleans up every structure it is in, and + or - steps the
+  charge of each of its atoms, as one step (until 2026-10-13 they changed
+  the atom under the pointer: `stepCharges`).
 - A right-click on something selected, or on empty space, opens the
   selection's menu (above): among its items *Delete selection*, *Turn
   over left to right*, *Turn over top to bottom*, *Clean up these
@@ -335,7 +359,9 @@ highlight's colour, under the drawing, and a small handle stands above it.
   one standing alone - an arrow pointing at something on a slide - as a
   shape is. A click selects one alone, Ctrl/⌘ and a click adds it or takes
   it out, and a box or a lasso takes an arrow wholly in it (each end and
-  each corner) and a "+" by its middle; Select All and a slide's *Select
+  each corner) and a "+" by its middle - and words on the page over no
+  arrow by where they stand (2026-10-13: a box never took them, though
+  Select All and a slide's did); Select All and a slide's *Select
   what is on it* take them as well. Selected, one is lit round, and goes
   with the selection when it is moved, turned, copied, cut, deleted,
   coloured (an arrow) or pasted, the words over an arrow with it. An
@@ -343,6 +369,16 @@ highlight's colour, under the drawing, and a small handle stands above it.
   once only, selected for itself or not (`utils/selectionScheme.ts`). A
   press on one carried by a selection with more takes all of it; else a
   drag moves it alone, as before.
+- What the pointer rests on is let go when an undo or a redo takes it away
+  or moves it from under the pointer (2026-10-13: an atom dragged, undone
+  back across the page, stayed lit, and Delete or a letter acted on it
+  there); it lights again as the pointer next moves.
+- Undo and redo (Ctrl/⌘ Z; Ctrl/⌘ Shift Z or Ctrl Y to redo) go a
+  thousand steps back per document, held to about 100 MB: a step costs
+  the atoms and bonds it copies, so a drawing of a few thousand atoms
+  keeps its thousand steps and a stack of 28,000 about 430. A step past
+  either drops the oldest; the steps to redo are never dropped, nor the
+  last one to undo (the maintainer, 2026-10-13: it was a hundred steps).
 - The selection is the view's, not the document's: undo does not change it,
   and what an edit deletes leaves it - an undo too: a paste undone leaves
   nothing selected (before 2026-10-10 its atoms stayed selected, unseen,
@@ -358,13 +394,18 @@ V, as everywhere, and the same from the menus.
   otherwise have the webview write an empty item over it).
 - A paste goes where the pointer is (where the menu was opened, from the
   menu; the middle of the view, if the pointer is off the drawing), comes
-  in selected so it can be dragged straight on, and is one undo step. What
+  in selected so it can be dragged straight on, and is one undo step.
+  Pasted again where the last one was asked for - the pointer not moved,
+  the view as it was - it lands a step down and to the right of the last,
+  so that a copy pasted twice is seen (the maintainer, 2026-10-12:
+  `pastePlace`). What
   is dropped onto the drawing - a structure's file, or a structure dragged
   out of Word or PowerPoint - comes in the same way where it is dropped, as
   does a SMILES added beside what is drawn.
 - The clipboard holds Meno's own record of the structure, which loses
   nothing, and a MOL file for other chemistry programs (MDLCT on Windows,
-  which they exchange there) - and no plain text: PowerPoint pastes plain
+  which they exchange there), and for a reaction - an arrow with its
+  molecules - an RXN file too; and no plain text: PowerPoint pastes plain
   text as a text box in preference to anything offered with it. *Copy as
   SMILES*, in the selection's menu, puts the SMILES alone there as text.
 - With them go pictures of the structure, drawn in the canvas's style at
@@ -387,12 +428,16 @@ V, as everywhere, and the same from the menus.
   other programs.
 - Files copied in the Finder or Explorer are pasted as they would be
   dropped where the paste goes: PDFs, pictures, texts and structures' files.
-- A paste reads Meno's own record first, then a picture that carries one
-  (Office's clip format, as Word and PowerPoint hand it back, or a PNG),
-  then a MOL file, then plain text that is a MOL file or a SMILES (drawn by
-  the engine, as a SMILES typed in Quick Add is).
+- A paste reads, in order: files copied in the Finder or Explorer (above);
+  Meno's own record, or an Office object that holds it; a picture that
+  carries one (an Office object as a Mac hands it back, Office's clip
+  format as Word and PowerPoint hand it back, a PNG); an RXN file; a MOL
+  file; then plain text that is a MOL file or a SMILES (drawn by the
+  engine, as a SMILES typed in Quick Add is). A picture with none of these
+  - a screenshot - goes on the page as a picture.
 - On empty space with nothing selected, a right-click opens *Paste* and
-  *Select all*; the selection's menu has *Cut*, *Copy* and *Copy as
+  *Select all*, with the canvas's own items under them (the table of
+  menus above); the selection's menu has *Cut*, *Copy* and *Copy as
   SMILES*, and *Paste* when it was opened on empty space.
 
 ## Who does what
@@ -453,7 +498,10 @@ Both go together, because both touch every layer.
   wider gaps (PR #33).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
   wavy: a plain bold bond, a bold dashed bond, a thin dashed bond, and a
-  dative (coordinate) bond.
+  dative (coordinate) bond. A wedge, hashes or a wavy line belong to a
+  single bond alone: a bond made double or triple loses its, and one is
+  not given to a double or triple bond (2026-10-13; a double bond's
+  either-configuration is its own).
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
@@ -533,8 +581,11 @@ All hover-based, as above.
   under the pointer, by Delete or Backspace or from the menu a right-click
   opens there, one undo step each; a carbon left with no bonds goes too.
   PR #66: the selection, by the same keys or its menu, in one step.)
-- Selection: by click, by adding to it, by box or lasso, a whole fragment;
-  move, rotate and flip what is selected. (PR #66, as above.)
+- Selection: Ctrl/⌘ and a click on an atom or a bond adds it or takes it
+  out, Shift and a click everything along the bonds to it, a long press a
+  whole structure, a box or a lasso what it holds (a click alone edits a
+  label, not the selection); move, rotate and flip what is selected.
+  (PR #66, as above.)
 - Elements without typing; charges, radicals and isotopes, drawn as
   superscripts and carried through the model, the files and the hydrogen
   count. (PR #65: charges, radicals and isotopes read from files and
@@ -563,7 +614,10 @@ All hover-based, as above.
   place, then goes in a moment, the label coming through: never a frame
   with no label, nor with the old one. The drawing's labels are drawn each
   by its atom (`Labels2D` `keyOf`): a label added or taken away sets no
-  other label's letters again.
+  other label's letters again. A label taken away - undone, redone away,
+  deleted with its atom, its atom drawn plain again - fades out in
+  DURATION.quick, gently at first, kept by its atom's key as it goes
+  (`usePresence`, `fadingOut`); before, it went in one frame.
 - **Labels read as they are meant** (the maintainer, 2026-10-10: nh2 is
   NH2, obz OBz, hnfmoc NHFmoc; `lib/chem/smartLabel.ts`). No list of what
   is typed: of the labels Meno reads (docs/CTFILE.md, *Atoms that are not
@@ -640,7 +694,8 @@ All hover-based, as above.
   after it.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
-  clicks on an atom or two on empty space, the honeycomb's ring where a
+  clicks on an atom, or Quick Add's *Chain* from empty space - two clicks
+  there open Quick Add since 2026-10-08 - the honeycomb's ring where a
   loop comes round to the chain - see *Drawing is dragging bonds out of atoms*. Benzene
   and other ring templates are still to come.)
 - Every bond type from the pointer: wavy, bold, dashed, and the rest of what
@@ -653,8 +708,9 @@ All hover-based, as above.
   drawn, not the way it was - each structure where it was.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
-  and E/Z from a button on the canvas; both in Settings › Chemistry, and
-  never in an exported picture.)
+  and E/Z from a button on the canvas, later shown on what they are asked
+  for on; valence warnings in Settings › Chemistry; neither in an exported
+  picture.)
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
@@ -688,11 +744,21 @@ All hover-based, as above.
     they look further off at that, and the maintainer asked for them
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
-  - Hidden unless asked for, on the drawing and in 3D (the maintainer,
-    2026-10-10): *Show R/S and E/Z* (the menu, or Settings › Chemistry;
-    named for both, the maintainer, 2026-10-13) shows them; making every stereoisomer a drawing leaves open shows each
-    one's open centres, to tell them apart (docs/WORKSPACE.md, *Told
-    apart*).
+  - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
+    before, one switch showed them all). Hidden unless asked for. The
+    right-click menu of an atom that can be a stereocentre says *Show
+    R/S*, of a double bond *Show E/Z*, of a structure's selection or a
+    molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
+    already (named for what they show, the maintainer, 2026-10-13). On a
+    molecule in 3D, the atom under the pointer where it has a label, else
+    what is chosen in it, else all of it. Kept in the document - each
+    atom's and bond's own, `stereoShown`, on a drawing; a molecule in 3D's
+    `stereo.shown` - as one undo step, in the workspace's file and in a
+    copy; a drawing and the molecule in 3D made from it each keep their
+    own. A molecule in 3D made with the other stereoisomers its drawing
+    leaves open shows its open centres until it is asked otherwise, to
+    tell them apart (docs/WORKSPACE.md, *Told apart*). Settings no longer
+    has a switch for them; one in an old settings file is not read.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -812,7 +878,10 @@ All hover-based, as above.
 
   A swatch is given at once, one step each (as long as the chooser is
   open, one step in all), and the card stays open for the next; Escape, a press elsewhere or the
-  wheel closes it. A selection's colour goes to its atoms and the bonds
+  wheel closes it, and so does an undo, or a delete, of anything it is
+  for; a ring is filled only while it is drawn (until 2026-10-13 a ring
+  undone away under an open card took a fill, an invisible step, and the
+  next ring drawn with its atoms' ids came up filled). A selection's colour goes to its atoms and the bonds
   selected among them; a bond keeps its own colour, its atoms theirs.
   R, S, E and Z are never coloured (2026-10-05), nor is anything Meno
   marks on its own. A colour goes with its part as it moves, is turned
@@ -827,7 +896,11 @@ All hover-based, as above.
   and drawn after IUPAC's recommendations: docs/CTFILE.md, step by step.
 - Abbreviations: Meno's own, those put together by rule (OTBS, 2,6-diMeBz)
   and the user's own, from Settings › Dictionary or a selection's *Save
-  as abbreviation…*: docs/CTFILE.md, "Atoms that are not elements".
+  as abbreviation…*: docs/CTFILE.md, "Atoms that are not elements". The
+  panel *Save as abbreviation* opens is about the group as it was: it
+  closes when the group changes under it - an undo taking an atom of it
+  away, a bond among them, a charge (until 2026-10-13, Save then showed
+  the label on what was left: a "tBu" holding an isopropyl).
 - Reaction arrows, "+" and text: create, move, edit, delete. (An arrow or
   a "+" is added from Quick Add, where it was opened: the arrow pointing right, two and two-thirds of a bond long.
   Either is moved by dragging it and deleted by Delete or Backspace under
@@ -904,8 +977,10 @@ All hover-based, as above.
        digit is typed after it: -78 is −78, (-20 °C) (−20 °C). Hyphens
        within words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6.
     3. **Ranges.** A number, one hyphen and a number, a word of its own,
-       have an en dash (U+2013) once the word has ended - a space, a
-       bracket, a stop or a comma after it, or the words kept: 1-2 h is
+       have an en dash (U+2013) once the word has ended - a space or a
+       bracket after it, or the words kept; a stop or a comma only once
+       what follows shows it was no decimal point (1-2.5 may yet come), by
+       design: 1-2 h is
        1–2 h, 0-25dc 0–25 °C, compounds 3-5 3–5. Not before, as 7647-0 may
        yet be a CAS number. Numbers joined by more hyphens are no range -
        a CAS number (7647-01-0), a date (2026-10-10) - and stay; so does a
@@ -1168,8 +1243,9 @@ traced from reference drawings.
   drawn in - and PNG. The SVG export draws what the canvas draws (PR #36),
   at ACS 1996's own size (PR #43); PNG to come.
 - No buttons on the canvas (2026-10-04): Open (Ctrl/Cmd+O), Save As, New
-  text, Fit to content (Ctrl/Cmd+1), R/S and E/Z and Drawing style are on the
-  right-click menu on empty space; Save is a button in the title bar, by
+  text, Fit to content (Ctrl/Cmd+1) and Drawing style are on the
+  right-click menu on empty space (R/S and E/Z on the menus of what they
+  are shown on); Save is a button in the title bar, by
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu
   (or Ctrl/Cmd+Shift+K on nothing); a SMILES is drawn from Quick Add.

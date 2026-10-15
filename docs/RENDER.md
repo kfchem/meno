@@ -31,10 +31,22 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
     or square;
-  - what the molecules are made of: as the 3D style draws them, glossy,
-    metal, glass, matte or clay (one light grey); and, where a surface is
-    shown, what it is made of: as the canvas draws it, glass, glossy or
-    matte.
+  - the **look**: one choice, a bundle of what the molecules are made of,
+    what the surfaces are made of, how it is shaded and how it is
+    outlined - as the canvas draws them, glossy, matte, clay, glass,
+    metal, cartoon, line art (2026-10-15). Folded under it, *Adjust this
+    look* shows its parts, filled in from it, each the chemist's to change
+    for this render alone: the molecules' material (as the 3D style draws
+    them, glossy, metal, glass, matte, clay, white); where a surface is
+    shown, the surface's (as the canvas draws it, glass, glossy, matte);
+    the shading (lit, as a renderer finds light and shadow, or toon: one
+    lit band and one in shade, the band's size chosen); and the outlines
+    (none; thin, on every line; the outer edge only; the outer edge thick
+    and the inner lines thin) with their width and colour. A part that
+    does not apply - a band's size without toon shading, a width without
+    an outer edge - is not shown.
+  - A look no added plugin can make is not offered: a plugin's manifest
+    declares the looks it can make (`looks`, PLUGINS.md).
 - The plugin's options, as its manifest declares them (the Blender
   plugin's below).
 
@@ -109,9 +121,9 @@ maintainer to change later:
   nothing besides (no list's surface, no vibration) - one job for each.
   No step takes pictures, so nothing is wired on from it.
 - **Pictures only**, no films.
-- Its options are Meno's own choices for a picture - width, shape, what
-  the molecules and the surfaces are made of, starting from the command's
-  defaults - then the plugin's; remembered for the step as any step's
+- Its options are Meno's own choices for a picture - width, shape, the
+  look and its parts, starting from the command's defaults - then the
+  plugin's; remembered for the step as any step's
   are (Settings, *Calculations*), apart from the command's.
 - The pictures go **in the step's result set**, framed and wired from
   the step as any step's result set is, named *Rendered* and counted
@@ -211,7 +223,52 @@ uv, no package), and the script Blender runs, `render.py`.
   (transparent - a film's then white - white, black or grey), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
-  the shadows' softness, and a film's quality.
+  the shadows' softness, and a film's quality. The renderer and noise
+  removal are not offered under toon shading, which Cycles draws.
+- **Its looks** (2026-10-15): all of Meno's. The materials are in the
+  scene's file. Toon shading is each material a Toon BSDF in the colour it
+  had, lit in one band whose size is chosen, drawn by Cycles - which draws
+  the band as a band - without noise removal, which would soften its edge.
+  Outlines: Freestyle's silhouettes, borders and creases for the thin
+  line, one pixel; and for the outer edge, the picture's own silhouette
+  grown by the width, in the colour, under the picture - one edge round
+  the molecule however its shapes overlap, which Freestyle's own external
+  contour (each shape's) is not. Meno's looks keep the picture's place
+  and size.
+- **Looks with materials and light of their own** (`looks.py`, beside
+  `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
+  wood, marble, clay, porcelain, slime, ice (melting: its surface in lumps by displacement, with wet highlights), neon,
+  X-ray and fur are not a colour and a gloss: each is a
+  material of Blender's own shader nodes, put on the molecules by their
+  shapes' names (`ball #909090`, `stick #000000`: the element's colour is
+  read from the name, so each element keeps its own, a shared material
+  being the one thing the colours must not come to), and brings **its own
+  lighting world**, which the camera never sees. The metals and the bubble
+  reflect, so they have a studio: a world that is dim above and a darker
+  band below, and three soft rectangular light panels (one wide at the
+  upper left, one tall at the right, one narrow above) that give the
+  reflections shapes. The matte looks have the same panels dim, a diffuse
+  surface being over-exposed by the metals' strength. What is behind is
+  still transparent, and is put under the picture as the Background choice
+  asks. These looks are made by Cycles, with noise removal using the
+  albedo and normal passes, the glossy and total bounces capped, and
+  adaptive sampling; the key light and the light all round are the look's,
+  not the canvas's. Their choices appear only under their look: silver's
+  finish (mirror or satin), copper's (brushed or tarnished), the wood's
+  species (oak, walnut, cherry, maple, ebony, or each element its own), clay's
+  colour (one colour, terracotta, or the element colours), porcelain's
+  finish (porcelain, or pearl: a cream white with a soft pink and green
+  orient), fur's pile (long, or short and dense as velvet - a hair's length is a
+  fixed fraction of its own part's radius and every ball and stick has the
+  same number of hairs, whatever scale the shape has in the scene), and
+  marble's pattern (Carrara, long veins laid in the molecule's own space so
+  that they run on across atoms and sticks, or swirls on each atom). The
+  metals' reflectances are the published F0 values of Hoffman's table of
+  metals ("Physically Based Shading", SIGGRAPH 2010 course): gold 1.00
+  0.71 0.29, silver 0.95 0.93 0.88 and copper 0.95 0.64 0.54, linear;
+  copper is deepened by the scene - panels of a warm tone, fewer of them
+  - not by its F0. A surface drawn from an orbital keeps the colours Meno
+  gave it.
 - **Where it fell back** (2026-10-15): the graphics processor asked for
   (the default) and Blender found none it can use, the render is on the
   processor, and the step's line says so in small words, *Rendered on the

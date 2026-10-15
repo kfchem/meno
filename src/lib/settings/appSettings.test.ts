@@ -13,7 +13,7 @@ describe("the settings file", () => {
       drawingStyle: { preset: "rsc", changes: { ends: "round" as const } },
       style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 } },
       network: { offline: true, granted: ["python-env:console"] },
-      chemistry: { valenceWarnings: false, stereoLabels: true },
+      chemistry: { valenceWarnings: false },
       updates: { asked: true },
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
@@ -43,8 +43,8 @@ describe("the settings file", () => {
     ).toEqual({ offline: false, granted: ["python-env:console"] });
     // a file from before there were chemistry settings, or a setting mangled
     expect(
-      acceptAppSettings({ chemistry: { stereoLabels: "on" } }).chemistry,
-    ).toEqual({ valenceWarnings: true, stereoLabels: false });
+      acceptAppSettings({ chemistry: { valenceWarnings: "on", stereoLabels: true } }).chemistry,
+    ).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
@@ -80,6 +80,12 @@ describe("the settings file", () => {
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });
+    // (on a share on the network, as Windows names one - kept for the app to look at; a share without a name, or a path from nowhere, not)
+    const shared = { "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe", "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe", "xtb:xtb": "\\\\", "crest:crest": "apps\\crest.exe" };
+    expect(acceptAppSettings({ plugins: { programs: shared } }).plugins.programs).toEqual({
+      "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe",
+      "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe",
+    });
     // the procedures saved: each with an id, a name and steps - the rest read as they are used
     const procedures = [
       { id: "p-1", name: " Optimise ", saved: 5, flow: { steps: [{}], sets: "x" } },

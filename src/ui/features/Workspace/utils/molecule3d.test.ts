@@ -28,9 +28,14 @@ import {
   RIBBON_REACH,
   coveredLength,
   labelSpot,
+  notesOf,
   populations,
   widestWay,
   type Turning3D,
+  spotFollowed,
+  valueSpots,
+  VALUE_SLACK_PX,
+  type SpotAbout,
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
@@ -49,6 +54,13 @@ const ethane = (at = { x: 0, y: 0 }): Molecule3D => ({
 });
 
 describe("a molecule in 3D as it is drawn", () => {
+  it("says over it how many of its file's atoms it leaves out, where it leaves out any", () => {
+    const notes = (m: Molecule3D) => notesOf(m, solidOf(m, STYLE_3D), "primary").filter((n) => n.endsWith("left out"));
+    expect(notes(ethane())).toEqual([]);
+    expect(notes({ ...ethane(), atomsLeftOut: 1 })).toEqual(["1 atom left out"]);
+    expect(notes({ ...ethane(), atomsLeftOut: 3 })).toEqual(["3 atoms left out"]);
+  });
+
   it("is laid about its centre, a bond of 1.5 Å as long as a drawn one", () => {
     const s = solidOf(ethane(), STYLE_3D);
     expect(Array.from(s.frames[0])).toEqual([-0.75 * WORLD_PER_ANGSTROM, 0, 0, 0.75 * WORLD_PER_ANGSTROM, 0, 0].map((v) => expect.closeTo(v, 6)));
@@ -581,6 +593,11 @@ describe("populations", () => {
     expect(low + high).toBeCloseTo(1, 12);
     expect(populations([])).toEqual([]);
   });
+
+  it("of a long run of frames - three hundred thousand energies - without overrunning the stack", () => {
+    const shares = populations(Array.from({ length: 300_000 }, (_, i) => (i % 5) / HARTREE));
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
+  });
 });
 
 describe("a molecule's bonds frame by frame", () => {
@@ -634,5 +651,111 @@ describe("a molecule's bonds frame by frame", () => {
   it("are its bonds, in every frame, where its file gave them", () => {
     expect(frameBondsOf(h2)).toBeNull();
     expect(bondsAt(h2, 1)).toBe(h2.bonds);
+  });
+});
+
+describe("a stereo label's place about its atom, followed", () => {
+  it("goes round the atom the shorter way to a new best way, out of the same reach, never across it", () => {
+    const was = { a: 0.9 * Math.PI, r: 20 };
+    const goal = { a: -0.9 * Math.PI, r: 20 };
+    let at = was;
+    const seen: number[] = [];
+    for (let k = 0; k < 60; k++) {
+      at = spotFollowed(at, goal, 1 / 60, 0.07);
+      seen.push(at.a);
+      // (never nearer the atom than either end: round it, not across)
+      expect(at.r).toBeCloseTo(20, 9);
+    }
+    // (through pi - the left - not through 0, the right: the short way, a fifth of a turn)
+    const wrapped = seen.map((a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+    expect(wrapped.every((a) => a > 0.85 * Math.PI && a < 1.15 * Math.PI)).toBe(true);
+    expect(at).toEqual(goal);
+  });
+
+  it("moves without a jump and without going past its goal, and is there in a fraction of a second", () => {
+    const goal = { a: 0, r: 30 };
+    let at = { a: Math.PI / 2, r: 18 };
+    let steps = 0;
+    let last = at;
+    while ((at.a !== goal.a || at.r !== goal.r) && steps < 600) {
+      at = spotFollowed(at, goal, 1 / 60, 0.07);
+      // (each frame's move a small one; never beyond the goal)
+      expect(Math.abs(at.a - last.a)).toBeLessThan(0.4);
+      expect(at.a).toBeGreaterThanOrEqual(0);
+      expect(at.r).toBeLessThanOrEqual(30);
+      last = at;
+      steps++;
+    }
+    expect(steps).toBeGreaterThan(5);
+    expect(steps / 60).toBeLessThan(0.75);
+  });
+
+  it("stays where it is when its goal does not move", () => {
+    expect(spotFollowed({ a: 1, r: 12 }, { a: 1, r: 12 }, 1 / 60, 0.07)).toEqual({ a: 1, r: 12 });
+  });
+});
+
+describe("measurements' values close together on the screen", () => {
+  const half = { x: 22, y: 9 };
+  const place = (v: { o: { x: number; y: number } }, s: SpotAbout) => ({ x: v.o.x + s.r * Math.cos(s.a), y: v.o.y + s.r * Math.sin(s.a) });
+  const apart = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) >= 2 * half.x - VALUE_SLACK_PX || Math.abs(a.y - b.y) >= 2 * half.y - VALUE_SLACK_PX;
+
+  it("stay on their points while those are clear of each other", () => {
+    const spots = valueSpots([
+      { o: { x: 0, y: 0 }, half, way: { x: 0, y: -1 } },
+      { o: { x: 100, y: 0 }, half, way: { x: 0, y: -1 } },
+    ]);
+    expect(spots.map((s) => s.r)).toEqual([0, 0]);
+  });
+
+  it("keep apart where their points are close, the later one moved off its way", () => {
+    const values = [
+      { o: { x: 0, y: 0 }, half, way: { x: 0, y: -1 } },
+      { o: { x: 10, y: 4 }, half, way: { x: 0, y: 1 } },
+    ];
+    const spots = valueSpots(values);
+    expect(spots[0].r).toBe(0);
+    expect(spots[1].r).toBeGreaterThan(0);
+    expect(apart(place(values[0], spots[0]), place(values[1], spots[1]))).toBe(true);
+  });
+
+  it("keep their places as the view turns slowly, rather than trading them frame by frame", () => {
+    // (three values near one another, their points drifting a little each frame as a slow turn moves them; each placed
+    // from where it stood the frame before, as the canvas places them)
+    let was: (SpotAbout | undefined)[] = [undefined, undefined, undefined];
+    let moves = 0;
+    for (let f = 0; f < 240; f++) {
+      const t = f / 240;
+      const values = [
+        { o: { x: 100 + 8 * Math.sin(2 * Math.PI * t), y: 100 }, half, way: { x: 0, y: -1 }, was: was[0] },
+        { o: { x: 112, y: 104 + 6 * Math.cos(2 * Math.PI * t) }, half, way: { x: 0, y: 1 }, was: was[1] },
+        { o: { x: 95 + 4 * t, y: 96 }, half, way: { x: -1, y: 0 }, was: was[2] },
+      ];
+      const spots = valueSpots(values);
+      // (never on top of one another)
+      for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) expect(apart(place(values[i], spots[i]), place(values[j], spots[j]))).toBe(true);
+      // (a value goes over to another side - its way off changing by more than a quarter turn - rarely, if ever)
+      spots.forEach((s, i) => {
+        const w = was[i];
+        if (w && w.r > 0 && s.r > 0 && Math.abs(Math.atan2(Math.sin(s.a - w.a), Math.cos(s.a - w.a))) > Math.PI / 2) moves++;
+      });
+      was = spots;
+    }
+    expect(moves).toBeLessThanOrEqual(2);
+  });
+
+  it("go back to their points once those are clear again, not before", () => {
+    const off = { a: Math.PI / 2, r: 12 };
+    const near = valueSpots([
+      { o: { x: 0, y: 0 }, half, way: { x: 0, y: -1 } },
+      // (its point now clear of the first by less than the slack: it stays off)
+      { o: { x: 2 * half.x + 1, y: 0 }, half, way: { x: 0, y: 1 }, was: off },
+    ]);
+    expect(near[1]).toEqual(off);
+    const clear = valueSpots([
+      { o: { x: 0, y: 0 }, half, way: { x: 0, y: -1 } },
+      { o: { x: 2 * half.x + VALUE_SLACK_PX + 1, y: 0 }, half, way: { x: 0, y: 1 }, was: off },
+    ]);
+    expect(clear[1].r).toBe(0);
   });
 });

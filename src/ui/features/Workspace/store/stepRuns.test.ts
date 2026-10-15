@@ -109,6 +109,19 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
+/** Why the next outputs kept with the workspace fail to be, as the test has it: none, kept as Meno keeps them. */
+const keepFails: string[] = [];
+vi.mock("../../../../lib/calc/asks", async (actual) => {
+  const real = await actual<typeof import("../../../../lib/calc/asks")>();
+  return {
+    ...real,
+    rememberOutput: async (...args: Parameters<typeof real.rememberOutput>) => {
+      const why = keepFails.shift();
+      if (why) throw new Error(why);
+      return real.rememberOutput(...args);
+    },
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { useReaders } from "../../../../lib/calc/workers";
@@ -121,8 +134,8 @@ import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
-import { canWire } from "../workflow/flow";
-import { optionsFor } from "../workflow/doers";
+import { canWire, stateOf } from "../workflow/flow";
+import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { setMembers } from "../workflow/entries";
 
@@ -176,6 +189,7 @@ describe("a step that runs a plugin's program", () => {
     asked.started = [];
     asked.stopped = [];
     asked.removed = [];
+    keepFails.length = 0;
     worker.prepare.mockClear();
     worker.collect.mockClear();
     useReaders.setState({ state: { xtb: "added" }, problem: {} });
@@ -237,6 +251,69 @@ describe("a step that runs a plugin's program", () => {
     Object.assign(job, { state: "done", ended: Date.now() + 1000, files: { "xtbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
+  });
+
+  it("saved while its job runs and opened again, picks the job up where it is - and brings its results in once it is done", async () => {
+    const { st, step } = editor();
+    void st().runStep(step);
+    await settle();
+    await settle();
+    expect(st().steps.find((s) => s.id === step)!.running).toBeDefined();
+    // (saved as the app saves it, then opened in a tab of its own as the app opens one - the first one gone)
+    const saved = readWorkspace(workspaceText(st()));
+    if (!saved) throw new Error("the workspace did not read back");
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    const st2 = () => store2.getState();
+    expect(st2().steps.find((s) => s.id === step)!.running?.jobs.map((j) => j.id)).toEqual([idOf(1)]);
+    // (the job still running: seen so, nothing brought in yet)
+    Object.assign(jobs.get(idOf(1))!, { state: "running", started: Date.now(), log: "cycle 3\n" });
+    await st2().lookAtJobs();
+    expect(st2().jobsSeen[idOf(1)]).toMatchObject({ state: "running" });
+    expect(st2().sets.some((b) => b.made?.step === step)).toBe(false);
+    // (done while the workspace was open again: read back and brought in, as if it had never been closed)
+    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 5000, files: { "xtbopt.log": "-5.0705" } });
+    await st2().lookAtJobs();
+    await settle();
+    const after = st2().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: true, jobs: [idOf(1)] });
+    expect(st2().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, holds: "molecules" });
+  });
+
+  it("saved while its job runs and opened again only once it has gone - its folder cleared - says so, and brings nothing in", async () => {
+    const { st, step } = editor();
+    void st().runStep(step);
+    await settle();
+    await settle();
+    const saved = readWorkspace(workspaceText(st()))!;
+    jobs.delete(idOf(1));
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    await store2.getState().lookAtJobs();
+    await settle();
+    const after = store2.getState().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: false });
+    expect(store2.getState().sets.some((b) => b.made?.step === step)).toBe(false);
+  });
+
+  it("given an empty set, starts nothing and says so - for each kind of step a plugin does", async () => {
+    const { st } = editor();
+    const empty = st().addSet({ x0: 40, y0: -3, x1: 46, y1: 3 });
+    for (const [kind, by] of [["optimise", "xtb"], ["energy", "xtb"], ["frequencies", "xtb"], ["conformers", "crest"]] as const) {
+      useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+      const step = st().addStep(kind, by, 60, 0);
+      st().connect({ set: empty }, step);
+      await st().runStep(step);
+      expect(asked.started).toEqual([]);
+      expect(st().steps.find((s) => s.id === step)!.ran, kind).toMatchObject({ ok: false });
+      expect(st().steps.find((s) => s.id === step)!.running, kind).toBeUndefined();
+    }
   });
 
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
@@ -423,6 +500,46 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
   });
 
+  it("fails where its plugin read back a geometry it could not read - and holds up no other step, nor itself", async () => {
+    const { st, step } = editor();
+    const other = st().addStep("energy", "xtb", 10, 20);
+    st().connect({ set: st().sets[0].id }, other);
+    const ran = st().runAll();
+    for (let i = 0; i < 5; i++) await settle();
+    const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;
+    const jobOf = (id: number) => jobs.get(stepOf(id).running!.jobs[0].id)!;
+    // both jobs ended well; the first one's output read back with a frame given as null
+    worker.collect.mockImplementationOnce(async () => ({ outputs: [{ schema: 1, atoms: ["O", "H", "H"], frames: [null, [0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]] }] }) as never);
+    Object.assign(jobOf(step), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobOf(other), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    // (looked at once a second, as Workflow2D does)
+    for (let i = 0; i < 3; i++) await st().lookAtJobs();
+    await ran;
+    expect(stepOf(step).running).toBeUndefined();
+    expect(stepOf(step).ran).toMatchObject({ ok: false, said: "It read back a geometry Meno cannot read" });
+    expect(stepOf(other).running).toBeUndefined();
+    expect(stepOf(other).ran).toMatchObject({ ok: true });
+    // (each job read back once, not once a second)
+    expect(worker.collect).toHaveBeenCalledTimes(2);
+  });
+
+  it("says what went wrong where its results cannot be brought in - and its run ends, its jobs looked at no more", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    keepFails.push("The disk is full");
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    const after = st().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: false, said: "Its results could not be brought in: The disk is full", jobs: [idOf(1)] });
+    expect(st().molecules3d).toHaveLength(1);
+    await st().lookAtJobs();
+    expect(worker.collect).toHaveBeenCalledTimes(1);
+  });
+
   it("shows its log in the column, rising out of its step - its step its body, kept with the workspace", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);
@@ -472,6 +589,16 @@ describe("a step that runs a plugin's program", () => {
     expect(st().askDeleteStep).toBeNull();
     await settle();
     expect(asked.stopped).toEqual([idOf(1)]);
+  });
+
+  it("deleted while it runs - the only step running, its jobs looked at no more - ends its run: nothing waits on it for good", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().removeStep(step, true);
+    const ended = await Promise.race([ran.then(() => "ended"), new Promise((go) => setTimeout(() => go("waits"), 200))]);
+    expect(ended).toBe("ended");
   });
 
   it("run again straight after it was stopped, runs anew once the stop has come through", async () => {
@@ -630,6 +757,39 @@ describe("running a workflow's steps", () => {
     expect(st().steps.find((s) => s.id === a)!.ran!.at).toBe(before);
   });
 
+  /** The chain with Duplicates between Energy window and Populations, all run; and what each step's card says, in the chain's order. */
+  async function longer() {
+    const { doc, st, a, b, c } = chain();
+    const d = st().addStep("duplicates", "meno", 40, 0);
+    st().connect({ step: b }, d);
+    st().connect({ step: d }, c);
+    await st().runFrom(a);
+    const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;
+    const states = () => [a, b, d, c].map((id) => stateOf(doc.getState(), stepOf(id), byOf(stepOf(id))));
+    const reruns = () => [a, b, d, c].map((id) => stepOf(id).runs?.length ?? 0);
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    return { st, a, b, c, states, reruns };
+  }
+
+  it("runs a step changed two links back, and every step between, before the step it runs - in order", async () => {
+    const { st, b, c, states, reruns } = await longer();
+    // Energy window's options changed: it reads as changed, the steps after it as done
+    st().updateStep(b, { options: { window: 0.5 } });
+    expect(states()).toEqual(["done", "changed", "done", "done"]);
+    await st().runStep(c);
+    // each run again on what the one before it gave anew; As conformers, before it, left as it was
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    expect(reruns()).toEqual([0, 1, 1, 1]);
+  });
+
+  it("runs all: a step changed, and every step after it - those before it left as they are", async () => {
+    const { st, b, states, reruns } = await longer();
+    st().updateStep(b, { options: { window: 0.5 } });
+    await st().runAll();
+    expect(states()).toEqual(["done", "done", "done", "done"]);
+    expect(reruns()).toEqual([0, 1, 1, 1]);
+  });
+
   it("runs steps that do not wait on one another at once", async () => {
     const { st } = editor();
     const set = st().sets[0].id;
@@ -730,7 +890,7 @@ describe("Render as a step", () => {
     const step = st().addStep("render", "blender", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
     // (Meno's own choices first, then Blender's - the role's, asked as a step)
-    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 4)).toEqual(["width", "shape", "molecules", "surfaces"]);
+    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 5)).toEqual(["width", "shape", "look", "molecules", "surfaces"]);
     expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
     // (it gives pictures, which no step takes: nothing is wired from it)
     expect(canWire(st(), { step }, st().addStep("energy", "xtb", 30, 0))).toBe(false);

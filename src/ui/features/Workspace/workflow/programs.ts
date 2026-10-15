@@ -67,7 +67,8 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     return mass != null ? { ...a, mass } : a;
   });
   const known = knownOf(molecule);
-  return { ...molecule, atoms, charge: Number(known.charge), multiplicity: Number(known.multiplicity) };
+  // (a molecule read from a calculation: the state it was in there; else what its atoms say)
+  return { ...molecule, atoms, charge: e.charge ?? Number(known.charge), multiplicity: e.multiplicity ?? Number(known.multiplicity) };
 }
 
 /**
@@ -224,6 +225,8 @@ export function readCollected(raw: unknown, count: number): ReaderOutput[] | { r
   for (const o of outs) {
     if (o?.schema != null && o.schema !== OUTPUT_SCHEMA) return { why: "It read it back in a form this Meno does not read" };
     if (!Array.isArray(o?.atoms) || !Array.isArray(o.frames) || !o.frames.some((f) => Array.isArray(f) && f.length === 3 * o.atoms.length)) return { why: "It read back no geometry" };
+    // (every frame a list: one it could not read, given as null, is not taken)
+    if (!o.frames.every(Array.isArray)) return { why: "It read back a geometry Meno cannot read" };
   }
   return outs;
 }

@@ -6,7 +6,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, remembered, renderOptions, type Kind } from "./renderOptions";
+import { askOf, LOOK_IDS, remembered, renderOptions, type Kind } from "./renderOptions";
 import { useInFront } from "../../../layouts/inFront";
 
 /**
@@ -35,7 +35,9 @@ export default function RenderCard({
   const saved = useAppSettings((s) => s.options);
   const rememberOptions = useAppSettings((s) => s.rememberOptions);
   const [kind, setKind] = useState<Kind>(saved.render?.kind === "film" ? "film" : "picture");
-  const own = renderOptions(kind, motions, surfaces);
+  // (the looks this plugin can make, of those Meno knows: where it says none, all)
+  const made = plugin.roleLooks.render?.filter((l) => LOOK_IDS.includes(l));
+  const own = renderOptions(kind, motions, surfaces, made?.length ? made : undefined);
   const theirs = (plugin.roleOptions.render ?? []).filter((o) => kind === "film" || o.id !== "quality");
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);
@@ -105,7 +107,7 @@ export default function RenderCard({
       {theirs.length > 0 && (
         <section className="mb-3 border-t border-gh-line pt-3">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{plugin.name}</h3>
-          <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} />
+          <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} context={values} />
         </section>
       )}
       {/* (kept in view at the card's foot, however many options there are above) */}

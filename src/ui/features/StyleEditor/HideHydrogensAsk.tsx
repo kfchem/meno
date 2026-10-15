@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAskedKeys } from "../../layouts/asking";
 import { FADE, RISE } from "../../theme/motion";
+import { QUESTION_ARRIVING_MS, useLeaving } from "../../theme/leaving";
 import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensText";
 
 /**
@@ -18,6 +19,8 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
   const [understood, setUnderstood] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades; come, it takes no click for a moment - one meant for what was there before is no answer: theme/leaving)
+  const { held } = useLeaving(QUESTION_ARRIVING_MS);
   const id = useId();
   useEffect(() => {
     keepRef.current?.focus();
@@ -28,6 +31,7 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
   return (
     <motion.div
       {...FADE}
+      {...held}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
       onPointerDown={(e) => {
         // (a press outside the box keeps them)
@@ -41,7 +45,18 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
         aria-modal="true"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-text`}
-        className="w-[480px] max-w-[90%] rounded-lg border border-accel-accent/50 bg-white shadow-lg p-5 text-sm text-gh-black"
+        // (a press in it that is on nothing that takes the keys - the box ticked, its words - leaves them
+        // with the box, so that an Enter after it is the box's, not lost behind it)
+        tabIndex={-1}
+        className="w-[480px] max-w-[90%] rounded-lg border border-accel-accent/50 bg-white shadow-lg p-5 text-sm text-gh-black outline-none"
+        onKeyDown={(e) => {
+          // (Enter keeps them wherever it is pressed in the box - the box just ticked among them, where it did
+          // nothing - but on a button, which answers for itself)
+          if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+            e.preventDefault();
+            onKeep();
+          }
+        }}
       >
         <h2 id={`${id}-title`} className="text-base font-semibold mb-3 text-accel-accent">
           {HIDE_H_TITLE}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedArrows, turnedOver, turnedOverArrows } from "./selection";
+import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedArrows, turnedOver, turnedOverArrows, wordsIn } from "./selection";
 
 const atom = (id: number, x: number, y: number) => ({ id, x, y, r: 0.9, el: "C" });
 
@@ -41,6 +41,19 @@ describe("inBox and inLasso", () => {
     expect([...wide.atoms].sort()).toEqual([1, 2, 3]);
     expect([...wide.bonds].sort()).toEqual([11, 12]);
     expect(insidePolygon({ x: 0, y: 0 }, [{ x: 1, y: 1 }])).toBe(false);
+  });
+});
+
+describe("wordsIn", () => {
+  it("takes the words on the page a box or a lasso holds - not those over an arrow, which go with it", () => {
+    const words = [
+      { id: 1, x: 1, y: 1 },
+      { id: 2, x: 9, y: 9 },
+      { id: 3, x: 2, y: 2, arrow: 7 },
+    ];
+    expect(wordsIn(words, "box", [{ x: 0, y: 0 }, { x: 5, y: 5 }])).toEqual([1]);
+    expect(wordsIn(words, "lasso", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }])).toEqual([1, 2]);
+    expect(wordsIn(words, "box", [{ x: 20, y: 20 }, { x: 30, y: 30 }])).toEqual([]);
   });
 });
 

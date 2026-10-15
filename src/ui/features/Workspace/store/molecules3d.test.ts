@@ -507,6 +507,48 @@ describe("a measurement on a molecule in 3D set to a value", () => {
     expect(state().molecules3d).toHaveLength(1);
   });
 
+  it("notes each copy a distance, an angle or a torsion angle set on a result makes - taken back into it by one undo, made again by its redo", () => {
+    const frames = [[0, 0, 0, 1.5, 0, 0, 2.1, 1.3, 0, 3.1, 1.4, 0.3]];
+    const measures = [
+      { id: 1, atoms: [0, 1] },
+      { id: 2, atoms: [0, 1, 2] },
+      { id: 3, atoms: [0, 1, 2, 3] },
+    ];
+    for (const [measure, value, label] of [
+      [1, 1.7, "set distance"],
+      [2, 118, "set angle"],
+      [3, 60, "set torsion angle"],
+    ] as const) {
+      const { doc, state } = store(propane({ conformerSet: true, frames, energies: [-1, -1.001], numbers: [4, 9], measures }));
+      expect(state().copied3d).toBeNull();
+      const id = state().setMeasure3d(1, measure, value);
+      expect(id).toBe(2);
+      expect(state().copied3d).toMatchObject({ from: 1, copy: 2 });
+      expect(state().copied3d?.undone).toBeUndefined();
+      expect(doc.history().undoLabel).toBe(label);
+      // (one undo: the copy gone, noted as undone - it goes back into the one it came from)
+      doc.undo();
+      expect(state().molecules3d.map((m) => m.id)).toEqual([1]);
+      expect(state().copied3d?.undone).toBeGreaterThan(0);
+      // (its redo: made again, noted afresh - it splits off again)
+      const was = state().copied3d!.at;
+      doc.redo();
+      expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2]);
+      expect(state().copied3d?.undone).toBeUndefined();
+      expect(state().copied3d!.at).toBeGreaterThanOrEqual(was);
+      // (gone some other way - deleted - nothing goes back into anything)
+      state().removeMolecule3d(2);
+      expect(state().molecules3d.map((m) => m.id)).toEqual([1]);
+      expect(state().copied3d).toBeNull();
+    }
+  });
+
+  it("notes no copy where a molecule of its own is edited in place", () => {
+    const { state } = store(propane());
+    expect(state().setMeasure3d(1, 1, 120)).toBe(1);
+    expect(state().copied3d).toBeNull();
+  });
+
   it("measures what is chosen, in the order chosen, and opens its value to be typed", () => {
     const { state } = store(propane());
     // (measured already the other way along: put in the order chosen)
@@ -520,6 +562,51 @@ describe("a measurement on a molecule in 3D set to a value", () => {
     state().setChosen3d();
     expect(state().molecules3d[0].measures?.[1]).toEqual({ id: 2, atoms: [0, 1] });
     expect(state().measureEdit3d).toEqual({ id: 1, measure: 2 });
+  });
+});
+
+describe("a molecule in 3D shown overlaid, undone away", () => {
+  it("is not shown overlaid in the next molecule made with its id, and is again when redone", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const state = () => store.getState();
+    const frames = [water.atoms.flatMap((a) => [a.x, a.y, a.z + 0.1])];
+    doc.edit("3D structure", (d) => addMolecule3d(d, { ...water, frames, at: { x: 0, y: 0 } }));
+    const first = state().molecules3d[0].id;
+    state().setOverlay3d(first, true);
+    doc.undo();
+    expect(state().overlay3d[first]).toBeUndefined();
+    // redone: the same molecule, overlaid as it was
+    doc.redo();
+    expect(state().overlay3d[first]).toBe(true);
+    // undone, and another made in its place, with its id: not overlaid
+    doc.undo();
+    doc.edit("3D structure", (d) => addMolecule3d(d, { ...water, frames, at: { x: 9, y: 0 } }));
+    expect(state().molecules3d[0].id).toBe(first);
+    expect(state().overlay3d[first]).toBeUndefined();
+  });
+});
+
+describe("molecules in 3D turned together, then something amended", () => {
+  it("are turned back by the undo all the same - a PDF scrolled in the column replaces the document's states", () => {
+    const { doc, state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: -40 });
+    const half: [number, number, number, number] = [0, 1, 0, 0];
+    state().turnMolecules3d(
+      [
+        { id: 1, at: { x: 6, y: 0 }, turn: half },
+        { id: 2, at: { x: 0, y: 0 }, turn: half },
+      ],
+      "turn-1",
+    );
+    // the PDF read in the column, scrolled: an amend, no step of its own
+    state().setPdfReading(state().pdfs[0].id, { at: 0, zoom: 1.5 });
+    doc.undo();
+    expect(state().molecules3d.find((m) => m.id === 1)!.at.x).toBe(0);
+    expect(state().turns3d[1]).toBeUndefined();
+    doc.redo();
+    expect(state().turns3d[1]).toEqual(half);
   });
 });
 

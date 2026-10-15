@@ -5,6 +5,7 @@ import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
 import samplePdb from "../../../../samples/cholesterol.pdb?raw";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 describe("processFileContent", () => {
   it("imports an SDF", async () => {
@@ -38,6 +39,68 @@ describe("processFileContent", () => {
     await expect(processFileContent("", "hello")).rejects.toThrow(
       "No molecules found in the file.",
     );
+  });
+});
+
+describe("a file with no coordinates", () => {
+  // (as some programs write one: every atom at 0, 0, 0 - opened as a pile, one label over the rest)
+  const atomAt = (el: string, x = 0, y = 0) => `${x.toFixed(4).padStart(10)}${y.toFixed(4).padStart(10)}${"0.0000".padStart(10)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`;
+  const bondOf = ([a, b, o]: number[]) => `${String(a).padStart(3)}${String(b).padStart(3)}${String(o).padStart(3)}  0`;
+  const molfile = (title: string, els: string[], bonds: number[][], header = "  Meno", at: (i: number) => [number, number] = () => [0, 0]) =>
+    [title, header, "", `${String(els.length).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...els.map((el, i) => atomAt(el, ...at(i))), ...bonds.map(bondOf), "M  END"].join("\n");
+  // ibuprofen
+  const els = ["C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "O", "O"];
+  const bonds = [[1, 2, 1], [2, 3, 1], [2, 4, 1], [4, 5, 1], [5, 6, 2], [6, 7, 1], [7, 8, 2], [8, 9, 1], [9, 10, 2], [10, 5, 1], [8, 11, 1], [11, 12, 1], [11, 13, 1], [13, 14, 2], [13, 15, 1]];
+  const spread = (atoms: readonly { id: number; x: number; y: number }[], bs: readonly { a: number; b: number }[]) => {
+    const at = new Map(atoms.map((a) => [a.id, a]));
+    const lengths = bs.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y));
+    let nearest = Infinity;
+    for (const [i, p] of atoms.entries()) for (const q of atoms.slice(i + 1)) nearest = Math.min(nearest, Math.hypot(p.x - q.x, p.y - q.y));
+    return { shortest: Math.min(...lengths), longest: Math.max(...lengths), nearest };
+  };
+
+  it("is laid out as it is opened, as Clean-up lays a structure out", async () => {
+    const r = await processFileContent("ibuprofen.mol", molfile("ibuprofen", els, bonds));
+    expect(r.model.atoms).toHaveLength(15);
+    const s = spread(r.model.atoms, r.model.bonds);
+    expect(s.shortest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.8);
+    expect(s.longest).toBeLessThan(NOMINAL_BOND_LENGTH * 1.2);
+    expect(s.nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
+  });
+
+  it("lays its fragments out side by side, and is no molecule in 3D whatever its header says", async () => {
+    const salt = await processFileContent("salt.mol", molfile("salt", ["Na", "Cl", "C", "O"], [[3, 4, 1]], "  Meno          3D"));
+    expect(salt.molecules3d ?? []).toHaveLength(0);
+    expect(salt.model.atoms).toHaveLength(4);
+    expect(spread(salt.model.atoms, salt.model.bonds).nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
+  });
+
+  it("lays out a reaction's molecules before the scheme is laid out: each clear of the arrow and the + between them", async () => {
+    // (ethanol + acetic acid -> ethyl acetate, every atom of each at 0, 0)
+    const rxn = ["$RXN", "", "  Meno", "", "  2  1", "$MOL", molfile("ethanol", ["C", "C", "O"], [[1, 2, 1], [2, 3, 1]]),
+      "$MOL", molfile("acid", ["C", "C", "O", "O"], [[1, 2, 1], [2, 3, 2], [2, 4, 1]]),
+      "$MOL", molfile("ester", ["C", "C", "O", "O", "C", "C"], [[1, 2, 1], [2, 3, 2], [2, 4, 1], [4, 5, 1], [5, 6, 1]])].join("\n");
+    const r = await processFileContent("esterification.rxn", rxn);
+    expect(r.model.atoms).toHaveLength(13);
+    const s = spread(r.model.atoms, r.model.bonds);
+    expect(s.shortest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.8);
+    expect(s.nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
+    // (the arrow between the reactants and the product, none of their atoms on it)
+    const a = r.arrow!;
+    expect(r.model.atoms.filter((at) => at.x > a.x1 && at.x < a.x2)).toHaveLength(0);
+  });
+
+  it("lays out the records of an SD file that have none, and leaves the rest where they are", async () => {
+    // (a first record drawn, a C-O; a second with no coordinates)
+    const drawn = molfile("drawn", ["C", "O"], [[1, 2, 1]], "  Meno", (i) => [i * 1.5, 0]);
+    const r = await processFileContent("two.sdf", `${drawn}\n$$$$\n${molfile("ibuprofen", els, bonds)}\n$$$$\n`);
+    expect(r.model.atoms).toHaveLength(17);
+    const first = r.model.atoms.slice(0, 2);
+    expect(Math.hypot(first[0].x - first[1].x, first[0].y - first[1].y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 1);
+    const rest = r.model.atoms.slice(2);
+    const ids = new Set(rest.map((a) => a.id));
+    expect(spread(rest, r.model.bonds.filter((b) => ids.has(b.a))).nearest).toBeGreaterThan(NOMINAL_BOND_LENGTH * 0.5);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptOptions, rememberable, valuesOf, type Option } from "./options";
+import { acceptOptions, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
   { id: "version", label: "Version", type: "choice", choices: [{ value: "auto", label: "Auto" }, { value: "V3000", label: "V3000" }], default: "auto" },
@@ -61,5 +61,43 @@ describe("options a plugin declares", () => {
       { id: "chk", label: "Checkpoint", type: "switch", default: true },
     ]);
     expect(acceptOptions("not a list")).toEqual([]);
+  });
+});
+
+describe("options that apply to one choice only, and choices that fill in others' values", () => {
+  const options: Option[] = [
+    {
+      id: "look",
+      label: "Look",
+      type: "choice",
+      default: "plain",
+      choices: [
+        { value: "plain", label: "Plain", sets: { shading: "lit" } },
+        { value: "toon", label: "Toon", sets: { shading: "toon", band: 0.4 } },
+      ],
+    },
+    { id: "shading", label: "Shading", type: "choice", default: "lit", choices: [{ value: "lit", label: "Lit" }, { value: "toon", label: "Toon" }], group: "Adjust" },
+    { id: "band", label: "Band", type: "number", default: 0.5, when: { id: "shading", in: ["toon"] }, group: "Adjust" },
+    { id: "engine", label: "Renderer", type: "choice", default: "a", choices: [{ value: "a", label: "A" }], when: { id: "shading", in: ["lit"] } },
+  ];
+
+  it("are shown while another option has one of the values they name - its own form's, or another's beside it", () => {
+    expect(shownOptions(options, { look: "plain", shading: "lit", band: 0.5, engine: "a" }).map((o) => o.id)).toEqual(["look", "shading", "engine"]);
+    expect(shownOptions(options, { look: "toon", shading: "toon" }).map((o) => o.id)).toEqual(["look", "shading", "band"]);
+    // (an option of another form: its `when` names one that is not here)
+    expect(shownOptions([options[3]], {}, { shading: "lit" })).toHaveLength(1);
+    expect(shownOptions([options[3]], {}, { shading: "toon" })).toHaveLength(0);
+  });
+
+  it("are read from a plugin's manifest as data - the rule, its group, and what a choice fills in - and not otherwise", () => {
+    const read = acceptOptions([
+      { id: "look", label: "Look", type: "choice", default: "a", choices: [{ value: "a", label: "A", sets: { band: 0.4, "bad id": 1, deep: { x: 1 } } }] },
+      { id: "band", label: "Band", type: "number", default: 0.5, when: { id: "look", in: ["a", 3, null] }, group: "Adjust" },
+      { id: "loose", label: "Loose", type: "switch", default: false, when: { id: "no id!", in: ["a"] } },
+    ]);
+    const look = read[0] as unknown as { choices: { sets?: unknown }[] };
+    expect(look.choices[0].sets).toEqual({ band: 0.4 });
+    expect(read[1]).toMatchObject({ when: { id: "look", in: ["a", 3] }, group: "Adjust" });
+    expect(read[2].when).toBeUndefined();
   });
 });
