@@ -551,6 +551,41 @@ work.meno (zip)
 - **The clipboard and Office keep the record**, JSON as before: a copy
   carries no file.
 
+### What a .meno holds
+
+Decided by the maintainer, 2026-10-15: "Meno's file is .meno alone, and
+that will never change. What it holds varies: a template, a style and so
+on." A `.meno` says what it holds in `meno.json`, stored, after `mimetype`:
+
+```
+style.meno (zip)
+  mimetype          first, stored: application/vnd.kfchem.meno+zip
+  meno.json         stored: {"kind": "style"}
+  style.json        stored: the styles - each its name and the whole of it
+  picture.png       stored, where there is one: what they look like
+```
+
+- **Kinds.** `workspace` - the default: a `.meno` with no `meno.json`, as
+  every file written before kinds were, is a workspace, and workspaces are
+  written as before - and `style`. A template, later, will be a workspace
+  opened as a new, untitled copy, with its own kind.
+- **A style file** holds one or more drawing styles and styles for
+  molecules in 3D (`style.json`: `drawing`, each `{name, style}`;
+  `molecules3d`, each `{name, look}`), at most 100 of each, each setting
+  read as the settings file reads it - one that does not read is Meno's
+  own. *Export style…*, on a style's menu in Settings or in a workspace's
+  Drawing style, writes one, with the 3D style's picture.
+- **Opened** - by Open, a drop, or a double-click in the system - a style
+  file asks: "Add the style X to your styles?". *Add* puts them below the
+  built-in ones (renamed where a style has the name); *Add and use* also
+  uses them - the drawing style in the workspace in front, eased in, an
+  edit that can be undone; the 3D one as the primary. It never opens as a
+  workspace.
+- **A kind this Meno does not know** - a file from a newer Meno - is said
+  so, "It was made by a newer Meno, and holds what this Meno cannot open",
+  and nothing is opened. A `meno.json` that does not say a kind is a file
+  that does not read.
+
 ### Opening a workspace file from the system
 
 Decided by the maintainer, 2026-10-12: Meno is the app for `.meno`, and for

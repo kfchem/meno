@@ -772,6 +772,18 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 
 ## Drawing style
 
+- **Styles of the user's own** (the maintainer, 2026-10-15: "in both 2D and
+  3D, I can't add new styles of my own"). *Save as style…*, under the
+  presets in a workspace's Drawing style or Settings', keeps the style as
+  it is set as one of the user's own, named, in Meno's settings - not in a
+  workspace - and offered below the built-in presets in every workspace,
+  marked *Your own*. A right-click on a style duplicates it into the user's
+  own, exports it (*Export style…*, FILE-IO.md, *What a .meno holds*), and
+  renames or deletes one of theirs; the built-in ones are only duplicated.
+  A workspace drawn in an own style carries the whole of it
+  (`StyleChoice.own`), so it opens the same where that style is not: there
+  it is offered as *In this workspace*.
+
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
 pull request (`agent/style-one-per-workspace`): L8 the change of style and
 what it converts, hunter C the style's place and its card, hunter A the
@@ -1000,6 +1012,23 @@ space-filling side by side is better science than either alone.
   set, any element can be given a colour of its own, marked, and set back
   to the set's one at a time. A style's sticks coloured by their atoms
   take each half's colour from its atom.
+- **Multiple bonds** (the maintainer, 2026-10-15). A style draws a double
+  or triple bond as two or three thinner lines side by side, or as one
+  stick, as thick as a single bond - Outlined's, as its reference draws
+  them. With one stick, the bond ends are moot, and shown faint. The
+  change is eased: the side lines go into the middle one.
+- **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
+  Primary and Secondary, each with its molecule drawn live and turnable;
+  below them every other style, built in and the user's own, each with a
+  still picture (drawn once, a frame apart, all with one renderer - a
+  context for each took the live ones' away). A style dragged onto a slot
+  takes it, the one there going back to the list; one slot's dragged onto
+  the other, the two change places - the card following the pointer, and
+  each card going to its new place eased, not jumping. A press, or Enter,
+  sets a style below; a right-click, or the menu key, offers Use as
+  primary, Use as secondary, Duplicate, Export style… - and, for the user's
+  own, Rename and Delete. A built-in style's changes are kept apart,
+  marked, and taken back by Reset; the user's own is set as a whole.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says
   which it is; giving a style the other's role swaps the two, so the
