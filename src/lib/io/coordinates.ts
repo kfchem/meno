@@ -105,12 +105,12 @@ function recordAt(ts: readonly Token[], i: number): Omit<Rec, "slot"> | null {
 const PAGE_MARK = /^(?:S-?\d+|page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\/\s*\d+|[-\u2013\u2014]\s*\d+\s*[-\u2013\u2014]|S\d+\s+of\s+S?\d+)$/i;
 /** A note of a structure's: an energy, a frequency, a correction, its method. */
 const NOTE =
-  /energ|hartree|kcal|kj\s*\/?\s*mol|\bscf\b|\bzpe\b|zero[- ]point|enthalp|gibbs|frequenc|imaginary|\bnimag|\be\s*\(|\b[eGH]\s*=|\bdelta\b|thermal|correction|b3lyp|m06|wb97|pbe|def2|6-31|6-311|cc-pv|\btzvp|\bsvp\b|level of theory/i;
+  /energ|hartree|kcal|kj\s*\/?\s*mol|\bscf\b|\bzpe\b|zero[- ]point|enthalp|gibbs|frequenc|imaginary|\be\s*\(|\b[eGH]\s*=|\bdelta\b|thermal|correction|b3lyp|m06|wb97|pbe|def2|6-31|6-311|cc-pv|\btzvp|\bsvp\b|level of theory/i;
 /** A line saying what follows, not naming it: a table's heads, "Cartesian coordinates", rules. */
 const HEADING_ONLY =
   /^(?:cartesian\s+coordinates?|coordinates?|xyz\s+coordinates?|optimi[sz]ed\s+(?:geometry|coordinates|structure)|standard orientation|input orientation|z-matrix orientation|center\s+atomic|number\s+number|atom\b|symbol\b|element\b|x\s+y\s+z|[-=_\s]+$|\(?(?:å|angstroms?|a\.?u\.?|bohr)\)?:?$)/i;
-/** A note within a longer line: an energy ("E = -1234.5678 Hartree", "SCF Done: E(RB3LYP) = -1234.5"), a count of imaginary frequencies. */
-const FRAGMENT = /(?:scf done:?\s*)?\b(?:E|G|H|ZPE)(?:\s*\([^)]*\))?\s*=\s*[-+]?\d+\.\d+(?:\s*(?:hartrees?|a\.u\.|au|eh|kcal\s*\/?\s*mol))?|imaginary frequenc(?:y|ies)\s*:?\s*\d+|nimag\s*=\s*\d+/i;
+/** A note within a longer line: an energy ("E = -1234.5678 Hartree", "E(RB3LYP) = -1234.5 A.U."), a count of imaginary frequencies. */
+const FRAGMENT = /\b(?:E|G|H|ZPE)(?:\s*\([^)]*\))?\s*=\s*[-+]?\d+\.\d+(?:\s*(?:hartrees?|a\.u\.|au|eh|kcal\s*\/?\s*mol))?|imaginary frequenc(?:y|ies)\s*:?\s*\d+/i;
 const STATED = /(\d+)\s*atoms\b|\batoms?\s*[:=]\s*(\d+)|number of atoms\s*[:=]?\s*(\d+)/i;
 const SAYS_BOHR = /\bbohrs?\b|\ba\.\s*u\.|\batomic units\b|units\s*=\s*(?:bohr|au)\b/i;
 const SAYS_ANGSTROM = /\u00e5|\u00e5ngstr\u00f6m|angstr[o\u00f6]m|\bunits\s*=\s*ang/i;

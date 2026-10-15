@@ -38,7 +38,7 @@ describe("structures read from coordinates, placed", () => {
   });
 
   it("take an energy a note gives in hartrees, and none in other units", () => {
-    expect(energyOf(["SCF Done:  E(RB3LYP) =  -154.987654321     A.U. after 12 cycles"])).toBe(-154.987654321);
+    expect(energyOf(["E(RB3LYP) =  -154.987654321     A.U. after 12 cycles"])).toBe(-154.987654321);
     expect(energyOf(["G = -12.3 kcal/mol", "Imaginary frequencies: 0"])).toBeUndefined();
   });
 

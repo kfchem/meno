@@ -29,11 +29,11 @@ export function coordinateMolecules(chosen: readonly { structure: CoordinateStru
   });
 }
 
-/** An energy a note gives in hartrees - "E = -154.987654 Hartree", "SCF Done: E(RB3LYP) = -154.98 A.U." - the first; none, in other units or none. */
+/** An energy a note gives in hartrees - "E = -154.987654 Hartree", "E(RB3LYP) = -154.98 A.U." - the first; none, in other units or none. */
 export function energyOf(notes: readonly string[]): number | undefined {
   for (const n of notes) {
-    const m = /=\s*([-+]?\d+\.\d+)\s*(hartrees?|a\.\s*u\.|au|eh)?\b/i.exec(n);
-    if (m && (m[2] || /scf done/i.test(n))) return Number(m[1]);
+    const m = /=\s*([-+]?\d+\.\d+)\s*(hartrees?|a\.\s*u\.|au|eh)?(?![a-z])/i.exec(n);
+    if (m?.[2]) return Number(m[1]);
   }
   return undefined;
 }
