@@ -36,6 +36,9 @@ ETHYNE = {
     "multiplicity": 1,
 }
 
+# a lone atom, as the ion of a salt is
+SODIUM = {"name": "sodium", "atoms": [{"el": "Na", "x": 1.0, "y": 2.0, "z": 3.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+
 # (after "Geometry Optimization", Example 1: two frames, each comment line holding the energy and the gradient norm)
 PATH = """4
  energy: -5.170000000000 gnorm: 0.100000000000 xtb: 6.7.1
@@ -146,6 +149,12 @@ class Prepare(unittest.TestCase):
         said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [{**ETHYNE, "charge": 0.5}], "options": {}}))
         self.assertFalse(said["ok"])
 
+    def test_a_lone_atom_is_not_optimised_but_has_its_energy_worked_out(self):
+        job = ask("prepare", step="optimise", entries=[SODIUM], options=defaults("optimise"))["jobs"][0]
+        self.assertNotIn("--opt", job["args"])
+        self.assertEqual(job["args"][1:7], ["--gfn", "2", "--chrg", "1", "--uhf", "0"])
+        self.assertEqual(job["reads"], ["xtbout.json"])
+
     def test_every_solvent_offered_is_one_it_takes(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         for step in manifest["steps"]:
@@ -168,6 +177,17 @@ class Collect(unittest.TestCase):
         self.assertEqual(ids, {"homo-lumo-gap", "charges"})
         not_yet = ask("collect", step="optimise", entries=[ETHYNE], options={}, files={"xtbopt.log": PATH, "NOT_CONVERGED": ""}, log="", ended="done")
         self.assertFalse(not_yet["outputs"][0]["optimised"])
+
+    def test_a_lone_atom_optimised_is_where_it_was_with_its_energy(self):
+        # (no electrons xtb counts: no HOMO, and the gap it gives - the LUMO's energy - left out)
+        dump = json.dumps({"total energy": 0.195485566667, "partial charges": [1.0], "number of electrons": 0, "HOMO-LUMO gap / eV": -16.81732849})
+        out = ask("collect", step="optimise", entries=[SODIUM], options=defaults("optimise"), files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
+        self.assertEqual(out["atoms"], ["Na"])
+        self.assertEqual(out["frames"], [[1.0, 2.0, 3.0]])
+        self.assertEqual(out["energies"], [0.195485566667])
+        self.assertTrue(out["optimised"])
+        self.assertEqual(out["charge"], 1)
+        self.assertEqual([r["id"] for r in out["results"]], ["charges"])
 
     def test_frequencies_and_thermochemistry(self):
         dump = json.dumps({

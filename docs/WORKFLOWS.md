@@ -150,9 +150,10 @@ in 3D, arrows, text - and is made of three things:
 
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
-Their words, and the chips on the page, go below 75 % (*How it looks*):
-a card then shows its icon and its state's icon alone, a set its frame
-and what it holds.
+Fit (Ctrl/Cmd+1) takes them in: each set's frame and each step's card,
+closed. Their words, and the chips on the page, go below 75 % (*How it
+looks*): a card then shows its icon and its state's icon alone, a set
+its frame and what it holds.
 
 ### How it looks
 
@@ -250,7 +251,11 @@ The first six run a program; the last five work on a set's entries
 alone (*Who does a step*). A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
-molecules in 3D only. More kinds come with Meno as they are needed - a
+molecules in 3D only. A lone atom - the ion of a salt drawn as ions -
+has no conformers to find and nothing to optimise; xtb, CREST, ORCA and
+Gaussian each stop when asked to. Their plugins work out its energy
+where it is instead, and it comes back where it was - in *Conformers*,
+its only conformer. More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
 out - each specified before it is built.
 
@@ -466,6 +471,20 @@ Run again, a step replaces its result set's entries with the new run's,
 gliding to where they now are; earlier runs are kept in the step (*Runs*,
 under its options: when, with what options, how long, the number it
 gave), and one can be shown again.
+
+A result set is laid out for the 3D look its molecules are drawn in.
+When a bigger look is chosen - a molecule switched to its other look, or
+another look in Settings - and its molecules no longer fit (one reaching
+past the frame or onto the set's name, or two over one another), the
+frame widens and they are laid out again, as a run in that look lays
+them out (decided, 2026-10-13) - or, where widening would reach over
+what stands beside the set (the next step's card), in rows as wide as
+the set was, the set growing downwards. The frame and the molecules
+glide there together, and nothing is left over another. A set never grows narrower
+or shorter for a smaller look; a chemist's own sets are left as they
+are. A molecule switched is one step to undo, with its set; a look
+chosen in Settings is not a step of the workspace, and lays out the
+states an undo goes back to as well.
 
 ### Several at once
 

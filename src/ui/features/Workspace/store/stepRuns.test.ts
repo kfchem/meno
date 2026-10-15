@@ -253,6 +253,69 @@ describe("a step that runs a plugin's program", () => {
     await ran;
   });
 
+  it("saved while its job runs and opened again, picks the job up where it is - and brings its results in once it is done", async () => {
+    const { st, step } = editor();
+    void st().runStep(step);
+    await settle();
+    await settle();
+    expect(st().steps.find((s) => s.id === step)!.running).toBeDefined();
+    // (saved as the app saves it, then opened in a tab of its own as the app opens one - the first one gone)
+    const saved = readWorkspace(workspaceText(st()));
+    if (!saved) throw new Error("the workspace did not read back");
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    const st2 = () => store2.getState();
+    expect(st2().steps.find((s) => s.id === step)!.running?.jobs.map((j) => j.id)).toEqual([idOf(1)]);
+    // (the job still running: seen so, nothing brought in yet)
+    Object.assign(jobs.get(idOf(1))!, { state: "running", started: Date.now(), log: "cycle 3\n" });
+    await st2().lookAtJobs();
+    expect(st2().jobsSeen[idOf(1)]).toMatchObject({ state: "running" });
+    expect(st2().sets.some((b) => b.made?.step === step)).toBe(false);
+    // (done while the workspace was open again: read back and brought in, as if it had never been closed)
+    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 5000, files: { "xtbopt.log": "-5.0705" } });
+    await st2().lookAtJobs();
+    await settle();
+    const after = st2().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: true, jobs: [idOf(1)] });
+    expect(st2().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, holds: "molecules" });
+  });
+
+  it("saved while its job runs and opened again only once it has gone - its folder cleared - says so, and brings nothing in", async () => {
+    const { st, step } = editor();
+    void st().runStep(step);
+    await settle();
+    await settle();
+    const saved = readWorkspace(workspaceText(st()))!;
+    jobs.delete(idOf(1));
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    await store2.getState().lookAtJobs();
+    await settle();
+    const after = store2.getState().steps.find((s) => s.id === step)!;
+    expect(after.running).toBeUndefined();
+    expect(after.ran).toMatchObject({ ok: false });
+    expect(store2.getState().sets.some((b) => b.made?.step === step)).toBe(false);
+  });
+
+  it("given an empty set, starts nothing and says so - for each kind of step a plugin does", async () => {
+    const { st } = editor();
+    const empty = st().addSet({ x0: 40, y0: -3, x1: 46, y1: 3 });
+    for (const [kind, by] of [["optimise", "xtb"], ["energy", "xtb"], ["frequencies", "xtb"], ["conformers", "crest"]] as const) {
+      useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+      const step = st().addStep(kind, by, 60, 0);
+      st().connect({ set: empty }, step);
+      await st().runStep(step);
+      expect(asked.started).toEqual([]);
+      expect(st().steps.find((s) => s.id === step)!.ran, kind).toMatchObject({ ok: false });
+      expect(st().steps.find((s) => s.id === step)!.running, kind).toBeUndefined();
+    }
+  });
+
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";

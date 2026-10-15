@@ -51,6 +51,12 @@ they hang from.
   way out of a clash (section 5).
 - **Rings of three to eight**: regular polygons; a four-membered ring a
   square with its sides level and upright (a beta-lactam, an oxetane).
+  An eight-membered ring is the one of these that can hold a trans double
+  bond, which a regular octagon would draw cis: one end of that bond is
+  dented in, across the line between its neighbours, so the ring atoms
+  either side of it fall on opposite sides ((E)-cyclooctene). The end
+  dented is one in no other ring, with the less hanging from it, and never
+  beside another dent.
   Rings fused to each other share a side exactly; a ring fused on two
   sides or more at once (as in pyrene) takes the positions its neighbours
   already fix. Where those cannot make it regular - a five-membered ring
@@ -540,7 +546,11 @@ of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
-  η⁶-benzene, p-cymene - is seen as it is: the metal on its axis, a bond
+  η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
+  the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
+  haptic bond - too: Clean-up gives the engine a star at its centre for
+  those bonds, and they stay drawn from the metal to each atom; the
+  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the

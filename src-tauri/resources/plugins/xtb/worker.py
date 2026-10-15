@@ -25,6 +25,9 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
   `--alpb` a solvent; `--opt` a level, or `--hess`; `-P` the cores;
   `-I` an input file that asks for the machine-readable dump
   (`$write json=true`), `xtbout.json`;
+- a lone atom - an ion of a salt, say - asked to be optimised is not:
+  it has no geometry to optimise, and xtb stops with an error when asked
+  to optimise one. Its energy is worked out where it is instead;
 - an optimisation's path in `xtbopt.log`, Xmol frames whose comment line
   holds the total energy and the gradient norm; `.xtboptok` where it
   converged, `NOT_CONVERGED` where it did not;
@@ -160,6 +163,11 @@ def whole(v, what):
     return int(v)
 
 
+def lone(entry):
+    """Whether an entry is a single atom: nothing to optimise."""
+    return len(elements_of(entry)) == 1
+
+
 def refuse_isotopes(entry):
     """Frequencies of an entry with an isotope, refused, naming it: xtb (6.7.1)
     says it takes an atom's mass (xcontrol(7): $hess, "isotope", "element
@@ -189,7 +197,9 @@ def args_for(step, options, entry, cores):
         level = options.get("level", "normal")
         if level not in LEVELS:
             raise Refused(f"no level is called {level!r}")
-        args += ["--opt", level]
+        # (a lone atom: its energy where it is)
+        if not lone(entry):
+            args += ["--opt", level]
     elif step == "frequencies":
         refuse_isotopes(entry)
         args += ["--hess"]
@@ -209,7 +219,7 @@ def op_prepare(m):
     options = m.get("options") or {}
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
-        reads = [DUMP] + ([PATH, LAST, CONVERGED, NOT_CONVERGED] if step == "optimise" else [])
+        reads = [DUMP] + ([PATH, LAST, CONVERGED, NOT_CONVERGED] if step == "optimise" and not lone(entry) else [])
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
@@ -352,7 +362,10 @@ def results_of(dump, n, log="", charge=0, masses=None, start=None, end=None):
     """The job's results, in Meno's general form: the gap and the dipole, each atom's charge, the vibrations."""
     out = []
     gap = dump.get("HOMO-LUMO gap / eV")
-    if isinstance(gap, (int, float)) and math.isfinite(gap):
+    # (none where there is no HOMO: a molecule with no electrons xtb counts - Na+ in GFN2-xTB - for which it gives the LUMO's energy as the gap)
+    electrons = dump.get("number of electrons")
+    occupied = not isinstance(electrons, (int, float)) or electrons > 0
+    if isinstance(gap, (int, float)) and math.isfinite(gap) and occupied:
         out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": float(gap), "unit": "eV", "digits": 2})
     dipole = dipole_of(dump, log, charge, masses, start, end)
     if dipole is not None:
@@ -445,7 +458,7 @@ def output_of(step, entry, options, files, log):
     frames = [start]
     energies = [total] if total is not None else None
     optimised = None
-    if step == "optimise":
+    if step == "optimise" and n > 1:
         path = frames_of(files.get(PATH) or "", n)
         if not path:
             raise Refused("xtb wrote no optimisation")
@@ -460,6 +473,9 @@ def output_of(step, entry, options, files, log):
         optimised = True if CONVERGED in files else False if NOT_CONVERGED in files else None
     elif total is None:
         raise Refused("xtb wrote no energy")
+    elif step == "optimise":
+        # (a lone atom: where it is, as optimised as it can be)
+        optimised = True
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
     version = str(dump.get("xtb version") or VERSION).split()[0]
     charge = whole(entry.get("charge", 0), "The charge")

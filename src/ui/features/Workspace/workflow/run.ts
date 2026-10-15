@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { addMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
+import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -15,7 +15,7 @@ import { hasChip } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
-import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, GAP, PX } from "./look";
+import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
 import { addSet, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -248,22 +248,63 @@ export function placeResults(
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
   const { molecules: made, aside, holds } = results;
-  // under its name, the molecules in rows, left to right, each as far as it
-  // reaches - with room for its frames chip below it, where it has one - and
-  // the whole in the middle of the set, where its name is wider
+  const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
+  const was = resultOf(doc, step.id);
+  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
+  // (all put on the page at once: one at a time copied the page's molecules again for each)
+  doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
+  const madeBy = { step: step.id, holds };
+  if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside);
+  const id = doc.nextWorkflowId ?? 1;
+  return markMade(addSet(doc, frame, madeBy), id, madeBy, aside);
+}
+
+/**
+ * The room a molecule in a result set takes about its middle: as far as it
+ * reaches (`e`), a quarter of a bond at least each way - and its frames
+ * chip's below it, where it has one, as wide as the chip where that is
+ * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
+ * wider than a water).
+ */
+function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet">, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
-  const sizes = made.map((m, i) => {
-    const e = w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]);
-    return { x0: Math.min(e.x0, -least), x1: Math.max(e.x1, least), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
-  });
+  const half = chipWide(m) / 2;
+  return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
+}
+
+/**
+ * About how wide a molecule's frames chip is, shut, on the page - as
+ * Frames3D writes it: "#3 · 4 / 12 · 0.00 kcal/mol · 62%", its widest
+ * numbers - where it shows always, a molecule of several frames. A single
+ * geometry's shows only while it is pointed at, over what is beside it:
+ * none.
+ */
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet">): number {
+  const n = framesOf(m);
+  if (n < 2) return 0;
+  const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
+  const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
+  const shares = m.shares?.length === n || (m.conformerSet && m.energies?.length === n) ? " · 100%" : "";
+  return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
+}
+
+/**
+ * How a result set's molecules lie in it, each taking the room `rooms` says:
+ * under its name, in rows, left to right, a row going no wider than
+ * `most` (`ROW_MOST`), and the whole in the middle of the set where the set is wider
+ * - its inside at least `least` wide, so that its name reads whole. Each
+ * molecule's place from the set's top left, and the set's width and height.
+ */
+export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = ROW_MOST): { at: { x: number; y: number }[]; width: number; height: number } {
   const places: { x: number; y: number }[] = [];
   let x = 0;
   let y = 0;
   let rowH = 0;
   let wide = 0;
-  sizes.forEach((size) => {
+  rooms.forEach((size) => {
     const d = size.x1 - size.x0;
-    if (x > 0 && x + d > ROW_MOST) {
+    if (x > 0 && x + d > most) {
       y -= rowH + BETWEEN;
       x = 0;
       rowH = 0;
@@ -274,20 +315,56 @@ export function placeResults(
     wide = Math.max(wide, x - BETWEEN);
   });
   const tall = -y + rowH;
-  const inner = Math.max(wide, LEAST_W);
-  const width = inner + 2 * SET_PAD;
-  const height = SET_TOP + tall + SET_PAD;
+  const inner = Math.max(wide, least);
   const middle = (inner - wide) / 2;
+  return {
+    at: places.map((p) => ({ x: SET_PAD + middle + p.x, y: -SET_TOP + p.y })),
+    width: inner + 2 * SET_PAD,
+    height: SET_TOP + tall + SET_PAD,
+  };
+}
 
-  const was = resultOf(doc, step.id);
-  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
-  // (all put on the page at once: one at a time copied the page's molecules again for each)
-  doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y } })));
-  const madeBy = { step: step.id, holds };
-  if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside);
-  const id = doc.nextWorkflowId ?? 1;
-  return markMade(addSet(doc, frame, madeBy), id, madeBy, aside);
+/**
+ * `doc` with each result set whose molecules no longer fit it laid out
+ * again (the maintainer, 2026-10-13): a molecule reaching past its frame
+ * or onto its name, or two over one another, as each is drawn now
+ * (`extentOf`, in its look and turned as `turnOf` says) - a bigger 3D look
+ * chosen, say. The frame widens as far as they need, its top left where it
+ * was, never narrower or shorter than it was; they lie in it as a run lays
+ * them, in the order the run gave them - or, where the set would then
+ * reach over something beside it (the next step's card), in rows no wider
+ * than it was, the set growing downwards. A set they fit, a chemist's set and a set
+ * of pictures are left as they are - and, where `only` says, a set holding
+ * none of those molecules.
+ */
+export function fitResultSets(
+  doc: WorkspaceDocument,
+  extentOf: RunWith["extentOf"],
+  turnOf: (id: number) => Turn3D | undefined = () => undefined,
+  only?: ReadonlySet<number>,
+): WorkspaceDocument {
+  const EPS = 1e-6;
+  for (const set of doc.sets ?? []) {
+    if (!set.made || set.made.holds === "pictures") continue;
+    // (in the order the run gave them - not as they read now: a molecule grown big has its middle lower than its neighbour's)
+    const member = new Set(setMembers(doc, set).molecules);
+    const ms = (doc.molecules3d ?? []).filter((m) => member.has(m.id));
+    if (!ms.length || (only && !ms.some((m) => only.has(m.id)))) continue;
+    // (its reach about its middle, wherever it is: asked of the molecule itself, which a caller may remember it by)
+    const rooms = ms.map((m) => roomOf(m, extentOf(m, turnOf(m.id))));
+    // (each where it is: its reach, and its chip below it)
+    const boxes = ms.map((m, i) => ({ x0: m.at.x + rooms[i].x0, x1: m.at.x + rooms[i].x1, y0: m.at.y + rooms[i].y0 - rooms[i].chip, y1: m.at.y + rooms[i].y1 }));
+    const within = boxes.every((b) => b.x0 >= set.x0 - EPS && b.x1 <= set.x1 + EPS && b.y0 >= set.y0 - EPS && b.y1 <= set.y1 - SET_TOP + EPS);
+    const apart = boxes.every((a, i) => boxes.every((b, j) => j <= i || !(a.x0 < b.x1 - EPS && b.x0 < a.x1 - EPS && a.y0 < b.y1 - EPS && b.y0 < a.y1 - EPS)));
+    if (within && apart) continue;
+    const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
+    const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
+    let lay = laidOut(rooms, least);
+    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
+    doc = moveMolecules3d(doc, ms.map((m, i) => ({ id: m.id, at: { x: set.x0 + lay.at[i].x, y: set.y1 + lay.at[i].y } })));
+    doc = resizeSet(doc, set.id, frameOf(lay));
+  }
+  return doc;
 }
 
 /**
@@ -296,20 +373,29 @@ export function placeResults(
  * keep clear of the page's sets, steps, structures and molecules.
  */
 export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: number, height: number): Frame {
-  const taken: Frame[] = [
-    ...(doc.sets ?? []),
-    ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
-  ];
-  const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).map((m) => m.at)];
-  const clear = (f: Frame) =>
-    !taken.some((t) => t.x0 < f.x1 + BETWEEN && t.x1 > f.x0 - BETWEEN && t.y0 < f.y1 + BETWEEN && t.y1 > f.y0 - BETWEEN) &&
-    !points.some((p) => inside({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN }, p));
   const x = step.x + CARD_W + GAP;
   for (let k = 0; k < 40; k++) {
     const f = frameAt(x, step.y - k * (CARD_H / 2), width, height);
-    if (clear(f)) return f;
+    if (clearOf(doc, f)) return f;
   }
   return frameAt(x, step.y, width, height);
+}
+
+/**
+ * Whether a frame keeps `BETWEEN` clear of what is on the page - its sets,
+ * its steps' cards, its structures and its molecules in 3D - but for the
+ * set `self` and the molecules it holds.
+ */
+function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number> }): boolean {
+  const taken: Frame[] = [
+    ...(doc.sets ?? []).filter((b) => b.id !== self?.set),
+    ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
+  ];
+  const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules.has(m.id)).map((m) => m.at)];
+  return (
+    !taken.some((t) => t.x0 < f.x1 + BETWEEN && t.x1 > f.x0 - BETWEEN && t.y0 < f.y1 + BETWEEN && t.y1 > f.y0 - BETWEEN) &&
+    !points.some((p) => inside({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN }, p))
+  );
 }
 
 /**

@@ -11,6 +11,8 @@ import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
 import { appendParts, partsBounds } from "../../workflow/parts";
 import { proceduresSaved } from "../../workflow/procedures";
+import { fitResultSets, type RunWith } from "../../workflow/run";
+import type { Frame } from "../../workflow/entries";
 import type { EditorState, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
 
@@ -32,6 +34,17 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     ...runs,
     forgetStepJobs: forgetJobs,
     setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => set(patch),
+    fitResultSets: () => {
+      // (each molecule's reach worked out once, however many of the history's states hold it)
+      const style = currentStyle3D();
+      const { turns3d } = get();
+      const reach = new WeakMap<object, Frame>();
+      const extentOf: RunWith["extentOf"] = (m, turn) => {
+        if (!reach.has(m)) reach.set(m, reachOverFrames({ ...m, id: 0 }, style, turn));
+        return reach.get(m)!;
+      };
+      doc.amend((d) => fitResultSets(d, extentOf, (id) => turns3d[id]));
+    },
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       doc.edit("add set", (d) => wf.addSet(d, frame));

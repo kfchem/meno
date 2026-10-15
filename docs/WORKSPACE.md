@@ -34,7 +34,11 @@ hold both.
   - an orthographic camera, drawn only when something changes;
   - instanced bonds and pick targets, troika text, unlit materials;
   - its structure is the tab's document, with undo and saving: one flat
-    model with no notion of separate molecules;
+    model with no notion of separate molecules; undo goes back a thousand
+    steps per document, held to about 100 MB - each step costing the atom
+    and bond lists it copies (`stepCost`) - the oldest dropped first
+    (`DEFAULT_HISTORY_LIMIT`, `DEFAULT_HISTORY_BUDGET`, lib/doc; the
+    maintainer, 2026-10-13 - it was a hundred steps);
   - atoms carry a depth (`Atom.z`) only for cages Clean-up draws in
     perspective.
 - **The 3D viewer** (`ui/features/MoleculeViewer`, retired in stage 1):
@@ -453,6 +457,18 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **A haptic bond binds its ring whole** (2026-10-13): where an atom of
+  the ring it binds is deleted or merged onto another, or it is pasted or
+  taken as part of a structure without its ring, it binds none - a plain
+  bond to its star - rather than name atoms gone, or the ring it was
+  copied from (`endpointsHeld`, on every edit).
+- **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
+  for a molecule: an element with the H it carries - C is methane, O water,
+  N ammonia - or a label Meno knows, written out as the molecule it stands
+  for (THF, DMSO, MeOH, Et3N). A bare atom - Na+, Cl-, a lone metal, a label
+  of nothing known - is not: alone, Meno says that one atom alone has no 3D
+  structure; beside others made - a salt's counter-ions - it is left out,
+  and a notice names it (`standsForMolecule`, `bareWords`, chem/make3d).
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest
