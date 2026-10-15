@@ -75,14 +75,30 @@ describe("a PDB file, read", () => {
 
   it("takes an atom's element from its element columns - or, where they are blank, from how its name is aligned", () => {
     const line = (name: string, element = "") => atomLine({ record: "HETATM", serial: 1, name, x: 0, y: 0, z: 0, element });
-    expect(elementOf(line(" CA", "C"))).toBe("C");
-    expect(elementOf(line("FE", "FE"))).toBe("Fe");
+    const el = (name: string, element = "") => elementOf(line(name, element))?.element;
+    expect(el(" CA", "C")).toBe("C");
+    expect(el("FE", "FE")).toBe("Fe");
     // (a one-letter element's name starts at column 14, a two-letter one's at 13)
-    expect(elementOf(line(" CA"))).toBe("C");
-    expect(elementOf(line("CA"))).toBe("Ca");
-    expect(elementOf(line("FE1"))).toBe("Fe");
-    expect(elementOf(line("1HG"))).toBe("H");
+    expect(el(" CA")).toBe("C");
+    expect(el("CA")).toBe("Ca");
+    expect(el("FE1")).toBe("Fe");
+    expect(el("1HG")).toBe("H");
     expect(elementOf(line(" XX", "QQ"))).toBeUndefined();
+  });
+
+  it("takes D and T, deuterium and tritium, for hydrogen of mass 2 and 3 - from the element columns or the name's alignment alike", () => {
+    const line = (name: string, element = "") => atomLine({ record: "HETATM", serial: 1, name, x: 0, y: 0, z: 0, element });
+    expect(elementOf(line(" D1", "D"))).toEqual({ element: "H", isotope: 2 });
+    expect(elementOf(line(" T1", "T"))).toEqual({ element: "H", isotope: 3 });
+    expect(elementOf(line(" H1", "H"))).toEqual({ element: "H" });
+    // (a one-letter name from column 14, the element columns blank)
+    expect(elementOf(line(" D1"))).toEqual({ element: "H", isotope: 2 });
+    // (from column 13, two letters: an element's, or none - never a deuterium's name read short)
+    expect(elementOf(line("DY"))).toEqual({ element: "Dy" });
+    expect(elementOf(line("TB1"))).toEqual({ element: "Tb" });
+    expect(elementOf(line("DA1"))).toBeUndefined();
+    const atoms = readPdb([line(" O", "O"), line(" D1", "D"), line(" D2", "D")].join("\n")).models[0].atoms;
+    expect(atoms.map((a) => [a.element, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
   });
 
   it("reads a charge as the format writes it, a digit and its sign", () => {
@@ -154,6 +170,34 @@ describe("a PDB file, read", () => {
     expect(entry.unread).toEqual({ REMARK: 2, CRYST1: 1 });
     expect(entry.unreadable).toBe(2);
     expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([2]);
+    // (the atom among them by its line, for the rest of Meno to say)
+    expect(entry.unreadableAtoms).toEqual([{ line: 5, what: "coordinates", resName: "GLY" }]);
+  });
+
+  it("keeps each atom's record that does not read by its line, and what of it does not: where it is, or its element", () => {
+    const entry = readPdb(
+      [
+        "REMARK   1",
+        atomLine({ record: "HETATM", serial: 1, name: " O", x: 0, y: 0, z: 0, element: "O" }),
+        // (a blank z, and a z that is no number)
+        "HETATM    2  H1  HOH A   1       0.957   0.000          1.00  0.00           H",
+        "HETATM    3  H2  HOH A   1      -0.240   0.927     NaN  1.00  0.00           H",
+        // (an element there is none of, given; and none given, nor by the name)
+        atomLine({ record: "HETATM", serial: 4, name: " Q1", x: 3, y: 0, z: 0, element: "QQ" }),
+        atomLine({ record: "HETATM", serial: 5, name: "XX1", x: 6, y: 0, z: 0 }),
+        atomLine({ record: "HETATM", serial: 6, name: " C", x: 9, y: 0, z: 0, element: "C" }),
+      ].join("\n"),
+    );
+    expect(entry.models[0].atoms.map((a) => a.serial)).toEqual([1, 6]);
+    expect(entry.unreadableAtoms).toEqual([
+      { line: 3, what: "coordinates", resName: "HOH" },
+      { line: 4, what: "coordinates", resName: "HOH" },
+      { line: 5, what: "element", resName: "GLY" },
+      { line: 6, what: "name", resName: "GLY" },
+    ]);
+    expect(entry.unreadable).toBe(4);
+    // (each its model's too)
+    expect(entry.models[0].unreadableAtoms).toEqual(entry.unreadableAtoms);
   });
 
   it("knows a line's record name by its first six columns", () => {
@@ -260,6 +304,14 @@ describe("a PDB file, written", () => {
     expect(cols(fe, 77, 80)).toBe("FE3+");
   });
 
+  it("writes a coordinate that rounds to nothing as 0.000, never -0.000", () => {
+    const [line] = writePdb([[{ atoms: [{ el: "C", x: -0.0004, y: -1e-12, z: -0.0005 }], bonds: [] }]]).split("\n");
+    expect(cols(line, 31, 38)).toBe("   0.000");
+    expect(cols(line, 39, 46)).toBe("   0.000");
+    // (one that rounds to a thousandth keeps its sign)
+    expect(cols(line, 47, 54)).toBe("  -0.001");
+  });
+
   it("names an atom by its element alone where its number among them does not fit", () => {
     const carbons = Array.from({ length: 100 }, (_, i) => ({ el: "C", x: i, y: 0, z: 0 }));
     const lines = writePdb([[{ atoms: carbons, bonds: [] }]]).split("\n");
@@ -310,6 +362,24 @@ describe("a PDB file, written", () => {
     ]);
     expect(entry.conect).toEqual([[1, 2], [1, 3]]);
     expect(entry.unreadable).toBe(0);
+  });
+
+  it("writes deuterium and tritium as D and T, named by them, and reads them back as hydrogen of their mass", () => {
+    const heavy: PdbWriteMolecule = { ...water, atoms: water.atoms.map((a, i) => (i ? { ...a, isotope: 2 } : a)) };
+    const lines = writePdb([[heavy, { atoms: [{ el: "H", x: 3, y: 0, z: 0, isotope: 3 }, { el: "H", x: 4, y: 0, z: 0 }], bonds: [] }]]).split("\n");
+    expect(lines.slice(0, 5).map((l) => [cols(l, 13, 16), cols(l, 77, 78)])).toEqual([
+      [" O1 ", " O"],
+      [" D1 ", " D"],
+      [" D2 ", " D"],
+      [" T1 ", " T"],
+      [" H1 ", " H"],
+    ]);
+    const entry = readPdb(lines.join("\n"));
+    expect(entry.models[0].atoms.map((a) => [a.element, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2], ["H", 3], ["H", undefined]]);
+    expect(entry.conect).toEqual([[1, 2], [1, 3]]);
+    // (a mass number the format has no symbol for goes unwritten: a carbon-13 is a carbon)
+    const [c13] = writePdb([[{ atoms: [{ el: "C", x: 0, y: 0, z: 0, isotope: 13 }], bonds: [] }]]).split("\n");
+    expect([cols(c13, 13, 16), cols(c13, 77, 78)]).toEqual([" C1 ", " C"]);
   });
 
   it("is how Meno's sample is written: cholesterol's atoms and bonds", () => {

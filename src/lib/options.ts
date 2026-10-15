@@ -12,6 +12,10 @@ type OptionBase = {
   id: string;
   /** What the chemist reads beside it. */
   label: string;
+  /** Shown only while another option of the role has one of these values (`shownOptions`): a part that applies to one choice only. */
+  when?: { id: string; in: readonly (string | number | boolean)[] };
+  /** Shown folded, under this name, with those beside it that say the same: a choice's parts, which it fills in (`sets`). */
+  group?: string;
 };
 /**
  * What Meno knows of what is written, which an option may start from rather
@@ -21,11 +25,22 @@ type OptionBase = {
  */
 export type Known = "charge" | "multiplicity" | "name";
 /** One of several, each with what it is called. */
-export type ChoiceOption = OptionBase & { type: "choice"; choices: readonly { value: string; label: string }[]; default: string };
+export type ChoiceOption = OptionBase & {
+  type: "choice";
+  /** `sets`: the values of other options that picking it fills in - a preset's parts - each still the chemist's to change. */
+  choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
+  default: string;
+};
 export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known };
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption;
+
+/** The options of `options` that apply, given the values chosen of them and of `context` (other options shown with them, in another form). */
+export function shownOptions<O extends Option>(options: readonly O[], values: OptionValues, context: OptionValues = {}): O[] {
+  const all = { ...context, ...values };
+  return options.filter((o) => !o.when || o.when.in.includes(all[o.when.id] as string | number | boolean));
+}
 
 /** How many choices are shown side by side, each to pick; more, and they are a list to pick from. */
 export const MANY_CHOICES = 5;
@@ -75,6 +90,15 @@ export function rememberable(options: readonly Option[], values: OptionValues): 
 const OPTION_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const KNOWN: readonly Known[] = ["charge", "multiplicity", "name"];
 const label = (v: unknown, most: number): string | null => (typeof v === "string" && v.trim() && v.length <= most ? v.trim() : null);
+/** What picking a choice fills in, read as data: other options' ids, each a value of a plain kind. */
+function setsOf(v: unknown): Record<string, string | number | boolean> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>).slice(0, 20)) {
+    if (OPTION_ID.test(k) && (typeof x === "string" || typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x)))) out[k] = x;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
 /**
@@ -90,12 +114,18 @@ export function acceptOptions(raw: unknown): Option[] {
     const name = label(r?.label, 120);
     if (!id || !name || out.some((o) => o.id === id)) continue;
     const from = KNOWN.find((k) => k === r.from);
+    const whenRaw = r.when as { id?: unknown; in?: unknown } | undefined;
+    const whenId = typeof whenRaw?.id === "string" && OPTION_ID.test(whenRaw.id) ? whenRaw.id : null;
+    const whenIn = Array.isArray(whenRaw?.in) ? (whenRaw!.in as unknown[]).filter((v): v is string | number | boolean => ["string", "number", "boolean"].includes(typeof v)).slice(0, 40) : [];
+    const when = whenId && whenIn.length ? { when: { id: whenId, in: whenIn } } : {};
+    const group = label(r.group, 60) ? { group: label(r.group, 60)! } : {};
     let o: Option | null = null;
     if (r.type === "choice" && Array.isArray(r.choices)) {
       const choices = (r.choices as Record<string, unknown>[])
         .slice(0, 40)
-        .map((c) => ({ value: label(c?.value, 80), label: label(c?.label, 120) }))
-        .filter((c): c is { value: string; label: string } => c.value != null && c.label != null);
+        .map((c) => ({ value: label(c?.value, 80), label: label(c?.label, 120), sets: setsOf(c?.sets) }))
+        .filter((c): c is { value: string; label: string; sets: Record<string, string | number | boolean> | undefined } => c.value != null && c.label != null)
+        .map(({ sets, ...c }) => (sets ? { ...c, sets } : c));
       if (choices.length) o = { id, label: name, type: "choice", choices, default: String(r.default) };
     } else if (r.type === "number") {
       o = {
@@ -113,7 +143,7 @@ export function acceptOptions(raw: unknown): Option[] {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };
     } else if (r.type === "switch") o = { id, label: name, type: "switch", default: r.default === true };
     // (its default, one it takes: else it is none)
-    if (o && fitting(o, o.default) !== undefined) out.push(o);
+    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group });
   }
   return out;
 }

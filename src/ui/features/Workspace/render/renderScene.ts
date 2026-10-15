@@ -26,7 +26,7 @@ export type Motion = "turn" | "frames" | "vibration";
 export type Shape = "fit" | "16:9" | "4:3" | "1:1";
 
 /** What molecules are made of in a render: as their look has it, or glossy, metal, glass, matte, or clay - one light grey, matte. */
-export type MoleculeMaterial = "meno" | "glossy" | "metal" | "glass" | "matte" | "clay";
+export type MoleculeMaterial = "meno" | "glossy" | "metal" | "glass" | "matte" | "clay" | "white";
 /** What surfaces are made of: as the canvas draws them (seen through), or glass, glossy, matte. */
 export type SurfaceMaterial = "meno" | "glass" | "glossy" | "matte";
 
@@ -40,7 +40,14 @@ export type RenderAsk = {
   fps?: number;
   molecules?: MoleculeMaterial;
   surfaces?: SurfaceMaterial;
+  /** How it is lit and outlined, where the renderer is asked to (the look's shading and outlines): for it to make, not for the scene's file. */
+  finish?: Finish;
 };
+
+/** How a picture is shaded - lit as the renderer lights it, or in one band of toon shading - and its outlines. */
+export type Shading = "lit" | "toon";
+export type Outlines = "none" | "thin" | "outer" | "mixed";
+export type Finish = { look: string; shading: Shading; outlines: Outlines; outline: number; outlineColour: "black" | "white" | "grey"; band: number };
 
 /** A molecule in 3D as it is shown: carried as a copy carries it, the surface it shows - placed about its shown frame's centre, in ångströms - and the vibration it shows, each atom's displacement. */
 export type Shown3D = { m: Carried3D; surfaces?: { plus: Mesh; minus: Mesh | null }; move?: readonly number[] };
@@ -401,6 +408,8 @@ export function moleculeMaterial(colour: string, look: Pick<MoleculeLook, "rough
       return { name: `${colour} matte`, colour: linear(colour), metallic: 0, roughness: 1 };
     case "clay":
       return { name: "clay", colour: linear(CLAY), metallic: 0, roughness: 0.9 };
+    case "white":
+      return { name: "white", colour: linear("#ffffff"), metallic: 0, roughness: 1 };
     default:
       return { name: colour, colour: linear(colour), metallic: look.metalness, roughness: look.roughness };
   }

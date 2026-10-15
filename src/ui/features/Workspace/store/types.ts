@@ -38,6 +38,8 @@ export type Atom = EditorAtom & {
   chargeAt?: MarkAt;
   /** Where its R or S was put by hand, likewise (chem/marks). */
   stereoAt?: MarkAt;
+  /** Its R or S shown, where it is a stereocentre: asked for on it, its structure or a selection holding it (docs/EDITOR-2D.md, *R and S*). */
+  stereoShown?: true;
   /** What was typed for its label, where it was read as something else (obz, read as OBz): had back from its menu. */
   typed?: string;
   /** The colour its label - its charge too - is drawn in, where it is given one (#rrggbb). */
@@ -97,6 +99,8 @@ export type Bond = BondChem & {
   dative?: boolean;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
+  /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
+  stereoShown?: true;
   /** The colour it is drawn in, where it is given one (#rrggbb). */
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
@@ -431,11 +435,19 @@ export type Molecule3D = {
    */
   bondsFrom?: "distance";
   /**
-   * Its stereocentres' and double bonds' CIP labels, by atom and bond index;
-   * and which of them its drawing left open - one stereoisomer of several
-   * made from it - so that it is told apart from the others.
+   * How many of its file's atoms it leaves out, their element not read - a
+   * PDB entry's unknown atom (X, UNX), say: said over it (utils/molecule3d
+   * `notesOf`).
    */
-  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] } };
+  atomsLeftOut?: number;
+  /**
+   * Its stereocentres' and double bonds' CIP labels, by atom and bond index;
+   * which of them its drawing left open - one stereoisomer of several made
+   * from it - so that it is told apart from the others; and which are shown
+   * (`shown`), as asked for on it or on them - where none has been, those
+   * its drawing left open (`stereoShownOf`).
+   */
+  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -842,6 +854,14 @@ export type EditorState = {
    * value cannot be set so.
    */
   setMeasure3d: (id: number, measure: number, value: number, gesture?: string) => number | null;
+  /**
+   * The copy a value set on a result made last (`setMeasure3d`): the
+   * molecule it was made from and the copy, by id, and when - for the view
+   * to bring it into sight and light it a moment (Molecules3D); `undone`,
+   * when an undo took it away again - it goes back into the one it came
+   * from - until a redo puts it back.
+   */
+  copied3d: { from: number; copy: number; at: number; undone?: number } | null;
   /** What is chosen of a molecule measured - as the atoms were chosen - and its value opened to be typed. */
   setChosen3d: () => void;
   setHoveredMeasure3d: (h: { id: number; measure: number } | null) => void;
@@ -1184,8 +1204,8 @@ export type EditorState = {
    * document as saved as it was - the look is Settings', not the document's.
    */
   fitResultSets: () => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
-  forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran" | "runs">) => void;
+  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
@@ -1441,6 +1461,12 @@ export type EditorState = {
   noteDoubleClickBond: (atomId: number) => void;
   /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
   takeBackDoubleClickBond: (atomId: number) => void;
+  /**
+   * R and S, E and Z shown - or hidden - on the drawing's atoms and bonds
+   * given, by id, and the molecules in 3D's, by index (all of a molecule's,
+   * given none): one undo step (document `setStereoShown`).
+   */
+  setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
   /** A chain drawn from a new atom on empty space, as one edit. */
   drawStrokeAt: (start: { x: number; y: number }, nodes: readonly StrokeNode[]) => void;
   suppressDoubleClick: (ms?: number) => void;

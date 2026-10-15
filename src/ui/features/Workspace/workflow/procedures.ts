@@ -97,6 +97,23 @@ export const suggestedName = (parts: FlowParts) =>
     .join(", ")
     .slice(0, 80);
 
+/** Names Windows keeps for its devices, which no file may take, whatever its extension. */
+const DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/i;
+
+/**
+ * A file's name for a procedure written out: its name as a file may be
+ * named on every system - no control character, nor \ / : * ? " < > |; not
+ * one of Windows' device names; not ending in a dot or a space; 120
+ * letters at most - with `.meno`, or "Procedure.meno" where nothing is left.
+ */
+export function procedureFileName(name: string): string {
+  const letters = [...name].map((c) => (c < " " || c === "\x7f" || '\\/:*?"<>|'.includes(c) ? " " : c));
+  let stem = letters.join("").replace(/\s+/g, " ").trim();
+  stem = [...stem].slice(0, 120).join("").replace(/[. ]+$/, "");
+  if (DEVICE.test(stem)) stem = `${stem} procedure`;
+  return `${stem || "Procedure"}.meno`;
+}
+
 /** A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing else - its middle where a workspace opened is first seen. */
 export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
   const parts = centredParts(p.parts);

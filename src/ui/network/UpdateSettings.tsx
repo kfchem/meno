@@ -3,6 +3,7 @@ import { revoke, useNetwork } from "../../lib/net/network";
 import {
   checkForUpdate,
   keepUpToDate,
+  readySaid,
   restartIntoUpdate,
   UPDATE_PURPOSE,
   useUpdate,
@@ -17,7 +18,7 @@ function status(u: UpdateState, offline: boolean, allowed: boolean): string {
   if (u.phase === "unavailable") return "This Meno does not update itself: it is a development build, or one Office started.";
   if (u.phase === "checking") return "Looking on GitHub for a newer Meno…";
   if (u.phase === "downloading") return `Downloading Meno ${u.version ?? ""}…`;
-  if (u.phase === "ready") return `Meno ${u.version ?? ""} is ready: it goes in when you quit Meno.`;
+  if (u.phase === "ready") return readySaid(u);
   if (!allowed) return "Meno does not look for newer versions.";
   if (offline) return "Meno works offline: it does not look for newer versions.";
   if (u.phase === "current") return `Up to date${u.checked ? ` - looked ${when(u.checked)}` : ""}.`;
@@ -74,8 +75,9 @@ export default function UpdateSettings() {
         </p>
         {u.phase === "ready" ? (
           <button
+            disabled={u.held > 0}
             onClick={() => void restartIntoUpdate()}
-            className="h-7 px-2.5 rounded-md border border-gh-line text-xs hover:bg-gh-base"
+            className="h-7 px-2.5 rounded-md border border-gh-line text-xs hover:bg-gh-base disabled:opacity-50"
           >
             Restart now
           </button>
