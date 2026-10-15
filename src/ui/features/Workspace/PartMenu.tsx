@@ -245,6 +245,8 @@ export default function PartMenu({
     /** A box drawn on it put on the page as a picture, or copied as one. */
     onPutBox?: () => void;
     onCopyBox?: () => void;
+    /** The coordinates in the words selected, or in the box drawn, shown as structures to place in 3D (lib/io/coordinates). */
+    onStructures?: () => void;
     /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
     onWrite?: () => void;
   };
@@ -253,7 +255,7 @@ export default function PartMenu({
   /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
   onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
-  text?: { icon: boolean; onRead: () => void; onIcon: () => void };
+  text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
@@ -547,6 +549,7 @@ export default function PartMenu({
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
           ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
+          ...(pdf?.onStructures ? [{ name: "3D structures", keys: "", run: pdf.onStructures }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
           ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
@@ -557,6 +560,7 @@ export default function PartMenu({
             ? [
                 { name: "Read", keys: "", run: text.onRead, icon: MENU_ICONS.read },
                 { name: text.icon ? "Show full size" : "Minimize to an icon", keys: "", run: text.onIcon, icon: text.icon ? MENU_ICONS.fullSize : MENU_ICONS.toIcon },
+                ...(text.onStructures ? [{ name: "3D structures", keys: "", run: text.onStructures }] : []),
               ]
             : []),
           del("Delete text"),

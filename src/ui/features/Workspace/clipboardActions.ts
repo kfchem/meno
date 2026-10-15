@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
-import { clipboardFiles, copying, openWorkspacesFrom, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { clipboardFiles, copying, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { isWorkspaceFile } from "./utils/workspace";
 import { styleOf } from "../../../lib/chem/style";
 import { labelPtOf } from "./restyle";
@@ -33,13 +34,16 @@ type Pt = { x: number; y: number };
  *   step. Files copied in the Finder or Explorer go there as they would
  *   dropped there (`openFiles`). A picture on the clipboard and nothing
  *   else - a screenshot, a photograph a browser copied - goes on the page
- *   as a picture.
+ *   as a picture. Text holding coordinates - a paper's supporting
+ *   information, copied from a PDF - is shown as the structures it holds,
+ *   to be placed in 3D (`onCoordinates`; lib/io/coordinates).
  * - `copySmiles` puts the SMILES alone on the clipboard, as plain text.
  */
 export function useClipboardActions(
   store: EditorStore,
   onError: (message: string) => void,
   openFiles?: (files: File[], at: Pt) => Promise<unknown>,
+  onCoordinates?: (structures: CoordinateStructure[], at: Pt) => void,
 ) {
   const busy = useCallback(() => {
     const st = store.getState();
@@ -185,6 +189,14 @@ export function useClipboardActions(
         // (a SMILES laid out in the drawing's style, as Clean-up lays it out)
         const found = await structureOnClipboard(styleOf(store.getState().docStyle));
         if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
+          // (text holding coordinates: the structures in it, shown before they are placed)
+          const text = onCoordinates ? (await readClipboard(["text"]))?.text : undefined;
+          const structures = text ? readCoordinates(text) : [];
+          if (structures.length) {
+            pastes.current = now;
+            onCoordinates!(structures, at);
+            return;
+          }
           // (a picture, and nothing that reads as a structure: a picture on the page)
           const png = await pictureOnClipboard();
           const picture = png ? await pictureToAdd(png[0] === 0xff && png[1] === 0xd8 ? "Pasted picture.jpg" : "Pasted picture.png", png) : null;
@@ -202,7 +214,7 @@ export function useClipboardActions(
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     },
-    [busy, store, onError, openFiles],
+    [busy, store, onError, openFiles, onCoordinates],
   );
 
   const copySmiles = useCallback(

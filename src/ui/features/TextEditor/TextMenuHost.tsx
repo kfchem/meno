@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { swallowPress } from "../Workspace/utils/press";
-import { clipboardHasText, runTextMenu, textMenuItems, useTextMenu } from "./textMenu";
+import { clipboardHasText, runTextMenu, structuresIn, textMenuItems, useTextMenu } from "./textMenu";
 
 export default function TextMenuHost() {
   const at = useTextMenu((s) => s.at);
@@ -61,6 +61,9 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
     };
   }, [close]);
   const items = textMenuItems(target, pasteable);
+  // (3D Structures, on a column's text holding coordinates, where the workspace takes them)
+  const take = useTextMenu((s) => s.structures);
+  const [found] = useState(() => (take ? structuresIn(target) : []));
   return (
     <motion.div
       ref={ref}
@@ -89,6 +92,22 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
           <kbd className={`font-sans text-xs ${item.enabled ? "text-gh-gray" : "text-gh-line"}`}>{item.keys}</kbd>
         </button>
       ))}
+      {take && found.length > 0 && target.text && (
+        <>
+          <div className="my-1 border-t border-gh-line" role="separator" />
+          <button
+            role="menuitem"
+            tabIndex={-1}
+            onClick={() => {
+              close();
+              take(found, target.text!.name);
+            }}
+            className="w-full h-8 px-3 flex items-center text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base outline-none"
+          >
+            3D structures
+          </button>
+        </>
+      )}
     </motion.div>
   );
 }

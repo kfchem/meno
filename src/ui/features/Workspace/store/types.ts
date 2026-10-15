@@ -1189,6 +1189,8 @@ export type EditorState = {
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
+  /** Molecules in 3D put on the page as a set of their own, its middle at `at`: one step. */
+  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;

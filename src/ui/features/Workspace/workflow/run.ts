@@ -255,6 +255,28 @@ export function placeResults(
 }
 
 /**
+ * `doc` with molecules in 3D put on the page as a set of their own - laid
+ * out as a run lays its results, the set's middle at `at`, or where
+ * `placed` moves it, told how large the set is (clear of what is there) -
+ * as a chemist puts a set round them: structures read from coordinates in
+ * a text (lib/io/coordinates), say.
+ */
+export function placeAsSet(
+  doc: WorkspaceDocument,
+  ms: readonly Omit<Molecule3D, "id" | "at">[],
+  asked: { x: number; y: number },
+  w: Pick<RunWith, "extentOf">,
+  placed: (width: number, height: number) => { x: number; y: number } = () => asked,
+): WorkspaceDocument {
+  if (!ms.length) return doc;
+  const lay = laidOut(ms.map((m) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }))));
+  const at = placed(lay.width, lay.height);
+  const frame = frameAt(at.x - lay.width / 2, at.y + lay.height / 2, lay.width, lay.height);
+  doc = addMolecules3d(doc, ms.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
+  return addSet(doc, frame);
+}
+
+/**
  * The room a molecule in a result set takes about its middle: as far as it
  * reaches (`e`), a quarter of a bond at least each way - and its frames
  * chip's below it, where it has one, as wide as the chip where that is

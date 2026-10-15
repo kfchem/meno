@@ -952,6 +952,15 @@ Two kinds of figure, read two ways:
 7. **A figure in a PDF that is a picture is read by the chosen plugin**
    from the same *Read as structure*, without being asked again.
 
+### Coordinates in a PDF (built 2026-10-15)
+
+*3D structures* is in the PDF's menu where words are selected on it, or a
+box is drawn on it: the coordinates in them - a paper's supporting
+information - read where each word lies, a page's two columns one after
+the other and its running heads and feet left out, and shown as the
+structures they hold before any is placed in 3D (docs/FILE-IO.md,
+*Coordinates in a text*). Where there are none, it says so.
+
 ### A figure read (part A, built 2026-10-11)
 
 *Read as structure* is in the PDF's menu when a box is drawn on it (a click
