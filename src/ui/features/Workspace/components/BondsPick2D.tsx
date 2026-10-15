@@ -1,3 +1,4 @@
+import { singleClickPatch } from "../utils/bondKinds";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
@@ -85,22 +86,7 @@ export default function BondsPick2D() {
       });
       return;
     }
-    const curS = (b.stereo ?? "none") as "none" | "up" | "down";
-    const curO = ((b as any).stereoOrient ?? "principle") as
-      | "principle"
-      | "reverse";
-    let nextS: typeof curS = curS;
-    let nextO: typeof curO = curO;
-    if (curS === "none") {
-      nextS = "up";
-    } else if (curS === "up") {
-      nextS = "down";
-    } else if (curS === "down") {
-      nextS = "none";
-      nextO = curO === "principle" ? "reverse" : "principle";
-    }
-    // Apply state
-    updateBond(b.id, { stereo: nextS as any, stereoOrient: nextO as any });
+    updateBond(b.id, singleClickPatch(b));
   }
   function applyDoubleCycle(b: (typeof model.bonds)[number]) {
     if (b.order !== 2) {

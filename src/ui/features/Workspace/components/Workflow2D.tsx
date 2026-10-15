@@ -595,7 +595,7 @@ export default function Workflow2D() {
                 : count.holds === "molecules"
                   ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
                   : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : "Input", count: counted }];
+          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: counted }];
         }),
       ),
     [flow, sets, steps],
@@ -663,6 +663,7 @@ export default function Workflow2D() {
             onGiveDown={(e) => drawFrom(e, { set: b.id })}
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
+            {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
           />
         </div>
       );
