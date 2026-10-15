@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { InstancedMesh } from "three";
 import { boundInstances } from "../utils/instanceSphere";
+import { menoShader } from "../utils/menoShader";
 
 /**
  * Tell three.js that an instanced mesh's instances have moved.
@@ -54,11 +55,11 @@ export function widenedMaterial(
 ): { material: THREE.MeshBasicMaterial; width: { value: number } } {
   const width = { value: 1 };
   const material = new THREE.MeshBasicMaterial(params);
-  material.onBeforeCompile = (shader) => {
+  menoShader(material, `widened-${across}`, (shader) => {
     shader.uniforms.uWidth = width;
-    shader.vertexShader =
-      "uniform float uWidth;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\n  transformed.${across} *= uWidth;`);
-  };
-  material.customProgramCacheKey = () => `widened-${across}`;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uWidth;")
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\n  transformed.${across} *= uWidth;`);
+  });
   return { material, width };
 }
