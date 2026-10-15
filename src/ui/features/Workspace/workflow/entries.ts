@@ -136,6 +136,13 @@ export type SetEntry = {
   xyz: readonly number[];
   /** In hartrees, where it has one. */
   energy?: number;
+  /**
+   * Its charge and spin multiplicity, where the calculation it was read
+   * from said them: the state it was in, which a step given it keeps -
+   * an output's atoms carry no charges of their own.
+   */
+  charge?: number;
+  multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
@@ -162,6 +169,11 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   molecules.forEach((m, i) => {
     const n = framesOf(m);
     const energies = m.energies?.length === n ? m.energies : undefined;
+    // (the state its calculation was in, where one said it)
+    const state = {
+      ...(Number.isInteger(m.calc?.charge) ? { charge: m.calc!.charge! } : {}),
+      ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
+    };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
@@ -172,6 +184,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz: frameXyz(m, f),
         ...(energies ? { energy: energies[f] } : {}),
+        ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         from: m.id,

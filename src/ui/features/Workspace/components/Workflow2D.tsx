@@ -10,10 +10,12 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import { clickedOpen } from "../workflow/cardOpen";
 import { countOf, type Frame } from "../workflow/entries";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { useShownFrames } from "./useShownFrames";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
@@ -32,6 +34,7 @@ type Pt = { x: number; y: number };
 
 /** The least a set is sized to, each way. */
 const LEAST = 48 * PX;
+
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
  * its grey; the accent while it is drawn; the attention colour into a step
@@ -229,6 +232,9 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  // (the step a click last opened, and when: a double-click's second click leaves it open)
+  const opened = useRef<{ step: number; at: number } | null>(null);
+
   // (the card just shut kept over the others while it shrinks back)
   const [shutting, setShutting] = useState<number | null>(null);
   const toldOpen = useRef<((open: number | null) => void) | null>(null);
@@ -246,6 +252,15 @@ export default function Workflow2D() {
   const selFlow = useEditor((s) => s.selFlow);
   const style3d = useStyle3D();
   const { camera, gl, invalidate } = useThree();
+  // the 3D look Settings has - as the workspace opens, and as it changes: the
+  // result sets its molecules no longer fit laid out again (workflow/run
+  // `fitResultSets`), frames and molecules going over to their new places
+  useEffect(() => {
+    store.getState().fitResultSets();
+  }, [store, style3d]);
+  // (each set's frame as it is drawn: on its way to where the document has it)
+  const shownSets = useShownFrames(sets);
+  const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
   // (where the programs installed separately that steps run are: looked for as such steps are put down, opened, changed)
@@ -462,7 +477,11 @@ export default function Workflow2D() {
     if (e.button !== 0) return;
     const open = () => {
       const s = store.getState();
-      s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+      const now = performance.now();
+      const next = clickedOpen(s.openStep, step.id, opened.current, now);
+      if (next === s.openStep) return;
+      if (next === step.id) opened.current = { step: step.id, at: now };
+      s.setWorkflowView({ openStep: next });
     };
     if (asSelected(e, { step: step.id }, open)) return;
     const start = worldOf(e.clientX, e.clientY);
@@ -471,9 +490,7 @@ export default function Workflow2D() {
       e,
       (p) => store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture),
       (moved) => {
-        if (moved) return;
-        const s = store.getState();
-        s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+        if (!moved) open();
       },
     );
   };
@@ -525,7 +542,7 @@ export default function Workflow2D() {
   const gives = (end: WireEnd): Pt | null => {
     if ("set" in end) {
       const b = setById.get(end.set);
-      return b ? setGives(b) : null;
+      return b ? setGives(shownOf(b)) : null;
     }
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
@@ -630,10 +647,11 @@ export default function Workflow2D() {
   const parts = [
     ...sets.map((b) => {
       const info = setInfo.get(b.id)!;
+      const f = shownOf(b);
       return (
-        <div key={`b${b.id}`} style={onLayer(b.x0, b.y1)}>
+        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
           <SetFrame
-            set={b}
+            set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
             hovered={hoveredSet === b.id}
@@ -710,7 +728,7 @@ export default function Workflow2D() {
     }),
     ...sets.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(b), moving: false, color: WIRE, onHover: undefined }] : [];
+      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);

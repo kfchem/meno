@@ -60,10 +60,10 @@ import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
 import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
 import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from "./workflow/procedures";
-import { knownOf, pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
+import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
-import { writtenOf } from "./utils/written";
+import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
@@ -1536,7 +1536,7 @@ function WorkspaceContent({
             known={(ids) => {
               const state = store.getState();
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
-              return chosen.length ? knownOf(writtenOf(chosen)) : {};
+              return chosen.length ? knownOfMolecules(chosen) : {};
             }}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {

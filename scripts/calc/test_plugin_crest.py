@@ -38,6 +38,9 @@ METHANOL = {
     "multiplicity": 1,
 }
 
+# a lone atom, as the ion of a salt is
+SODIUM = {"name": "sodium", "atoms": [{"el": "Na", "x": 1.0, "y": 2.0, "z": 3.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+
 # (after "Coordinate Files", ensemble files: Xmol frames in angstroms, each comment line an energy in hartrees, lowest first)
 ENSEMBLE = """6
        -11.39270131
@@ -119,6 +122,31 @@ class Prepare(unittest.TestCase):
         # (two Xmol frames, one after the other)
         self.assertEqual([ensemble[0], ensemble[8]], ["6", "6"])
 
+    def test_a_lone_atom_has_its_energy_worked_out_by_xtb_not_crest(self):
+        # (CREST stops on one atom: xtb's single point instead, as xtb's "Commandline Usage" has it)
+        jobs = ask("prepare", step="conformers", entries=[METHANOL, SODIUM], options={**defaults(), "solvent": "water"}, cores=4)["jobs"]
+        self.assertEqual([j["program"] for j in jobs], ["crest", "xtb"])
+        lone = jobs[1]
+        self.assertEqual(lone["entries"], [1])
+        self.assertEqual(lone["args"], ["input.xyz", "--gfn", "2", "--chrg", "1", "--uhf", "0", "--alpb", "water", "-P", "4", "-I", "xcontrol"])
+        files = {f["name"]: f["text"] for f in lone["files"]}
+        self.assertEqual(files["xcontrol"].split(), ["$write", "json=true", "$end"])
+        self.assertEqual(files["input.xyz"].splitlines()[2].split(), ["Na", "1.0000000000", "2.0000000000", "3.0000000000"])
+        self.assertEqual(lone["reads"], ["xtbout.json"])
+        # (a two-level search's finer method; an ensemble's lone atoms one job, as other molecules')
+        self.assertEqual(ask("prepare", step="conformers", entries=[SODIUM], options={"method": "gfn2//gfnff"})["jobs"][0]["args"][1:3], ["--gfn", "2"])
+        jobs = ask("prepare", step="optimise", entries=[SODIUM, METHANOL, {**SODIUM, "atoms": [{"el": "Na", "x": 0, "y": 0, "z": 0}]}], options={"method": "gfnff"})["jobs"]
+        self.assertEqual([(j["program"], j["entries"]) for j in jobs], [("xtb", [0, 2]), ("crest", [1])])
+        self.assertEqual(jobs[0]["args"][1], "--gfnff")
+        # (refused as CREST would refuse it)
+        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "conformers", "entries": [SODIUM], "options": {"ewin": 0}}))
+        self.assertFalse(said["ok"])
+
+    def test_the_programs_its_jobs_run_are_those_its_manifest_names(self):
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        for step in manifest["steps"]:
+            self.assertEqual(set(step["programs"]), {"crest", "xtb"})
+
     def test_every_option_offered_is_one_it_takes(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         step = next(s for s in manifest["steps"] if "conformers" in s["kinds"])
@@ -174,6 +202,22 @@ T /K                                  :   298.15
         said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "optimise", "entries": [METHANOL], "options": {}, "files": {"crest_ensemble.xyz": ENSEMBLE}, "log": "", "ended": "done"}))
         self.assertFalse(said["ok"])
 
+    def test_a_lone_atom_comes_back_where_it_was_with_xtb_s_energy(self):
+        dump = json.dumps({"total energy": 0.195485566667, "xtb version": "6.7.1 (abc)"})
+        out = ask("collect", step="conformers", entries=[SODIUM], options={"method": "gfn2//gfnff", "solvent": "water"}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
+        self.assertEqual((out["program"], out["version"], out["method"]), ("xtb", "6.7.1", "GFN2-xTB (ALPB, water)"))
+        self.assertEqual((out["atoms"], out["frames"], out["energies"], out["populations"]), (["Na"], [[1.0, 2.0, 3.0]], [0.195485566667], [1.0]))
+        self.assertEqual((out["charge"], out["multiplicity"]), (1, 1))
+        # (each atom of an ensemble where it was, with the one energy)
+        there = {**SODIUM, "atoms": [{"el": "Na", "x": 0, "y": 0, "z": 0}]}
+        outs = ask("collect", step="optimise", entries=[SODIUM, there], options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"]
+        self.assertEqual([o["frames"] for o in outs], [[[1.0, 2.0, 3.0]], [[0.0, 0.0, 0.0]]])
+        self.assertNotIn("populations", outs[0])
+        # (no dump: why, as xtb said)
+        self.assertEqual(ask("collect", step="conformers", entries=[SODIUM], options={}, files={}, log="a\n[ERROR] it failed\n", ended="failed")["why"], "[ERROR] it failed")
+        said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [SODIUM], "options": {}, "files": {"xtbout.json": "{}"}, "log": "", "ended": "done"}))
+        self.assertFalse(said["ok"])
+
     def test_conformers_of_another_molecule_are_not_taken(self):
         said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [METHANOL], "options": {},
                                          "files": {"crest_conformers.xyz": ENSEMBLE.replace("O    ", "N    ")}, "log": "", "ended": "done"}))
@@ -184,6 +228,13 @@ T /K                                  :   298.15
         said = ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log=log, ended="failed")
         self.assertEqual(said["why"], "Initial geometry optimization failed!")
         self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log="", ended="stopped")["why"], "CREST said nothing")
+        # (a change in topology, the remedies listed after it: what changed)
+        topology = (" xTB Geometry Optimization\nERROR STOP abnormal termination of crest\n\nError termination. Backtrace:\n#0  0x104fa4403\n"
+                    " WARNING! Change in topology detected!\n The topology change was seen in the initial geometry optimization.\n"
+                    " Try either of these options:\n    C) Fix the initial input geometry by introducing bond length constraints\n"
+                    "       or by using a method with fixed topology (GFN-FF).\n")
+        self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log=topology, ended="failed")["why"],
+                         "Change in topology detected! The topology change was seen in the initial geometry optimization.")
         # (ended, but with no conformers written: why, as it said)
         self.assertEqual(ask("collect", step="conformers", entries=[METHANOL], options={}, files={}, log="a\nlast words\n", ended="done")["why"], "last words")
 
