@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, type Style3D } from "../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
 import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
@@ -13,6 +13,8 @@ import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
+import { watchShaderErrors } from "./utils/menoShader";
+import { bentStickGeometry, stickBends } from "./utils/stickBend";
 import { fitShadow, lightBoxOf } from "./utils/shadows3d";
 import { ScreenShade, shadeMarginPx, shadeWith } from "./utils/screenShade";
 
@@ -79,9 +81,11 @@ export function tilesOf(w: number, h: number, most: number): { x: number; y: num
  * covering where they all reach on the page, `pxPerWorld` pixels to the
  * page's unit, transparent round them - each drawn in tiles at most `tile`
  * pixels either way where it is larger. Null where there are none, or no
- * WebGL to draw them with. A style's line round its balls and sticks is as
- * wide as `cssPx` of the picture's pixels to the style's one (a picture at
- * 300 dpi, 300 / 96: as wide in print as on the screen); what lies further
+ * WebGL to draw them with. A style's lines - round its balls and sticks,
+ * and on its balls - are as wide as the style sets them in ångströms, in
+ * proportion to the molecule at any size, never thinner than its least
+ * pixels, `cssPx` of the picture's to one of the screen's (a picture at
+ * 300 dpi, 300 / 96); what lies further
  * back fades toward white, the page's colour, as on the canvas.
  */
 export function rendered3d(
@@ -115,6 +119,7 @@ export function rendered3d(
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
+    watchShaderErrors(renderer);
   } catch {
     return null;
   }
@@ -180,7 +185,7 @@ export function rendered3d(
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
       const bonds = drawn.atoms !== "space" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
-      const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM);
+      const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look]);
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };
       const ball = new THREE.SphereGeometry(1, segments, segments / 2);
@@ -197,7 +202,9 @@ export function rendered3d(
       ball.setAttribute("ballLined", new THREE.InstancedBufferAttribute(Float32Array.from(m.atoms, (a) => (linedBall(a.el, drawn) ? 1 : 0)), 1));
       const circles = ballCircles(drawn);
       ao.lines.amount.value.set(circles >= 2 ? 1 : 0, circles >= 2 ? 1 : 0, circles >= 3 ? 1 : 0);
-      ao.lines.width.value = drawn.ballLinesWidth * cssPx;
+      // (in the balls' own units, the least as many of the picture's pixels as the canvas's, `cssPx` to one)
+      ao.lines.width.value = drawn.ballLinesWidth * WORLD_PER_ANGSTROM;
+      ao.lines.least.value = LINE_LEAST_PX * cssPx;
       ao.lines.colour.value.set(drawn.ballLinesColor).convertLinearToSRGB();
       if (occlusion) {
         setAtomOcclusion(ball, occlusion.atoms);
@@ -211,47 +218,64 @@ export function rendered3d(
       const lined: { of: THREE.InstancedMesh; geometry: THREE.BufferGeometry }[] = [];
       if (drawn.outline > 0) lined.push({ of: atomsMesh, geometry: ball });
       if (lines.length) {
-        const stick = new THREE.CylinderGeometry(1, 1, 1, BOND_SEGMENTS);
         const bondsMat = new THREE.MeshStandardMaterial({ ...finish, color: drawn.bondColor });
         const bo = occludedMaterial(bondsMat, "bonds");
-        const bondsMesh = new THREE.InstancedMesh(stick, bondsMat, lines.length);
-        made.push(stick, bondsMat);
+        made.push(bondsMat);
         fades.push(bo.fade);
-        if (drawn.outline > 0) lined.push({ of: bondsMesh, geometry: stick });
-        // (each half in its atom's colour, where the style colours them so: its two ends')
-        if (drawn.bondColouring === "byAtom") {
-          const ends = [new Float32Array(3 * lines.length), new Float32Array(3 * lines.length)];
-          let k = 0;
-          for (const b of bonds) {
-            for (let j = 0; j < linesOf(b.order); j++, k++) {
-              colour.set(atomColour(m.atoms[b.a1].el, drawn)).toArray(ends[0], 3 * k);
-              colour.set(atomColour(m.atoms[b.a2].el, drawn)).toArray(ends[1], 3 * k);
-            }
+        // (each line's bond, for its ends' colours)
+        const lineBond = bonds.flatMap((b) => Array<typeof b>(linesOf(b.order)).fill(b));
+        // the straight sticks, and apart from them those that curve in to a lone atom (utils/stickBend) - drawn with the rings a curve needs
+        const bent = lines.flatMap((l, k) => (l.bend ? [k] : []));
+        const straight = bent.length ? lines.flatMap((l, k) => (l.bend ? [] : [k])) : lines.map((_, k) => k);
+        for (const [which, stick] of [
+          [straight, new THREE.CylinderGeometry(1, 1, 1, BOND_SEGMENTS)],
+          [bent, bentStickGeometry(BOND_SEGMENTS)],
+        ] as const) {
+          if (!which.length) continue;
+          // (those that bend, their own material - the straight ones' twin - so that straight sticks never pay for the bending)
+          let mat = bondsMat;
+          if (which === bent) {
+            mat = bondsMat.clone();
+            occludedMaterial(mat, "bonds", { bend: true, like: bo });
+            made.push(mat);
           }
-          stick.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(ends[0], 3));
-          stick.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(ends[1], 3));
-          bo.byAtom.value = 1;
+          const bondsMesh = new THREE.InstancedMesh(stick, mat, which.length);
+          made.push(stick);
+          if (drawn.outline > 0) lined.push({ of: bondsMesh, geometry: stick });
+          // (each half in its atom's colour, where the style colours them so: its two ends')
+          if (drawn.bondColouring === "byAtom") {
+            const ends = [new Float32Array(3 * which.length), new Float32Array(3 * which.length)];
+            which.forEach((k, j) => {
+              colour.set(atomColour(m.atoms[lineBond[k].a1].el, drawn)).toArray(ends[0], 3 * j);
+              colour.set(atomColour(m.atoms[lineBond[k].a2].el, drawn)).toArray(ends[1], 3 * j);
+            });
+            stick.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(ends[0], 3));
+            stick.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(ends[1], 3));
+            bo.byAtom.value = 1;
+          }
+          which.forEach((k, j) => {
+            const line = lines[k];
+            const along = line.b.clone().sub(line.a);
+            const length = along.length();
+            const way = length > 1e-9 ? along.divideScalar(length) : up;
+            const at = line.a.clone().add(line.b).multiplyScalar(0.5);
+            bondsMesh.setMatrixAt(j, mtx.compose(at, new THREE.Quaternion().setFromUnitVectors(up, way), new THREE.Vector3(line.r, length, line.r)));
+          });
+          if (which === bent) stick.setAttribute("stickBend", new THREE.InstancedBufferAttribute(stickBends(which.map((k) => lines[k])), 4));
+          if (occlusion) setBondOcclusion(stick, Float32Array.from(which.flatMap((k) => [occlusion.bonds[2 * k], occlusion.bonds[2 * k + 1]])));
+          bondsMesh.castShadow = bondsMesh.receiveShadow = true;
+          group.add(bondsMesh);
         }
-        lines.forEach((line, k) => {
-          const along = line.b.clone().sub(line.a);
-          const length = along.length();
-          const way = length > 1e-9 ? along.divideScalar(length) : up;
-          const at = line.a.clone().add(line.b).multiplyScalar(0.5);
-          bondsMesh.setMatrixAt(k, mtx.compose(at, new THREE.Quaternion().setFromUnitVectors(up, way), new THREE.Vector3(line.r, length, line.r)));
-        });
         if (occlusion) {
-          setBondOcclusion(stick, occlusion.bonds);
           bo.strength.value = drawn.occlusionBy === "atoms" ? drawn.occlusion : 0;
           bo.direct.value = OCCLUSION_DIRECT;
         }
-        bondsMesh.castShadow = bondsMesh.receiveShadow = true;
-        group.add(bondsMesh);
       }
       for (const { of, geometry } of lined) {
-        const o = outlineMaterial();
+        const o = outlineMaterial(of.geometry.getAttribute("stickBend") !== undefined);
         const mesh = new THREE.InstancedMesh(geometry, o.material, of.count);
         mesh.instanceMatrix = of.instanceMatrix;
-        o.width.value = (drawn.outline * cssPx) / pxPerWorld;
+        o.width.value = lineWidth(drawn.outline, WORLD_PER_ANGSTROM, cssPx / pxPerWorld);
         o.material.color.set(drawn.outlineColor);
         fades.push(o.fade);
         made.push(o.material);

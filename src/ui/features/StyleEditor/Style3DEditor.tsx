@@ -29,7 +29,8 @@ import {
 import type { Turn3D } from "../Workspace/store/types";
 import Molecule3DView from "../Workspace/components/Molecule3DView";
 import KeyLight3D from "../Workspace/components/KeyLight3D";
-import { solidOf } from "../Workspace/utils/molecule3d";
+import { watchShaderErrors } from "../Workspace/utils/menoShader";
+import { endsShow, solidOf } from "../Workspace/utils/molecule3d";
 import HideHydrogensAsk from "./HideHydrogensAsk";
 import { useAtLeastWide } from "./sideBySide";
 import { SAMPLE_3D } from "./sample3d";
@@ -108,8 +109,13 @@ export default function Style3DEditor({
                   was={{ value: edited.look[f.key], from: edited.name }}
                   onSet={(v) => setLook(f.key, v as never)}
                   warn={f.key === "hydrogens" && look.hydrogens === "carbonHidden"}
-                  // (what space-filling has none of, or sticks alone: there, but faint)
-                  faint={(look.atoms === "space" && STICKS_ONLY.has(f.key)) || (look.atoms === "sticks" && f.key === "ballScale")}
+                  // (what space-filling has none of, or sticks alone, or bond ends its balls cover: there, but faint)
+                  faint={
+                    (look.atoms === "space" && STICKS_ONLY.has(f.key)) ||
+                    (look.atoms === "sticks" && f.key === "ballScale") ||
+                    (f.key === "doubleEnds" && !endsShow(look, 2)) ||
+                    (f.key === "tripleEnds" && !endsShow(look, 3))
+                  }
                   // (what another setting makes moot - how deep a shade there is none of)
                   off={!!f.unless && look[f.unless.key as keyof typeof look] === f.unless.is}
                 />
@@ -434,7 +440,7 @@ function Preview({ style, look, onDouble }: { style: Style3D; look: Role3D; onDo
   // (far enough back for a molecule twice the size of its space-filling self)
   const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.secondary * 16, [style]);
   return (
-    <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }} onDoubleClick={onDouble}>
+    <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }} onDoubleClick={onDouble} onCreated={({ gl }) => watchShaderErrors(gl)}>
       <ambientLight intensity={style.ambientLight} />
       <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       <Framing style={style} look={look} />

@@ -15,6 +15,7 @@ import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
 import { unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
+import { bentPieces } from "../utils/stickBend";
 import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import type { Carried3D, Molecule3D } from "../store/types";
@@ -223,15 +224,19 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     // each bond's lines (a double bond two, a triple three), as sticks from atom to atom
     if (bondR > 0 && bonds.length) {
       const stick = shapeIn("stick", material(drawn.bondColor, drawn));
-      const linesAt = (x: Sample) =>
+      // (a line curving in to a lone atom, as straight pieces along its curve: a plugin's sticks are straight)
+      const linesIn = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR).map((l) => {
+        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look]).map((l) => bentPieces(l));
+      const linesAt = (x: Sample) =>
+        linesIn(x).flat().map((l) => {
           const along = l.b.clone().sub(l.a);
           const len = along.length();
           return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
         });
-      // (which bond each line is of, a bond's lines side by side)
-      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
+      // (which bond each line - each piece of a curving one - is of, a bond's lines side by side)
+      const pieces = linesIn(samples[0]).map((p) => p.length);
+      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i)).flatMap((b, l) => Array<number>(pieces[l]).fill(b));
       const each = samples.map(linesAt);
       for (let l = 0; l < each[0].length; l++) {
         const at = (s: number) => {

@@ -46,8 +46,9 @@ export type MoleculeLook = {
    */
   biopolymers: "ribbons" | "atoms";
   /**
-   * A thin line round every ball and every stick, as wide on the screen at
-   * any zoom: in pixels, none at 0; and its colour.
+   * A thin line round every ball and every stick, in ångströms - growing
+   * and shrinking with the molecule as it is zoomed, never thinner on the
+   * screen than `LINE_LEAST_PX` - none at 0; and its colour.
    */
   outline: number;
   outlineColor: string;
@@ -59,10 +60,18 @@ export type MoleculeLook = {
   /** The sticks in one colour (`bondColor`), or each half in its atom's colour. */
   bondColouring: "single" | "byAtom";
   /**
+   * How a double bond's lines, and a triple bond's, end at an atom nothing
+   * else joins, where its ball is drawn smaller than they reach - in
+   * practice, sticks alone (`BondEnds`).
+   */
+  doubleEnds: BondEnds;
+  tripleEnds: BondEnds;
+  /**
    * Lines on the balls: great circles about the molecule's own axes - two
    * or three, crossing as a globe's equator and meridians do, turning with
    * it - on every atom's ball, every one's but hydrogen's, or carbon's
-   * alone; as wide on the screen at any zoom, in pixels, and in a colour.
+   * alone; in ångströms wide, as the outline is (`lineWidth`), and in a
+   * colour.
    */
   ballLines: "none" | "two" | "three";
   ballLinesOn: "all" | "heavy" | "carbon";
@@ -73,6 +82,17 @@ export type MoleculeLook = {
   /** Colours of its own, by element (#rrggbb), over the set's (`atomColour`). */
   colours: Readonly<Record<string, string>>;
 };
+
+/**
+ * How a multiple bond's lines end at a lone atom drawn smaller than they
+ * reach: "plain", side by side to its centre; "curve", side by side, then
+ * turning round there as one tube, a half circle - a triple bond's middle
+ * one running straight in - as thick throughout, no ball; "joint", its ball as large as takes all their ends in; "main", one
+ * full stick on the bond's axis, the others thinner beside it and short of
+ * both atoms; "fork", each from where it stands at the other atom straight
+ * to its centre.
+ */
+export type BondEnds = "plain" | "curve" | "joint" | "main" | "fork";
 
 /** What every style shares: the light molecules are seen in, how they turn, a surface's colours, and how smooth they are drawn. */
 export type Scene3D = {
@@ -128,9 +148,11 @@ export const BALL_AND_STICK: MoleculeLook = {
   outlineColor: "#1c1c1c",
   depthFade: 0,
   bondColouring: "single",
+  doubleEnds: "plain",
+  tripleEnds: "plain",
   ballLines: "none",
   ballLinesOn: "all",
-  ballLinesWidth: 1,
+  ballLinesWidth: 0.01,
   ballLinesColor: "#1c1c1c",
   colourSet: "jmol",
   colours: {},
@@ -205,12 +227,12 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       roughness: 0.3,
       metalness: 0.05,
       occlusion: 0.35,
-      outline: 1.5,
+      outline: 0.015,
       outlineColor: "#161616",
       depthFade: 0.5,
       ballLines: "three",
       ballLinesOn: "all",
-      ballLinesWidth: 1,
+      ballLinesWidth: 0.01,
       ballLinesColor: "#161616",
       colourSet: "bright",
     },
@@ -226,7 +248,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       bondColor: "#141414",
       roughness: 0.85,
       occlusion: 0.5,
-      outline: 1.25,
+      outline: 0.02,
       outlineColor: "#000000",
       depthFade: 0.45,
       colourSet: "greys",
@@ -247,8 +269,8 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
   {
     id: "licorice",
     name: "Sticks",
-    description: "Sticks alone, as thick as they are round each atom, each half in its atom's colour.",
-    look: { ...BALL_AND_STICK, atoms: "sticks", bondRadius: 0.16, bondColouring: "byAtom", roughness: 0.45, metalness: 0, occlusion: 0.5 },
+    description: "Sticks alone, as thick as they are round each atom, each half in its atom's colour; a double or triple bond's curving in to a lone atom.",
+    look: { ...BALL_AND_STICK, atoms: "sticks", bondRadius: 0.16, bondColouring: "byAtom", roughness: 0.45, metalness: 0, occlusion: 0.5, doubleEnds: "curve", tripleEnds: "curve" },
   },
   {
     id: "space",
@@ -403,6 +425,19 @@ export function ballCircles(look: Pick<MoleculeLook, "ballLines">): 0 | 2 | 3 {
 
 /** The most a style's depth fade takes something at the very back toward the page (`fadeAt`). */
 export const FADE_MOST = 0.7;
+
+/** The thinnest a style's line - round the balls and sticks, or on the balls - is drawn on the screen, in pixels, however far out: thinner, it would shimmer away. */
+export const LINE_LEAST_PX = 0.5;
+
+/**
+ * A line `angstroms` wide, as wide as it is drawn: in the molecule's own
+ * units, `perAngstrom` of them to the ångström, but never thinner than
+ * `LINE_LEAST_PX` on the screen, where `perPx` of them are a pixel. None
+ * at 0.
+ */
+export function lineWidth(angstroms: number, perAngstrom: number, perPx: number): number {
+  return angstroms > 0 ? Math.max(angstroms * perAngstrom, LINE_LEAST_PX * perPx) : 0;
+}
 
 /**
  * How far toward the page something is faded at `depth` - 0 at the front
@@ -597,6 +632,22 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     kind: "colour",
     unless: { key: "bondColouring", is: "byAtom" },
   },
+  ...(["doubleEnds", "tripleEnds"] as const).map(
+    (key): Style3DField<keyof MoleculeLook> => ({
+      key,
+      group: "Atoms and bonds",
+      label: key === "doubleEnds" ? "Double bond ends" : "Triple bond ends",
+      description: `How a ${key === "doubleEnds" ? "double" : "triple"} bond's sticks end at an atom nothing else joins, where its ball is thinner than they reach.`,
+      kind: "choice",
+      options: [
+        { value: "curve", label: "Curve" },
+        { value: "joint", label: "Joint" },
+        { value: "main", label: "Main stick" },
+        { value: "fork", label: "Fork" },
+        { value: "plain", label: "Plain" },
+      ],
+    }),
+  ),
   {
     key: "hydrogens",
     group: "Atoms and bonds",
@@ -645,13 +696,14 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     key: "outline",
     group: "Lines",
     label: "Outline",
-    description: "A thin line round every ball and every stick, as wide at any zoom.",
+    description: "A thin line round every ball and every stick, in picometres: it grows and shrinks with the molecule.",
     kind: "number",
     min: 0,
-    max: 3,
-    step: 0.25,
-    unit: "px",
-    digits: 2,
+    max: 0.06,
+    step: 0.001,
+    scale: 100,
+    unit: "pm",
+    digits: 1,
   },
   { key: "outlineColor", group: "Lines", label: "Outline colour", description: "The line round the balls and sticks.", kind: "colour" },
   {
@@ -683,13 +735,14 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     key: "ballLinesWidth",
     group: "Lines",
     label: "Their width",
-    description: "As wide on the screen at any zoom.",
+    description: "In picometres, as the outline is: they grow and shrink with the molecule.",
     kind: "number",
-    min: 0.5,
-    max: 3,
-    step: 0.25,
-    unit: "px",
-    digits: 2,
+    min: 0.002,
+    max: 0.06,
+    step: 0.001,
+    scale: 100,
+    unit: "pm",
+    digits: 1,
     unless: { key: "ballLines", is: "none" },
   },
   {

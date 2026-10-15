@@ -6,6 +6,8 @@ import {
   greyOf,
   ballCircles,
   linedBall,
+  lineWidth,
+  LINE_LEAST_PX,
   paler,
   FADE_MOST,
   fadeAt,
@@ -217,8 +219,9 @@ describe("the outlined style, and what it is made of", () => {
   it("draws a dark line round balls and thin near-black sticks, circles on every ball, its back fading, in its own colours", () => {
     const look = look3dPreset("outlined").look;
     expect(look.atoms).toBe("balls");
-    expect(look.outline).toBeGreaterThanOrEqual(1);
-    expect(look.outline).toBeLessThanOrEqual(1.5);
+    // (in ångströms: about a pixel and a half at caffeine's fit, 1 pm to a pixel there)
+    expect(look.outline).toBeGreaterThanOrEqual(0.01);
+    expect(look.outline).toBeLessThanOrEqual(0.02);
     expect(look.bondColouring).toBe("single");
     expect(look.depthFade).toBeGreaterThan(0);
     expect(look.roughness).toBeLessThan(0.5);
@@ -279,9 +282,9 @@ describe("the outlined style, and what it is made of", () => {
     const read = acceptStyle3dChoice({
       primary: "outlined",
       secondary: "space",
-      looks: { outlined: { outline: 2, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#ABCDEF", colours: { C: "#123456", Xx: "#000000", O: "red", N: 3 } } },
+      looks: { outlined: { outline: 0.03, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#ABCDEF", colours: { C: "#123456", Xx: "#000000", O: "red", N: 3 } } },
     });
-    expect(read.looks.outlined).toEqual({ outline: 2, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#abcdef", colours: { C: "#123456" } });
+    expect(read.looks.outlined).toEqual({ outline: 0.03, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#abcdef", colours: { C: "#123456" } });
     const odd = acceptStyle3dChoice({ primary: "outlined", secondary: "balls", looks: { outlined: { outline: 9, depthFade: -1, bondColouring: "rainbow", colours: [] } } });
     expect(odd.looks.outlined).toBeUndefined();
   });
@@ -298,8 +301,8 @@ describe("lines on the balls", () => {
   });
 
   it("are read back from the settings file, within their bounds", () => {
-    const read = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 2, ballLinesColor: "#334455" } } });
-    expect(read.looks.balls).toEqual({ ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 2, ballLinesColor: "#334455" });
+    const read = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 0.02, ballLinesColor: "#334455" } } });
+    expect(read.looks.balls).toEqual({ ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 0.02, ballLinesColor: "#334455" });
     const odd = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: 2, ballLinesOn: "H", ballLinesWidth: 9 } } });
     expect(odd.looks.balls).toBeUndefined();
   });
@@ -363,5 +366,23 @@ describe("the styles built in", () => {
         expect([p.id, f.key, read.looks[p.id]?.[f.key]]).toEqual([p.id, f.key, other]);
       }
     }
+  });
+});
+
+describe("a style's lines", () => {
+  it("are as wide as set in ångströms, in the molecule's units - growing and shrinking with it", () => {
+    // (20 units to the ångström; a pixel 0.001 of them, far in)
+    expect(lineWidth(0.015, 20, 0.001)).toBeCloseTo(0.3, 9);
+    expect(lineWidth(0.015, 40, 0.001)).toBeCloseTo(0.6, 9);
+  });
+  it("are never thinner on the screen than the least pixels, however far out - and none where set to none", () => {
+    // (far out: a pixel a unit, the line 0.3 of them - drawn as the least instead)
+    expect(lineWidth(0.015, 20, 1)).toBeCloseTo(LINE_LEAST_PX, 9);
+    expect(LINE_LEAST_PX).toBe(0.5);
+    expect(lineWidth(0, 20, 1)).toBe(0);
+  });
+  it("in Print: an outline a little thicker than Outlined's, its circles as wide as Outlined's", () => {
+    expect(look3dPreset("print").look.outline).toBeGreaterThan(look3dPreset("outlined").look.outline);
+    expect(look3dPreset("outlined").look.ballLinesWidth).toBe(BALL_AND_STICK.ballLinesWidth);
   });
 });
