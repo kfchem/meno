@@ -1,6 +1,7 @@
 import type { EditorStore } from "../store";
 import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { drawnShape, type ShapeKind } from "../../../../lib/chem/shapes";
+import { traceEndedBy } from "../utils/press";
 
 type Pt = { x: number; y: number };
 
@@ -25,6 +26,8 @@ export function shapeFrom(
   const sy = press.clientY;
   let started = false;
   let tracing = false;
+  // (when the trace began, where, and whether the pointer has gone anywhere since: utils/press#traceEndedBy)
+  let traced = { at: 0, x: 0, y: 0, moved: false };
   let last: { x: number; y: number; shift: boolean } | null = null;
   // (the drag is the shape's, not the view's)
   store.getState().beginPanHold(press.pointerId);
@@ -60,6 +63,7 @@ export function shapeFrom(
   };
   const onMove = (ev: PointerEvent) => {
     if (tracing && ev.buttons !== 0) return;
+    if (tracing && !traced.moved && Math.hypot(ev.clientX - traced.x, ev.clientY - traced.y) >= MOV_PX) traced.moved = true;
     last = { x: ev.clientX, y: ev.clientY, shift: ev.shiftKey };
     if (!started) {
       if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;
@@ -79,11 +83,15 @@ export function shapeFrom(
     // (let go where it was pressed: traced with the button up, from here)
     tracing = true;
     started = true;
+    traced = { at: performance.now(), x: ev.clientX, y: ev.clientY, moved: false };
     window.addEventListener("pointerdown", onDown, true);
   };
   const onDown = (ev: PointerEvent) => {
     swallow(ev);
-    if (ev.button === 0) {
+    const does = traceEndedBy(ev.button, performance.now() - traced.at, traced.moved, DOUBLE_CLICK_MS);
+    // (the second press of the double-click that began it - the icon double-clicked - ends nothing; its click, and the canvas's double-click, are the shape's)
+    if (does === "second click") store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+    else if (does === "end") {
       last = { x: ev.clientX, y: ev.clientY, shift: ev.shiftKey };
       draft();
       finish(true);

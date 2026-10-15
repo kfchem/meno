@@ -10,6 +10,11 @@
 //! The download is checked against the signing key in tauri.conf.json
 //! before anything is installed. A development build, and a Meno Windows
 //! started for Office, neither look nor install.
+//!
+//! On Windows an update waits for Meno's jobs: installing ends every process
+//! of Meno's executable, the jobs' runners among them, so while any job
+//! waits or runs it is installed neither as Meno quits nor by a restart into
+//! it - at a later quit, with none (docs/WORKFLOWS.md, *When Meno closes*).
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +45,9 @@ pub struct UpdateState {
     pub checked: Option<u64>,
     /// Why the last look failed.
     pub error: Option<String>,
+    /// How many jobs wait or run that installing the update downloaded
+    /// would stop: it waits for them (`INSTALL_STOPS_JOBS`).
+    pub held: u32,
 }
 
 /// The updater's state, managed by the app.
@@ -57,7 +65,7 @@ impl Updates {
     pub fn new(current: String) -> Self {
         let phase = if updates_itself() { "idle" } else { "unavailable" };
         Self {
-            state: Mutex::new(UpdateState { current, phase, version: None, notes: None, checked: None, error: None }),
+            state: Mutex::new(UpdateState { current, phase, version: None, notes: None, checked: None, error: None, held: 0 }),
             ready: Mutex::new(None),
             busy: AtomicBool::new(false),
             restart: AtomicBool::new(false),
@@ -75,25 +83,55 @@ fn updates_itself() -> bool {
     !cfg!(debug_assertions)
 }
 
+/// Whether installing an update stops Meno's jobs. On Windows the installer
+/// ends every process of Meno's executable before it puts the new one in
+/// place - the jobs' runners among them (`Meno.exe --job`), and with each
+/// the program it runs, which its job object takes with it (jobs.rs). On a
+/// Mac a runner goes on from the executable it was started from.
+const INSTALL_STOPS_JOBS: bool = cfg!(windows);
+
+/// How many jobs an update waits for: those waiting or running
+/// (`under_way`, counted only where it matters), where installing stops
+/// them; none elsewhere.
+fn waits_for(install_stops_jobs: bool, under_way: impl FnOnce() -> u32) -> u32 {
+    if install_stops_jobs {
+        under_way()
+    } else {
+        0
+    }
+}
+
+/// How many jobs the update downloaded waits for now.
+fn held_now(app: &AppHandle) -> u32 {
+    waits_for(INSTALL_STOPS_JOBS, || crate::jobs::under_way_now(app))
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// Changes the state - with how many jobs an update downloaded waits for,
+/// as they are now - without telling the page.
+fn changed(app: &AppHandle, change: impl FnOnce(&mut UpdateState)) -> UpdateState {
+    let updates = app.state::<Updates>();
+    let mut s = updates.state.lock().unwrap();
+    change(&mut s);
+    s.held = if s.phase == "ready" { held_now(app) } else { 0 };
+    s.clone()
+}
+
 /// Changes the state, and tells the page.
 fn set(app: &AppHandle, change: impl FnOnce(&mut UpdateState)) -> UpdateState {
-    let updates = app.state::<Updates>();
-    let state = {
-        let mut s = updates.state.lock().unwrap();
-        change(&mut s);
-        s.clone()
-    };
+    let state = changed(app, change);
     let _ = app.emit("update:state", state.clone());
     state
 }
 
+/// Where the updater is - and, with an update downloaded, how many jobs it
+/// waits for now: the page asks again while one is ready.
 #[tauri::command]
 pub fn update_state(app: AppHandle) -> UpdateState {
-    app.state::<Updates>().state.lock().unwrap().clone()
+    changed(&app, |_| {})
 }
 
 /// Asks GitHub for a newer Meno, through Meno's network - to the hosts the
@@ -169,17 +207,33 @@ async fn look(app: &AppHandle, hosts: Option<Vec<String>>) -> UpdateState {
 
 /// The user asks to restart into the update downloaded: it is installed as
 /// Meno quits, and Meno started again after it. (The page then closes the
-/// window, as a quit - so that unsaved work is asked about first.)
+/// window, as a quit - so that unsaved work is asked about first.) Refused
+/// while jobs wait or run that installing would stop.
 #[tauri::command]
-pub fn update_restart_after_quit(app: AppHandle) {
+pub fn update_restart_after_quit(app: AppHandle) -> Result<(), String> {
+    let held = set(&app, |_| {}).held;
+    if held > 0 {
+        let jobs = if held == 1 { "a job waits or runs".to_string() } else { format!("{held} jobs wait or run") };
+        return Err(format!("{jobs}: installing the update would stop {}", if held == 1 { "it" } else { "them" }));
+    }
     app.state::<Updates>().restart.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 /// As Meno quits: the update downloaded, if there is one, is installed -
-/// quietly - and Meno started again only if the user asked for that.
+/// quietly - and Meno started again only if the user asked for that. Not
+/// while jobs wait or run that installing would stop: it goes in at a later
+/// quit, downloaded again after Meno next starts.
 pub fn install_on_exit(app: &AppHandle) {
     let updates = app.state::<Updates>();
-    if !updates_itself() {
+    if !updates_itself() || updates.ready.lock().unwrap().is_none() {
+        return;
+    }
+    if held_now(app) > 0 {
+        // (a job begun since the restart was asked for: Meno started again as it was)
+        if updates.restart.load(Ordering::SeqCst) {
+            app.restart();
+        }
         return;
     }
     let Some((update, bytes)) = updates.ready.lock().unwrap().take() else { return };
@@ -268,8 +322,26 @@ mod tests {
         // (tests are built with debug assertions, as a development build is)
         let updates = Updates::new("0.1.0".into());
         let state = updates.state.lock().unwrap();
-        assert_eq!((state.phase, state.current.as_str()), ("unavailable", "0.1.0"));
+        assert_eq!((state.phase, state.current.as_str(), state.held), ("unavailable", "0.1.0", 0));
         assert!(updates.ready.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn an_update_waits_for_jobs_only_where_installing_stops_them() {
+        // (Windows: as many as wait or run - and none, once they are done)
+        assert_eq!(waits_for(true, || 2), 2);
+        assert_eq!(waits_for(true, || 0), 0);
+        // (elsewhere none, and the jobs not even counted)
+        let mut counted = false;
+        assert_eq!(
+            waits_for(false, || {
+                counted = true;
+                3
+            }),
+            0
+        );
+        assert!(!counted);
+        assert_eq!(INSTALL_STOPS_JOBS, cfg!(windows));
     }
 
     #[cfg(windows)]

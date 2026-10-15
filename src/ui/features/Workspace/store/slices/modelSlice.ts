@@ -223,14 +223,15 @@ export const createModelSlice = (
   noteDoubleClickBond: (atomId: number) =>
     set((prev: EditorState) => ({
       ...prev,
-      doubleClickBond: { atomId, depth: doc.history().undoDepth, at: performance.now() },
+      doubleClickBond: { atomId, state: doc.getState(), at: performance.now() },
     })),
 
   takeBackDoubleClickBond: (atomId: number) => {
     const d = get().doubleClickBond;
     set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));
     if (!d || d.atomId !== atomId || performance.now() - d.at > 2 * DOUBLE_CLICK_MS) return;
-    if (doc.history().undoDepth === d.depth) doc.undo();
+    // (the bond's own step, nothing since: the document still as the bond left it)
+    if (doc.getState() === d.state) doc.undo();
   },
 
   notePress: () => {
@@ -268,6 +269,13 @@ export const createModelSlice = (
     if (!atom) return;
     const charge = (atom.charge ?? 0) + step;
     doc.edit("change charge", (d) => ops.setAtomChemistry(d, id, { ...atom, charge }));
+  },
+
+  stepCharges: (ids: Iterable<number>, step: 1 | -1) => {
+    const want = new Set(ids);
+    doc.edit("change charge", (d) =>
+      d.model.atoms.filter((a) => want.has(a.id)).reduce((x, atom) => ops.setAtomChemistry(x, atom.id, { ...atom, charge: (atom.charge ?? 0) + step }), d),
+    );
   },
 
   toggleRadical: (id: number) => {

@@ -51,6 +51,19 @@ describe("three clicks on an atom", () => {
     expect(st().model.atoms).toHaveLength(3);
     expect(doc.history().undoLabel).not.toBe(undefined);
   });
+
+  it("take back nothing but the double-click's bond once the history is full, its depth then the same after any edit", () => {
+    const { st } = editor();
+    for (let i = 0; i < 1001; i++) st().addAtom(i * 3, 50, "O");
+    const a = st().addAtom(0, 0, "C");
+    st().addAtomBonded(a, L, 0, "C", 1);
+    st().noteDoubleClickBond(a);
+    // something else drawn before the third click
+    st().addAtom(100, 100, "N");
+    st().takeBackDoubleClickBond(a);
+    expect(st().model.atoms.some((x) => x.el === "N")).toBe(true);
+    expect(st().model.bonds).toHaveLength(1);
+  });
 });
 
 describe("a stroke's nodes", () => {

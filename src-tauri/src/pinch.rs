@@ -18,7 +18,7 @@
 use tauri::utils::config::{BuildConfig, FrontendDist, WebviewUrl, WindowConfig};
 use tauri::Url;
 #[cfg(windows)]
-use tauri::{AppHandle, WebviewWindowBuilder};
+use tauri::{AppHandle, WebviewWindow, WebviewWindowBuilder};
 #[cfg(windows)]
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings5;
 #[cfg(windows)]
@@ -51,9 +51,9 @@ pub(crate) fn page_url(build: &BuildConfig, window: &WindowConfig, dev: bool) ->
     }
 }
 
-/// The main window made as `config` says, its pinch let through before its page first loads.
+/// The main window made as `config` says, its pinch let through before its page first loads - hidden, to be shown where it was left (windowstate.rs).
 #[cfg(windows)]
-pub fn open_main(app: &AppHandle, config: &WindowConfig) -> tauri::Result<()> {
+pub fn open_main(app: &AppHandle, config: &WindowConfig) -> tauri::Result<WebviewWindow> {
     let page = page_url(&app.config().build, config, tauri::is_dev()).ok_or(tauri::Error::InvalidWebviewUrl("the main window's page"))?;
     let mut blank = config.clone();
     blank.url = WebviewUrl::External(Url::parse("about:blank").expect("about:blank is a URL"));
@@ -67,10 +67,7 @@ pub fn open_main(app: &AppHandle, config: &WindowConfig) -> tauri::Result<()> {
         }
         let _ = core.Navigate(&HSTRING::from(page.as_str()));
     })?;
-    if config.visible {
-        window.show()?;
-    }
-    Ok(())
+    Ok(window)
 }
 
 #[cfg(test)]

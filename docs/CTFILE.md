@@ -98,6 +98,7 @@ holds whole: the file is read (before, either failed as it was read).
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
+| An aromatic bond (type 4) | Written out as a Kekulé structure: every carbon of the ring with one double bond, a pyridine-type N where the ring needs it, a pyrrole-type N-H or a furan O with none. A query atom in the ring - A, Q, *, an atom list - takes one where the ring needs it, as such an N does (until 2026-10-13 it took none, and a ring with a query atom between every two carbons came out with no double bond at all). | The editor draws single, double and triple bonds. |
 | A query bond (types 5 to 8) | The first kind it stands for - single, or double for "double or aromatic" - labelled small beside its middle on the side with more room: S/D, S/A, D/A, Any. | GR-11.2: a bond's annotation by its middle, smaller than an atom's label. Meno's own labels. |
 
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
@@ -500,10 +501,11 @@ and what is sent to the RDKit plugin to draw as a formula or to find bond
 orders and hydrogens for - is written by `writeMolfile3d`, its header
 saying 3D: V2000 wherever it can be, and V3000 past 999 atoms or bonds, a
 coordinate or a symbol wider than V2000's field, or a coordination or
-hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
-atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
-such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
-quote, a double quote, "=", "(" or ")" are written in double quotes, and
-so are those that end in "-", which at a line's end continues it: a
-counter-anion's label beside a complex, Nu- or OTf-, read back as "NuEND"
-when written bare.
+hydrogen bond (types 9 and 10). V3000 gives a charge, a radical and an
+isotope on the atom (CHG=, RAD=, MASS=) where V2000 has M  CHG, M  RAD and
+M  ISO lines, a radical coded as the format codes it: 1 singlet, 2
+doublet, 3 triplet. A PDB entry such as 1STP, 1001 atoms, is past 999.
+V3000 strings that hold a blank, a quote, a double quote, "=", "(" or ")"
+are written in double quotes, and so are those that end in "-", which at a
+line's end continues it: a counter-anion's label beside a complex, Nu- or
+OTf-, read back as "NuEND" when written bare.

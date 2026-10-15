@@ -352,6 +352,43 @@ const METALS = new Set(
 const BRIDGED_TO = new Set(["Li", "Na", "K", "Mg", "Ca", "Zn", "Al", "Ga", "In"]);
 
 /** Whether an atom is a metal's: one ligands are drawn round (docs/LAYOUT-2D.md, section 7). */
+/**
+ * The rings a drawing binds to a metal atom by atom - a bond from the
+ * metal to each of the ring's atoms, as ferrocene or bis(benzene)chromium
+ * is drawn by hand, with no haptic bond to draw - each with its metal, its
+ * atoms and those bonds (by index). Such a ring is bound face-on and is
+ * laid out so, as a haptic bond's ring is (the maintainer, 2026-10-13):
+ * laid out as drawn, every bond to the metal a ring of three, it was a
+ * tangle.
+ */
+export function ringsBondedAtomByAtom(input: LayoutInput): { metal: number; ring: number[]; bonds: number[] }[] {
+  const toMetal = new Map<number, Map<number, number>>();
+  input.bonds.forEach((b, i) => {
+    for (const [m, x] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      if (!isMetal(input.atoms[m]?.el ?? "") || isMetal(input.atoms[x]?.el ?? "")) continue;
+      if (!toMetal.has(m)) toMetal.set(m, new Map());
+      toMetal.get(m)!.set(x, i);
+    }
+  });
+  const out: { metal: number; ring: number[]; bonds: number[] }[] = [];
+  for (const [metal, around] of toMetal) {
+    if (around.size < 3) continue;
+    // (the rings among the atoms bonded to it, the metal left out)
+    const local = [...around.keys()];
+    const at = new Map(local.map((a, k) => [a, k]));
+    const edges = input.bonds.flatMap((b): [number, number][] => (at.has(b.a) && at.has(b.b) ? [[at.get(b.a)!, at.get(b.b)!]] : []));
+    for (const r of smallestRings(local.length, edges)) {
+      if (r.length < 3 || r.length > 8) continue;
+      const ring = r.map((k) => local[k]);
+      out.push({ metal, ring, bonds: ring.map((a) => around.get(a)!) });
+    }
+  }
+  return out;
+}
+
 export function isMetal(el: string): boolean {
   return METALS.has(el);
 }

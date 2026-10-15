@@ -167,10 +167,11 @@ export function withValue(xyz: readonly number[], path: readonly number[], value
   return out;
 }
 
-/** A frame's places, in ångströms: the first frame's from its atoms. */
+/** A frame's places, in ångströms: the first frame's from its atoms - kept to the frames it has, as the frame drawn is (utils/molecule3d `frameOf`). */
 export function placesOf(m: Pick<Molecule3D, "atoms" | "frames">, frame: number): number[] {
-  if (frame <= 0 || !m.frames?.[frame - 1]) return m.atoms.flatMap((a) => [a.x, a.y, a.z]);
-  return [...m.frames[frame - 1]];
+  const f = Math.min(Math.max(0, Math.round(frame)), m.frames?.length ?? 0);
+  if (f === 0) return m.atoms.flatMap((a) => [a.x, a.y, a.z]);
+  return [...m.frames![f - 1]];
 }
 
 /**
@@ -235,7 +236,8 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
  * atoms where the edit put them, its bonds as that frame has them, its
  * drawing, look, measurements and stereo labels kept - and nothing that
  * was the result's: no other frames, energies, populations, numbers or
- * calculation. It says what it was made from (`edited`).
+ * calculation, nor what its file left out. It says what it was made from
+ * (`edited`).
  */
 export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[], stereo: Molecule3D["stereo"], at: { x: number; y: number }): Omit<Molecule3D, "id"> {
   const {
@@ -252,6 +254,7 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
     bondsFrom: _bondsFrom,
     framesLeftOut: _left,
     together: _together,
+    atomsLeftOut: _leftOut,
     stereo: _stereo,
     ...rest
   } = m;

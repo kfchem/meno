@@ -21,8 +21,20 @@
 
 /** Successive edits are merged into one undo step for this long by default. */
 export const DEFAULT_COALESCE_MS = 500;
-/** Undo steps kept per document. */
-export const DEFAULT_HISTORY_LIMIT = 100;
+/**
+ * Undo steps kept per document, the oldest dropped first (the maintainer,
+ * 2026-10-13: a thousand; it was a hundred, which a long session of
+ * drawing ran past).
+ */
+export const DEFAULT_HISTORY_LIMIT = 1000;
+/**
+ * What the history of a document that says what its steps cost
+ * (`DocumentOptions.cost`) holds at most, in what they cost - for a
+ * workspace, the atoms and bonds its steps copy: about 100 MB (the
+ * maintainer, 2026-10-13). A drawing of a few thousand atoms keeps its
+ * thousand steps; a stack of 28,000 about 430. The oldest go first.
+ */
+export const DEFAULT_HISTORY_BUDGET = 25_000_000;
 
 export type EditMeta = {
   /**
@@ -101,6 +113,12 @@ export interface DocumentStore<T> {
    */
   markSaved(state?: T): void;
   history(): HistoryInfo;
+  /**
+   * Whether the present state was gone back or forward to - an undo, a
+   * redo, a gesture dropped - rather than made by an edit: what was on the
+   * page may have moved without the pointer moving.
+   */
+  travelled(): boolean;
 }
 
 type Entry<T> = {
@@ -109,6 +127,8 @@ type Entry<T> = {
   label: string;
   coalesceKey?: string;
   at: number;
+  /** What keeping it costs beyond the step before it (`DocumentOptions.cost`). */
+  cost?: number;
 };
 
 export type DocumentOptions<T = unknown> = {
@@ -121,7 +141,31 @@ export type DocumentOptions<T = unknown> = {
    * keep a structure drawn on inside them).
    */
   settle?: (next: T, before: T) => T;
+  /**
+   * What keeping a state in the history costs beyond the state before it
+   * (none before the first): what it holds that that one does not share.
+   * Given, the history holds no more than `budget` of it, the oldest steps
+   * dropped first - never one to redo, nor the last one to undo.
+   */
+  cost?: (state: T, before: T | undefined) => number;
+  /** How much the history may hold, in what `cost` counts; DEFAULT_HISTORY_BUDGET. */
+  budget?: number;
 };
+
+/** Each state an amend replaced, and what it became (`DocumentStore.amend`). */
+const amendedTo = new WeakMap<object, unknown>();
+
+/**
+ * What a state has become through amends - the state itself if none has
+ * replaced it: something that knows the document by its states (a journal
+ * of turns in 3D) finds them again after an amend, which replaces every
+ * state it changes.
+ */
+export function amendedState<T>(state: T): T {
+  let s: unknown = state;
+  while (typeof s === "object" && s !== null && amendedTo.has(s)) s = amendedTo.get(s);
+  return s as T;
+}
 
 export function createDocument<T>(
   initial: T,
@@ -134,6 +178,26 @@ export function createDocument<T>(
   let present: Entry<T> = { state: initial, label: "open", at: now() };
   let future: Entry<T>[] = [];
   let savedState: T = initial;
+  let travelled = false;
+
+  // (the history kept within what it may hold, where its steps say what
+  // they cost: the oldest dropped first, down to one step to undo; the
+  // steps to redo kept whole)
+  const budget = options.budget ?? DEFAULT_HISTORY_BUDGET;
+  const costOf = (e: Entry<T>, before: Entry<T> | undefined) => (e.cost ??= options.cost!(e.state, before?.state));
+  const bound = () => {
+    if (!options.cost) return;
+    let held = costOf(past[0] ?? present, undefined);
+    for (let i = 1; i < past.length; i++) held += costOf(past[i], past[i - 1]);
+    present.cost = undefined;
+    if (past.length) held += costOf(present, past[past.length - 1]);
+    let drop = 0;
+    while (held > budget && past.length - drop > 1) {
+      held -= past[drop].cost ?? 0;
+      drop++;
+    }
+    if (drop) past = past.slice(drop);
+  };
 
   const listeners = new Set<() => void>();
   const notify = () => {
@@ -162,14 +226,17 @@ export function createDocument<T>(
         present.coalesceKey === meta.coalesceKey &&
         at - present.at <= window;
 
+      travelled = false;
       if (coalesce) {
         // Keep the step that is already on the stack and move its end point,
         // so undo jumps back to before the whole gesture.
         present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        bound();
       } else {
         past.push(present);
         if (past.length > limit) past = past.slice(past.length - limit);
         present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        bound();
       }
       future = [];
       notify();
@@ -181,6 +248,7 @@ export function createDocument<T>(
       if (!previous) return false;
       future.unshift(present);
       present = previous;
+      travelled = true;
       notify();
       return true;
     },
@@ -188,6 +256,7 @@ export function createDocument<T>(
     drop(coalesceKey) {
       if (present.coalesceKey !== coalesceKey || !past.length) return false;
       present = past.pop()!;
+      travelled = true;
       notify();
       return true;
     },
@@ -212,6 +281,7 @@ export function createDocument<T>(
       if (!next) return false;
       past.push(present);
       present = next;
+      travelled = true;
       notify();
       return true;
     },
@@ -221,6 +291,7 @@ export function createDocument<T>(
       future = [];
       present = { state, label, at: now() };
       savedState = state;
+      travelled = false;
       notify();
     },
 
@@ -229,7 +300,11 @@ export function createDocument<T>(
       // (one state held twice - the saved one is one of the history's - amended once, so it is still the same state)
       const amended = new Map<T, T>();
       const next = (state: T) => {
-        if (!amended.has(state)) amended.set(state, updater(state));
+        if (!amended.has(state)) {
+          const to = updater(state);
+          amended.set(state, to);
+          if (typeof state === "object" && state !== null && !Object.is(to, state)) amendedTo.set(state, to);
+        }
         return amended.get(state)!;
       };
       const map = (e: Entry<T>): Entry<T> => {
@@ -241,13 +316,18 @@ export function createDocument<T>(
       present = map(present);
       // (the saved state amended too - but not with what is not saved yet)
       if (!meta.unsaved) savedState = next(savedState);
-      if (!Object.is(present.state, was)) notify();
+      if (!Object.is(present.state, was)) {
+        travelled = false;
+        notify();
+      }
     },
 
     markSaved(state) {
       savedState = state ?? present.state;
       notify();
     },
+
+    travelled: () => travelled,
 
     history() {
       return {

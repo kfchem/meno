@@ -32,7 +32,7 @@ export type Writer = {
   by: string;
 };
 
-/** Which CTfile version a structure is written in: the drawing's - molecules in 3D are written in V2000, or in V3000 where V2000 cannot hold them (lib/chem/molWriter `writeMolfile3d`). */
+/** Which CTfile version a structure is written in: the drawing's - and, in an SD file, its records in 3D too; elsewhere molecules in 3D are written in V2000, or in V3000 where V2000 cannot hold them (lib/chem/molWriter `writeMolfile3d`). */
 const VERSION: WriterOption = {
   about: "drawing",
   id: "version",
@@ -55,7 +55,8 @@ export const WRITERS = {
     takes: "page",
     by: "meno",
     options: [
-      VERSION,
+      // (an SD file's records in 3D are written in it too: shown where the page holds molecules in 3D alone)
+      { ...VERSION, about: undefined },
       {
         id: "frames",
         about: "molecules3d",

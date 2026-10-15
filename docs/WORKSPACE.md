@@ -34,7 +34,11 @@ hold both.
   - an orthographic camera, drawn only when something changes;
   - instanced bonds and pick targets, troika text, unlit materials;
   - its structure is the tab's document, with undo and saving: one flat
-    model with no notion of separate molecules;
+    model with no notion of separate molecules; undo goes back a thousand
+    steps per document, held to about 100 MB - each step costing the atom
+    and bond lists it copies (`stepCost`) - the oldest dropped first
+    (`DEFAULT_HISTORY_LIMIT`, `DEFAULT_HISTORY_BUDGET`, lib/doc; the
+    maintainer, 2026-10-13 - it was a hundred steps);
   - atoms carry a depth (`Atom.z`) only for cages Clean-up draws in
     perspective.
 - **The 3D viewer** (`ui/features/MoleculeViewer`, retired in stage 1):
@@ -453,6 +457,18 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **A haptic bond binds its ring whole** (2026-10-13): where an atom of
+  the ring it binds is deleted or merged onto another, or it is pasted or
+  taken as part of a structure without its ring, it binds none - a plain
+  bond to its star - rather than name atoms gone, or the ring it was
+  copied from (`endpointsHeld`, on every edit).
+- **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
+  for a molecule: an element with the H it carries - C is methane, O water,
+  N ammonia - or a label Meno knows, written out as the molecule it stands
+  for (THF, DMSO, MeOH, Et3N). A bare atom - Na+, Cl-, a lone metal, a label
+  of nothing known - is not: alone, Meno says that one atom alone has no 3D
+  structure; beside others made - a salt's counter-ions - it is left out,
+  and a notice names it (`standsForMolecule`, `bareWords`, chem/make3d).
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest
@@ -985,6 +1001,13 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
+  Its balls are drawn with as many segments as their size on the screen
+  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
+  across, down to 8 under about 8 - within about 0.3 of a pixel of a
+  circle at each, so that the change is not seen; more at once as balls
+  grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
+  183 ms a frame with 32, and turns at 33 ms.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -1093,6 +1116,27 @@ reading in Meno is.
   Space-filling every atom, so a double-click goes from the fold to the
   protein's surface and its pockets, and back. Going over, the ribbon
   shrinks to its line as the atoms grow, and back.
+- **Water.** Water is a residue named HOH or DOD, as the wwPDB's Chemical
+  Component Dictionary names water and heavy water - or one named as a
+  molecular dynamics program writes water in a PDB file, where its atoms
+  are a water's (one oxygen, otherwise at most two hydrogens; a TIP4P or
+  TIP5P model's massless sites have no element and are not read): SOL,
+  GROMACS's (its reference manual, *Topology file formats*:
+  https://manual.gromacs.org/current/reference-manual/topologies/topology-file-formats.html;
+  its `share/top/residuetypes.dat`); WAT, Amber's, as tleap writes it (its
+  tutorial *Adding Water and Ions with tleap*:
+  https://ambermd.org/tutorials/advanced/tutorial8/loop4.php;
+  `residuetypes.dat`); and TIP, CHARMM's TIP3 as a PDB file's residue
+  name (columns 18-20) reads it, and its TIP4 and TIP5 (CHARMM's *io*
+  documentation: https://academiccharmm.org/documentation/version/c48b2/io;
+  `residuetypes.dat`). The atoms are asked as well because SOL is also a
+  dictionary component, L-sorbose. Names that are components and no
+  program documents as water are never water: T3P (thymidine
+  3'-phosphate), SPC, T4P, T5P, OHH and T3H (all in
+  `residuetypes.dat`, all components: https://www.rcsb.org/ligand/T3P and
+  so on); nor H2O, which no program's documentation gives (the maintainer,
+  2026-10-13). A solvated frame of streptavidin (1STP in 3 778 waters)
+  draws the same 103 atoms with its water named HOH, SOL, WAT or TIP3.
 - **Pointing.** A ribbon lights its outline as a molecule's does; pointed
   at, a residue says its name, number and chain. A click on a ribbon
   chooses the residue's backbone atom, which can be measured.
@@ -1210,7 +1254,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   (cut short, or with a place that does not read: never without a word);
   *Atoms in one place* where atoms of it stood within 0.1 Å of another as
   it was read - a damaged file, or none of a molecule's - which are given
-  no bond. Said as *C–H hidden* is:
+  no bond; *1 atom left out*, *3 atoms left out* where its file has atoms
+  whose element does not read - a PDB entry's unknown atom (X, UNX) - and
+  the molecule leaves them out. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,

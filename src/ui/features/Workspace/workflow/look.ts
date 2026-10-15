@@ -60,3 +60,6 @@ export const GAP = 64 * PX;
 export const BETWEEN = 24 * PX;
 /** The room a molecule's frames chip takes below it, where it has one: the chip and the gap above it (Frames3D). */
 export const CHIP = 40 * PX;
+/** A frames chip's text, about how wide a character of it is - generously - and the room either side of it (Frames3D: 11-pixel text, 10 pixels and a border each side). */
+export const CHIP_CHAR = 5.5 * PX;
+export const CHIP_SIDES = 22 * PX;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, movePress, releaseClicksBond, startPress, swallowPress } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -95,6 +95,69 @@ describe("a press swallowed", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("a long press another button joins", () => {
+  it("is joined as a second button goes down with it - the move that says so - and not by the move of the button held alone", () => {
+    // (the primary button held; the right one pressed with it)
+    expect(joinedBy(1, 3)).toBe(true);
+    expect(joinedBy(1, 1 | 4)).toBe(true);
+    expect(joinedBy(1, 1)).toBe(false);
+    // (the held button let go is no chord)
+    expect(joinedBy(1, 0)).toBe(false);
+  });
+
+  it("calls off the press once, on the first move with another button, and listens no more", () => {
+    // (a window of its own, as the test runs with none)
+    const had = (globalThis as { window?: unknown }).window;
+    const win = new EventTarget();
+    (globalThis as { window?: unknown }).window = win;
+    try {
+      const fire = (type: string, buttons: number) => win.dispatchEvent(Object.assign(new Event(type), { buttons }));
+      let chords = 0;
+      const off = onChord(1, () => chords++);
+      fire("pointermove", 1);
+      expect(chords).toBe(0);
+      fire("pointermove", 3);
+      fire("mousedown", 3);
+      fire("contextmenu", 3);
+      expect(chords).toBe(1);
+      // (let go before any chord: nothing heard after)
+      let late = 0;
+      const offLate = onChord(1, () => late++);
+      offLate();
+      fire("pointermove", 3);
+      expect(late).toBe(0);
+      off();
+    } finally {
+      (globalThis as { window?: unknown }).window = had;
+    }
+  });
+});
+
+describe("a press on a chain traced with the button up", () => {
+  it("ends it with the primary button, and lets it go with the other", () => {
+    expect(traceEndedBy(0, 2000, true, 500)).toBe("end");
+    expect(traceEndedBy(2, 2000, true, 500)).toBe("let go");
+  });
+
+  it("takes the second press of the double-click that began it - as it begins, where it began - as nothing", () => {
+    expect(traceEndedBy(0, 120, false, 500)).toBe("second click");
+    // (a click once the pointer has gone on, or a moment later, ends it)
+    expect(traceEndedBy(0, 120, true, 500)).toBe("end");
+    expect(traceEndedBy(0, 800, false, 500)).toBe("end");
+    // (the other button lets it go, whenever)
+    expect(traceEndedBy(2, 120, false, 500)).toBe("let go");
+  });
+});
+
+describe("a click on a panel's toggle", () => {
+  it("toggles on the first click of a double-click only - double-clicked, the panel opens and stays - and from the keyboard", () => {
+    expect(togglesOn(1)).toBe(true);
+    expect(togglesOn(2)).toBe(false);
+    expect(togglesOn(3)).toBe(false);
+    expect(togglesOn(0)).toBe(true);
   });
 });
 

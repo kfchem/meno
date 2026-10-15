@@ -166,8 +166,9 @@ export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<W
 export function fitSets(doc: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
   if (!doc.sets?.length || doc.model === before.model) return doc;
   const was = new Map(before.model.atoms.map((a) => [a.id, a]));
+  const now = new Map(doc.model.atoms.map((a) => [a.id, a]));
   const shaped = structuresOf(doc.model).filter((ids) => {
-    const atoms = ids.map((id) => doc.model.atoms.find((a) => a.id === id)!);
+    const atoms = ids.map((id) => now.get(id)!);
     if (atoms.some((a) => !was.has(a.id))) return true;
     const first = was.get(atoms[0].id)!;
     const dx = atoms[0].x - first.x;
