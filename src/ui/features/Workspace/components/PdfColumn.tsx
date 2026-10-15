@@ -272,7 +272,8 @@ function ColumnPass({
     flightCam.position.set(0, 0, 10);
   }, [cam, flightCam]);
 
-  const clock = useRef({ last: performance.now(), still: 0, levels: new Map<number, number>() });
+  // (and which way the column last went: up, -1, or down, 1 - where its tiles are asked for ahead)
+  const clock = useRef({ last: performance.now(), still: 0, levels: new Map<number, number>(), top: 0, way: 0 });
   useFrame(({ gl: r, scene: page, camera }) => {
     const now = performance.now();
     const c = clock.current;
@@ -285,6 +286,9 @@ function ColumnPass({
     if (pdf && reader.id === pdf.id) {
       const going = reader.step(dt);
       if (reader.pageNow().changed) reader.tell("page");
+      const { top: at } = reader.seen();
+      if (going && at !== c.top) c.way = Math.sign(at - c.top);
+      c.top = at;
       if (going) {
         c.still = now;
         redraw();
@@ -385,6 +389,29 @@ function ColumnPass({
           now,
         ) || asked;
       for (const t of pics.tilesOf(pdf.sha256, i, level)) held.add(t.key);
+    }
+    // the next screen's worth the way it went, after all in view: there when it goes on
+    const way = clock.current.way;
+    if (level && way) {
+      const from = way > 0 ? top + tall : top - tall;
+      const mid = { x: left + reader.width / 2, y: top + tall / 2 };
+      for (const i of pagesInView(l, from, tall)) {
+        const p = l.pages[i];
+        asked =
+          pics.ask(
+            {
+              sha256: pdf.sha256,
+              page: i,
+              size: pdf.pages[i],
+              level,
+              part: { x0: (left - p.x) / l.scale, x1: (left + reader.width - p.x) / l.scale, y0: (from - p.y) / l.scale, y1: (from + tall - p.y) / l.scale },
+              nearness: (ti, tj) => 0.5 + Math.hypot(p.x + ((ti + 0.5) * TILE * l.scale) / level - mid.x, p.y + ((tj + 0.5) * TILE * l.scale) / level - mid.y) * 1e-6,
+              stillSince: () => clock.current.still,
+              ahead: true,
+            },
+            now,
+          ) || asked;
+      }
     }
     pics.held = held;
     if (asked) redraw();
