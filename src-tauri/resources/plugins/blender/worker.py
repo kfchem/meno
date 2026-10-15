@@ -104,6 +104,14 @@ def switch(v, what):
     return v
 
 
+def plugin_home():
+    """The plugin's data folder, where its environment (`venv`) and its files (`files`, Blender's own) are: the folder holding the environment this worker runs in. None where it is run some other way (a test)."""
+    prefix = os.path.abspath(sys.prefix)
+    if os.path.basename(prefix) == "venv" and os.path.isdir(os.path.dirname(prefix)):
+        return os.path.dirname(prefix)
+    return None
+
+
 def settings_of(entry, options):
     """A render's settings, as render.py reads them: what Meno asked for, and the options chosen, each checked."""
     if not isinstance(entry, dict):
@@ -124,6 +132,8 @@ def settings_of(entry, options):
         "samples": whole(options.get("samples", 128), "The samples", 1, 4096),
         "denoise": switch(options.get("denoise", True), "Noise removal"),
         "device": one_of(options.get("device", "auto"), "device", DEVICES),
+        # (where what is learned of this computer is kept: the plugin's data folder, which this worker knows)
+        **({"probe_dir": plugin_home()} if plugin_home() else {}),
         "background": one_of(options.get("background", "transparent"), "background", BACKGROUNDS),
         "colours": one_of(options.get("colours", "neutral"), "colour transform", COLOURS),
         "key": number(options.get("key", 1), "The key light", 0, 10),

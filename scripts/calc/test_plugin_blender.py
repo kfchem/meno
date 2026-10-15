@@ -92,6 +92,29 @@ class Prepare(unittest.TestCase):
         settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
         self.assertEqual((settings["out"], settings["frames"], settings["fps"], settings["quality"], settings["background"]), ("film.mp4", 240, 30, "lossless", "black"))
 
+    def test_the_data_folder_the_worker_runs_from_goes_to_the_job_for_what_is_kept(self):
+        import types
+        fake = types.SimpleNamespace(prefix="/somewhere/uv/plugin-blender/venv")
+        real = worker.sys
+        try:
+            worker.sys = fake
+            home = worker.plugin_home()
+        finally:
+            worker.sys = real
+        # (only where that folder exists: a path that is not there gives none)
+        self.assertIsNone(home)
+        with tempfile.TemporaryDirectory() as d:
+            venv = os.path.join(d, "plugin-blender", "venv")
+            os.makedirs(venv)
+            try:
+                worker.sys = types.SimpleNamespace(prefix=venv)
+                self.assertEqual(worker.plugin_home(), os.path.join(d, "plugin-blender"))
+                said = ask("prepare", step="render", entries=[SCENE], options={})
+            finally:
+                worker.sys = real
+            settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
+            self.assertEqual(settings["probe_dir"], os.path.join(d, "plugin-blender"))
+
     def test_the_device_is_a_three_way_choice_automatic_by_default(self):
         m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
         device = next(o for o in m["roles"][0]["options"] if o["id"] == "device")

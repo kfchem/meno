@@ -276,8 +276,10 @@ uv, no package), and the script Blender runs, `render.py`.
   computer - 16 samples at an eighth of the picture's width and height,
   the graphics processor warmed up first so that what is timed is not its
   kernels' preparing - and keeps the faster, by the processors' names and
-  Blender's version, in `device-probe.json` in the plugin's data folder; a
-  later render takes what is kept. The step's line says *Checking which is
+  Blender's version, in `device-probe.json` in the plugin's data folder - which
+  its worker knows, as the folder holding its environment, and passes to the
+  job, whatever Blender's own path looks like; a later render takes what
+  is kept. The step's line says *Checking which is
   faster...* while it times, and, after, **Rendered on the processor**,
   in small words, where the render was on the processor - by the choice,
   by the timing, or because Blender has no graphics processor it can use

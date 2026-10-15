@@ -231,9 +231,12 @@ def gpu_ready():
 
 
 def data_folder(s):
-    """The plugin's data folder, where Blender - Meno's own - is unpacked under `files`: where what is learned of this computer is kept (docs/RENDER.md). A settings' `probe_file` names the file itself, as a test does."""
+    """Where what is learned of this computer is kept (docs/RENDER.md): `device-probe.json` in the plugin's data folder, which the worker passes (`probe_dir`); else, found from Blender's own path, the folder above its `files`. A settings' `probe_file` names the file itself, as a test does."""
     if s.get("probe_file"):
         return s["probe_file"]
+    # (the plugin's data folder, as its worker passes it: whatever Blender's own path looks like)
+    if s.get("probe_dir"):
+        return os.path.join(s["probe_dir"], "device-probe.json")
     path = os.path.abspath(bpy.app.binary_path)
     while True:
         parent = os.path.dirname(path)
