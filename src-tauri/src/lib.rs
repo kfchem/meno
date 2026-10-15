@@ -21,7 +21,6 @@ mod logfile;
 mod pdf;
 mod net;
 mod opened;
-#[cfg(windows)]
 mod pinch;
 mod pixienv;
 mod plugfiles;
