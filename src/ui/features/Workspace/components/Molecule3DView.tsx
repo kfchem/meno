@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
+import { pageScale } from "../utils/pageScale";
 import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
@@ -976,6 +977,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const valuesPlaced: LabelBox[] = [];
     if (labels.current.size) {
       const w = new THREE.Vector3();
+      // (a value's chip grows and shrinks with the page, from its middle: its size on the screen is its own times that)
+      const chipScale = pageScale(camera.zoom || 1);
       const values: (ValueAt & { id: number; el: HTMLDivElement })[] = [];
       for (const [id, l] of labels.current) {
         const level = measureLevels.current.get(id);
@@ -1000,7 +1003,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           own.length === 2
             ? { x: own[0].y - own[1].y, y: own[1].x - own[0].x }
             : { x: o.x - own.reduce((t, q) => t + q.x, 0) / own.length, y: o.y - own.reduce((t, q) => t + q.y, 0) / own.length };
-        values.push({ o, half: { x: box.w / 2, y: box.h / 2 }, way: Math.hypot(way.x, way.y) > 1e-9 ? way : { x: 0, y: -1 }, was: valuesAbout.current.get(id), id, el: l.el });
+        values.push({ o, half: { x: (box.w / 2) * chipScale, y: (box.h / 2) * chipScale }, way: Math.hypot(way.x, way.y) > 1e-9 ? way : { x: 0, y: -1 }, was: valuesAbout.current.get(id), id, el: l.el });
       }
       const goals = valueSpots(values);
       values.forEach((v, k) => {
