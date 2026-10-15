@@ -221,7 +221,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
   {
     id: "outlined",
     name: "Outlined",
-    description: "Glossy balls with thin dark circles crossing on each, thin near-black sticks, each drawn round with a dark line; what lies further back fades toward the page.",
+    description: "Glossy balls and thin near-black sticks, each drawn round with a dark line; what lies further back fades toward the page.",
     look: {
       ...BALL_AND_STICK,
       ballScale: 0.15,
@@ -233,7 +233,8 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       outline: 0.015,
       outlineColor: "#161616",
       depthFade: 0.5,
-      ballLines: "three",
+      // (the circles on the balls offered, not drawn: the maintainer, 2026-10-15)
+      ballLines: "none",
       ballLinesOn: "all",
       ballLinesWidth: 0.01,
       ballLinesColor: "#161616",

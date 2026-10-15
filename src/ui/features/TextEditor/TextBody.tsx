@@ -15,9 +15,9 @@ import { fieldTarget, useTextMenu } from "./textMenu";
 import { selFrom, selTo } from "../../../lib/text/editing";
 
 /** `write`: a text just made to be written in, given the keys as it shows - `onWrite` told once it has them. */
-type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void };
+type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void; name?: string };
 
-export default function TextBody({ entry, value, onChange, write = false, onWrite }: Props) {
+export default function TextBody({ entry, value, onChange, write = false, onWrite, name = "Text" }: Props) {
   const ed = entry.ed;
   const boxRef = useRef<HTMLDivElement>(null);
   // (typed through an EditContext on the text's own element, where the webview has one; else a textarea)
@@ -128,7 +128,7 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
       ed.pressAt(e.clientX - box.left, e.clientY - box.top, 1, false);
       field.current?.sync();
     }
-    useTextMenu.getState().open(e.clientX, e.clientY, fieldTarget(ed, () => field.current));
+    useTextMenu.getState().open(e.clientX, e.clientY, { ...fieldTarget(ed, () => field.current), text: { whole: () => ed.text, name } });
   };
 
   return (

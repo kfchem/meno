@@ -64,6 +64,80 @@ built* below.
 | PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`) | wwPDB Format v3.3; see *As step 7 was built* |
 | KET | not read | never | Open does not offer it; one dropped says "not supported yet" |
 
+### Coordinates in a text
+
+Built 2026-10-15 (`lib/io/coordinates.ts`; the maintainer's request: a
+paper's supporting information, printed, made into 3D structures with no
+tidying by hand). Text holding atoms' coordinates becomes the structures
+it holds, shown first in a card - each its name, which can be changed, its
+atoms, its formula, its notes and what looks wrong - and those ticked
+placed in 3D as a set of their own, laid out as a step's results are, in
+free space nearest where they were asked for, one step to undo
+(`placeAsSet`, `workflow/run.ts`). The set is named for where they came
+from - the PDF's name and its page or pages (*made-up-si.pdf, p. 2*), the
+text's name, or *Pasted structures* - and can be renamed as a chemist's
+set is (docs/WORKFLOWS.md). Each molecule is bonded by distance, its bonds'
+orders unknown, as an XYZ file's; its chip says its name always, with its
+energy where a note gives one in hartrees, and a click on it opens what
+the text says of it - its charge and multiplicity and its notes (*In the
+text*).
+
+- **Where from.** Pasted on the page, where nothing else on the clipboard
+  reads as a structure (the card offers *Paste as text* as well, to put
+  the words on the page instead); pasted in Quick Add's SMILES field; *3D
+  structures* in a PDF's menu, on the words selected or in a box drawn; and
+  in the menu of a text in the column, on what is selected or the whole
+  text, and of a text's sheet. A text file opened or dropped opens as a
+  text, as ever (the maintainer, 2026-10-15).
+- **An atom** is an element - its symbol as it is written, or its atomic
+  number - and three numbers with a decimal point or an exponent, read from
+  the words in turn rather than the lines, so a line broken anywhere reads
+  whole: `C 1.2 3.4 5.6`; a label of up to four letters and digits
+  (`C1`), a freeze code between (`C 0 x y z`, `C -1 x y z`), its items
+  apart by spaces, tabs or commas, as Gaussian's manual has a molecule
+  specification's line (*Molecule Specification*); `1 C x y z`, numbered;
+  and a row of Gaussian's table of an orientation - centre, atomic number,
+  type, x, y, z. A minus printed as a typographic minus or a dash reads as
+  one.
+- **Left out**: a page's number set alone ("S12", "Page 3 of 40", "- 4 -")
+  and a line of words set again and again (a running head, a journal's
+  foot); from a PDF, besides, a line near a page's top or foot set there on
+  another page too, its numbers aside.
+- **A structure's own**: its name, the line before its atoms nearest them
+  that names something - not a note, a table's heads or numbers alone; its
+  charge and multiplicity ("0 1", "0,1"); its count of atoms, said ("52
+  atoms") or set alone as an XYZ file sets it; and its notes, lines of
+  energies, frequencies or its method ("E = -1234.5678 Hartree", "SCF
+  Done", "Imaginary frequencies: 1") - those written after a structure's
+  atoms and before the next's name are its.
+- **Where one ends**: at words between atoms, and where numbered atoms
+  begin again at 1, or a count set alone is followed by as many atoms. A
+  page's number between two atoms is passed over, unless it counts the
+  atoms after it. Two parts that words set once (a page's foot) part are one
+  where together they bond as one and no atom of either stands where one
+  of the other does: two structures each about the origin stand in each
+  other's place.
+- **Bohr**: where the text says so ("bohr", "a.u.", "atomic units",
+  "Units=Bohr"), the lengths are turned into ångströms (CODATA 2018), and
+  the card says so.
+- **Columns.** From a PDF, each word where it lies: line by line, a page's
+  two columns one after the other, where the words either side of a gap in
+  the page's middle half each make whole atoms on their lines - two at
+  least each side - so that a table's x, y and z set far apart stay one.
+  Pasted text has no places: two atoms whole on a line are two columns read
+  across, each a structure, an atom alone on its line (one column run on
+  past the other) given to the one it bonds to as an atom can (no H bonded
+  twice, no two atoms closer than any bond); atoms of two structures taken
+  in turn are parted every other one, where each part is then whole. Where
+  neither tells them apart, the card says the columns came mixed and that
+  structure cannot be ticked - nothing is guessed.
+- **What looks wrong**, said in the card: a count the text gives that is
+  not the atoms found; an atom more than 4 Å from every other; two atoms
+  closer than 0.6 Å (H2's bond, the shortest, is 0.74).
+- Tested on texts made up for the tests - water, methane, ethanol set out
+  as a supporting information's pages set them, with page ends, two
+  columns, running heads and feet and broken lines; no paper's text.
+
 ### Calculation output
 
 | Kind | Told by | Read by |
@@ -422,11 +496,16 @@ As this part of step 5 was built (#155, from main beside step 3):
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
     written in V2000, or in V3000 where V2000 cannot hold them, as before.
-    The records of molecules in 3D do not follow that choice yet
-    (2026-10-13): each is V2000, or V3000 where V2000 cannot hold it.
+    In an SD file the choice holds for its records in 3D too, and is
+    offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
-    (`> <Energy (Eh)>`).
+    (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
+    isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
+    one shown, or every one - is written with the bonds it has, as the
+    page shows them: a trajectory's bonds, found from distances, form and
+    break as its frames go. A copy's MOL file, a PDB file and what a
+    plugin's writer is given are the same.
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls
@@ -780,15 +859,46 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   - every ATOM and HETATM record, all its fields kept - name, residue,
     chain, occupancy and the rest - though Meno shows only the atoms;
   - an atom's element from its element columns, or - where they are
-    blank - from how its name is aligned, as the format says;
+    blank - from how its name is aligned, as the format says; D and T,
+    deuterium and tritium, are hydrogen of mass 2 and 3, the mass number
+    kept with the atom, as Meno's table holds elements, not isotopes
+    (since 2026-10-13: before, such atoms were left out unsaid);
+  - an ATOM or HETATM record that does not read is never passed over
+    unsaid (since 2026-10-13: before, such atoms were left out without a
+    word):
+    - its coordinates no numbers: the file is damaged, and is not
+      opened, the chemist told how many such records there are and the
+      first by its line;
+    - its element none Meno knows (columns 77-78, or its name where they
+      are blank), in a residue named as water is - HOH, DOD, SOL, WAT,
+      TIP (`namedWater`, lib/chem/biopolymer) - a TIP4P or TIP5P water
+      model's massless site (MW, LP, EP, OM): no atom, and left out;
+    - its element none Meno knows, anywhere else - a wwPDB entry's
+      unknown atom (element X, residue UNX), an old file's name with
+      its element columns blank: the atom is left out and the molecule
+      says how many, *1 atom left out* (`atomsLeftOut`;
+      docs/WORKSPACE.md, *Said over it*);
   - MODELs as one molecule's frames, where each holds the same atoms;
     else each model a molecule of its own;
+  - a residue as the atoms listed one after another with the same chain,
+    sequence number, insertion code and residue name: the format lists a
+    residue's atoms together, its residues in order (ATOM, *Details*).
+    Not every atom in the file of that number: the format numbers
+    residues in four columns (ATOM, resSeq: 23-26), and a file of more
+    than 9,999 of them, or of more than 99,999 atoms - a molecular
+    dynamics frame in its water - numbers them over again, or past the
+    columns. A HELIX or SHEET record's residue is the first so numbered;
   - where an atom is given in more than one place, its residue's first
     alternate location;
   - bonds from CONECT records, and - for pairs CONECT does not speak for
     both atoms of - from distances, as an XYZ file's: a standard
     residue's own bonds are in the Chemical Component Dictionary, not in
-    the file;
+    the file. A serial number two atoms carry names neither, and a CONECT
+    record that names one is not taken: the format numbers a model's atoms
+    in five columns (ATOM, serial: 7-11) and so holds at most 99,999 of
+    them (MODEL, *Details*), and a file of more - a molecular dynamics
+    frame in its water - numbers them over again, or past the columns in
+    a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
   - HELIX and SHEET records (Secondary Structure Section, since lane L5,
     2026-10-10), every field kept, and with them each atom's name and
@@ -803,9 +913,17 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   for it.
 - **What is written** (Export, molecules in 3D only): HETATM records, each
   molecule a residue of its own named UNL - the Chemical Component
-  Dictionary's unknown ligand - in chain A; every bond in CONECT records;
-  a MODEL for each frame where the writer's options ask; END. No HEADER,
-  CRYST1 or MASTER: a file of coordinates, not an entry of the archive.
+  Dictionary's unknown ligand - in chain A; a MODEL for each frame where
+  the writer's options ask; every bond the frame written has in CONECT
+  records - one set of them serves every model, so with a MODEL for each
+  frame, the first frame's; END. No HEADER, CRYST1 or MASTER: a file of
+  coordinates, not an entry of the archive. A coordinate that rounds to
+  nothing in its three decimals is written 0.000, never -0.000, as a MOL
+  file's never has -0.0000. One molecule is written where
+  its file had it; several, one system, as they stand on the page - each
+  turned and placed as it is seen, its ångströms kept - as a plugin's
+  writer is given them (utils/written `writtenAtoms`; *Which molecule*,
+  below), not each where its file had it, on top of one another.
 
 As step 7's writer was built - decided with the maintainer on
 2026-10-06:

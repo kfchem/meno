@@ -22,6 +22,8 @@ export const ORDERS_MARK = "Bond orders unknown";
 export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? "" : "s"} left out`;
 /** What a molecule says where atoms of it stood in one place as it was read: a damaged file, or none of a molecule's. */
 export const TOGETHER_MARK = "Atoms in one place";
+/** What a molecule says of the atoms its file has and it leaves out, their element not read: "1 atom left out", "3 atoms left out". */
+export const atomsLeftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
 
 /** The most atoms a molecule's bond orders are sought for from its shape, at once: more, and they are left unknown. */
 export const MOST_PERCEIVED = 400;
@@ -183,7 +185,7 @@ export function blockOf(m: Pick<Molecule3D, "atoms" | "bonds">, atoms?: readonly
     return a1 != null && a2 != null ? [{ a1, a2, order: b.order >= 1 && b.order <= 3 ? b.order : 1 }] : [];
   });
   const block = writeMolfile3d(
-    which.map((i) => ({ el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}) })),
+    which.map((i) => ({ el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}), ...(m.atoms[i].radical ? { radical: m.atoms[i].radical } : {}) })),
     bonds,
   );
   return { molblock: block, atoms: which };

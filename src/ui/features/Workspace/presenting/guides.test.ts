@@ -11,7 +11,8 @@ describe("guides as things are moved", () => {
     const g = guided(moving, 30.3, 0, [other], 0.5);
     expect(g.dx).toBeCloseTo(30);
     expect(g.dy).toBe(0);
-    expect(g.lines).toEqual([{ x1: 30, y1: 0, x2: 30, y2: 30 }]);
+    // (from end to end of what lines up, and a dozen pixels - twice the reach - past each end)
+    expect(g.lines).toEqual([{ x1: 30, y1: -1, x2: 30, y2: 31 }]);
     // (out of reach: as it was moved, nothing shown)
     const far = guided(moving, 31, 0, [other], 0.5);
     expect(far).toEqual({ dx: 31, dy: 0, lines: [], marks: [] });

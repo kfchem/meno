@@ -680,7 +680,7 @@ Built:
   - On a stack at full size, a drag moves the view, as a drag on empty space does. Held still a moment on its words - as a box begins on empty space, the same ring spreading - the word under the press is selected, and the selection is drawn on from it as the pointer goes. A click selected nothing then (it selects the PDF since: *With the rest of the page*, below); two read the PDF in the column.
   - A press between two lines, or just past a line's end, counts as on the line beside it.
   - The words selected are marked in Meno's light, the same on the stack and in the column.
-  - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too.
+  - Cmd/Ctrl+C copies them, or *Copy* in the PDF's menu; a right-click in the column opens that menu too. They are copied as a PDF viewer copies them (2026-10-15): each of the page's lines on a line of its own, a blank line where the next stands further below than a line is tall (a paragraph's end, a heading set apart), a word broken at a line's end whole, and each page's on from the last's. Before, a line's end was copied as a space.
   - Selecting words lets the drawing's selection go. Esc, or a click elsewhere, lets the words go.
 - **Searching**, with Cmd/Ctrl+F or *Find in PDF…* in the right-click menu on empty space.
   - A field opens over the top of the column, holding the words selected, if any.
@@ -951,6 +951,15 @@ Two kinds of figure, read two ways:
    the picture, no more.
 7. **A figure in a PDF that is a picture is read by the chosen plugin**
    from the same *Read as structure*, without being asked again.
+
+### Coordinates in a PDF (built 2026-10-15)
+
+*3D structures* is in the PDF's menu where words are selected on it, or a
+box is drawn on it: the coordinates in them - a paper's supporting
+information - read where each word lies, a page's two columns one after
+the other and its running heads and feet left out, and shown as the
+structures they hold before any is placed in 3D (docs/FILE-IO.md,
+*Coordinates in a text*). Where there are none, it says so.
 
 ### A figure read (part A, built 2026-10-11)
 

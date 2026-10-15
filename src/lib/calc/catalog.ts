@@ -51,6 +51,8 @@ export type PythonPlugin = ReaderBase &
     writes: readonly WriteDecl[];
     /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
+    /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
+    roleLooks: Partial<Record<RoleId, readonly string[]>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
@@ -96,6 +98,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     installed: m.installed,
     downloads: m.downloads,
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
+    roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     profile: `plugin-${m.id}`,
     lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,

@@ -31,7 +31,7 @@ import type { OptionValues } from "../../../lib/options";
 import { extensionOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
-import { writtenOf } from "./utils/written";
+import { writtenAtoms, writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
@@ -147,7 +147,8 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
   // in 3D - the frame it shows, where its file had it, or each of its
-  // frames, numbered, with its energy where it is known
+  // frames, numbered, with its energy where it is known - each frame with
+  // the bonds it has
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
     const name = m.name ? stem(m.name) : title;
     // (each frame's energy, where it is known: the frame shown's too)
@@ -155,11 +156,11 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       const energy = m.energies?.[i];
       return energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "";
     };
-    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), m.bonds, { title: name }) + data(m.frame ?? 0) + "$$$$\n"];
+    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       // (each frame with the bonds it has, where they go frame by frame)
-      return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}` }) + data(i) + "$$$$\n";
+      return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
@@ -174,17 +175,22 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
  * Molecules in 3D as a PDB file holds them (lib/chem/pdb): each a residue of
  * its own, in the frame it shows - or, every frame, a model for each frame
  * there is, each molecule in its frame of that number, or in the frame it
- * shows where it has none of that number. Throws where there are none.
+ * shows where it has none of that number - with the bonds that frame has.
+ * One where its file had it; several, one system, as they stand on the
+ * page, each turned and placed as it is seen, as a writer is given them
+ * (utils/written `writtenAtoms`). The file's CONECT records serve every
+ * model: the first model's bonds. Throws where there are none.
  */
 export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}): string {
   if (!molecules.length) throw new Error("There are no molecules in 3D to write: a PDB file holds no drawing.");
   const framesOf = (m: Carried3D) => 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
   const count = options.frames === "all" ? greatest(molecules.map(framesOf)) : 1;
+  const placed = molecules.length > 1;
   const models = Array.from({ length: count }, (_, i) =>
-    molecules.map((m) => ({
-      atoms: frameAtoms(m, options.frames === "all" && i < framesOf(m) ? i : m.frame),
-      bonds: m.bonds,
-    })),
+    molecules.map((m) => {
+      const frame = options.frames === "all" && i < framesOf(m) ? i : m.frame;
+      return { atoms: writtenAtoms(m, frame, placed), bonds: bondsAt(m, frame) };
+    }),
   );
   return writePdb(models);
 }
@@ -201,6 +207,7 @@ function frameAtoms(m: Carried3D, frame = 0): Atom3D[] {
     y: xyz[3 * i + 1],
     z: xyz[3 * i + 2],
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     ...(a.isotope ? { isotope: a.isotope } : {}),
   }));
 }

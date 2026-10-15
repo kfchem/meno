@@ -17,10 +17,19 @@ const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 /** A frame with its corners in order: x0 left of x1, y0 below y1. */
 export const framed = (f: Frame): Frame => ({ x0: Math.min(f.x0, f.x1), y0: Math.min(f.y0, f.y1), x1: Math.max(f.x0, f.x1), y1: Math.max(f.y0, f.y1) });
 
-/** `doc` with a set round `frame`; it is numbered `nextWorkflowId`. Made by a step, it says so. */
-export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet["made"]): WorkspaceDocument {
+/** `doc` with a set round `frame`; it is numbered `nextWorkflowId`. Made by a step, it says so; named, it has the name. */
+export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet["made"], name?: string): WorkspaceDocument {
   const id = idOf(doc);
-  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), { id, ...framed(frame), ...(made ? { made } : {}) }] };
+  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), { id, ...framed(frame), ...(made ? { made } : {}), ...(name ? { name } : {}) }] };
+}
+
+/** A chemist's set named anew - a step's set is named for what made it - its name taken away where the new one is empty. */
+export function renameSet(doc: WorkspaceDocument, id: number, name: string): WorkspaceDocument {
+  const set = doc.sets?.find((b) => b.id === id);
+  if (!set || set.made || (set.name ?? "") === name.trim()) return doc;
+  const { name: _was, ...rest } = set;
+  const next = name.trim() ? { ...rest, name: name.trim() } : rest;
+  return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? next : b)) };
 }
 
 function withSet(doc: WorkspaceDocument, id: number, change: (b: WorkflowSet) => WorkflowSet): WorkspaceDocument {
@@ -166,8 +175,9 @@ export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<W
 export function fitSets(doc: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
   if (!doc.sets?.length || doc.model === before.model) return doc;
   const was = new Map(before.model.atoms.map((a) => [a.id, a]));
+  const now = new Map(doc.model.atoms.map((a) => [a.id, a]));
   const shaped = structuresOf(doc.model).filter((ids) => {
-    const atoms = ids.map((id) => doc.model.atoms.find((a) => a.id === id)!);
+    const atoms = ids.map((id) => now.get(id)!);
     if (atoms.some((a) => !was.has(a.id))) return true;
     const first = was.get(atoms[0].id)!;
     const dx = atoms[0].x - first.x;

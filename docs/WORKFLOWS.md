@@ -390,7 +390,12 @@ Conformers go through a workflow as any set does (decided):
   with nothing in it, *Empty*. Its name is *Input* where the chemist made
   it, else what its step made, as its kind says it - an option's value in
   it where the kind says one (*Within 3 kcal/mol*, *Populations at
-  298.15 K*).
+  298.15 K*). Structures placed from coordinates in a text make a set named
+  for where they came from - the PDF's name and its page or pages
+  (*made-up-si.pdf, p. 2*), the text's name, or *Pasted structures*
+  (docs/FILE-IO.md, *Coordinates in a text*; 2026-10-15). Two clicks on a
+  chemist's set's name change it, Enter keeping the new one and Escape the
+  old; emptied, it is *Input* again. A step's set is named for its step.
 
 ## Running
 
@@ -398,11 +403,11 @@ Conformers go through a workflow as any set does (decided):
 
 | From | What |
 | --- | --- |
-| A step's menu (right-click) | *Run* - this step, and first any step before it that is not done: not run, changed, failed or stopped |
+| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step from that one on |
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
-| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - in order |
+| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order |
 | | *Stop all* - while any runs |
 
 No key starts a run (decided: menus, at first). Steps run in the order
@@ -506,6 +511,14 @@ states an undo goes back to as well.
 - **Jobs go on** (decided). Closing with jobs waiting or running says how
   many will go on, and asks nothing else; those waiting start in turn,
   without Meno.
+- **An update waits for them** (Windows). Installing a newer Meno ends
+  every process of Meno's executable, the jobs' runners among them, and
+  with each the program it runs. So while any job - of any workspace -
+  waits or runs, an update downloaded is installed neither as Meno quits
+  nor by *Restart now*: the notice and Settings say it waits, and for how
+  many jobs. It goes in at a quit with none, downloaded again after Meno
+  next starts. On a Mac a runner goes on from the Meno it was started
+  from, and an update goes in as Meno quits.
 - **Opened again**, a workspace looks at its jobs: done - their results
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was

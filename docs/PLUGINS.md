@@ -163,7 +163,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
-| `roles` | list of `{role, programs?, options?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*). |
+| `roles` | list of `{role, programs?, options?, looks?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it can make (`looks`: ids of Meno's looks, docs/RENDER.md - a look no added plugin can make is not offered). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
@@ -392,8 +392,13 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 - **A role's options** - a conformer search's method and its settings, a
   calculation input's method and basis - are declared by the plugin in a
   general form: a choice, a number, a text or a switch, each with a label
-  and a default. Meno draws them and remembers the chemist's last
-  choices. The form, its drawing and the remembering are in place, used
+  and a default. An option may be shown only while another has one of some
+  values (`when: {id, in}`: a band's size, only under toon shading), may be
+  folded with others under a name (`group`), and a choice may fill in other
+  options' values when picked (`sets`: a preset's parts, each still the
+  chemist's to change); the rule may name an option of Meno's own form
+  beside the plugin's (Render's shading). Meno draws them and remembers
+  the chemist's last choices. The form, its drawing and the remembering are in place, used
   first by Meno's own writers in Export (`lib/options.ts`, FILE-IO.md).
   A plugin declares a role's options in its manifest, with the role
   (`roles: [{role, options}]`, for a role that takes them); Settings draws
@@ -407,6 +412,16 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
   when its chip is opened (the maintainer, 2026-10-07).
+- **Equivalent atoms keep their places across RDKit's conformers**
+  (2026-10-15): an embedding does not say which of a CH2's two hydrogens,
+  or of an isopropyl's two methyls, is which, so the plugin lays each
+  equivalent group - neighbours of one atom of the same graph rank, each
+  the root of a branch joined to the rest through it, and a pendant ring
+  symmetric about its bond - as it is in the lowest conformer, by whole
+  branches (handedness first, then the fit in the parent's frame), before it
+  answers. Only conformers RDKit made are touched: not a calculation's,
+  not another program's, not a single structure; no heavy atom moves but
+  as a whole equivalent branch; and no whole-molecule symmetry is searched.
 
 ## When plugins run
 

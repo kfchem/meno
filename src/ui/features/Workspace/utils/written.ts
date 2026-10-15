@@ -3,7 +3,7 @@ import type { Known } from "../../../../lib/options";
 import type { Carried3D } from "../store/types";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D } from "../style3d";
-import { heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { bondsAt, heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
 
 /** A molecule in 3D's atoms' places in one of its frames, where its file had them, in ångströms: x, y, z of each. */
 function frameXyz(m: Carried3D, frame = 0): number[] {
@@ -26,46 +26,57 @@ function turned([qx, qy, qz, qw]: readonly number[], [vx, vy, vz]: readonly numb
 const stem = (name: string) => name.replace(/\.[^.]*$/, "");
 
 /**
+ * A molecule in 3D's atoms as a writer is given them, in ångströms, in one
+ * of its frames: where its file had them; or - `placed`, one of several
+ * written as one system - as it stands on the page, about its centre in
+ * that frame, turned as it is seen, where on the page and how high, its
+ * file's ångströms kept. With what its atoms carry.
+ */
+export function writtenAtoms(m: Carried3D, frame: number | undefined, placed: boolean, style: Style3D = currentStyle3D()): WrittenAtom[] {
+  const xyz = frameXyz(m, frame);
+  const n = m.atoms.length;
+  const k = WORLD_PER_ANGSTROM;
+  let place = (i: number): [number, number, number] => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
+  if (placed) {
+    // (as it stands: about its centre, turned, where on the page and how high - in ångströms)
+    const c = [0, 0, 0];
+    for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) c[j] += xyz[3 * i + j] / n;
+    const height = heightOf(m, solidOf({ ...m, id: 0 }, style), lookOf(m)) / k;
+    const q = m.turn ?? [0, 0, 0, 1];
+    place = (i) => {
+      const [x, y, z] = turned(q, [xyz[3 * i] - c[0], xyz[3 * i + 1] - c[1], xyz[3 * i + 2] - c[2]]);
+      return [m.at.x / k + x, m.at.y / k + y, height + z];
+    };
+  }
+  return m.atoms.map((a, i) => {
+    const [x, y, z] = place(i);
+    return {
+      el: a.el,
+      x,
+      y,
+      z,
+      ...(a.charge ? { charge: a.charge } : {}),
+      ...(a.isotope ? { isotope: a.isotope } : {}),
+      ...(a.radical ? { radical: a.radical } : {}),
+    };
+  });
+}
+
+/**
  * Molecules in 3D as one molecule a writer is given (lib/io/writers
- * `WrittenMolecule`), in ångströms, each in the frame it shows: one, where
- * its file had it; several, one system, as they stand on the page - each
- * turned and placed as it is seen, its file's ångströms kept - so that a
- * complex put together on the page is written as it was put together.
- * Called by the name of the file each came from.
+ * `WrittenMolecule`), in ångströms, each in the frame it shows, with the
+ * bonds that frame has: one, where its file had it; several, one system,
+ * as they stand on the page (`writtenAtoms`) - so that a complex put
+ * together on the page is written as it was put together. Called by the
+ * name of the file each came from.
  */
 export function writtenOf(molecules: readonly Carried3D[], style: Style3D = currentStyle3D()): WrittenMolecule {
   const atoms: WrittenAtom[] = [];
   const bonds: WrittenMolecule["bonds"] = [];
-  const k = WORLD_PER_ANGSTROM;
   for (const m of molecules) {
-    const xyz = frameXyz(m, m.frame);
-    const n = m.atoms.length;
-    let place = (i: number): [number, number, number] => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
-    if (molecules.length > 1) {
-      // (as it stands: about its centre, turned, where on the page and how high - in ångströms)
-      const c = [0, 0, 0];
-      for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) c[j] += xyz[3 * i + j] / n;
-      const height = heightOf(m, solidOf({ ...m, id: 0 }, style), lookOf(m)) / k;
-      const q = m.turn ?? [0, 0, 0, 1];
-      place = (i) => {
-        const [x, y, z] = turned(q, [xyz[3 * i] - c[0], xyz[3 * i + 1] - c[1], xyz[3 * i + 2] - c[2]]);
-        return [m.at.x / k + x, m.at.y / k + y, height + z];
-      };
-    }
     const first = atoms.length;
-    m.atoms.forEach((a, i) => {
-      const [x, y, z] = place(i);
-      atoms.push({
-        el: a.el,
-        x,
-        y,
-        z,
-        ...(a.charge ? { charge: a.charge } : {}),
-        ...(a.isotope ? { isotope: a.isotope } : {}),
-        ...(a.radical ? { radical: a.radical } : {}),
-      });
-    });
-    for (const b of m.bonds) bonds.push({ a1: first + b.a1, a2: first + b.a2, order: b.order });
+    for (const a of writtenAtoms(m, m.frame, molecules.length > 1, style)) atoms.push(a);
+    for (const b of bondsAt(m, m.frame)) bonds.push({ a1: first + b.a1, a2: first + b.a2, order: b.order });
   }
   const names = molecules.map((m) => (m.name ? stem(m.name) : "")).filter(Boolean);
   return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}) };

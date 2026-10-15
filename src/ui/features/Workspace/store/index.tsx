@@ -178,6 +178,20 @@ function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travell
   };
 }
 
+/**
+ * The copy a value set on a result made, as the document now is: undone -
+ * taken away by the undo of the step that made it - or put back by its
+ * redo, and so made again; none once it, or the one it was made from, has
+ * gone some other way.
+ */
+export function copiedHeld(c: EditorState["copied3d"], molecules: readonly { id: number }[], history: { redoDepth: number; redoLabel?: string }): EditorState["copied3d"] {
+  if (!c) return c;
+  if (!molecules.some((m) => m.id === c.from)) return null;
+  const there = molecules.some((m) => m.id === c.copy);
+  if (!there) return c.undone != null ? c : history.redoDepth > 0 && /^set /.test(history.redoLabel ?? "") ? { ...c, undone: performance.now() } : null;
+  return c.undone != null ? { from: c.from, copy: c.copy, at: performance.now() } : c;
+}
+
 export function connectStoreToDocument(
   store: EditorStore,
   doc: DocumentStore<WorkspaceDocument>,
@@ -215,6 +229,7 @@ export function connectStoreToDocument(
         selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
         selInks: picturesHeld(prev.selInks, mirrored.inks),
         hoveredInk: prev.hoveredInk != null && !mirrored.inks.some((k) => k.id === prev.hoveredInk) ? null : prev.hoveredInk,
+        copied3d: copiedHeld(prev.copied3d, mirrored.molecules3d, doc.history()),
         hoveredShape: prev.hoveredShape != null && !mirrored.shapes.some((s) => s.id === prev.hoveredShape) ? null : prev.hoveredShape,
         hoveredSlide: prev.hoveredSlide != null && !mirrored.slides.some((s) => s.id === prev.hoveredSlide) ? null : prev.hoveredSlide,
         // (a talk given from slides an undo took away: ended; from fewer, at the last there is)
@@ -292,6 +307,7 @@ export function createEditorStore(
     chosen3d: null,
     hoveredMeasure3d: null,
     measureEdit3d: null,
+    copied3d: null,
     hoveredArrow: null,
     hoveredPush: null,
     pushDraw: null,

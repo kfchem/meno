@@ -197,6 +197,14 @@ describe("molecules in 3D on the clipboard", () => {
     expect(back?.molecules3d).toEqual([made]);
   });
 
+  it("keep how many atoms their file left out, where it is some", () => {
+    const back = (atomsLeftOut: unknown) => readRecord(recordText({ atoms: [], bonds: [], molecules3d: [{ ...water3d, atomsLeftOut } as typeof water3d] }))!.molecules3d![0].atomsLeftOut;
+    expect(back(2)).toBe(2);
+    expect(back(0)).toBeUndefined();
+    expect(back(1.5)).toBeUndefined();
+    expect(back("2")).toBeUndefined();
+  });
+
   it("lose a tie or labels that do not read, not the molecule", () => {
     const text = recordText({
       atoms: [],
@@ -220,6 +228,36 @@ describe("molecules in 3D on the clipboard", () => {
     expect(Math.abs(rows[1][0] - rows[0][0])).toBeLessThan(0.7);
     expect(Math.abs(rows[1][1] - rows[0][1])).toBeGreaterThan(0.7);
     expect(items.some((i) => i.flavor === "rxn")).toBe(false);
+  });
+
+  it("go to other programs with the bonds the frame they show has, where they go frame by frame", () => {
+    // (two carbons bonded, then 3 Å apart: an XYZ file's frames, bonds by distance)
+    const parting = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "C", x: 1.5, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      frames: [[0, 0, 0, 3, 0, 0]],
+      bondsFrom: "distance" as const,
+      at: { x: 0, y: 0 },
+    };
+    const counts = (frame: number) => clipItems({ atoms: [], bonds: [], molecules3d: [{ ...parting, frame }] }).find((i) => i.flavor === "mol")!.text!.split("\n")[3].slice(0, 6);
+    expect(counts(0)).toBe("  2  1");
+    expect(counts(1)).toBe("  2  0");
+  });
+
+  it("keep their radicals in the molfile other programs are given", () => {
+    const hydroxyl = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0, radical: "doublet" as const },
+        { el: "H", x: 0.97, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+    };
+    const mol = clipItems({ atoms: [], bonds: [], molecules3d: [hydroxyl] }).find((i) => i.flavor === "mol")!.text!;
+    expect(mol).toContain("M  RAD  1   1   2\n");
   });
 
   it("are pasted about the point asked for, with the rest", () => {

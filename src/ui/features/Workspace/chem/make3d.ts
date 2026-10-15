@@ -5,6 +5,7 @@
  * it - and comes to rest beside it, tied to it atom by atom
  * (docs/WORKSPACE.md, stage 2).
  */
+import { placesOf } from "../utils/edit3d";
 import * as THREE from "three";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -20,7 +21,7 @@ import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
-import { lookOf, solidOf } from "../utils/molecule3d";
+import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { undrawnHydrogens } from "./drawing";
 import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
@@ -431,10 +432,13 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * found (no hydrogens, say), and so drawn single.
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
-  const xyz = frame > 0 && m.frames?.[frame - 1] ? m.frames[frame - 1] : m.atoms.flatMap((a) => [a.x, a.y, a.z]);
-  const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
-  const wanted = m.bonds.length > 0 && m.bonds.every((b) => b.order === 1);
-  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, m.bonds), perceive: wanted });
+  // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
+  const xyz = placesOf(m, frame);
+  const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
+  // (with the bonds that frame has, where they go frame by frame)
+  const bonds = bondsAt(m, frame);
+  const wanted = bonds.length > 0 && bonds.every((b) => b.order === 1);
+  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
   const model = await laidOut(drawn, style).catch(() => drawn);
   // (its heavy atoms came back in their order)

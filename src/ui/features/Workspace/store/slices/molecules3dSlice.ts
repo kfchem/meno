@@ -318,7 +318,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const newId = doc.getState().nextMolecule3dId ?? 1;
       doc.edit(label, (d) => ops.addMolecule3d(d, { ...copy, at: { x: left, y } }), meta);
       const turn = get().turns3d[id];
-      if (turn) set((prev) => ({ ...prev, turns3d: { ...prev.turns3d, [newId]: turn } }));
+      set((prev) => ({ ...prev, ...(turn ? { turns3d: { ...prev.turns3d, [newId]: turn } } : {}), copied3d: { from: id, copy: newId, at: performance.now() } }));
       return newId;
     },
     setChosen3d: () => {
