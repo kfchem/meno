@@ -23,7 +23,8 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
-import { useShading3d } from "./shading3d";
+import { byAtomOf, fadeOf, useShading3d } from "./shading3d";
+import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
@@ -75,6 +76,16 @@ const FRAME_TAU = 0.06;
 /** How quickly a vibration's swing eases in, and out as it comes to rest, in seconds. */
 const VIBRATION_TAU = 0.25;
 const LOOK_TAU = 0.08;
+/**
+ * The line round the balls (utils/outlineMaterial) is a ball drawn again,
+ * as smooth as the balls up to LINES_FINE_MOST atoms, and of LINES_COARSE
+ * segments past them: measured on 10 648 atoms and 30 492 bonds, a frame
+ * took 14.0 ms with no line, 19.7 ms with lines as smooth as the balls (32
+ * segments) and 16.4 ms with 16 - its rim strays from a circle by under a
+ * pixel up to balls 40 pixels across.
+ */
+const LINES_FINE_MOST = 2000;
+const LINES_COARSE = 16;
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How far above the molecule the mark of hydrogens left out stands, in pixels. */
@@ -224,6 +235,19 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const atoms = useRef<THREE.InstancedMesh>(null!);
   const bonds = useRef<THREE.InstancedMesh>(null);
   const atomHull = useRef<THREE.InstancedMesh>(null!);
+  // the style's line round every ball and stick (utils/outlineMaterial), and how wide it is drawn now and how far the
+  // back fades - each gone over to as the style or the look changes
+  const atomLines = useRef<THREE.InstancedMesh>(null);
+  const bondLines3d = useRef<THREE.InstancedMesh>(null);
+  const outlines = useMemo(() => ({ atoms: outlineMaterial(), bonds: outlineMaterial() }), []);
+  useEffect(() => () => {
+    outlines.atoms.material.dispose();
+    outlines.bonds.material.dispose();
+  }, [outlines]);
+  const lineLook = useRef<{ px: number; fade: number; byAtom: number } | null>(null);
+  // the atoms' colours as drawn now (linear RGB, three to an atom), and whether they are still going over to the style's
+  const atomCols = useRef<Float32Array | null>(null);
+  const recolour = useRef(true);
   const bondHull = useRef<THREE.InstancedMesh>(null);
   const chosenHull = useRef<THREE.InstancedMesh>(null!);
   const linkedHull = useRef<THREE.Mesh>(null!);
@@ -398,15 +422,34 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     invalidate();
   }, [stereoMarks, invalidate]);
 
-  // the molecule itself changed - its atoms, its frames, the style: drawn afresh
+  // each atom's colour in either look, by its element as the look colours it (linear RGB)
+  const atomGoals = useMemo(() => {
+    const of = (look: Style3D["primary"]) => {
+      const out = new Float32Array(3 * n);
+      const col = new THREE.Color();
+      for (let i = 0; i < n; i++) col.set(atomColour(m.atoms[i].el, look)).toArray(out, 3 * i);
+      return out;
+    };
+    return { primary: of(style.primary), secondary: of(style.secondary) };
+  }, [m.atoms, n, style.primary, style.secondary]);
+
+  // the molecule itself changed - its atoms, its frames, the style: drawn afresh - its colours gone over to (below),
+  // or, new, as they are at once
   useLayoutEffect(() => {
-    const col = new THREE.Color();
-    for (let i = 0; i < n; i++) atoms.current.setColorAt(i, col.set(atomColour(m.atoms[i].el)));
-    if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+    if (!atomCols.current || atomCols.current.length !== 3 * n) {
+      const now = new Float32Array(3 * n);
+      const f = fill.current;
+      for (let k = 0; k < now.length; k++) now[k] = atomGoals.primary[k] + (atomGoals.secondary[k] - atomGoals.primary[k]) * f;
+      atomCols.current = now;
+      const col = new THREE.Color();
+      for (let i = 0; i < n; i++) atoms.current.setColorAt(i, col.fromArray(now, 3 * i));
+      if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+    }
+    recolour.current = true;
     if (places.current.length !== target.length) places.current = Float32Array.from(target);
     dirty.current = true;
     invalidate();
-  }, [m, n, target, style, invalidate]);
+  }, [m, n, target, style, atomGoals, invalidate]);
 
   // measurements come and go, fading
   useEffect(() => {
@@ -668,6 +711,81 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       atomsMat.current.opacity = seenBy;
       if (bondsMat.current) bondsMat.current.opacity = seenBy;
       if (ribbonMat.current) ribbonMat.current.opacity = seenBy;
+    }
+    // the style's atoms' colours, its lines and its depth fade - gone over to as the style or the look changes, never
+    // in a jump (the maintainer's rule: no abrupt changes)
+    {
+      const P = style.primary;
+      const S = style.secondary;
+      const ff = fill.current;
+      const cols = atomCols.current;
+      const recoloured = !!cols && (recolour.current || refinish);
+      if (cols && recoloured) {
+        let going = false;
+        for (let k = 0; k < cols.length; k++) {
+          const to = atomGoals.primary[k] + (atomGoals.secondary[k] - atomGoals.primary[k]) * ff;
+          if (cols[k] === to) continue;
+          cols[k] = follow(cols[k], to, step, LOOK_TAU);
+          if (cols[k] !== to) going = true;
+        }
+        for (let i = 0; i < n; i++) atoms.current.setColorAt(i, colour.fromArray(cols, 3 * i));
+        if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+        recolour.current = going;
+        if (going) moving = true;
+      }
+      const wantPx = P.outline + (S.outline - P.outline) * ff;
+      const wantFade = P.depthFade + (S.depthFade - P.depthFade) * ff;
+      const byAtom = (l: Style3D["primary"]) => (l.bondColouring === "byAtom" ? 1 : 0);
+      const wantByAtom = byAtom(P) + (byAtom(S) - byAtom(P)) * ff;
+      const was = lineLook.current ?? { px: wantPx, fade: wantFade, byAtom: wantByAtom };
+      const ll = { px: follow(was.px, wantPx, step, LOOK_TAU), fade: follow(was.fade, wantFade, step, LOOK_TAU), byAtom: follow(was.byAtom, wantByAtom, step, LOOK_TAU) };
+      if (ll.px !== wantPx || ll.fade !== wantFade || ll.byAtom !== wantByAtom) moving = true;
+      lineLook.current = ll;
+      // (the sticks coloured by their atoms: each line's two ends' colours, as the atoms are coloured now)
+      const bm = bonds.current;
+      if (bm && bondsMat.current) {
+        byAtomOf(bondsMat.current).value = ll.byAtom;
+        const ends = bm.geometry.getAttribute("bondEndA") as THREE.InstancedBufferAttribute | undefined;
+        if (ll.byAtom > 0 && cols && (recoloured || !ends || ends.count !== lineCount)) {
+          const a = new Float32Array(3 * lineCount);
+          const b = new Float32Array(3 * lineCount);
+          for (let k = 0; k < lineCount; k++) {
+            const bond = drawn.bonds[lineBond[k]];
+            if (!bond) continue;
+            for (let c = 0; c < 3; c++) {
+              a[3 * k + c] = cols[3 * bond.a1 + c];
+              b[3 * k + c] = cols[3 * bond.a2 + c];
+            }
+          }
+          bm.geometry.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(a, 3));
+          bm.geometry.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(b, 3));
+        }
+      }
+      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      // (where the molecule's front and back stand in the camera's depth: what fades between)
+      const centre = placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z;
+      const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x;
+      const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade];
+      for (const u of fades) {
+        u.fadeNear.value = centre + reach;
+        u.fadeFar.value = centre - reach;
+        u.fadeAmount.value = ll.fade;
+      }
+      const pairs: [THREE.InstancedMesh | null, THREE.InstancedMesh | null, ReturnType<typeof outlineMaterial>][] = [
+        [atomLines.current, atoms.current, outlines.atoms],
+        [bondLines3d.current, bonds.current, outlines.bonds],
+      ];
+      for (const [lines, of, o] of pairs) {
+        if (!lines) continue;
+        lines.visible = ll.px > 0.02 && !!of?.visible;
+        if (!lines.visible || !of) continue;
+        // (the balls' or sticks' own instances: where they are, it is)
+        if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
+        lines.count = of.count;
+        o.width.value = ll.px / zoom;
+        o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
+        o.material.opacity = seenBy;
+      }
     }
     // the atom under the pointer, and the chosen atoms' rings
     for (const [i, s] of swell.current) {
@@ -1119,6 +1237,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
+        {/* the style's line round every ball (utils/outlineMaterial) */}
+        <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
+          <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
+        </instancedMesh>
         {lineCount > 0 && (
           <instancedMesh
             ref={bonds}
@@ -1139,6 +1261,12 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           >
             <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
             <meshStandardMaterial ref={bondsMat} transparent opacity={1} />
+          </instancedMesh>
+        )}
+        {lineCount > 0 && (
+          // (and round every stick)
+          <instancedMesh ref={bondLines3d} args={[undefined, outlines.bonds.material, lineCount]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
+            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
           </instancedMesh>
         )}
         {runs.length > 0 && (
@@ -1470,6 +1598,7 @@ function fillGeometry(g: THREE.BufferGeometry, m: { positions: Float32Array; nor
 const mtx = new THREE.Matrix4();
 const toLocal = new THREE.Matrix4();
 const colour = new THREE.Color();
+const fadeCentre = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion();
 const scale = new THREE.Vector3();

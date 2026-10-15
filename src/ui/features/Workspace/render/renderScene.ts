@@ -211,7 +211,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const r = radii[i] / k;
       const node = nodes.length;
       const p0 = samples[0].places;
-      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r] });
+      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el, drawn), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r] });
       children.push(node);
       if (animated) channels.push({ node, path: "translation", values: Float32Array.from(samples.flatMap((x) => [x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]])) });
       for (const x of samples) {

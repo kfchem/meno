@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
-import { bondLines, bondsAt, frameOf, heightOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { outlineMaterial } from "./utils/outlineMaterial";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
 import { chainRuns } from "../../../lib/chem/biopolymer";
@@ -78,7 +79,10 @@ export function tilesOf(w: number, h: number, most: number): { x: number; y: num
  * covering where they all reach on the page, `pxPerWorld` pixels to the
  * page's unit, transparent round them - each drawn in tiles at most `tile`
  * pixels either way where it is larger. Null where there are none, or no
- * WebGL to draw them with.
+ * WebGL to draw them with. A style's line round its balls and sticks is as
+ * wide as `cssPx` of the picture's pixels to the style's one (a picture at
+ * 300 dpi, 300 / 96: as wide in print as on the screen); what lies further
+ * back fades toward white, the page's colour, as on the canvas.
  */
 export function rendered3d(
   ms: readonly Carried3D[],
@@ -86,6 +90,7 @@ export function rendered3d(
   pxPerWorld: number,
   eyeHeight?: number,
   tile = TILE,
+  cssPx = 1,
 ): { canvas: HTMLCanvasElement; bounds: Bounds } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
@@ -186,7 +191,7 @@ export function rendered3d(
       m.atoms.forEach((a, i) => {
         const r = left[i] ? 0 : radii[i];
         atomsMesh.setMatrixAt(i, mtx.makeScale(r, r, r).setPosition(places[3 * i], places[3 * i + 1], places[3 * i + 2]));
-        atomsMesh.setColorAt(i, colour.set(atomColour(a.el)));
+        atomsMesh.setColorAt(i, colour.set(atomColour(a.el, drawn)));
       });
       if (occlusion) {
         setAtomOcclusion(ball, occlusion.atoms);
@@ -195,12 +200,32 @@ export function rendered3d(
       }
       atomsMesh.castShadow = atomsMesh.receiveShadow = true;
       group.add(atomsMesh);
+      // the style's line round every ball and stick, and its depth fade (utils/outlineMaterial, occlusionMaterial)
+      const fades = [ao.fade];
+      const lined: { of: THREE.InstancedMesh; geometry: THREE.BufferGeometry }[] = [];
+      if (drawn.outline > 0) lined.push({ of: atomsMesh, geometry: ball });
       if (lines.length) {
         const stick = new THREE.CylinderGeometry(1, 1, 1, BOND_SEGMENTS);
         const bondsMat = new THREE.MeshStandardMaterial({ ...finish, color: drawn.bondColor });
         const bo = occludedMaterial(bondsMat, "bonds");
         const bondsMesh = new THREE.InstancedMesh(stick, bondsMat, lines.length);
         made.push(stick, bondsMat);
+        fades.push(bo.fade);
+        if (drawn.outline > 0) lined.push({ of: bondsMesh, geometry: stick });
+        // (each half in its atom's colour, where the style colours them so: its two ends')
+        if (drawn.bondColouring === "byAtom") {
+          const ends = [new Float32Array(3 * lines.length), new Float32Array(3 * lines.length)];
+          let k = 0;
+          for (const b of bonds) {
+            for (let j = 0; j < linesOf(b.order); j++, k++) {
+              colour.set(atomColour(m.atoms[b.a1].el, drawn)).toArray(ends[0], 3 * k);
+              colour.set(atomColour(m.atoms[b.a2].el, drawn)).toArray(ends[1], 3 * k);
+            }
+          }
+          stick.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(ends[0], 3));
+          stick.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(ends[1], 3));
+          bo.byAtom.value = 1;
+        }
         lines.forEach((line, k) => {
           const along = line.b.clone().sub(line.a);
           const length = along.length();
@@ -215,6 +240,24 @@ export function rendered3d(
         }
         bondsMesh.castShadow = bondsMesh.receiveShadow = true;
         group.add(bondsMesh);
+      }
+      for (const { of, geometry } of lined) {
+        const o = outlineMaterial();
+        const mesh = new THREE.InstancedMesh(geometry, o.material, of.count);
+        mesh.instanceMatrix = of.instanceMatrix;
+        o.width.value = (drawn.outline * cssPx) / pxPerWorld;
+        o.material.color.set(drawn.outlineColor);
+        fades.push(o.fade);
+        made.push(o.material);
+        group.add(mesh);
+      }
+      // (the molecule's front and back in the camera's depth: it seen from EYE_HEIGHT - or eyeHeight - above, standing as high as it does)
+      const reach = solid.reach[look];
+      const centre = group.position.z - (eyeHeight ?? EYE_HEIGHT);
+      for (const u of fades) {
+        u.fadeNear.value = centre + reach;
+        u.fadeFar.value = centre - reach;
+        u.fadeAmount.value = drawn.depthFade;
       }
       // its chains as ribbons, where its look draws them so
       if (solid.ribbons[look] && m.biopolymer) {
@@ -372,7 +415,7 @@ export function withSolidsImage(
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
   const area = Math.max((marks.max.x - marks.min.x) * zoom, 1) * Math.max((marks.max.y - marks.min.y) * zoom, 1);
   const scale = Math.min(dpi / 96, Math.sqrt(PICTURE_MOST_PIXELS / area));
-  const drawn = rendered3d(ms, style, zoom * scale);
+  const drawn = rendered3d(ms, style, zoom * scale, undefined, TILE, scale);
   if (!drawn) return null;
   const { canvas, bounds } = drawn;
   const href = canvas.toDataURL("image/png");

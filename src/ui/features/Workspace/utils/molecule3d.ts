@@ -797,7 +797,7 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   const at = (i: number) => new THREE.Vector3(places[3 * i], places[3 * i + 1], places[3 * i + 2]).applyQuaternion(q);
   const balls = m.atoms.map((a, i) => {
     const s = seen(at(i));
-    return { kind: "ball" as const, c: { x: s.x, y: s.y }, r: radii[i] * s.k, color: atomColour(a.el), z: s.z };
+    return { kind: "ball" as const, c: { x: s.x, y: s.y }, r: radii[i] * s.k, color: atomColour(a.el, drawn), z: s.z };
   });
   // (an atom its look leaves out is not drawn, nor a bond to it)
   const left = solid.hidden[look];

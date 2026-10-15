@@ -26,6 +26,16 @@ function uniformsOf(material: THREE.MeshStandardMaterial, kind: "atoms" | "bonds
   return u;
 }
 
+/** What fades a molecule's atoms or bonds with depth (utils/occlusionMaterial `withFade`): the material's own, taught once. */
+export function fadeOf(material: THREE.MeshStandardMaterial, kind: "atoms" | "bonds") {
+  return uniformsOf(material, kind).fade;
+}
+
+/** How far a molecule's sticks are coloured by their atoms (utils/occlusionMaterial): the bonds' material's own. */
+export function byAtomOf(material: THREE.MeshStandardMaterial) {
+  return uniformsOf(material, "bonds").byAtom;
+}
+
 /** Open all round: the terms of an atom nothing shades. */
 function openTerms(n: number): Float32Array {
   const t = new Float32Array(OCCLUSION_TERMS * n);

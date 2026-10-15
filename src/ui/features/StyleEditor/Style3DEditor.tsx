@@ -6,6 +6,7 @@ import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import {
+  atomColour,
   LOOK_3D_FIELDS,
   LOOK_3D_PRESETS,
   look3dPreset,
@@ -13,6 +14,7 @@ import {
   SCENE_3D,
   SCENE_3D_FIELDS,
   style3dOf,
+  withAtomColour,
   withLookSetting,
   withRole,
   withSharedSetting,
@@ -114,6 +116,7 @@ export default function Style3DEditor({
             </div>
           </section>
         ))}
+        <AtomColours look={look} preset={edited.look} name={edited.name} onSet={(el, colour) => onChange(withAtomColour(choice, editing, el, colour))} />
         <div className="mt-8 flex items-center gap-2">
           <h3 className="flex-1 text-sm font-semibold text-gh-black">Every style</h3>
           {sharedChanged > 0 && (
@@ -243,6 +246,60 @@ function Styles({
 }
 
 // --- One setting ---------------------------------------------------------------
+
+/** The elements whose colours are offered to be set, besides any set already: the common ones, then the metals most met. */
+const COLOURED = ["H", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I", "B", "Si", "Li", "Na", "K", "Mg", "Fe", "Cu", "Zn", "Pd", "Pt"];
+
+/** A style's atoms' colours, each element's to be set or set back - to its preset's, or Meno's where the preset gives none. */
+function AtomColours({
+  look,
+  preset,
+  name,
+  onSet,
+}: {
+  look: MoleculeLook;
+  preset: MoleculeLook;
+  name: string;
+  onSet: (el: string, colour: string | null) => void;
+}) {
+  const elements = [...COLOURED, ...Object.keys(look.colours).filter((el) => !COLOURED.includes(el))];
+  return (
+    <section className="mt-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Atom colours</h4>
+      <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-x-3 gap-y-1.5 rounded-lg border border-gh-line bg-white px-3 py-2.5">
+        {elements.map((el) => {
+          const now = atomColour(el, look);
+          const was = atomColour(el, preset);
+          const changed = now.toLowerCase() !== was.toLowerCase();
+          return (
+            <label key={el} className="flex items-center gap-1.5 text-sm text-gh-black">
+              <span className="w-6 tabular-nums">{el}</span>
+              <input
+                type="color"
+                value={now}
+                aria-label={`${el}'s colour`}
+                onChange={(e) => onSet(el, e.target.value.toLowerCase())}
+                className={clsx("h-6 w-8 rounded border bg-white p-0.5", changed ? "border-accel-base" : "border-gh-line")}
+              />
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSet(el, null);
+                }}
+                disabled={!changed}
+                aria-label={`Reset ${el}'s colour`}
+                title={changed ? `Back to ${name}'s colour` : "Not changed"}
+                className="h-6 w-6 rounded-md flex items-center justify-center text-gh-gray hover:bg-gh-base hover:text-gh-black disabled:opacity-0"
+              >
+                <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
+              </button>
+            </label>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function Row({
   field,
