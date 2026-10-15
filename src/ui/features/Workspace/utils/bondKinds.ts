@@ -70,3 +70,21 @@ export function bondKindOf(b: Pick<Bond, "order" | "stereo" | "display" | "dativ
   if (b.display === "wedge") return null;
   return "single";
 }
+
+/**
+ * What a click on a single bond makes of it, the cycle drawing wants: plain,
+ * wedge, hashed wedge, plain again with the wedge's other end narrow. A
+ * bond that is another kind - wavy, or bold, hashed, dashed or dative, as
+ * its menu or a file made it - is taken out of it into the cycle's plain,
+ * not left as it was (a wavy bond clicked stayed wavy).
+ */
+export function singleClickPatch(b: Pick<Bond, "stereo" | "stereoOrient" | "display" | "dative">): Partial<Bond> {
+  const stereo = b.stereo ?? "none";
+  const orient = b.stereoOrient ?? "principle";
+  // (another kind of single: the plain one first)
+  const other = stereo === "wavy" || stereo === "either" || b.dative || b.display === "bold" || b.display === "hashed" || b.display === "dashed";
+  if (other) return { stereo: "none", display: undefined, dative: undefined, stereoOrient: orient };
+  if (stereo === "none") return { stereo: "up", stereoOrient: orient };
+  if (stereo === "up") return { stereo: "down", stereoOrient: orient };
+  return { stereo: "none", stereoOrient: orient === "principle" ? "reverse" : "principle" };
+}

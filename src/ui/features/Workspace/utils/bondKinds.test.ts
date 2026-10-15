@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { bondKindOf, bondKindPatch, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./bondKinds";
+import { bondKindOf, bondKindPatch, COMMON_BOND_KINDS, OTHER_BOND_KINDS, singleClickPatch, type BondKindName } from "./bondKinds";
 
 const ALL: BondKindName[] = [...COMMON_BOND_KINDS, ...OTHER_BOND_KINDS];
 
@@ -42,5 +42,24 @@ describe("the kinds a bond's menu chooses among", () => {
     expect(kinds()).toEqual(["single", "single"]);
     st().setBondsKind([ab], "dative");
     expect(kinds()).toEqual(["dative", "single"]);
+  });
+});
+
+describe("a click on a single bond", () => {
+  it("cycles plain, wedge, hashed wedge and plain again, the other end narrow the second time round", () => {
+    const b = { stereo: "none" as const, stereoOrient: "principle" as const };
+    expect(singleClickPatch(b)).toMatchObject({ stereo: "up" });
+    expect(singleClickPatch({ ...b, stereo: "up" })).toMatchObject({ stereo: "down" });
+    expect(singleClickPatch({ ...b, stereo: "down" })).toMatchObject({ stereo: "none", stereoOrient: "reverse" });
+  });
+
+  it("takes a bond of another kind out of it - wavy, bold, hashed, dashed, dative - to plain, so it can be cycled", () => {
+    expect(singleClickPatch({ stereo: "wavy" })).toMatchObject({ stereo: "none" });
+    for (const kind of ["bold", "hashed", "dashed", "dative"] as const) {
+      const made = bondKindPatch(kind);
+      const patch = singleClickPatch(made);
+      const after = { ...made, ...patch };
+      expect(bondKindOf(after)).toBe("single");
+    }
   });
 });
