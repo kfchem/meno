@@ -63,7 +63,6 @@ FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "
 WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
 MARBLES = {"carrara", "swirl"}
 PILES = {"long", "short"}
-ICES = {"clear", "melting", "frosted", "cracked"}
 CLAYS = {"terracotta", "elements"}
 PORCELAINS = {"porcelain", "pearl"}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
@@ -139,7 +138,6 @@ def settings_of(entry, options):
         "copper_finish": one_of(options.get("copper-finish", "brushed"), "copper finish", FINISHES["copper-finish"]),
         "wood": one_of(options.get("wood", "oak"), "wood", WOODS),
         "marble": one_of(options.get("marble", "carrara"), "marble pattern", MARBLES),
-        "ice": one_of(options.get("ice", "clear"), "ice", ICES),
         "pile": one_of(options.get("pile", "long"), "pile", PILES),
         "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
         "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),

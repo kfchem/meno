@@ -21,7 +21,6 @@
       "programs": ["blender"],
       "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart", "gold", "silver", "copper", "bubble", "wood", "marble", "porcelain", "slime", "ice", "neon", "xray", "fur"],
       "options": [
-        {"id": "ice", "when": {"id": "look", "in": ["ice"]}, "label": "Ice", "type": "choice", "choices": [{"value": "clear", "label": "Clear, with cloudy cores"}, {"value": "melting", "label": "Melting: lumps, wet highlights, streaks"}, {"value": "frosted", "label": "Frosted: milky, white at the edges"}, {"value": "cracked", "label": "Cracked: white crack planes"}], "default": "clear"},
         {"id": "pile", "when": {"id": "look", "in": ["fur"]}, "label": "Pile", "type": "choice", "choices": [{"value": "long", "label": "Long: fur"}, {"value": "short", "label": "Short and dense: velvet"}], "default": "long"},
         {"id": "clay-colour", "when": {"id": "look", "in": ["clay"]}, "label": "Clay's colour", "type": "choice", "choices": [{"value": "terracotta", "label": "One colour (terracotta)"}, {"value": "elements", "label": "Element colours"}], "default": "terracotta"},
         {"id": "porcelain-finish", "when": {"id": "look", "in": ["porcelain"]}, "label": "Porcelain's finish", "type": "choice", "choices": [{"value": "porcelain", "label": "Porcelain: glazed blue-white"}, {"value": "pearl", "label": "Pearl: cream white with an orient"}], "default": "porcelain"},

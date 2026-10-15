@@ -316,53 +316,30 @@ def porcelain(nt, out, c, kind, o):
 
 
 def ice(nt, out, c, kind, o):
-    """Ice, never a perfect clean sphere. Always: refracting glass (IOR 1.31) that shows the studio through it; a faint cyan that deepens with the thickness (volume absorption, nearly colourless where thin); a frosted skin in patches, crisp where smooth.
-    Style: "clear" - cloudy cores of tiny bubbles, densest at the centre; "melting" - the surface in gentle lumps (displacement), wet sharp highlights, droplets, bubbles and white streaks inside; "frosted" - a milky core and a white frost at the grazing edges, clear patches between; "cracked" - thin crack planes catching the light white, and a paler cyan."""
-    style = o.get("ice", "clear")
+    """Melting ice, never a perfect clean sphere: refracting glass (IOR 1.31) that shows the studio through it; the surface in gentle lumps (displacement from a low-frequency noise, so the outline is no circle), wet sharp highlights and a few droplets; a faint cyan that deepens with the thickness (volume absorption, nearly colourless where thin); bubbles and white streaks inside, densest at the centre."""
     tc = node(nt, "ShaderNodeTexCoord")
     patch = node(nt, "ShaderNodeTexNoise", Scale=5.0, Detail=4.0, Distortion=0.4)
     link(nt, tc, "Object", patch, "Vector")
-    frost = ramp_of(nt, [(0.45, (0.02, 0.02, 0.02, 1)), (0.65, (0.30, 0.30, 0.30, 1))])
-    if style == "melting":
-        frost = ramp_of(nt, [(0.5, (0.0, 0.0, 0.0, 1)), (0.8, (0.12, 0.12, 0.12, 1))])  # wet: mostly smooth
-    link(nt, patch, "Fac", frost, "Fac")
+    wet = ramp_of(nt, [(0.5, (0.0, 0.0, 0.0, 1)), (0.8, (0.12, 0.12, 0.12, 1))])  # mostly smooth: wet
+    link(nt, patch, "Fac", wet, "Fac")
     pr = principled(nt, IOR=1.31, **{"Base Color": (0.97, 0.99, 1.0, 1), "Transmission Weight": 1.0, "Coat Weight": 0.3, "Coat Roughness": 0.02})
-    link(nt, frost, "Color", pr, "Roughness")
-    surface = pr
-    if style == "melting":
-        # gentle lumps: displacement from a low-frequency noise (its outline is no longer a circle), and droplets as sharp small bumps
-        lumps = node(nt, "ShaderNodeTexNoise", Scale=1.5, Detail=2.0, Roughness=0.5)
-        link(nt, tc, "Object", lumps, "Vector")
-        drops = node(nt, "ShaderNodeTexVoronoi", Scale=26.0, feature="F1")
-        link(nt, tc, "Object", drops, "Vector")
-        dome = ramp_of(nt, [(0.0, (1, 1, 1, 1)), (0.18, (0, 0, 0, 1))])
-        link(nt, drops, "Distance", dome, "Fac")
-        bump = node(nt, "ShaderNodeBump", Strength=0.6, Distance=0.02)
-        link(nt, dome, "Color", bump, "Height")
-        link(nt, bump, "Normal", pr, "Normal")
-        disp = node(nt, "ShaderNodeDisplacement", Scale=0.35, Midlevel=0.5)
-        link(nt, lumps, "Fac", disp, "Height")
-        link(nt, disp, "Displacement", out, "Displacement")
-    if style == "frosted":
-        # a white frost skin at the grazing edges and in patches, clear between
-        lw = facing(nt, 0.4)
-        edge = maths(nt, "SUBTRACT", 1.0, (lw, "Facing"))
-        pat = ramp_of(nt, [(0.55, (0, 0, 0, 1)), (0.8, (0.8, 0.8, 0.8, 1))])
-        link(nt, patch, "Fac", pat, "Fac")
-        w = maths(nt, "POWER", (edge, "Value"), 2.0)
-        wp = node(nt, "ShaderNodeMath", operation="MAXIMUM", use_clamp=True)
-        link(nt, w, "Value", wp, 0)
-        link(nt, pat, "Color", wp, 1)
-        milk = node(nt, "ShaderNodeBsdfDiffuse", Color=(0.8, 0.86, 0.92, 1), Roughness=1.0)
-        mix = node(nt, "ShaderNodeMixShader")
-        link(nt, wp, "Value", mix, "Fac")
-        link(nt, pr, "BSDF", mix, 1)
-        link(nt, milk, "BSDF", mix, 2)
-        surface = mix
-    link(nt, surface, "BSDF" if surface is pr else "Shader", out, "Surface")
-    # the volume: absorption (pale cyan that deepens with the path through), and scatter inside
-    cyan = (0.7, 0.9, 0.96, 1) if style == "cracked" else (0.45, 0.85, 0.95, 1)
-    absorb = node(nt, "ShaderNodeVolumeAbsorption", Color=cyan, Density=1.5 if style == "cracked" else 2.5)
+    link(nt, wet, "Color", pr, "Roughness")
+    # lumps by displacement, and droplets as sharp small bumps
+    lumps = node(nt, "ShaderNodeTexNoise", Scale=1.5, Detail=2.0, Roughness=0.5)
+    link(nt, tc, "Object", lumps, "Vector")
+    drops = node(nt, "ShaderNodeTexVoronoi", Scale=26.0, feature="F1")
+    link(nt, tc, "Object", drops, "Vector")
+    dome = ramp_of(nt, [(0.0, (1, 1, 1, 1)), (0.18, (0, 0, 0, 1))])
+    link(nt, drops, "Distance", dome, "Fac")
+    bump = node(nt, "ShaderNodeBump", Strength=0.6, Distance=0.02)
+    link(nt, dome, "Color", bump, "Height")
+    link(nt, bump, "Normal", pr, "Normal")
+    disp = node(nt, "ShaderNodeDisplacement", Scale=0.35, Midlevel=0.5)
+    link(nt, lumps, "Fac", disp, "Height")
+    link(nt, disp, "Displacement", out, "Displacement")
+    link(nt, pr, "BSDF", out, "Surface")
+    # the volume: absorption (pale cyan, deeper the longer the path), and scatter: bubbles and white streaks, densest at the centre
+    absorb = node(nt, "ShaderNodeVolumeAbsorption", Color=(0.45, 0.85, 0.95, 1), Density=2.5)
     gen = node(nt, "ShaderNodeTexCoord")
     centre = node(nt, "ShaderNodeVectorMath", operation="SUBTRACT")
     centre.inputs[1].default_value = (0.5, 0.5, 0.5)
@@ -374,51 +351,25 @@ def ice(nt, out, c, kind, o):
     link(nt, tc, "Object", bubbles, "Vector")
     cloud = ramp_of(nt, [(0.35, (0.1, 0.1, 0.1, 1)), (0.6, (1, 1, 1, 1))])
     link(nt, bubbles, "Fac", cloud, "Fac")
-    if style == "cracked":
-        # thin crack planes: bands of a wave texture, distorted, as thin sheets that scatter white
-        mp, _i = random_rotation(nt)
-        wv = node(nt, "ShaderNodeTexWave", wave_type="BANDS", Scale=3.0, Distortion=3.0, Detail=1.0)
-        link(nt, mp, "Vector", wv, "Vector")
-        sheet = ramp_of(nt, [(0.45, (0, 0, 0, 1)), (0.5, (1, 1, 1, 1)), (0.55, (0, 0, 0, 1))])
-        link(nt, wv, "Fac", sheet, "Fac")
-        dens = maths(nt, "MULTIPLY", (sheet, "Color"), 80.0) if False else None
-        cracks = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-        link(nt, sheet, "Color", cracks, 0)
-        cracks.inputs[1].default_value = 500.0
-        base = maths(nt, "MULTIPLY", (core, "Value"), 8.0)
-        tot = node(nt, "ShaderNodeMath", operation="ADD")
-        link(nt, cracks, "Value", tot, 0)
-        link(nt, base, "Value", tot, 1)
-        scat_d = tot
-    elif style == "frosted":
-        scat_d = maths(nt, "MULTIPLY", (core, "Value"), 18.0)  # a milky core
-    elif style == "melting":
-        streak = node(nt, "ShaderNodeTexNoise", Scale=6.0, Detail=2.0)
-        sm = node(nt, "ShaderNodeMapping")
-        sm.inputs["Scale"].default_value = (1.0, 1.0, 9.0)
-        link(nt, tc, "Object", sm, "Vector")
-        link(nt, sm, "Vector", streak, "Vector")
-        sr = ramp_of(nt, [(0.5, (0, 0, 0, 1)), (0.75, (1, 1, 1, 1))])
-        link(nt, streak, "Fac", sr, "Fac")
-        d1 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-        link(nt, core, "Value", d1, 0)
-        d1.inputs[1].default_value = 20.0
-        d2 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-        link(nt, d1, "Value", d2, 0)
-        link(nt, cloud, "Color", d2, 1)
-        d3 = node(nt, "ShaderNodeMath", operation="MULTIPLY_ADD")
-        link(nt, sr, "Color", d3, 0)
-        d3.inputs[1].default_value = 12.0
-        link(nt, d2, "Value", d3, 2)
-        scat_d = d3
-    else:
-        d1 = maths(nt, "MULTIPLY", (core, "Value"), 45.0)
-        d2 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-        link(nt, d1, "Value", d2, 0)
-        link(nt, cloud, "Color", d2, 1)
-        scat_d = d2
+    streak = node(nt, "ShaderNodeTexNoise", Scale=6.0, Detail=2.0)
+    sm = node(nt, "ShaderNodeMapping")
+    sm.inputs["Scale"].default_value = (1.0, 1.0, 9.0)
+    link(nt, tc, "Object", sm, "Vector")
+    link(nt, sm, "Vector", streak, "Vector")
+    sr = ramp_of(nt, [(0.5, (0, 0, 0, 1)), (0.75, (1, 1, 1, 1))])
+    link(nt, streak, "Fac", sr, "Fac")
+    d1 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
+    link(nt, core, "Value", d1, 0)
+    d1.inputs[1].default_value = 20.0
+    d2 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
+    link(nt, d1, "Value", d2, 0)
+    link(nt, cloud, "Color", d2, 1)
+    d3 = node(nt, "ShaderNodeMath", operation="MULTIPLY_ADD")
+    link(nt, sr, "Color", d3, 0)
+    d3.inputs[1].default_value = 12.0
+    link(nt, d2, "Value", d3, 2)
     scat = node(nt, "ShaderNodeVolumeScatter", Color=(1, 1, 1, 1), Anisotropy=0.3)
-    link(nt, scat_d, "Value", scat, "Density")
+    link(nt, d3, "Value", scat, "Density")
     add = node(nt, "ShaderNodeAddShader")
     link(nt, absorb, "Volume", add, 0)
     link(nt, scat, "Volume", add, 1)
@@ -724,7 +675,7 @@ def apply(scene, camera, look, options, background):
         else:
             ob.data.materials.append(m)
         made[ob.data.name] = m
-        if look == "ice" and o.get("ice") == "melting":
+        if look == "ice":
             m.displacement_method = "BOTH"
             sub = ob.modifiers.new("lumps", "SUBSURF")
             sub.levels = 0
