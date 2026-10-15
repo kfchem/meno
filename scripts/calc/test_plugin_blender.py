@@ -141,6 +141,30 @@ class Collect(unittest.TestCase):
         self.assertEqual(said["result"], {"why": "render.py: the scene has no camera"})
 
 
+class ProgressStatistics(unittest.TestCase):
+    """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
+
+    @classmethod
+    def setUpClass(cls):
+        import re as _re
+        src = (FOLDER / "render.py").read_text(encoding="utf-8")
+        start = src.index("CLOCK = ")
+        end = src.index("class Progress:")
+        ns = {"re": _re}
+        exec(src[start:end], ns)  # the two patterns, as written
+        cls.clock = ns["CLOCK"]
+
+    def test_reads_the_time_taken_and_remaining(self):
+        text = "Time: 00:00.80 | Remaining: 00:35.42 | Mem: 20.1M | Sample 1/128"
+        found = {m.group(1): (int(m.group(2) or 0) * 60 + int(m.group(3))) * 60 + float(m.group(4)) for m in self.clock.finditer(text)}
+        self.assertAlmostEqual(found["Time"], 0.8)
+        self.assertAlmostEqual(found["Remaining"], 35.42)
+
+    def test_reads_hours(self):
+        m = [m for m in self.clock.finditer("Remaining: 1:02:03.5")][0]
+        self.assertEqual((m.group(2), m.group(3), m.group(4)), ("1", "02", "03.5"))
+
+
 class Manifest(unittest.TestCase):
     def test_says_its_licence_and_carries_its_text(self):
         m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))

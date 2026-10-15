@@ -61,6 +61,8 @@ import math
 import os
 import re
 import sys
+import threading
+import time
 
 import bpy
 
@@ -291,6 +293,8 @@ def frames_of(scene, count):
 # How far a frame's samples are, as Blender says it in its render statistics
 # (the string `bpy.app.handlers.render_stats` is given): Cycles - "... | Sample 12/128" -
 # and EEVEE - "Rendering 12 / 128 samples"
+# Blender's render statistics carry the time taken and its own estimate of what remains: "Time: 00:04.50 | Remaining: 00:35.42 | Sample 1/128"
+CLOCK = re.compile(r"\b(Time|Remaining):\s*(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)")
 SAMPLES = re.compile(r"(?:\bSample\s+(\d+)\s*/\s*(\d+)|Rendering\s+(\d+)\s*/\s*(\d+)\s+samples)")
 
 
@@ -303,17 +307,57 @@ class Progress:
         self.frames = frames
         self.frame = 0
         self.said = -1
+        # (Blender's estimate of the frame, as of the moment it was told - the bar goes on by the clock from there, up to nearly the end)
+        self.anchor = None
+        self.lock = threading.RLock()
+        self.ended = threading.Event()
+        self.ticker = None
+
+    def tick(self):
+        """Between the statistics Blender reports - seconds apart on a graphics processor, a sample each - the bar goes on by the clock, along its own estimate; it never says the end, and never goes back."""
+        while not self.ended.wait(0.25):
+            with self.lock:
+                a = self.anchor
+                if a is None or a[3] != self.frame:
+                    continue
+                wall, taken, whole_time, _ = a
+                share = min(0.97, (taken + (time.monotonic() - wall)) / whole_time)
+                whole = (self.frame + share) / self.frames
+                self.say_at(int(whole * self.PARTS * 0.999), self.PARTS)
+
+    def end(self):
+        self.ended.set()
 
     def say_at(self, done, total):
-        # (a hundredth of the whole at least, or the last)
-        mark = (done * self.PARTS) // total
-        if mark > self.said or done >= total:
-            if done >= total and self.said >= self.PARTS:
-                return
-            self.said = max(self.said, mark)
-            say(f"progress {self.said}/{self.PARTS}")
+        # (a hundredth of the whole at least, or the last; the bar's own clock and Blender's statistics both say, one line at a time)
+        with self.lock:
+            mark = (done * self.PARTS) // total
+            if mark > self.said or done >= total:
+                if done >= total and self.said >= self.PARTS:
+                    return
+                self.said = max(self.said, mark)
+                say(f"progress {self.said}/{self.PARTS}")
+
+    @staticmethod
+    def clocks(text):
+        """The time taken and the time remaining that a statistics line says, in seconds: each, or None."""
+        found = {}
+        for m in CLOCK.finditer(text or ""):
+            found[m.group(1)] = (int(m.group(2) or 0) * 60 + int(m.group(3))) * 60 + float(m.group(4))
+        return found.get("Time"), found.get("Remaining")
 
     def stats(self, text, *_):
+        taken, left = self.clocks(text)
+        if taken is not None and left is not None and taken + left > 0:
+            # (Blender's own estimate: the share of this frame's time that has passed - moves the bar between the samples it reports,
+            # where one sample takes seconds; the sample's own share is the floor, and the bar never goes back)
+            whole = (self.frame + min(1.0, taken / (taken + left))) / self.frames
+            with self.lock:
+                self.say_at(int(whole * self.PARTS * 0.999), self.PARTS)
+                self.anchor = (time.monotonic(), taken, taken + left, self.frame)
+            if self.ticker is None:
+                self.ticker = threading.Thread(target=self.tick, daemon=True)
+                self.ticker.start()
         m = SAMPLES.search(text or "")
         if not m:
             return
@@ -325,8 +369,10 @@ class Progress:
         self.say_at(int(whole * self.PARTS * 0.999), self.PARTS)
 
     def frame_done(self):
-        self.frame += 1
-        self.say_at(int((self.frame / self.frames) * self.PARTS), self.PARTS)
+        with self.lock:
+            self.frame += 1
+            self.anchor = None
+            self.say_at(int((self.frame / self.frames) * self.PARTS), self.PARTS)
 
 
 def render(scene, s, folder):
@@ -338,11 +384,13 @@ def render(scene, s, folder):
     if not s["film"]:
         scene.render.filepath = os.path.join(folder, "frame.png")
         bpy.ops.render.render(write_still=True)
+        progress.end()
         say("progress 100/100")
         return [os.path.join(folder, "frame.png")]
     frames_of(scene, s["frames"])
     scene.render.filepath = os.path.join(folder, "frames", "####")
     bpy.ops.render.render(animation=True)
+    progress.end()
     made = sorted(glob.glob(os.path.join(folder, "frames", "*.png")))
     if len(made) != s["frames"]:
         raise SystemExit(f"render.py: Blender rendered {len(made)} of {s['frames']} frames")

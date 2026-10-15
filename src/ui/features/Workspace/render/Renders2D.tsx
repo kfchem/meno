@@ -54,14 +54,14 @@ export default function Renders2D() {
   );
 }
 
-/** What a render says it is doing, in a line. */
-function said(r: Rendering): string {
+/** What a render says it is doing, in a line. Its progress is hundredths of the whole (`done` of `total`, a job's own: not frames), so a film says how far it is in hundredths of its length. */
+export function said(r: Rendering): string {
   if (r.state === "failed") return r.why ?? "It failed";
   if (r.stopping) return "Stopping…";
   if (r.state === "preparing") return "Getting ready…";
   if (r.state === "waiting") return "Waiting for other jobs to finish…";
   if (r.state === "finishing") return "Putting it on the page…";
-  if (r.total && r.done != null) return r.kind === "film" && r.total > 1 ? `Rendering frame ${Math.min(r.done + 1, r.total)} of ${r.total}…` : "Rendering…";
+  if (r.total && r.done != null) return r.kind === "film" && r.total > 1 ? `Rendering ${Math.round((100 * Math.min(r.done, r.total)) / r.total)}%…` : "Rendering…";
   return "Rendering…";
 }
 

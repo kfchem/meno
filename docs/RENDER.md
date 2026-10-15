@@ -273,9 +273,14 @@ uv, no package), and the script Blender runs, `render.py`.
   (the default) and Blender found none it can use, the render is on the
   processor, and the step's line says so in small words, *Rendered on the
   processor*, after its time. Nothing is said where it rendered on the
-  graphics processor, or the setting was off. The log says which in each
-  case. A render's progress comes from Blender's own render statistics
-  (samples; a film's frames), as hundredths, and never goes back.
+  graphics processor, or the setting was off. The job's log (*Show log*
+  on the step's menu) says which in each case - it is not in `meno.log`.
+  A render's progress comes from Blender's own render statistics
+  (samples; a film's frames), as hundredths, and never goes back; between
+  the statistics a graphics processor reports, seconds apart, the bar goes
+  on by the clock along Blender's own estimate of the time remaining
+  (never to the end before the render says it). A film's line says it in
+  hundredths of its length, *Rendering 37%…*.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
