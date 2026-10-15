@@ -223,6 +223,20 @@ the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
 the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
 the document, and a save that fails says so under the canvas's card.
 
+## The main window's size and place (`windowstate.rs`)
+
+The main window's frame - its size in logical pixels, its place in the
+desktop's physical ones - and whether it was maximized or full screen (never
+minimized) are kept in `window-state.json` in Meno's data folder, not in the
+settings: written a moment after the last move or resize, and as it closes.
+They are put back in setup, before the window is first shown: its config makes
+it hidden, and `restore` shows it, so it never appears at the default size and
+moves (the no-abrupt-changes rule). Where the kept frame is not mostly on a
+monitor there is now - one unplugged, a resolution or scale changed - it is
+brought onto the nearest, its title bar within reach, or centred at the default
+size where there is none (`place`, with its tests). The talk's window and any
+other are not kept. Tauri's window API only; no crate of its own.
+
 ## Meno's log
 
 A release started from the Finder or Explorer has no terminal, so what
