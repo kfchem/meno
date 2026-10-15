@@ -913,6 +913,13 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .setup(|app| {
+            // the main window, made here rather than from tauri.conf.json (its "create" is
+            // false): on Windows its pinch is let through before its page first loads (pinch.rs)
+            let main = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or("no main window in tauri.conf.json")?;
+            #[cfg(windows)]
+            pinch::open_main(app.handle(), &main)?;
+            #[cfg(not(windows))]
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &main)?.build()?;
             // (and where Tauri has the data folder, should that be elsewhere)
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
@@ -930,9 +937,6 @@ pub fn run() {
             // the installers updates left in the temporary folder (Windows)
             #[cfg(windows)]
             update::tidy_after_updates(app.handle());
-            // a pinch - a touchpad's, a touch screen's - the page's own (Windows)
-            #[cfg(windows)]
-            pinch::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

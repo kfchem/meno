@@ -161,10 +161,11 @@ On Windows a pinch - two fingers on a precision touchpad, as on a
 Surface's, or on its touch screen - is the user's only where WebView2's
 `IsPinchZoomEnabled` lets it be, and Meno's webview is made with it off
 together with its zoom by Ctrl and the wheel or the keys (Tauri's
-`zoomHotkeysEnabled`). So at its start Meno turns it on and loads the page
-again, a setting taking effect at the next navigation
-(`src-tauri/src/pinch.rs`); Ctrl with the wheel or the keys still zooms
-nothing of the WebView's own. The page takes every pinch for itself: a
+`zoomHotkeysEnabled`). A setting takes effect from the next navigation, so
+on Windows Meno makes its main window itself (`"create": false` in
+tauri.conf.json) at about:blank, hidden, turns the pinch on, and only then
+loads the page - once (`src-tauri/src/pinch.rs`). Ctrl with the wheel or
+the keys still zooms nothing of the WebView's own. The page takes every pinch for itself: a
 touchpad's comes as the wheel with Ctrl held, which the canvas follows as
 on a Mac and whose default the page prevents everywhere (`main.tsx`), so
 that it zooms the page nowhere; a touch screen's finds no pinch allowed

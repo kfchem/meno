@@ -4,6 +4,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Meno",
         "width": 1024,
         "height": 768,
