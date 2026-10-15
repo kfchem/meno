@@ -3,7 +3,7 @@
  * order, what of each page it takes, and its words as they are copied -
  * across pages, a page's end read as a space.
  */
-import { textOf, wordBoxesBetween, wordsBetween } from "../../../../lib/pdf/text";
+import { textBetween, textOf, wordBoxesBetween, wordsBetween } from "../../../../lib/pdf/text";
 import type { PlacedPage, PlacedWord } from "../../../../lib/io/coordinates";
 import type { PdfBox, PdfItem, WordPlace, PdfSelection } from "../store/types";
 
@@ -28,7 +28,19 @@ export function onPage(sel: PdfSelection, page: number, n: number): [number, num
   return b > a ? [a, b] : null;
 }
 
-/** A selection's words, as they are copied. */
+/** A selection's text as Copy puts it on the clipboard: the page's lines kept, a blank line where one stands apart, each page's on from the last's (lib/pdf/text `textBetween`). */
+export async function selectedText(sel: PdfSelection, pdf: Pick<PdfItem, "sha256">): Promise<string> {
+  const { from, to } = ordered(sel);
+  const parts: string[] = [];
+  for (let page = from.page; page <= to.page; page++) {
+    const t = await textOf(pdf.sha256, page);
+    const range = onPage(sel, page, t.codes.length);
+    if (range) parts.push(textBetween(t, range[0], range[1]));
+  }
+  return parts.filter(Boolean).join("\n");
+}
+
+/** A selection's words on one line, a line's end a space: what a search is begun with, and what is carried out onto the page. */
 export async function selectedWords(sel: PdfSelection, pdf: Pick<PdfItem, "sha256">): Promise<string> {
   const { from, to } = ordered(sel);
   const parts: string[] = [];

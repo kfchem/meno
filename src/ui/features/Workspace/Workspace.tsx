@@ -142,7 +142,7 @@ import { savePictureFile } from "./render/savePicture";
 import TextSheets2D from "./components/TextSheets2D";
 import PdfColumn from "./components/PdfColumn";
 import { goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
-import { boxedPlaced, selectedPlaced, selectedWords, selects } from "./utils/pdfSelection";
+import { boxedPlaced, selectedPlaced, selectedText, selectedWords, selects } from "./utils/pdfSelection";
 import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
@@ -677,7 +677,7 @@ function WorkspaceContent({
         const sel = st.pdfSel;
         const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
         if (!sel || !pdf) return;
-        const words = await selectedWords(sel, pdf);
+        const words = await selectedText(sel, pdf);
         if (words) await writeClipboard([{ flavor: "text", text: words }]);
       }),
     [store],
