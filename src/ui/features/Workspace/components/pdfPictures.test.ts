@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
-import { FADE_MS, levelFor, Pictures, PREVIEW_PX, TILE, type Pic } from "./pdfPictures";
+import { FADE_MS, levelFor, Pictures, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+
+// (the reader: a tile drawn at once - or, while `hold` is set, never)
+const reader = vi.hoisted(() => ({ hold: false }));
+vi.mock("../../../../lib/pdf/reader", () => ({
+  drawPart: (a: { w?: number; h?: number }) =>
+    reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 }),
+}));
 
 describe("the level a page is drawn at", () => {
   it("is none where the page's small picture is enough", () => {
@@ -50,5 +57,59 @@ describe("a page's tiles drawn", () => {
     pics.tiles.set("p:0:4:0:0", pic(0));
     const drawn = pics.tilesOf("p", 0, 2, 10);
     expect(drawn.map((t) => [t.key, !!t.under])).toEqual([["p:0:4:0:0", true]]);
+  });
+});
+
+describe("a page's tiles kept", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  /** What the canvas asks of a page 3000 points square: the part seen, a screen of 2560 by 1600 pixels, its top left at (x, y) points. */
+  const asked = (level: number, x: number, y: number): TileAsk => ({
+    sha256: "p",
+    page: 0,
+    size: [3000, 3000],
+    level,
+    part: { x0: x, y0: y, x1: x + 2560 / level, y1: y + 1600 / level },
+    nearness: () => 0,
+    stillSince: () => 0,
+  });
+
+  it("keep what is drawn under a zoom made after the view stood still a long while, until the new level's tiles come", async () => {
+    reader.hold = false;
+    const pics = new Pictures();
+    const t0 = performance.now();
+    pics.ask(asked(2, 0, 0), t0);
+    await settle();
+    const had = [...pics.tiles.keys()];
+    expect(had.length).toBeGreaterThan(0);
+    // (still for ten seconds, then zoomed in: the new level's tiles on their way)
+    reader.hold = true;
+    const later = t0 + 10_000;
+    pics.ask(asked(2.83, 0, 0), later);
+    pics.letGo(later);
+    for (const k of had) expect(pics.tiles.has(k)).toBe(true);
+    expect(pics.tilesOf("p", 0, 2.83, later).filter((t) => t.under).map((t) => t.key).sort()).toEqual(had.sort());
+    reader.hold = false;
+  });
+
+  it("stay few however long the view is panned and zoomed: none kept under for parts not seen", async () => {
+    reader.hold = false;
+    const pics = new Pictures();
+    const levels = [2, 2.83, 4, 5.66, 4, 2.83];
+    let now = performance.now();
+    let most = 0;
+    for (let step = 0; step < 240; step++) {
+      const level = levels[step % levels.length];
+      // (wandering over the page, a little further each time)
+      const x = (step * 137) % 2400;
+      const y = (step * 89) % 2600;
+      pics.ask(asked(level, x, y), now);
+      await settle();
+      pics.tilesOf("p", 0, level, now);
+      pics.letGo(now);
+      most = Math.max(most, pics.tiles.size);
+      now += 400;
+    }
+    // (the tiles of a screen at each of the levels seen in the last few seconds, and those kept under: tens, not hundreds)
+    expect(most).toBeLessThan(10 * 12 + UNDER_MOST);
   });
 });

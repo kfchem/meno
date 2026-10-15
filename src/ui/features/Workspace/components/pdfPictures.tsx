@@ -33,6 +33,8 @@ export const PREVIEW_PX = 360;
 export const FADE_MS = 160;
 /** How long a tile no longer wanted is kept before it is let go, in ms. */
 const KEEP_MS = 4000;
+/** How many tiles of other levels a page keeps under its level's own while those come: a screen's worth, and more. */
+export const UNDER_MOST = 24;
 
 /** Marks on a page: boxes, in points from its top left, in a colour - words selected, or found. */
 export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean; ring?: boolean };
@@ -80,6 +82,8 @@ export type TileAsk = {
   nearness: (i: number, j: number) => number;
   /** Since when what asks has been still: a tile not wanted since is dropped before its turn. */
   stillSince: () => number;
+  /** Asked ahead - where the view is going, past what is seen - rather than for what is seen. */
+  ahead?: true;
 };
 
 /** The pictures of the PDFs' pages: previews by page, tiles by level and place; those it is told have come are said to whoever listens. */
@@ -90,6 +94,8 @@ export class Pictures {
   wanted = new Map<string, number>();
   /** The tiles the column draws now: kept, however long since they were asked for (the column asks only as it moves). */
   held = new Set<string>();
+  /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
+  seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
 
   listen(f: () => void): () => void {
@@ -128,6 +134,7 @@ export class Pictures {
     const right = Math.min(w * level, part.x1 * level);
     const top = Math.max(0, part.y0 * level);
     const bottom = Math.min(h * level, part.y1 * level);
+    if (!a.ahead) this.seen.set(`${a.sha256}:${a.page}`, { level, x0: left, y0: top, x1: right, y1: bottom });
     let asked = false;
     for (let j = Math.floor(top / TILE); j * TILE < bottom; j++)
       for (let i = Math.floor(left / TILE); i * TILE < right; i++) {
@@ -153,15 +160,22 @@ export class Pictures {
           })
           .catch(() => this.tiles.delete(key));
       }
+    // (those of other levels kept under what is seen, as wanted now: kept, even
+    // where the view stood still a long while before - long since wanted -
+    // and has just been zoomed, until the level's own have come)
+    if (!a.ahead) this.tilesOf(a.sha256, a.page, level, now);
     return asked;
   }
 
   /**
    * A page's tiles to draw at a level: those at it, and under them those
    * had at any other - finer or coarser, from before a zoom - where the
-   * level's own have not all come and faded in over them: what a zoom
-   * leaves stays until what replaces it is there, never the page's small
-   * picture between (each kept so, as wanted, while it is drawn).
+   * level's own over the part seen have not all come and faded in over
+   * them: what a zoom leaves stays until what replaces it is there, never
+   * the page's small picture between (each kept so, as wanted, while it is
+   * drawn). The part seen is the one last asked for at that level; what
+   * lies outside it is not waited for. At most `UNDER_MOST` are kept under,
+   * those of the levels nearest first.
    */
   tilesOf(sha256: string, page: number, level: number, now = performance.now()): Tile[] {
     const out: Tile[] = [];
@@ -173,8 +187,11 @@ export class Pictures {
       const [l, i, j] = key.slice(prefix.length).split(":").map(Number);
       (l === level ? out : others).push({ key, pic: t, i, j, level: l });
     }
-    // (the level's own tile over a part come and faded in)
+    // (the level's own tile over a part come and faded in - or a part not seen, which is not waited for)
+    const seen = this.seen.get(`${sha256}:${page}`);
+    const look = seen && seen.level === level ? seen : null;
     const done = (i: number, j: number) => {
+      if (look && ((i + 1) * TILE <= look.x0 || i * TILE >= look.x1 || (j + 1) * TILE <= look.y0 || j * TILE >= look.y1)) return true;
       const t = this.tiles.get(`${prefix}${level}:${i}:${j}`);
       return !!t && t !== "asked" && now - t.born >= FADE_MS;
     };
@@ -188,6 +205,9 @@ export class Pictures {
       for (let j = Math.floor(y0 / TILE); j * TILE < y1 - 0.5; j++) for (let i = Math.floor(x0 / TILE); i * TILE < x1 - 0.5; i++) if (!done(i, j)) return true;
       return false;
     });
+    // (the nearest levels' first, as many as are kept)
+    under.sort((x, y) => Math.abs(Math.log2(x.level / level)) - Math.abs(Math.log2(y.level / level)));
+    under.length = Math.min(under.length, UNDER_MOST);
     for (const o of under) this.wanted.set(o.key, now);
     // (drawn coarsest first, the level's own over all: Page sets them so)
     return [...under.sort((x, y) => x.level - y.level).map((o) => ({ ...o, under: true as const })), ...out];
