@@ -1,9 +1,11 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
+import { colourTargetGone } from "./utils/menuTarget";
 import { stylesOf } from "../../../lib/chem/captions";
 import { isBox, tintOf } from "../../../lib/chem/shapes";
 import { markerColour } from "../../../lib/chem/ink";
@@ -45,7 +47,20 @@ export default function ColourCard({
   const model = useEditor((s) => s.model);
   const ringFills = useEditor((s) => s.ringFills);
   const ref = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
+  // what it is for undone away, or deleted: the card goes with it
+  const gone = useEditor((s) => colourTargetGone(target, s));
+  // (the keys given to it as it opens, once: not again each time the canvas
+  // round it is drawn, which took them from wherever they had been put)
   useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (gone) onClose();
+  }, [gone, onClose]);
+  useEffect(() => {
+    if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -55,13 +70,12 @@ export default function ColourCard({
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("wheel", onClose, true);
-    ref.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("wheel", onClose, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
 
   const parts = target.atoms.length + target.bonds.length > 0;
   const arrows = target.pushes ?? [];
@@ -117,12 +131,9 @@ export default function ColourCard({
     if (row === "ring") s.fillRings(target.rings, color, gesture);
     else if (row === "line") s.colourShapes(shapes.map((x) => x.id), "stroke", color ?? "none", gesture);
     else if (row === "fill" || row === "tint") s.colourShapes(boxes.map((x) => x.id), "fill", color, gesture);
-    else {
-      if (parts || arrows.length) s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
-      if (words.length && row === "color") s.colourWords(words, color, gesture);
-      if (lines.length && row === "color") s.setArrowForm(lines, { color }, gesture);
-      if (inks.length && row === "color") s.colourInks(inks.map((k) => k.id), color, gesture);
-    }
+    else if (row === "highlight") s.colourParts({ atoms: target.atoms, bonds: target.bonds, pushes: arrows }, row, color, gesture);
+    // (all of it, one step)
+    else s.colourTogether({ atoms: target.atoms, bonds: target.bonds, pushes: arrows, words, arrows: lines, inks: inks.map((k) => k.id) }, color, gesture);
   };
   // (a marker's own colour not listed twice: a swatch fewer)
   const width = 92 + (palette.length + 2 - (markerOwn && palette.includes(markerOwn) ? 1 : 0)) * (SWATCH + 4) + 12;
@@ -131,6 +142,7 @@ export default function ColourCard({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="dialog"
       aria-label="Colour"
       tabIndex={-1}

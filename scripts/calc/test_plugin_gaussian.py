@@ -169,6 +169,13 @@ class Steps(unittest.TestCase):
         # (the wavefunction's file, "read from the input stream, on a separate line": after the molecule, ended by a blank line)
         self.assertEqual(text.split("\n\n")[3:], ["wavefunction.wfx", ""])
 
+    def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
+        # (Gaussian, given Opt for one atom, stops in its optimiser)
+        sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+        lines = ask("prepare", step="optimise", entries=[sodium], options=step_defaults("optimise"))["jobs"][0]["files"][0]["text"].splitlines()
+        route = next(line for line in lines if line.startswith("#"))
+        self.assertEqual(route, "# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ SP Output=WFX")
+
     def test_keeps_the_wavefunction_only_where_asked(self):
         job = ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "wavefunction": False})["jobs"][0]
         self.assertNotIn("Output=WFX", job["files"][0]["text"])
@@ -189,6 +196,37 @@ class Steps(unittest.TestCase):
             self.assertFalse(said["ok"], options)
         said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "conformers", "entries": [ENTRY], "options": {}}))
         self.assertFalse(said["ok"])
+
+    def test_text_typed_into_the_route_names_no_program_and_no_file(self):
+        # (a workspace's steps may come from someone else, and run where it is opened: External runs a program the
+        # input names - gaussian.com, "External" - "@" places a file in the input, "%" begins a Link 0 command)
+        refused = [
+            {"keywords": 'External="RunTink Amber"'},
+            {"keywords": "external=MyScript"},
+            {"keywords": "Opt Exter=MyScript"},
+            {"method": 'ONIOM(B3LYP/6-31G(d):AM1:External="RunTink Amber")'},
+            {"method": "ONIOM(External=RunCC:B3LYP)"},
+            {"basis": "@/etc/hosts"},
+            {"keywords": "Opt @basis.gbs/N"},
+            {"keywords": "Opt %Subst L103 /tmp"},
+            {"keywords": "Opt #P"},
+            {"keywords": 'Geom=Check "x"'},
+            {"keywords": "Opt ! a comment hiding what follows"},
+        ]
+        for options in refused:
+            said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [ENTRY], "options": {**step_defaults("energy"), **options}}))
+            self.assertFalse(said["ok"], options)
+            self.assertFalse(write(**options)["ok"], options)
+        # (what is typed there in the ordinary way still goes in as it was typed)
+        kept = {
+            "method": "CAM-B3LYP",
+            "basis": "6-311++G(2d',p')",
+            "keywords": "Opt=(CalcFC,MaxCycles=100) Int=UltraFine SCF=XQC Pop=NBO ExtraBasis",
+        }
+        line = text(**kept).split("\n")[1]
+        self.assertEqual(line, "# CAM-B3LYP/6-311++G(2d',p') EmpiricalDispersion=GD3BJ Opt Freq Opt=(CalcFC,MaxCycles=100) Int=UltraFine SCF=XQC Pop=NBO ExtraBasis")
+        oniom = text(method="ONIOM(B3LYP/6-31G(d):UFF)", basis="").split("\n")[1]
+        self.assertTrue(oniom.startswith("# ONIOM(B3LYP/6-31G(d):UFF) "), oniom)
 
     def test_every_option_offered_is_one_it_takes(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))

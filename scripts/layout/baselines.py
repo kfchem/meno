@@ -81,6 +81,10 @@ def graph(mol, centres=True):
     atoms = []
     for a in kek.GetAtoms():
         atom = {"el": a.GetSymbol(), "charge": a.GetFormalCharge(), "hs": a.GetTotalNumHs()}
+        # (its mass number, which the engine does not use but a drawing read
+        # back must say: a CD centre is no stereocentre without it)
+        if a.GetIsotope():
+            atom["isotope"] = a.GetIsotope()
         if a.GetIdx() in tetra:
             atom["tetra"] = tetra[a.GetIdx()]
         atoms.append(atom)

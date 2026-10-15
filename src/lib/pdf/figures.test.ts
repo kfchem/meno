@@ -36,6 +36,13 @@ describe("a PDF page's figures", () => {
     expect(figures[0]).toEqual([91, 300, 180, 328]);
   });
 
+  it("leave out a panel's ground drawn across the page behind a figure and a column of words", () => {
+    const panel = path([1.5, 270, 605.5, 360]);
+    const column = [text([51, 280, 290, 290]), text([51, 292, 290, 302]), text([51, 304, 290, 314])];
+    const figures = figuresOf([panel, ...column, ...structureAt(400, 300), text([51, 60, 555, 70])]);
+    expect(figures).toEqual([[391, 300, 480, 328]]);
+  });
+
   it("are each their own where they lie apart; a picture, however small, is one", () => {
     const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 100, 316, 112] }]);
     expect(figures).toHaveLength(3);
@@ -105,6 +112,22 @@ describe("a PDF page's figures", () => {
       { kind: "image", box: [200, 100, 328, 200] },
     ];
     expect(figuresOf([...panels, text([72, 300, 520, 310]), text([72, 700, 520, 710])])).toEqual([[72, 100, 328, 200]]);
+  });
+
+  it("are none on a page scanned in strips further apart than a scan is told by, the words read over them - but one drawn with lines as large, on a page cut close round it", () => {
+    // (three picture strips 5 points apart, forty lines of words read over them)
+    const strips: PageObject[] = [0, 1, 2].map((i) => ({ kind: "image", box: [6, 10 + i * 275, 606, 10 + i * 275 + 270] }));
+    const words = Array.from({ length: 40 }, (_, i) => text([60, 20 + i * 20, 560, 28 + i * 20]));
+    expect(figuresOf([...strips, ...words])).toEqual([]);
+    // (a scheme exported as a PDF of its own: compounds and an arrow, the page no larger than they are - nine tenths of it the figure)
+    const arrow = [path([168, 108, 230, 109]), path([228, 105, 236, 112])];
+    const scheme = [...structureAt(100, 100), ...arrow, ...structureAt(256, 100), text([180, 90, 220, 98])];
+    const figures = figuresOf([...scheme, text([95, 132, 300, 136])]);
+    expect(figures).toHaveLength(1);
+    const pageBox = [...scheme, text([95, 132, 300, 136])].map((o) => o.box).reduce((a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] as Box);
+    const share = ((figures[0][2] - figures[0][0]) * (figures[0][3] - figures[0][1])) / ((pageBox[2] - pageBox[0]) * (pageBox[3] - pageBox[1]));
+    expect(share).toBeGreaterThan(0.8);
+    expect(figureAt(figures, 200, 105)).toEqual(figures[0]);
   });
 
   it("take a reaction scheme whole: its arrow joins the compounds beyond its ends, a + joins those beside it, and its conditions and numbers are its", () => {

@@ -119,8 +119,12 @@ export function parseRXNGroups(text: string): RXNGroups {
  * them either side. Returns the model, the arrow's ends, the
  * pluses and the atoms' centroid.
  */
-export function buildEditorModelFromRXN(text: string): RXNLayout {
-  const groups = parseRXNGroups(text);
+export function buildEditorModelFromRXN(text: string, place: (mols: ParsedMol[]) => ParsedMol[] = (mols) => mols): RXNLayout {
+  // (its molecules as `place` has them - one given no coordinates, laid out: lib/io/unplaced)
+  const read = parseRXNGroups(text);
+  const [r, p] = [read.reactants.length, read.products.length];
+  const all = place([...read.reactants, ...read.products, ...read.agents]);
+  const groups: RXNGroups = { reactants: all.slice(0, r), products: all.slice(r, r + p), agents: all.slice(r + p) };
   const allMols = [...groups.reactants, ...groups.products, ...groups.agents];
   if (!allMols.length)
     return {
@@ -318,13 +322,19 @@ export function drawnBox(model: EditorModel): { minX: number; maxX: number; minY
     const a1 = index.get(b.a);
     const a2 = index.get(b.b);
     if (a1 == null || a2 == null) continue;
+    // (a haptic bond's endpoints are atoms' ids, which the layout takes by
+    // index: as indices, or none where the part lacks its ring - read as
+    // indices, they put the box at NaN, and a set round it was dropped on saving)
+    const { endpoints, attach: _attach, ...chem } = bondChem(b);
+    const ends = endpoints?.map((e) => index.get(e));
     bonds.push({
       a1,
       a2,
       order: b.order,
       stereo: b.stereo ?? "none",
       ...(b.dative ? { dative: true } : {}),
-      ...bondChem(b),
+      ...chem,
+      ...(ends?.length && ends.every((e) => e != null) ? { endpoints: ends as number[], attach: b.attach ?? "all" } : {}),
     });
   }
   const opts = layoutOptionsFor(MENO, NOMINAL_BOND_LENGTH, { units: "world" });
@@ -384,6 +394,10 @@ function markSgroups(
                 data: g.field.data,
                 ...(g.field.units ? { units: g.field.units } : {}),
                 ...(g.field.type ? { type: g.field.type } : {}),
+                ...(g.field.info ? { info: g.field.info } : {}),
+                ...(g.field.display ? { display: g.field.display } : {}),
+                ...(g.field.queryType ? { queryType: g.field.queryType } : {}),
+                ...(g.field.queryOp ? { queryOp: g.field.queryOp } : {}),
               },
             }
           : {}),

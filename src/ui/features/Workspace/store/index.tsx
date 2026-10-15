@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
@@ -25,6 +26,7 @@ import { createShapesSlice } from "./slices/shapesSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
+import { withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
 
@@ -38,7 +40,7 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
  * `model`, `arrows` and the aromatic flags from the store, while the document
  * is what actually holds them - which is how undo and redo reach the canvas.
  */
-function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>) {
+function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>, talkLooks: Readonly<Record<number, Look>> = NO_LOOKS) {
   return {
     // (of each stack of drawings, the record it shows: the canvas works on
     // that, the whole kept beside it for what keeps the document - utils/stacks)
@@ -55,11 +57,13 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     nextPlusId: doc.nextPlusId ?? 1,
     captions: doc.captions ?? NO_CAPTIONS,
     nextCaptionId: doc.nextCaptionId ?? 1,
-    molecules3d: doc.molecules3d ?? [],
+    // (each in the look a talk switched it to, while it is given)
+    molecules3d: withLooks(doc.molecules3d ?? [], talkLooks),
     sets: doc.sets ?? NO_SETS,
     steps: doc.steps ?? NO_STEPS,
     wires: doc.wires ?? NO_WIRES,
     docStyle: doc.style,
+    pageId: doc.pageId,
     texts: doc.texts ?? NO_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
     pictures: doc.pictures ?? NO_PICTURES,
@@ -117,6 +121,7 @@ const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
 const NO_RECORDS: Record<number, number> = {};
+const NO_LOOKS: Readonly<Record<number, Look>> = {};
 
 /**
  * Mirrors the document into the store and keeps doing so. Returns the
@@ -135,21 +140,34 @@ function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: read
   return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
 }
 
-function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>) {
-  const kept = (id: number | null, there: readonly { id: number }[]) => (id != null && !there.some((x) => x.id === id) ? null : id);
+function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travelled: boolean) {
+  // (gone back or forward to - an undo, a redo - what was under the pointer
+  // may have moved from under it: the pointer has not, and a key - Delete,
+  // a letter - acted on an atom across the page. What has changed is let
+  // go, to be lit again as the pointer next moves.)
+  const changed = <T extends { id: number }>(id: number, before: readonly T[], there: readonly T[]) =>
+    travelled && before.find((x) => x.id === id) !== there.find((x) => x.id === id);
+  const kept = <T extends { id: number }>(id: number | null, there: readonly T[], before: readonly T[] = there) =>
+    id != null && (!there.some((x) => x.id === id) || changed(id, before, there)) ? null : id;
   const { atoms, bonds } = now.model;
-  const atom = prev.hovered.atomId != null && !atoms.some((a) => a.id === prev.hovered.atomId);
-  const bond = prev.hovered.bondId != null && !bonds.some((b) => b.id === prev.hovered.bondId);
+  const placeOf = (list: readonly { id: number; x: number; y: number }[], id: number) => list.find((a) => a.id === id);
+  const moved = (id: number) => {
+    const [p, q] = [placeOf(prev.model.atoms, id), placeOf(atoms, id)];
+    return travelled && (!p || !q || p.x !== q.x || p.y !== q.y);
+  };
+  const hb = prev.hovered.bondId != null ? bonds.find((b) => b.id === prev.hovered.bondId) : undefined;
+  const atom = prev.hovered.atomId != null && (!atoms.some((a) => a.id === prev.hovered.atomId) || moved(prev.hovered.atomId));
+  const bond = prev.hovered.bondId != null && (!hb || moved(hb.a) || moved(hb.b));
   const molecule = (id: number) => now.molecules3d.find((m) => m.id === id);
   const { hovered3d: m3d, hoveredAtom3d: a3d, hoveredMeasure3d: q3d, hoveredMark: mark } = prev;
   return {
     hovered: atom || bond ? { atomId: atom ? null : prev.hovered.atomId, bondId: bond ? null : prev.hovered.bondId } : prev.hovered,
-    hoveredPush: kept(prev.hoveredPush, now.pushes),
-    hoveredArrow: kept(prev.hoveredArrow, now.arrows),
-    hoveredPlus: kept(prev.hoveredPlus, now.pluses),
-    hoveredCaption: kept(prev.hoveredCaption, now.captions),
-    hoveredPdf: kept(prev.hoveredPdf, now.pdfs),
-    hoveredPicture: kept(prev.hoveredPicture, now.pictures),
+    hoveredPush: kept(prev.hoveredPush, now.pushes, prev.pushes),
+    hoveredArrow: kept(prev.hoveredArrow, now.arrows, prev.arrows),
+    hoveredPlus: kept(prev.hoveredPlus, now.pluses, prev.pluses),
+    hoveredCaption: kept(prev.hoveredCaption, now.captions, prev.captions),
+    hoveredPdf: kept(prev.hoveredPdf, now.pdfs, prev.pdfs),
+    hoveredPicture: kept(prev.hoveredPicture, now.pictures, prev.pictures),
     hoveredSet: kept(prev.hoveredSet, now.sets),
     hoveredStep: kept(prev.hoveredStep, now.steps),
     hoveredWire: kept(prev.hoveredWire, now.wires),
@@ -168,7 +186,7 @@ export function connectStoreToDocument(
   const sync = () =>
     store.setState((prev) => {
       const now = doc.getState();
-      const mirrored = mirrorOf(now, prev.recordsShown);
+      const mirrored = mirrorOf(now, prev.recordsShown, prev.talkLooks);
       // (a turn of several as one body undone or redone: their turns too)
       const turns = turnsAcross(doc, was, now);
       was = now;
@@ -176,12 +194,16 @@ export function connectStoreToDocument(
         ...heldOf(prev, mirrored.molecules3d),
         sel: drawingHeld(prev.sel, mirrored.model),
         selAnchor: prev.selAnchor != null && !mirrored.model.atoms.some((a) => a.id === prev.selAnchor) ? null : prev.selAnchor,
-        ...hoversHeld(prev, mirrored),
+        ...hoversHeld(prev, mirrored, doc.travelled()),
         // (a bond or a chain being drawn out of an atom, or an atom being dragged, that an undo
         // took away: let go - drawn on, it was a bond from nowhere, its new atom a lone CH4)
         extend: prev.extend.active && prev.extend.atomId != null && !mirrored.model.atoms.some((a) => a.id === prev.extend.atomId) ? noStroke : prev.extend,
         moveDrag: prev.moveDrag.active && !mirrored.model.atoms.some((a) => a.id === prev.moveDrag.atomId) ? noMoveDrag : prev.moveDrag,
         selFlow: flowHeld(prev.selFlow, mirrored.sets, mirrored.steps),
+        // (a step's options card, or a set chosen, an undo took away: shut - a redo
+        // brought the card back, and a step pasted into the id it freed opened with it)
+        openStep: prev.openStep != null && !mirrored.steps.some((x) => x.id === prev.openStep) ? null : prev.openStep,
+        chosenSet: prev.chosenSet != null && !mirrored.sets.some((x) => x.id === prev.chosenSet) ? null : prev.chosenSet,
         // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
         quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
@@ -263,6 +285,7 @@ export function createEditorStore(
     frames3d: {},
     stacksShown: {},
     recordsShown: NO_RECORDS,
+    talkLooks: NO_LOOKS,
     recordSwaps: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
@@ -367,6 +390,9 @@ export function storeOf(doc: DocumentStore<WorkspaceDocument>): EditorStore {
   return store;
 }
 
+/** The store a document is drawn from, where one has been made: none for a document never drawn. */
+export const madeStoreOf = (doc: DocumentStore<WorkspaceDocument>): EditorStore | undefined => storesOf.get(doc);
+
 /** The stores that have taken what their canvas was opened with (hooks/useStructureEvents). */
 const openedStores = new WeakSet<EditorStore>();
 
@@ -398,7 +424,7 @@ export function EditorProvider({
   children: ReactNode;
 }) {
   const doc = useMemo(
-    () => document ?? createWorkspaceDocument(),
+    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle),
     // A different tab identity means a different canvas, so a canvas without a
     // document of its own gets a fresh one rather than keeping the old tab's.
     // eslint-disable-next-line react-hooks/exhaustive-deps

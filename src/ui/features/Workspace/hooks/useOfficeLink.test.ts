@@ -83,3 +83,25 @@ describe("the link back to a document", () => {
     stop();
   });
 });
+
+describe("the link back to an Office document, as the canvas changes", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const settle = () => vi.advanceTimersByTimeAsync(1000);
+
+  it("sends words, a shape or writing by hand added alone - all of it what the document shows", async () => {
+    for (const add of [
+      (st: ReturnType<ReturnType<typeof opened>["state"]>) => st.addCaption("NaH, THF", 5, 5),
+      (st: ReturnType<ReturnType<typeof opened>["state"]>) => st.addShape({ kind: "rect", x0: 0, y0: 0, x1: 20, y1: 10 }),
+      (st: ReturnType<ReturnType<typeof opened>["state"]>) => st.writeStroke({ pen: "pen", width: 1 }, { points: [0, 0, 0.5, 1, 1, 0.5, 2, 0, 0.5] }),
+    ]) {
+      const { state, sent, stop } = opened(true);
+      await settle();
+      const before = sent.length;
+      add(state());
+      await settle();
+      expect(sent.length).toBe(before + 1);
+      stop();
+    }
+  });
+});

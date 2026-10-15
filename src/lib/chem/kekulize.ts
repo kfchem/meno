@@ -14,7 +14,8 @@
  * those decide too: an N that carries its H ([nH]) takes no double bond,
  * and a charged one may with a third bond (an N-alkylpyridinium's [n+], a
  * pyrylium's [o+]); without them, a charged aromatic atom is judged as if
- * it were neutral. Where no assignment satisfies every atom, as many
+ * it were neutral. A query atom - A, Q, *, an atom list - takes one where
+ * the ring needs it, as a pyridine's N does. Where no assignment satisfies every atom, as many
  * carbons as possible still get their double bond and the rest stay single.
  */
 
@@ -25,6 +26,9 @@ export type KekuleAtom = { el: string; hs?: number; charge?: number };
 export type KekuleBond = { a1: number; a2: number; order: number };
 
 type Role = "needs" | "may" | "never";
+
+/** A CTfile's query atoms that a ring of aromatic bonds may run through: A, Q, * and an atom list, L. */
+const QUERY_ATOMS = new Set(["A", "Q", "*", "L"]);
 
 /** Per bond, the order to draw it with: 1, 2 or 3. */
 export function kekuleOrders(
@@ -66,6 +70,9 @@ export function kekuleOrders(
     }
     // a pyrylium's or a thiopyrylium's
     if ((el === "O" || el === "S") && degree[i] === 2 && charge > 0) return "may";
+    // a query atom - any atom (A, *), any but C (Q), one of a list (L) -
+    // in a ring of aromatic bonds: as the ring needs, as a pyridine's N
+    if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return "may";
     return "never";
   };
   const roles = atoms.map((_, i) => role(i));
@@ -131,6 +138,18 @@ export function kekuleOrders(
         matched[a] = p.bond;
         matched[p.other] = p.bond;
       }
+    }
+  }
+
+  // A query atom the carbons left without one takes its double bond with a
+  // neighbour left without one too - the ring's last, which carbons alone
+  // did not need: a pyridine with * for a carbon
+  for (let a = 0; a < atoms.length; a++) {
+    if (matched[a] >= 0 || !QUERY_ATOMS.has(atoms[a]?.el ?? "")) continue;
+    const p = free(a)[0];
+    if (p) {
+      matched[a] = p.bond;
+      matched[p.other] = p.bond;
     }
   }
 

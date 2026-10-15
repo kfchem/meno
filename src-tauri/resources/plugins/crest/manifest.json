@@ -3,7 +3,7 @@
   "name": "CREST",
   "version": "2.12",
   "description": "Searches for a molecule's conformers in 3D, by metadynamics with the GFN methods of xtb, from the Grimme group.",
-  "licence": "LGPL-3.0",
+  "licence": "LGPL-3.0-or-later",
   "homepage": "https://crest-lab.github.io/crest-docs",
   "systems": ["macos", "linux"],
   "environment": "pixi",
@@ -11,7 +11,7 @@
     {
       "kinds": ["conformers"],
       "takes": ["molecules", "conformers"],
-      "programs": ["crest"],
+      "programs": ["crest", "xtb"],
       "options": [
         {"id": "method", "label": "Method", "type": "choice", "choices": [
           {"value": "gfn2", "label": "GFN2-xTB"},
@@ -57,7 +57,7 @@
     },
     {
       "kinds": ["optimise"],
-      "programs": ["crest"],
+      "programs": ["crest", "xtb"],
       "options": [
         {"id": "method", "label": "Method", "type": "choice", "choices": [{"value": "gfn2", "label": "GFN2-xTB"}, {"value": "gfn1", "label": "GFN1-xTB"}, {"value": "gfnff", "label": "GFN-FF"}], "default": "gfn2"},
         {"id": "solvent", "label": "Solvent (ALPB)", "type": "choice", "choices": [

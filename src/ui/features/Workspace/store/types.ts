@@ -237,6 +237,8 @@ export type PdfItem = {
    * its pages were, 1 as wide as the column. Kept, not a step to undo.
    */
   reading?: PdfReading;
+  /** The page's units in one of its points, as it was laid: the workspace's (lib/pdf/layout `pointFor`), scaled with the page as its style changes (restyle); unset, ACS 1996's (`POINT`). */
+  point?: number;
 };
 
 /**
@@ -328,6 +330,8 @@ export type PdfBox = { id: number; page: number; box: [number, number, number, n
  */
 export type PictureFlight = {
   box: PdfBox;
+  /** The page's units in a point of the PDF it is cut out of (lib/pdf/layout `pointOf`). */
+  point: number;
   from: { left: number; top: number; k: number };
   grab: { x: number; y: number };
   start: number;
@@ -501,7 +505,7 @@ export type WordsFlight = {
  * or a step's log, has no sheet: that molecule, or its step, is its body
  * (`of`) - what it rises out of into the column, and goes back into.
  */
-export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; reading?: false; icon?: true; of?: TextOf };
+export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
 export type TextOf = { step: number } | { molecule: number };
 /**
@@ -592,6 +596,10 @@ export type CarriedList = { id: string; row: number | null; iso?: number };
 export type Carried3D = Omit<Molecule3D, "id"> & { turn?: Turn3D; frame?: number; list?: CarriedList; shown?: true };
 /** What is drawn, as a copy carries it: the drawing, its arrows, pluses and words, molecules in 3D - and a workflow's parts (sets, steps and the wires among them). */
 export type Drawn = Model & {
+  /** The bond's printed length in the style of the workspace it was copied from (`bondLengthPt`): pasted where that differs, what it carries is converted (docs/WORKSPACE.md, *Drawing style*). */
+  bondPt?: number;
+  /** How large the style it was copied in set its labels, in pt (restyle `labelPtOf`): words given no size are kept that large where pasted. */
+  labelPt?: number;
   pushes?: PushArrow[];
   ringFills?: RingFills;
   arrows?: Arrow[];
@@ -757,6 +765,17 @@ export type EditorState = {
   gatherStack: (stack: number, shown: number) => void;
   /** Which record each stack of drawings shows, by the stack's id: by the record's place in its file; its first if absent (utils/stacks). */
   recordsShown: Record<number, number>;
+  /**
+   * Molecules in 3D shown in their other look for a talk - two clicks on
+   * one while it is given (docs/PRESENTING.md) - by id: the view's alone,
+   * gone as the talk ends; the document's looks as they were, nothing to
+   * undo, nothing unsaved.
+   */
+  talkLooks: Readonly<Record<number, Look3D>>;
+  /** A molecule in 3D shown in its other look for the talk being given. */
+  switchTalkLook3d: (id: number) => void;
+  /** The looks a talk switched let go: each molecule as the document has it. */
+  endTalkLooks: () => void;
   /** A stack of drawings shows another of its records - selected in its place, where the one it showed was. */
   showRecord: (stack: number, record: number) => void;
   /**
@@ -1012,6 +1031,8 @@ export type EditorState = {
   /** A shape put on the page, over the others; its id. */
   addShape: (shape: Omit<Shape, "id">) => number | null;
   /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  /** A resize let go: back as it was at the press (Escape, or undo during it). */
+  dropShapeChange: (id: number, gesture: string) => void;
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
   /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
   styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
@@ -1156,6 +1177,13 @@ export type EditorState = {
    */
   wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
+  /**
+   * The result sets whose molecules no longer fit them, as the 3D look in
+   * Settings draws them, laid out again (workflow/run `fitResultSets`):
+   * in every state the history holds, with no step of its own and the
+   * document as saved as it was - the look is Settings', not the document's.
+   */
+  fitResultSets: () => void;
   /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
   forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran" | "runs">) => void;
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
@@ -1215,6 +1243,8 @@ export type EditorState = {
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
   jobsSeen: Record<string, JobSeen>;
+  /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
+  menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */
   rewire: (id: number, to: number) => void;
   hoverPulse: { id: number | null; nonce: number; until: number };
@@ -1231,10 +1261,18 @@ export type EditorState = {
    * or highlighted in it - or (null) none: one step.
    */
   colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
+  /** One colour given to all a selection holds - atoms and bonds, electron arrows, words, reaction arrows, writing by hand - as one step. */
+  colourTogether: (
+    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+    color: string | null,
+    gesture?: string,
+  ) => void;
   /** The rings named (by key) filled with a colour, or (null) not: one step - a run of them in one `gesture` too. */
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
-  docStyle?: StyleChoice;
+  docStyle: StyleChoice;
+  /** Which page the document is (document.ts `pageId`): unset until one is opened from a file. */
+  pageId?: number;
   labelEdit: {
     active: boolean;
     atomId: number | null;
@@ -1314,6 +1352,8 @@ export type EditorState = {
    */
   /** An atom's charge one up (+1) or one down (-1), as one undo step. */
   stepCharge: (id: number, step: 1 | -1) => void;
+  /** Each atom's charge stepped by one, as one undo step: the selection's, by + or -. */
+  stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
   deleteAtom: (id: number) => void;
@@ -1331,6 +1371,8 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
+  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
+  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -1394,7 +1436,8 @@ export type EditorState = {
   pressHold: { atomId?: number; at?: { x: number; y: number }; start: number } | null;
   setPressHold: (h: EditorState["pressHold"]) => void;
   /** The bond a double-click on an atom drew, which a third click takes back to draw a chain instead. */
-  doubleClickBond: { atomId: number; depth: number; at: number } | null;
+  /** (`state`: the document as the bond left it - its depth in the history stays the same once the history is full, so it is told by this) */
+  doubleClickBond: { atomId: number; state: object; at: number } | null;
   noteDoubleClickBond: (atomId: number) => void;
   /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
   takeBackDoubleClickBond: (atomId: number) => void;
@@ -1413,6 +1456,12 @@ export type EditorState = {
    * and the column stay as they are.
    */
   letGo: () => void;
+  /**
+   * No gesture under way any more (store/gesture): the flags a gesture
+   * lost - the window left, the pointer taken - leaves, cleared. What is
+   * drawn, selected or being typed stays as it is.
+   */
+  endGestures: () => void;
   setMoveMode: (mode: "snap" | "free") => void;
   beginMoveDrag: (
     atomId: number,
@@ -1452,7 +1501,7 @@ export type EditorState = {
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
-  openModel: (next: Model, scheme?: ImportedScheme) => void;
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => void;
   /** Joins what readers reading an output as well have found to each molecule read from it (lib/calc/readings): learnt of the document, not done to it - nothing to undo. */
   joinReadings: () => void;
   /** A file opened over the canvas's contents, as one undo step. */
@@ -1515,7 +1564,10 @@ export type EditorState = {
    * (undefined). Changes sharing `coalesceKey` - a drag along a slider - are
    * one undo step.
    */
-  setDocumentStyle: (style: StyleChoice | undefined, coalesceKey?: string) => void;
+  /** The workspace's drawing style set and its page converted with it, one step; with `coalesceKey`, a slider's ticks, each from the page as the drag began, coalesced. */
+  setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => void;
+  /** A preset chosen in the Drawing style card: the style taken, its bond eased in from the old one, one step (../styleEase). */
+  easeDocumentStyle: (style: StyleChoice) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

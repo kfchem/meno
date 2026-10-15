@@ -15,7 +15,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { TAU, follow } from "../../../theme/motion";
 import { COLORS } from "../../../theme/colors";
-import { POINT } from "../../../../lib/pdf/layout";
 import { useEditorStore } from "../store";
 import type { PictureFlight as Flight } from "../store/types";
 
@@ -69,8 +68,8 @@ export default function PictureFlight({ f }: { f: Flight }) {
   const store = useEditorStore();
   const { gl, camera, invalidate } = useThree();
   const [x0, y0, x1, y1] = f.box.box;
-  const w = (x1 - x0) * POINT;
-  const h = (y1 - y0) * POINT;
+  const w = (x1 - x0) * f.point;
+  const h = (y1 - y0) * f.point;
   // where in it the pointer holds it, in units of the page from its middle (as components/boxDrag puts it down)
   const held = useMemo(() => ({ x: (f.grab.x - f.from.left) / f.from.k - w / 2, y: h / 2 - (f.grab.y - f.from.top) / f.from.k }), [f.grab, f.from, w, h]);
   const sheet = useRef<THREE.Mesh>(null);

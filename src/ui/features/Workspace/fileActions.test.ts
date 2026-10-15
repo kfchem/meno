@@ -191,6 +191,17 @@ describe("drawingSvg", () => {
     expect(w).toBeCloseTo((0.45 / 12.2) * L, 9);
   });
 
+  it("draws what XML cannot hold in words on the page as the replacement character, as words pasted from elsewhere bring it", () => {
+    const words = drawingSvg({ ...model, captions: [{ id: 9, x: 0, y: -2 * L, text: "ligature\x02break \x00nul\x1b x\u{FFFE}y\u{FFFF} & <b>" }] }, aromatic, ACS_1996);
+    const notXml = [...words].filter((c) => {
+      const n = c.codePointAt(0)!;
+      return (n < 0x20 && n !== 0x09 && n !== 0x0a && n !== 0x0d) || n === 0xfffe || n === 0xffff;
+    });
+    expect(notXml).toEqual([]);
+    expect(words).toContain("ligature\u{FFFD}break \u{FFFD}nul\u{FFFD} x\u{FFFD}y\u{FFFD}");
+    expect(words).toContain("&amp; &lt;b&gt;");
+  });
+
   it("keeps a line its true width, however thin that is in pixels", () => {
     const w = Number(/stroke-width="([\d.e]+)"/.exec(svg)![1]);
     // 0.6 pt of a 14.4 pt bond, in the drawing's own units
@@ -319,8 +330,10 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const back = await processFileContent("oh.sdf", text);
     expect(back.molecules3d).toHaveLength(3);
     expect(back.molecules3d![2].atoms[1]).toMatchObject({ el: "H", x: 0.98 });
-    // (the frame shown, unless asked)
-    expect(structureFileText({ atoms: [], bonds: [], molecules3d: [conformers] }, "/tmp/oh.sdf").match(/\$\$\$\$/g)).toHaveLength(1);
+    // (the frame shown, unless asked - with its energy)
+    const shown = structureFileText({ atoms: [], bonds: [], molecules3d: [conformers] }, "/tmp/oh.sdf");
+    expect(shown.match(/\$\$\$\$/g)).toHaveLength(1);
+    expect(shown).toContain("> <Energy (Eh)>\n-75.39\n");
   });
 
   it("writes molecules in 3D as a PDB file - each a residue, the frame shown or a model for each frame - which reads back as they were", async () => {

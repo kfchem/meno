@@ -10,10 +10,12 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import { clickedOpen } from "../workflow/cardOpen";
 import { countOf, type Frame } from "../workflow/entries";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { useShownFrames } from "./useShownFrames";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
@@ -32,6 +34,7 @@ type Pt = { x: number; y: number };
 
 /** The least a set is sized to, each way. */
 const LEAST = 48 * PX;
+
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
  * its grey; the accent while it is drawn; the attention colour into a step
@@ -229,6 +232,9 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  // (the step a click last opened, and when: a double-click's second click leaves it open)
+  const opened = useRef<{ step: number; at: number } | null>(null);
+
   // (the card just shut kept over the others while it shrinks back)
   const [shutting, setShutting] = useState<number | null>(null);
   const toldOpen = useRef<((open: number | null) => void) | null>(null);
@@ -242,9 +248,19 @@ export default function Workflow2D() {
   const turns3d = useEditor((s) => s.turns3d);
   const frames3d = useEditor((s) => s.frames3d);
   const jobsSeen = useEditor((s) => s.jobsSeen);
+  const menoWorking = useEditor((s) => s.menoWorking);
   const selFlow = useEditor((s) => s.selFlow);
   const style3d = useStyle3D();
   const { camera, gl, invalidate } = useThree();
+  // the 3D look Settings has - as the workspace opens, and as it changes: the
+  // result sets its molecules no longer fit laid out again (workflow/run
+  // `fitResultSets`), frames and molecules going over to their new places
+  useEffect(() => {
+    store.getState().fitResultSets();
+  }, [store, style3d]);
+  // (each set's frame as it is drawn: on its way to where the document has it)
+  const shownSets = useShownFrames(sets);
+  const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
   // (where the programs installed separately that steps run are: looked for as such steps are put down, opened, changed)
@@ -461,7 +477,11 @@ export default function Workflow2D() {
     if (e.button !== 0) return;
     const open = () => {
       const s = store.getState();
-      s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+      const now = performance.now();
+      const next = clickedOpen(s.openStep, step.id, opened.current, now);
+      if (next === s.openStep) return;
+      if (next === step.id) opened.current = { step: step.id, at: now };
+      s.setWorkflowView({ openStep: next });
     };
     if (asSelected(e, { step: step.id }, open)) return;
     const start = worldOf(e.clientX, e.clientY);
@@ -470,9 +490,7 @@ export default function Workflow2D() {
       e,
       (p) => store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture),
       (moved) => {
-        if (moved) return;
-        const s = store.getState();
-        s.setWorkflowView({ openStep: s.openStep === step.id ? null : step.id });
+        if (!moved) open();
       },
     );
   };
@@ -484,25 +502,19 @@ export default function Workflow2D() {
     store.getState().setWorkflowView({ workflowMenu: { kind, id, clientX: e.clientX, clientY: e.clientY } });
   };
 
-  // a step open to its options: shut by Escape, or a press anywhere else
+  // a step open to its options: shut by Escape, its Close, or its card pressed again - not by a press elsewhere:
+  // the page is worked on (panned, scrolled, other cards) while its options are
   useEffect(() => {
     if (openStep == null) return;
     const shut = () => store.getState().setWorkflowView({ openStep: null });
-    const onPress = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest?.(`[data-step-card="${openStep}"]`)) shut();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
       shut();
     };
-    window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPress, true);
-      window.removeEventListener("keydown", onKey, true);
-    };
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [openStep, store]);
 
   // a set chosen: let go by a press anywhere but its tab, or Escape
@@ -530,16 +542,17 @@ export default function Workflow2D() {
   const gives = (end: WireEnd): Pt | null => {
     if ("set" in end) {
       const b = setById.get(end.set);
-      return b ? setGives(b) : null;
+      return b ? setGives(shownOf(b)) : null;
     }
     const s = stepById.get(end.step);
     return s ? stepGives(s) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
+  // (Meno's Duplicates working in turns: running, as a step with jobs is)
   // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const states = useMemo(() => new Map(steps.map((s) => [s.id, stateOf(flow, s, byOf(s))])), [flow, steps, settingsOptions]);
+  const states = useMemo(() => new Map(steps.map((s) => [s.id, menoWorking[s.id] ? ("running" as const) : stateOf(flow, s, byOf(s))])), [flow, steps, menoWorking, settingsOptions]);
   // how each running step's jobs are getting on, as last looked at
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
@@ -561,8 +574,10 @@ export default function Workflow2D() {
         },
       });
     }
+    // (and Meno's working in turns: how many of its entries it has been through)
+    for (const [id, m] of Object.entries(menoWorking)) out.set(Number(id), { waiting: false, view: { since: m.since, ended: m.done, total: m.total } });
     return out;
-  }, [steps, jobsSeen]);
+  }, [steps, jobsSeen, menoWorking]);
   // each set's name and count: what it holds, worked out as the page changes, not as the pointer moves
   const setInfo = useMemo(
     () =>
@@ -632,10 +647,11 @@ export default function Workflow2D() {
   const parts = [
     ...sets.map((b) => {
       const info = setInfo.get(b.id)!;
+      const f = shownOf(b);
       return (
-        <div key={`b${b.id}`} style={onLayer(b.x0, b.y1)}>
+        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
           <SetFrame
-            set={b}
+            set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
             hovered={hoveredSet === b.id}
@@ -679,6 +695,7 @@ export default function Workflow2D() {
             onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
+            onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
             onTakeDown={(e) => drawInto(e, s.id)}
             onGiveDown={(e) => drawFrom(e, { step: s.id })}
@@ -711,7 +728,7 @@ export default function Workflow2D() {
     }),
     ...sets.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(b), moving: false, color: WIRE, onHover: undefined }] : [];
+      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);

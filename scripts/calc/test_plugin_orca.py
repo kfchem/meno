@@ -77,10 +77,41 @@ class Prepare(unittest.TestCase):
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
 
+    def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
+        # (ORCA, given OPT for one atom, warns and stops with no energy)
+        sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}
+        lines = ask("prepare", step="optimise", entries=[sodium], options=defaults("optimise"))["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! B3LYP def2-SVP D3BJ SP")
+        self.assertEqual(lines[1], "* xyz 1 1")
+        # (frequencies are asked of it as of any molecule)
+        freq = ask("prepare", step="frequencies", entries=[sodium], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        self.assertIn(" FREQ", freq.splitlines()[0])
+
     def test_keeps_the_wavefunction_only_where_asked(self):
         job = ask("prepare", step="energy", entries=[WATER], options={**defaults("energy"), "wavefunction": False})["jobs"][0]
         self.assertNotIn("then", job)
         self.assertEqual(job["reads"], [])
+
+    def test_text_typed_into_the_simple_input_line_names_no_program_and_no_file(self):
+        # (the manual names them only in a block, begun by "%", in quotes: %method ProgExt "path", %MOInp "file")
+        for options in ({"keywords": 'ExtOpt %method ProgExt "/bin/sh" end'}, {"keywords": 'MORead %moinp "/etc/hosts"'}, {"basis": "def2-SVP\n%method ProgExt x end"}):
+            said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))
+            self.assertFalse(said["ok"], options)
+
+    def test_an_isotope_is_given_its_mass_after_its_coordinates(self):
+        # (heavy water: each H a deuterium, its mass as Meno gives it - the manual's "M =" after the coordinates)
+        d2o = {**WATER, "atoms": [WATER["atoms"][0]] + [{**a, "isotope": 2, "mass": 2.01410177812} for a in WATER["atoms"][1:]]}
+        text = ask("prepare", step="frequencies", entries=[d2o], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        atoms = [l for l in text.splitlines() if l[:1] in ("O", "H")]
+        self.assertFalse(atoms[0].endswith("M = 2.01410177812"))
+        self.assertTrue(all(l.endswith("  M = 2.01410177812") for l in atoms[1:]), atoms)
+        # (no isotope: as before)
+        plain = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"))["jobs"][0]["files"][0]["text"]
+        self.assertNotIn("M =", plain)
+        # (an isotope Meno knows no mass for: refused, naming it - never given as the natural element)
+        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [{**WATER, "atoms": [{**WATER["atoms"][0], "isotope": 99}] + WATER["atoms"][1:]}], "options": defaults("energy")}))
+        self.assertFalse(said["ok"])
+        self.assertIn("99O", said["error"])
 
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):

@@ -122,6 +122,13 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
 
 ## What has gone wrong before
 
+- **A tie decided by rounding** (2026-10-14). Cyclotetracosane, nothing
+  on it, came out a triangle of zigzags, as tall as wide (hunter B): its
+  five shapes all read 0 on the measure, but the sums differed in the
+  fourteenth place, and the smallest was the fifth shape, the triangle.
+  Shapes alike on the measure now keep the order they are offered in, the
+  one that lies best first; a shape is taken over an earlier one only
+  where it reads better by more than rounding.
 - **The search is greedy and follows a path.** A new kind of move, or a
   new term, can send it to a worse drawing elsewhere (vancomycin and
   azithromycin both did). Compare the whole sheet.
@@ -199,6 +206,26 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   other, ibogaine's isoquinuclidine to a view that crowded its indole.
   The choice among them is now made on the whole drawing, and a cage's
   next best views are tried with what hangs from it.
+- **A cage eased onto its template keeps its atoms apart** (2026-10-13).
+  The atoms of a cage not on its template ring were eased toward bonds of
+  one length with nothing keeping them off each other: seen from the
+  template's side, scopolamine's epoxide landed by its N, and its solid
+  lost to a flat drawing. The easing is run again with atoms not bonded
+  to each other kept 0.7 of a bond apart, and that taken where it leaves
+  fewer pairs of atoms nearer than 0.6 of a mean bond and has a lower
+  `viewCost` at its defaults (0.6 and 0.3, no depth: the measure flat and
+  solid are weighed by, not the one views are ranked by). Kept apart
+  always, adamantane's bonds came out uneven - its back CH2 0.62 from a
+  front bridgehead is how it is drawn - and tetrodotoxin's C4 mark moved
+  onto a ring bond. Taken wherever `viewCost` alone fell (hunter B's
+  review), every bicyclo[2.2.2] view counted as crowded - its back bridge
+  0.52 from the back bridgehead, eased only to 0.54 with its bonds uneven -
+  and of 1230 bridged molecules 37 read worse by more than 0.5 (a
+  chlorobicyclo[2.2.2]octanol 4.3 to 8.4, a 3-aryl nortropane 2.4 to 7.5).
+  A centre the easing turns is put back where it was put, again while any
+  reads wrong. Scopolamine (12.2 to 2.1), gelsemine (9.5 to 6.9) and
+  tetrodotoxin (16.31 to 16.26) read better; nothing else on the two lists
+  changes. Ibogaine, 20.3 to 17.1 by `viewCost` alone, is left as it was.
 - **A double bond is stereo too.** The read-back guards read the
   stereocentres only, and huperzine A's bridge drew a ring's C=C trans
   unnoticed. They read every drawn double bond now (2026-10-13): one the
@@ -366,6 +393,18 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
+- **Two double bonds in a ring of ten or twelve** (hunter B's sweep of
+  cycloalkadienes, 2026-10-13): one of them still comes out the other way
+  round in 12 of the 126 rings of 8 to 16 atoms - four of eight atoms
+  (drawn regular; hunter B's 8-ring dent is a PR of its own), and eight of
+  10 and 12, where the lattice has one shape or none that holds both (a
+  twelve has a single shape with no dents, and no dented one without a
+  turn of five). Rings of 11, 14 and 16 take a shape from further down
+  now, and every ring of 14 to 24 with two comes out as given (14 of 358
+  wrong on main). With three, two of them trans, 27 of 1820 in rings of
+  14 to 20 (not 19) still come out wrong, against 130 on main: 24 in a
+  ring of 14, and the all-trans conjugated triene of 16, numbered three
+  ways. Not yet checked: the macrolides of 16 to 43 atoms the sweep found.
 - **Tetrodotoxin**, carried over from part 2 (the maintainer, 2026-10-11:
   the perspective drawing read better than the flat one, and both faced
   the wrong way). Its whole solid now reads as given, its centres the
@@ -407,6 +446,9 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
+- **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
+  a tangled flat projection, bonds crossing and the second lines of its
+  double bonds floating inside its faces.
 - **Ginkgolide B** (2026-10-13). No two of its rings share three atoms,
   so it is no cage; three share the bond C7-C12, a propellane, which no
   flat drawing can lay out without a crossing. The whole is drawn as a

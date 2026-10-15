@@ -13,9 +13,10 @@ import { shapePlace, type MarkPlaces } from "../document";
 import { isBox, middleOf as shapeMiddle, moved as shapeMoved } from "../../../../lib/chem/shapes";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { pdfRoom } from "../../../../lib/pdf/layout";
-import { sheetOf } from "./textSheets";
+import { sheetOfText } from "./textSheets";
 import { cornersOf } from "./selection";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
+import { middleOfPoints } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 type Axis = "vertical" | "horizontal";
@@ -32,7 +33,7 @@ export function mirroredAbout(about: Pt, axis: Axis): (p: Pt) => Pt {
 function sheetsOf(st: EditorState): { id: number; x: number; y: number; w: number; h: number }[] {
   return st.texts.flatMap((t) => {
     if (!t.at || !st.selTexts.has(t.id)) return [];
-    const s = sheetOf(t.text, t.name);
+    const s = sheetOfText(t);
     return [{ id: t.id, x: t.at.x + s.w / 2, y: t.at.y - s.h / 2, w: s.w, h: s.h }];
   });
 }
@@ -62,9 +63,7 @@ export function turnOverMiddle(st: EditorState, scheme: Scheme): Pt | null {
     const b = st.selInks.has(k.id) ? strokesBounds(k.strokes, 0) : null;
     if (b) pts.push({ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y1 });
   }
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  return middleOfPoints(pts) ?? { x: NaN, y: NaN };
 }
 
 /**

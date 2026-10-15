@@ -25,7 +25,7 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { saverOf } from "./lib/doc/savers";
+import { saverOf, tabHolding } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
@@ -34,6 +34,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { MENO_KINDS } from "./lib/io/kinds";
+import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
@@ -41,6 +42,8 @@ import { showGuidesDue, useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
 import { stopJob } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
+import { madeStoreOf } from "./ui/features/Workspace/store";
+import { stopRenders } from "./ui/features/Workspace/render/renders";
 import ConfirmDiscard from "./ui/layouts/ConfirmDiscard";
 import { ErrorBoundary, StoppedCard } from "./ui/layouts/ErrorBoundary";
 import { loadAppSettings, useAppSettings } from "./lib/settings/appSettings";
@@ -183,18 +186,27 @@ export default function App() {
     return () => window.removeEventListener("contextmenu", keepSystemMenuShut, true);
   }, []);
 
-  // The last tab closed, Meno goes with it. (Destroyed, not closed: what
-  // was unsaved has been asked about already.)
-  const closeTab = (id: string) => {
+  // A tab's document let go of - its tab closed, or another put in its
+  // place: a workspace's renders stopped with it, since what they make
+  // would come to no page (render/renders). Resolved once they are asked.
+  const letGoOf = (id: string): Promise<void> => {
+    const held = documentsRef.current.get(id);
     documentsRef.current.delete(id);
     forgetFiles(id);
+    const store = held?.kind === "workspace" ? madeStoreOf(held.doc as DocumentStore<WorkspaceDocument>) : undefined;
+    return store ? stopRenders(store) : Promise.resolve();
+  };
+
+  // The last tab closed, Meno goes with it - once its renders are asked to
+  // stop. (Destroyed, not closed: what was unsaved has been asked about
+  // already.)
+  const closeTab = (id: string) => {
+    const stopped = letGoOf(id);
     const last = stateRef.current.tabOrder.every((x) => x === id);
     act({ type: "CLOSE_TAB", id });
-    if (last) {
-      try {
-        void getCurrentWindow().destroy().catch(() => {});
-      } catch {}
-    }
+    // (asked within 2 s at most: a backend that does not answer keeps no window open)
+    const asked = Promise.race([stopped.catch(() => {}), new Promise<void>((done) => setTimeout(done, 2000))]);
+    if (last) void asked.then(() => getCurrentWindow().destroy()).catch(() => {});
   };
 
   // A canvas nothing is drawn on, nor opened into: what a file opened takes
@@ -220,8 +232,7 @@ export default function App() {
     const made = viewRegistry[opened.kind].create(opened.label);
     const tab = { ...made, content: { ...made.content, data: opened.data } } as TabInstance;
     if (blank) {
-      documentsRef.current.delete(blank);
-      forgetFiles(blank);
+      void letGoOf(blank);
       act({ type: "REPLACE_TAB", id: blank, tab });
     } else act({ type: "ADD_TAB", tab });
     return true;
@@ -349,7 +360,7 @@ export default function App() {
           workspaces.push({ name, workspace, path });
           continue;
         }
-        const text = new TextDecoder().decode(bytes);
+        const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
         const opened = openedAs(name, text, path, await kindOfFile(name, text));
         const asText = textsOf(opened);
@@ -363,7 +374,13 @@ export default function App() {
     // front only where nothing else opened is to go there - and that one
     // brought back in front, to take the rest)
     const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
-    for (const w of workspaces) openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    // (one already open in a tab - by where it is saved - brought forward, not opened again: two tabs on one file overwrite each other)
+    const tabs = () => Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path }));
+    for (const w of workspaces) {
+      const held = tabHolding(w.path, tabs());
+      if (held) act({ type: "SELECT_TAB", id: held });
+      else openWorkspaceTab(w.name, w.workspace, w.path, !rest);
+    }
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
     if (pdfs.length) openPdfs(pdfs, front);
@@ -411,7 +428,7 @@ export default function App() {
           openWorkspaceTab(f.name, workspace);
           continue;
         }
-        const text = await f.text();
+        const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
         const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
         const asText = textsOf(opened);

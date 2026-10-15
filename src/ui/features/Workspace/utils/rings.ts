@@ -62,6 +62,19 @@ export function ringAt(model: Model, p: P): string | null {
   return best?.key ?? null;
 }
 
+/**
+ * Whether the ring a key names is still in the drawing: its atoms there,
+ * and a ring among them - not undone away, its closing bond not broken.
+ * Worked out on those atoms alone, so it costs nothing on a large drawing.
+ */
+export function ringThere(model: Model, key: string): boolean {
+  const ids = new Set(key.split("-").map(Number));
+  const atoms = model.atoms.filter((a) => ids.has(a.id));
+  if (atoms.length !== ids.size) return false;
+  const bonds = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
+  return ringsOf({ ...model, atoms, bonds }).some((r) => r.key === key);
+}
+
 /** The rings all of whose atoms are among `ids`, by key. */
 export function ringsAmong(model: Model, ids: ReadonlySet<number>): string[] {
   return ringsOf(model)
@@ -69,7 +82,11 @@ export function ringsAmong(model: Model, ids: ReadonlySet<number>): string[] {
     .map((r) => r.key);
 }
 
-/** The fills of the rings whose atoms are all among `ids` - what a copy of them carries. */
-export function fillsAmong(fills: RingFills | undefined, ids: ReadonlySet<number>): RingFills {
+/**
+ * What is kept of each ring whose atoms are all among `ids`, by key - its
+ * fill, whether its circle is drawn: what a copy of them carries, and what
+ * a workspace saves of rings still drawn.
+ */
+export function fillsAmong<T = RingFills[string]>(fills: Readonly<Record<string, T>> | undefined, ids: ReadonlySet<number>): Record<string, T> {
   return Object.fromEntries(Object.entries(fills ?? {}).filter(([key]) => key.split("-").every((id) => ids.has(Number(id)))));
 }

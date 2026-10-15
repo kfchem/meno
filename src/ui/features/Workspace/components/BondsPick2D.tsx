@@ -6,9 +6,12 @@ import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
+import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
+import { releaseClicksBond } from "../utils/press";
 
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
@@ -41,6 +44,8 @@ export default function BondsPick2D() {
   const remountKey = model.bonds.length;
   const PICK_THICKNESS_RATIO = 0.32;
 
+  // (the last press on a bond: a second soon after on the same one is a double-click's)
+  const lastBondPress = useRef<(BondPress & { count: number }) | null>(null);
   const clickState = useRef<{
     lastAt: number;
     count: number;
@@ -318,13 +323,18 @@ export default function BondsPick2D() {
         // Held still, the press selects the whole structure, the selection
         // spreading out from the bond as it is held (HoldProgress2D); a drag
         // from there moves it. A click or a drag before then is the bond's.
-        {
+        // (Not the second press of a double-click, as on an atom.)
+        const tPress = performance.now();
+        const count = pressOnBond(lastBondPress.current, { id: b.id, t: tPress }, DOUBLE_CLICK_MS);
+        lastBondPress.current = { id: b.id, t: tPress, count };
+        if (count === 1) {
           const ev0 = (e as any).nativeEvent ?? e;
           const sx = ev0.clientX;
           const sy = ev0.clientY;
           store.getState().setPressHold({ atomId: b.a, start: performance.now() });
           const letGo = () => {
             window.clearTimeout(hold);
+            offChord();
             store.getState().setPressHold(null);
             window.removeEventListener("pointermove", onEarlyMove);
             window.removeEventListener("pointerup", letGo, true);
@@ -347,6 +357,12 @@ export default function BondsPick2D() {
               endPanHold(ev.pointerId ?? pid);
             });
           }, LONG_PRESS_MS);
+          // (another button pressed with it: no press at all, nor a click of the bond's - utils/press#onChord)
+          const offChord = onChord(1, () => {
+            letGo();
+            clickState.current.armed = false;
+            clickState.current.downBondId = null;
+          });
           window.addEventListener("pointermove", onEarlyMove);
           window.addEventListener("pointerup", letGo, true);
         }
@@ -367,8 +383,11 @@ export default function BondsPick2D() {
         const b = model.bonds[idx];
         if (!b) return;
         const st = clickState.current;
-        if (!st.armed || st.downBondId !== b.id) return;
         const ev = (e as any).nativeEvent ?? e;
+        if (!releaseClicksBond(st, b.id, ev?.button ?? 0)) return;
+        // (the press's arming used up: the next click arms again with its own)
+        st.armed = false;
+        st.downBondId = null;
         const down = st.downPos;
         const moved = (() => {
           if (!down || !ev) return false;

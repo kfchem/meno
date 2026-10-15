@@ -9,7 +9,7 @@
 import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 import { figureBond, readFigure, type FigureRead } from "./read";
-import type { GlyphShape } from "./glyphs";
+import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import type { ArrowForm, ArrowWeight } from "../chem/reactionArrow";
 import type { WordsMark, WordsStyle } from "../chem/captions";
 import { marksOf } from "../chem/captions";
@@ -829,12 +829,16 @@ export function readScheme(
   const long = shapes.strokes.filter((s) => len(s) > 0.5 * byLines);
   const meetsLong = (s: Stroke) => long.some((t) => t !== s && [t.a, t.b].some((q) => dist(q, s.a) < 0.12 * len(s) || dist(q, s.b) < 0.12 * len(s)));
   const joints = long.filter((s) => Math.abs(len(s) - byLines) <= byLines / 4 && meetsLong(s)).length;
-  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || joints >= 3) ? byLines : byLetters || byLines || 14.4;
+  // (but never more than six times as long as its letters are set: lines that long meeting - a page's rules, a graph's frame - are no bonds)
+  const bond = byLines && (!(byLetters && byLines > 2 * byLetters) || (joints >= 3 && byLines <= 6 * byLetters)) ? byLines : byLetters || byLines || 14.4;
   // (the line most bonds are drawn with, for an arrow's weight)
   const widths = shapes.strokes.filter((s) => len(s) > 0.5 * bond && len(s) < 1.3 * bond).map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = widths[Math.floor(widths.length / 2)] ?? 0;
   // (charges drawn in rings, kept from the arrows and the signs: the structure's - lib/figure/charges)
-  const free = withoutMarks(shapes, chargeMarks(shapes, bond));
+  const marked = withoutMarks(shapes, chargeMarks(shapes, bond));
+  // (letters drawn as outlines and read surely from their shapes - an S, a C, an N of one part - no arrow's head, however like one)
+  const asLetters = new Set((known.length ? shapeLetters(marked, bond, known) : []).filter((l) => /^[A-Za-z0-9]$/.test(l.c) && sureEnough(l)).flatMap((l) => l.from));
+  const free = asLetters.size ? without(marked, asLetters) : marked;
   const { arrows, used, usedLetters } = arrowsOf(free, drawn.letters, bond, lineWidth);
   const signs = plusesOf(free, bond, used);
   for (const o of signs.taken) used.add(o);

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { usePresentingWindow } from "../presenting";
 import { RISE } from "../theme/motion";
+import { Leaving } from "../theme/leaving";
 import {
   ArrowDownTrayIcon,
   CheckCircleIcon,
@@ -87,11 +88,14 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       {/* each card comes in, and goes, softly; the others make room as it does */}
       <AnimatePresence initial={false}>
       {/* what Meno did of itself, with the way to have it otherwise (../notices) */}
+      {/* (going, each does nothing more as it fades - a notice's action is done once: theme/leaving) */}
       {!talk.on && notices.map((n) => (
+        <Leaving key={`notice-${n.id}`}>
+        {(held) => (
         <motion.div
-          key={`notice-${n.id}`}
           layout
           {...RISE}
+          {...held}
           role="status"
           onContextMenu={(e) => {
             e.preventDefault();
@@ -118,6 +122,8 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
             </div>
           )}
         </motion.div>
+        )}
+        </Leaving>
       ))}
       {!talk.on && cards.map(({ key, task, conns }) => {
         const blocked = !task;
@@ -138,10 +144,12 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
               ? XCircleIcon
               : CheckCircleIcon;
         return (
+          <Leaving key={key}>
+          {(held) => (
           <motion.button
-            key={key}
             layout
             {...RISE}
+            {...held}
             role="status"
             onClick={onOpen}
             onContextMenu={(e) => {
@@ -192,6 +200,8 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
               )}
             </div>
           </motion.button>
+          )}
+          </Leaving>
         );
       })}
       </AnimatePresence>

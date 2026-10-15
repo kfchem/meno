@@ -28,7 +28,7 @@ import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
 import { currentStyle3D } from "./style3d";
-import type { DrawingStyle } from "../../../lib/chem/style";
+import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout } from "./fileActions";
 import type { Drawn, EditorState } from "./store/types";
@@ -45,13 +45,21 @@ const MOST_PIXELS = 48_000_000;
 /** The resolution copied pictures are made at, as Settings says. */
 const pictureDpi = () => useAppSettings.getState().pictures.dpi;
 
+/** The longest side of a canvas a picture is drawn on, in pixels. */
+const MOST_SIDE = 32_767;
+
 /**
  * The resolution a picture `width` by `height` CSS pixels is made at:
- * `dpi`, or lower where that would come to more than `MOST_PIXELS`.
+ * `dpi`, or lower where that would come to more than `MOST_PIXELS`, or a
+ * side longer than `MOST_SIDE` - a line of words thousands of letters long,
+ * kept at full resolution, was a canvas too wide to draw, and its PNG was
+ * left off the clipboard.
  */
 export function pictureDpiFor(width: number, height: number, dpi: number): number {
   const area = Math.max(width, 1) * Math.max(height, 1) * (dpi / 96) ** 2;
-  return area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const byArea = area <= MOST_PIXELS ? dpi : Math.floor(dpi * Math.sqrt(MOST_PIXELS / area));
+  const bySide = Math.floor((MOST_SIDE * 96) / Math.max(width, height, 1));
+  return Math.max(1, Math.min(byArea, bySide));
 }
 
 const utf8 = new TextEncoder();
@@ -66,7 +74,8 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
-  const record = recordText(part);
+  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
+  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
   const drawing = seenDrawing(part);
   const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
@@ -116,7 +125,7 @@ export async function structureInPicture(item: ClipItem): Promise<Drawn | null> 
   if (item.flavor === "png") return fromPng(item.bytes);
   if (item.flavor === "object") return fromObject(item.bytes);
   if (item.flavor !== "gvml") return null;
-  for (const { name, data } of await gvmlImages(item.bytes)) {
+  for (const { name, data } of gvmlImages(item.bytes)) {
     const found = /\.emf$/i.test(name) ? fromEmf(data) : /\.png$/i.test(name) ? fromPng(data) : null;
     if (found) return found;
   }

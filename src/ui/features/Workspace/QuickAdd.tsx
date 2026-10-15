@@ -1,13 +1,14 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
 import { guideNotice } from "../../../lib/plugins/guides";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress } from "./utils/press";
+import { swallowPress, togglesOn } from "./utils/press";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
@@ -181,9 +182,12 @@ export default function QuickAdd({
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
   const calcOpen = open === "calculations";
   const ref = useRef<HTMLDivElement>(null);
+  // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
+    if (leaving) return;
     // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
     const outside = (e: Event) => {
       if (ref.current?.contains(e.target as Node)) return;
@@ -204,7 +208,7 @@ export default function QuickAdd({
       window.removeEventListener("wheel", outside, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
   // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
   const offered = wired ? [] : procedures;
   const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
@@ -232,6 +236,7 @@ export default function QuickAdd({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="toolbar"
       aria-label="Add"
       data-guide="quick-add"
@@ -251,7 +256,7 @@ export default function QuickAdd({
                 c.id === "chain" || (c.id === "arrow" && onArrow)
                   ? undefined
                   : c.id === "smiles" || c.id === "shapes"
-                    ? () => setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
+                    ? (e) => togglesOn(e.detail) && setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
                     : () => onChoose(c.id as QuickAddChoice)
               }
               className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${(c.id === "smiles" || c.id === "shapes") && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
@@ -267,7 +272,7 @@ export default function QuickAdd({
             aria-label="Calculations"
             aria-expanded={calcOpen}
             title="Calculations"
-            onClick={() => setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
+            onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
             className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
           >
@@ -370,6 +375,8 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
+  const reading = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
@@ -381,12 +388,16 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
       onSubmit={(e) => {
         e.preventDefault();
         const smiles = text.trim();
-        if (!smiles || busy) return;
+        if (!smiles || busy || reading.current) return;
+        reading.current = true;
         setBusy(true);
         setError(null);
         onSmiles(smiles)
           .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            reading.current = false;
+            setBusy(false);
+          });
       }}
     >
       <input

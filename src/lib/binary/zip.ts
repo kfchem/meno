@@ -1,8 +1,11 @@
 /**
- * Just enough of ZIP for Office's clip format: writing an archive whose
- * entries are stored as they are, and reading one whose entries are stored
- * or deflated (as Office writes them).
+ * Just enough of ZIP for Office's clip format and Meno's workspace file:
+ * writing an archive whose entries are stored as they are, and reading one
+ * whose entries are stored or deflated (as Office writes them) - nothing
+ * inflated but what is asked for, and nothing to more than the archive
+ * says it comes to, whatever it says.
  */
+import { Inflate } from "fflate";
 
 const TABLE = (() => {
   const t = new Uint32Array(256);
@@ -63,8 +66,23 @@ export function zipStored(files: { name: string; data: Uint8Array | string }[]):
   return concat([...parts, ...central, new Uint8Array(end.buffer)]);
 }
 
-/** The files in an archive, by name; null if it is not one this reads. */
-export async function unzip(zip: Uint8Array): Promise<Map<string, Uint8Array> | null> {
+/** An archive's entry as its central directory lists it, nothing inflated. */
+export type ZipEntry = {
+  name: string;
+  /** How it is packed: 0 stored, 8 deflated (none else is read). */
+  method: number;
+  /** Its bytes, as packed. */
+  packed: Uint8Array;
+  /** What the archive says they come to, unpacked - which `entryBytes` holds them to. */
+  size: number;
+};
+
+/**
+ * The entries of an archive, in the order its central directory lists
+ * them, nothing inflated; null if it is not one this reads (nor ZIP64: an
+ * archive of 4 GB or more is not read).
+ */
+export function zipEntries(zip: Uint8Array): ZipEntry[] | null {
   const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
   // the end record, searched for from the end (it may carry a comment)
   let end = -1;
@@ -77,12 +95,13 @@ export async function unzip(zip: Uint8Array): Promise<Map<string, Uint8Array> | 
   if (end < 0) return null;
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
-  const files = new Map<string, Uint8Array>();
+  const entries: ZipEntry[] = [];
   const decoder = new TextDecoder();
   for (let n = 0; n < count; n++) {
     if (at + 46 > zip.length || view.getUint32(at, true) !== 0x02014b50) return null;
     const method = view.getUint16(at + 10, true);
     const packed = view.getUint32(at + 20, true);
+    const size = view.getUint32(at + 24, true);
     const nameLength = view.getUint16(at + 28, true);
     const extra = view.getUint16(at + 30, true);
     const comment = view.getUint16(at + 32, true);
@@ -91,17 +110,81 @@ export async function unzip(zip: Uint8Array): Promise<Map<string, Uint8Array> | 
     at += 46 + nameLength + extra + comment;
     if (local + 30 > zip.length || view.getUint32(local, true) !== 0x04034b50) return null;
     const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
-    const body = zip.subarray(start, start + packed);
-    if (method === 0) files.set(name, body);
-    else if (method === 8) files.set(name, await inflate(body));
-    else return null;
+    // (an entry running on past the archive's end: it was cut short)
+    if (start + packed > zip.length) return null;
+    entries.push({ name, method, packed: zip.subarray(start, start + packed), size });
   }
-  return files;
+  return entries;
 }
 
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/**
+ * How much of an entry is inflated at a time: deflate makes at most 1,032
+ * bytes of one, so no slice makes more than some 4 MB past what the entry
+ * may come to before inflating it is stopped - and text inflates in slices
+ * so a tenth or so slower than at a stroke.
+ */
+const SLICE = 4 * 1024;
+
+/**
+ * An entry's bytes, its own copy: stored, as they are; deflated, inflated -
+ * either way only where they come to just what the archive says. What it
+ * says is not trusted to set room aside by (a few bytes may say a
+ * gigabyte): room grows as the bytes come, and inflating stops as soon as
+ * they come to more. Null where they come to anything else, will not
+ * inflate, or are packed some other way.
+ */
+export function entryBytes(entry: ZipEntry): Uint8Array | null {
+  const { method, packed, size } = entry;
+  if (method === 0) return packed.length === size ? packed.slice() : null;
+  if (method !== 8) return null;
+  let out = new Uint8Array(Math.min(size, Math.max(4 * packed.length, 64 * 1024)));
+  let n = 0;
+  const inflater = new Inflate((chunk) => {
+    if (n + chunk.length > size) throw new RangeError("more than the archive says");
+    if (n + chunk.length > out.length) {
+      const grown = new Uint8Array(Math.min(size, Math.max(2 * out.length, n + chunk.length)));
+      grown.set(out.subarray(0, n));
+      out = grown;
+    }
+    out.set(chunk, n);
+    n += chunk.length;
+  });
+  try {
+    let at = 0;
+    do {
+      inflater.push(packed.subarray(at, at + SLICE), at + SLICE >= packed.length);
+      at += SLICE;
+    } while (at < packed.length);
+  } catch {
+    // (cut short, damaged, or more than it says)
+    return null;
+  }
+  return n === size ? out : null;
+}
+
+/** The most `unzip` hands back of an archive, all the files wanted together, unless told otherwise. */
+export const MOST_UNZIPPED = 64 * 1024 * 1024;
+
+/**
+ * The files in an archive, by name: those `wanted`, where the caller says
+ * which - the rest are not inflated - each as large as the archive says it
+ * is. Null if it is not one this reads, or the files wanted would come to
+ * more than `most` bytes together.
+ */
+export function unzip(zip: Uint8Array, wanted: (name: string) => boolean = () => true, most = MOST_UNZIPPED): Map<string, Uint8Array> | null {
+  const entries = zipEntries(zip);
+  if (!entries) return null;
+  const files = new Map<string, Uint8Array>();
+  let left = most;
+  for (const entry of entries) {
+    if (!wanted(entry.name)) continue;
+    if (entry.size > left) return null;
+    const bytes = entryBytes(entry);
+    if (!bytes) return null;
+    left -= bytes.length;
+    files.set(entry.name, bytes);
+  }
+  return files;
 }
 
 export function concat(parts: Uint8Array[]): Uint8Array {

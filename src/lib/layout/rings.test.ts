@@ -201,9 +201,20 @@ describe("smallestRings", () => {
     ];
     const edges: Edge[] = [];
     for (let k = 0; k < 1000; k++) for (const [a, b] of one) edges.push([a + 28 * k, b + 28 * k]);
+    // (how much of the bonds' list it looks at, counted rather than timed: the
+    // page some thousand times one molecule alone - 102 reads alone, 102 000
+    // for the page, with room for another pass or two over the list. Each ring
+    // system's bonds picked out of the whole list again, part by part, is 31
+    // million; one search over the whole page reads every bond again for every
+    // atom. A clock behind it, loose enough never to trip on a busy machine:
+    // only what a search inside one ring system might come to costing)
+    const alone = counted(one);
+    smallestRings(28, alone.list);
+    const seen = counted(edges);
     const started = performance.now();
-    const rings = smallestRings(28 * 1000, edges);
-    expect(performance.now() - started).toBeLessThan(2000);
+    const rings = smallestRings(28 * 1000, seen.list);
+    expect(performance.now() - started).toBeLessThan(20_000);
+    expect(seen.reads()).toBeLessThan(3000 * alone.reads());
     expect(rings).toHaveLength(4000);
     // shortest first, then in the order of their atoms
     expect(rings.slice(0, 3).map((r) => r.length)).toEqual([5, 5, 5]);
@@ -266,3 +277,15 @@ describe("ringsAlike", () => {
     expect(alike(10, naphthalene)).toHaveLength(2);
   });
 });
+
+/** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */
+function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
+  let n = 0;
+  const list = new Proxy(xs, {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) n++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { list, reads: () => n };
+}

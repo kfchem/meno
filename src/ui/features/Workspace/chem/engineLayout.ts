@@ -19,17 +19,20 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import type { CisTrans } from "../../../../lib/layout/perceive";
+import { ringsBondedAtomByAtom, type CisTrans } from "../../../../lib/layout/perceive";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, orientFor } from "./drawing";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
-  /** The model atom each of the input's atoms is. */
+  /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
+  /** The bonds from a metal to each atom of a ring bound so, by their atoms' ids (`pairKey`): not the engine's, which has a star for them. */
+  loose?: Set<string>;
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
 };
@@ -127,8 +130,26 @@ export function layoutJob(part: Model): LayoutJob {
         }
       : {}),
   };
-  return { input, ids: kept.map((i) => part.atoms[i].id), folded };
+  const ids = kept.map((i) => part.atoms[i].id);
+  // A ring bound to a metal atom by atom - ferrocene drawn by hand, a bond
+  // from the iron to each carbon - is given to the engine as a haptic
+  // bond's is, a star at its centre bonded to the metal, and laid out
+  // face-on (the maintainer, 2026-10-13); the bonds to its atoms stay in
+  // the drawing as drawn, from the metal to each atom where it now is.
+  const bound = ringsBondedAtomByAtom(input);
+  if (!bound.length) return { input, ids, folded };
+  const dropped = new Set(bound.flatMap((r) => r.bonds));
+  const atoms = [...input.atoms];
+  const bonds = input.bonds.filter((_, i) => !dropped.has(i));
+  for (const r of bound) {
+    atoms.push({ el: "*", hs: 0, pi: r.ring });
+    bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
+  }
+  const loose = new Set(bound.flatMap((r) => r.ring.map((a) => pairKey(ids[a], ids[r.metal]))));
+  return { input: { ...input, atoms, bonds }, ids, folded, loose };
 }
+
+const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
 
 /**
  * The engine's layout of `job` as edits to `model`: the part where it was
@@ -142,13 +163,15 @@ export function layoutJob(part: Model): LayoutJob {
  */
 export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: Layout2D, style?: DrawingStyle): Relayout {
   const { input, ids } = job;
-  const n = input.atoms.length;
+  // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
+  const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   // at the drawing's own bond length: each bond as drawn against as the
   // engine has it (a bond to a metal longer, a ring in perspective's
   // shorter, in both), the middle one of those
   const indexOf = new Map(ids.map((id, i) => [id, i]));
   const lengths = part.bonds
+    .filter((b) => !job.loose?.has(pairKey(b.a, b.b)))
     .map((b) => {
       const p = byId.get(b.a);
       const q = byId.get(b.b);
@@ -178,7 +201,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring
   input.atoms.forEach((a, i) => {
-    if (a.pi?.length) atoms[i] = { ...atoms[i], x: mid(a.pi.map((j) => atoms[j].x)), y: mid(a.pi.map((j) => atoms[j].y)) };
+    if (i < n && a.pi?.length) atoms[i] = { ...atoms[i], x: mid(a.pi.map((j) => atoms[j].x)), y: mid(a.pi.map((j) => atoms[j].y)) };
   });
   // the H the engine draws: a centre's own where it had one
   const spare = new Map([...job.folded].map(([c, hs]) => [c, [...hs]]));
@@ -216,12 +239,12 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       continue;
     }
     const bond = model.bonds.find((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
-    if (bond) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
+    // (a wedge on a single bond only: one put on a double or triple bond - at an atom with too many bonds, say - is no wedge)
+    if (bond && bond.order === 1) wedgeOn.set(bond.id, { stereo: w.stereo, narrow: from });
   }
   // a ring in perspective (face-on to a metal, or turned on its bond): its
   // near edges bold, a bond toward the viewer a wedge narrow at its far
   // end, the rest of it plain
-  const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
   const boldOnes = new Set(laid.bold.map(([u, v]) => pairKey(ids[u], ids[v])));
   // (and a cluster's metals in contact, dashed)
   const dashedOnes = new Set(laid.dashed.map(([u, v]) => pairKey(ids[u], ids[v])));
@@ -361,5 +384,5 @@ function stereoOf(m: Model) {
 
 /** The first id no atom or bond of `model` has. */
 export function nextFree(model: Model): number {
-  return Math.max(0, ...model.atoms.map((a) => a.id), ...model.bonds.map((b) => b.id)) + 1;
+  return Math.max(0, greatest(model.atoms.map((a) => a.id)), greatest(model.bonds.map((b) => b.id))) + 1;
 }

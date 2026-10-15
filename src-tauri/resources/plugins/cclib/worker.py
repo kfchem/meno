@@ -40,6 +40,13 @@ from cclib.parser.utils import PeriodicTable, convertor  # noqa: E402
 
 # calories per mole in a hartree, for an entropy
 CAL_PER_HARTREE = 627509.474
+# debye in an elementary charge times an angstrom, and the bohr in angstroms (CODATA 2018)
+DEBYE_PER_E_ANGSTROM = 4.803204712570263
+BOHR = 0.529177210903
+# where ORCA says it took the electric moments about, in bohr: "Position of electric origin ... x y z"
+ORCA_ORIGIN = re.compile(r"Position of electric origin\s*\.\.\.\s*([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)")
+# what a charged molecule's dipole is called: said, as it is taken about a point of Meno's choosing
+ABOUT_CENTRE = "Dipole moment about the centre of mass"
 
 # the form of the answer, as Meno reads it
 SCHEMA = 1
@@ -115,7 +122,7 @@ def per_atom(data, n):
     out = []
     for attr, group, kind, quantity in (
         ("atomcharges", "Partial charges", "charges", "charge"),
-        ("atomspins", "Spin populations", "spins", "number"),
+        ("atomspins", "Spin populations", "spins", "spin"),
     ):
         if not has(data, attr):
             continue
@@ -152,7 +159,7 @@ def per_frame(data, frames):
 
 
 def molecule_wide(data):
-    """The molecule's thermochemistry and dipole moment: its free energy first in the chip's line."""
+    """The molecule's thermochemistry: its free energy first in the chip's line."""
     out = []
 
     def add(id_, group, label, value, rank=None, **measure):
@@ -171,10 +178,65 @@ def molecule_wide(data):
         entropy * CAL_PER_HARTREE if entropy is not None else None, unit="cal/(mol·K)", digits=2)
     add("thermo.temperature", "Thermochemistry", "Temperature", getattr(data, "temperature", None), unit="K", digits=2)
     add("thermo.pressure", "Thermochemistry", "Pressure", getattr(data, "pressure", None), unit="atm", digits=2)
-    moments = getattr(data, "moments", None)
-    if moments is not None and len(moments) > 1 and len(moments[1]) == 3:
-        add("dipole", "Properties", "Dipole moment", sum(float(v) ** 2 for v in moments[1]) ** 0.5, rank=2, quantity="dipole")
     return out
+
+
+def centre_of_mass(data, xyz):
+    """Where the molecule's centre of mass is, in angstroms: from the masses
+    the output gives its atoms, or else the standard atomic weights; none
+    where they cannot be had."""
+    n = len(data.atomnos)
+    if not xyz or len(xyz) != 3 * n:
+        return None
+    masses = getattr(data, "atommasses", None)
+    if masses is not None and len(masses) == n:
+        masses = [float(m) for m in masses]
+    else:
+        try:
+            from periodictable import elements  # (cclib's own dependency, in this plugin's lock)
+            masses = [float(elements[int(z)].mass) for z in data.atomnos]
+        except Exception:
+            return None
+    total = sum(masses)
+    if not all(math.isfinite(m) and m > 0 for m in masses) or total <= 0:
+        return None
+    return [sum(m * xyz[3 * i + k] for i, m in enumerate(masses)) / total for k in range(3)]
+
+
+def electric_origin(data, text, program):
+    """Where the output took its dipole about, in angstroms: where ORCA says
+    it did; or else where cclib says it was taken about."""
+    if program == "orca":
+        found = list(ORCA_ORIGIN.finditer(text or ""))
+        if found:
+            return [float(v) * BOHR for v in found[-1].groups()]
+    moments = getattr(data, "moments", None)
+    origin = moments[0] if moments is not None and len(moments) > 1 else None
+    return [float(v) for v in origin] if origin is not None and len(origin) == 3 else None
+
+
+def dipole(data, text, program, xyz):
+    """The dipole moment, in debye: as the output has it where the molecule
+    is neutral. A charged molecule's depends on the point it is taken about,
+    so it is taken again about the centre of mass of the geometry it is of,
+    `xyz` (the last), and said to be - or left out where that cannot be
+    done."""
+    moments = getattr(data, "moments", None)
+    if moments is None or len(moments) < 2 or len(moments[1]) != 3:
+        return []
+    vector = [float(v) for v in moments[1]]
+    charge = int(data.charge) if has(data, "charge") else 0
+    label = "Dipole moment"
+    if charge:
+        origin, centre = electric_origin(data, text, program), centre_of_mass(data, xyz)
+        if origin is None or centre is None:
+            return []
+        vector = [v - charge * (c - o) * DEBYE_PER_E_ANGSTROM for v, c, o in zip(vector, centre, origin)]
+        label = ABOUT_CENTRE
+    value = sum(v * v for v in vector) ** 0.5
+    if not math.isfinite(value):
+        return []
+    return [{"id": "dipole", "on": "molecule", "group": "Properties", "label": label, "value": value, "quantity": "dipole", "rank": 2}]
 
 
 def orbital_name(i, homo):
@@ -221,27 +283,41 @@ def orbitals(data):
 
 def vibrations(data, n):
     """The vibrations, as a list: each one's frequency (an imaginary one negative), its
-    symmetry and IR intensity where given; chosen, the molecule moves along its displacements.
+    symmetry, reduced mass, IR intensity and Raman activity where the output gives them;
+    chosen, the molecule moves along its displacements.
     The translations and rotations an output lists with them, at a frequency of naught, are left out."""
     if not has(data, "vibfreqs"):
         return []
     freqs = [float(f) for f in data.vibfreqs]
     disps = getattr(data, "vibdisps", None)
     syms = getattr(data, "vibsyms", None)
-    irs = getattr(data, "vibirs", None)
     syms = syms if syms is not None and len(syms) == len(freqs) else None
-    irs = irs if irs is not None and len(irs) == len(freqs) else None
+
+    def each(name):
+        """A value for each vibration, where the output gives one for each."""
+        values = getattr(data, name, None)
+        if values is None or len(values) != len(freqs):
+            return None
+        values = [float(v) for v in values]
+        return values if all(math.isfinite(v) for v in values) else None
+
+    masses, irs, ramans = each("vibrmasses"), each("vibirs"), each("vibramans")
     columns = [{"label": "Mode", "quantity": "number", "digits": 0}]
     if syms is not None:
         columns.append({"label": "Symmetry"})
     columns.append({"label": "Frequency", "quantity": "wavenumber"})
+    if masses is not None:
+        columns.append({"label": "Reduced mass", "unit": "amu", "digits": 2})
     if irs is not None:
         columns.append({"label": "IR intensity", "unit": "km/mol", "digits": 1})
+    if ramans is not None:
+        columns.append({"label": "Raman activity", "unit": "Å⁴/amu", "digits": 2})
     rows = []
     for i, f in enumerate(freqs):
         if abs(f) < FREQUENCY_LEAST:
             continue
-        cells = [len(rows) + 1] + ([str(syms[i])] if syms is not None else []) + [f] + ([float(irs[i])] if irs is not None else [])
+        cells = [len(rows) + 1] + ([str(syms[i])] if syms is not None else []) + [f]
+        cells += [v[i] for v in (masses, irs, ramans) if v is not None]
         row = {"cells": cells}
         if disps is not None and i < len(disps) and len(disps[i]) == n:
             row["move"] = [float(v) for xyz in disps[i] for v in xyz]
@@ -514,18 +590,92 @@ def op_read(m):
         "multiplicity": int(data.mult) if has(data, "mult") else None,
         "atoms": atoms,
         "frames": frames,
-        "energies": frame_energies(data, len(frames)) if frames else None,
-        "optimised": bool(data.optdone) if has(data, "optdone") else None,
+        # (an excited state's geometries: their energies the excited state's, which are not read here - not the
+        # ground state's at each, which cclib gives)
+        "energies": frame_energies(data, len(frames)) if frames and not excited_path(data, len(frames)) else None,
+        # (a scan's or a reaction path's last geometry is no optimum)
+        "optimised": bool(data.optdone) if has(data, "optdone") and not path_kind(data, text) else None,
     }
     result["results"] = (
         run_results(ended, why, scf, whole)
+        + path_said(data, text, len(frames))
         + molecule_wide(data)
+        + dipole(data, text, program, frames[-1] if frames else None)
         + per_frame(data, len(frames))
         + per_atom(data, len(atoms))
         + vibrations(data, len(atoms))
         + orbitals(data)
     )
+    # (a Gaussian reaction path's points in the order of its reaction coordinate, as its own summary lists them)
+    order = irc_order(text, len(frames)) if path_kind(data, text) == "irc" else None
+    if order:
+        result["frames"] = [frames[k] for k in order]
+        if result["energies"]:
+            result["energies"] = [result["energies"][k] for k in order]
+        for r in result["results"]:
+            if r.get("on") == "frames":
+                r["values"] = [r["values"][k] for k in order]
     return without(result, ghosts)
+
+
+# a Gaussian route section as it echoes it: begun by " #", over as many lines as it wraps onto, up to the line
+# of dashes after it
+GAUSSIAN_ROUTE = re.compile(r"^ #.*?(?=^ -{5,})", re.M | re.S)
+# ORCA's summary of a reaction path it followed
+ORCA_IRC = "IRC PATH SUMMARY"
+# a point on a Gaussian reaction path: "Point Number:  3          Path Number:   1"
+IRC_POINT = re.compile(r"Point Number:\s+(\d+)\s+Path Number:\s+(\d+)")
+
+
+def path_kind(data, text):
+    """What a run's geometries are where they are no optimisation's path: a relaxed scan's ("scan", by the scan
+    cclib reads), a Gaussian reaction path's ("irc", by its route); otherwise None."""
+    if has(data, "scanenergies") and len(data.scanenergies) > 1:
+        return "scan"
+    if any(re.search(r"\bIRC\b", " ".join(route.split()), re.I) for route in GAUSSIAN_ROUTE.findall(text or "")):
+        return "irc"
+    return None
+
+
+def excited_path(data, frames):
+    """Whether a run's geometries are an excited state's: excited states worked out over more than one geometry -
+    an excited state optimised (Gaussian's TD with Opt, ORCA's TD-DFT with Opt)."""
+    return has(data, "etenergies") and frames > 1
+
+
+def path_said(data, text, frames):
+    """What a run's geometries are, where they are not an optimisation's path, and that an excited state's
+    energies are not read: first in the chip's line."""
+    out = []
+    kind = path_kind(data, text)
+    if kind == "scan":
+        # (relaxed where each point was optimised - more geometries than points; rigid, one geometry a point)
+        points = len(data.scanenergies)
+        label = "Relaxed scan" if frames > points else "Scan"
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": label, "value": f"{points} points", "rank": 0})
+    elif kind == "irc":
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": f"{frames} points", "rank": 0})
+    elif ORCA_IRC in (text or ""):
+        # (ORCA's reaction path, after its transition state's optimisation: its points are not among the geometries
+        # read - those are the optimisation's - and that is said; ORCA writes them to an XYZ file of their own)
+        out.append({"id": "run.path", "on": "molecule", "group": "Calculation", "label": "Reaction path", "value": "not read", "rank": 0})
+    if excited_path(data, frames):
+        out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
+    return out
+
+
+def irc_order(text, frames):
+    """A Gaussian reaction path's points in the order of its reaction coordinate - the second path's (the reverse
+    direction) last first, the transition state, then the first path's - where the output gives the transition
+    state and each path's points one after another, as many as its geometries; otherwise None."""
+    last = {}
+    for m in IRC_POINT.finditer(text or ""):
+        point, path = int(m.group(1)), int(m.group(2))
+        last[path] = max(last.get(path, 0), point)
+    ahead, back = last.get(1, 0), last.get(2, 0)
+    if not back or set(last) - {1, 2} or 1 + ahead + back != frames:
+        return None
+    return list(range(frames - 1, ahead, -1)) + [0] + list(range(1, ahead + 1))
 
 
 def run_results(ended, why, scf, whole=True):
@@ -596,6 +746,10 @@ def job_kind(out):
     """What a job did, in words, by what was read of it: an optimisation (and frequencies), frequencies, or a
     single point."""
     vibrations = any(r.get("id") == "vibrations" for r in out.get("results") or [])
+    # (a scan or a reaction path read - not one said not read, after an optimisation that was)
+    path = next((r["label"] for r in out.get("results") or [] if r.get("id") == "run.path" and r.get("value") != "not read"), None)
+    if path:
+        return path
     if out.get("optimised") is not None:
         return "Optimisation and frequencies" if vibrations else "Optimisation"
     return "Frequencies" if vibrations else "Single point"

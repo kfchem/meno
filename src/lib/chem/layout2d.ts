@@ -14,7 +14,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { greatest, least, pushAll } from "./lists";
-import { namesLaid } from "../layout/names";
+import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
 
@@ -707,6 +707,39 @@ export function runsWidth(runs: readonly TextRun[], fontSize: number, set: Label
     w += r.mark ? size * MARK_WIDTH : runWidth(font, r.text, size);
   }
   return w;
+}
+
+/**
+ * How far in each place of `runs` set side by side lies - before each of
+ * their letters, by its place in their text, and at their end: what
+ * `runsWidth` measures of them cut there, in one pass, not a measure for
+ * each place.
+ */
+export function runsPlaces(runs: readonly TextRun[], fontSize: number, set: LabelSet = ACS_LABEL_SET): number[] {
+  const font = labelFont(set.fontFamily);
+  const out = [0];
+  // (the runs before, added up as runsWidth adds them, and the one cut, as runWidth adds its letters: the same sums, so the same numbers)
+  let done = 0;
+  for (const r of runs) {
+    const size = fontSize * (r.sub || r.sup || r.mark ? set.subscriptSize : 1);
+    let w = 0;
+    if (r.mark) {
+      w = size * MARK_WIDTH;
+      for (let k = 1; k < r.text.length; k++) out.push(done + w);
+    } else {
+      let k = 0;
+      for (const ch of r.text) {
+        if (k > 0) out.push(done + w);
+        // (cut between the halves of a letter of two code units: the first half, as runWidth reads it)
+        if (ch.length === 2) out.push(done + (w + font.advance(ch[0]) * size));
+        w += font.advance(ch) * size;
+        k += ch.length;
+      }
+    }
+    done += w;
+    if (r.text.length) out.push(done);
+  }
+  return out;
 }
 
 export function computeBounds(atoms: Atom[]): { min: Vec2; max: Vec2 } {
@@ -2375,13 +2408,19 @@ export function buildTextLabels(
       }
       const set = labelSetOf(opts);
       const size = opts.fontPx * set.subscriptSize;
+      // (the marks are set centred where they go, side by side: a charge and
+      // a radical's dot are wider than one mark, and the first of them came
+      // over the letters where they went out across them - an N+'s circle
+      // on its N; out by that much more across)
+      const wide = tail.reduce((w, r) => w + (r.mark ? MARK_WIDTH : 0.6 * r.text.length), 0) * size;
+      const more = Math.max(0, wide / 2 - (MARK_WIDTH / 2) * size);
       out.push({
         ...besideVertex(a, ways.get(i) ?? [], tail, opts, (dir) => {
           let far = 0;
           for (const hull of labelHulls(bare, opts.fontPx, set, false)) {
             for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
           }
-          return far + size * (MARK_RADIUS + 0.2);
+          return far + size * (MARK_RADIUS + 0.2) + more * Math.abs(dir.x);
         }),
         markOf: i,
       });
@@ -2448,7 +2487,14 @@ export function buildTextLabels(
     // and above it when they fall - on the side further from every bond, so
     // that three bonds evenly spread, one of them straight down (a borate's
     // BH), keep the line clear of it; where neither is, as the bonds lean.
-    if (leftward.has(i) && rightward.has(i)) {
+    // (and only where the line above or below is clearer of the bonds
+    // than the row beside the symbol: two bonds nearly in a line, steep -
+    // tetrodotoxin's guanidine NH - leave the sides open and the line
+    // above or below on a bond)
+    // (lib/layout/names `rowClearer`, as the engine reckons where the H goes)
+    const dirs = (ways.get(i) ?? []).map((w) => w.dir);
+    const onRow = leftward.has(i) && rightward.has(i) && rowClearer(dirs);
+    if (leftward.has(i) && rightward.has(i) && !onRow) {
       const rise = Math.max(...(ways.get(i) ?? []).map((w) => w.dir.y));
       const fall = Math.max(...(ways.get(i) ?? []).map((w) => -w.dir.y));
       const stack = rise < fall - 1e-6 ? "above" : fall < rise - 1e-6 ? "below" : toward.y >= 0 ? "below" : "above";
@@ -2470,9 +2516,12 @@ export function buildTextLabels(
     // go where its formula is written with them - first for oxygen and the
     // halogens and their groups, H2O, H2S, HCl, H3O+; after the symbol for
     // the rest, NH3, CH4, PH3.
-    const neighboursRight = bonded.has(i)
+    let neighboursRight = bonded.has(i)
       ? toward.x > Math.hypot(toward.x, toward.y) * band
       : HYDROGENS_FIRST.has(a.el);
+    // (on the row because it is clearer than the line above or below: on its
+    // clearer side - NH, or HN - and, the two alike, after the symbol)
+    if (onRow) neighboursRight = clearRowSide(dirs) === "before";
     // (the charge after all of it where the H follow the symbol: NH3+; after
     // the symbol where they come first: H3N+)
     const runs = neighboursRight
@@ -2568,6 +2617,9 @@ export function labelTrims(
   };
 }
 
+/** The least share of a bond seen between the labels at its ends, however much of it they would take. */
+export const BOND_SEEN_LEAST = 1 / 3;
+
 export function buildBondPrimitives(
   atoms: Atom[],
   bond: Bond,
@@ -2611,6 +2663,15 @@ export function buildBondPrimitives(
   const room = trims.room;
   if (trimA + trimB > room) {
     const k = room / (trimA + trimB);
+    trimA *= k;
+    trimB *= k;
+  }
+  // And whatever the labels, a bond is seen for a third of its length at
+  // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  const seen = L0 * BOND_SEEN_LEAST;
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;
   }
@@ -4440,23 +4501,55 @@ function expandBounds(
   };
 }
 
+/**
+ * What XML 1.0 does not allow in a document, at all (Characters, [2]): the
+ * control characters but tab, line feed and carriage return; U+FFFE and
+ * U+FFFF; and a surrogate with no other half. Written as they came - a
+ * NUL from a damaged file, an escape from a PDF's words - the SVG was no
+ * well-formed XML, and a picture of it was dropped from the clipboard.
+ */
+function xmlChars(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // (a surrogate with its other half: a character beyond the first plane, kept)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+      out += text[i] + text[++i];
+      continue;
+    }
+    const banned = (c < 0x20 && c !== 0x9 && c !== 0xa && c !== 0xd) || c === 0xfffe || c === 0xffff || (c >= 0xd800 && c <= 0xdfff);
+    out += banned ? "\uFFFD" : text[i];
+  }
+  return out;
+}
+
+const XML_ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
+
+/** Text as an element holds it: its markup escaped, what XML cannot hold the replacement character. */
 function escapeXml(text: string): string {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return xmlChars(String(text)).replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
+}
+
+/**
+ * A value as an attribute in double quotes holds it: escaped as text is,
+ * but for an apostrophe, which a font stack quotes names in. Every value an
+ * SVG is written with that is not a number goes through it - a typeface's
+ * name, a colour, an image's address - as a document or the settings may
+ * give any of them.
+ */
+export function xmlAttr(value: string): string {
+  return xmlChars(String(value)).replace(/[&<>"]/g, (c) => XML_ESCAPES[c]);
 }
 
 /**
  * The CSS font stack for a typeface: itself, its nearest stand-ins, then
  * IBM Plex Sans JP for what it lacks - as the canvas draws it. IBM Plex
  * Sans, which Meno carries but a picture's reader seldom has, stands in as
- * Arial or Helvetica there, the nearest most have.
+ * Arial or Helvetica there, the nearest most have. A name with more than
+ * letters, digits and hyphens is quoted, an apostrophe in it escaped.
  */
 export function fontStack(family: string): string {
-  const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name);
+  const quote = (name: string) => (/[^A-Za-z0-9-]/.test(name) ? `'${name.replace(/[\\']/g, "\\$&")}'` : name);
   const standIn =
     family === "Arial" ? ["Helvetica"] : family === "Helvetica" ? ["Arial"] : family === "IBM Plex Sans" ? ["Arial", "Helvetica"] : [];
   return [family, ...standIn, "IBM Plex Sans JP", "sans-serif"]
@@ -4471,14 +4564,14 @@ function svgLabel(
   set: LabelSet,
   fill: string,
 ): string {
-  const fontFamily = fontStack(set.fontFamily ?? "Arial");
+  const fontFamily = xmlAttr(fontStack(set.fontFamily ?? "Arial"));
   let out = "";
   for (const run of placeLabel(t, fontSize, set)) {
     // (a mark is drawn with the lines and shapes)
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${svgColor(run.color, fill)}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"` +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4513,26 +4606,26 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     return d + "Z";
   };
   for (const m of layout.shapes ?? []) {
-    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${svgColor(m.fill.color)}" stroke="none" />`;
-    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${svgColor(m.curve.color)}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+    if (m.fill) s += `<path d="${m.fill.curve ? curvePath(m.fill.curve) : toSvgPath(m.fill)}" fill="${xmlAttr(svgColor(m.fill.color))}" stroke="none" />`;
+    if (m.curve) s += `<path d="${curvePath(m.curve.points)}" fill="none" stroke="${xmlAttr(svgColor(m.curve.color))}" stroke-width="${m.curve.width}" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     for (const l of m.lines) {
       const d = l.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${-p.y}`).join(" ") + (l.closed ? " Z" : "");
-      s += `<path d="${d}" fill="none" stroke="${svgColor(l.color)}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
+      s += `<path d="${d}" fill="none" stroke="${xmlAttr(svgColor(l.color))}" stroke-width="${l.width}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3" />`;
     }
   }
   // a marker's writing, over the shapes and under the drawing
   for (const k of layout.inks ?? []) if (!k.over) s += svgInk(k);
   // behind the drawing: the rings' fills and the parts' highlights
   for (const u of layout.under ?? []) {
-    s += `<path d="${toSvgPath(u)}" fill="${svgColor(u.color)}" stroke="none" />`;
+    s += `<path d="${toSvgPath(u)}" fill="${xmlAttr(svgColor(u.color))}" stroke="none" />`;
   }
   // filled join caps
   for (const c of layout.fills || []) {
     s += `<circle cx="${c.c.x}" cy="${-c.c
-      .y}" r="${c.r}" fill="${svgColor(c.color, stroke)}" stroke="none" />`;
+      .y}" r="${c.r}" fill="${xmlAttr(svgColor(c.color, stroke))}" stroke="none" />`;
   }
   for (const p of layout.polys) {
-    s += `<path d="${toSvgPath(p)}" fill="${svgColor(p.color, stroke)}" stroke="none" />`;
+    s += `<path d="${toSvgPath(p)}" fill="${xmlAttr(svgColor(p.color, stroke))}" stroke="none" />`;
   }
   for (const c of layout.curves ?? []) {
     if (c.points.length < 4) continue;
@@ -4541,7 +4634,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       const [p, q, r] = [c.points[i], c.points[i + 1], c.points[i + 2]];
       d += `C${p.x} ${-p.y} ${q.x} ${-q.y} ${r.x} ${-r.y}`;
     }
-    s += `<path d="${d}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${c.width}"` +
+    s += `<path d="${d}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${c.width}"` +
       ` stroke-linecap="${c.round ? "round" : "butt"}" stroke-linejoin="round" />`;
   }
   for (const c of layout.circles || []) {
@@ -4549,13 +4642,13 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       c.squash != null && c.squash < 1
         ? `<ellipse cx="${c.c.x}" cy="${-c.c.y}" rx="${c.r}" ry="${c.r * c.squash}"` +
           ` transform="rotate(${(-(c.angle ?? 0) * 180) / Math.PI} ${c.c.x} ${-c.c.y})"` +
-          ` fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`
-        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${svgColor(c.color, stroke)}" stroke-width="${strokeWidth}" />`;
+          ` fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`
+        : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`;
   }
   for (const l of layout.lines) {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${svgColor(l.color, stroke)}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="butt"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
@@ -4563,7 +4656,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   }
   const img = layout.solidsImage;
   s += img
-    ? `<image href="${img.href}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
+    ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
       ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
     : svgSolids(layout.solids ?? []);
   // (with the molecules an image, their measurements' lines and fans are in
@@ -4575,12 +4668,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   return s;
 }
 
-/** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
 /** A stroke written by hand, as SVG: its outline, filled - see-through where it is a marker's. */
 function svgInk(k: InkMark): string {
-  return `<path d="${toSvgPath(k)}" fill="${svgColor(k.color)}"${k.opacity != null && k.opacity < 1 ? ` fill-opacity="${k.opacity}"` : ""} stroke="none" />`;
+  return `<path d="${toSvgPath(k)}" fill="${xmlAttr(svgColor(k.color))}"${k.opacity != null && k.opacity < 1 ? ` fill-opacity="${k.opacity}"` : ""} stroke="none" />`;
 }
 
+/** A part's colour as an SVG attribute takes it: a #rrggbb colour as it is, anything else as `otherwise`. */
 function svgColor(css: string | undefined, otherwise = "black"): string {
   return css && /^#[0-9a-f]{6}$/i.test(css) ? css : otherwise;
 }
@@ -4589,17 +4682,17 @@ function svgColor(css: string | undefined, otherwise = "black"): string {
 function svgMeasure(m: MeasureMark, family: string | undefined, lines = true): string {
   let s = "";
   for (const [a, b, c] of lines ? m.fan : []) {
-    s += `<path d="M${a.x} ${-a.y}L${b.x} ${-b.y}L${c.x} ${-c.y}Z" fill="${m.color}" fill-opacity="${m.fanOpacity}" stroke="none" />`;
+    s += `<path d="M${a.x} ${-a.y}L${b.x} ${-b.y}L${c.x} ${-c.y}Z" fill="${xmlAttr(m.color)}" fill-opacity="${m.fanOpacity}" stroke="none" />`;
   }
   for (const [a, b] of lines ? m.lines : []) {
-    s += `<line x1="${a.x}" y1="${-a.y}" x2="${b.x}" y2="${-b.y}" stroke="${m.color}" stroke-width="${m.width}" stroke-linecap="butt" />`;
+    s += `<line x1="${a.x}" y1="${-a.y}" x2="${b.x}" y2="${-b.y}" stroke="${xmlAttr(m.color)}" stroke-width="${m.width}" stroke-linecap="butt" />`;
   }
   const box = measureLabelBox(m, family);
   s +=
     `<rect x="${box.min.x}" y="${-box.max.y}" width="${box.max.x - box.min.x}" height="${box.max.y - box.min.y}"` +
     ` rx="${(box.max.y - box.min.y) / 2}" fill="white" fill-opacity="0.9" stroke="none" />` +
-    `<text x="${box.baseline.x}" y="${-box.baseline.y}" font-family="${fontStack(family ?? "Arial")}"` +
-    ` font-size="${m.size}" fill="${m.color}" stroke="none" text-anchor="start">${escapeXml(m.text)}</text>`;
+    `<text x="${box.baseline.x}" y="${-box.baseline.y}" font-family="${xmlAttr(fontStack(family ?? "Arial"))}"` +
+    ` font-size="${m.size}" fill="${xmlAttr(m.color)}" stroke="none" text-anchor="start">${escapeXml(m.text)}</text>`;
   return s;
 }
 
@@ -4641,7 +4734,7 @@ function svgSolids(marks: SolidMark[]): string {
     defs +=
       `<radialGradient id="${id}" cx="0.5" cy="0.5" r="0.5" fx="${fx}" fy="${fy}">` +
       `<stop offset="0" stop-color="${shadeOf(m.color, BALL_SHADE.light)}"/>` +
-      `<stop offset="0.6" stop-color="${m.color}"/>` +
+      `<stop offset="0.6" stop-color="${xmlAttr(m.color)}"/>` +
       `<stop offset="1" stop-color="${shadeOf(m.color, -BALL_SHADE.dark)}"/>` +
       `</radialGradient>`;
   }
@@ -4650,7 +4743,7 @@ function svgSolids(marks: SolidMark[]): string {
     s +=
       m.kind === "ball"
         ? `<circle cx="${m.c.x}" cy="${-m.c.y}" r="${m.r}" fill="url(#${ids.get(m.color)})" stroke="none" />`
-        : `<line x1="${m.a.x}" y1="${-m.a.y}" x2="${m.b.x}" y2="${-m.b.y}" stroke="${m.color}" stroke-width="${m.width}" stroke-linecap="butt" />`;
+        : `<line x1="${m.a.x}" y1="${-m.a.y}" x2="${m.b.x}" y2="${-m.b.y}" stroke="${xmlAttr(m.color)}" stroke-width="${m.width}" stroke-linecap="butt" />`;
   }
   return s;
 }

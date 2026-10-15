@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { axialOut, cageCore, drawnAsChairOrBoat, isCage, keepsConfigurations, projectCage, solidOf, type Vec3 } from "./cage";
+import { axialOut, cageCore, drawnAsChairOrBoat, flatCost, isCage, keepsConfigurations, projectCage, putBackTurned, solidOf, type Vec3 } from "./cage";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -255,5 +255,105 @@ describe("a solid's configurations", () => {
     const far = new Map([[0, 0], [1, 0], [2, 0], [3, -1]]);
     expect(keepsConfigurations(mol, [0, 1, 2, 3], pos, near)).toBe(true);
     expect(keepsConfigurations(mol, [0, 1, 2, 3], pos, far)).toBe(false);
+  });
+
+  it("are put back where the easing turned one: the centre where the solid has it, unless the template holds it", () => {
+    const atoms = [0, 1, 2, 3];
+    const anchors = atoms.map((a) => pos.get(a)!);
+    const depth = [0, 0, 0, 1];
+    // (eased past its neighbours' line, the centre reads the other way)
+    const eased = () => [{ x: 1, y: 1 }, ...anchors.slice(1)];
+    const near = new Map(atoms.map((a, i) => [a, depth[i]]));
+    expect(keepsConfigurations(mol, atoms, new Map(atoms.map((a, i) => [a, eased()[i]])), near)).toBe(false);
+    const pts = eased();
+    expect(putBackTurned(mol, atoms, pts, depth, anchors)).toBe(1);
+    expect(pts[0]).toEqual(anchors[0]);
+    expect(keepsConfigurations(mol, atoms, new Map(atoms.map((a, i) => [a, pts[i]])), near)).toBe(true);
+    const held = eased();
+    expect(putBackTurned(mol, atoms, held, depth, anchors, new Set([0]))).toBe(0);
+    expect(held[0]).toEqual({ x: 1, y: 1 });
+  });
+
+  it("are looked at again once another is put back: a centre that read right before its neighbour moved", () => {
+    // two centres bonded, 0 and 1, each with two more neighbours, one of
+    // them nearer the viewer; 1 put back turns 0, which is put back in turn
+    const pair = perceive({
+      atoms: [
+        { el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: -1 } },
+        { el: "C", tetra: { neighbours: [0, 4, 5, -1], volume: 1 } },
+        ...[2, 3, 4, 5].map(() => ({ el: "C" })),
+      ],
+      bonds: [[0, 1], [0, 2], [0, 3], [1, 4], [1, 5]].map(([a, b]) => ({ a, b, order: 1 })),
+    });
+    const atoms = [0, 1, 2, 3, 4, 5];
+    const depth = [0, 0, 0, 1, 0, 1];
+    const pts = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: -1, y: 0 }, { x: -1, y: 1 }];
+    const anchors = [{ x: 2, y: 0 }, { x: 1, y: -1 }, ...pts.slice(2)];
+    const near = new Map(atoms.map((a, i) => [a, depth[i]]));
+    const reads = (p: typeof pts) => new Map(atoms.map((a, i) => [a, p[i]]));
+    expect(keepsConfigurations(pair, [0, 1, 2, 3], reads(pts), near)).toBe(true);
+    expect(keepsConfigurations(pair, [1, 0, 4, 5], reads(pts), near)).toBe(false);
+    expect(putBackTurned(pair, atoms, pts, depth, anchors)).toBe(2);
+    expect(pts.slice(0, 2)).toEqual(anchors.slice(0, 2));
+    expect(keepsConfigurations(pair, atoms, reads(pts), near)).toBe(true);
+  });
+});
+
+describe("a cage eased onto its template", () => {
+  /** A molecule read from SMILES as the engine takes it. */
+  const inputOf = (smiles: string): LayoutInput => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    return {
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    };
+  };
+  /** The same molecule, its atoms numbered and its bonds listed in another order (none for seed 0). */
+  const shuffled = (input: LayoutInput, seed: number): LayoutInput => {
+    if (!seed) return input;
+    let r = seed;
+    const next = () => (r = (r * 16807) % 2147483647) / 2147483647;
+    const shuffle = <T>(xs: T[]) => {
+      for (let i = xs.length - 1; i > 0; i--) {
+        const j = Math.floor(next() * (i + 1));
+        [xs[i], xs[j]] = [xs[j], xs[i]];
+      }
+      return xs;
+    };
+    const to = shuffle(input.atoms.map((_, i) => i));
+    const atoms = [...input.atoms];
+    input.atoms.forEach((a, i) => (atoms[to[i]] = a.tetra ? { ...a, tetra: { ...a.tetra, neighbours: a.tetra.neighbours.map((n) => (n < 0 ? n : to[n])) } } : a));
+    return { atoms, bonds: shuffle(input.bonds.map((b) => ({ ...b, a: to[b.b], b: to[b.a] }))) };
+  };
+  /** The cage of `size` atoms seen from its template's side, in each of several orders of its atoms. */
+  const views = (smiles: string, size: number) =>
+    [0, 1, 2, 3, 4].map((seed) => {
+      const mol = perceive(shuffled(inputOf(smiles), seed));
+      const sys = mol.systems.find((x) => x.atoms.length === size)!;
+      const view = projectCage(mol, sys);
+      const at = (a: number, b: number) => Math.hypot(view.pos.get(a)!.x - view.pos.get(b)!.x, view.pos.get(a)!.y - view.pos.get(b)!.y);
+      const pairs = sys.atoms.flatMap((a) => sys.atoms.filter((b) => a < b).map((b) => [a, b] as const));
+      return {
+        faults: flatCost(mol, sys, view.pos, view.depth, false, true),
+        apart: pairs.filter(([a, b]) => !mol.neighbours[a].includes(b)).map(([a, b]) => at(a, b)),
+        bonds: pairs.filter(([a, b]) => mol.neighbours[a].includes(b)).map(([a, b]) => at(a, b)),
+      };
+    });
+
+  it("keeps atoms not bonded to each other apart: scopolamine's tropane seen as a solid, as cocaine's, no atom on another or on a bond, whatever order its atoms come in", () => {
+    for (const { faults, apart } of views("CN1[C@@H]2CC(C[C@H]1[C@H]3[C@@H]2O3)OC(=O)[C@H](CO)C4=CC=CC=C4", 9)) {
+      expect(faults).toBeLessThan(1);
+      expect(Math.min(...apart)).toBeGreaterThan(0.55);
+    }
+  });
+
+  it("leaves bicyclo[2.2.2]octane as the textbook draws it: its back bridge by its back bridgehead, its bonds one length, not eased apart", () => {
+    for (const { apart, bonds } of views("OC1CC2CCC1CC2", 8)) {
+      expect(apart.filter((d) => d < 0.6)).toHaveLength(1);
+      expect(Math.max(...bonds) / Math.min(...bonds)).toBeLessThan(1.02);
+    }
   });
 });

@@ -16,6 +16,7 @@
  * candidates show at the caret.
  */
 import { IS_MAC } from "../../../lib/doc/shortcuts";
+import { forTheClipboard } from "../../../lib/clipboard";
 import { caretAt, plainLines, selFrom, selTo, type Edit, type Lines, type Sel } from "../../../lib/text/editing";
 import { clausesWithin, composed, composingIn, editOf, inText, windowOf, withTakenAway, type FieldWindow } from "../../../lib/text/field";
 import { commandOf, type Command } from "../../../lib/text/keys";
@@ -127,7 +128,8 @@ abstract class Field implements TypingField {
     e.preventDefault();
     const text = this.ed.selectedText();
     if (!text) return;
-    e.clipboardData?.setData("text/plain", text);
+    // (on Windows, its lines ended as Meno's copies through the menu end them)
+    e.clipboardData?.setData("text/plain", forTheClipboard(text));
     if (cut) {
       this.ed.replaceSelection("");
       this.sync();

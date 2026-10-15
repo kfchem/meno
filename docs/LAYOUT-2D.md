@@ -110,6 +110,12 @@ they hang from.
   way out of a clash (section 5).
 - **Rings of three to eight**: regular polygons; a four-membered ring a
   square with its sides level and upright (a beta-lactam, an oxetane).
+  An eight-membered ring is the one of these that can hold a trans double
+  bond, which a regular octagon would draw cis: one end of that bond is
+  dented in, across the line between its neighbours, so the ring atoms
+  either side of it fall on opposite sides ((E)-cyclooctene). The end
+  dented is one in no other ring, with the less hanging from it, and never
+  beside another dent.
   Rings fused to each other share a side exactly; a ring fused on two
   sides or more at once (as in pyrene) takes the positions its neighbours
   already fix. Where those cannot make it regular - a five-membered ring
@@ -138,9 +144,17 @@ they hang from.
   among the few that lie well, for the room it leaves inside. A ring fused
   on its side sits where the shape turns (both ends of that side corners
   pointing out), a ring it runs through at three atoms stands outside a
-  corner pointing in, and every double bond in it keeps its cis or trans.
-  A macrolide has its lactone at the lower left, the ring numbered from
-  its carbonyl carbon counterclockwise - C2 to its right along the bottom,
+  corner pointing in, and every double bond in it keeps its cis or trans:
+  a cis one at a corner, a trans one along a zigzag. Where none of the
+  shapes offered has corners and zigzags at the places two of them need
+  (a cyclohexadecadiene's, a bond apart), the shapes of the size that lie
+  less well are looked through, best first and each once, those with a
+  dent or two among them (two turns inward together, for rings of up to
+  24), and the best few that keep them all are offered instead; for an
+  odd ring, the rings one larger, each drawn together where that eases
+  best of the places that keep them. A macrolide has its lactone at the
+  lower left, the ring numbered from its carbonyl carbon
+  counterclockwise - C2 to its right along the bottom,
   the ring O last, above it - as erythromycin and epothilone are drawn: of
   the ways of fitting the ring to its shape that put the heavy groups
   outside, the one that does so. A ring of up to fifteen, seven bonds a
@@ -227,11 +241,25 @@ they hang from.
   bridge between two of them hanging from them however it must;
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
-  eased into place, every bond pulled at once and each atom moved by the
-  mean of its bonds' pulls, so that no bond is eased before another (bond
-  by bond, the order decided the drawing: paeoniflorin's boat came out
-  costing 7.68 in one order and 8.04 in another, over the 8 a textbook
-  view may cost, and was then drawn from below by projection). A view that eases a double bond in a ring of seven
+  eased into place - its bonds toward one length, each atom held near
+  where the solid seen from that side puts it, every bond pulled at once
+  and each atom moved by the mean of its pulls, so that no bond is eased
+  before another (bond by bond, the order decided the drawing:
+  paeoniflorin's boat came out costing 7.68 in one order and 8.04 in
+  another, over the 8 a textbook view may cost, and was then drawn from
+  below by projection) - and eased again with
+  atoms not bonded to each other kept 0.7 of a bond apart. That is taken
+  only where it leaves fewer pairs of atoms nearer than 0.6 of a bond and
+  reads better by the measure a flat drawing and a solid are weighed by
+  (`viewCost` at its defaults, with no depth): where the solid seen so
+  puts one atom on another (scopolamine's epoxide by its N), not where a
+  near pair is the drawing's own (adamantane's back CH2 by a front
+  bridgehead; bicyclo[2.2.2]octane's back bridge by its back bridgehead,
+  which eased apart only comes a little less near, its bonds uneven). A
+  stereocentre the easing turns - a bridgehead whose three bonds lie
+  nearly in the page can tip through - goes back where it was put (one
+  stood upright on the ring, upright still), and the others are looked at
+  again. A view that eases a double bond in a ring of seven
   atoms or fewer trans, its neighbours round the ring either side of it,
   counts that as heavily as a bridge drawn so: tetrodotoxin's guanidine
   ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
@@ -523,8 +551,15 @@ much else a crossing would clear.
 And last, room for the H of every label: the drawing writes it beside the
 symbol on the side the bonds leave free (OH, or HO where they leave to the
 right; under or over the symbol only between bonds on both sides, as in a
-chain's NH). Where it - or its count, NH2's 2 after it and set lower -
-would run into another label, an atom or a bond, the
+chain's NH, and only where that line is clearer of the bonds than the row
+beside the symbol, by more than a band of 10 degrees - two bonds nearly
+in a line, steep, leave the row open and the line above or below on a
+bond, as tetrodotoxin's guanidine NH; nearer even, it stays stacked. On
+the row so, it goes on the row's clearer side - a borate's BH- with a
+bond straight right is written HB- - and, the two sides alike, after the
+symbol: NH. lib/layout/names `rowClearer`, `clearRowSide`, which the
+drawing and the engine share). Where it - or its count, NH2's 2 after it
+and set lower - would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
@@ -549,7 +584,11 @@ bond). Two names one over the other keep a line's space between them, a
 quarter of a bond: with less, taxol's AcO sat on its OBz.
 
 - Two labels share a bond's length: together they may take nine tenths of
-  it (`labelShareMax`), each giving up its share past that. Where one of
+  it (`labelShareMax`), each giving up its share past that - and, drawn,
+  never more than two thirds, whatever the labels: a third of a bond is
+  always seen, its end touching a label's letters or digits (13C's) where
+  it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
+  2026-10-14). Where one of
   them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
   long enough for the two to keep their margins, in the drawing's style -
   measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,
@@ -615,7 +654,11 @@ of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
-  η⁶-benzene, p-cymene - is seen as it is: the metal on its axis, a bond
+  η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
+  the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
+  haptic bond - too: Clean-up gives the engine a star at its centre for
+  those bonds, and they stay drawn from the metal to each atom; the
+  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the

@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
-import { sheetMiddle, sheetOf } from "../utils/textSheets";
-import { pdfBounds } from "../../../../lib/pdf/layout";
+import { sheetMiddle, sheetOfText } from "../utils/textSheets";
+import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -27,6 +27,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { hiddenInStacks } from "../utils/stacks";
 import SelectionShade2D from "./SelectionShade2D";
 import { pressMovedUnder } from "./viewGoal";
+import { greatest, least } from "../../../../lib/chem/lists";
 
 /** How far above the selection its turning handle stands, as a share of a bond. */
 const HANDLE_ABOVE = 0.75;
@@ -88,8 +89,8 @@ function selectionExtent(
   }
   if (!xs.length) return null;
   // (the drawing alone: its atoms' middle, as ever)
-  const mid = sel3d.size || pictures.length ? { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 } : middleOf(model, atoms);
-  return mid ? { mid, top: Math.max(...ys) } : null;
+  const mid = sel3d.size || pictures.length ? { x: (least(xs) + greatest(xs)) / 2, y: (least(ys) + greatest(ys)) / 2 } : middleOf(model, atoms);
+  return mid ? { mid, top: greatest(ys) } : null;
 }
 
 /**
@@ -97,8 +98,9 @@ function selectionExtent(
  *
  * - what is selected, shaded under the drawing;
  * - a box or a lasso being drawn to select what it holds - from empty
- *   space with Ctrl (⌘ on a Mac) held, or by a double-click there that
- *   drags; with Alt (Option) held, a lasso rather than a box;
+ *   space with Ctrl (⌘ on a Mac) held, or by a long press there and a
+ *   drag (a double-click there opens Quick Add); with Alt (Option) held,
+ *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D selected alone
  *   it turns as one body, in 3D - as a drag on a molecule turns it - about
@@ -178,7 +180,7 @@ export default function Selection2D() {
         s.selectMolecules3d(molecules3dIn(s.molecules3d.filter((m) => !outOfSight.has(m.id)), kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
         // (and texts' sheets, by their middles - and PDFs, by the middle of what they cover)
-        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name) }] : [])), kind, points), add);
+        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name, pointOf(t)) }] : [])), kind, points), add);
         s.selectPdfs(
           molecules3dIn(
             s.pdfs.map((p) => {
@@ -201,6 +203,8 @@ export default function Selection2D() {
         // (and arrows standing wholly in it - each end and corner - and "+" signs, by their middles: those among the atoms it takes are carried with them, once)
         s.selectArrows(arrowsIn(s.arrows, kind, points), add);
         s.selectPluses(molecules3dIn(s.pluses.map((x) => ({ id: x.id, at: x })), kind, points), add);
+        // (and words on the page over no arrow, by where they stand)
+        s.selectCaptions(wordsIn(s.captions, kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing
@@ -343,7 +347,7 @@ export default function Selection2D() {
     const picturesAt = (angle: number) => turned(pics, about, angle).map((q, i) => ({ ...q, turn: (pics[i].turn ?? 0) + angle }));
     const sheets = st.texts.flatMap((t) => {
       if (!t.at || !st.selTexts.has(t.id)) return [];
-      const s = sheetOf(t.text, t.name);
+      const s = sheetOfText(t);
       return [{ id: t.id, x: t.at.x + s.w / 2, y: t.at.y - s.h / 2, w: s.w, h: s.h }];
     });
     const sheetsAt = (angle: number) => turned(sheets, about, angle).map((q, i) => ({ id: q.id, x: q.x - sheets[i].w / 2, y: q.y + sheets[i].h / 2 }));

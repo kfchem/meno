@@ -219,9 +219,9 @@ describe("cleanUp", () => {
       const s2 = stereo({ atoms: told.atoms.map(({ id, x, y, el }) => atom(id, x, y, el)), bonds: told.bonds as Bond[] });
       for (const [c, t] of s0) expect(sameConfiguration(t, s2.get(c)!), `${name} ${c}, flat`).toBe(true);
     }
-    // (the whole engine on each of the cages, drawn and read back: about a
-    // second alone, a few times that on a machine busy with the rest of the
-    // tests)
+    // (every cage cleaned up in turn: under a second on a quiet machine, past
+    // the 5 s default on a slow CI runner - 5.2 to 5.4 s seen there, with
+    // the layout tests all as much slower)
   }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
@@ -402,3 +402,41 @@ describe("cleanUp", () => {
     expect(labels()).toEqual([]);
   });
 });
+
+describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the maintainer, 2026-10-13)", () => {
+  // ferrocene as drawn with no haptic bond: two pentagons over and under the
+  // iron, ten bonds from it - laid out as drawn, each a ring of three, it was a tangle
+  const pentagon = (cy: number, from: number) =>
+    Array.from({ length: 5 }, (_, i) => ({ id: from + i, x: 0.85 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 5), y: cy + 0.4 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 5), r: 0.9, el: "C" }));
+  const ring = (from: number, id0: number): Bond[] =>
+    Array.from({ length: 5 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 5), order: i === 0 || i === 2 ? 2 : 1, stereo: "none", stereoOrient: "principle" }) as Bond);
+  const ferrocene: Model = {
+    atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Fe" }, ...pentagon(1.5, 2), ...pentagon(-1.5, 7)],
+    bonds: [
+      ...ring(2, 20),
+      ...ring(7, 30),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none", stereoOrient: "principle" }) as Bond),
+    ],
+  };
+  it("is laid out as the sandwich a written-out Cp2Fe is: each ring face-on, one over the metal and one under, its bonds kept", async () => {
+    const laid = await laidOut(ferrocene);
+    expect(laid.atoms).toHaveLength(11);
+    expect(laid.bonds).toHaveLength(20);
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    const fe = at.get(1)!;
+    const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
+    const [top, bottom] = [middle([2, 3, 4, 5, 6]), middle([7, 8, 9, 10, 11])];
+    // on the metal's axis, either side of it
+    expect(Math.sign(top.y - fe.y)).toBe(-Math.sign(bottom.y - fe.y));
+    expect(Math.abs(top.x - fe.x)).toBeLessThan(0.2 * NOMINAL_BOND_LENGTH);
+    // each ring's own bonds crossing none of the other's, nor each other
+    const ringBonds = laid.bonds.filter((b) => b.a !== 1 && b.b !== 1);
+    const idx = new Map(laid.atoms.map((a, i) => [a.id, i]));
+    const m = layoutMetrics({ x: laid.atoms.map((a) => a.x), y: laid.atoms.map((a) => a.y), edges: ringBonds.map((b) => [idx.get(b.a)!, idx.get(b.b)!] as const), orders: ringBonds.map((b) => b.order) });
+    expect(m.crossings).toBe(0);
+    expect(m.overlaps).toBe(0);
+    // in perspective, as Haworth drew rings: some edges bold
+    expect(laid.bonds.some((b) => b.display === "bold")).toBe(true);
+  });
+});
+

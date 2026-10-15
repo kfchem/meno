@@ -522,3 +522,85 @@ describe("a measurement on a molecule in 3D set to a value", () => {
     expect(state().measureEdit3d).toEqual({ id: 1, measure: 2 });
   });
 });
+
+describe("a molecule in 3D shown overlaid, undone away", () => {
+  it("is not shown overlaid in the next molecule made with its id, and is again when redone", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const state = () => store.getState();
+    const frames = [water.atoms.flatMap((a) => [a.x, a.y, a.z + 0.1])];
+    doc.edit("3D structure", (d) => addMolecule3d(d, { ...water, frames, at: { x: 0, y: 0 } }));
+    const first = state().molecules3d[0].id;
+    state().setOverlay3d(first, true);
+    doc.undo();
+    expect(state().overlay3d[first]).toBeUndefined();
+    // redone: the same molecule, overlaid as it was
+    doc.redo();
+    expect(state().overlay3d[first]).toBe(true);
+    // undone, and another made in its place, with its id: not overlaid
+    doc.undo();
+    doc.edit("3D structure", (d) => addMolecule3d(d, { ...water, frames, at: { x: 9, y: 0 } }));
+    expect(state().molecules3d[0].id).toBe(first);
+    expect(state().overlay3d[first]).toBeUndefined();
+  });
+});
+
+describe("molecules in 3D turned together, then something amended", () => {
+  it("are turned back by the undo all the same - a PDF scrolled in the column replaces the document's states", () => {
+    const { doc, state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: -40 });
+    const half: [number, number, number, number] = [0, 1, 0, 0];
+    state().turnMolecules3d(
+      [
+        { id: 1, at: { x: 6, y: 0 }, turn: half },
+        { id: 2, at: { x: 0, y: 0 }, turn: half },
+      ],
+      "turn-1",
+    );
+    // the PDF read in the column, scrolled: an amend, no step of its own
+    state().setPdfReading(state().pdfs[0].id, { at: 0, zoom: 1.5 });
+    doc.undo();
+    expect(state().molecules3d.find((m) => m.id === 1)!.at.x).toBe(0);
+    expect(state().turns3d[1]).toBeUndefined();
+    doc.redo();
+    expect(state().turns3d[1]).toEqual(half);
+  });
+});
+
+describe("a molecule in 3D shown in its other look for a talk", () => {
+  it("is the view's alone: nothing to undo, nothing unsaved, the document's look as it was - and as it was once the talk ends", () => {
+    const doc = createWorkspaceDocument();
+    doc.edit("open", (d) => addMolecule3d(d, { ...WATER_TALK, at: { x: 0, y: 0 } }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const depth = doc.history().undoDepth;
+    const saved = doc.getState();
+    st().switchTalkLook3d(1);
+    expect(st().molecules3d[0].look).toBe("secondary");
+    expect(doc.getState()).toBe(saved);
+    expect(doc.history().undoDepth).toBe(depth);
+    // (an edit meanwhile keeps it so; two clicks again, back)
+    st().addAtom(9, 0, "C");
+    expect(st().molecules3d[0].look).toBe("secondary");
+    st().switchTalkLook3d(1);
+    expect(st().molecules3d[0].look ?? "primary").toBe("primary");
+    st().switchTalkLook3d(1);
+    st().endTalkLooks();
+    expect(st().molecules3d[0].look ?? "primary").toBe("primary");
+    expect(doc.getState().molecules3d?.[0].look ?? "primary").toBe("primary");
+  });
+});
+
+const WATER_TALK = {
+  atoms: [
+    { el: "O", x: 0, y: 0, z: 0 },
+    { el: "H", x: 0.76, y: 0.59, z: 0 },
+    { el: "H", x: -0.76, y: 0.59, z: 0 },
+  ],
+  bonds: [
+    { a1: 0, a2: 1, order: 1 },
+    { a1: 0, a2: 2, order: 1 },
+  ],
+};

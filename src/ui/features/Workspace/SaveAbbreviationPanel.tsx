@@ -1,8 +1,9 @@
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import AbbreviationForm from "../../abbreviations/AbbreviationForm";
 import { useEditor } from "./store";
+import { groupShape } from "./utils/groupShape";
 
 /**
  * The selected group saved as an abbreviation of the user's own, beside the
@@ -22,6 +23,14 @@ export default function SaveAbbreviationPanel({
   const setAbbreviations = useAppSettings((s) => s.setAbbreviations);
   const contract = useEditor((s) => s.contractToAbbreviation);
   const [here, setHere] = useState(true);
+  // the group changed - an undo took an atom of it away - takes the panel
+  // with it: its SMILES, and the atoms it would show as the label, were
+  // the group's as it was (a "tBu" came to hold an isopropyl)
+  const shape = useEditor((s) => groupShape(s.model, ids));
+  const [opened] = useState(shape);
+  useEffect(() => {
+    if (shape !== opened) onClose();
+  }, [shape, opened, onClose]);
   return (
     <aside
       aria-label="Save as abbreviation"

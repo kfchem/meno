@@ -46,7 +46,7 @@ built* below.
 | **Office re-edit** (Windows OLE: Word or PowerPoint opens Meno) | always a record; named `office.meno` to reach it (`App.tsx`) | `readRecord` | a tab linked to the object |
 | **Calculation output**, through Open or a drop | `outputKindOf` (`lib/calc/catalog.ts`) - by content only, and only once `detectFormat` has found no structure format | every reader added that reads the kind (`readOutput`, `lib/calc/read.ts`) | a molecule in 3D with what the calculation found |
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
-| **`.meno`** (Open, drop) | the extension | `readWorkspace` (version 1 only); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too |
+| **`.meno`** (Open, drop) | the extension | `readWorkspace` (version 1 only); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved, brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
 | **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
 
@@ -54,10 +54,10 @@ built* below.
 
 | Format | Read by, where | Written | Notes |
 | --- | --- | --- | --- |
-| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth |
-| SDF | the same | Save (drawing as one record, each molecule in 3D as one) | |
-| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy | |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); none whole, the file refused, saying why of its first frame ("The XYZ file ends before its atoms do: it says 3, and gives 2.", "Line 4 of the XYZ file gives C a place that is not a number: …"); atoms in one place said too |
+| MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
+| SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
+| RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -338,6 +338,30 @@ How these behave:
   says which plugin the catalogue suggests, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
+- **A file's text is read as its bytes are written** (2026-10-13,
+  `lib/io/text.ts`). Open, a drop, a file pasted and an output read again
+  all read it so:
+  - as UTF-8;
+  - as UTF-16 where a byte order mark says so, either way round, or
+    with no mark where its start has NULs - which no UTF-8 or Shift_JIS
+    text has - nearly all on one side of each pair (the high byte of
+    Latin letters, digits and line ends: a text mostly in Japanese has
+    some, one in English half), and read that way round is nearly all
+    letters a text holds;
+  - bytes that are not UTF-8, as Shift_JIS, which Windows in Japanese
+    writes text in;
+  - those that are not Shift_JIS either, as Windows-1252.
+
+  A file of no kind Meno reads is held as a text by Open as by a drop,
+  unless it is bytes (a NUL in its start, once read as above) or of a kind
+  Meno says it does not read yet: those are said so by both alike.
+
+  A text is held with its lines ended "\n", however its file ended them.
+  Text Meno puts on the clipboard on Windows has them ended "\r\n", as
+  Windows programs take it - copied through the menu or with the keys
+  (2026-10-14). Export writes a text beside its original as
+  UTF-8, its lines ended "\n" and with no byte order mark, whatever its
+  file was written in: Meno holds the text, not the bytes it was read from.
 - **Office's record is handed to the canvas as the record**, not under a
   made-up name.
 
@@ -403,7 +427,12 @@ As this part of step 5 was built (#155, from main beside step 3):
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`).
-  - **SVG** takes no options yet.
+  - **SVG** takes no options yet. Whatever a document gives it as text -
+    labels, words, a typeface's name, a colour - is escaped, in elements
+    and in attributes alike, and what XML cannot hold at all (the controls
+    but tab and the line breaks, a surrogate without its pair, U+FFFE and
+    U+FFFF) is drawn as the replacement character, so the file is
+    well-formed whatever was pasted.
 - **What a writer takes** is said by it (step 7): Meno's own take what is
   selected on the page; a plugin's, one molecule - the molecules in 3D
   selected, several as one system. A plugin's writer is offered only where
@@ -502,7 +531,20 @@ work.meno (zip)
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
 - **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`).
+  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
+  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is taken for more, or other, than the file says.** What it
+  says of a part's size is not trusted to set room aside by - a few bytes
+  may say a gigabyte: each part is inflated a little at a time, stopped as
+  soon as it comes to more than it says, and taken only if it comes to
+  just that (`lib/binary/zip.ts`). A workspace that does not is said to be
+  damaged; a file kept that does not is not had. And each file kept - an
+  output, a text, a PDF or a picture alike - is taken only if its bytes
+  are what its SHA-256 says, so that no file can pass for another held
+  this session.
+- **Saved within the same limits.** A workspace that would come to more
+  than a workspace file is read with is not written: Save says so, with
+  the sizes, rather than leave a file that would not open again.
 - **The JSON `.meno` of before is not looked for** (the maintainer: not
   needed). One still opens, the JSON being the same as `workspace.json`;
   nothing was added for it, and it is saved as a zip.
@@ -761,6 +803,12 @@ As step 7's writer was built - decided with the maintainer on
   they stand on the page, each turned and placed as it is seen, its
   ångströms kept. Export is for the selection (2026-10-10), so there is
   nothing else to ask.
+  - **After a change of the drawing style** (utils/restyle3d
+    `restyled3d`), molecules that touch - a complex put together on the
+    page - are one body, moved as one, and are written in the same
+    ångströms as before. Separate bodies move apart or closer with their
+    places on the page, so the ångströms between them follow the page as
+    it now stands.
 - **The contract** (`lib/io/writers`): a writer, Meno's or a plugin's, is
   one `Writer` - the kind it writes, its name, its files' extensions,
   what it takes, its options in the general form, who writes it. A

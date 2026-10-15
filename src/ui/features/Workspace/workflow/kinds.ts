@@ -4,6 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
+import { numberText } from "../../../../lib/calc/results";
 import type { Option } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
@@ -134,7 +135,7 @@ export function howOf(
   return options
     .flatMap((o) => {
       const v = values[o.id];
-      if (o.type === "number") return [`${v}${o.unit ? ` ${o.unit}` : ""}`];
+      if (o.type === "number") return [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") return v === "none" ? [] : [o.choices.find((c) => c.value === v)?.label ?? String(v)];
       if (o.type === "switch") return v ? [o.label] : [];
       return v ? [String(v)] : [];

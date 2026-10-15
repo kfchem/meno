@@ -19,9 +19,16 @@ export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= 
 /** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
 export function structuresOf(model: Model): number[][] {
   const around = new Map<number, number[]>();
+  const join = (p: number, q: number) => {
+    around.set(p, [...(around.get(p) ?? []), q]);
+    around.set(q, [...(around.get(q) ?? []), p]);
+  };
   for (const b of model.bonds) {
-    around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
-    around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
+    join(b.a, b.b);
+    // (a haptic bond's ring with its metal and star, as fragmentOf has them:
+    // walked by its bonds alone, the metal and the star were a structure
+    // without the ring)
+    for (const e of b.endpoints ?? []) join(b.a, e);
   }
   const seen = new Set<number>();
   const out: number[][] = [];
@@ -129,6 +136,13 @@ export type SetEntry = {
   xyz: readonly number[];
   /** In hartrees, where it has one. */
   energy?: number;
+  /**
+   * Its charge and spin multiplicity, where the calculation it was read
+   * from said them: the state it was in, which a step given it keeps -
+   * an output's atoms carry no charges of their own.
+   */
+  charge?: number;
+  multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
@@ -155,6 +169,11 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   molecules.forEach((m, i) => {
     const n = framesOf(m);
     const energies = m.energies?.length === n ? m.energies : undefined;
+    // (the state its calculation was in, where one said it)
+    const state = {
+      ...(Number.isInteger(m.calc?.charge) ? { charge: m.calc!.charge! } : {}),
+      ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
+    };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
@@ -165,6 +184,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz: frameXyz(m, f),
         ...(energies ? { energy: energies[f] } : {}),
+        ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         from: m.id,

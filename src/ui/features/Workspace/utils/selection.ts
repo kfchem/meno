@@ -11,6 +11,7 @@
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
+import { middleOfPoints } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
 
@@ -59,6 +60,16 @@ export function molecules3dIn(molecules: readonly { id: number; at: Pt }[], kind
   }
   if (points.length < 3) return [];
   return molecules.filter((m) => insidePolygon(m.at, points)).map((m) => m.id);
+}
+
+/**
+ * The words on the page a box or a lasso takes: those over no arrow, by
+ * where they stand, as a slide's "Select what is on it" takes them (words
+ * over an arrow go with the arrow). A box never took words before
+ * 2026-10-13, though Select all did.
+ */
+export function wordsIn(captions: readonly { id: number; x: number; y: number; arrow?: number }[], kind: "box" | "lasso", points: readonly Pt[]): number[] {
+  return molecules3dIn(captions.filter((c) => c.arrow == null).map((c) => ({ id: c.id, at: c })), kind, points);
 }
 
 /** Whether `q` lies in a box (its two corners) or within a lasso, as `molecules3dIn` takes a middle. */
@@ -119,11 +130,7 @@ export function pathBetween(model: Model, from: number, to: number): Sel | null 
 
 /** The middle of the selected atoms: of the box round them. */
 export function middleOf(model: Model, atoms: ReadonlySet<number>): Pt | null {
-  const at = model.atoms.filter((a) => atoms.has(a.id));
-  if (!at.length) return null;
-  const xs = at.map((a) => a.x);
-  const ys = at.map((a) => a.y);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  return middleOfPoints(model.atoms.filter((a) => atoms.has(a.id)));
 }
 
 /**
