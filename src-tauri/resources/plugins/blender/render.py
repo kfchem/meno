@@ -41,7 +41,8 @@ The settings (all checked by the worker that wrote them):
     film        a film, not a picture
     width, height, frames, fps
     engine      "cycles" or "eevee"
-    samples, denoise, gpu
+    samples, denoise
+    device      "auto" - the faster of the graphics processor and the processor, found once by a timing and kept -, "gpu" or "cpu"
     background  "transparent", "white", "black" or "grey"
     colours     "neutral", "agx" or "standard"
     key, ambient   the key light's and the light all round's strengths, as factors of Meno's
@@ -229,13 +230,113 @@ def gpu_ready():
     return False
 
 
+def data_folder(s):
+    """The plugin's data folder, where Blender - Meno's own - is unpacked under `files`: where what is learned of this computer is kept (docs/RENDER.md). A settings' `probe_file` names the file itself, as a test does."""
+    if s.get("probe_file"):
+        return s["probe_file"]
+    path = os.path.abspath(bpy.app.binary_path)
+    while True:
+        parent = os.path.dirname(path)
+        if parent == path:
+            return None
+        if os.path.basename(path) == "files":
+            return os.path.join(parent, "device-probe.json")
+        path = parent
+
+
+def probe_key():
+    """What a timing is true of: the graphics processors Blender sees, by name, and its version."""
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    names = sorted(d.name for d in prefs.devices if d.use and d.type != "CPU")
+    return f"{bpy.app.version_string}|{prefs.compute_device_type}|{'+'.join(names)}"
+
+
+def timed(scene, device):
+    """One render of the scene as it is set, not written: how long it took, in seconds."""
+    scene.cycles.device = device
+    started = time.monotonic()
+    bpy.ops.render.render()
+    return time.monotonic() - started
+
+
+def faster_is_gpu(scene, s):
+    """Whether the graphics processor is the faster here: found by a timing once - 16 samples at an eighth of the picture's width and height, the processor and the graphics processor, the latter warmed up first, its kernels prepared - and kept, by the processors' names and Blender's version, in the plugin's data folder."""
+    key = probe_key()
+    path = data_folder(s)
+    known = {}
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                known = json.load(f)
+        except (OSError, ValueError):
+            known = {}
+    if isinstance(known.get(key), dict) and known[key].get("device") in ("gpu", "cpu"):
+        say(f"Rendering on the {'graphics processor' if known[key]['device'] == 'gpu' else 'processor'}, as timed before")
+        return known[key]["device"] == "gpu"
+    say("Checking which is faster...")
+    r = scene.render
+    was = (r.resolution_x, r.resolution_y, r.resolution_percentage, scene.cycles.samples, scene.cycles.use_denoising, scene.cycles.device, r.use_compositing, r.use_freestyle)
+    try:
+        r.resolution_x, r.resolution_y, r.resolution_percentage = max(16, s["width"] // 8), max(16, s["height"] // 8), 100
+        scene.cycles.samples = 16
+        scene.cycles.use_denoising = False
+        r.use_compositing = False
+        r.use_freestyle = False
+        # (the graphics processor's first render prepares its kernels: that is not what is being timed)
+        scene.cycles.samples = 1
+        timed(scene, "GPU")
+        scene.cycles.samples = 16
+        cpu = timed(scene, "CPU")
+        gpu = timed(scene, "GPU")
+    finally:
+        r.resolution_x, r.resolution_y, r.resolution_percentage, scene.cycles.samples, scene.cycles.use_denoising, scene.cycles.device, r.use_compositing, r.use_freestyle = was
+    chosen = "gpu" if gpu < cpu else "cpu"
+    say(f"Processor {cpu:.1f} s, graphics processor {gpu:.1f} s: the {'graphics processor' if chosen == 'gpu' else 'processor'} is faster")
+    if path:
+        known[key] = {"device": chosen, "cpu": round(cpu, 2), "gpu": round(gpu, 2)}
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(known, f, indent=1)
+        except OSError:
+            pass
+    return chosen == "gpu"
+
+
+_DECIDED = []
+
+
+def use_gpu(scene, s):
+    """Whether this render is on the graphics processor, and the log saying which: asked for it, and Blender has one it can use - or, where it is left to decide, the one that is faster here. Decided once for the render."""
+    if not _DECIDED:
+        _DECIDED.append(decide_gpu(scene, s))
+    return _DECIDED[0]
+
+
+def decide_gpu(scene, s):
+    device = s["device"]
+    if device == "cpu":
+        say("Rendering on the processor")
+        return False
+    if not gpu_ready():
+        say("Rendering on the processor (no graphics processor Blender can use)")
+        return False
+    if device == "auto":
+        scene.render.engine = "CYCLES"
+        if not faster_is_gpu(scene, s):
+            say("Rendering on the processor (the faster one here)")
+            return False
+    say("Rendering on the graphics processor")
+    return True
+
+
 def engine(scene, s):
     # (the cartoon look's band is the Toon BSDF's: Cycles draws it as one, and its noise is not removed, which would soften the band's edge)
     if s["shading"] == "toon":
         scene.render.engine = "CYCLES"
         scene.cycles.samples = s["samples"]
         scene.cycles.use_denoising = False
-        scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+        scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
         return
     if s["engine"] == "eevee":
         scene.render.engine = "BLENDER_EEVEE"
@@ -244,10 +345,8 @@ def engine(scene, s):
     scene.render.engine = "CYCLES"
     scene.cycles.samples = s["samples"]
     scene.cycles.use_denoising = s["denoise"]
-    on_gpu = s["gpu"] and gpu_ready()
-    scene.cycles.device = "GPU" if on_gpu else "CPU"
     # (said, in the log, which it is: a graphics processor asked for and none found falls back to the processor)
-    say("Rendering on the graphics processor" if on_gpu else ("Rendering on the processor (no graphics processor Blender can use)" if s["gpu"] else "Rendering on the processor"))
+    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
 
 
 def own_look(scene, s):
@@ -255,7 +354,7 @@ def own_look(scene, s):
     scene.render.engine = "CYCLES"
     scene.cycles.samples = s["samples"]
     scene.cycles.use_denoising = s["denoise"] and s["shading"] != "toon"
-    scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
     camera = scene.camera
     looks.apply(scene, camera, s["look"], {"silver_finish": s["silver_finish"], "copper_finish": s["copper_finish"], "wood": s["wood"], "marble": s["marble"], "pile": s["pile"],
          "clay-colour": s["clay_colour"], "porcelain-finish": s["porcelain_finish"]}, s["background"])

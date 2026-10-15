@@ -92,6 +92,19 @@ class Prepare(unittest.TestCase):
         settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
         self.assertEqual((settings["out"], settings["frames"], settings["fps"], settings["quality"], settings["background"]), ("film.mp4", 240, 30, "lossless", "black"))
 
+    def test_the_device_is_a_three_way_choice_automatic_by_default(self):
+        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
+        device = next(o for o in m["roles"][0]["options"] if o["id"] == "device")
+        self.assertEqual([c["value"] for c in device["choices"]], ["auto", "gpu", "cpu"])
+        self.assertEqual(device["default"], "auto")
+        for chosen in ("auto", "gpu", "cpu"):
+            said = ask("prepare", step="render", entries=[SCENE], options={"device": chosen})
+            settings = json.loads({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["render.json"])
+            self.assertEqual(settings["device"], chosen)
+        none = ask("prepare", step="render", entries=[SCENE], options={})
+        self.assertEqual(json.loads({f["name"]: f["text"] for f in none["result"]["jobs"][0]["files"]}["render.json"])["device"], "auto")
+        self.assertFalse(ask("prepare", step="render", entries=[SCENE], options={"device": "tpu"})["ok"])
+
     def test_refuses_what_it_cannot_do(self):
         for entry, options in [
             ({**SCENE, "scene": "../scene.gltf"}, {}),
@@ -175,7 +188,7 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "device", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
 
 
 def blender():
@@ -239,7 +252,7 @@ class Renders(unittest.TestCase):
     def test_renders_a_picture_on_white(self):
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "gpu": False})
+            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
@@ -263,7 +276,7 @@ class Renders(unittest.TestCase):
             scene["materials"] = [{"pbrMetallicRoughness": {"baseColorFactor": [1, 0, 0, 1], "metallicFactor": 0, "roughnessFactor": 1}}]
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
             entry = {**SCENE, "shading": "toon", "outlines": "mixed", "outline": 4}
-            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "gpu": False})
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
@@ -295,7 +308,7 @@ class Renders(unittest.TestCase):
         scene["scenes"] = [{"nodes": [0, 1, 2, 3], "extras": {"meno": {"ambientLight": 0.9}}}]
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[{**SCENE, "look": "clay"}], options={"clay-colour": "elements", "samples": 16, "background": "white", "gpu": False})
+            said = ask("prepare", step="render", entries=[{**SCENE, "look": "clay"}], options={"clay-colour": "elements", "samples": 16, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
@@ -307,10 +320,53 @@ class Renders(unittest.TestCase):
             self.assertGreater(r1, 2 * max(g1, b1), (r1, g1, b1))
             self.assertGreater(b2, 2 * max(r2, g2), (r2, g2, b2))
 
+    def run_job(self, d, options, probe_file=None):
+        (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
+        said = ask("prepare", step="render", entries=[{**SCENE, "width": 160, "height": 120}], options={"samples": 4, "background": "white", **options})
+        job = said["result"]["jobs"][0]
+        files = {f["name"]: f["text"] for f in job["files"]}
+        settings = json.loads(files["render.json"])
+        if probe_file:
+            settings["probe_file"] = probe_file
+        files["render.json"] = json.dumps(settings)
+        for name, text in files.items():
+            (pathlib.Path(d) / name).write_text(text, encoding="utf-8")
+        run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+        self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+        return run.stdout
+
+    def test_the_automatic_choice_times_the_two_once_and_keeps_the_faster(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:
+            cache = os.path.join(k, "device-probe.json")
+            first = self.run_job(d, {"device": "auto"}, cache)
+            if "no graphics processor Blender can use" in first:
+                self.skipTest("no graphics processor here to time against the processor")
+            self.assertIn("Checking which is faster...", first)
+            kept = json.load(open(cache))
+            self.assertEqual(len(kept), 1)
+            entry = next(iter(kept.values()))
+            self.assertIn(entry["device"], ("gpu", "cpu"))
+            self.assertGreater(entry["cpu"], 0)
+            self.assertGreater(entry["gpu"], 0)
+            # (the second render takes what was kept, and does not time again)
+            second = self.run_job(d, {"device": "auto"}, cache)
+            self.assertNotIn("Checking which is faster...", second)
+            self.assertIn("as timed before", second)
+            expected = "Rendering on the graphics processor" if entry["device"] == "gpu" else "Rendering on the processor (the faster one here)"
+            self.assertIn(expected, second)
+
+    def test_the_processor_choice_never_times_and_says_so(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:
+            cache = os.path.join(k, "device-probe.json")
+            out = self.run_job(d, {"device": "cpu"}, cache)
+            self.assertNotIn("Checking which is faster", out)
+            self.assertIn("Rendering on the processor", out)
+            self.assertFalse(os.path.exists(cache))
+
     def test_a_film_moves_its_progress_by_its_frames_samples_and_never_back(self):
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 3, "fps": 3, "width": 64, "height": 48}], options={"samples": 8, "background": "white", "gpu": False})
+            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 3, "fps": 3, "width": 64, "height": 48}], options={"samples": 8, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
@@ -339,7 +395,7 @@ class Renders(unittest.TestCase):
         scene = {**BALL, **mesh, "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0, "roughnessFactor": 1}}]}
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "gpu": False, "engine": "eevee"})
+            said = ask("prepare", step="render", entries=[SCENE], options={"samples": 4, "background": "white", "device": "cpu", "engine": "eevee"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")

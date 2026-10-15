@@ -48,9 +48,11 @@ SETTINGS = "render.json"
 PICTURE = "picture.png"
 # the line render.py logs where the graphics processor was asked for and none was found
 FELL_BACK = "Rendering on the processor (no graphics processor Blender can use)"
+FASTER = "Rendering on the processor (the faster one here)"
 FILM = "film.mp4"
 
 ENGINES = {"cycles", "eevee"}
+DEVICES = {"auto", "gpu", "cpu"}
 BACKGROUNDS = {"transparent", "white", "black", "grey"}
 COLOURS = {"neutral", "agx", "standard"}
 QUALITIES = {"high", "medium", "lossless"}
@@ -121,7 +123,7 @@ def settings_of(entry, options):
         "engine": one_of(options.get("engine", "cycles"), "engine", ENGINES),
         "samples": whole(options.get("samples", 128), "The samples", 1, 4096),
         "denoise": switch(options.get("denoise", True), "Noise removal"),
-        "gpu": switch(options.get("gpu", True), "The graphics processor"),
+        "device": one_of(options.get("device", "auto"), "device", DEVICES),
         "background": one_of(options.get("background", "transparent"), "background", BACKGROUNDS),
         "colours": one_of(options.get("colours", "neutral"), "colour transform", COLOURS),
         "key": number(options.get("key", 1), "The key light", 0, 10),
@@ -201,7 +203,7 @@ def op_collect(m):
         made.append({"entry": i, "file": FILM if film else PICTURE, "media": "video/mp4" if film else "image/png"})
     result = {"made": made}
     # (the graphics processor asked for, and Blender fell back to the processor: said once, which the card may show - nothing where it rendered on the graphics processor or was not asked to)
-    if FELL_BACK in (m.get("log") or ""):
+    if FELL_BACK in (m.get("log") or "") or FASTER in (m.get("log") or ""):
         result["note"] = "Rendered on the processor"
     return result
 
