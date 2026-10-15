@@ -399,7 +399,9 @@ describe("the user's own 3D styles", () => {
   });
 
   it("are set as a whole - no changes kept apart, nothing to reset - and draw as they are set", () => {
-    let { choice, id } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "outlined");
+    const dup = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "outlined");
+    const id = dup.id;
+    let choice = dup.choice;
     choice = withLookSetting(choice, id, "ballScale", 0.12);
     choice = withAtomColour(choice, id, "N", "#00ff00");
     expect(choice.looks).toEqual({});
@@ -413,7 +415,9 @@ describe("the user's own 3D styles", () => {
   });
 
   it("are renamed - never to nothing, nor to another style's name - and deleted, a role they had going to Meno's own", () => {
-    let { choice, id } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "glossy");
+    const dup = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "glossy");
+    const id = dup.id;
+    let choice = dup.choice;
     expect(withRenamed3d(choice, id, "  ")).toBe(choice);
     expect(withRenamed3d(choice, id, "glossy")).toBe(choice);
     expect(withRenamed3d(choice, "balls", "Mine")).toBe(choice);
