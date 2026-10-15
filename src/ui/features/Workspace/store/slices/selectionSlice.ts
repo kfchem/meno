@@ -118,7 +118,7 @@ export function createSelectionSlice(set: SetState) {
         return { ...prev, sel: { atoms, bonds }, selAnchor: id };
       }),
 
-    /** Everything on the canvas, the molecules in 3D, the pictures, texts' sheets, PDFs, slides, shapes, arrows, "+" signs, the words and the workflow's sets and steps with it. */
+    /** Everything on the canvas, the molecules in 3D, the pictures, texts' sheets, PDFs, slides, shapes, arrows, "+" signs, catalytic cycles, the words and the workflow's sets and steps with it. */
     selectAll: () =>
       set((prev: EditorState) => {
         // (of a stack, the one it shows: utils/stacks)
@@ -136,6 +136,7 @@ export function createSelectionSlice(set: SetState) {
           selArrows: new Set(prev.arrows.map((a) => a.id)),
           selPluses: new Set(prev.pluses.map((p) => p.id)),
           selInks: new Set(prev.inks.map((k) => k.id)),
+          selCycles: new Set(prev.cycles.map((c) => c.id)),
           selFlow: { sets: new Set(prev.sets.map((b) => b.id)), steps: new Set(prev.steps.map((s) => s.id)) },
         };
       }),

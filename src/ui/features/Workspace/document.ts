@@ -1560,8 +1560,8 @@ export type MarkPlaces = {
   slides?: { id: number; x: number; y: number }[];
   /** Writing by hand moved or carried round with the rest: each piece's strokes where they now are. */
   inks?: { id: number; strokes: InkStroke[] }[];
-  /** Catalytic cycles moved, or sized, with the rest: where each one's middle now is, and its radius. */
-  cycles?: { id: number; x: number; y: number; r?: number }[];
+  /** Catalytic cycles moved, sized, carried round or turned over with the rest: where each one's middle now is, and its radius, the way it goes and its arrows in and out. */
+  cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[] }[];
   /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
   shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
@@ -1587,7 +1587,14 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
   }
   if (places?.cycles?.length) {
     const at = new Map(places.cycles.map((p) => [p.id, p]));
-    const placed = { ...doc, cycles: (doc.cycles ?? []).map((c) => (at.has(c.id) ? { ...c, x: at.get(c.id)!.x, y: at.get(c.id)!.y, r: at.get(c.id)!.r ?? c.r } : c)) };
+    const put = (c: Cycle): Cycle => {
+      const p = at.get(c.id)!;
+      // (the way it goes and its arrows, where they are said: a turn-over turns them)
+      const { ccw: _w, ...rest } = c;
+      const ccw = "branches" in p || "ccw" in p ? p.ccw : c.ccw;
+      return { ...rest, x: p.x, y: p.y, r: p.r ?? c.r, ...(ccw ? { ccw } : {}), ...("branches" in p ? { branches: p.branches } : {}) };
+    };
+    const placed = { ...doc, cycles: (doc.cycles ?? []).map((c) => (at.has(c.id) ? put(c) : c)) };
     return placeMarks(placed, { ...places, cycles: [] });
   }
   if (places?.shapes?.length) {

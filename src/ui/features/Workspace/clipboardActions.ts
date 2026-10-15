@@ -194,7 +194,7 @@ export function useClipboardActions(
         }
         // (a SMILES laid out in the drawing's style, as Clean-up lays it out)
         const found = await structureOnClipboard(styleOf(store.getState().docStyle));
-        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length)) {
+        if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length && !found.cycles?.length)) {
           // (text holding coordinates: the structures in it, shown before they are placed)
           const text = onCoordinates ? (await readClipboard(["text"]))?.text : undefined;
           const structures = text ? readCoordinates(text) : [];

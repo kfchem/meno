@@ -983,6 +983,9 @@ All hover-based, as above.
     still on it a moment; selected, a drag moves it with what is on it and
     the words at its arrows' ends, and its handle at the lower right sizes
     it, what is on it moved out or in with the line - each one undo step.
+    It is selected with all, copied or cut alone or with the rest, and
+    carried round or turned over with what is selected: turned over, it
+    goes the other way and its arrows in and out join it mirrored.
   - **Saved** in the .meno and in Meno's own copies, pasted and restyled
     as the rest of the drawing; in pictures - SVG, EMF, those copied - its
     arrows are reaction arrows, the curves as corners close along them.

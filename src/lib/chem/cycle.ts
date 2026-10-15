@@ -248,3 +248,26 @@ export function angleOn(c: Pick<Cycle, "x" | "y" | "r">, p: P, reach: number): n
 
 /** The radius a cycle starts with, in bonds: room for three or four structures round it. */
 export const CYCLE_RADIUS = 4.5;
+
+/** A cycle carried round `about` by `angle` (radians, anticlockwise): its middle, and where its arrows coming in and going out join it, turned as far. */
+export function cycleTurned(c: Cycle, about: P, angle: number): Pick<Cycle, "x" | "y" | "branches"> {
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  const dx = c.x - about.x;
+  const dy = c.y - about.y;
+  return { x: about.x + dx * cos - dy * sin, y: about.y + dx * sin + dy * cos, branches: c.branches?.map((b) => ({ ...b, at: round(b.at + angle) })) };
+}
+
+/**
+ * A cycle turned over about `about` - left for right (`vertical`, its axis
+ * upright) or top for bottom - as a mirror shows it: its middle mirrored,
+ * the way it goes the other, and where its arrows join it mirrored.
+ */
+export function cycleMirrored(c: Cycle, about: P, axis: "vertical" | "horizontal"): Pick<Cycle, "x" | "y" | "ccw" | "branches"> {
+  const across = axis === "vertical";
+  return {
+    x: across ? 2 * about.x - c.x : c.x,
+    y: across ? c.y : 2 * about.y - c.y,
+    ...(c.ccw ? {} : { ccw: true as const }),
+    branches: c.branches?.map((b) => ({ ...b, at: round(across ? Math.PI - b.at : -b.at) })),
+  };
+}

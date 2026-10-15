@@ -36,7 +36,8 @@ export type Box = { x0: number; y0: number; x1: number; y1: number };
 type Selected = Pick<
   EditorState,
   "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "selInks" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes" | "inks"
->;
+> &
+  Partial<Pick<EditorState, "selCycles" | "cycles">>;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
 export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeight?: number, frames = false): Box | null {
@@ -105,6 +106,8 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
     if (r) take(r.x0, r.y0, r.x1, r.y1);
   }
+  // (a catalytic cycle: its circle)
+  for (const c of st.cycles ?? []) if (st.selCycles?.has(c.id)) take(c.x - c.r, c.y - c.r, c.x + c.r, c.y + c.r);
   return Number.isFinite(b.x0) && Number.isFinite(b.y0) ? b : null;
 }
 

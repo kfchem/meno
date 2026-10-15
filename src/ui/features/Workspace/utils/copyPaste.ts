@@ -110,13 +110,13 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
 
 /**
  * Whether a copy holds what a picture draws - a structure, molecules in 3D,
- * or words, shapes, writing by hand, arrows and "+" signs alone (the
+ * or words, shapes, writing by hand, arrows, "+" signs and catalytic cycles alone (the
  * maintainer's docs/PRESENTING.md: a slide's content goes into pictures, so
  * that it pastes into slides software and word processors). Slides, PDFs,
  * texts' sheets and pictures on the page are not drawn in one.
  */
-export function drawsPicture(p: Pick<Drawn, "atoms" | "molecules3d" | "captions" | "shapes" | "inks" | "arrows" | "pluses" | "pushes">): boolean {
-  return !!(p.atoms.length || p.molecules3d?.length || p.captions?.length || p.shapes?.length || p.inks?.length || p.arrows?.length || p.pluses?.length || p.pushes?.length);
+export function drawsPicture(p: Pick<Drawn, "atoms" | "molecules3d" | "captions" | "shapes" | "inks" | "arrows" | "pluses" | "pushes" | "cycles">): boolean {
+  return !!(p.atoms.length || p.molecules3d?.length || p.captions?.length || p.shapes?.length || p.inks?.length || p.arrows?.length || p.pluses?.length || p.pushes?.length || p.cycles?.length);
 }
 
 /** Meno's own record of a structure on the clipboard, and its version. */
@@ -134,7 +134,7 @@ export function clipItems(part: Drawn): ClipItem[] {
   if (!part.atoms.length) {
     const ms = part.molecules3d ?? [];
     // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
-    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
+    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));

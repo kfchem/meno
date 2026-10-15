@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angleOn, branchPath, cycleArrows, cycleMembers, ontoCycle, type Cycle, type CycleBox } from "./cycle";
+import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, ontoCycle, type Cycle, type CycleBox } from "./cycle";
 import { arrowPath, arrowPieces, type ArrowMeasures } from "./reactionArrow";
 
 const BOND = 1;
@@ -186,5 +186,23 @@ describe("an arrow with no head", () => {
     // (no point beyond the line's half width: no head)
     expect(Math.max(...plain[0].map((p) => Math.abs(p.y)))).toBeCloseTo(0.05);
     expect(Math.max(...plain[0].map((p) => p.x))).toBeCloseTo(4);
+  });
+});
+
+describe("a cycle carried round or turned over", () => {
+  const withArrows: Cycle = { id: 1, x: 2, y: 0, r: 1, branches: [{ at: Math.PI / 2, way: "in" }] };
+  it("carried round, has its middle and its arrows' joins turned as far", () => {
+    const t = cycleTurned(withArrows, { x: 0, y: 0 }, Math.PI / 2);
+    expect(t.x).toBeCloseTo(0);
+    expect(t.y).toBeCloseTo(2);
+    expect(t.branches![0].at).toBeCloseTo(Math.PI);
+  });
+
+  it("turned over, goes the other way, its middle and its arrows' joins mirrored", () => {
+    const m = cycleMirrored(withArrows, { x: 0, y: 0 }, "horizontal");
+    expect([m.x, m.y]).toEqual([2, 0]);
+    expect(m.ccw).toBe(true);
+    expect(m.branches![0].at).toBeCloseTo((3 * Math.PI) / 2);
+    expect(cycleMirrored({ ...withArrows, ccw: true }, { x: 0, y: 0 }, "vertical").ccw).toBeUndefined();
   });
 });
