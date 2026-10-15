@@ -3,7 +3,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
-import { chosenPath, lookOf, solidOf, bondsAt, withLooks } from "../../utils/molecule3d";
+import { chosenPath, lookOf, solidOf, bondsAt, reachOverFrames, withLooks } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
 import { currentStyle3D } from "../../style3d";
@@ -12,6 +12,7 @@ import { noteTurns } from "../turnJournal";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
+import { fitResultSets } from "../../workflow/run";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -239,7 +240,12 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       doc.edit("delete molecule", (d) => ops.removeMolecule3d(d, id));
     },
     setLook3d: (ids: number[], look: Look3D) => {
-      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) => ops.setLook3d(d, ids, look));
+      // (a result set they no longer fit in that look laid out again, its frame widened: the same step to undo)
+      const style = currentStyle3D();
+      const { turns3d } = get();
+      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) =>
+        fitResultSets(ops.setLook3d(d, ids, look), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
+      );
     },
     learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => {
       doc.amend((d) => ops.changeMolecule3d(d, id, change));
@@ -360,7 +366,7 @@ function chosenWith(
  * not as its file has it. (Changed in any way, a molecule is another; one
  * new is seen as its file has it.)
  */
-const seenAsLetGo = new WeakMap<Molecule3D, { turn?: Turn3D; frame?: number }>();
+const seenAsLetGo = new WeakMap<Molecule3D, { turn?: Turn3D; frame?: number; overlay?: true }>();
 
 /**
  * The view's hold on molecules in 3D, kept to those the document still has:
@@ -382,12 +388,16 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
   };
   let turns3d = keep(prev.turns3d);
   let frames3d = keep(prev.frames3d);
+  // (a molecule shown overlaid, undone away, is not: another made next took
+  // its id and came up overlaid, unasked - but it is again, redone)
+  let overlay3d = keep(prev.overlay3d);
   const had = new Set(prev.molecules3d.map((m) => m.id));
-  for (const m of prev.molecules3d) if (!by.has(m.id)) seenAsLetGo.set(m, { turn: prev.turns3d[m.id], frame: prev.frames3d[m.id] });
+  for (const m of prev.molecules3d) if (!by.has(m.id)) seenAsLetGo.set(m, { turn: prev.turns3d[m.id], frame: prev.frames3d[m.id], overlay: prev.overlay3d[m.id] });
   for (const m of molecules) {
     const seen = had.has(m.id) ? undefined : seenAsLetGo.get(m);
     if (seen?.turn) turns3d = { ...turns3d, [m.id]: seen.turn };
     if (seen?.frame != null) frames3d = { ...frames3d, [m.id]: seen.frame };
+    if (seen?.overlay) overlay3d = { ...overlay3d, [m.id]: true };
   }
   const sel3d = [...prev.sel3d].every((id) => by.has(id)) ? prev.sel3d : new Set([...prev.sel3d].filter((id) => by.has(id)));
   const c = prev.chosen3d;
@@ -416,6 +426,7 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     lists3d,
     turns3d,
     frames3d,
+    overlay3d,
     sel3d,
     chosen3d: chosenStays ? c : null,
     hovered3d: prev.hovered3d && !by.has(prev.hovered3d.id) ? null : prev.hovered3d,

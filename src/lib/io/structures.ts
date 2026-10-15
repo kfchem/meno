@@ -9,9 +9,10 @@ import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText,
 import { energiesOf } from "../../utils/xyzEnergies";
 import { atomsTogether, bondsByDistance, wholeXyzFrames } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
-import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
+import { readPdb, type PdbAtom, type PdbEntry, type PdbModel, type PdbUnreadableAtom } from "../chem/pdb";
 import { readRxnfile } from "../chem/ctfile";
-import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
+import { biopolymerOf, namedWater, sameResidue, type Biopolymer } from "../chem/biopolymer";
+import { laidOutAsRead, laidOutWhereUnplaced } from "./unplaced";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -39,6 +40,8 @@ export type FileMolecule3D = {
   framesLeftOut?: number;
   /** How many of its atoms stand in one place with another, as it is read (utils/structureParsers `atomsTogether`): said over it. */
   together?: number;
+  /** How many of its file's atoms it leaves out, their element not read - a PDB entry's unknown atom (X, UNX), say; in a frame, the most. */
+  atomsLeftOut?: number;
 };
 
 /**
@@ -111,6 +114,26 @@ function depthOf(m: Molecule): number {
 const noMolecules = (name: string) => new Error(`No molecules found in ${name}. Supported formats: MOL, SDF, RXN, XYZ, PDB.`);
 
 /**
+ * Why a PDB file in which an atom's coordinates do not read is not opened,
+ * as the chemist is told: how many such atoms, and the first, by its line.
+ * The file is damaged: where the atom stands is not known.
+ */
+function atomsUnplaced(name: string, atoms: readonly PdbUnreadableAtom[]): Error {
+  const [first] = atoms;
+  const which = atoms.length === 1 ? `the atom on line ${first.line} does not read` : `${atoms.length.toLocaleString("en")} of its atoms do not read, the first on line ${first.line}`;
+  return new Error(`${name} could not be read: ${which} (its coordinates, columns 31-54).`);
+}
+
+/**
+ * How many of a model's atoms are left out, their element not read
+ * (columns 77-78, or the name where those are blank): every such atom but
+ * those in a water - a residue named as the dictionary or a dynamics
+ * program names water (lib/chem/biopolymer `namedWater`) - which are a
+ * TIP4P or TIP5P model's massless sites (MW, LP, EP, OM), no atoms.
+ */
+const leftOutOf = (m: PdbModel) => m.unreadableAtoms.filter((a) => a.what !== "coordinates" && !namedWater(a.resName)).length;
+
+/**
  * Why a file that ends before what it says it holds - its atoms and bonds,
  * its reaction's molecules - is not read: what it holds is not what it says
  * (CTfile's counts lines, an XYZ frame's count), and read anyway its missing
@@ -138,15 +161,19 @@ const recordProblem = (m: Molecule): string | null =>
  * What a structure's file of `kind` holds: an RXN file's reaction, laid out
  * with its arrow and "+" signs; an XYZ file's frames, one molecule's, in
  * 3D, each with its energy where the comment lines give one; a PDB file's
- * models, in 3D (`pdbMolecules`); a MOL or SD file's records, each a
+ * models, in 3D (`pdbMolecules`) - or, where an atom's coordinates do not
+ * read, none, and the first such line said; a MOL or SD file's records, each a
  * drawing or - where the file says it is 3D, or its atoms spread in depth -
  * a molecule in 3D.
  */
 export function readStructures(kind: StructureKind, filename: string, content: string): StructureRead {
   const name = filename || "the file";
   if (kind === "pdb") {
-    // (its records by line, whatever ends them - an old Mac's CR too - and a byte-order mark no part of the first)
-    const molecules3d = pdbMolecules(readPdb(content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n")), filename);
+    const entry = readPdb(content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"));
+    // (an atom whose element does not read is left out, and said: `pdbMolecules`)
+    const unplaced = entry.unreadableAtoms.filter((a) => a.what === "coordinates");
+    if (unplaced.length) throw atomsUnplaced(name, unplaced);
+    const molecules3d = pdbMolecules(entry, filename);
     if (!molecules3d.length) throw noMolecules(name);
     return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
   }
@@ -156,7 +183,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     if (reaction.damaged) throw damaged(name, reaction.damaged);
     if (reaction.unread) throw unread(name, reaction.unread);
     // RXN format: uses pre-computed layout with arrow
-    const rxnLayout = buildEditorModelFromRXN(content);
+    // (a molecule given no coordinates laid out before the scheme is: ./unplaced)
+    const rxnLayout = buildEditorModelFromRXN(content, laidOutWhereUnplaced);
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
     return {
       model: rxnLayout.model,
@@ -202,7 +230,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     };
   }
   // MOL and SD files: their records, each a drawing or a molecule in 3D
-  const molecules = readMoleculesFromText(content, kind);
+  const read = readMoleculesFromText(content, kind);
+  // (a MOL or SD record given no coordinates: laid out, and flat whatever its header says - ./unplaced)
+  const noPlaces = read.map((m) => laidOutAsRead(m));
+  const molecules = laidOutWhereUnplaced(read);
   // (a record cut short, damaged or saying what Meno cannot read: of
   // several, left out, the others opened and those left out named - their
   // number and why - as a trajectory's frames left out are said (the
@@ -218,8 +249,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   const recordsLeftOut = problems.flatMap((why, i) => (why ? [{ record: i + 1, why }] : []));
   const leftOut = recordsLeftOut.length ? { recordsLeftOut } : {};
-  const said = saysThreeD(content);
-  const inDepth = (i: number) => molecules[i].atoms.length > 0 && (said[i] || depthOf(molecules[i]) > 0.1);
+  const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
+  const inDepth = (i: number) => molecules[i].atoms.length > 0 && !noPlaces[i] && (said[i] || depthOf(molecules[i]) > 0.1);
   const molecules3d = good.filter(inDepth).map((i) => {
     const m = molecules[i];
     // (and its record's title, its first line, where it gives one)
@@ -243,16 +274,16 @@ export function readStructures(kind: StructureKind, filename: string, content: s
  * The atoms of a model Meno shows: each in one place - where an atom is
  * given in more than one, the first alternate location its residue gives
  * (ATOM, *Details*: a residue's atoms in one conformation share their
- * indicator).
+ * indicator). A residue is a run of atoms listed one after another
+ * (`sameResidue`), not every atom in the file that shares its number.
  */
 function inOnePlace(atoms: readonly PdbAtom[]): PdbAtom[] {
-  const chosen = new Map<string, string>();
-  return atoms.filter((a) => {
+  let chosen = "";
+  return atoms.filter((a, i) => {
+    if (!sameResidue(a, atoms[i - 1])) chosen = "";
     if (!a.altLoc) return true;
-    const residue = `${a.chainID} ${a.resSeq} ${a.iCode} ${a.resName}`;
-    const first = chosen.get(residue);
-    if (first === undefined) chosen.set(residue, a.altLoc);
-    return (first ?? a.altLoc) === a.altLoc;
+    chosen ||= a.altLoc;
+    return chosen === a.altLoc;
   });
 }
 
@@ -263,15 +294,28 @@ function inOnePlace(atoms: readonly PdbAtom[]): PdbAtom[] {
  * between groups (Connectivity Section); a standard residue's own bonds
  * are in the Chemical Component Dictionary, not in the file, and Meno does
  * not carry the dictionary.
+ *
+ * A serial number two atoms carry names neither. The format numbers a
+ * model's atoms in five columns (ATOM, serial: 7-11), and so a model holds
+ * at most 99,999 (MODEL, *Details*); a file of more - a molecular dynamics
+ * frame in its water - numbers them over again from 0 or 1, or past
+ * 99,999 in hexadecimal or hybrid-36, which can read as an earlier atom's
+ * number, or fills the columns with stars. A CONECT record that names such
+ * a number is not taken, and its atoms are not spoken for by it: their
+ * bonds are those their distances give.
  */
 function pdbBonds(atoms: readonly PdbAtom[], conect: readonly [number, number][]): ParsedBond[] {
   const index = new Map<number, number>();
+  const shared = new Set<number>();
   atoms.forEach((a, i) => {
-    if (Number.isFinite(a.serial) && !index.has(a.serial)) index.set(a.serial, i);
+    if (!Number.isFinite(a.serial)) return;
+    if (index.has(a.serial)) shared.add(a.serial);
+    else index.set(a.serial, i);
   });
   const given: ParsedBond[] = [];
   const spoken = new Set<number>();
   for (const [p, q] of conect) {
+    if (shared.has(p) || shared.has(q)) continue;
     const a1 = index.get(p);
     const a2 = index.get(q);
     if (a1 === undefined || a2 === undefined) continue;
@@ -291,18 +335,28 @@ function togetherIn(atoms: readonly { x: number; y: number; z: number }[]): { to
   return n ? { together: n } : {};
 }
 
-const parsedAtom = (a: PdbAtom): ParsedAtom => ({ el: a.element, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) });
+const parsedAtom = (a: PdbAtom): ParsedAtom => ({
+  el: a.element,
+  x: a.x,
+  y: a.y,
+  z: a.z,
+  ...(a.charge ? { charge: a.charge } : {}),
+  // (a deuterium's or a tritium's mass number, with it)
+  ...(a.isotope ? { isotope: a.isotope } : {}),
+});
 
 /**
  * A PDB file's molecules in 3D: its models one molecule's frames, where
  * each holds the same atoms (MODEL, *Details*: an ensemble's models are
  * alike); else each model a molecule of its own. All a model holds - its
  * chains, hetero groups, waters - is one molecule in 3D, as an XYZ file's
- * atoms are.
+ * atoms are; each saying how many atoms it leaves out (`leftOutOf`).
  */
 function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
-  const models = entry.models.map((m) => inOnePlace(m.atoms)).filter((atoms) => atoms.length);
-  if (!models.length) return [];
+  const read = entry.models.map((m) => ({ atoms: inOnePlace(m.atoms), leftOut: leftOutOf(m) })).filter((m) => m.atoms.length);
+  if (!read.length) return [];
+  const models = read.map((m) => m.atoms);
+  const said = (leftOut: number) => (leftOut ? { atomsLeftOut: leftOut } : {});
   const [first, ...rest] = models;
   const alike = rest.every((atoms) => atoms.length === first.length && atoms.every((a, i) => a.element === first[i].element));
   const named = filename ? { name: filename } : {};
@@ -321,11 +375,13 @@ function pdbMolecules(entry: PdbEntry, filename: string): FileMolecule3D[] {
         ...biopolymer(first),
         // (a PDB file gives no bond orders: CONECT records say which atoms are bonded, not how)
         bondOrders: "unknown" as const,
+        // (the most any of its models leaves out)
+        ...said(read.reduce((most, m) => Math.max(most, m.leftOut), 0)),
         ...togetherIn(first),
       },
     ];
   }
-  return models.map((atoms) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const, ...togetherIn(atoms) }));
+  return read.map(({ atoms, leftOut }) => ({ atoms: atoms.map(parsedAtom), bonds: pdbBonds(atoms, entry.conect), ...named, ...biopolymer(atoms), bondOrders: "unknown" as const, ...said(leftOut), ...togetherIn(atoms) }));
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -366,6 +422,12 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (!(m.frames ?? []).every((f) => Array.isArray(f) && f.length === 3 * n && f.every(finite))) throw bad("a frame of a molecule in 3D is not whole");
     if (m.framesLeftOut != null && !(Number.isInteger(m.framesLeftOut) && m.framesLeftOut > 0)) throw bad("a molecule in 3D's frames left out are no count");
     if (m.together != null && !(Number.isInteger(m.together) && m.together > 0)) throw bad("a molecule in 3D's atoms in one place are no count");
+    // (an energy for each frame, the first among them, or none: each frame's is the one at its place)
+    if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
+      throw bad("the energies of a molecule in 3D are not one for each of its frames");
+    }
+    // (how many atoms it leaves out: some, or it says none)
+    if (m.atomsLeftOut != null && !(Number.isInteger(m.atomsLeftOut) && m.atomsLeftOut > 0)) throw bad("a molecule in 3D says it leaves out atoms, but not how many");
   }
   const left = (s as { recordsLeftOut?: unknown }).recordsLeftOut;
   if (left != null && !(Array.isArray(left) && left.every((r) => Number.isInteger(r?.record) && r.record > 0 && typeof r.why === "string"))) {

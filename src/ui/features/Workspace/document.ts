@@ -15,7 +15,7 @@ import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style"
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
-import { ringKeyOf } from "./utils/rings";
+import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
@@ -159,14 +159,45 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
   // (each edit's sets grown to keep what is drawn on in them inside them, as
   // part of it - and its stacks of drawings kept whole: utils/stacks)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before) });
+  // (its history held to about 100 MB: what a step costs is the atoms and
+  // bonds it copies - the lists a drawing's edit makes anew, not those it
+  // shares with the step before; the maintainer, 2026-10-13)
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before), cost: stepCost });
+}
+
+/** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
+export function stepCost(state: WorkspaceDocument, before: WorkspaceDocument | undefined): number {
+  const { atoms, bonds } = state.model;
+  return (atoms !== before?.model.atoms ? atoms.length : 0) + (bonds !== before?.model.bonds ? bonds.length : 0);
 }
 
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  const model = settledRecords(doc.model, before?.model);
+  const model = endpointsHeld(settledRecords(doc.model, before?.model));
   return model === doc.model ? doc : { ...doc, model };
+}
+
+/**
+ * A model's haptic bonds kept to the ring they bind: where an atom of that
+ * ring has gone - deleted, merged onto another - or a bond's endpoints are
+ * not all atoms of the drawing, the bond binds no ring and keeps none (a
+ * plain bond to its star). Left as they were, endpoints named atoms gone,
+ * drawn from nowhere, and a set round the complex took a frame of NaN,
+ * which a save then dropped with the set (the command centre's document
+ * fuzzer, 2026-10-13).
+ */
+export function endpointsHeld(model: Model): Model {
+  if (!model.bonds.some((b) => b.endpoints?.length)) return model;
+  const there = new Set(model.atoms.map((a) => a.id));
+  let changed = false;
+  const bonds = model.bonds.map((b) => {
+    if (!b.endpoints?.length || b.endpoints.every((e) => there.has(e))) return b;
+    changed = true;
+    const { endpoints: _gone, attach: _attach, ...rest } = b;
+    return rest as Bond;
+  });
+  return changed ? { ...model, bonds } : model;
 }
 
 /** A row of PDFs put down clear of those already on the page: moved along to the right, a place at a time, until none of them, nor their names, lies over another. */
@@ -723,6 +754,11 @@ export function updateBond(
       if (!(key in patch)) delete merged[key];
     }
     if (merged.order !== 2 && merged.stereo === "either") merged.stereo = "none";
+    // (a wedge, hashes or a wavy line say something of a single bond's end
+    // alone: a double or triple bond made one, or given one, carries none -
+    // the API put them there, and a file or Clean-up then read a wedge on
+    // a multiple bond)
+    if (merged.order !== 1 && (merged.stereo === "up" || merged.stereo === "down" || merged.stereo === "wavy")) merged.stereo = "none";
   }
   const next = bonds.slice();
   next[index] = merged;
@@ -757,7 +793,14 @@ export function replaceDraggedAtomWith(
     bonds.push(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId });
   }
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
-  return { ...doc, model: { atoms, bonds } };
+  // (its electron-pushing arrows with it: an end on the atom dragged now on
+  // the one it was dropped on, and those on a bond that collapsed, or come
+  // to point at where they leave, gone - as a delete leaves them; they were
+  // left on what was gone, drawn no more and dropped on reopening)
+  const onto = (e: PushEnd): PushEnd =>
+    "atom" in e ? (e.atom === movingId ? { atom: targetId } : e) : "gap" in e ? { gap: [e.gap[0] === movingId ? targetId : e.gap[0], e.gap[1] === movingId ? targetId : e.gap[1]] } : e;
+  const pushes = doc.pushes?.map((p) => ({ ...p, from: onto(p.from), to: onto(p.to) })).filter((p) => JSON.stringify(p.from) !== JSON.stringify(p.to));
+  return withPushesOn({ ...doc, model: { atoms, bonds }, ...(pushes ? { pushes } : {}) });
 }
 
 // --- whole-model operations ------------------------------------------------
@@ -831,12 +874,15 @@ export function appendModel(
   const bonds = next.bonds.map((b) => {
     const id = cursor++;
     bondMap.set(b.id, id);
+    // (a haptic bond pasted without its ring binds none: its endpoints named the ring copied from)
+    const { endpoints, attach, ...rest } = b;
+    const whole = !!endpoints?.length && endpoints.every((e) => idMap.has(e));
     return {
-      ...b,
+      ...rest,
       id,
       a: idMap.get(b.a) ?? b.a,
       b: idMap.get(b.b) ?? b.b,
-      ...(b.endpoints ? { endpoints: b.endpoints.map((e) => idMap.get(e) ?? e) } : {}),
+      ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
     };
   });
   // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
@@ -1605,7 +1651,14 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
 export type MarkOf = { atom: number; kind: "charge" | "stereo" } | { bond: number };
 
 /** `doc` with a mark put where a hand put it - `at`, from what it is of - or (null) back where the drawing puts it. */
-export function putMark(doc: WorkspaceDocument, of: MarkOf, at: MarkAt | null): WorkspaceDocument {
+/** How far from what it is of a mark put by hand is read, in ems of the labels: farther, it is put back (utils/copyPaste); put, it goes no farther. */
+export const MARK_REACH = 50;
+
+export function putMark(doc: WorkspaceDocument, of: MarkOf, given: MarkAt | null): WorkspaceDocument {
+  // (no farther than a mark is read back from a file or a copy - dragged
+  // farther, it was put back on reopening, or on pasting)
+  const far = given ? Math.hypot(given.x, given.y) : 0;
+  const at = given && far >= MARK_REACH ? { x: (given.x * (MARK_REACH - 0.01)) / far, y: (given.y * (MARK_REACH - 0.01)) / far } : given;
   const same = (p?: MarkAt) => (p && at ? p.x === at.x && p.y === at.y : !p && !at);
   if ("bond" in of) {
     const b = doc.model.bonds.find((x) => x.id === of.bond);
@@ -2159,7 +2212,10 @@ export function colourParts(
 export function fillRings(doc: WorkspaceDocument, keys: readonly string[], color: string | null): WorkspaceDocument {
   const was = doc.ringFills ?? {};
   const next = { ...was };
-  for (const k of keys) {
+  // (a ring no longer drawn - undone away under an open colour card - is
+  // given nothing: its fill was a step that changed nothing to be seen,
+  // and came back on the next ring drawn with its atoms' ids)
+  for (const k of keys.filter((key) => ringThere(doc.model, key))) {
     if (color) next[k] = color;
     else delete next[k];
   }

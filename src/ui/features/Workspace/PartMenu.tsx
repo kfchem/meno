@@ -1,6 +1,7 @@
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
@@ -345,9 +346,12 @@ export default function PartMenu({
     const w = ref.current?.offsetWidth;
     if (w) setWidth(w);
   }, [target, radical]);
+  // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("menu"), []);
   useEffect(() => {
+    if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -375,7 +379,7 @@ export default function PartMenu({
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("wheel", onClose, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
 
   const deleteKey = MAC ? "⌫" : "Del";
   const cleanUpKey = MAC ? "⇧⌘K" : "Ctrl+Shift+K";
@@ -720,6 +724,7 @@ export default function PartMenu({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="menu"
       data-guide="menu"
       aria-label={

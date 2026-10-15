@@ -39,6 +39,8 @@ export const EASE_SLIDE: [number, number, number, number] = [0.45, 0, 0.55, 1];
 export const TAU = {
   quick: 0.05,
   move: 0.07,
+  /** A molecule in 3D going to its place, and a workflow's set with it. */
+  place: 0.08,
 } as const;
 
 /** The spring of things that swell and settle: the 3D viewer's. */

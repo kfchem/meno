@@ -4,7 +4,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { partsBounds, type FlowParts } from "./parts";
-import { centredParts, procedureLine, procedureNeeds, procedureOf, proceduresSaved, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
+import { centredParts, procedureFileName, procedureLine, procedureNeeds, procedureOf, proceduresSaved, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
 
 /** A procedure's parts: an empty input set wired into an optimisation by xTB, whose result goes into Meno's energy window. */
 const PARTS: FlowParts = {
@@ -81,5 +81,22 @@ describe("a procedure", () => {
     expect(doc.history().undoLabel).toBe("put down procedure");
     doc.undo();
     expect(st().steps).toEqual([]);
+  });
+});
+
+describe("a procedure written out", () => {
+  it("is named as a file may be named on every system", () => {
+    expect(procedureFileName("Optimise, then energy window")).toBe("Optimise, then energy window.meno");
+    expect(procedureFileName('a/b\\c:d*e?f"g<h>i|j')).toBe("a b c d e f g h i j.meno");
+    expect(procedureFileName("tab\there\nand there\u0007")).toBe("tab here and there.meno");
+    // (Windows' devices' names taken by no file, whatever its extension)
+    expect(procedureFileName("CON")).toBe("CON procedure.meno");
+    expect(procedureFileName("lpt1")).toBe("lpt1 procedure.meno");
+    expect(procedureFileName("Console")).toBe("Console.meno");
+    // (no dot or space at its end; not too long; never nothing)
+    expect(procedureFileName("Opt... ")).toBe("Opt.meno");
+    expect(procedureFileName("x".repeat(300))).toBe(`${"x".repeat(120)}.meno`);
+    expect(procedureFileName("😀".repeat(200))).toBe(`${"😀".repeat(120)}.meno`);
+    expect(procedureFileName(' :*?" ')).toBe("Procedure.meno");
   });
 });

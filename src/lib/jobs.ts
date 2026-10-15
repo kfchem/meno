@@ -1,7 +1,7 @@
 /**
  * Jobs (src-tauri/src/jobs.rs; docs/WORKFLOWS.md): a program a plugin
- * names, run for a workflow's step in a folder of its own in Meno's data
- * folder, by Meno's executable started apart from Meno - so that it goes on
+ * names, run for a workflow's step in a folder of its own in Meno's local
+ * data folder, by Meno's executable started apart from Meno - so that it goes on
  * when Meno closes. Jobs wait their turn, as many running at once as
  * Settings allows; each has its log, and a record of how it ended.
  */

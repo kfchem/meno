@@ -5,7 +5,7 @@
  */
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
-import { pushAtoms } from "../document";
+import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
@@ -22,7 +22,7 @@ import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import { restyled } from "../restyle";
-import { asSeen } from "./molecule3d";
+import { asSeen, bondsAt } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
@@ -106,8 +106,6 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   };
 }
 
-/** How far from what it is of a mark put by hand is read, in ems of the labels: farther, it is put back. */
-const MARK_REACH = 50;
 
 /**
  * Whether a copy holds what a picture draws - a structure, molecules in 3D,
@@ -145,7 +143,8 @@ export function clipItems(part: Drawn): ClipItem[] {
         flavor: "mol",
         text: writeMolfile3d(
           seen.flat(),
-          ms.flatMap((m, i) => m.bonds.map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
+          // (each with the bonds the frame it shows has)
+          ms.flatMap((m, i) => bondsAt(m, m.frame).map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
           { title: ms.length === 1 ? ms[0].name?.replace(/\.[^.]*$/, "") : undefined },
         ),
       },
@@ -560,10 +559,13 @@ export function readCarried3D(given: unknown): Carried3D | null {
   if (!bonds.every((b) => isEntry(b) && index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
   const at = m.at as Partial<Pt & { z: number }>;
   if (!isNum(at.x) || !isNum(at.y)) return null;
-  // (what does not read is left out, not the molecule)
-  const frames = (Array.isArray(m.frames) ? (m.frames as unknown[]) : []).filter(
-    (f): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum),
-  );
+  // (what does not read is left out, not the molecule - and the frame it
+  // showed is still the one shown: where it was left out, the one before it)
+  const listed = Array.isArray(m.frames) ? (m.frames as unknown[]) : [];
+  const whole = (f: unknown): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum);
+  const frames = listed.filter(whole);
+  const shownFrame = Number.isInteger(m.frame) ? Math.min(Math.max(0, m.frame as number), listed.length) : null;
+  const frame = shownFrame == null ? null : listed.slice(0, shownFrame).filter(whole).length;
   const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
   const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
     (x): x is Measure3D => isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
@@ -591,7 +593,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
     ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),
-    ...(Number.isInteger(m.frame) ? { frame: m.frame as number } : {}),
+    ...(frame != null ? { frame } : {}),
     ...(listOf(m.list) ? { list: listOf(m.list) } : {}),
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
@@ -605,6 +607,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
     ...(Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? { framesLeftOut: m.framesLeftOut as number } : {}),
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
+    ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),

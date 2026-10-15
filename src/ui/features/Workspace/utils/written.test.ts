@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { writtenOf } from "./written";
+import { knownOfMolecules, writtenOf } from "./written";
 import { WORLD_PER_ANGSTROM } from "./molecule3d";
 import type { Carried3D } from "../store/types";
 
@@ -26,6 +26,9 @@ describe("molecules in 3D as a writer is given them", () => {
     expect(m.atoms[1]).toEqual({ el: "H", x: 1.96, y: 2, z: 3, isotope: 2 });
     const shown = writtenOf([water({ frames: [[0, 0, 0, 0.97, 0, 0, 0, 0.97, 0]], frame: 1 })]);
     expect(shown.atoms.map((a) => a.x)).toEqual([0, 0.97, 0]);
+    // (with the bonds that frame has, where they go frame by frame: one hydrogen gone 3 Å off)
+    const parting = water({ frames: [[1, 2, 3, 1.96, 2, 3, 1, 5, 3]], frame: 1, bondsFrom: "distance" });
+    expect(writtenOf([parting]).bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
   });
 
   it("is several as one system, each as it stands on the page - placed and turned - its ångströms kept", () => {
@@ -45,5 +48,19 @@ describe("molecules in 3D as a writer is given them", () => {
     // and their centres 4 Å apart, as they stand
     const centre = (from: number) => m.atoms.slice(from, from + 3).reduce((c, a) => ({ x: c.x + a.x / 3, y: c.y + a.y / 3, z: c.z + a.z / 3 }), { x: 0, y: 0, z: 0 });
     expect(dist(centre(0), centre(3))).toBeCloseTo(4, 9);
+  });
+});
+
+describe("what Export starts a molecule's charge and multiplicity from", () => {
+  it("is what its atoms say - or, one molecule read from a calculation, the state that calculation was in", () => {
+    // (water as its file had it: neutral, a singlet)
+    expect(knownOfMolecules([water()])).toMatchObject({ charge: 0, multiplicity: 1 });
+    // (the hydronium ion read from a cation's output: its atoms carry no charge; the calculation said +1, a singlet)
+    const hydronium = water({ atoms: [...water().atoms, { el: "H", x: 1, y: 2, z: 3.96 }], calc: { readers: [], charge: 1, multiplicity: 1 } });
+    expect(knownOfMolecules([hydronium])).toMatchObject({ charge: 1, multiplicity: 1 });
+    // (as its atoms alone say it: neutral, a doublet - what a writer was given before)
+    expect(knownOfMolecules([{ ...hydronium, calc: undefined }])).toMatchObject({ charge: 0, multiplicity: 2 });
+    // (two together: what their atoms say, not one of their calculations')
+    expect(knownOfMolecules([hydronium, water()])).toMatchObject({ charge: 0 });
   });
 });

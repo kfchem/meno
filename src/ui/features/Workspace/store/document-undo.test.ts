@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { selectedOf } from "./slices/selectionSlice";
+import { dragsSelection, selectedOf } from "./slices/selectionSlice";
 import { createWorkspaceDocument } from "../document";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
@@ -342,6 +342,100 @@ describe("editor store over a document", () => {
     expect(state().hovered.atomId).toBe(base);
   });
 
+  it("lets go of what an undo or a redo moves from under the pointer, and keeps what stayed", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtomBonded(a, 1.5, 0, "C");
+    const bond = state().model.bonds[0].id;
+    // dragged to (5, 0), the pointer resting on it there
+    state().moveAtoms([{ id: b, x: 5, y: 0 }], "drag-1");
+    state().setHoveredFromId(b);
+    doc.undo();
+    // back across the page: Delete, or a letter, acted on it from there
+    expect(state().hovered.atomId).toBeNull();
+    // and a redo, the same
+    state().setHoveredFromId(b);
+    doc.redo();
+    expect(state().hovered.atomId).toBeNull();
+    // a bond whose end moved
+    state().setHoveredFromId(bond);
+    doc.undo();
+    expect(state().hovered.bondId).toBeNull();
+    // what an undo did not move stays under the pointer
+    state().setHoveredFromId(a);
+    state().addAtom(9, 9, "N");
+    doc.undo();
+    expect(state().hovered.atomId).toBe(a);
+    // and an atom dragged stays lit as it goes, edit by edit
+    state().setHoveredFromId(b);
+    state().moveAtoms([{ id: b, x: 6, y: 0 }], "drag-2");
+    expect(state().hovered.atomId).toBe(b);
+  });
+
+  it("selects nothing for a structure whose atom an undo took away before a long press ended", () => {
+    const { doc, state } = editor();
+    const base = state().addAtom(0, 0, "C");
+    const end = state().addAtomBonded(base, 1.5, 0, "C");
+    // a long press on the atom just drawn, and Cmd+Z before its 320 ms are up
+    doc.undo();
+    state().selectStructure(end);
+    expect(state().sel.atoms.size).toBe(0);
+    expect(state().selAnchor).toBeNull();
+    // what is there is selected whole, as before
+    state().selectStructure(base);
+    expect([...state().sel.atoms]).toEqual([base]);
+  });
+
+  it("shuts a step's options card, and forgets a set chosen, when an undo takes it away", () => {
+    const { doc, state } = editor();
+    const step = state().addStep("energy" as never, "xtb", 0, 0);
+    state().setWorkflowView({ openStep: step });
+    doc.undo();
+    expect(state().openStep).toBeNull();
+    // a redo brings the step back, not its card
+    doc.redo();
+    expect(state().steps.some((x) => x.id === step)).toBe(true);
+    expect(state().openStep).toBeNull();
+    // a step still there keeps its card open over an undo of something else
+    state().setWorkflowView({ openStep: step });
+    state().addAtom(9, 9, "C");
+    doc.undo();
+    expect(state().openStep).toBe(step);
+  });
+
+  it("moves the whole selection by an atom of it selected with a picture, a shape or words, not the atom alone", () => {
+    const { state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtom(5, 0, "C");
+    // the atom alone, selected or not: its own drag
+    expect(dragsSelection(state(), a)).toBe(false);
+    state().setSel({ atoms: new Set([a]), bonds: new Set() }, a);
+    expect(dragsSelection(state(), a)).toBe(false);
+    // with another atom, or with words on the page: the selection's
+    state().setSel({ atoms: new Set([a, b]), bonds: new Set() }, a);
+    expect(dragsSelection(state(), a)).toBe(true);
+    state().setSel({ atoms: new Set([a]), bonds: new Set() }, a);
+    const words = state().addCaption("rt, 2 h", 9, 9);
+    state().selectCaptions([words], true);
+    expect(dragsSelection(state(), a)).toBe(true);
+    // and not an atom outside the selection
+    expect(dragsSelection(state(), b)).toBe(false);
+  });
+
+  it("steps the charge of each atom selected, by + or -, as one undo step", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "N");
+    const b = state().addAtom(5, 0, "O");
+    const c = state().addAtom(9, 0, "C");
+    const depth = doc.history().undoDepth;
+    state().stepCharges([a, b], 1);
+    const charge = (id: number) => state().model.atoms.find((x) => x.id === id)!.charge ?? 0;
+    expect([charge(a), charge(b), charge(c)]).toEqual([1, 1, 0]);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect([charge(a), charge(b)]).toEqual([0, 0]);
+  });
+
   it("takes what an undo takes back out of the selection, and nothing is left selected", () => {
     const { doc, state } = editor();
     state().addAtom(0, 0, "C");
@@ -560,5 +654,174 @@ describe("a workspace's drawing style", () => {
     // and once saved again, it is saved there
     state().markSavedAs("/work/second.mol");
     expect(state().savedPath).toBe("/work/second.mol");
+  });
+});
+
+describe("a workspace's history, held to about 100 MB (the maintainer, 2026-10-13)", () => {
+  it("costs a step the atoms and bonds it copies: a small drawing keeps its thousand steps, a large one fewer", async () => {
+    const { createDocument, DEFAULT_HISTORY_BUDGET } = await import("../../../../lib/doc/document");
+    const { stepCost } = await import("../document");
+    const { emptyWorkspaceDocument } = await import("../document");
+    // a move copies the atoms, not the bonds; words copy neither
+    const base = emptyWorkspaceDocument();
+    const drawn = { ...base, model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }], bonds: [] } };
+    const moved = { ...drawn, model: { ...drawn.model, atoms: [{ ...drawn.model.atoms[0], x: 1 }] } };
+    expect(stepCost(moved, drawn)).toBe(1);
+    expect(stepCost({ ...moved, texts: [] }, moved)).toBe(0);
+    expect(stepCost(moved, undefined)).toBe(1);
+    // 300 atoms: a thousand steps, the 1001st dropping the oldest
+    const { doc: small, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    for (let i = 1; i < 300; i++) state().addAtom(i, 0, "C");
+    for (let i = 0; i < 1001; i++) state().moveAtoms([{ id: a, x: 0, y: i }], `drag-${i}`);
+    expect(small.history().undoDepth).toBe(1000);
+    // 10,000 atoms, a budget of a million: a hundred moves held, the oldest gone
+    const atoms = Array.from({ length: 10_000 }, (_, i) => ({ id: i + 1, x: i, y: 0, r: 0.9, el: "C" }));
+    const big = createDocument({ ...base, model: { atoms, bonds: [] } }, { cost: stepCost, budget: 1_000_000 });
+    for (let i = 0; i < 150; i++) big.edit("move", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((x, k) => (k === 0 ? { ...x, y: i } : x)) } }));
+    expect(big.history().undoDepth).toBeGreaterThanOrEqual(98);
+    expect(big.history().undoDepth).toBeLessThanOrEqual(100);
+    // and the workspace's own budget
+    expect(DEFAULT_HISTORY_BUDGET).toBe(25_000_000);
+  });
+});
+
+describe("a haptic bond's endpoints, held to the ring it binds (the command centre's document fuzzer, 2026-10-13)", () => {
+  /** FeCp2 written out on a carbon: its metal, its stars and their haptic bonds to the Cp rings. */
+  const ferrocene = () => {
+    const ed = editor();
+    const a = ed.state().addAtom(0, 0, "C");
+    const fe = ed.state().addAtomBonded(a, 1.5, 0, "C");
+    ed.state().beginLabelEdit(fe, "FeCp2");
+    ed.state().commitLabelEdit();
+    ed.state().expandAbbreviation(fe);
+    const hap = ed.doc.getState().model.bonds.find((b) => b.endpoints?.length)!;
+    return { ...ed, hap };
+  };
+  const bond = (doc: ReturnType<typeof ferrocene>["doc"], id: number) => doc.getState().model.bonds.find((b) => b.id === id);
+
+  it("binds no ring once an atom of it is deleted, or merged onto another - endpoints never name an atom gone", () => {
+    const deleted = ferrocene();
+    deleted.state().deleteAtom(deleted.hap.endpoints![0]);
+    expect(bond(deleted.doc, deleted.hap.id)?.endpoints).toBeUndefined();
+    const merged = ferrocene();
+    merged.state().replaceDraggedAtomWith(merged.hap.endpoints![0], merged.hap.endpoints![2]);
+    const ids = new Set(merged.doc.getState().model.atoms.map((x) => x.id));
+    for (const b of merged.doc.getState().model.bonds) for (const e of b.endpoints ?? []) expect(ids.has(e)).toBe(true);
+    // and undone, the ring and its bond as they were
+    deleted.doc.undo();
+    expect(bond(deleted.doc, deleted.hap.id)?.endpoints).toEqual(deleted.hap.endpoints);
+  });
+
+  it("pasted without its ring - the metal and the star alone - binds none, not the ring it was copied from", () => {
+    const { state, doc, hap } = ferrocene();
+    const m = doc.getState().model;
+    const part = { atoms: m.atoms.filter((x) => x.id === hap.a || x.id === hap.b), bonds: [hap] };
+    const before = new Set(m.bonds.map((b) => b.id));
+    state().pasteModel({ atoms: part.atoms.map((x) => ({ ...x, x: x.x + 20 })), bonds: part.bonds });
+    const pasted = doc.getState().model.bonds.filter((b) => !before.has(b.id));
+    expect(pasted).toHaveLength(1);
+    expect(pasted[0].endpoints).toBeUndefined();
+  });
+
+  it("is left out of a part that does not hold the whole ring", async () => {
+    const { partOf } = await import("../chem/cleanUp");
+    const { doc, hap } = ferrocene();
+    const part = partOf(doc.getState().model, new Set([hap.a, hap.b, hap.endpoints![0]]));
+    expect(part.bonds.find((b) => b.id === hap.id)?.endpoints).toBeUndefined();
+  });
+});
+
+describe("a complex written out inside a workflow set (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("leaves the set's frame finite, and a part without its ring measurable - a NaN frame was dropped with its set on saving", async () => {
+    const { drawnBox } = await import("../../../../utils/importers");
+    const { structuresOf } = await import("../workflow/entries");
+    for (const label of ["Cp*", "FeCp2"]) {
+      const { doc, state } = editor();
+      const a = state().addAtom(0, 0, "C");
+      const x = state().addAtomBonded(a, 1.8, 0, "C");
+      const set = state().addSet({ x0: -5, y0: -5, x1: 8, y1: 5 });
+      state().beginLabelEdit(x, label);
+      state().commitLabelEdit();
+      state().expandAbbreviation(x);
+      const d = doc.getState();
+      const frame = (d.sets ?? []).find((s) => s.id === set)!;
+      for (const v of [frame.x0, frame.x1, frame.y0, frame.y1]) expect(Number.isFinite(v)).toBe(true);
+      // the metal and its star alone: measured, not NaN
+      const hap = d.model.bonds.find((b) => b.endpoints?.length)!;
+      const part = { atoms: d.model.atoms.filter((y) => y.id === hap.a || y.id === hap.b), bonds: [hap] };
+      const box = drawnBox(part);
+      for (const v of [box.minX, box.maxX, box.minY, box.maxY]) expect(Number.isFinite(v)).toBe(true);
+      // and the complex one structure, its rings with its metal
+      const ring = hap.endpoints![0];
+      expect(structuresOf(d.model).find((s) => s.includes(hap.a))).toContain(ring);
+    }
+  });
+});
+
+describe("electron-pushing arrows over a merge (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("go with the atom dragged onto another, and those on a bond that collapsed go - none left on what is gone", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    const b = state().addAtom(1.5, 0, "O");
+    const c = state().addAtom(3, 0, "C");
+    const ab = state().connectAtoms(a, b, 1)!;
+    state().connectAtoms(b, c, 1);
+    state().addPush({ bond: ab }, { atom: b }, false);
+    state().addPush({ atom: a }, { atom: c }, false);
+    // a dragged onto b: the bond a-b collapses, a goes
+    state().replaceDraggedAtomWith(a, b);
+    const d = doc.getState();
+    const ids = new Set(d.model.atoms.map((x) => x.id));
+    const bonds = new Set(d.model.bonds.map((x) => x.id));
+    for (const p of d.pushes ?? [])
+      for (const e of [p.from, p.to]) {
+        if ("atom" in e) expect(ids.has(e.atom)).toBe(true);
+        if ("bond" in e) expect(bonds.has(e.bond)).toBe(true);
+      }
+    // the arrow from a now leaves b, where a was dropped
+    expect((d.pushes ?? []).some((p) => "atom" in p.from && p.from.atom === b && "atom" in p.to && p.to.atom === c)).toBe(true);
+    // and the one on the collapsed bond is gone
+    expect((d.pushes ?? []).some((p) => "bond" in p.from && p.from.bond === ab)).toBe(false);
+  });
+});
+
+describe("a charge's mark dragged far from its atom (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("goes no farther than a mark is read back from a file or a copy, so it is not put back on reopening", async () => {
+    const { MARK_REACH } = await import("../document");
+    const { doc, state } = editor();
+    const n = state().addAtom(0, 0, "N");
+    state().stepCharge(n, 1);
+    state().putMark({ atom: n, kind: "charge" }, { x: 300, y: 400 }, "far");
+    const at = doc.getState().model.atoms.find((a) => a.id === n)!.chargeAt!;
+    expect(Math.hypot(at.x, at.y)).toBeLessThan(MARK_REACH);
+    // in the same direction
+    expect(at.y / at.x).toBeCloseTo(400 / 300, 6);
+    // one near is put as it is
+    state().putMark({ atom: n, kind: "charge" }, { x: 1.5, y: -0.5 }, "near");
+    expect(doc.getState().model.atoms.find((a) => a.id === n)!.chargeAt).toEqual({ x: 1.5, y: -0.5 });
+  });
+});
+
+describe("a bond's stereo and its order (the command centre's document fuzzer, 2026-10-13)", () => {
+  it("lets a double or triple bond carry no wedge, hashes or wavy line, made so or given one", () => {
+    const { doc, state } = editor();
+    const a = state().addAtom(0, 0, "C");
+    state().addAtomBonded(a, 1.5, 0, "C");
+    const id = doc.getState().model.bonds[0].id;
+    const bond = () => doc.getState().model.bonds.find((b) => b.id === id)!;
+    state().setBondStereo(id, "up");
+    expect(bond().stereo).toBe("up");
+    state().setBondOrder(id, 2);
+    expect(bond().stereo).toBe("none");
+    state().setBondStereo(id, "wavy");
+    expect(bond().stereo).toBe("none");
+    state().setBondOrder(id, 3);
+    state().setBondStereo(id, "down");
+    expect(bond().stereo).toBe("none");
+    // a single bond takes them as ever
+    state().setBondOrder(id, 1);
+    state().setBondStereo(id, "down");
+    expect(bond().stereo).toBe("down");
   });
 });

@@ -36,6 +36,21 @@ describe("what a plugin is given of an entry", () => {
     expect([e.charge, e.multiplicity, e.name]).toEqual([-1, 2, "water"]);
   });
 
+  it("is a molecule read from a calculation in the state its calculation was: its charge and multiplicity, not its atoms' (none, as an output gives them)", () => {
+    // (the ammonium ion, as an output of a cation gives it: five atoms, no charge on any)
+    const nh4: Omit<Molecule3D, "id"> = {
+      atoms: [{ el: "N", x: 0, y: 0, z: 0 }, ...[[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]].map(([x, y, z]) => ({ el: "H", x: 0.6 * x, y: 0.6 * y, z: 0.6 * z }))],
+      bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
+      at: { x: 0, y: 0 },
+      calc: { readers: ["cclib 1.9rc1"], program: "ORCA", charge: 1, multiplicity: 1 },
+    };
+    const [entry] = setEntries([{ ...nh4, id: 1 }], "molecules");
+    expect([pluginEntry(entry).charge, pluginEntry(entry).multiplicity]).toEqual([1, 1]);
+    // (drawn and made in 3D - no calculation said otherwise - it is what its atoms say: neutral NH4, a doublet)
+    const [drawn] = setEntries([{ ...nh4, calc: undefined, id: 2 }], "molecules");
+    expect([pluginEntry(drawn).charge, pluginEntry(drawn).multiplicity]).toEqual([0, 2]);
+  });
+
   it("gives an isotope its mass (NIST), where one is measured - none, where none is", () => {
     const heavy = pluginEntry({ ...WATER, atoms: WATER.atoms.map((a, i) => (i === 1 ? { ...a, isotope: 2 } : i === 2 ? { ...a, isotope: 99 } : a)) });
     expect(heavy.atoms[1]).toEqual({ el: "H", x: 0, y: 0.76, z: 0.59, isotope: 2, mass: 2.01410177812 });
@@ -93,6 +108,7 @@ describe("what a plugin reads back of a job", () => {
     expect(readCollected({ outputs: [] }, 1)).toEqual({ why: "It read back nothing for it" });
     expect(readCollected({ outputs: [{ ...out, schema: 2 }] }, 1)).toEqual({ why: "It read it back in a form this Meno does not read" });
     expect(readCollected({ outputs: [{ ...out, frames: [[1, 2]] }] }, 1)).toEqual({ why: "It read back no geometry" });
+    expect(readCollected({ outputs: [{ ...out, frames: [null, WATER.xyz] }] }, 1)).toEqual({ why: "It read back a geometry Meno cannot read" });
   });
 
   it("or, for each entry, an output for Meno's readers: its kind, and a file it read back or what the program printed - by a name inside its folder", () => {
