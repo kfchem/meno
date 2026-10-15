@@ -471,7 +471,21 @@ Taken on 2026-10-13:
   nearest way round that covers no other atom, no measurement's value
   and no bond (an atom hidden counts for more than a bond covered) - and
   a little way off the others (2026-10-05: on Windows, an (S) sat on a
-  value or on a bond in some frames as the molecule turned).
+  value or on a bond in some frames as the molecule turned). As the
+  molecule turns and the best way changes, a label glides round its atom
+  to it, the shorter way, on a 70 ms time constant - never across the
+  atom, never in a jump (the maintainer, 2026-10-15).
+- **Measurements' values keep apart.** Each value stands on its point
+  while that is clear of the values before it; where another is in its
+  way it moves off - square to a distance's line, out from an angle's
+  atoms - and stays where it went until its point is clear again by
+  3 px, so that two side by side, the view turning, keep their places
+  rather than trading them. It glides where it goes, as the R and S do.
+- **Under what is beside and over the page.** R and S, values, chips and
+  cards are drawn in the page's HTML layer: its own stacking context,
+  clipped to the canvas. They are cut at the canvas's edge as the drawing
+  is, and never stand over the panel beside it, the window bar, the
+  tabs, the column, the cards or the menus (the maintainer, 2026-10-15).
 - **Tied to the drawing.** An atom hovered in either lights in the other.
   Drawn otherwise since - atoms, bonds or wedges, not where they are - the
   molecule stays as it is and says so under its frames, with *Make
@@ -1044,6 +1058,16 @@ the rest is for later, through a plugin.
   12*, or the output's name) under it. A drag that began on the result
   goes on editing the copy, and the copy and the drag are one undo step.
   A molecule of its own is edited in place.
+- **The copy is seen splitting off** (the maintainer, 2026-10-15). It
+  starts over the result, the same shape and turned the same, and glides
+  out to its place as the value set goes over from the old to the new -
+  0.45 s, longer where its place is far, never faster than 14 bond
+  lengths a second, at most 1.1 s. Where its place is out of view, the
+  view glides as far as shows it and the result - or, where both do not
+  fit, the copy - the zoom kept. Once there it is lit a moment, as
+  anything just put down. Undone, it slides back into the result and is
+  gone, and the view goes back where it was, unless it has been moved
+  since; a redo splits it off again.
 - **Stereo labels follow.** A centre turned inside out has its R and S
   swapped, and a double bond turned past square its E and Z (the
   priorities round them are as they were). The drawing is not told: a 3D
