@@ -953,10 +953,11 @@ space-filling side by side is better science than either alone.
 - **Ball sizes** (the maintainer, 2026-10-15). Ball and stick's balls
   are a fifth of each atom's van der Waals size, Outlined's 15%, and the
   other balls and sticks' - Glossy, Print, Pastel and Model kit - 18%.
-- **Outlined.** Glossy balls - hydrogen's small - with three thin dark
-  circles on every one, thin near-black sticks, each ball and stick drawn
-  round with a near-black line 1.5 pm wide, the circles 1 pm, the back
-  fading by half, in the Bright colours. At caffeine's fit in a window
+- **Outlined.** Glossy balls - hydrogen's small - and thin near-black
+  sticks, each ball and stick drawn round with a near-black line 1.5 pm
+  wide, the back fading by half, in the Bright colours. Its lines on the
+  balls are None (the maintainer, 2026-10-15), to be turned on in
+  Settings: three, on every atom, 1 pm wide, as its settings keep them. At caffeine's fit in a window
   1280 pixels wide, a picometre is about a pixel: the widths were chosen
   to look there as they did when they were set in pixels.
 - **Print.** Matt balls in Greys, black sticks, a black line 2 pm wide

@@ -895,6 +895,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       // (where the molecule's front and back stand in the camera's depth: what fades between)
       const centre = placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z;
+      // (a screen pixel in the camera's space at the molecule: an orthographic camera's - the canvas's - its zoom's;
+      // a perspective one's - Settings' preview - as far off as the molecule stands)
+      const pc = camera as THREE.PerspectiveCamera;
+      const perPx = pc.isPerspectiveCamera ? (2 * Math.max(-centre, 1e-6) * Math.tan((pc.fov * Math.PI) / 360)) / Math.max(size.height, 1) : 1 / zoom;
       const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x;
       const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade, outlines.bent.fade];
       for (const u of fades) {
@@ -915,7 +919,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
         lines.count = of.count;
         // (in the molecule's units, as large as it is drawn now - never under the least pixels)
-        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x, 1 / zoom);
+        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x, perPx);
         o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
         o.material.opacity = seenBy;
       }

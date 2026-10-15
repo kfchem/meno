@@ -216,7 +216,7 @@ describe("the 3D style as chosen", () => {
 });
 
 describe("the outlined style, and what it is made of", () => {
-  it("draws a dark line round balls and thin near-black sticks, circles on every ball, its back fading, in its own colours", () => {
+  it("draws a dark line round balls and thin near-black sticks, its back fading, in its own colours - circles on the balls offered, not drawn", () => {
     const look = look3dPreset("outlined").look;
     expect(look.atoms).toBe("balls");
     // (in ångströms: about a pixel and a half at caffeine's fit, 1 pm to a pixel there)
@@ -231,9 +231,11 @@ describe("the outlined style, and what it is made of", () => {
     // (a bright red)
     expect(atomColour("O", look)).toBe("#ff1f1f");
     expect(look.bondRadius).toBeLessThan(BALL_AND_STICK.bondRadius);
-    // (three circles, on every atom - hydrogen's too - as thin as a line)
-    expect(ballCircles(look)).toBe(3);
-    for (const el of ["H", "C", "O", "Li"]) expect(linedBall(el, look)).toBe(true);
+    // (no circles on the balls - but set to three, on every atom, hydrogen's too, as thin as a line)
+    expect(ballCircles(look)).toBe(0);
+    const lined = { ...look, ballLines: "three" as const };
+    expect(ballCircles(lined)).toBe(3);
+    for (const el of ["H", "C", "O", "Li"]) expect(linedBall(el, lined)).toBe(true);
     expect(look.ballLinesWidth).toBeLessThanOrEqual(look.outline);
     expect(atomColour("Na", look)).toBe(atomColour("K", look));
     // (an element it does not colour: as Meno does)
