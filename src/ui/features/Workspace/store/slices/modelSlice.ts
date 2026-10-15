@@ -220,6 +220,10 @@ export const createModelSlice = (
       doubleClickBond: { atomId, state: doc.getState(), at: performance.now() },
     })),
 
+  setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {
+    doc.edit(show ? "show R/S" : "hide R/S", (d) => ops.setStereoShown(d, of, show));
+  },
+
   takeBackDoubleClickBond: (atomId: number) => {
     const d = get().doubleClickBond;
     set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));
@@ -432,6 +436,7 @@ export const createModelSlice = (
       hovered3d: null,
       hoveredMeasure3d: null,
       measureEdit3d: null,
+      copied3d: null,
       hovered: { atomId: null, bondId: null },
       labelEdit: { active: false, atomId: null, value: "" },
       moveDrag: {

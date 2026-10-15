@@ -1194,6 +1194,53 @@ export function addMeasure3d(doc: WorkspaceDocument, id: number, atoms: number[]
   });
 }
 
+/** The stereocentres and double bonds a molecule in 3D shows the labels of: those asked for on it, or - none asked for - those its drawing left open. */
+export function stereoShownOf(m: Pick<Molecule3D, "stereo">): { atoms: number[]; bonds: number[] } | null {
+  return m.stereo?.shown ?? m.stereo?.chosen ?? null;
+}
+
+/**
+ * Which R and S, E and Z are shown (docs/EDITOR-2D.md, *R and S*), set for
+ * the drawing's atoms and bonds given, by id, and the molecules in 3D's, by
+ * index - shown, or not. A molecule in 3D given with no atoms and no bonds
+ * is given all of its stereocentres and double bonds. A drawing and the
+ * molecule in 3D made from it each keep their own.
+ */
+export function setStereoShown(
+  doc: WorkspaceDocument,
+  of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] },
+  show: boolean,
+): WorkspaceDocument {
+  const atoms = new Set(of.atoms ?? []);
+  const bonds = new Set(of.bonds ?? []);
+  const flagged = <T extends { id: number; stereoShown?: true }>(x: T, given: Set<number>): T => {
+    if (!given.has(x.id) || !!x.stereoShown === show) return x;
+    if (show) return { ...x, stereoShown: true as const };
+    const { stereoShown: _s, ...rest } = x;
+    return rest as T;
+  };
+  let out = doc;
+  if (atoms.size || bonds.size) {
+    const model = { ...doc.model, atoms: doc.model.atoms.map((a) => flagged(a, atoms)), bonds: doc.model.bonds.map((b) => flagged(b, bonds)) };
+    if (model.atoms.some((a, i) => a !== doc.model.atoms[i]) || model.bonds.some((b, i) => b !== doc.model.bonds[i])) out = { ...out, model };
+  }
+  for (const g of of.molecules ?? []) {
+    out = withMolecule3d(out, g.id, (m) => {
+      const st = m.stereo;
+      if (!st) return m;
+      const all = !g.atoms?.length && !g.bonds?.length;
+      const ga = all ? Object.keys(st.atoms).map(Number) : (g.atoms ?? []).filter((i) => i in st.atoms);
+      const gb = all ? Object.keys(st.bonds).map(Number) : (g.bonds ?? []).filter((i) => i in st.bonds);
+      const was = stereoShownOf(m) ?? { atoms: [], bonds: [] };
+      const next = (now: number[], given: number[]) => (show ? [...new Set([...now, ...given])].sort((x, y) => x - y) : now.filter((i) => !given.includes(i)));
+      const shown = { atoms: next(was.atoms, ga), bonds: next(was.bonds, gb) };
+      if (st.shown && shown.atoms.join() === st.shown.atoms.join() && shown.bonds.join() === st.shown.bonds.join()) return m;
+      return { ...m, stereo: { ...st, shown } };
+    });
+  }
+  return out;
+}
+
 /** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */
 export function orderMeasure3d(doc: WorkspaceDocument, id: number, measure: number, atoms: number[]): WorkspaceDocument {
   return withMolecule3d(doc, id, (m) => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { viewBesideColumn } from "./coverLayer";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { pageHtmlLayerStyle, viewBesideColumn } from "./coverLayer";
 import { COLUMN_NARROWEST, COLUMN_WIDTH, columnWidthFor } from "../utils/texts";
 
 const size = { width: 1280, height: 800 };
@@ -42,5 +44,34 @@ describe("the view as the column opens on a PDF", () => {
     // (a tiny PDF out of view: brought in, not made larger)
     const far = viewBesideColumn(view, size, { now: 0, final: 960 }, { x0: 500, x1: 501, y0: 0, y1: 1 })!;
     expect(far.zoom).toBe(view.zoom);
+  });
+});
+
+// What is drawn on the page in HTML - a stereo label, a measurement's value,
+// a chip, a card - never stands over the panels, cards and menus beside or
+// over the page, however high its zIndexRange: it is all in one layer, its
+// own stacking context, clipped to the canvas.
+describe("the page's HTML, under what is beside and over the page", () => {
+  it("is laid in a layer of its own stacking context, clipped to the canvas, cut off at the column", () => {
+    expect(pageHtmlLayerStyle(0)).toEqual({ isolation: "isolate", overflow: "hidden" });
+    expect(pageHtmlLayerStyle(240)).toEqual({ isolation: "isolate", overflow: "hidden", clipPath: "inset(0 240px 0 0)" });
+    const workspace = readFileSync(join(__dirname, "..", "Workspace.tsx"), "utf8");
+    expect(workspace).toMatch(/ref=\{setHtmlLayer\}[^>]*style=\{pageHtmlLayerStyle\(cover\)\}/);
+  });
+
+  it("is put in that layer however it is drawn: drei's Html only through PageHtml, and PageHtml into the layer", () => {
+    const ui = join(__dirname, "..", "..", "..");
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(path);
+      }
+    };
+    walk(ui);
+    const htmlUsers = files.filter((f) => /<Html[\s>]/.test(readFileSync(f, "utf8")));
+    expect(htmlUsers.map((f) => f.slice(ui.length + 1))).toEqual([join("features", "Workspace", "components", "PageHtml.tsx")]);
+    expect(readFileSync(join(__dirname, "PageHtml.tsx"), "utf8")).toMatch(/portal: layer/);
   });
 });

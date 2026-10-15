@@ -14,6 +14,19 @@ import { setViewGoal, viewGoalOf, type ViewGoal } from "./viewGoal";
 /** The layer the page's HTML goes in, cut off where the column begins: its element, once it is there. */
 export const PageHtmlLayer = createContext<HTMLElement | null>(null);
 
+/**
+ * How the layer the page's HTML goes in is laid: over the canvas, its own
+ * stacking context and clipped to the canvas's box - and cut off where the
+ * column begins. However high what is in it stands among itself (a
+ * stereo label's zIndexRange, a chip's, a card's), it is never over what is
+ * beside or over the page - the panel beside the canvas, the cards, the
+ * menus - and never seen past the canvas's edge, as an atom turned out of
+ * view under the panel had its R or S shown over the panel.
+ */
+export function pageHtmlLayerStyle(cover: number): { isolation: "isolate"; overflow: "hidden"; clipPath?: string } {
+  return { isolation: "isolate", overflow: "hidden", ...(cover > 0 ? { clipPath: `inset(0 ${cover}px 0 0)` } : {}) };
+}
+
 /** The layer, as drei's Html takes a place to go in. */
 export function usePageHtmlLayer(): RefObject<HTMLElement> | null {
   const el = useContext(PageHtmlLayer);

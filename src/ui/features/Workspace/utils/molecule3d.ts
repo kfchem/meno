@@ -4,7 +4,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -96,6 +96,69 @@ export function coveredLength(box: LabelBox, s: Stick): number {
     if (t0 >= t1) return 0;
   }
   return (t1 - t0) * Math.hypot(dx, dy);
+}
+
+/** A label's place about its atom on the screen: the way it stands off it (radians, screen y down) and how far, in pixels. */
+export type SpotAbout = { a: number; r: number };
+
+/**
+ * A label's place about its atom, `dt` seconds on from `was` toward `goal`,
+ * following with time constant `tau`: round the atom the shorter way and
+ * out or in together, so that a label whose best way changes as the
+ * molecule turns glides round to it - never across the atom, never past
+ * it. There once within a hundredth of a pixel and of a radian.
+ */
+export function spotFollowed(was: SpotAbout, goal: SpotAbout, dt: number, tau: number): SpotAbout {
+  // (the turn still to go, the shorter way round: within half a turn either way)
+  let turn = (goal.a - was.a) % (2 * Math.PI);
+  if (turn > Math.PI) turn -= 2 * Math.PI;
+  if (turn < -Math.PI) turn += 2 * Math.PI;
+  const keep = Math.exp(-Math.max(dt, 0) / tau);
+  const a = Math.abs(turn * keep) < 0.01 ? goal.a : goal.a - turn * keep;
+  const r = Math.abs((was.r - goal.r) * keep) < 0.01 ? goal.r : goal.r + (was.r - goal.r) * keep;
+  return { a, r };
+}
+
+/** How far a measurement's value may run into another before it is in its way, in pixels; and how clear its own point must be for it to go back there - so that two side by side, the view turning, do not trade places frame by frame. */
+export const VALUE_SLACK_PX = 3;
+/** How far off its point a value moved off it stands, in pixels. */
+export const VALUE_OFF_PX = 3;
+
+/** A measurement's value on the screen: its point (`o`), its half size, the way off it it goes where it must (a distance's square to its line, an angle's out from its atoms), and where it stood last about its point, if it has been placed. */
+export type ValueAt = { o: { x: number; y: number }; half: { x: number; y: number }; way: { x: number; y: number }; was?: SpotAbout };
+
+/**
+ * Where the measurements' values are to stand about their points, in
+ * order, each clear of those before it: on its point while that is clear -
+ * running into one before it by no more than VALUE_SLACK_PX; one moved off
+ * it stays where it is while that is clear, and goes back once its point is
+ * clear by VALUE_SLACK_PX; else off it, the way it goes, clear of them
+ * (labelSpot). Two close together, the view turning slowly, keep their
+ * places rather than trade them frame by frame.
+ */
+export function valueSpots(values: readonly ValueAt[]): SpotAbout[] {
+  const placed: LabelBox[] = [];
+  const boxAt = (v: ValueAt, s: SpotAbout): LabelBox => ({ x: v.o.x + s.r * Math.cos(s.a), y: v.o.y + s.r * Math.sin(s.a), hx: v.half.x, hy: v.half.y });
+  // (how far a box runs into those placed: the most of any, along its lesser way)
+  const into = (b: LabelBox) => {
+    let most = -Infinity;
+    for (const p of placed) most = Math.max(most, Math.min(p.hx + b.hx - Math.abs(p.x - b.x), p.hy + b.hy - Math.abs(p.y - b.y)));
+    return most;
+  };
+  return values.map((v) => {
+    const home: SpotAbout = { a: v.was?.a ?? Math.atan2(v.way.y, v.way.x), r: 0 };
+    const off = v.was && v.was.r > 0;
+    let goal: SpotAbout;
+    if (off && into(boxAt(v, home)) < -VALUE_SLACK_PX) goal = home;
+    else if (off && into(boxAt(v, v.was!)) <= VALUE_SLACK_PX) goal = v.was!;
+    else if (!off && into(boxAt(v, home)) <= VALUE_SLACK_PX) goal = home;
+    else {
+      const spot = labelSpot(v.o, VALUE_OFF_PX, v.half, v.way, [], placed);
+      goal = { a: Math.atan2(spot.y - v.o.y, spot.x - v.o.x), r: Math.hypot(spot.x - v.o.x, spot.y - v.o.y) };
+    }
+    placed.push(boxAt(v, goal));
+    return goal;
+  });
 }
 
 /**
@@ -893,7 +956,7 @@ export function asSeen(
   turn?: Turn3D,
   frame?: number,
   placed = false,
-): { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[] {
+): { el: string; x: number; y: number; z: number; charge?: number; radical?: Molecule3D["atoms"][number]["radical"]; isotope?: number }[] {
   const n = m.atoms.length;
   const frames = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...(m.frames ?? []).filter((f) => f.length === 3 * n)];
   const xyz = frames[Math.min(Math.max(0, Math.round(frame ?? 0)), frames.length - 1)];
@@ -908,7 +971,7 @@ export function asSeen(
       v.y += m.at.y / k;
       v.z += (m.at.z ?? 0) / k;
     }
-    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
+    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
   });
 }
 
@@ -986,7 +1049,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
- * own, or a biopolymer's chains' where they are drawn as atoms.
+ * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
+ * its file's it leaves out, their element not read.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -999,6 +1063,7 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
+    ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }
 
