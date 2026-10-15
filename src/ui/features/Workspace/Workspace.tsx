@@ -143,13 +143,13 @@ import { savePictureFile } from "./render/savePicture";
 import TextSheets2D from "./components/TextSheets2D";
 import PdfColumn from "./components/PdfColumn";
 import { goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
-import { selectedWords, selects } from "./utils/pdfSelection";
+import { boxedPlaced, ordered, selectedPlaced, selectedText, selectedWords, selects } from "./utils/pdfSelection";
 import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
 import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
-import { copying, writeClipboard } from "../../../lib/clipboard";
+import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
 import { FollowStyle } from "./components/FollowStyle";
@@ -166,6 +166,10 @@ import { PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
+import CoordinatesCard from "./CoordinatesCard";
+import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
+import { useTextMenu } from "../TextEditor/textMenu";
+import { coordinateMolecules } from "./utils/coordinates";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
@@ -387,6 +391,10 @@ function WorkspaceContent({
     const seen = viewBox();
     st.present(seen ? Math.max(0, slideInView(st.slides, seen)) : 0);
   }, [store, viewBox]);
+  // Structures read from coordinates - pasted, or selected in a PDF or a text (lib/io/coordinates) - shown before they are
+  // placed in 3D, where they were asked for, as a set named for where they came from (`named`: the PDF's name and pages, the
+  // text's, or a paste's); a paste's text may go on the page as words instead (`asText`)
+  const [coords, setCoords] = useState<{ structures: CoordinateStructure[]; at: { x: number; y: number }; source: string; named: string; asText?: () => void } | null>(null);
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
@@ -669,7 +677,7 @@ function WorkspaceContent({
         const sel = st.pdfSel;
         const pdf = selects(sel) ? st.pdfs.find((p) => p.id === sel.id) : undefined;
         if (!sel || !pdf) return;
-        const words = await selectedWords(sel, pdf);
+        const words = await selectedText(sel, pdf);
         if (words) await writeClipboard([{ flavor: "text", text: words }]);
       }),
     [store],
@@ -701,7 +709,31 @@ function WorkspaceContent({
   /** A flow being saved as a procedure: its parts, asking for its name. */
   const [naming, setNaming] = useState<FlowParts | null>(null);
   // Copy, cut and paste, by the keys and from the menu
-  const clip = useClipboardActions(store, setChemError, openFilesAt);
+  /** The structures coordinates on a PDF's pages hold - read where each word lies - shown before they are placed; none, said so. */
+  const structuresFrom = async (pages: Promise<PlacedPage[]>, source: string, from: number, to: number, at: { x: number; y: number }) => {
+    const structures = readCoordinates(textOfPages(await pages));
+    const named = `${source}, ${from === to ? `p. ${from + 1}` : `pp. ${from + 1}\u2013${to + 1}`}`;
+    if (structures.length) setCoords({ structures, at, source, named });
+    else setChemError("There are no coordinates in what is selected.");
+  };
+  // (3D structures, from the menu on a text in the column: shown here, while this workspace is in front)
+  useEffect(() => {
+    if (!active) return;
+    useTextMenu.getState().takeStructures((structures, source) => setCoords({ structures, at: viewMiddle(), source, named: source }));
+    return () => useTextMenu.getState().takeStructures(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+  const clip = useClipboardActions(store, setChemError, openFilesAt, (structures, at) =>
+    setCoords({
+      structures,
+      at,
+      source: "Pasted text",
+      named: "Pasted structures",
+      asText: () => {
+        void readClipboard(["text"]).then((t) => t?.text && store.getState().addCaption(t.text.trim(), at.x, at.y));
+      },
+    }),
+  );
   const chargeAtom = useCallback(
     (id: number, step: 1 | -1) => {
       const st = store.getState();
@@ -961,7 +993,8 @@ function WorkspaceContent({
     ? {
         otherLook: (() => {
           const other = lookOf(menuMolecule) === "primary" ? "secondary" : "primary";
-          return { name: styleNames3d[other], atoms: style3d[other].atoms, run: () => store.getState().switchLook3d(menuMolecule.id) };
+          // (sticks alone drawn as balls and sticks are, in the icon)
+          return { name: styleNames3d[other], atoms: style3d[other].atoms === "space" ? ("space" as const) : ("balls" as const), run: () => store.getState().switchLook3d(menuMolecule.id) };
         })(),
         chosen: chosen3d?.id === menuMolecule.id ? (chosenPath(menuMolecule, chosen3d)?.length ?? 0) : 0,
         onMeasure: () => store.getState().measureChosen3d(),
@@ -1476,6 +1509,26 @@ function WorkspaceContent({
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
+        {coords && (
+          <CoordinatesCard
+            key="coordinates"
+            structures={coords.structures}
+            onPlace={(chosen) => {
+              setCoords(null);
+              store.getState().placeAsSet(coordinateMolecules(chosen, coords.source), coords.at, coords.named);
+            }}
+            onText={
+              coords.asText &&
+              (() => {
+                setCoords(null);
+                coords.asText!();
+              })
+            }
+            onCancel={() => setCoords(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {ask3d && (
           <Ask3D
             key="ask3d"
@@ -1586,6 +1639,11 @@ function WorkspaceContent({
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is;
               // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
               putDownSmiles(store, quickAdd, await structureFromSmiles(smiles, style));
+            }}
+            onCoordinates={(structures) => {
+              const { at } = quickAdd;
+              store.getState().setQuickAdd(null);
+              setCoords({ structures, at, source: "Pasted text", named: "Pasted structures" });
             }}
             onChoose={(what) => {
               const st = store.getState();
@@ -1880,7 +1938,13 @@ function WorkspaceContent({
           text={(() => {
             const t = menu.kind === "text" && menu.id != null ? store.getState().texts.find((x) => x.id === menu.id) : undefined;
             if (!t) return undefined;
-            return { icon: !!t.icon, onRead: () => store.getState().readText(t.id), onIcon: () => store.getState().setTextIcon(t.id, !t.icon) };
+            const found = readCoordinates(t.text);
+            return {
+              icon: !!t.icon,
+              onRead: () => store.getState().readText(t.id),
+              onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
+              ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
+            };
           })()}
           pdf={(() => {
             const p = menu.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id) : undefined;
@@ -1897,6 +1961,15 @@ function WorkspaceContent({
               ...(!p.spread && !p.icon && p.page > 0 ? { onPrevious: () => st.turnPdf(p.id, p.page - 1) } : {}),
               onRead: () => st.readPdf(p.id),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
+              // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
+              ...(selects(st.pdfSel) && st.pdfSel.id === p.id
+                ? (() => {
+                    const { from, to } = ordered(st.pdfSel!);
+                    return { onStructures: () => void structuresFrom(selectedPlaced(st.pdfSel!, p), p.name, from.page, to.page, pasteTarget()) };
+                  })()
+                : st.pdfBox?.id === p.id
+                  ? { onStructures: () => void structuresFrom(boxedPlaced(st.pdfBox!, p), p.name, st.pdfBox!.page, st.pdfBox!.page, pasteTarget()) }
+                  : {}),
               // (a box drawn on it: put on the page, or copied, as a picture)
               ...(st.pdfBox?.id === p.id
                 ? (() => {

@@ -5,12 +5,15 @@
  * shut (lib/doc/shortcuts `keepSystemMenuShut`: its one item there was the
  * webview's Reload). Cut, Copy, Paste and Select All, as the keys do them;
  * one that does not apply now is shown, but cannot be pressed (the
- * maintainer, 2026-10-13). The menu itself is TextMenuHost.tsx.
+ * maintainer, 2026-10-13). On a text in the column, 3D structures besides,
+ * where what is selected - or, nothing selected, the whole text - holds
+ * coordinates (lib/io/coordinates). The menu itself is TextMenuHost.tsx.
  */
 import { create } from "zustand";
 import { IS_MAC } from "../../../lib/doc/shortcuts";
 import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { plainLines } from "../../../lib/text/editing";
+import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import type { FieldHost, TypingField } from "./typingField";
 
 /** What the menu works on: words that can be changed - a field's - or only read. */
@@ -24,6 +27,8 @@ export type TextMenuTarget = {
   replace?: (text: string, pasted: boolean) => void;
   /** Told after any of them: the caret and what is selected shown again, the keys the words' again. */
   after?: () => void;
+  /** A text's in the column: the whole of it, and its name - what coordinates in it are read from where nothing is selected. */
+  text?: { whole: () => string; name: string };
 };
 
 export type TextMenuKind = "cut" | "copy" | "paste" | "selectAll";
@@ -85,13 +90,23 @@ export function fieldTarget(ed: FieldHost, field: () => TypingField | null): Tex
   };
 }
 
-/** The menu, open where it was asked for, on what; or none. */
+/** The structures the coordinates in a column's text hold - what is selected, or the whole of it - none where there are none or no text's. */
+export function structuresIn(t: TextMenuTarget): CoordinateStructure[] {
+  if (!t.text) return [];
+  return readCoordinates(t.selected() || t.text.whole());
+}
+
+/** The menu, open where it was asked for, on what; or none. And what 3D Structures does with what it found, where the workspace takes them (`structures`). */
 export const useTextMenu = create<{
   at: { x: number; y: number; target: TextMenuTarget } | null;
   open: (x: number, y: number, target: TextMenuTarget) => void;
   close: () => void;
+  structures: ((found: CoordinateStructure[], name: string) => void) | null;
+  takeStructures: (take: ((found: CoordinateStructure[], name: string) => void) | null) => void;
 }>((set) => ({
   at: null,
   open: (x, y, target) => set({ at: { x, y, target } }),
   close: () => set({ at: null }),
+  structures: null,
+  takeStructures: (take) => set({ structures: take }),
 }));
