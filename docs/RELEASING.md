@@ -118,7 +118,9 @@ where they are):
   not uninstalled first; a desktop shortcut is made, as the finish page
   used to by default.
 - If Meno is running, it asks to close it before its window shows;
-  declined, it ends having done nothing.
+  declined, it ends having done nothing. If installing stops part way (a
+  file that cannot be written, and *Abort* chosen), it says Meno could not
+  be installed and ends - the window has no button to close it by.
 - Quiet runs - an update's `/S /UPDATE`, with `/R` and `/ARGS` to start
   Meno again - show nothing and do what Tauri's do. The uninstaller is
   Tauri's, its page asking whether to delete Meno's data included.

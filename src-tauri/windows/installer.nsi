@@ -13,7 +13,9 @@
 ;   not uninstalled first, so the shortcuts and pins stay (no MSI of Meno was
 ;   ever published, so the WiX migration went with the reinstall page);
 ; - a desktop shortcut is made as the finish page's ticked box made it;
-; - Meno running is asked about before the window shows (MenoInstFilesPre);
+; - Meno running is asked about before the window shows (MenoInstFilesPre),
+;   and installing stopped part way is said and the installer quits
+;   (MenoInstFilesLeave), as the window has no button to close it;
 ; - the installing page is restyled (MenoGuiInit, MenoInstFilesShow), and
 ;   Meno is started at the end (.onInstSuccess).
 ; Quiet installs (/S, as an update runs it: /S /UPDATE, with /R and /ARGS to
@@ -222,10 +224,11 @@ Var AppStartMenuFolder
 !insertmacro MUI_PAGE_STARTMENU Application $AppStartMenuFolder
 
 ; 2. Installation page: Meno's small window (MenoInstFilesPre,
-;    MenoInstFilesShow). It closes by itself (SetAutoClose in Install), and
-;    there is no finish page.
+;    MenoInstFilesShow, MenoInstFilesLeave). It closes by itself
+;    (SetAutoClose in Install), and there is no finish page.
 !define MUI_PAGE_CUSTOMFUNCTION_PRE MenoInstFilesPre
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW MenoInstFilesShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE MenoInstFilesLeave
 !insertmacro MUI_PAGE_INSTFILES
 
 Function RunMainBinary
@@ -835,6 +838,17 @@ Function MenoInstFilesPre
     ${EndIf}
     !insertmacro RestartManager_EndSession $R0
   ${EndIf}
+FunctionEnd
+
+Function MenoInstFilesLeave
+  ; Called as installing ends. Stopped part way (a file that could not be
+  ; written and the user chose Abort, or an Abort of the script's): the
+  ; window, which has no button to close it, would stay saying "Installing".
+  ; It says so instead and quits, Meno not started.
+  IfAbort 0 meno_installed
+    MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} could not be installed: installing stopped before it was done. Open the installer again to try again."
+    Quit
+  meno_installed:
 FunctionEnd
 
 Function MenoInstFilesShow
