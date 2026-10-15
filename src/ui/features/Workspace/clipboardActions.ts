@@ -80,7 +80,7 @@ export function useClipboardActions(
     const inks = only != null ? [] : state.inks.filter((k) => state.selInks.has(k.id));
     // (and the catalytic cycles selected, with what lies on them and the words of their arrows coming in and going out)
     const cycles = only != null ? [] : state.cycles.filter((c) => state.selCycles.has(c.id));
-    const onCycles = cycles.length ? cycles.map((c) => carriedByCycle(c, cycleThings(model, state.captions, styleOf(state.docStyle)))) : [];
+    const onCycles = cycles.length ? cycles.map((c) => carriedByCycle(c, cycleThings(model, state.captions, styleOf(state.docStyle), cycles))) : [];
     words.push(...state.captions.filter((c) => onCycles.some((o) => o.captions.includes(c.id)) && !words.some((w) => w.id === c.id)));
     const others = pictures.length + words.length + pdfs.length + sheets.length + slides.length + shapes.length + lone.length + lonePluses.length + inks.length + cycles.length > 0;
     const heldAtoms = new Set([...held.flatMap((h) => h.structures.flat()), ...onCycles.flatMap((o) => o.atoms)]);

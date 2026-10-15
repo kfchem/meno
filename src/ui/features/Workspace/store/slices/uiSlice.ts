@@ -163,10 +163,10 @@ export function createUiSlice(
     },
 
     // (one colour given to all a selection holds - atoms and bonds, electron
-    // arrows, words, reaction arrows, writing by hand - as one step; the
+    // arrows, words, reaction arrows, writing by hand, catalytic cycles - as one step; the
     // system's chooser dragged through colours, one step for all of it)
     colourTogether: (
-      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[]; cycles?: readonly number[] },
       color: string | null,
       gesture?: string,
     ) => {
@@ -177,6 +177,7 @@ export function createUiSlice(
           if (what.words?.length) n = ops.markCaptions(n, what.words, (c) => marksAll(c.text, c.marks, { color }));
           if (what.arrows?.length) n = ops.setArrowForm(n, what.arrows, { color });
           if (what.inks?.length) n = ops.colourInks(n, what.inks, color);
+          for (const id of what.cycles ?? []) n = ops.updateCycle(n, id, { color });
           return n;
         },
         gesture ? gestureStep(`colour:color:${gesture}`) : undefined,

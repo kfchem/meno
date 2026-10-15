@@ -22,8 +22,13 @@ export function createCyclesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       const id = doc.getState().nextCycleId ?? 1;
       return doc.edit("add cycle", (d) => ops.addCycle(d, cycle)) ? id : null;
     },
-    updateCycle: (id: number, patch: ops.CyclePatch, gesture?: string) =>
-      doc.edit(patch.ccw !== undefined ? "turn cycle round" : patch.branches ? "change cycle's arrows" : "change cycle", (d) => ops.updateCycle(d, id, patch), gesture ? gestureStep(`cycle:${id}:${gesture}`) : {}),
+    // (with the words by its arrows put where they go, as it is turned round: `captions`)
+    updateCycle: (id: number, patch: ops.CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) =>
+      doc.edit(
+        patch.ccw !== undefined ? "turn cycle round" : patch.branches ? "change cycle's arrows" : "change cycle",
+        (d) => ops.placeMarks(ops.updateCycle(d, id, patch), captions?.length ? { captions } : undefined),
+        gesture ? gestureStep(`cycle:${id}:${gesture}`) : {},
+      ),
     removeCycle: (id: number) => {
       if (doc.edit("delete cycle", (d) => ops.removeCycles(d, [id])))
         set((prev: EditorState) => ({ ...prev, hoveredCycle: prev.hoveredCycle === id ? null : prev.hoveredCycle }));

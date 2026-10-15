@@ -7,7 +7,7 @@ import { cycleArrows, cycleMembers, type Cycle } from "../../../../lib/chem/cycl
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
-import { carriedByCycle, CycleEase, cyclePointed, cycleThings, thingKey } from "../utils/cycles";
+import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, thingKey } from "../utils/cycles";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { COLORS } from "../../../theme/colors";
 import ReactionArrow2D from "./ReactionArrow2D";
@@ -43,7 +43,7 @@ export default function Cycles2D() {
   const camera = useThree((st) => st.camera);
   const gl = useThree((st) => st.gl);
   const zoom = useDrawnZoom((z) => z);
-  const things = useMemo(() => cycleThings(model, captions, styleOf(docStyle)), [model, captions, docStyle]);
+  const things = useMemo(() => cycleThings(model, captions, styleOf(docStyle), cycles), [model, captions, docStyle, cycles]);
   const toWorld = useCallback(
     (cx: number, cy: number): Pt => {
       const rect = gl.domElement.getBoundingClientRect();
@@ -68,13 +68,18 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
   const now = useMemo(() => cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH).map((m) => ({ ...m, key: thingKey(things[m.index]) })), [c, things]);
   const ease = useRef(new CycleEase());
   ease.current.take(now);
+  // (and the cycle's own changes: turned round, an arrow coming in or going out put there or taken away)
+  const change = useRef(new CycleChange());
+  change.current.take(c);
   const [, setStep] = useState(0);
   useFrame((_, dt) => {
-    if (!ease.current.step(Math.min(dt, 1 / 30))) return;
+    const d = Math.min(dt, 1 / 30);
+    const moving = ease.current.step(d);
+    if (!change.current.step(d) && !moving) return;
     setStep((n) => n + 1);
     invalidate();
   });
-  const arrows = cycleArrows(c, [], NOMINAL_BOND_LENGTH, ease.current.members());
+  const arrows = cycleArrows(c, [], NOMINAL_BOND_LENGTH, ease.current.members(), change.current.motion());
   const slack = EDGE_PX / Math.max(zoom, 1e-6);
   const handle = HANDLE_PX / Math.max(zoom, 1e-6);
   const hp = { x: c.x + c.r * Math.cos(HANDLE_AT), y: c.y + c.r * Math.sin(HANDLE_AT) };
@@ -151,11 +156,12 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
     e.stopPropagation();
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
-    const carried = carriedByCycle(c, cycleThings(st.model, st.captions, styleOf(st.docStyle)));
+    const here = cycleThings(st.model, st.captions, styleOf(st.docStyle), [c]);
+    const carried = carriedByCycle(c, here);
     const atoms = st.model.atoms.filter((a) => carried.atoms.includes(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
     const words = st.captions.filter((w) => carried.captions.includes(w.id)).map((w) => ({ id: w.id, x: w.x, y: w.y }));
     // (each structure, or words, moved as its middle is - out along the line from the cycle's middle)
-    const groups = cycleThings(st.model, st.captions, styleOf(st.docStyle)).filter((t) => (t.atoms ? t.atoms.some((id) => carried.atoms.includes(id)) : carried.captions.includes(t.caption!)));
+    const groups = here.filter((t) => (t.atoms ? t.atoms.some((id) => carried.atoms.includes(id)) : carried.captions.includes(t.caption!)));
     const gesture = `cycle-size-${performance.now()}`;
     const onMoveDrag = (mv: PointerEvent) => {
       const p = toWorld(mv.clientX, mv.clientY);
@@ -193,7 +199,7 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
       {arrows.map((a, i) => {
         const dx = (Math.cos(a.angle) * a.length) / 2;
         const dy = (Math.sin(a.angle) * a.length) / 2;
-        return <ReactionArrow2D key={i} x1={a.x - dx} y1={a.y - dy} x2={a.x + dx} y2={a.y + dy} form={a} color={a.color} />;
+        return <ReactionArrow2D key={i} x1={a.x - dx} y1={a.y - dy} x2={a.x + dx} y2={a.y + dy} form={a} color={a.color} headScale={a.headScale} />;
       })}
       {/* (lit along its line under the pointer, and more while it is selected) */}
       {lit > 0 && (

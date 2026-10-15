@@ -293,7 +293,7 @@ export function drawingLayout(
   const set = labelSetOf(opts);
   const arrows = arrowsWithWords(model.arrows ?? [], model.captions ?? [], opts.fontPx, set, opts.pointPx);
   // (and the catalytic cycles' arrows, as reaction arrows are drawn: lib/chem/cycle)
-  const cycled = model.cycles?.length ? arrowsOfCycles(model.cycles, cycleThings(model, model.captions ?? [], style)) : [];
+  const cycled = model.cycles?.length ? arrowsOfCycles(model.cycles, cycleThings(model, model.captions ?? [], style, model.cycles)) : [];
   const pieces = schemePieces({ ...model, arrows: [...arrows, ...cycled] }, style, NOMINAL_BOND_LENGTH);
   if (pieces.length) {
     const points = pieces.flatMap((o) => o.points);

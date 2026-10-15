@@ -614,6 +614,7 @@ export default function PartMenu({
       ? [...colour, del("Delete writing")]
       : target.kind === "cycle" && cycle
       ? [
+          ...colour,
           { name: "Arrow coming in", keys: "", run: cycle.onIn },
           { name: "Arrow going out", keys: "", run: cycle.onOut },
           ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),

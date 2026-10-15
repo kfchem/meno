@@ -24,8 +24,20 @@ export type CycleBranch = { at: number; way: "in" | "out" };
 /** A cycle: its middle and radius, in the drawing's units; the way it goes (clockwise, unless `ccw`); the arrows coming in and going out; its colour (#rrggbb; none, the bonds' ink). */
 export type Cycle = { id: number; x: number; y: number; r: number; ccw?: true; branches?: CycleBranch[]; color?: string };
 
-/** An arrow as a cycle draws it: where its middle is, which way it points and how long it is, and its form - as a reaction arrow is kept. */
-export type CycleArrow = ArrowForm & { x: number; y: number; angle: number; length: number; color?: string };
+/**
+ * An arrow as a cycle draws it: where its middle is, which way it points and
+ * how long it is, and its form - as a reaction arrow is kept. While the cycle
+ * changes, its head may be drawn smaller (`headScale`, a share of its size).
+ */
+export type CycleArrow = ArrowForm & { x: number; y: number; angle: number; length: number; color?: string; headScale?: number };
+
+/**
+ * A cycle caught changing, drawn on the way rather than at a jump: turning
+ * round to the way it goes now (`turn`, from 0, just turned, to 1, done),
+ * and its arrows coming in and going out, each as far grown as it is (0 to
+ * 1: one put there growing, one taken away going).
+ */
+export type CycleMotion = { turn?: number; branches?: readonly { b: CycleBranch; grown: number }[] };
 
 /**
  * What is on a cycle: which of the boxes given, at what angle round it, and
@@ -101,7 +113,7 @@ function arcPoints(c: Pick<Cycle, "x" | "y" | "r">, a: number, sweep: number): P
 }
 
 /** An arrow along points, from the first to the last, as a reaction arrow is kept: its ends, and the rest as its corners. */
-function arrowThrough(points: readonly P[], form: ArrowForm, color?: string): CycleArrow | null {
+function arrowThrough(points: readonly P[], form: ArrowForm, color?: string, headScale?: number): CycleArrow | null {
   const from = points[0];
   const to = points[points.length - 1];
   const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -114,7 +126,23 @@ function arrowThrough(points: readonly P[], form: ArrowForm, color?: string): Cy
     ...form,
     ...(points.length > 2 ? { corners: points.slice(1, -1).map((p) => cornerAt(from, to, p)) } : {}),
     ...(color ? { color } : {}),
+    ...(headScale !== undefined && headScale < 1 && form.heads !== 0 ? { headScale: Math.max(headScale, 0) } : {}),
   };
+}
+
+/** Points along a line through `points`, cut at a share `s` of the way along it: the part before, and the part after, both with the point cut at. */
+function cutAt(points: readonly P[], s: number): [P[], P[]] {
+  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  let left = Math.min(Math.max(s, 0), 1) * lengths.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < lengths.length; i++) {
+    if (left <= lengths[i] || i === lengths.length - 1) {
+      const t = lengths[i] > 0 ? Math.min(left / lengths[i], 1) : 0;
+      const at = { x: points[i].x + (points[i + 1].x - points[i].x) * t, y: points[i].y + (points[i + 1].y - points[i].y) * t };
+      return [[...points.slice(0, i + 1), at], [at, ...points.slice(i + 1)]];
+    }
+    left -= lengths[i];
+  }
+  return [[...points], [points[points.length - 1]]];
 }
 
 /** A quadratic curve's points, from `s` by `q` to `e`. */
@@ -155,9 +183,15 @@ export function branchPath(c: Pick<Cycle, "x" | "y" | "r" | "ccw">, b: CycleBran
  * reaction arrow; the circle whole, with nothing on it, as two halves with
  * no heads; and each arrow coming in (no head: it joins the stretch, which
  * goes on) or going out (its head at its far end). What is on it may be
- * given as it is being drawn (`members`) - one coming on, or going off.
+ * given as it is being drawn (`members`) - one coming on, or going off -
+ * and the cycle caught changing (`motion`): turning round, each stretch's
+ * head travels along it from the end it was at to the other, turning about
+ * half way, where it is smallest; an arrow coming in or going out turns
+ * from the one side to the other; one growing comes in from its far end, or
+ * goes out from the circle.
  */
-export function cycleArrows(c: Cycle, boxes: readonly CycleBox[], bond: number, members: readonly CycleMember[] = cycleMembers(c, boxes, bond)): CycleArrow[] {
+export function cycleArrows(c: Cycle, boxes: readonly CycleBox[], bond: number, members: readonly CycleMember[] = cycleMembers(c, boxes, bond), motion: CycleMotion = {}): CycleArrow[] {
+  const turn = motion.turn ?? 1;
   const way = wayOf(c);
   const out: CycleArrow[] = [];
   const push = (a: CycleArrow | null) => a && out.push(a);
@@ -173,10 +207,32 @@ export function cycleArrows(c: Cycle, boxes: readonly CycleBox[], bond: number, 
       if (ranked.length === 1) gap = 2 * Math.PI;
       const sweep = gap - m.half - next.half;
       if (sweep <= STEP / 2) return;
-      push(arrowThrough(arcPoints(c, start, sweep * way), next.passing ? { heads: 0 } : {}, c.color));
+      const points = arcPoints(c, start, sweep * way);
+      if (next.passing || turn >= 1) return push(arrowThrough(points, next.passing ? { heads: 0 } : {}, c.color));
+      // (turning round: its head part of the way along, pointing the way it went until half way, then the way it goes)
+      const [before, after] = cutAt(points, turn);
+      if (turn >= 0.5) {
+        push(arrowThrough(before, {}, c.color, 2 * turn - 1));
+        push(arrowThrough(after, { heads: 0 }, c.color));
+      } else {
+        push(arrowThrough(before, { heads: 0 }, c.color));
+        push(arrowThrough([...after].reverse(), {}, c.color, 1 - 2 * turn));
+      }
     });
   }
-  for (const b of c.branches ?? []) push(arrowThrough(branchPath(c, b, bond).points, b.way === "in" ? { heads: 0 } : {}, c.color));
+  const was = { ...c, ccw: c.ccw ? undefined : (true as const) };
+  for (const { b, grown } of motion.branches ?? (c.branches ?? []).map((b) => ({ b, grown: 1 }))) {
+    let points = branchPath(c, b, bond).points;
+    // (turning round: from the side it joined on to the other, point by point)
+    if (turn < 1) {
+      const from = branchPath(was, b, bond).points;
+      points = points.map((p, i) => ({ x: from[i].x + (p.x - from[i].x) * turn, y: from[i].y + (p.y - from[i].y) * turn }));
+    }
+    if (grown <= 0) continue;
+    // (growing: coming in from its far end, or going out from the circle)
+    if (grown < 1) points = cutAt(points, grown)[0];
+    push(arrowThrough(points, b.way === "in" ? { heads: 0 } : {}, c.color, grown < 1 && b.way === "out" ? grown : undefined));
+  }
   return out;
 }
 

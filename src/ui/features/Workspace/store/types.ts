@@ -1046,8 +1046,8 @@ export type EditorState = {
   selectCycles: (ids: Iterable<number>, add?: boolean) => void;
   /** A cycle put on the page, as one step; its id, or null where none was. */
   addCycle: (cycle: Omit<Cycle, "id">) => number | null;
-  /** A cycle turned round, given arrows coming in and going out, or a colour: one step, or one a gesture's changes make together. */
-  updateCycle: (id: number, patch: CyclePatch, gesture?: string) => void;
+  /** A cycle turned round, given arrows coming in and going out, or a colour - the words by its arrows put where `captions` says - one step, or one a gesture's changes make together. */
+  updateCycle: (id: number, patch: CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) => void;
   removeCycle: (id: number) => void;
   /**
    * The arrows and "+" signs selected for themselves - one standing alone,
@@ -1307,7 +1307,7 @@ export type EditorState = {
   colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
   /** One colour given to all a selection holds - atoms and bonds, electron arrows, words, reaction arrows, writing by hand - as one step. */
   colourTogether: (
-    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[]; cycles?: readonly number[] },
     color: string | null,
     gesture?: string,
   ) => void;

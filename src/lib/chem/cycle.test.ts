@@ -120,6 +120,64 @@ describe("an arrow coming in or going out", () => {
   });
 });
 
+describe("a cycle caught changing", () => {
+  const three = [box(0, 4), box(4 * Math.cos(-Math.PI / 6), 4 * Math.sin(-Math.PI / 6)), box(-4 * Math.cos(-Math.PI / 6), 4 * Math.sin(-Math.PI / 6))];
+  const headsOf = (arrows: ReturnType<typeof cycleArrows>) => arrows.filter((a) => a.heads !== 0);
+  const tipOf = (a: ReturnType<typeof cycleArrows>[number]) => last(ends(a));
+
+  it("turning round, has each stretch's head travel along it, smallest half way, the way it went and then the way it goes", () => {
+    const turned = { ...c, ccw: true as const };
+    const done = cycleArrows(turned, three, BOND);
+    const before = cycleArrows(c, three, BOND);
+    const start = cycleArrows(turned, three, BOND, undefined, { turn: 0 });
+    const early = cycleArrows(turned, three, BOND, undefined, { turn: 0.25 });
+    const late = cycleArrows(turned, three, BOND, undefined, { turn: 0.75 });
+    // (just turned, as it was: its heads where they were)
+    const at = (xs: ReturnType<typeof cycleArrows>) => headsOf(xs).map((a) => deg(tipOf(a))).sort((p, q) => p - q);
+    at(start).forEach((d, i) => expect(d).toBeCloseTo(at(before)[i], 5));
+    // (on the way: as many heads, smaller, between where they were and where they go)
+    for (const xs of [early, late]) {
+      expect(headsOf(xs)).toHaveLength(3);
+      for (const a of headsOf(xs)) {
+        expect(a.headScale).toBeGreaterThan(0.4);
+        expect(a.headScale).toBeLessThan(0.6);
+      }
+    }
+    // (the same circle drawn all the way: as long in all, at every point of the turn)
+    const total = (xs: ReturnType<typeof cycleArrows>) => xs.reduce((n, a) => n + ends(a).slice(1).reduce((m, p, i) => m + Math.hypot(p.x - ends(a)[i].x, p.y - ends(a)[i].y), 0), 0);
+    expect(total(early)).toBeCloseTo(total(done), 3);
+    expect(total(late)).toBeCloseTo(total(done), 3);
+    expect(done.every((a) => a.headScale === undefined)).toBe(true);
+  });
+
+  it("turning round, swings an arrow coming in from the one side to the other, joining where it did", () => {
+    const b = { at: Math.PI / 2, way: "in" as const };
+    const half = cycleArrows({ ...c, ccw: true, branches: [b] }, [], BOND, undefined, { turn: 0.5 });
+    const branch = last(half);
+    const pts = ends(branch);
+    // (half way round: straight out from where it joins)
+    expect(last(pts).x).toBeCloseTo(0, 5);
+    expect(last(pts).y).toBeCloseTo(4, 5);
+    expect(Math.abs(pts[0].x)).toBeLessThan(1e-6);
+  });
+
+  it("grows an arrow going out from the circle, and one coming in from its far end", () => {
+    const out = { at: Math.PI / 2, way: "out" as const };
+    const into = { at: Math.PI / 2, way: "in" as const };
+    const full = branchPath(c, out, BOND);
+    const [grown] = cycleArrows({ ...c, branches: [out] }, [], BOND, undefined, { branches: [{ b: out, grown: 0.5 }] }).slice(-1);
+    expect(ends(grown)[0].x).toBeCloseTo(full.points[0].x, 5);
+    expect(Math.hypot(tipOf(grown).x - full.end.x, tipOf(grown).y - full.end.y)).toBeGreaterThan(0.5);
+    expect(grown.headScale).toBeCloseTo(0.5);
+    const [coming] = cycleArrows({ ...c, branches: [into] }, [], BOND, undefined, { branches: [{ b: into, grown: 0.5 }] }).slice(-1);
+    const fullIn = branchPath(c, into, BOND);
+    expect(ends(coming)[0].x).toBeCloseTo(fullIn.end.x, 5);
+    expect(Math.hypot(tipOf(coming).x, tipOf(coming).y - 4)).toBeGreaterThan(0.5);
+    // (gone: not drawn)
+    expect(cycleArrows({ ...c, branches: [] }, [], BOND, undefined, { branches: [{ b: out, grown: 0 }] })).toHaveLength(2);
+  });
+});
+
 describe("an arrow with no head", () => {
   it("is its line alone", () => {
     const m: ArrowMeasures = { thickness: 0.1, headLength: 0.5, headWidth: 0.4, inset: 0, round: false };

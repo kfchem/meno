@@ -39,7 +39,7 @@ export function dragSelection(
   const held = sets.map((b) => setMembers(st, b));
   // (a catalytic cycle selected takes what lies on it along, and the words of its arrows coming in and going out)
   const cycles = st.cycles.filter((c) => st.selCycles.has(c.id));
-  const things = cycleThings(st.model, st.captions, styleOf(st.docStyle));
+  const things = cycles.length ? cycleThings(st.model, st.captions, styleOf(st.docStyle), cycles) : [];
   const onCycles = cycles.map((c) => carriedByCycle(c, things));
   const takenAtoms = new Set([...st.sel.atoms, ...held.flatMap((h) => h.structures.flat()), ...onCycles.flatMap((o) => o.atoms)]);
   const takenSolids = new Set([...st.sel3d, ...held.flatMap((h) => h.molecules)]);
@@ -94,9 +94,11 @@ export function dragSelection(
   const ontoCycle = () => {
     const s = store.getState();
     if (cycles.length || !s.cycles.length) return;
-    const now = cycleThings(s.model, s.captions, styleOf(s.docStyle));
+    const now = cycleThings(s.model, s.captions, styleOf(s.docStyle), s.cycles);
     const moved = now.filter((t) => (t.atoms ? t.atoms.some((id) => takenAtoms.has(id)) : words.some((w) => w.id === t.caption)));
-    if (moved.length !== 1 || (moved[0].atoms && moved[0].atoms.some((id) => !takenAtoms.has(id)))) return;
+    // (one thing alone moved, all of it: one structure, or words)
+    const whole = moved.length === 1 && (moved[0].atoms ? moved[0].atoms.length === takenAtoms.size && !words.length : !takenAtoms.size && words.length === 1);
+    if (!whole) return;
     const by = snapToCycles(s.cycles, moved[0].box);
     if (!by) return;
     const t = moved[0];

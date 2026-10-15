@@ -167,7 +167,7 @@ import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
-import { cyclePointed } from "./utils/cycles";
+import { cyclePointed, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS } from "../../../lib/chem/cycle";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
@@ -1932,7 +1932,7 @@ function WorkspaceContent({
               onOut: () => add("out"),
               ...(near >= 0 ? { onRemoveArrow: () => st.updateCycle(cy.id, { branches: branches.filter((_, i) => i !== near) }) } : {}),
               ccw: !!cy.ccw,
-              onTurn: () => st.updateCycle(cy.id, { ccw: !cy.ccw }),
+              onTurn: () => turnCycle(store, cy.id),
             };
           })()}
           shape={(() => {
@@ -2120,8 +2120,8 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size || st.selCycles.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks], cycles: [...st.selCycles] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
@@ -2137,6 +2137,8 @@ function WorkspaceContent({
                     ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
                     : menu.kind === "arrow" && menu.id != null
                     ? { atoms: [], bonds: [], rings: [], arrows: [menu.id] }
+                    : menu.kind === "cycle" && menu.id != null
+                    ? { atoms: [], bonds: [], rings: [], cycles: [menu.id] }
                     : menu.kind === "ring" && menu.ring
                       ? (() => {
                           const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
