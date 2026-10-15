@@ -258,9 +258,11 @@ uv, no package), and the script Blender runs, `render.py`.
   species (oak, walnut, cherry, maple, ebony, or each element its own), clay's
   colour (one colour, terracotta, or the element colours), porcelain's
   finish (porcelain, or pearl: a cream white with a soft pink and green
-  orient), fur's pile (long, or short and dense as velvet - a hair's length
-  and how many hairs there are being the same in the scene's units on every
-  ball and stick, as fractions of a ball's size) and
+  orient), fur's pile (long, or short and dense as velvet - a hair's length is a
+  fixed fraction of its own part's radius and every ball and stick has the
+  same number of hairs, whatever scale the shape has in the scene), ice
+  (clear with cloudy cores, melting - the surface in lumps by displacement,
+  frosted, or cracked) and
   marble's pattern (Carrara, long veins laid in the molecule's own space so
   that they run on across atoms and sticks, or swirls on each atom). The
   metals' reflectances are the published F0 values of Hoffman's table of

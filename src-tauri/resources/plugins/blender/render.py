@@ -47,7 +47,7 @@ The settings (all checked by the worker that wrote them):
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
     look        the look's name; those with materials and light of their own (looks.py) are made by it
-    silver_finish, copper_finish, wood, marble, pile, clay_colour, porcelain_finish   the choices that adjust them
+    silver_finish, copper_finish, wood, marble, pile, ice, clay_colour, porcelain_finish   the choices that adjust them
     shading     "lit", as a renderer lights it, or "toon": each material a Toon BSDF in the colour it had,
                 lit in one band - `band` its size - which Cycles draws as a band, without noise removal
     outlines    "none", "thin" (Freestyle's lines, one pixel), "outer" (the picture's silhouette grown
@@ -250,7 +250,7 @@ def own_look(scene, s):
     scene.cycles.use_denoising = s["denoise"] and s["shading"] != "toon"
     scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
     camera = scene.camera
-    looks.apply(scene, camera, s["look"], {"silver_finish": s["silver_finish"], "copper_finish": s["copper_finish"], "wood": s["wood"], "marble": s["marble"], "pile": s["pile"],
+    looks.apply(scene, camera, s["look"], {"silver_finish": s["silver_finish"], "copper_finish": s["copper_finish"], "wood": s["wood"], "marble": s["marble"], "pile": s["pile"], "ice": s["ice"],
          "clay-colour": s["clay_colour"], "porcelain-finish": s["porcelain_finish"]}, s["background"])
     looks.settle_denoising(scene)
     scene.render.film_transparent = True
