@@ -234,7 +234,11 @@ it hidden, and `restore` shows it, so it never appears at the default size and
 moves (the no-abrupt-changes rule). Where the kept frame is not mostly on a
 monitor there is now - one unplugged, a resolution or scale changed - it is
 brought onto the nearest, its title bar within reach, or centred at the default
-size where there is none (`place`, with its tests). The talk's window and any
+size where there is none (`place`, with its tests). The size kept is the
+inner one - what `set_size` takes - and the place the outer one, so that a
+frameless window's larger outer frame on Windows does not grow it at every
+start; a maximized window is shown at its frame before it is maximized on
+Windows, so that it goes back to it. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log

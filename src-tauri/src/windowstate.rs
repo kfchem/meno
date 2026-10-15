@@ -164,6 +164,13 @@ pub fn restore(w: &WebviewWindow, data: Option<&Path>) {
         Some((Placement::At(r), s)) => {
             let _ = w.set_size(tauri::PhysicalSize::new(r.w as u32, r.h as u32));
             let _ = w.set_position(tauri::PhysicalPosition::new(r.x, r.y));
+            // (on Windows a window maximized while hidden loses the frame it goes back to,
+            // and unmaximized lands at the system's own place: it is shown at its frame first,
+            // then maximized - on the Mac and elsewhere, maximized before it is seen)
+            #[cfg(windows)]
+            if s.maximized || s.fullscreen {
+                let _ = w.show();
+            }
             if s.maximized {
                 let _ = w.maximize();
             }
@@ -196,7 +203,10 @@ fn snapshot(w: &Window, before: Option<State>) -> Option<State> {
     s.maximized = w.is_maximized().unwrap_or(false);
     s.fullscreen = w.is_fullscreen().unwrap_or(false);
     if !s.maximized && !s.fullscreen {
-        let (p, size, scale) = (w.outer_position().ok()?, w.outer_size().ok()?, w.scale_factor().ok()?);
+        // (its size as `set_size` takes it - the inner one: a frameless window's outer
+        // frame is larger on Windows, and kept so it grew at every start - and its
+        // place as `set_position` takes it, the outer one)
+        let (p, size, scale) = (w.outer_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
         if size.width == 0 || size.height == 0 || scale <= 0.0 {
             return None;
         }
@@ -246,6 +256,33 @@ pub fn on_event(w: &Window, event: &tauri::WindowEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A window as the kept state sees it: `set_size` sets the inner size, whose outer frame is larger by a fixed amount.
+    struct Fake {
+        inner: (u32, u32),
+        frame: (u32, u32),
+    }
+
+    impl Fake {
+        fn outer(&self) -> (u32, u32) {
+            (self.inner.0 + self.frame.0, self.inner.1 + self.frame.1)
+        }
+    }
+
+    #[test]
+    fn the_size_kept_and_set_again_does_not_grow_by_the_frame() {
+        let mut w = Fake { inner: (1700, 1100), frame: (24, 64) };
+        let scale = 1.75;
+        for _ in 0..3 {
+            // (kept: the inner size, in logical pixels; set again: at the scale it is on)
+            let kept = State { x: 0, y: 0, width: w.inner.0 as f64 / scale, height: w.inner.1 as f64 / scale, scale, maximized: false, fullscreen: false };
+            let screens = [Screen { frame: Rect { x: 0, y: 0, w: 3840, h: 2160 }, scale }];
+            let Placement::At(r) = place(&kept, &screens) else { panic!("placed") };
+            w.inner = (r.w as u32, r.h as u32);
+            assert_eq!(w.inner, (1700, 1100));
+            let _ = w.outer();
+        }
+    }
 
     const ONE: Screen = Screen { frame: Rect { x: 0, y: 0, w: 1920, h: 1080 }, scale: 1.0 };
     const RIGHT: Screen = Screen { frame: Rect { x: 1920, y: 0, w: 2560, h: 1440 }, scale: 1.0 };
