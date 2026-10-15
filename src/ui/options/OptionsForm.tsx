@@ -1,4 +1,4 @@
-import { MANY_CHOICES, type Option, type OptionValues } from "../../lib/options";
+import { MANY_CHOICES, shownOptions, type Option, type OptionValues } from "../../lib/options";
 
 /**
  * A role's options, drawn from their general form (lib/options): a choice
@@ -11,15 +11,24 @@ export default function OptionsForm({
   options,
   values,
   onChange,
+  context,
 }: {
   options: readonly Option[];
   values: OptionValues;
   onChange: (values: OptionValues) => void;
+  /** Values of other options shown beside these, which an option's `when` may name. */
+  context?: OptionValues;
 }) {
-  const set = (id: string, v: string | number | boolean) => onChange({ ...values, [id]: v });
-  return (
-    <div className="space-y-3">
-      {options.map((o) => (
+  const set = (id: string, v: string | number | boolean) => {
+    // (a choice that fills in others - a preset's parts - sets them with it)
+    const option = options.find((o) => o.id === id);
+    const sets = option?.type === "choice" ? option.choices.find((c) => c.value === v)?.sets : undefined;
+    onChange({ ...values, ...(sets ?? {}), [id]: v });
+  };
+  const shown = shownOptions(options, values, context);
+  // (those of one group folded together where the first of them is, under its name)
+  const first = new Set(shown.filter((o, i) => o.group && shown.findIndex((x) => x.group === o.group) === i).map((o) => o.id));
+  const field = (o: Option) => (
         <div key={o.id}>
           {o.type === "choice" && o.choices.length > MANY_CHOICES ? (
             <label className="block">
@@ -73,7 +82,19 @@ export default function OptionsForm({
             </label>
           )}
         </div>
-      ))}
+  );
+  return (
+    <div className="space-y-3">
+      {shown.map((o) => {
+        if (!o.group) return field(o);
+        if (!first.has(o.id)) return null;
+        return (
+          <details key={`group-${o.group}`} className="rounded-md border border-gh-line px-2 py-1.5">
+            <summary className="cursor-pointer select-none text-xs text-gh-gray">{o.group}</summary>
+            <div className="mt-2 space-y-3">{shown.filter((x) => x.group === o.group).map(field)}</div>
+          </details>
+        );
+      })}
     </div>
   );
 }

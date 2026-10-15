@@ -64,6 +64,9 @@ import { useReaders } from "../../../../lib/calc/workers";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, madeStoreOf, storeOf } from "../store";
 
+/** The look as the canvas draws it: lit, and not outlined. */
+const LIT = { look: "meno", shading: "lit", outlines: "none", outline: 3, outlineColour: "black", band: 0.5 };
+
 describe("a render", () => {
   it("is as far as its job last said, in lines of its log", () => {
     expect(progressOf("Blender 5.2\nprogress 0/240\nFra:1\nprogress 12/240\nFra:13 Mem: 30M\n")).toEqual({ done: 12, total: 240 });
@@ -75,12 +78,12 @@ describe("a render", () => {
 
   it("is asked for by Meno's own choices: a picture's size and shape, a film's motion, length and rate - offered only where they can be", () => {
     const picture = renderOptions("picture", ["turn"], false);
-    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "molecules"]);
+    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "shading", "band", "outlines", "outline", "outline_colour"]);
     const film = renderOptions("film", ["turn", "frames"], true);
-    expect(film.map((o) => o.id)).toEqual(["motion", "seconds", "fps", "width", "shape", "molecules", "surfaces"]);
+    expect(film.map((o) => o.id)).toEqual(["motion", "seconds", "fps", "width", "shape", "look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
     const ask = askOf("film", valuesOf(film));
-    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno" });
-    expect(askOf("picture", valuesOf(picture))).toEqual({ kind: "picture", width: 2400, shape: "fit", molecules: "meno", surfaces: "meno" });
+    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno", finish: LIT });
+    expect(askOf("picture", valuesOf(picture))).toEqual({ kind: "picture", width: 2400, shape: "fit", molecules: "meno", surfaces: "meno", finish: LIT });
   });
 });
 
