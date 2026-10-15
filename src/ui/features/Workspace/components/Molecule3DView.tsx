@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { TAU } from "../../../theme/motion";
 import { buttonHeld } from "./buttonHeld";
-import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, linedBall, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
@@ -23,7 +23,7 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
-import { byAtomOf, fadeOf, useShading3d } from "./shading3d";
+import { ballLinesOf, byAtomOf, fadeOf, useShading3d } from "./shading3d";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
@@ -244,7 +244,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     outlines.atoms.material.dispose();
     outlines.bonds.material.dispose();
   }, [outlines]);
-  const lineLook = useRef<{ px: number; fade: number; byAtom: number } | null>(null);
+  const lineLook = useRef<{ px: number; fade: number; byAtom: number; circles: [number, number, number]; circlePx: number } | null>(null);
   // the atoms' colours as drawn now (linear RGB, three to an atom), and whether they are still going over to the style's
   const atomCols = useRef<Float32Array | null>(null);
   const recolour = useRef(true);
@@ -446,6 +446,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
     }
     recolour.current = true;
+    // (which balls carry lines, in either look: drawn as far as the look carries them)
+    const lined = new Float32Array(n);
+    for (let i = 0; i < n; i++) lined[i] = linedBall(m.atoms[i].el, style.primary) || linedBall(m.atoms[i].el, style.secondary) ? 1 : 0;
+    atoms.current.geometry.setAttribute("ballLined", new THREE.InstancedBufferAttribute(lined, 1));
     if (places.current.length !== target.length) places.current = Float32Array.from(target);
     dirty.current = true;
     invalidate();
@@ -737,10 +741,29 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const wantFade = P.depthFade + (S.depthFade - P.depthFade) * ff;
       const byAtom = (l: Style3D["primary"]) => (l.bondColouring === "byAtom" ? 1 : 0);
       const wantByAtom = byAtom(P) + (byAtom(S) - byAtom(P)) * ff;
-      const was = lineLook.current ?? { px: wantPx, fade: wantFade, byAtom: wantByAtom };
-      const ll = { px: follow(was.px, wantPx, step, LOOK_TAU), fade: follow(was.fade, wantFade, step, LOOK_TAU), byAtom: follow(was.byAtom, wantByAtom, step, LOOK_TAU) };
-      if (ll.px !== wantPx || ll.fade !== wantFade || ll.byAtom !== wantByAtom) moving = true;
+      const circlesOf = (l: Style3D["primary"]) => {
+        const k = ballCircles(l);
+        return [k >= 2 ? 1 : 0, k >= 2 ? 1 : 0, k >= 3 ? 1 : 0] as const;
+      };
+      const cp = circlesOf(P);
+      const cs = circlesOf(S);
+      const wantCircles = [0, 1, 2].map((a) => cp[a] + (cs[a] - cp[a]) * ff) as [number, number, number];
+      const wantCirclePx = P.ballLinesWidth + (S.ballLinesWidth - P.ballLinesWidth) * ff;
+      const was = lineLook.current ?? { px: wantPx, fade: wantFade, byAtom: wantByAtom, circles: wantCircles, circlePx: wantCirclePx };
+      const ll = {
+        px: follow(was.px, wantPx, step, LOOK_TAU),
+        fade: follow(was.fade, wantFade, step, LOOK_TAU),
+        byAtom: follow(was.byAtom, wantByAtom, step, LOOK_TAU),
+        circles: was.circles.map((c, a) => follow(c, wantCircles[a], step, LOOK_TAU)) as [number, number, number],
+        circlePx: follow(was.circlePx, wantCirclePx, step, LOOK_TAU),
+      };
+      if (ll.px !== wantPx || ll.fade !== wantFade || ll.byAtom !== wantByAtom || ll.circlePx !== wantCirclePx || ll.circles.some((c, a) => c !== wantCircles[a])) moving = true;
       lineLook.current = ll;
+      // (the lines on the balls: their circles, width and colour - the screen's sRGB)
+      const bl = ballLinesOf(atomsMat.current);
+      bl.amount.value.set(...ll.circles);
+      bl.width.value = ll.circlePx;
+      bl.colour.value.set(P.ballLinesColor).lerp(colour.set(S.ballLinesColor), ff).convertLinearToSRGB();
       // (the sticks coloured by their atoms: each line's two ends' colours, as the atoms are coloured now)
       const bm = bonds.current;
       if (bm && bondsMat.current) {

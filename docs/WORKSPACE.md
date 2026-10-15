@@ -917,10 +917,20 @@ space-filling side by side is better science than either alone.
   balls). A pass over the finished picture finding its edges was set
   aside: it would draw lines round the page's drawing as well, and needs
   the scene drawn again for its normals.
+- **Lines on the balls** (the maintainer, 2026-10-15: "the cross lines").
+  A style may draw great circles on its balls - two or three, crossing as
+  a globe's equator and meridians do, about the molecule's own axes, so
+  that they turn with it and lie the same way on every atom - on every
+  atom's ball, every one's but hydrogen's, or carbon's alone, as wide on
+  the screen at any zoom and in a colour of their own. They are worked out
+  in the ball's shader from its normal, which in the molecule's frame is
+  the ball's own (a ball is never turned on its own): no geometry, and
+  nothing on the CPU for each atom.
 - **Outlined.** Glossy balls a quarter of each atom's size - hydrogen's
-  small - and sticks in one dark grey, each drawn round with a 1.25-pixel
-  near-black line, the back fading by half: carbon a mid grey, hydrogen
-  white, oxygen red, sulfur yellow, fluorine and chlorine light green, the
+  small - with three thin dark circles on every one, thin near-black
+  sticks, each ball and stick drawn round with a 1.5-pixel near-black
+  line, the back fading by half: carbon a mid grey, hydrogen white, oxygen
+  a bright red, sulfur yellow, fluorine and chlorine light green, the
   alkali metals lavender.
 - **Atoms' colours.** Each style has its atoms' colours, by element:
   Meno's (the elements' own) unless the style gives its own - Outlined

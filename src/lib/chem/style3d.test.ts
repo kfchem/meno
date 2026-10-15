@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ballCircles,
+  linedBall,
   FADE_MOST,
   fadeAt,
   lookOfStyle,
@@ -207,7 +209,7 @@ describe("the 3D style as chosen", () => {
 });
 
 describe("the outlined style, and what it is made of", () => {
-  it("draws a thin dark line round balls and sticks in one dark grey, its back fading, in its own colours", () => {
+  it("draws a dark line round balls and thin near-black sticks, circles on every ball, its back fading, in its own colours", () => {
     const look = look3dPreset("outlined").look;
     expect(look.atoms).toBe("balls");
     expect(look.outline).toBeGreaterThanOrEqual(1);
@@ -218,12 +220,19 @@ describe("the outlined style, and what it is made of", () => {
     // (hydrogen's ball smaller than carbon's, both a quarter of their size)
     expect(atomRadius("H", look)).toBeLessThan(atomRadius("C", look));
     expect(atomColour("H", look)).toBe("#ffffff");
-    expect(atomColour("O", look)).toMatch(/^#e/);
+    // (a bright red)
+    expect(atomColour("O", look)).toBe("#ff1f1f");
+    expect(look.bondRadius).toBeLessThan(BALL_AND_STICK.bondRadius);
+    // (three circles, on every atom - hydrogen's too - as thin as a line)
+    expect(ballCircles(look)).toBe(3);
+    for (const el of ["H", "C", "O", "Li"]) expect(linedBall(el, look)).toBe(true);
+    expect(look.ballLinesWidth).toBeLessThanOrEqual(look.outline);
     expect(atomColour("Na", look)).toBe(atomColour("K", look));
     // (an element it does not colour: as Meno does)
     expect(atomColour("Br", look)).toBe(atomColour("Br"));
     // (Meno's own styles draw no line and fade nothing)
     for (const id of ["balls", "glossy", "space"]) {
+      expect(ballCircles(look3dPreset(id).look)).toBe(0);
       expect(look3dPreset(id).look.outline).toBe(0);
       expect(look3dPreset(id).look.depthFade).toBe(0);
     }
@@ -270,5 +279,23 @@ describe("the outlined style, and what it is made of", () => {
     expect(read.looks.outlined).toEqual({ outline: 2, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#abcdef", colours: { C: "#123456" } });
     const odd = acceptStyle3dChoice({ primary: "outlined", secondary: "balls", looks: { outlined: { outline: 9, depthFade: -1, bondColouring: "rainbow", colours: [] } } });
     expect(odd.looks.outlined).toBeUndefined();
+  });
+});
+
+describe("lines on the balls", () => {
+  it("are on the atoms chosen: all, all but hydrogen, or carbon alone - none, where the style draws none", () => {
+    const on = (ballLinesOn: "all" | "heavy" | "carbon", ballLines: "none" | "two" | "three" = "two") => ["H", "C", "O"].filter((el) => linedBall(el, { ballLines, ballLinesOn }));
+    expect(on("all")).toEqual(["H", "C", "O"]);
+    expect(on("heavy")).toEqual(["C", "O"]);
+    expect(on("carbon")).toEqual(["C"]);
+    expect(on("all", "none")).toEqual([]);
+    expect(ballCircles({ ballLines: "two" })).toBe(2);
+  });
+
+  it("are read back from the settings file, within their bounds", () => {
+    const read = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 2, ballLinesColor: "#334455" } } });
+    expect(read.looks.balls).toEqual({ ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 2, ballLinesColor: "#334455" });
+    const odd = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: 2, ballLinesOn: "H", ballLinesWidth: 9 } } });
+    expect(odd.looks.balls).toBeUndefined();
   });
 });

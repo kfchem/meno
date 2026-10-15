@@ -58,6 +58,16 @@ export type MoleculeLook = {
   depthFade: number;
   /** The sticks in one colour (`bondColor`), or each half in its atom's colour. */
   bondColouring: "single" | "byAtom";
+  /**
+   * Lines on the balls: great circles about the molecule's own axes - two
+   * or three, crossing as a globe's equator and meridians do, turning with
+   * it - on every atom's ball, every one's but hydrogen's, or carbon's
+   * alone; as wide on the screen at any zoom, in pixels, and in a colour.
+   */
+  ballLines: "none" | "two" | "three";
+  ballLinesOn: "all" | "heavy" | "carbon";
+  ballLinesWidth: number;
+  ballLinesColor: string;
   /** The atoms' colours of this style's own, by element (#rrggbb); every other element as Meno colours it (`atomColour`). */
   colours: Readonly<Record<string, string>>;
 };
@@ -116,6 +126,10 @@ export const BALL_AND_STICK: MoleculeLook = {
   outlineColor: "#1c1c1c",
   depthFade: 0,
   bondColouring: "single",
+  ballLines: "none",
+  ballLinesOn: "all",
+  ballLinesWidth: 1,
+  ballLinesColor: "#1c1c1c",
   colours: {},
 };
 
@@ -128,7 +142,7 @@ const OUTLINED_COLOURS: Readonly<Record<string, string>> = {
   C: "#a6a6a6",
   H: "#ffffff",
   N: "#3a62d8",
-  O: "#e3212b",
+  O: "#ff1f1f",
   S: "#efe02a",
   F: "#8de06a",
   Cl: "#6cd65a",
@@ -179,18 +193,22 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
   {
     id: "outlined",
     name: "Outlined",
-    description: "Glossy balls and sticks in one dark grey, each drawn round with a thin dark line; what lies further back fades toward the page.",
+    description: "Glossy balls with thin dark circles crossing on each, thin near-black sticks, each drawn round with a dark line; what lies further back fades toward the page.",
     look: {
       ...BALL_AND_STICK,
       ballScale: 0.25,
-      bondRadius: 0.09,
-      bondColor: "#4a4a4a",
+      bondRadius: 0.07,
+      bondColor: "#2a2a2a",
       roughness: 0.3,
       metalness: 0.05,
       occlusion: 0.35,
-      outline: 1.25,
-      outlineColor: "#1c1c1c",
+      outline: 1.5,
+      outlineColor: "#161616",
       depthFade: 0.5,
+      ballLines: "three",
+      ballLinesOn: "all",
+      ballLinesWidth: 1,
+      ballLinesColor: "#161616",
       colours: OUTLINED_COLOURS,
     },
   },
@@ -284,6 +302,17 @@ export function atomColour(el: string, look?: Pick<MoleculeLook, "colours">): st
   if (own) return own;
   if (!colour.has(el)) colour.set(el, elementColour(el));
   return colour.get(el)!;
+}
+
+/** Whether a look draws its lines on an atom's ball (`ballLinesOn`), by its element. */
+export function linedBall(el: string, look: Pick<MoleculeLook, "ballLines" | "ballLinesOn">): boolean {
+  if (look.ballLines === "none") return false;
+  return look.ballLinesOn === "all" || (look.ballLinesOn === "heavy" ? el !== "H" : el === "C");
+}
+
+/** How many circles a look draws on a ball: none, two or three. */
+export function ballCircles(look: Pick<MoleculeLook, "ballLines">): 0 | 2 | 3 {
+  return look.ballLines === "three" ? 3 : look.ballLines === "two" ? 2 : 0;
 }
 
 /** The most a style's depth fade takes something at the very back toward the page (`fadeAt`). */
@@ -528,6 +557,52 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     digits: 2,
   },
   { key: "outlineColor", group: "Lines", label: "Outline colour", description: "The line round the balls and sticks.", kind: "colour" },
+  {
+    key: "ballLines",
+    group: "Lines",
+    label: "Lines on the balls",
+    description: "Circles crossing on each ball, as a globe's equator and meridians, turning with the molecule.",
+    kind: "choice",
+    options: [
+      { value: "none", label: "None" },
+      { value: "two", label: "Two" },
+      { value: "three", label: "Three" },
+    ],
+  },
+  {
+    key: "ballLinesOn",
+    group: "Lines",
+    label: "On which atoms",
+    description: "Every atom's ball, every one's but hydrogen's, or carbon's alone.",
+    kind: "choice",
+    options: [
+      { value: "all", label: "All" },
+      { value: "heavy", label: "All but H" },
+      { value: "carbon", label: "Carbon" },
+    ],
+    unless: { key: "ballLines", is: "none" },
+  },
+  {
+    key: "ballLinesWidth",
+    group: "Lines",
+    label: "Their width",
+    description: "As wide on the screen at any zoom.",
+    kind: "number",
+    min: 0.5,
+    max: 3,
+    step: 0.25,
+    unit: "px",
+    digits: 2,
+    unless: { key: "ballLines", is: "none" },
+  },
+  {
+    key: "ballLinesColor",
+    group: "Lines",
+    label: "Their colour",
+    description: "The circles on the balls.",
+    kind: "colour",
+    unless: { key: "ballLines", is: "none" },
+  },
   {
     key: "depthFade",
     group: "Lines",

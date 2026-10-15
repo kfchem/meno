@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type Style3D } from "../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
 import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
@@ -193,6 +193,12 @@ export function rendered3d(
         atomsMesh.setMatrixAt(i, mtx.makeScale(r, r, r).setPosition(places[3 * i], places[3 * i + 1], places[3 * i + 2]));
         atomsMesh.setColorAt(i, colour.set(atomColour(a.el, drawn)));
       });
+      // (lines on its balls, where its style draws them)
+      ball.setAttribute("ballLined", new THREE.InstancedBufferAttribute(Float32Array.from(m.atoms, (a) => (linedBall(a.el, drawn) ? 1 : 0)), 1));
+      const circles = ballCircles(drawn);
+      ao.lines.amount.value.set(circles >= 2 ? 1 : 0, circles >= 2 ? 1 : 0, circles >= 3 ? 1 : 0);
+      ao.lines.width.value = drawn.ballLinesWidth * cssPx;
+      ao.lines.colour.value.set(drawn.ballLinesColor).convertLinearToSRGB();
       if (occlusion) {
         setAtomOcclusion(ball, occlusion.atoms);
         ao.strength.value = drawn.occlusionBy === "atoms" ? drawn.occlusion : 0;

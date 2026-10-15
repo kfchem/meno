@@ -31,6 +31,11 @@ export function fadeOf(material: THREE.MeshStandardMaterial, kind: "atoms" | "bo
   return uniformsOf(material, kind).fade;
 }
 
+/** What draws the lines on a molecule's balls (utils/occlusionMaterial): the atoms' material's own. */
+export function ballLinesOf(material: THREE.MeshStandardMaterial) {
+  return uniformsOf(material, "atoms").lines;
+}
+
 /** How far a molecule's sticks are coloured by their atoms (utils/occlusionMaterial): the bonds' material's own. */
 export function byAtomOf(material: THREE.MeshStandardMaterial) {
   return uniformsOf(material, "bonds").byAtom;
