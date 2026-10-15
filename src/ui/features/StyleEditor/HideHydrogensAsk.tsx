@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAskedKeys } from "../../layouts/asking";
 import { FADE, RISE } from "../../theme/motion";
+import { QUESTION_ARRIVING_MS, useLeaving } from "../../theme/leaving";
 import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensText";
 
 /**
@@ -18,6 +19,8 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
   const [understood, setUnderstood] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades; come, it takes no click for a moment - one meant for what was there before is no answer: theme/leaving)
+  const { held } = useLeaving(QUESTION_ARRIVING_MS);
   const id = useId();
   useEffect(() => {
     keepRef.current?.focus();
@@ -28,6 +31,7 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
   return (
     <motion.div
       {...FADE}
+      {...held}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
       onPointerDown={(e) => {
         // (a press outside the box keeps them)

@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { FADE, RISE } from "../theme/motion";
+import { useLeaving } from "../theme/leaving";
 import { useEffect, useRef, useState } from "react";
 import { useAskedKeys } from "./asking";
 
@@ -28,6 +29,8 @@ export default function NameDialog({
   const [name, setName] = useState(initial);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLFormElement>(null);
+  // (going, it does nothing more as it fades - theme/leaving)
+  const { held } = useLeaving();
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
@@ -38,6 +41,7 @@ export default function NameDialog({
   return (
     <motion.div
       {...FADE}
+      {...held}
       className="absolute inset-0 z-[100] flex items-center justify-center bg-black/20"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onCancel();

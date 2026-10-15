@@ -2408,13 +2408,19 @@ export function buildTextLabels(
       }
       const set = labelSetOf(opts);
       const size = opts.fontPx * set.subscriptSize;
+      // (the marks are set centred where they go, side by side: a charge and
+      // a radical's dot are wider than one mark, and the first of them came
+      // over the letters where they went out across them - an N+'s circle
+      // on its N; out by that much more across)
+      const wide = tail.reduce((w, r) => w + (r.mark ? MARK_WIDTH : 0.6 * r.text.length), 0) * size;
+      const more = Math.max(0, wide / 2 - (MARK_WIDTH / 2) * size);
       out.push({
         ...besideVertex(a, ways.get(i) ?? [], tail, opts, (dir) => {
           let far = 0;
           for (const hull of labelHulls(bare, opts.fontPx, set, false)) {
             for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
           }
-          return far + size * (MARK_RADIUS + 0.2);
+          return far + size * (MARK_RADIUS + 0.2) + more * Math.abs(dir.x);
         }),
         markOf: i,
       });

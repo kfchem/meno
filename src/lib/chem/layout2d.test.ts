@@ -2346,6 +2346,27 @@ describe("charges, radicals and isotopes", () => {
     expect(buildTextLabels([atom(0, 0, 0, "N", { chargeAt: { x: 1, y: 1 } })], o, []).some((x) => x.beside)).toBe(false);
   });
 
+  it("sets a charge and a radical together beside a label clear of its letters, however long the pair", () => {
+    // a pyridinium radical's N+•, its ring bonds up to either side: the pair goes below, beside the N
+    const o = opts();
+    const set = labelSetOf(o);
+    const n = atom(0, 0, 0, "N", { charge: 1, radical: "doublet" });
+    const ring = [n, atom(1, -L * Math.cos(Math.PI / 6), L / 2, "C"), atom(2, L * Math.cos(Math.PI / 6), L / 2, "C")];
+    // (one of its ring bonds double, as in the ring: no H on it)
+    const texts = buildTextLabels(ring, o, [single(0, 1), { ...single(0, 2), order: 2 }]);
+    const beside = texts.find((t) => t.beside && t.markOf === 0)!;
+    expect(beside.runs!.map((r) => r.mark)).toEqual(["charge", "radical"]);
+    const label = texts.find((t) => t.atom === 0)!;
+    expect(label.runs!.map((r) => r.text)).toEqual(["N"]);
+    // (each item's outlines about where it stands)
+    const at = (t: typeof label, hs: Vec2[][]) => hs.map((h) => h.map((p) => ({ x: p.x + t.x, y: p.y + t.y })));
+    const letters = at(label, labelHulls(label, o.fontPx, set, false));
+    const marks = at(beside, labelHulls(beside, o.fontPx, set));
+    // no corner of the marks within the N's letters, nor of the letters within the marks
+    for (const p of marks.flat()) for (const h of letters) expect(inside(p, h)).toBe(false);
+    for (const p of letters.flat()) for (const h of marks) expect(inside(p, h)).toBe(false);
+  });
+
   it("draws a circled charge's circle and sign, and a radical's dot, with the lines", () => {
     const layout = layoutMolecule(ammonium, [single(0, 1)], opts(), 30);
     const plain = layoutMolecule(ammonium.map((a) => ({ ...a, charge: undefined })), [single(0, 1)], opts(), 30);

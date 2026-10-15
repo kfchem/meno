@@ -202,6 +202,13 @@ words, a width they break into lines at, and how their lines lie.
   lifted; as thick as the pen is pressed where the system says, else even,
   its ends tapered - a pen that tells no pressure (the same throughout)
   written as the mouse writes.
+- **A stroke is kept whole**: it ends where the pen was lifted. The page
+  takes no pan or zoom gesture of the system's own from a pen or a touch,
+  which would take a stroke back as it is written. A pressure read as 0
+  while the pen still touches is taken as the pressure before it. A stroke
+  taken back all the same goes on if the pen comes down again within
+  250 ms and 24 pixels. A touch while a pen writes - the hand resting on
+  the screen - is no press at all.
 - **On a PDF's page**: a stroke begun on a page is that page's, kept in its
   points, and goes wherever the page goes - stacked, spread, turned, made
   an icon, read in the column, where it is shown; a page is written on on
@@ -299,7 +306,11 @@ Shift+Enter, since Enter keeps the words, as it did before.
   drawing's fills: each shape and one being drawn; a press on its line or,
   filled, inside it - none through what is drawn over it; a hold, a click,
   a second click to write in it; the handles. `components/shapeFrom.ts`:
-  drawn from Quick Add, led by a drag or traced with the button up.
+  drawn from Quick Add, led by a drag or traced with the button up - its
+  icon double-clicked too: the second press, as the trace begins and where
+  it began, is not the click that ends it (`traceEndedBy`, utils/press;
+  before, it ended the shape at once, too small to be kept, and nothing
+  was drawn).
 - Quick Add's *Shapes* opens a row of the five; the shape's menu
   (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
   regular or thick line, dashed, *Bring to front*, *Send to back*. The
@@ -391,7 +402,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   widths and an em of that piece's. `components/Inks2D.tsx`: the pieces -
   a pen's at 0.3, over the drawing, a marker's at -0.12, under it - the
   stroke being written, the light round a piece, and a press, a hold and a
-  click on one, as on a picture.
+  click on one, as on a picture. `utils/strokeTaking.ts`: a stroke's
+  points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
   being the set's first, shown once), three widths, Done (or Escape).
