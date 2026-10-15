@@ -5,7 +5,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { CHAIN_EASE, DOUBLE_CLICK_MS } from "../constants";
+import { CHAIN_EASE, DOUBLE_CLICK_MS, MOV_PX } from "../constants";
+import { traceEndedBy } from "../utils/press";
 import { cellOf, cellsWithin, type Honeycomb } from "../utils/honeycomb";
 import { setLinePoints } from "../utils/linePoints";
 import { trailShown } from "../utils/chain";
@@ -81,8 +82,14 @@ export default function ChainGuide2D() {
       ev.stopPropagation();
       ev.preventDefault();
     };
+    // (when it began, and whether the pointer has gone anywhere since: utils/press#traceEndedBy)
+    const began = performance.now();
+    let from: { x: number; y: number } | null = null;
+    let moved = false;
     const onMove = (e: PointerEvent) => {
       if (e.buttons !== 0) return;
+      if (!from) from = { x: e.clientX, y: e.clientY };
+      else if (Math.hypot(e.clientX - from.x, e.clientY - from.y) >= MOV_PX) moved = true;
       const p = toPage(e);
       store.getState().updateExtend(p.x, p.y);
       invalidate();
@@ -90,11 +97,13 @@ export default function ChainGuide2D() {
     const onDown = (e: PointerEvent) => {
       swallow(e);
       const st = store.getState();
-      if (e.button === 0) {
+      const does = traceEndedBy(e.button, performance.now() - began, moved, DOUBLE_CLICK_MS);
+      if (does === "end") {
         const p = toPage(e);
         st.updateExtend(p.x, p.y);
         st.commitExtend();
-      } else st.cancelExtend();
+      } else if (does === "let go") st.cancelExtend();
+      // (and no double-click of the canvas's - the second press's least of all: no Quick Add opened under the chain)
       st.suppressDoubleClick(DOUBLE_CLICK_MS);
       // (the click, and the menu, that end the press are the chain's too)
       for (const type of ["click", "contextmenu"]) window.addEventListener(type, swallow, { capture: true, once: true });

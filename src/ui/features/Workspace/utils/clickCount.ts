@@ -65,3 +65,16 @@ export function pressOnEmpty(last: (EmptyPress & { count: number }) | null, pres
   const near = !!last && press.t - last.t <= within && Math.hypot(press.x - last.x, press.y - last.y) < 8;
   return near && last!.count === 1 ? 2 : 1;
 }
+
+/** A press on a bond: which, and when. */
+export type BondPress = { id: number; t: number };
+
+/**
+ * Which press of a double-click a press on a bond is: the second, on the
+ * same bond soon after a first (within `within` ms); else a first. A second
+ * press begins no long press, as on an atom or empty space (2026-10-13: a
+ * double-click held a moment selected the bond's whole structure).
+ */
+export function pressOnBond(last: (BondPress & { count: number }) | null, press: BondPress, within: number): 1 | 2 {
+  return !!last && last.id === press.id && press.t - last.t <= within && last.count === 1 ? 2 : 1;
+}

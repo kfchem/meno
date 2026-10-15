@@ -15,19 +15,25 @@
  * the document's - and what it wrote goes as the slide does.
  *
  * The press is the writing's alone: nothing else on the page sees it. The
- * other buttons and the wheel still move and zoom the view.
+ * other buttons and the wheel still move and zoom the view. The page takes
+ * no pen or touch gesture of the system's own (`touch-action`), which would
+ * take a stroke back as it is written; a touch while a pen writes - the
+ * hand resting on the screen - is no press at all; and a stroke taken back
+ * all the same goes on if the pen comes down again at once
+ * (utils/strokeTaking).
  */
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { InkLook } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { INK_WIDTHS_PT, inkWidth, OneEuro, pressureFelt, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { INK_WIDTHS_PT, inkWidth, pressureFelt, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
 import { shownSheet } from "../../../../lib/pdf/layout";
 import { pageAt } from "../utils/page";
 import { pageUnder, pointsOnPage, toPagePoint } from "../utils/pdfInk";
 import { stageOf } from "../presenting/stage";
 import { DOUBLE_CLICK_MS } from "../constants";
+import { RESUME_MS, StrokeTaking } from "../utils/strokeTaking";
 import { useDrawnLayout } from "./drawnLayoutContext";
 
 /** How long after one stroke the next may come and join it, in ms. */
@@ -54,6 +60,8 @@ export default function InkWriting() {
   // (the pointer over the page, while the card is open: one to write with)
   useEffect(() => {
     const dom = gl.domElement;
+    // (no pan or zoom of the system's own from a pen or a touch: it would take the stroke back, with a pointercancel, as it is written)
+    dom.style.touchAction = "none";
     const sync = () => {
       dom.style.cursor = store.getState().inkMode ? "crosshair" : "";
     };
@@ -76,9 +84,21 @@ export default function InkWriting() {
       return Math.hypot(b.x - a.x, b.y - a.y) || 1;
     };
 
+    // (the stroke being written, if any: one the system took back may be gone on with)
+    let writing: { taking: StrokeTaking; resume: () => void } | null = null;
     const onDown = (ev: PointerEvent) => {
       const st = store.getState();
       const pen = ev.pointerType === "pen";
+      if (writing) {
+        // (the pen down again just after the system took its stroke back, or a hand resting on the screen as a pen writes)
+        const resumed = writing.taking.resumes(ev);
+        if (resumed || (writing.taking.pen && ev.pointerType === "touch")) {
+          ev.stopImmediatePropagation();
+          ev.preventDefault();
+          if (resumed) writing.resume();
+          return;
+        }
+      }
       // (a talk: a pen on the surface it is given on, only)
       const talk = st.presenting != null;
       if (talk ? !pen || ev.target !== stageOf(store).layer : ev.target !== dom) return;
@@ -98,16 +118,10 @@ export default function InkWriting() {
       const look: InkLook = mode && mode.tool !== "eraser" ? { pen: mode.tool, width: mode.width, ...(mode.color ? { color: mode.color } : {}) } : { pen: "pen", width: 1 };
       // (begun on a PDF's page: that page's)
       const on = talk ? null : pageUnder(store.getState().pdfs, toPage(down.clientX, down.clientY));
-      const fx = new OneEuro();
-      const fy = new OneEuro();
-      const points: number[] = [];
-      const take = (e: PointerEvent) => {
-        const t = e.timeStamp / 1000;
-        const p = toPage(fx.next(e.clientX, t), fy.next(e.clientY, t));
-        points.push(p.x, p.y, pen ? e.pressure : 0.5);
-      };
-      take(down);
+      const taking = new StrokeTaking(down, toPage, pen);
+      const points = taking.points;
       let frame: number | null = null;
+      let held: number | null = null;
       const show = () => {
         frame = null;
         store.getState().setInkDraft({ look, stroke: { points: points.slice(), ...(pen && pressureFelt(points) ? { pressure: true as const } : {}) } });
@@ -115,15 +129,27 @@ export default function InkWriting() {
       };
       show();
       const onMove = (e: PointerEvent) => {
-        if (e.pointerId !== down.pointerId) return;
-        for (const c of e.getCoalescedEvents?.() ?? [e]) take(c);
+        if (!taking.move(e)) return;
         if (frame == null) frame = window.requestAnimationFrame(show);
       };
       const onUp = (e: PointerEvent) => {
-        if (e.pointerId !== down.pointerId) return;
+        if (taking.up(e)) end(e.timeStamp);
+      };
+      // (taken back by the system: kept a moment for the pen to go on with, then ended where it was)
+      const onCancel = (e: PointerEvent) => {
+        if (!taking.cancel(e)) return;
+        held = window.setTimeout(() => end(e.timeStamp + RESUME_MS), RESUME_MS);
+      };
+      const resume = () => {
+        if (held != null) window.clearTimeout(held);
+        held = null;
+      };
+      writing = { taking, resume };
+      const end = (at: number) => {
+        if (writing?.taking === taking) writing = null;
         window.removeEventListener("pointermove", onMove, true);
         window.removeEventListener("pointerup", onUp, true);
-        window.removeEventListener("pointercancel", onUp, true);
+        window.removeEventListener("pointercancel", onCancel, true);
         if (frame != null) window.cancelAnimationFrame(frame);
         const st = store.getState();
         st.setInkDraft(null);
@@ -146,25 +172,25 @@ export default function InkWriting() {
         const last = lastRef.current;
         const sameOn = (a: Last["on"]) => (on ? "pdf" in a && a.pdf === on.pdf && a.page === on.page : "id" in a);
         const joins =
-          last && sameOn(last.on) && e.timeStamp - last.t < JOIN_MS && last.look.pen === look.pen && last.look.width === look.width && (last.look.color ?? null) === (look.color ?? null) && box.x0 <= last.box.x1 + near && box.x1 >= last.box.x0 - near && box.y0 <= last.box.y1 + near && box.y1 >= last.box.y0 - near;
+          last && sameOn(last.on) && at - last.t < JOIN_MS && last.look.pen === look.pen && last.look.width === look.width && (last.look.color ?? null) === (look.color ?? null) && box.x0 <= last.box.x1 + near && box.x1 >= last.box.x0 - near && box.y0 <= last.box.y1 + near && box.y1 >= last.box.y0 - near;
         if (on) {
           const prev = joins && last && "pdf" in last.on ? last.on.piece : null;
           const piece = st.writePdfStroke(on.pdf, on.page, look, stroke, prev);
           if (piece == null) return;
           const kept = store.getState().pdfs.find((p) => p.id === on.pdf)?.inks?.[piece];
-          lastRef.current = { on: { pdf: on.pdf, page: on.page, piece }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+          lastRef.current = { on: { pdf: on.pdf, page: on.page, piece }, t: at, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
         } else {
           const prev = joins && last && "id" in last.on ? last.on.id : null;
           const id = st.writeStroke(look, stroke, prev);
           if (id == null) return;
           const kept = store.getState().inks.find((k) => k.id === id);
-          lastRef.current = { on: { id }, t: e.timeStamp, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
+          lastRef.current = { on: { id }, t: at, look, box: (kept && strokesBounds(kept.strokes, width / 2)) ?? box };
         }
         invalidate();
       };
       window.addEventListener("pointermove", onMove, true);
       window.addEventListener("pointerup", onUp, true);
-      window.addEventListener("pointercancel", onUp, true);
+      window.addEventListener("pointercancel", onCancel, true);
     };
 
     const erase = (down: PointerEvent, talk: boolean) => {

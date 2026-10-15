@@ -42,6 +42,16 @@ nothing else:
   each structure of the ensemble file given, optimised, written to
   `crest_ensemble.xyz` in the same order, each comment line its energy.
 
+A lone atom - an ion of a salt, say - has no conformers to search for and
+nothing to optimise, and CREST stops with an error when given one. Its
+energy is worked out where it is instead, by the xtb CREST runs, as xtb's
+own documentation has it (xtb-docs.readthedocs.io: "Commandline Usage",
+"Properties"): `--gfn 1`, `--gfn 2` or `--gfnff` - a two-level search's
+finer method - `--chrg`, `--uhf`, `--alpb`, `-P` the cores, and `-I` an
+input file asking for the machine-readable dump (`$write json=true`),
+`xtbout.json`, whose total energy is read. The atom comes back where it
+was: its only conformer, or optimised as it can be.
+
 It keeps nothing between requests, and reaches no network.
 """
 
@@ -76,6 +86,18 @@ SEARCHES = {"full": [], "quick": ["--quick"], "squick": ["--squick"], "mquick": 
 # the energy window CREST's conformer search keeps by default (kcal/mol)
 EWIN = 6.0
 STEPS = {"conformers", "optimise"}
+# a lone atom's energy, by the xtb CREST runs (the version its environment's lock pins)
+XTB = "xtb"
+XTB_VERSION = "6.7.1"
+XTB_CONTROL = "xcontrol"
+XTB_CONTROL_TEXT = "$write\n   json=true\n$end\n"
+XTB_DUMP = "xtbout.json"
+XTB_METHODS = {
+    "gfn2": (["--gfn", "2"], "GFN2-xTB"),
+    "gfn1": (["--gfn", "1"], "GFN1-xTB"),
+    "gfnff": (["--gfnff"], "GFN-FF"),
+    "gfn2//gfnff": (["--gfn", "2"], "GFN2-xTB"),
+}
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
 
 
@@ -160,6 +182,30 @@ def optimise_args(options, entry, cores):
     return ["--mdopt", ENSEMBLE_IN] + level_args(options, entry) + cores_args(cores)
 
 
+def lone(entry):
+    """Whether an entry is a single atom: no conformers to search for, nothing to optimise."""
+    return len(elements_of(entry)) == 1
+
+
+def lone_job(members, entry, options, cores):
+    """A lone atom's job: its energy where it is, by xtb - the method, the charge and unpaired electrons, the solvent, the cores, and the dump asked for."""
+    level_args(options, entry)
+    args = [INPUT] + XTB_METHODS[options.get("method", "gfn2")][0]
+    args += ["--chrg", str(whole(entry.get("charge", 0), "The charge")), "--uhf", str(whole(entry.get("multiplicity", 1), "The multiplicity") - 1)]
+    solvent = options.get("solvent", "none")
+    if solvent != "none":
+        args += ["--alpb", solvent]
+    if cores:
+        args += ["-P", str(whole(cores, "The cores"))]
+    return {
+        "entries": members,
+        "program": XTB,
+        "args": args + ["-I", XTB_CONTROL],
+        "files": [{"name": INPUT, "text": xyz_of(entry)}, {"name": XTB_CONTROL, "text": XTB_CONTROL_TEXT}],
+        "reads": [XTB_DUMP],
+    }
+
+
 def molecule_key(entry):
     """What an ensemble's structures must share: their atoms, in the same order, and their charge and spin."""
     return (tuple(elements_of(entry)), entry.get("charge", 0), entry.get("multiplicity", 1))
@@ -176,25 +222,35 @@ def op_prepare(m):
         groups = {}
         for i, entry in enumerate(entries):
             groups.setdefault(molecule_key(entry), []).append(i)
-        jobs = [
-            {
+        jobs = []
+        for members in groups.values():
+            first = entries[members[0]]
+            # (what CREST would refuse, refused for a lone atom too)
+            args = optimise_args(options, first, m.get("cores"))
+            if lone(first):
+                jobs.append(lone_job(members, first, options, m.get("cores")))
+                continue
+            jobs.append({
                 "entries": members,
                 "program": PROGRAM,
-                "args": optimise_args(options, entries[members[0]], m.get("cores")),
+                "args": args,
                 "files": [{"name": ENSEMBLE_IN, "text": "".join(xyz_of(entries[i]) for i in members)}],
                 "reads": [ENSEMBLE_OUT],
-            }
-            for members in groups.values()
-        ]
+            })
         if not jobs:
             raise Refused("nothing came in")
         return {"jobs": jobs}
     jobs = []
     for i, entry in enumerate(entries):
+        # (what CREST would refuse, refused for a lone atom too)
+        args = args_for(options, entry, m.get("cores"))
+        if lone(entry):
+            jobs.append(lone_job([i], entry, options, m.get("cores")))
+            continue
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
-            "args": args_for(options, entry, m.get("cores")),
+            "args": args,
             "files": [{"name": INPUT, "text": xyz_of(entry)}],
             "reads": [CONFORMERS],
         })
@@ -246,12 +302,17 @@ def version_in(log):
 
 def why_of(log):
     """Why CREST stopped, as it says: the first line it marks an error or a failure - not the Fortran
-    runtime's own, as it stops, nor its backtrace; else its last."""
+    runtime's own, as it stops, nor its backtrace; else the last warning it gave, with the line after
+    it (a change in topology: what changed, not the remedies it lists after); else its last line."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
     said = [line for line in lines if not re.match(r"ERROR STOP|Error termination|#\d", line)]
     for line in said:
         if re.search(r"error|failed|abnormal", line, re.I):
             return line.strip("* ").strip() or line
+    warned = [k for k, line in enumerate(said) if line.startswith("WARNING!")]
+    if warned:
+        k = warned[-1]
+        return " ".join(said[k:k + 2])[len("WARNING!"):].strip()
     return said[-1] if said else lines[-1] if lines else "CREST said nothing"
 
 
@@ -349,6 +410,34 @@ def output_of(entry, options, files, log):
     }
 
 
+def lone_of(step, entry, options, files):
+    """A lone atom, as xtb left it: where it was, with its energy - its only conformer, or itself optimised as it can be."""
+    elements = elements_of(entry)
+    try:
+        dump = json.loads(files.get(XTB_DUMP) or "")
+    except ValueError:
+        dump = None
+    total = dump.get("total energy") if isinstance(dump, dict) else None
+    if isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total):
+        raise Refused("xtb wrote no energy")
+    method = XTB_METHODS.get(options.get("method", "gfn2"), (None, None))[1]
+    solvent = options.get("solvent", "none")
+    a = entry["atoms"][0]
+    return {
+        "schema": SCHEMA,
+        "program": "xtb",
+        "version": str(dump.get("xtb version") or XTB_VERSION).split()[0],
+        "method": (method + (f" (ALPB, {solvent})" if solvent != "none" else "")) if method else None,
+        "charge": whole(entry.get("charge", 0), "The charge"),
+        "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
+        "atoms": elements,
+        "frames": [[float(a.get(k, 0.0)) for k in ("x", "y", "z")]],
+        "energies": [float(total)],
+        **({"populations": [1.0]} if step == "conformers" else {}),
+        "results": [],
+    }
+
+
 def op_collect(m):
     step = m.get("step")
     if step not in STEPS:
@@ -356,9 +445,12 @@ def op_collect(m):
     files = m.get("files") or {}
     log = m.get("log") or ""
     entries = m.get("entries") or []
-    wrote = ENSEMBLE_OUT if step == "optimise" else CONFORMERS
+    alone = bool(entries) and lone(entries[0])
+    wrote = XTB_DUMP if alone else ENSEMBLE_OUT if step == "optimise" else CONFORMERS
     if m.get("ended") != "done" or wrote not in files:
         return {"why": why_of(log)}
+    if alone:
+        return {"outputs": [lone_of(step, e, m.get("options") or {}, files) for e in entries]}
     if step == "optimise":
         return {"outputs": optimised_of(entries, m.get("options") or {}, files, log)}
     return {"outputs": [output_of(e, m.get("options") or {}, files, log) for e in entries]}

@@ -45,6 +45,10 @@ else:
   definition"), the mass Meno gives with the entry (NIST's) - and "*" at
   their end.
 
+A lone atom - an ion of a salt, say - asked to be optimised is run as SP:
+it has no geometry to optimise, and ORCA, given OPT for one atom, warns
+and stops with no energy. It comes back where it was, with its energy.
+
 ORCA is run as the manual says: by its full path, given the input file,
 printing its output. To keep the wavefunction, the job then runs
 orca_2mkl, installed beside ORCA, as the manual's "orca_2mkl" has it:
@@ -137,6 +141,9 @@ def orca_input(step, entry, options, cores):
     run = RUNS.get(step)
     if run is None:
         raise Refused(f"this plugin does no {step!r}")
+    # (a lone atom: its energy where it is)
+    if step == "optimise" and len(elements_of(entry)) == 1:
+        run = RUNS["energy"]
     method = words(options.get("method", ""), "The method")
     if not method:
         raise Refused("there is no method")

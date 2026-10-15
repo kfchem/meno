@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { FADE, RISE } from "../theme/motion";
+import { QUESTION_ARRIVING_MS, useLeaving } from "../theme/leaving";
 import { useEffect, useRef } from "react";
 import { useAskedKeys } from "./asking";
 
@@ -29,6 +30,8 @@ export default function ConfirmDiscard({
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades; come, it takes no click for a moment - one meant for what was there before is no answer: theme/leaving)
+  const { held } = useLeaving(QUESTION_ARRIVING_MS);
   useEffect(() => {
     // Keeping is the safe answer, so it is the one a stray Enter gives.
     cancelRef.current?.focus();
@@ -39,6 +42,7 @@ export default function ConfirmDiscard({
   return (
     <motion.div
       {...FADE}
+      {...held}
       className="absolute inset-0 z-[100] flex items-center justify-center bg-black/20"
       onPointerDown={(e) => {
         // A press outside the box is a way of saying no.
