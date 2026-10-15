@@ -1190,8 +1190,8 @@ export type EditorState = {
    * document as saved as it was - the look is Settings', not the document's.
    */
   fitResultSets: () => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
-  forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran" | "runs">) => void;
+  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */

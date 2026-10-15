@@ -574,10 +574,12 @@ not taken from either.
   starts with them, its own changes never written back. Quick Add offers
   the plugins added, each with its kinds (`workflow/offered.ts`).
 - **Running** (`store/slices/stepRuns.ts`): the steps to run - those
-  asked for, and before each those that have not run or have changed -
-  each started once the step before it has ended well, those that do not
-  wait on one another at once (`runSteps`; *Run from here* adds the steps
-  after, *Run all* every step not done); each run - Meno's at once, as
+  asked for, and before each the furthest back that has not run or has
+  changed, and every step from it on (`chainTo`: a step done takes anew
+  what one changed before it gives) - each started once the step before
+  it has ended well, those that do not wait on one another at once
+  (`runSteps`; *Run from here* adds the steps after, *Run all* every step
+  not done and every step after one); each run - Meno's at once, as
   one edit; a plugin's conformer search on structures drawn in its worker
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`
@@ -655,6 +657,11 @@ closes*).
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A runner asked to go** - SIGTERM, SIGINT or SIGHUP (macOS, Linux: a
+  logout, `kill`, Activity Monitor's *Quit*) - stops its program as *Stop*
+  does, writes the job stopped, and goes (`run_as_runner`): its program,
+  in a group of its own, is never left running with the job read as gone.
+  On Windows the job object takes it with the runner, however it goes.
 - **A finished job's folder is taken away** (*Remove*, *Clear finished
   jobs' files*) by moving it out of the jobs' way first, under a name no
   job has (`.taken-…`), then removing it: one a program still holds a file

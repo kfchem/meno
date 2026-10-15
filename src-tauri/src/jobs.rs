@@ -37,6 +37,7 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
 
@@ -224,8 +225,36 @@ pub fn current_record(dir: &Path) -> Option<JobRecord> {
     Some(gone)
 }
 
+/// Whether the job is to stop: asked to (its `stop` file), or its runner asked to go.
 fn stop_asked(dir: &Path) -> bool {
-    dir.join(STOP).exists()
+    GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
+}
+
+/// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
+/// SIGHUP - a logout, `kill`, Activity Monitor's Quit): it stops its job as
+/// a stop does, and goes.
+static GOING: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn asked_to_go(_: libc::c_int) {
+    GOING.store(true, Ordering::SeqCst);
+}
+
+/// The runner asked to go stops its program and says so, rather than
+/// going at once and leaving it running in its group of its own - its job
+/// read as gone, its turn free for the next. (On Windows the job object
+/// takes the program with the runner, however it goes.)
+#[cfg(unix)]
+fn listen_for_going() {
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = asked_to_go as extern "C" fn(libc::c_int) as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART;
+        libc::sigemptyset(&mut action.sa_mask);
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
+    }
 }
 
 /// Sleeps `long` in slices of `WAIT_STEP` at most, waking as soon as a
@@ -261,7 +290,19 @@ pub fn job_mode() -> Option<i32> {
     }
     let dir = PathBuf::from(args.next()?);
     let (Some(data), Some(plugins)) = (data_dir_here(), plugins_here()) else { return Some(1) };
+    // (asked to go, a runner stops its program as if asked to stop)
+    #[cfg(unix)]
+    listen_for_going();
     Some(runner(&data, &plugins, &dir))
+}
+
+/// Run the job in `dir` as its runner does, what it is to run taken as it is
+/// (a test's own jobs): asked to go, stopped as if asked to stop.
+#[cfg(test)]
+pub fn run_as_runner(dir: &Path) -> i32 {
+    #[cfg(unix)]
+    listen_for_going();
+    run_job(dir, &|_| Ok(()))
 }
 
 /// What a job's runner does with the folder it was given, Meno's data folder
@@ -311,10 +352,15 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     // looked for often from when it is at the head of the queue, and at the
     // old step behind it, so that a queue of many costs what it did
     let mut at_head: Option<Instant> = None;
+    let mut unsure = 0;
     loop {
         if stop_asked(dir) {
             end(JobState::Stopped, None, None, None);
             return 0;
+        }
+        // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
+        if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
+            return 1;
         }
         match take_turn(dir, &spec, &base) {
             Ok(Turn::Taken) => break,
@@ -402,6 +448,25 @@ fn wait_program(dir: &Path, program: &mut Program) -> (Option<std::process::Exit
     (status, stopping.is_some())
 }
 
+/// Whether a waiting runner is to wait no more, its job's spec `there` or
+/// not and its record as read (`record`): where its record says it is no
+/// longer waiting - ended by another - at once; where its folder or its
+/// record cannot be found or read, only the second time running (`unsure`,
+/// counted here), since another program may hold a file a moment - an
+/// antivirus on Windows - and a waiting job is not given up on for that.
+fn waits_no_more(unsure: &mut u32, there: bool, record: Option<&JobRecord>) -> bool {
+    match (there, record) {
+        (true, Some(r)) => {
+            *unsure = 0;
+            r.state != JobState::Waiting
+        }
+        _ => {
+            *unsure += 1;
+            *unsure >= 2
+        }
+    }
+}
+
 /// A waiting job's turn, as it looks: taken; next - the first waiting, its
 /// turn to come as one running ends; or behind others waiting, so many of
 /// them before it.
@@ -456,7 +521,14 @@ const PLACE_STEP: Duration = Duration::from_millis(300);
 fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    queue.lock()?;
+    // (a runner asked to go takes its wait up again of itself - its signals
+    // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
+    // Interrupted here; one given, on a system that does, is waited again)
+    while let Err(e) = queue.lock() {
+        if e.kind() != std::io::ErrorKind::Interrupted {
+            return Err(e);
+        }
+    }
     let mut running = 0u32;
     let mut first: Option<(u64, PathBuf)> = None;
     // (those waiting before it: asked for before it, or at once and by name)
@@ -895,15 +967,23 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    // (a group of its own, so that what it leaves running is ended with it)
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let mut child = cmd.spawn().ok()?;
     let mut out = child.stdout.take()?;
-    // (what it prints read apart, so that a full pipe never holds it)
-    // (and read as near as it can be where it is not UTF-8: a banner in the
-    // system's code page lost the version with it)
-    let reader = std::thread::spawn(move || {
+    // (what it prints read apart, so that a full pipe never holds it - and
+    // waited for no longer than the program: a child it left holding the
+    // pipe would hold the read for good; read as near as it can be where it is
+    // not UTF-8: a banner in the system's code page lost the version with it)
+    let (said, heard) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut bytes = Vec::new();
         let _ = out.read_to_end(&mut bytes);
-        String::from_utf8_lossy(&bytes).into_owned()
+        let _ = said.send(String::from_utf8_lossy(&bytes).into_owned());
     });
     let start = std::time::Instant::now();
     let ended = loop {
@@ -913,18 +993,33 @@ pub fn version_of(p: &Path, rule: &VersionRule) -> Option<String> {
             _ => break false,
         }
     };
-    if !ended {
+    let end_group = |child: &mut std::process::Child| {
+        #[cfg(unix)]
+        // SAFETY: the group made for it above, by its id; ended, it is ended again to no effect.
+        unsafe {
+            libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+        }
         let _ = child.kill();
         let _ = child.wait();
+    };
+    if !ended {
+        end_group(&mut child);
     }
-    let printed = reader.join().unwrap_or_default();
+    let grace = std::time::Duration::from_millis(500);
+    let printed = match heard.recv_timeout(grace) {
+        Ok(text) => text,
+        Err(_) => {
+            // (ended, but what it left holds its output open: ended too, and what it said taken)
+            end_group(&mut child);
+            heard.recv_timeout(grace).unwrap_or_default()
+        }
+    };
     let v = if ended { version_in(&printed, rule) } else { None };
     if let Ok(mut known) = KNOWN.get_or_init(Default::default).lock() {
         known.insert(key, v.clone());
     }
     v
 }
-
 
 /// Where a usual place starts, as Meno has it: the home folder, and the
 /// folder programs are installed in (Windows' Program Files).
@@ -1746,7 +1841,14 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         return Err(format!("a job reads only a file written for it: {name}"));
     }
     let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&payload.plugin))?;
-    let found = match installed_program(&plugin_dir, &payload.plugin, &payload.program, payload.path.as_deref())? {
+    // (looked for off the commands' threads: a program installed separately is asked its version, which may take seconds)
+    let installed = {
+        let (dir, plugin, program, path) = (plugin_dir.clone(), payload.plugin.clone(), payload.program.clone(), payload.path.clone());
+        tauri::async_runtime::spawn_blocking(move || installed_program(&dir, &plugin, &program, path.as_deref()))
+            .await
+            .map_err(|e| e.to_string())??
+    };
+    let found = match installed {
         Some(found) => {
             // (a program installed separately, and those beside it, given the job's own files alone - none of the chemist's elsewhere)
             let written: Vec<String> = payload.files.iter().map(|f| f.name.clone()).collect();
@@ -2034,7 +2136,8 @@ mod tests {
         };
         sleep_watching(&dir, BEHIND_MOST);
         stop.join().unwrap();
-        assert!(asleep.elapsed() < Duration::from_millis(150) + WAIT_STEP + Duration::from_millis(250), "{:?}", asleep.elapsed());
+        // (woken by the stop, not by the end of its ten seconds: a bound half of them, which a slow runner's scheduling does not reach)
+        assert!(asleep.elapsed() < BEHIND_MOST / 2, "{:?}", asleep.elapsed());
         // (asked nothing, it sleeps all it was to)
         let dir = temp();
         let asleep = Instant::now();
@@ -2272,6 +2375,55 @@ mod tests {
     }
 
     #[test]
+    fn a_waiting_runner_gives_up_on_a_record_it_cannot_read_only_the_second_time_running() {
+        let waiting = JobRecord::new(JobState::Waiting, 1);
+        let ended = JobRecord::new(JobState::Gone, 1);
+        let mut unsure = 0;
+        // (held a moment - an antivirus reading it on Windows: waited on)
+        assert!(!waits_no_more(&mut unsure, true, None));
+        assert!(!waits_no_more(&mut unsure, true, Some(&waiting)));
+        assert!(!waits_no_more(&mut unsure, false, Some(&waiting)));
+        assert!(!waits_no_more(&mut unsure, true, Some(&waiting)));
+        // (twice running: gone)
+        assert!(!waits_no_more(&mut unsure, true, None));
+        assert!(waits_no_more(&mut unsure, false, None));
+        // (said ended: at once)
+        let mut fresh = 0;
+        assert!(waits_no_more(&mut fresh, true, Some(&ended)));
+    }
+
+    #[test]
+    fn a_waiting_job_whose_folder_is_taken_away_waits_no_more() {
+        let root = temp();
+        let first = shell(&root, PAUSE, 1);
+        std::thread::sleep(Duration::from_millis(5));
+        let second = shell(&root, ECHO, 1);
+        let a = {
+            let d = first.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&first).is_some_and(|r| r.state == JobState::Running));
+        let b = {
+            let d = second.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&second).is_some_and(|r| r.state == JobState::Waiting));
+        // (taken away while it waits - cleared, say: its runner goes, never to start it)
+        for _ in 0..40 {
+            if fs::remove_dir_all(&second).is_ok() || !second.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let begun = std::time::Instant::now();
+        assert_eq!(b.join().unwrap(), 1);
+        assert!(begun.elapsed() < Duration::from_secs(3));
+        assert!(!second.exists());
+        a.join().unwrap();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn runs_as_many_at_once_as_were_allowed() {
         let root = temp();
         let jobs: Vec<PathBuf> = (0..2).map(|_| shell(&root, PAUSE, 2)).collect();
@@ -2318,6 +2470,52 @@ mod tests {
             wait_for(|| unsafe { libc::kill(started, 0) } != 0);
         }
         let _ = fs::remove_dir_all(root);
+    }
+
+    /// This test binary, started again by
+    /// `a_runner_asked_to_go_stops_its_program_and_says_so`, runs one job as
+    /// `Meno --job <folder>` would, then exits. Started as a test, it does nothing.
+    #[cfg(unix)]
+    #[test]
+    fn runner_child() {
+        if let Some(dir) = std::env::var_os("MENO_TEST_RUN_JOB") {
+            std::process::exit(run_as_runner(Path::new(&dir)));
+        }
+    }
+
+    /// A runner asked to go (SIGTERM: a logout, `kill`, Activity Monitor's
+    /// Quit) stops its program, in its group of its own, and writes the job
+    /// stopped - never goes leaving it running, the job read as gone and its
+    /// turn free for the next.
+    #[cfg(unix)]
+    #[test]
+    fn a_runner_asked_to_go_stops_its_program_and_says_so() {
+        let root = temp();
+        let dir = shell(&root, "echo $$ > program.pid; exec sleep 30", 1);
+        let mut runner = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "jobs::tests::runner_child", "--test-threads=1"])
+            .env("MENO_TEST_RUN_JOB", &dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        wait_for(|| read_work_file(&dir, "program.pid").is_ok_and(|s| s.ends_with('\n')));
+        let program: libc::pid_t = read_work_file(&dir, "program.pid").unwrap().trim().parse().unwrap();
+        unsafe { libc::kill(runner.id() as libc::pid_t, libc::SIGTERM) };
+        let t = Instant::now();
+        let _ = runner.wait();
+        let took = t.elapsed();
+        while unsafe { libc::kill(program, 0) } == 0 && t.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let runs_on = unsafe { libc::kill(program, 0) } == 0;
+        let state = current_record(&dir).map(|r| r.state);
+        // (the test's own clean-up, whatever it found)
+        unsafe { libc::killpg(program, libc::SIGKILL) };
+        let _ = fs::remove_dir_all(&root);
+        assert!(!runs_on, "its program ({program}) runs on, its runner gone");
+        assert_eq!(state, Some(JobState::Stopped));
+        assert!(took < STOP_GRACE + Duration::from_secs(2), "it took {took:?} to go");
     }
 
     #[test]
@@ -3065,6 +3263,20 @@ mod tests {
         let q = program_file(&base.join("other"), "blender");
         fs::write(&q, "#!/bin/sh\necho hello\n").unwrap();
         assert_eq!(version_of(&q, &rule), None);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hears_a_program_say_its_version_though_it_leaves_one_running_that_holds_its_output() {
+        let base = temp();
+        let p = program_file(&base, "blender");
+        // (it says its version and goes, leaving a child of its own that keeps its output open half a minute)
+        fs::write(&p, "#!/bin/sh\necho \"Blender 5.2.2 LTS\"\nsleep 30 &\n").unwrap();
+        let rule = VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() };
+        let begun = std::time::Instant::now();
+        assert_eq!(version_of(&p, &rule), Some("5.2.2".into()));
+        assert!(begun.elapsed() < std::time::Duration::from_secs(5), "{:?}", begun.elapsed());
         let _ = fs::remove_dir_all(base);
     }
 
