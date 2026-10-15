@@ -68,7 +68,9 @@ export type MoleculeLook = {
   ballLinesOn: "all" | "heavy" | "carbon";
   ballLinesWidth: number;
   ballLinesColor: string;
-  /** The atoms' colours of this style's own, by element (#rrggbb); every other element as Meno colours it (`atomColour`). */
+  /** The set of element colours it draws its atoms in (`COLOUR_SETS_3D`, by id). */
+  colourSet: string;
+  /** Colours of its own, by element (#rrggbb), over the set's (`atomColour`). */
   colours: Readonly<Record<string, string>>;
 };
 
@@ -130,15 +132,16 @@ export const BALL_AND_STICK: MoleculeLook = {
   ballLinesOn: "all",
   ballLinesWidth: 1,
   ballLinesColor: "#1c1c1c",
+  colourSet: "jmol",
   colours: {},
 };
 
 /**
- * The atoms' colours of the outlined style: carbon a mid grey, hydrogen
- * white, oxygen red, sulfur yellow, fluorine and chlorine light green, the
- * alkali metals lavender.
+ * The Bright set's colours, where they are not Jmol's: carbon a mid grey,
+ * hydrogen white, oxygen a bright red, sulfur yellow, fluorine and
+ * chlorine light green, the alkali metals lavender.
  */
-const OUTLINED_COLOURS: Readonly<Record<string, string>> = {
+const BRIGHT_COLOURS: Readonly<Record<string, string>> = {
   C: "#a6a6a6",
   H: "#ffffff",
   N: "#3a62d8",
@@ -209,7 +212,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       ballLinesOn: "all",
       ballLinesWidth: 1,
       ballLinesColor: "#161616",
-      colours: OUTLINED_COLOURS,
+      colourSet: "bright",
     },
   },
   {
@@ -296,12 +299,51 @@ export function bondRadiusOf(look: MoleculeLook): number {
   return look.atoms === "space" ? 0 : look.bondRadius;
 }
 
-/** An atom's colour, by its element (an unknown one grey) - as the look colours it, where it has one of its own. */
-export function atomColour(el: string, look?: Pick<MoleculeLook, "colours">): string {
-  const own = look?.colours[el];
-  if (own) return own;
+/** A set of element colours a style draws its atoms in: its id, its name and what it is, and each element's colour. */
+export type ColourSet3D = { id: string; name: string; description: string; colour: (el: string) => string };
+
+/** An element's colour in Jmol's set: elements.ts's (an unknown element grey). */
+function jmolColour(el: string): string {
   if (!colour.has(el)) colour.set(el, elementColour(el));
   return colour.get(el)!;
+}
+
+/** A colour as a grey as light as it is (its relative luminance, as sRGB weighs it), #rrggbb. */
+export function greyOf(hex: string): string {
+  const v = parseInt(hex.slice(1), 16);
+  const lin = (c: number) => {
+    const x = c / 255;
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  const y = 0.2126 * lin((v >> 16) & 255) + 0.7152 * lin((v >> 8) & 255) + 0.0722 * lin(v & 255);
+  const g = Math.round(255 * (y <= 0.0031308 ? 12.92 * y : 1.055 * y ** (1 / 2.4) - 0.055));
+  return `#${g.toString(16).padStart(2, "0").repeat(3)}`;
+}
+
+/**
+ * The sets of element colours a style chooses from: Jmol's, Meno's from
+ * its first release; Bright, brighter and plainer; and Greys, each element
+ * as light as its Jmol colour, for figures printed in black and white.
+ */
+export const COLOUR_SETS_3D: readonly ColourSet3D[] = [
+  { id: "jmol", name: "Jmol", description: "Jmol's default element colours.", colour: jmolColour },
+  {
+    id: "bright",
+    name: "Bright",
+    description: "Carbon a mid grey, oxygen a bright red, sulfur yellow, fluorine and chlorine light green, the alkali metals lavender; the others as Jmol's.",
+    colour: (el) => BRIGHT_COLOURS[el] ?? jmolColour(el),
+  },
+  { id: "greys", name: "Greys", description: "Each element a grey as light as its Jmol colour: for black and white.", colour: (el) => greyOf(jmolColour(el)) },
+];
+
+/** The colour set with this id, or Jmol's. */
+export function colourSet3d(id: string | undefined): ColourSet3D {
+  return COLOUR_SETS_3D.find((c) => c.id === id) ?? COLOUR_SETS_3D[0];
+}
+
+/** An atom's colour, by its element (an unknown one grey): the look's own where it has one, else its colour set's - Jmol's, given no look. */
+export function atomColour(el: string, look?: Pick<MoleculeLook, "colours" | "colourSet">): string {
+  return look?.colours[el] ?? colourSet3d(look?.colourSet).colour(el);
 }
 
 /** Whether a look draws its lines on an atom's ball (`ballLinesOn`), by its element. */
@@ -334,10 +376,12 @@ export function fadeAt(depth: number, depthFade: number): number {
  * the style's own colour for it, no longer changed: its preset's again.
  */
 export function withAtomColour(choice: Style3DChoice, id: string, el: string, value: string | null): Style3DChoice {
-  const preset = look3dPreset(id).look.colours;
+  const preset = look3dPreset(id).look;
+  // (what it would be with no colour of the user's own: the preset's own, else the set chosen's)
+  const base = atomColour(el, { colours: preset.colours, colourSet: choice.looks[id]?.colourSet ?? preset.colourSet });
   const was = { ...(choice.looks[id]?.colours ?? {}) };
   delete was[el];
-  const colours = value && value.toLowerCase() !== (preset[el] ?? atomColour(el)).toLowerCase() ? { ...was, [el]: value.toLowerCase() } : was;
+  const colours = value && value.toLowerCase() !== base.toLowerCase() ? { ...was, [el]: value.toLowerCase() } : was;
   const { colours: _c, ...rest } = choice.looks[id] ?? {};
   const changes = Object.keys(colours).length ? { ...rest, colours } : rest;
   const { [id]: _old, ...others } = choice.looks;
@@ -480,6 +524,14 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     step: 0.01,
     unit: "Å",
     digits: 2,
+  },
+  {
+    key: "colourSet",
+    group: "Atoms and bonds",
+    label: "Colours",
+    description: "The set of element colours the atoms are drawn in; any element can be given its own below.",
+    kind: "choice",
+    options: COLOUR_SETS_3D.map((c) => ({ value: c.id, label: c.name })),
   },
   {
     key: "bondColouring",

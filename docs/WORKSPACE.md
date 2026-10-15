@@ -929,13 +929,18 @@ space-filling side by side is better science than either alone.
 - **Outlined.** Glossy balls a quarter of each atom's size - hydrogen's
   small - with three thin dark circles on every one, thin near-black
   sticks, each ball and stick drawn round with a 1.5-pixel near-black
-  line, the back fading by half: carbon a mid grey, hydrogen white, oxygen
-  a bright red, sulfur yellow, fluorine and chlorine light green, the
-  alkali metals lavender.
-- **Atoms' colours.** Each style has its atoms' colours, by element:
-  Meno's (the elements' own) unless the style gives its own - Outlined
-  does - and any of them set in Settings, under the style, and set back
-  one at a time to the style's. A style's sticks coloured by their atoms
+  line, the back fading by half, in the Bright colours.
+- **Colour sets** (the maintainer, 2026-10-15: "each style decides a
+  colour set"). A style draws its atoms in one set of element colours,
+  chosen under it in Settings: *Jmol* - Jmol's default element colours
+  (jmol.sourceforge.net, *Jmol Colors*; lib/chem/elements.ts), Meno's
+  from its first release and its own styles' - *Bright*, Outlined's:
+  carbon a mid grey, oxygen a bright red, sulfur yellow, fluorine and
+  chlorine light green, the alkali metals lavender, the others as Jmol's -
+  and *Greys*, each element a grey as light as its Jmol colour (its
+  relative luminance), for figures printed in black and white. Over the
+  set, any element can be given a colour of its own, marked, and set back
+  to the set's one at a time. A style's sticks coloured by their atoms
   take each half's colour from its atom.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says

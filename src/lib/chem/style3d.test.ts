@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { elementColour } from "./elements";
 import {
+  COLOUR_SETS_3D,
+  colourSet3d,
+  greyOf,
   ballCircles,
   linedBall,
   FADE_MOST,
@@ -297,5 +301,32 @@ describe("lines on the balls", () => {
     expect(read.looks.balls).toEqual({ ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 2, ballLinesColor: "#334455" });
     const odd = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: 2, ballLinesOn: "H", ballLinesWidth: 9 } } });
     expect(odd.looks.balls).toBeUndefined();
+  });
+});
+
+describe("the colour sets", () => {
+  it("are Jmol's - the elements' own - Bright over Jmol's, and Greys as light as Jmol's", () => {
+    expect(COLOUR_SETS_3D.map((c) => c.id)).toEqual(["jmol", "bright", "greys"]);
+    expect(colourSet3d("jmol").name).toBe("Jmol");
+    expect(atomColour("N")).toBe(elementColour("N"));
+    expect(colourSet3d("bright").colour("O")).toBe("#ff1f1f");
+    expect(colourSet3d("bright").colour("Br")).toBe(elementColour("Br"));
+    expect(colourSet3d("greys").colour("H")).toBe("#ffffff");
+    expect(greyOf("#000000")).toBe("#000000");
+    // (a pure red as light as it is: about a third of the way up)
+    expect(greyOf("#ff0000")).toBe("#7f7f7f");
+    expect(colourSet3d("rainbow").id).toBe("jmol");
+  });
+
+  it("are chosen per style, the style's own colours over them, and set back to the set chosen", () => {
+    let choice = withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "colourSet", "greys");
+    expect(atomColour("O", lookOfStyle(choice, "balls"))).toBe(greyOf(elementColour("O")));
+    choice = withAtomColour(choice, "balls", "O", "#ff0000");
+    expect(atomColour("O", lookOfStyle(choice, "balls"))).toBe("#ff0000");
+    // (set back: the grey of the set chosen, nothing of its own left)
+    choice = withAtomColour(choice, "balls", "O", greyOf(elementColour("O")));
+    expect(choice.looks.balls).toEqual({ colourSet: "greys" });
+    expect(look3dPreset("outlined").look.colourSet).toBe("bright");
+    expect(look3dPreset("balls").look.colourSet).toBe("jmol");
   });
 });
