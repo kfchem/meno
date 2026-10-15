@@ -138,4 +138,55 @@ describe("molecules in 3D written as a scene to render", () => {
   it("says there is nothing to render where nothing is drawn", () => {
     expect(() => renderScene([], STYLE_3D, PICTURE)).toThrow(/nothing to render/);
   });
+
+  describe("seen through, a stick stops at its ball's surface", () => {
+    const parts = (ask: RenderAsk) => {
+      const g = parse(renderScene([{ m: ethene() }], STYLE_3D, ask).gltf);
+      const root = g.nodes[g.scenes[0].nodes[0]];
+      const children = root.children.map((i: number) => g.nodes[i]);
+      return {
+        balls: children.filter((n: Json) => g.meshes[n.mesh].name.startsWith("ball")),
+        sticks: children.filter((n: Json) => g.meshes[n.mesh].name.startsWith("stick")),
+      };
+    };
+    const solid = parts(PICTURE);
+    const glass = parts({ ...PICTURE, molecules: "glass" });
+
+    it("leaves the sticks of an opaque look from atom to atom", () => {
+      expect(solid.sticks).toHaveLength(6);
+      // (the C-H bond: 0.923 across and 0.571 along)
+      const ch = Math.hypot(0.923, 1.238 - 0.667);
+      expect(solid.sticks.some((n: Json) => Math.abs(n.scale[1] - ch) < 1e-4)).toBe(true);
+    });
+
+    it("stops a single bond's stick at both balls' surfaces, its own radius allowed for", () => {
+      const rC = glass.balls[0].scale[0];
+      const rH = glass.balls[2].scale[0];
+      const ch = Math.hypot(0.923, 1.238 - 0.667);
+      // (the C-H sticks: those of the bond's own radius, not the double bond's two lines)
+      const singles = glass.sticks.filter((n: Json) => Math.abs(n.scale[0] - 0.1) < 1e-3);
+      expect(singles).toHaveLength(4);
+      const r = singles[0].scale[0];
+      const reach = (R: number) => Math.sqrt(R * R - r * r);
+      for (const n of singles) expect(n.scale[1]).toBeCloseTo(ch - reach(rC) - reach(rH), 3);
+      expect(singles[0].scale[1]).toBeLessThan(ch - 0.5 * (rC + rH));
+    });
+
+    it("stops a double bond's two lines where each meets the sphere, off its axis", () => {
+      const rC = glass.balls[0].scale[0];
+      const lines = glass.sticks.filter((n: Json) => Math.abs(n.translation[2]) < 1e-6);
+      expect(lines).toHaveLength(2);
+      for (const n of lines) {
+        const off = Math.abs(n.translation[1]);
+        const r = n.scale[0];
+        const reach = Math.sqrt(rC * rC - r * r);
+        expect(off).toBeGreaterThan(0.05);
+        expect(n.scale[1]).toBeCloseTo(1.334 - 2 * Math.sqrt(reach * reach - off * off), 3);
+      }
+    });
+
+    it("keeps the balls as they are", () => {
+      expect(glass.balls.map((n: Json) => n.scale)).toEqual(solid.balls.map((n: Json) => n.scale));
+    });
+  });
 });

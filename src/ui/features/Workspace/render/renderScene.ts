@@ -85,6 +85,34 @@ const RATIOS: Record<Exclude<Shape, "fit">, number> = { "16:9": 16 / 9, "4:3": 4
  */
 type Sample = { places: Float32Array; turn: THREE.Quaternion; presence: Float32Array | null };
 
+/**
+ * Whether the molecules are seen through, so that what is inside a ball shows: made of glass. A renderer's own looks
+ * that see through (ice, a soap bubble, slime, X-ray) are added here by the look that makes them.
+ */
+export function seesThrough(ask: Pick<RenderAsk, "molecules">): boolean {
+  return ask.molecules === "glass";
+}
+
+/**
+ * Where a stick's end stops: the move of `end`, along the line towards `other`, to the surface of the ball about
+ * `centre` of radius `radius` - the stick's own radius allowed for, so that the flat end's rim, not its middle,
+ * meets the surface. A line that does not meet the ball, or whose end is outside it, is not moved.
+ */
+export function stoppedAt(end: THREE.Vector3, centre: THREE.Vector3, radius: number, stick: number, other: THREE.Vector3): THREE.Vector3 {
+  const along = other.clone().sub(end);
+  const len = along.length();
+  if (len < 1e-9) return new THREE.Vector3();
+  along.divideScalar(len);
+  const rel = end.clone().sub(centre);
+  const reach = Math.sqrt(Math.max(radius * radius - stick * stick, 0));
+  const d = rel.dot(along);
+  const across2 = rel.lengthSq() - d * d;
+  if (reach * reach <= across2) return new THREE.Vector3();
+  const exit = -d + Math.sqrt(reach * reach - across2);
+  if (exit <= 0) return new THREE.Vector3();
+  return along.multiplyScalar(Math.min(exit, len));
+}
+
 export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: RenderAsk): Rendered {
   const film = ask.kind === "film";
   const fps = film ? Math.max(1, Math.round(ask.fps ?? 30)) : 1;
@@ -223,15 +251,24 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     // each bond's lines (a double bond two, a triple three), as sticks from atom to atom
     if (bondR > 0 && bonds.length) {
       const stick = shapeIn("stick", material(drawn.bondColor, drawn));
+      // (which bond each line is of, a bond's lines side by side)
+      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
+      const seeThrough = seesThrough(ask);
       const linesAt = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR).map((l) => {
+        bondLines({ ...molecule, bonds }, x.places, bondR).map((l, li) => {
+          if (seeThrough) {
+            // (seen through, a stick stops where its ball's surface is: nothing runs on inside the glass)
+            const b = bonds[lineBond[li]];
+            for (const [end, atom, sign] of [[l.a, b.a1, 1], [l.b, b.a2, -1]] as const) {
+              const R = left[atom] || radii[atom] <= 0 ? 0 : radii[atom] / k;
+              if (R > 0) end.add(stoppedAt(end, new THREE.Vector3(x.places[3 * atom], x.places[3 * atom + 1], x.places[3 * atom + 2]), R, l.r, sign === 1 ? l.b : l.a));
+            }
+          }
           const along = l.b.clone().sub(l.a);
           const len = along.length();
           return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
         });
-      // (which bond each line is of, a bond's lines side by side)
-      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
       const each = samples.map(linesAt);
       for (let l = 0; l < each[0].length; l++) {
         const at = (s: number) => {
