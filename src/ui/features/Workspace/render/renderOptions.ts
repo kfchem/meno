@@ -75,6 +75,27 @@ export const LOOKS: readonly { id: string; label: string; parts: LookParts }[] =
   { id: "metal", label: "Metal", parts: { ...PLAIN, molecules: "metal", surfaces: "glossy" } },
   { id: "cartoon", label: "Cartoon: one lit band, outlined", parts: { ...PLAIN, molecules: "meno", surfaces: "meno", shading: "toon", outlines: "mixed" } },
   { id: "lineart", label: "Line art: white fill, outlined", parts: { ...PLAIN, molecules: "white", surfaces: "matte", shading: "toon", outlines: "mixed", band: 1 } },
+  // (looks a renderer makes with materials of its own, in light of its own: the molecules keep the element colours the renderer reads)
+  ...(
+    [
+      ["gold", "Gold: polished metal"],
+      ["silver", "Silver: mirror or satin"],
+      ["copper", "Copper: brushed or tarnished"],
+      ["bubble", "Soap bubble: clear, with thin-film colour"],
+      ["wood", "Wood: varnished, in a species"],
+      ["marble", "Marble: polished white stone, veined"],
+      ["terracotta", "Terracotta: dry, unglazed clay"],
+      ["plasticine", "Plasticine: element colours, hand pressed"],
+      ["plush", "Velvet: a deep pile with a bright rim"],
+      ["pearl", "Pearl: cream white with an orient"],
+      ["porcelain", "Porcelain: glazed blue-white"],
+      ["slime", "Slime: see-through jelly"],
+      ["ice", "Ice: cold, clear glass"],
+      ["neon", "Neon: lit tubes"],
+      ["xray", "X-ray: layers that add up"],
+      ["fur", "Fur: short dense hair"],
+    ] as const
+  ).map(([id, label]) => ({ id, label, parts: { ...PLAIN, molecules: "meno" as const, surfaces: "meno" as const } })),
 ];
 
 /** The ids of the looks Meno knows. */
@@ -119,6 +140,7 @@ export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: 
 /** How a render is lit and outlined, from Render's own choices. */
 export function finishOf(v: OptionValues): Finish {
   return {
+    look: typeof v.look === "string" ? v.look : "meno",
     shading: (v.shading as Shading) ?? "lit",
     outlines: (v.outlines as Outlines) ?? "none",
     outline: Number(v.outline ?? 3),
@@ -130,7 +152,7 @@ export function finishOf(v: OptionValues): Finish {
 /** A render's finish as an entry says it to the renderer: the look's shading and outlines, in the names its settings have. */
 export function finishEntry(f: Finish | undefined) {
   const g = f ?? finishOf({});
-  return { shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
+  return { look: g.look, shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
 }
 
 /** What a render is asked to make, from Render's own choices. */

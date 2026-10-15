@@ -37,8 +37,13 @@ describe("Render's look: one choice, a bundle of parts", () => {
     const l = LOOKS.find((x) => x.id === "lineart")!;
     const ask = askOf("picture", { width: 900, shape: "fit", look: l.id, ...l.parts });
     expect(ask).toMatchObject({ molecules: "white", surfaces: "matte", finish: { shading: "toon", outlines: "mixed", band: 1 } });
-    expect(finishEntry(ask.finish)).toEqual({ shading: "toon", outlines: "mixed", outline: 3, outline_colour: "black", band: 1 });
+    expect(finishEntry(ask.finish)).toEqual({ look: "lineart", shading: "toon", outlines: "mixed", outline: 3, outline_colour: "black", band: 1 });
     // (a look as the canvas draws it: lit, no outlines)
-    expect(finishEntry(askOf("picture", { width: 900, shape: "fit" }).finish)).toMatchObject({ shading: "lit", outlines: "none" });
+    expect(finishEntry(askOf("picture", { width: 900, shape: "fit" }).finish)).toMatchObject({ look: "meno", shading: "lit", outlines: "none" });
+    // (a look the renderer makes with materials of its own: its name goes with the entry, the scene keeping the element colours)
+    const gold = LOOKS.find((x) => x.id === "gold")!;
+    const goldAsk = askOf("picture", { width: 900, shape: "fit", look: gold.id, ...gold.parts });
+    expect(goldAsk.molecules).toBe("meno");
+    expect(finishEntry(goldAsk.finish).look).toBe("gold");
   });
 });

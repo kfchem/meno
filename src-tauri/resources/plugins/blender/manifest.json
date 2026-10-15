@@ -6,31 +6,341 @@
   "licence": "GPL-3.0-or-later",
   "homepage": "https://www.blender.org",
   "environment": "uv",
-  "systems": ["macos", "windows"],
+  "systems": [
+    "macos",
+    "windows"
+  ],
   "downloads": [
-    {"file": "blender-5.2.2-macos-arm64.dmg", "name": "Blender 5.2.2 LTS", "licence": "GPL-3.0-or-later", "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-macos-arm64.dmg", "sha256": "dc4125399b8bfefe283cc1624d6cfc7809d1cac20ace51072127eb371f31f210", "bytes": 346286611, "system": "macos", "arch": "aarch64", "unpack": "dmg", "program": "Blender.app/Contents/MacOS/Blender", "provides": "blender"},
-    {"file": "blender-5.2.2-windows-x64.zip", "name": "Blender 5.2.2 LTS", "licence": "GPL-3.0-or-later", "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-windows-x64.zip", "sha256": "3849d17a682cba006075aaa3f3597ecb5c9c30ec31035b2e092c53e40679b535", "bytes": 404453484, "system": "windows", "arch": "x86_64", "unpack": "zip", "program": "*/blender.exe", "provides": "blender"},
-    {"file": "blender-5.2.2-windows-arm64.zip", "name": "Blender 5.2.2 LTS", "licence": "GPL-3.0-or-later", "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-windows-arm64.zip", "sha256": "2e90b53c9443cc56d2be75a61550a38e4aba942c8cded046ceff98ed58ebc67b", "bytes": 274036892, "system": "windows", "arch": "aarch64", "unpack": "zip", "program": "*/blender.exe", "provides": "blender"}
+    {
+      "file": "blender-5.2.2-macos-arm64.dmg",
+      "name": "Blender 5.2.2 LTS",
+      "licence": "GPL-3.0-or-later",
+      "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-macos-arm64.dmg",
+      "sha256": "dc4125399b8bfefe283cc1624d6cfc7809d1cac20ace51072127eb371f31f210",
+      "bytes": 346286611,
+      "system": "macos",
+      "arch": "aarch64",
+      "unpack": "dmg",
+      "program": "Blender.app/Contents/MacOS/Blender",
+      "provides": "blender"
+    },
+    {
+      "file": "blender-5.2.2-windows-x64.zip",
+      "name": "Blender 5.2.2 LTS",
+      "licence": "GPL-3.0-or-later",
+      "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-windows-x64.zip",
+      "sha256": "3849d17a682cba006075aaa3f3597ecb5c9c30ec31035b2e092c53e40679b535",
+      "bytes": 404453484,
+      "system": "windows",
+      "arch": "x86_64",
+      "unpack": "zip",
+      "program": "*/blender.exe",
+      "provides": "blender"
+    },
+    {
+      "file": "blender-5.2.2-windows-arm64.zip",
+      "name": "Blender 5.2.2 LTS",
+      "licence": "GPL-3.0-or-later",
+      "url": "https://download.blender.org/release/Blender5.2/blender-5.2.2-windows-arm64.zip",
+      "sha256": "2e90b53c9443cc56d2be75a61550a38e4aba942c8cded046ceff98ed58ebc67b",
+      "bytes": 274036892,
+      "system": "windows",
+      "arch": "aarch64",
+      "unpack": "zip",
+      "program": "*/blender.exe",
+      "provides": "blender"
+    }
   ],
   "steps": [
-    {"kinds": ["render"], "programs": ["blender"]}
+    {
+      "kinds": [
+        "render"
+      ],
+      "programs": [
+        "blender"
+      ]
+    }
   ],
   "roles": [
     {
       "role": "render",
-      "programs": ["blender"],
-      "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"],
+      "programs": [
+        "blender"
+      ],
+      "looks": [
+        "meno",
+        "glossy",
+        "matte",
+        "clay",
+        "glass",
+        "metal",
+        "cartoon",
+        "lineart",
+        "gold",
+        "silver",
+        "copper",
+        "bubble",
+        "wood",
+        "marble",
+        "terracotta",
+        "plasticine",
+        "plush",
+        "pearl",
+        "porcelain",
+        "slime",
+        "ice",
+        "neon",
+        "xray",
+        "fur"
+      ],
       "options": [
-        {"id": "engine", "when": {"id": "shading", "in": ["lit"]}, "label": "Renderer", "type": "choice", "choices": [{"value": "cycles", "label": "Cycles: light traced, true shadows"}, {"value": "eevee", "label": "EEVEE: fast"}], "default": "cycles"},
-        {"id": "samples", "label": "Samples for each pixel", "type": "number", "default": 128, "min": 1, "max": 4096, "step": 1},
-        {"id": "denoise", "when": {"id": "shading", "in": ["lit"]}, "label": "Remove noise", "type": "switch", "default": true},
-        {"id": "gpu", "label": "Use the graphics processor where Blender can", "type": "switch", "default": true},
-        {"id": "background", "label": "Background", "type": "choice", "choices": [{"value": "transparent", "label": "Transparent (a film's is white)"}, {"value": "white", "label": "White"}, {"value": "black", "label": "Black"}, {"value": "grey", "label": "Grey"}], "default": "transparent"},
-        {"id": "colours", "label": "Colours", "type": "choice", "choices": [{"value": "neutral", "label": "True to the style (Khronos PBR Neutral)"}, {"value": "agx", "label": "Film-like (AgX)"}, {"value": "standard", "label": "Standard"}], "default": "neutral"},
-        {"id": "key", "label": "Key light, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
-        {"id": "ambient", "label": "Light all round, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
-        {"id": "softness", "label": "Shadows' softness", "type": "number", "default": 10, "min": 0, "max": 90, "step": 1, "unit": "°"},
-        {"id": "quality", "label": "A film's quality", "type": "choice", "choices": [{"value": "high", "label": "High"}, {"value": "medium", "label": "Medium: smaller"}, {"value": "lossless", "label": "Nearly lossless: largest"}], "default": "high"}
+        {
+          "id": "silver-finish",
+          "label": "Silver's finish",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "mirror",
+              "label": "Mirror"
+            },
+            {
+              "value": "satin",
+              "label": "Satin"
+            }
+          ],
+          "default": "mirror",
+          "when": {
+            "id": "look",
+            "in": [
+              "silver"
+            ]
+          }
+        },
+        {
+          "id": "copper-finish",
+          "label": "Copper's finish",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "brushed",
+              "label": "Brushed"
+            },
+            {
+              "value": "tarnished",
+              "label": "Tarnished"
+            }
+          ],
+          "default": "brushed",
+          "when": {
+            "id": "look",
+            "in": [
+              "copper"
+            ]
+          }
+        },
+        {
+          "id": "wood",
+          "label": "Wood",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "oak",
+              "label": "Oak"
+            },
+            {
+              "value": "walnut",
+              "label": "Walnut"
+            },
+            {
+              "value": "cherry",
+              "label": "Cherry"
+            },
+            {
+              "value": "maple",
+              "label": "Maple"
+            },
+            {
+              "value": "ebony",
+              "label": "Ebony"
+            },
+            {
+              "value": "element",
+              "label": "By element: each its own wood"
+            }
+          ],
+          "default": "oak",
+          "when": {
+            "id": "look",
+            "in": [
+              "wood"
+            ]
+          }
+        },
+        {
+          "id": "marble",
+          "label": "Marble's pattern",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "carrara",
+              "label": "Carrara: long veins across the molecule"
+            },
+            {
+              "value": "swirl",
+              "label": "Swirls on each atom"
+            }
+          ],
+          "default": "carrara",
+          "when": {
+            "id": "look",
+            "in": [
+              "marble"
+            ]
+          }
+        },
+        {
+          "id": "engine",
+          "when": {
+            "id": "shading",
+            "in": [
+              "lit"
+            ]
+          },
+          "label": "Renderer",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "cycles",
+              "label": "Cycles: light traced, true shadows"
+            },
+            {
+              "value": "eevee",
+              "label": "EEVEE: fast"
+            }
+          ],
+          "default": "cycles"
+        },
+        {
+          "id": "samples",
+          "label": "Samples for each pixel",
+          "type": "number",
+          "default": 128,
+          "min": 1,
+          "max": 4096,
+          "step": 1
+        },
+        {
+          "id": "denoise",
+          "when": {
+            "id": "shading",
+            "in": [
+              "lit"
+            ]
+          },
+          "label": "Remove noise",
+          "type": "switch",
+          "default": true
+        },
+        {
+          "id": "gpu",
+          "label": "Use the graphics processor where Blender can",
+          "type": "switch",
+          "default": true
+        },
+        {
+          "id": "background",
+          "label": "Background",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "transparent",
+              "label": "Transparent (a film's is white)"
+            },
+            {
+              "value": "white",
+              "label": "White"
+            },
+            {
+              "value": "black",
+              "label": "Black"
+            },
+            {
+              "value": "grey",
+              "label": "Grey"
+            }
+          ],
+          "default": "transparent"
+        },
+        {
+          "id": "colours",
+          "label": "Colours",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "neutral",
+              "label": "True to the style (Khronos PBR Neutral)"
+            },
+            {
+              "value": "agx",
+              "label": "Film-like (AgX)"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            }
+          ],
+          "default": "neutral"
+        },
+        {
+          "id": "key",
+          "label": "Key light, against the canvas's",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 10,
+          "step": 0.1,
+          "unit": "×"
+        },
+        {
+          "id": "ambient",
+          "label": "Light all round, against the canvas's",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 10,
+          "step": 0.1,
+          "unit": "×"
+        },
+        {
+          "id": "softness",
+          "label": "Shadows' softness",
+          "type": "number",
+          "default": 10,
+          "min": 0,
+          "max": 90,
+          "step": 1,
+          "unit": "°"
+        },
+        {
+          "id": "quality",
+          "label": "A film's quality",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "high",
+              "label": "High"
+            },
+            {
+              "value": "medium",
+              "label": "Medium: smaller"
+            },
+            {
+              "value": "lossless",
+              "label": "Nearly lossless: largest"
+            }
+          ],
+          "default": "high"
+        }
       ]
     }
   ]

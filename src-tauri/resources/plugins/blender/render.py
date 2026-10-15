@@ -46,6 +46,8 @@ The settings (all checked by the worker that wrote them):
     key, ambient   the key light's and the light all round's strengths, as factors of Meno's
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
+    look        the look's name; those with materials and light of their own (looks.py) are made by it
+    silver_finish, copper_finish, wood, marble   the choices that adjust them
     shading     "lit", as a renderer lights it, or "toon": each material a Toon BSDF in the colour it had,
                 lit in one band - `band` its size - which Cycles draws as a band, without noise removal
     outlines    "none", "thin" (Freestyle's lines, one pixel), "outer" (the picture's silhouette grown
@@ -59,6 +61,9 @@ import os
 import sys
 
 import bpy
+
+sys.path.insert(0, os.getcwd())
+import looks  # noqa: E402 - beside this script, in the job's folder
 
 # What a factor of 1 of Meno's lights is, in Blender's units: Meno's key
 # light, a sun of this many watts a square metre; its light all round, a
@@ -238,6 +243,18 @@ def engine(scene, s):
     scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
 
 
+def own_look(scene, s):
+    """A look with materials and light of its own (looks.py): Cycles, the world and panels it brings, its materials on the molecules; what reflections find is never seen by the camera."""
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = s["samples"]
+    scene.cycles.use_denoising = s["denoise"] and s["shading"] != "toon"
+    scene.cycles.device = "GPU" if s["gpu"] and gpu_ready() else "CPU"
+    camera = scene.camera
+    looks.apply(scene, camera, s["look"], {k: s[k] for k in ("silver_finish", "copper_finish", "wood", "marble")}, s["background"])
+    looks.settle_denoising(scene)
+    scene.render.film_transparent = True
+
+
 def output(scene, s):
     """What is rendered: its size, its colours as asked, each frame a PNG with its transparency."""
     scene.render.resolution_x = s["width"]
@@ -367,6 +384,8 @@ def main():
     camera_of(scene, gltf)
     light(scene, s, float(meno.get("ambientLight", 1.0)))
     engine(scene, s)
+    if s["look"] in looks.IDS:
+        own_look(scene, s)
     if s["shading"] == "toon":
         toon(scene, s)
     lines(scene, s)

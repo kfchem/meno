@@ -235,6 +235,35 @@ uv, no package), and the script Blender runs, `render.py`.
   the molecule however its shapes overlap, which Freestyle's own external
   contour (each shape's) is not. Meno's looks keep the picture's place
   and size.
+- **Looks with materials and light of their own** (`looks.py`, beside
+  `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
+  wood, marble, terracotta, plasticine, velvet, pearl, porcelain, slime,
+  ice, neon, X-ray and fur are not a colour and a gloss: each is a
+  material of Blender's own shader nodes, put on the molecules by their
+  shapes' names (`ball #909090`, `stick #000000`: the element's colour is
+  read from the name, so each element keeps its own, a shared material
+  being the one thing the colours must not come to), and brings **its own
+  lighting world**, which the camera never sees. The metals and the bubble
+  reflect, so they have a studio: a world that is dim above and a darker
+  band below, and three soft rectangular light panels (one wide at the
+  upper left, one tall at the right, one narrow above) that give the
+  reflections shapes. The matte looks have the same panels dim, a diffuse
+  surface being over-exposed by the metals' strength. What is behind is
+  still transparent, and is put under the picture as the Background choice
+  asks. These looks are made by Cycles, with noise removal using the
+  albedo and normal passes, the glossy and total bounces capped, and
+  adaptive sampling; the key light and the light all round are the look's,
+  not the canvas's. Their choices appear only under their look: silver's
+  finish (mirror or satin), copper's (brushed or tarnished), the wood's
+  species (oak, walnut, cherry, maple, ebony, or each element its own) and
+  marble's pattern (Carrara, long veins laid in the molecule's own space so
+  that they run on across atoms and sticks, or swirls on each atom). The
+  metals' reflectances are the published F0 values of Hoffman's table of
+  metals ("Physically Based Shading", SIGGRAPH 2010 course): gold 1.00
+  0.71 0.29, silver 0.95 0.93 0.88 and copper 0.95 0.64 0.54, linear;
+  copper is deepened by the scene - panels of a warm tone, fewer of them
+  - not by its F0. A surface drawn from an orbital keeps the colours Meno
+  gave it.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer

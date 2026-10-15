@@ -72,6 +72,19 @@ class Prepare(unittest.TestCase):
         looks = m["roles"][0]["looks"]
         self.assertIn("cartoon", looks)
         self.assertIn("meno", looks)
+        for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "terracotta", "plasticine", "plush", "pearl", "porcelain", "slime", "ice", "neon", "xray", "fur"):
+            self.assertIn(own, looks)
+            self.assertIn(own, worker.LOOKS)
+
+    def test_a_look_with_materials_of_its_own_carries_looks_py_and_its_choices(self):
+        entry = {**SCENE, "look": "wood"}
+        said = ask("prepare", step="render", entries=[entry], options={"wood": "cherry", "silver-finish": "satin", "marble": "swirl"})
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertIn("looks.py", files)
+        settings = json.loads(files["render.json"])
+        self.assertEqual((settings["look"], settings["wood"], settings["silver_finish"], settings["marble"]), ("wood", "cherry", "satin", "swirl"))
+        refused = ask("prepare", step="render", entries=[{**SCENE, "look": "chrome"}], options={})
+        self.assertFalse(refused["ok"])
 
     def test_a_film_is_written_as_one(self):
         said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 240, "fps": 30}], options={"quality": "lossless", "background": "black"})
@@ -125,11 +138,11 @@ class Manifest(unittest.TestCase):
         self.assertEqual(m["licence"], "GPL-3.0-or-later")
         self.assertIn("GNU GENERAL PUBLIC LICENSE", (FOLDER / "LICENSE").read_text(encoding="utf-8"))
         self.assertIn("Version 3", (FOLDER / "LICENSE").read_text(encoding="utf-8"))
-        for f in ("worker.py", "render.py"):
+        for f in ("worker.py", "render.py", "looks.py"):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble"})
 
 
 def blender():
@@ -229,6 +242,33 @@ class Renders(unittest.TestCase):
             from collections import Counter
             top = sum(n for _, n in Counter(tuple(p[:3]) for p in row).most_common(3))
             self.assertGreater(top, 0.8 * width)
+
+    def test_a_look_with_materials_of_its_own_keeps_each_elements_colour(self):
+        # (two balls named as Meno names a shape, one red, one blue, in the plasticine look: the left reads red and the right blue - not both the one grey a shared material gives)
+        mesh = ball_mesh()
+        scene = {**BALL, **mesh}
+        scene["meshes"] = [{**mesh["meshes"][0], "name": "ball #FF0000"}, {**mesh["meshes"][0], "name": "ball #0000FF"}]
+        scene["materials"] = [{"pbrMetallicRoughness": {"baseColorFactor": [0.8, 0.8, 0.8, 1], "metallicFactor": 0, "roughnessFactor": 1}}]
+        scene["nodes"] = [
+            {"name": "ball #FF0000", "mesh": 0, "translation": [-1, 0, 0]},
+            {"name": "ball #0000FF", "mesh": 1, "translation": [1, 0, 0]},
+            {"camera": 0, "translation": [0, 0, 5]},
+            BALL["nodes"][2],
+        ]
+        scene["scenes"] = [{"nodes": [0, 1, 2, 3], "extras": {"meno": {"ambientLight": 0.9}}}]
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            said = ask("prepare", step="render", entries=[{**SCENE, "look": "plasticine"}], options={"samples": 16, "background": "white", "gpu": False})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            png = (pathlib.Path(d) / "picture.png").read_bytes()
+            r1, g1, b1 = png_pixel(png, 110, 120)[:3]
+            r2, g2, b2 = png_pixel(png, 210, 120)[:3]
+            self.assertGreater(r1, 2 * max(g1, b1), (r1, g1, b1))
+            self.assertGreater(b2, 2 * max(r2, g2), (r2, g2, b2))
 
     def test_colours_a_surface_by_its_points_colours(self):
         # (a ball each of whose points is red, over a white material: COLOR_0 multiplies the base colour - glTF 3.9.2)

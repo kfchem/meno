@@ -47,7 +47,7 @@ export type RenderAsk = {
 /** How a picture is shaded - lit as the renderer lights it, or in one band of toon shading - and its outlines. */
 export type Shading = "lit" | "toon";
 export type Outlines = "none" | "thin" | "outer" | "mixed";
-export type Finish = { shading: Shading; outlines: Outlines; outline: number; outlineColour: "black" | "white" | "grey"; band: number };
+export type Finish = { look: string; shading: Shading; outlines: Outlines; outline: number; outlineColour: "black" | "white" | "grey"; band: number };
 
 /** A molecule in 3D as it is shown: carried as a copy carries it, the surface it shows - placed about its shown frame's centre, in ångströms - and the vibration it shows, each atom's displacement. */
 export type Shown3D = { m: Carried3D; surfaces?: { plus: Mesh; minus: Mesh | null }; move?: readonly number[] };
