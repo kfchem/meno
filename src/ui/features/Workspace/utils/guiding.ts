@@ -78,12 +78,16 @@ export function guideScale(store: EditorStore, toWorld: (cx: number, cy: number)
   const style = styleNow(store);
   const px = pixelOn(toWorld, at);
   const others = besidesBoxes(store.getState(), style);
+  // (taken at one distance, held to a longer: no flicker as it passes the edge)
+  let held = false;
   const step = (f: number, keys: Held, keep: (f: number) => Box): number => {
     if (off(keys)) {
+      held = false;
       showGuides(store, null);
       return f;
     }
-    const s = sizedLike(was, f, nearOf(keep(f), others, NEAR_SIDES * Math.max(was.x1 - was.x0, was.y1 - was.y0) * f + NEAR_PX * px), GUIDE_PX * px, keep);
+    const s = sizedLike(was, f, nearOf(keep(f), others, NEAR_SIDES * Math.max(was.x1 - was.x0, was.y1 - was.y0) * f + NEAR_PX * px), (held ? GUIDE_HOLD_PX : GUIDE_PX) * px, keep);
+    held = s.marks.length > 0;
     showGuides(store, s.marks.length ? { lines: s.lines, marks: s.marks } : null);
     return s.f;
   };
@@ -95,12 +99,15 @@ export function guideWidth(store: EditorStore, toWorld: (cx: number, cy: number)
   const style = styleNow(store);
   const px = pixelOn(toWorld, at);
   const others = besidesBoxes(store.getState(), style, undefined, { caption });
+  let held = false;
   const step = (now: Box, keys: Held): number | null => {
     if (off(keys)) {
+      held = false;
       showGuides(store, null);
       return null;
     }
-    const w = widthLike(now, nearOf(now, others, NEAR_SIDES * (now.x1 - now.x0) + NEAR_PX * px), GUIDE_PX * px);
+    const w = widthLike(now, nearOf(now, others, NEAR_SIDES * (now.x1 - now.x0) + NEAR_PX * px), (held ? GUIDE_HOLD_PX : GUIDE_PX) * px);
+    held = w.size != null;
     showGuides(store, w.marks.length ? { lines: [], marks: w.marks } : null);
     return w.size;
   };
@@ -117,12 +124,15 @@ export function guideSides(store: EditorStore, toWorld: (cx: number, cy: number)
   const style = styleNow(store);
   const px = pixelOn(toWorld, at);
   const others = besidesBoxes(store.getState(), style);
+  let held = false;
   const step = (now: Box, moving: { x?: "x0" | "x1"; y?: "y0" | "y1" }, keys: Held): Box => {
     if (off(keys)) {
+      held = false;
       showGuides(store, null);
       return now;
     }
-    const s = sidesLike(now, moving, nearOf(now, others, NEAR_SIDES * Math.max(now.x1 - now.x0, now.y1 - now.y0) + NEAR_PX * px), GUIDE_PX * px);
+    const s = sidesLike(now, moving, nearOf(now, others, NEAR_SIDES * Math.max(now.x1 - now.x0, now.y1 - now.y0) + NEAR_PX * px), (held ? GUIDE_HOLD_PX : GUIDE_PX) * px);
+    held = s.marks.length > 0;
     showGuides(store, s.marks.length ? { lines: [], marks: s.marks } : null);
     return s.box;
   };
