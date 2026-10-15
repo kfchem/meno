@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, findIn, letterAt, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
+import { blockOf, findIn, letterAt, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, textBetween, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
 
 /** A page of lines as PDFium reads them: each letter 6 points wide, each line 12 tall, 14 apart, starting where it is given (72, else); its ends "\r\n" with no box. */
 function page(lines: (string | [string, number])[]): PageText {
@@ -119,5 +119,41 @@ describe("a PDF page's words", () => {
     const columns = page(["the quick brown fox", "jumps over the lazy dog and", "runs far away"]);
     expect(blockOf(columns, 0, 3)).toMatchObject({ lines: 1, align: "left" });
     expect(blockOf(spread, 0, 0)).toBeNull();
+  });
+});
+
+describe("words copied from a PDF", () => {
+  /** Lines set where they are given - each [text, x, y], letters 6 points wide and 12 tall - in the order PDFium reads them, each ended "\r\n". */
+  const placed = (lines: [string, number, number][]): PageText => {
+    let text = "";
+    const boxes: ([number, number, number, number] | null)[] = [];
+    for (const [line, x, y] of lines) {
+      [...line].forEach((ch, k) => {
+        text += ch;
+        boxes.push(ch === " " ? null : [x + k * 6, y, x + 6 + k * 6, y + 12]);
+      });
+      text += "\r\n";
+      boxes.push(null, null);
+    }
+    return pageTextFrom(text, boxes);
+  };
+
+  it("keep the page's lines, a blank line where one stands apart, across two columns read one after the other", () => {
+    // (a heading set apart over the left column; the right column's lines, read after the left's, going on from it)
+    const t = placed([
+      ["Ethanol (1a)", 60, 100],
+      ["0 1", 60, 130],
+      ["C -1.170000 -0.400000 0.000000", 60, 144],
+      ["C 0.190000 0.290000 0.000000", 60, 158],
+      ["O 1.200000 -0.710000 0.000000", 330, 100],
+      ["H -1.980000 0.330000 0.000000", 330, 114],
+    ]);
+    expect(textBetween(t, 0, t.codes.length)).toBe(
+      ["Ethanol (1a)", "", "0 1", "C -1.170000 -0.400000 0.000000", "C 0.190000 0.290000 0.000000", "O 1.200000 -0.710000 0.000000", "H -1.980000 0.330000 0.000000"].join("\n"),
+    );
+  });
+
+  it("join a word PDFium broke at a line's end, as a search reads it", () => {
+    expect(textBetween(p, 0, p.codes.length)).toBe("Rotational barriers of the hy-\ndroxyl group were conformational, as found.");
   });
 });

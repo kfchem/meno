@@ -9,6 +9,7 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
+import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
@@ -166,6 +167,7 @@ export default function QuickAdd({
   onArrow,
   onShape,
   onSmiles,
+  onCoordinates,
   onStep,
   onProcedure,
   onClose,
@@ -188,6 +190,8 @@ export default function QuickAdd({
   onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
   onSmiles: (smiles: string) => Promise<void>;
+  /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
+  onCoordinates?: (structures: CoordinateStructure[]) => void;
   onStep: (kind: StepKind, by: string) => void;
   onProcedure?: (id: string) => void;
   onClose: () => void;
@@ -298,7 +302,7 @@ export default function QuickAdd({
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           <div className="overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onCoordinates={onCoordinates} />
           </div>
         </div>
       )}
@@ -382,9 +386,20 @@ export default function QuickAdd({
 /**
  * Where a SMILES is typed, below Quick Add's row: Enter draws it - the
  * first time, once the plugin that reads SMILES is set up - and what went
- * wrong, if anything, is said under it.
+ * wrong, if anything, is said under it. Coordinates pasted in it are read
+ * whole, their lines' ends and all, which the field itself would drop.
  */
-function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; onSmiles: (smiles: string) => Promise<void> }) {
+function SmilesField({
+  width,
+  open,
+  onSmiles,
+  onCoordinates,
+}: {
+  width: number;
+  open: boolean;
+  onSmiles: (smiles: string) => Promise<void>;
+  onCoordinates?: (structures: CoordinateStructure[]) => void;
+}) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -420,7 +435,15 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
           setText(e.target.value);
           setError(null);
         }}
-        placeholder="SMILES"
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData("text/plain");
+          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
+          const structures = onCoordinates ? readCoordinates(pasted) : [];
+          if (!structures.length) return;
+          e.preventDefault();
+          onCoordinates!(structures);
+        }}
+        placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"
         spellCheck={false}
         autoCorrect="off"
