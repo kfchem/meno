@@ -3,7 +3,8 @@
 //! apart from Meno, so that it goes on when Meno closes - its log written
 //! as it goes, and how it ended recorded.
 //!
-//! A job's folder, in Meno's data folder, `jobs/<id>/`:
+//! A job's folder, in Meno's local data folder (lib.rs `local_data_dir`),
+//! `jobs/<id>/`:
 //!
 //! - `job.json` - what to run: the program, its arguments and environment,
 //!   how many jobs may run at once, when it was asked for;
@@ -1589,7 +1590,7 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
 /// neither leads out - and holding what it is to run. Where it is there.
 pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
     let refused = || format!("not a job of Meno's: {}", dir.display());
-    let jobs = data.join("jobs");
+    let jobs = jobs_in(data);
     let root = jobs.canonicalize().map_err(|_| refused())?;
     let real = dir.canonicalize().map_err(|_| refused())?;
     let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
@@ -1620,12 +1621,14 @@ fn plain(path: PathBuf) -> PathBuf {
 /// Meno's identifier (tauri.conf.json), which names its data folder.
 const IDENTIFIER: &str = "com.kfchem.meno";
 
-/// Meno's data folder as Tauri finds it (`app_data_dir`: the system's
-/// folder for applications' data, then Meno's identifier) - for a job's
-/// runner, which has no window to ask.
+/// Meno's local data folder as Tauri finds it (`app_local_data_dir`: the
+/// system's folder for applications' local data, then Meno's identifier),
+/// where Meno makes jobs (lib.rs `local_data_dir`) - for a job's runner,
+/// which has no window to ask. On a Mac and on Linux it is the data folder
+/// itself; on Windows the local one, not the roaming one.
 fn data_dir_here() -> Option<PathBuf> {
     #[cfg(windows)]
-    let base = roaming_app_data();
+    let base = local_app_data();
     #[cfg(unix)]
     let base = {
         let home = std::env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute());
@@ -1639,14 +1642,14 @@ fn data_dir_here() -> Option<PathBuf> {
     base.map(|b| b.join(IDENTIFIER))
 }
 
-/// The user's roaming application data folder (Windows' known folder, as Tauri reads it).
+/// The user's local application data folder (Windows' known folder, as Tauri reads it).
 #[cfg(windows)]
-fn roaming_app_data() -> Option<PathBuf> {
+fn local_app_data() -> Option<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath};
+    use windows_sys::Win32::UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath};
     unsafe {
         let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
-        let ok = SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, std::ptr::null_mut(), &mut path) == 0;
+        let ok = SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, std::ptr::null_mut(), &mut path) == 0;
         let found = (ok && !path.is_null()).then(|| {
             let len = (0..).take_while(|&i| *path.add(i) != 0).count();
             PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
@@ -1672,8 +1675,13 @@ fn plugins_here() -> Option<PathBuf> {
 
 // --- Meno's commands ---------------------------------------------------------
 
+/// The jobs' folder in Meno's local data folder `data`: where Meno makes them, and the only one their runner takes them from.
+fn jobs_in(data: &Path) -> PathBuf {
+    data.join("jobs")
+}
+
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = crate::app_data_dir(app)?.join("jobs");
+    let root = jobs_in(&crate::local_data_dir(app)?);
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
 }
@@ -1730,7 +1738,7 @@ pub struct ThenAsk {
 /// A job made and its runner started: its id. It waits its turn.
 #[tauri::command]
 pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload: JobAsk) -> Result<String, String> {
-    let data = crate::app_data_dir(&app)?;
+    let data = crate::local_data_dir(&app)?;
     if !plugin_id(&payload.plugin) {
         return Err(format!("not a plugin: {}", payload.plugin));
     }
@@ -1811,6 +1819,18 @@ fn listed(id: &str, dir: &Path) -> Option<JobListed> {
 pub async fn job_state(app: AppHandle, id: String) -> Result<JobListed, String> {
     let dir = job_dir(&app, &id)?;
     listed(&id, &dir).ok_or_else(|| format!("no job {id}"))
+}
+
+/// How many of the jobs in `root` wait or run: those whose runners are
+/// there, or are starting.
+pub fn under_way(root: &Path) -> u32 {
+    let Ok(entries) = fs::read_dir(root) else { return 0 };
+    entries.flatten().filter(|e| current_record(&e.path()).is_some_and(|r| !r.state.finished())).count() as u32
+}
+
+/// How many of Meno's jobs wait or run - every workspace's, open or not.
+pub fn under_way_now(app: &AppHandle) -> u32 {
+    jobs_root(app).map(|root| under_way(&root)).unwrap_or(0)
 }
 
 /// Every job in Meno's data folder, those asked for first first.
@@ -2384,6 +2404,31 @@ mod tests {
     }
 
     #[test]
+    fn counts_the_jobs_that_wait_or_run() {
+        let root = temp();
+        assert_eq!(under_way(&root), 0);
+        assert_eq!(under_way(&root.join("not there")), 0);
+        // (its runner starting: waiting)
+        shell(&root, ECHO, 1);
+        // (running, its runner there)
+        let running = shell(&root, ECHO, 1);
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(running.join(RUNNER_LOCK)).unwrap();
+        lock.lock().unwrap();
+        write_record(&running, &JobRecord::new(JobState::Running, 1)).unwrap();
+        // (done; and recorded running by a runner that is gone)
+        let done = shell(&root, ECHO, 1);
+        write_record(&done, &JobRecord { ended: Some(3), code: Some(0), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        let gone = shell(&root, ECHO, 1);
+        write_record(&gone, &JobRecord::new(JobState::Running, 1)).unwrap();
+        // (and what is not a job's folder)
+        fs::create_dir_all(root.join("not a job")).unwrap();
+        fs::write(root.join(QUEUE_LOCK), b"").unwrap();
+        assert_eq!(under_way(&root), 2);
+        drop(lock);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn keeps_a_job_s_files_inside_its_folder() {
         assert!(inside_name("input.inp"));
         assert!(inside_name("sub/coords.xyz"));
@@ -2675,6 +2720,27 @@ mod tests {
             assert!(spec_allowed(&data, &plugins, &then, &written).is_err(), "{arg}");
         }
         assert!(spec_allowed(&data, &plugins, &good, &[]).is_err());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_runner_takes_a_job_made_in_the_local_data_folder() {
+        // (where the runner looks: the folder Tauri gives as the local one, in which Meno makes jobs - on Windows not the roaming one)
+        let here = data_dir_here().unwrap();
+        #[cfg(windows)]
+        {
+            let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join(IDENTIFIER);
+            assert_eq!(here, local);
+            assert!(!here.starts_with(std::env::var_os("APPDATA").unwrap()));
+        }
+        #[cfg(target_os = "macos")]
+        assert_eq!(here, PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library").join("Application Support").join(IDENTIFIER));
+        // (a job made as job_start makes it, in a local data folder: taken by its runner)
+        let base = temp();
+        let data = base.join("local");
+        let source = shell(&base.join("source"), ECHO, 1);
+        let (id, dir) = make_job(&jobs_in(&data), &read_spec(&source).unwrap(), &[]).unwrap();
+        assert_eq!(runner_folder(&data, &dir), Ok(plain(jobs_in(&data).canonicalize().unwrap().join(&id))));
         let _ = fs::remove_dir_all(base);
     }
 

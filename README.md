@@ -61,8 +61,10 @@ image cannot update itself.
 The first time it starts, Meno asks whether it may keep itself up to date. If
 you agree, it looks for a new version as it starts and every few hours,
 downloads it in the background and installs it when you quit. *Restart now*
-in the notice installs it at once. You can turn this on or off at any time in
-Settings, Network, under *Keep Meno up to date*.
+in the notice installs it at once. On Windows it waits while calculation jobs
+are waiting or running, because installing would stop them: it goes in when
+you quit with none. You can turn this on or off at any time in Settings,
+Network, under *Keep Meno up to date*.
 
 Meno connects to nothing without asking first, and shows every connection as
 it is made. Click the globe at the top of the window to work offline: then
@@ -88,10 +90,12 @@ installed yourself are used where they are; Meno never downloads them.
   uninstaller offers to delete Meno's data as well.
 - **Mac**: drag Meno from Applications to the Bin.
 
-Meno keeps its settings, plugins and calculation jobs in its own folder:
-`%APPDATA%\com.kfchem.meno` on Windows and
-`~/Library/Application Support/com.kfchem.meno` on a Mac. Delete that folder to
-remove them too. Your own files are wherever you saved them.
+Meno keeps its settings, its plugins' Python environments and downloads, and
+calculation jobs in its own folder: `~/Library/Application Support/com.kfchem.meno`
+on a Mac. On Windows the settings are in `%APPDATA%\com.kfchem.meno`, and the
+rest, which is large and of this computer alone, in
+`%LOCALAPPDATA%\com.kfchem.meno`. Delete those folders to remove them too. Your
+own files are wherever you saved them.
 
 ## What Meno does
 

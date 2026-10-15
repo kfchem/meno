@@ -1,7 +1,7 @@
 //! Python environments pixi makes - a plugin's, where it needs conda-forge
 //! (docs/PLUGINS.md) - beside those uv makes. An environment is made from
 //! the manifest and the lock in the plugin's folder, copied into the app's
-//! data folder, `pixi/plugin-<id>/`, where pixi
+//! local data folder (lib.rs `local_data_dir`), `pixi/plugin-<id>/`, where pixi
 //! keeps the environment it makes (`.pixi/envs/default`); everything else
 //! pixi keeps - its cache, its home - is there too, and no configuration of
 //! the user's is read.

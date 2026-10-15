@@ -620,7 +620,7 @@ not taken from either.
 ### Jobs
 
 A program a step runs - xTB's, say - runs as a job (`src-tauri/src/jobs.rs`,
-`lib/jobs.ts`): in a folder of its own, `<app data>/jobs/<id>/`, apart from
+`lib/jobs.ts`): in a folder of its own, `<local app data>/jobs/<id>/`, apart from
 Meno, so that it goes on when Meno closes (WORKFLOWS.md, *When Meno
 closes*).
 
@@ -988,12 +988,22 @@ double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
 lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
-The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
-(`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
-the lock or Python version changes. uv runs with its Python downloads
-(`uv/python`) and cache (`uv/cache`) under the app data dir too, only
+The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp
+file (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only
+when the lock or Python version changes. uv runs with its Python downloads
+(`uv/python`) and cache (`uv/cache`) under the local app data dir too, only
 uv-managed Pythons, and no user uv configuration (`uv_command` in `lib.rs`):
 nothing of Meno's environments lands in the user's own directories.
+
+The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
+in the webview) holds what is large and of this computer alone: uv's and pixi's
+environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
+download. On Windows that is `%LOCALAPPDATA%\com.kfchem.meno`, not the roaming
+`%APPDATA%` one, which a domain may copy to a server and back at each sign-in
+and keep within a quota; the settings and the network log stay in the roaming
+one. On a Mac and on Linux the two are one folder. A Meno before this kept all
+of it in the roaming folder on Windows; nothing is moved - plugins are set up
+again as they are next used, and the old folders can be deleted.
 
 ### PDFs
 
@@ -1288,8 +1298,8 @@ path it is given:
 - `py_env_*`: the webview names no tool - uv is the one `tools.rs` pins;
   `lockPath` must be a plugin's own lock in its folder,
   `resources/plugins/<id>/`: uv's `requirements.lock`, made in exactly
-  `<app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
-  `<app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
+  `<local app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
+  `<local app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
   (2026-10-13: the console's and the workflows' locks are gone); relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
@@ -1300,7 +1310,7 @@ path it is given:
   (Japanese Windows). What a sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
-  inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
+  inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script that is a plugin's `worker.py` in `resources/plugins/<id>/`, in that
   plugin's own environment (`SIDECAR_SCRIPTS`); later arguments go to the script unchanged.
 - A worker is pointed at the proxy with no task, so what it reaches for is
@@ -1331,7 +1341,7 @@ path it is given:
   32 folders deep, and no more than 10,000 files and folders are looked
   at. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be
-  `<app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
+  `<local app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
   job in the folder it checked), and what it is to run - the program, the programs after it, their arguments against
   the files in its work folder, their environment - what `job_start`
   would give (`spec_allowed`). Otherwise it writes a Failed record into
@@ -1359,7 +1369,7 @@ Adding a new worker or interpreter flag means extending these rules
 `lib.rs`.
 
 Files the chemist's own: the webview's file scope (`capabilities/main.json`)
-reaches only the app's data and resources. A file is written elsewhere only
+reaches only the app's data (roaming and local) and resources. A file is written elsewhere only
 where the system's save dialog was answered - Save, Save As, Export - since
 the dialog plugin adds the path it gives back to the file scope, for that
 path alone and for the session; nothing else outside the app's own folders
@@ -1433,6 +1443,10 @@ to be able to work with nothing going out at all.
   update is checked against the updater's public key (`tauri.conf.json`)
   before it is installed, which is as Meno quits; a development build, and
   a Meno Windows started for Office, neither look nor install. On Windows
+  it waits while jobs wait or run (`held`, `INSTALL_STOPS_JOBS`): the
+  installer ends every process of Meno's executable, the jobs' runners
+  among them, so it is installed neither as Meno quits nor by *Restart
+  now* until none do (docs/WORKFLOWS.md, *When Meno closes*). On Windows
   the installer is left in a folder of the temporary directory
   (`Meno-<version>-updater-…`), which Meno takes away as it starts once it
   is some minutes old (`tidy_after_updates`). Releases:
