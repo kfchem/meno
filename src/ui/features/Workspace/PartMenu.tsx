@@ -132,6 +132,7 @@ export type MenuMolecule3D = {
 export default function PartMenu({
   target,
   records,
+  stereo,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -328,6 +329,8 @@ export default function PartMenu({
   molecule3d?: MenuMolecule3D;
   /** The stack of drawings what was right-clicked is a record of (utils/stacks): whether it is laid out as a grid, and laid out so, or stacked again. */
   records?: { spread: boolean; run: () => void };
+  /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
+  stereo?: { name: string; run: () => void };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   onClose: () => void;
@@ -392,6 +395,7 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
+  const stereoItem: Item[] = stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -444,6 +448,7 @@ export default function PartMenu({
           { name: "Copy", keys: keys ? shortcut("C") : "", run: molecule3d.onCopy, icon: MENU_ICONS.copy },
           ...moleculeRow,
           del("Delete molecule", keys),
+          ...stereoItem,
           ...moleculeList,
           // (rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
@@ -632,6 +637,7 @@ export default function PartMenu({
           ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),
           // (its molecules in 3D rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
+          ...stereoItem,
           ...(drawing
             ? [
                 { name: "Turn over left to right", keys: "", run: () => onTurnOver("vertical"), divider: true },
@@ -697,6 +703,7 @@ export default function PartMenu({
                 ...(asTyped ? [{ name: `As typed: ${asTyped.typed}`, keys: "", run: asTyped.run }] : []),
               ]
             : []),
+          ...stereoItem,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...stackItem,
         ];

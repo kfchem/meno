@@ -461,9 +461,11 @@ Taken on 2026-10-13:
   Several rise one after another, in a row.
 - **Told apart.** Made with the other stereoisomers its drawing leaves
   open, a stereoisomer's centres that were left open carry their R and S
-  always, every centre's while R and S are shown; made alone - one
-  configuration chosen - it carries them only while they are shown, as
-  the drawing does (the maintainer, 2026-10-10: hidden unless asked for). They are
+  until it is asked otherwise; made alone - one configuration chosen - it
+  carries them only where they are asked for, on it, an atom of it or a
+  selection holding it (the maintainer, 2026-10-10: hidden unless asked
+  for; 2026-10-15: asked for on what they are shown on, docs/EDITOR-2D.md,
+  *R and S*). They are
   as large as the drawing's R and S, and written as the drawing's style
   writes them (bare, or in parentheses), in blue. Each is set clear of
   its atom - beyond its ball by as much as the drawing's style sets them

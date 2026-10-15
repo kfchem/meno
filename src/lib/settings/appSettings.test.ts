@@ -13,7 +13,7 @@ describe("the settings file", () => {
       drawingStyle: { preset: "rsc", changes: { ends: "round" as const } },
       style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 } },
       network: { offline: true, granted: ["python-env:console"] },
-      chemistry: { valenceWarnings: false, stereoLabels: true },
+      chemistry: { valenceWarnings: false },
       updates: { asked: true },
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
@@ -43,8 +43,8 @@ describe("the settings file", () => {
     ).toEqual({ offline: false, granted: ["python-env:console"] });
     // a file from before there were chemistry settings, or a setting mangled
     expect(
-      acceptAppSettings({ chemistry: { stereoLabels: "on" } }).chemistry,
-    ).toEqual({ valenceWarnings: true, stereoLabels: false });
+      acceptAppSettings({ chemistry: { valenceWarnings: "on", stereoLabels: true } }).chemistry,
+    ).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });

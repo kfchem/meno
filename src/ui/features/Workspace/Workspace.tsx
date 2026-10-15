@@ -111,6 +111,7 @@ import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
+import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { cleanUp } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -344,9 +345,7 @@ function WorkspaceContent({
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
   const readUnsure = useMemo(() => readMarks(model), [model]);
-  const chemistry = useAppSettings((s) => s.chemistry);
   const procedures = useAppSettings((s) => s.procedures);
-  const setChemistry = useAppSettings((s) => s.setChemistry);
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)
   const chemShare = useDownloads((s) => (chem.state === "setting-up" ? s[chem.id] : undefined));
@@ -1261,17 +1260,14 @@ function WorkspaceContent({
     if (r?.down) r.pending = target; // macOS: open on the way up
     else if (!r?.moved) setMenu(target); // Windows, or a Ctrl-click on a Mac
   };
-  const toggleStereoLabels = () => {
-    const stereoLabels = !chemistry.stereoLabels;
-    setChemistry({ ...chemistry, stereoLabels });
-    if (!stereoLabels) return;
-    // asked for: what labels them set up now, if it has not been
+  // R and S, E and Z shown on what was asked (utils/stereoShown) - or hidden; shown on the drawing, what labels them set up
+  // now, if it has not been
+  const showStereo = (item: StereoItem) => {
+    store.getState().setStereoShown(item.of, item.show);
+    if (!item.show || (!item.of.atoms.length && !item.of.bonds.length)) return;
     setChemError(null);
     chemWorker("checks").catch((e: unknown) => {
-      setChemistry({ ...useAppSettings.getState().chemistry, stereoLabels: false });
-      setChemError(
-        `${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setChemError(`${STEREO_LABELS.failed}: ${e instanceof Error ? e.message : String(e)}`);
     });
   };
 
@@ -1361,7 +1357,6 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    { name: chemistry.stereoLabels ? STEREO_LABELS.hide : STEREO_LABELS.show, keys: "", run: toggleStereoLabels },
     ...(texts.length || reading
       ? [
           textsOpen
@@ -1906,6 +1901,11 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          stereo={(() => {
+            const st = store.getState();
+            const item = stereoItemFor(st, menu);
+            return item ? { name: item.name, run: () => showStereo(item) } : undefined;
+          })()}
           onTurnOver={(axis) => store.getState().turnSelectionOver(axis)}
           onCharge={(step) => {
             if (menu.kind === "atom" && menu.id != null) chargeAtom(menu.id, step);
