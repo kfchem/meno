@@ -48,13 +48,15 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       };
       doc.amend((d) => fitResultSets(d, extentOf, (id) => turns3d[id]));
     },
-    placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }) =>
+    placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) =>
       // (in free space nearest where it was asked for, as a file opened goes: utils/freePlace)
       doc.edit("place structures", (d) =>
         placeAsSet(d, ms, at, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn) }, (width, height) =>
           freePlace(pageBoxes(get(), styleOf(get().docStyle)), { x0: -width / 2, x1: width / 2, y0: -height / 2, y1: height / 2 }, at, NOMINAL_BOND_LENGTH),
+          name,
         ),
       ),
+    renameSet: (id: number, name: string) => doc.edit("rename set", (d) => wf.renameSet(d, id, name)),
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       doc.edit("add set", (d) => wf.addSet(d, frame));

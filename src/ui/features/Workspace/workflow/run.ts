@@ -11,7 +11,7 @@ import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
-import { hasChip } from "./selectionSet";
+import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
@@ -256,7 +256,7 @@ export function placeResults(
 
 /**
  * `doc` with molecules in 3D put on the page as a set of their own - laid
- * out as a run lays its results, the set's middle at `at`, or where
+ * out as a run lays its results, named `name`, the set's middle at `at`, or where
  * `placed` moves it, told how large the set is (clear of what is there) -
  * as a chemist puts a set round them: structures read from coordinates in
  * a text (lib/io/coordinates), say.
@@ -267,13 +267,14 @@ export function placeAsSet(
   asked: { x: number; y: number },
   w: Pick<RunWith, "extentOf">,
   placed: (width: number, height: number) => { x: number; y: number } = () => asked,
+  name?: string,
 ): WorkspaceDocument {
   if (!ms.length) return doc;
   const lay = laidOut(ms.map((m) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }))));
   const at = placed(lay.width, lay.height);
   const frame = frameAt(at.x - lay.width / 2, at.y + lay.height / 2, lay.width, lay.height);
   doc = addMolecules3d(doc, ms.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
-  return addSet(doc, frame);
+  return addSet(doc, frame, undefined, name);
 }
 
 /**
@@ -283,7 +284,7 @@ export function placeAsSet(
  * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
  * wider than a water).
  */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet">, e: Frame): Frame & { chip: number } {
+function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
   const half = chipWide(m) / 2;
   return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
@@ -296,9 +297,10 @@ function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | 
  * geometry's shows only while it is pointed at, over what is beside it:
  * none.
  */
-export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet">): number {
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>): number {
   const n = framesOf(m);
-  if (n < 2) return 0;
+  // (a single geometry called by its name: its name, and its energy where it has one)
+  if (n < 2) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
   const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
   const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
   const shares = m.shares?.length === n || (m.conformerSet && m.energies?.length === n) ? " · 100%" : "";

@@ -7,13 +7,14 @@ import type { Molecule3D } from "../store/types";
  * and named, as molecules in 3D: bonded by distance, their orders unknown
  * until they are found, as an XYZ file's are; each called by its name, where
  * it came from kept (`source`: the PDF's or the file's name), and what was
- * said of it - its charge and multiplicity, its energies - shown with it.
+ * said of it - its charge and multiplicity, its notes - shown with it; its
+ * energy, where a note gives one in hartrees, as its energy.
  */
 export function coordinateMolecules(chosen: readonly { structure: CoordinateStructure; name: string }[], source: string): Omit<Molecule3D, "id" | "at">[] {
   return chosen.map(({ structure: s, name }) => {
     const said = [
       ...(s.charge != null && s.multiplicity != null ? [{ label: "Charge, multiplicity", text: `${s.charge} ${s.multiplicity}` }] : []),
-      ...s.notes.map((text) => ({ label: "Said", text })),
+      ...s.notes.map((text) => ({ label: "Note", text })),
     ];
     return {
       atoms: s.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z })),
@@ -22,7 +23,17 @@ export function coordinateMolecules(chosen: readonly { structure: CoordinateStru
       bondOrders: "unknown" as const,
       title: name,
       name: source,
-      ...(said.length ? { made: { how: said } } : {}),
+      ...(energyOf(s.notes) != null ? { energies: [energyOf(s.notes)!] } : {}),
+      ...(said.length ? { said } : {}),
     };
   });
+}
+
+/** An energy a note gives in hartrees - "E = -154.987654 Hartree", "SCF Done: E(RB3LYP) = -154.98 A.U." - the first; none, in other units or none. */
+export function energyOf(notes: readonly string[]): number | undefined {
+  for (const n of notes) {
+    const m = /=\s*([-+]?\d+\.\d+)\s*(hartrees?|a\.\s*u\.|au|eh)?\b/i.exec(n);
+    if (m && (m[2] || /scf done/i.test(n))) return Number(m[1]);
+  }
+  return undefined;
 }

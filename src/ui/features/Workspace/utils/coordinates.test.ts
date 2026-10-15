@@ -3,7 +3,7 @@ import { readCoordinates } from "../../../../lib/io/coordinates";
 import { emptyWorkspaceDocument } from "../document";
 import { setMembers } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
-import { coordinateMolecules } from "./coordinates";
+import { coordinateMolecules, energyOf } from "./coordinates";
 
 // (made up for the test: a water and a methane, each under its name)
 const TEXT = [
@@ -29,19 +29,26 @@ describe("structures read from coordinates, placed", () => {
     expect(water.bonds).toHaveLength(2);
     expect(methane.bonds).toHaveLength(4);
     expect([water.bondOrders, water.bondsFrom, water.title, water.name]).toEqual(["unknown", "distance", "Water", "Pasted text"]);
-    expect(water.made?.how).toEqual([
+    expect(water.said).toEqual([
       { label: "Charge, multiplicity", text: "0 1" },
-      { label: "Said", text: "E = -76.4 Hartree" },
+      { label: "Note", text: "E = -76.4 Hartree" },
     ]);
-    expect(methane.made).toBeUndefined();
+    expect(methane.said).toBeUndefined();
+    expect([water.energies, methane.energies]).toEqual([[-76.4], undefined]);
+  });
+
+  it("take an energy a note gives in hartrees, and none in other units", () => {
+    expect(energyOf(["SCF Done:  E(RB3LYP) =  -154.987654321     A.U. after 12 cycles"])).toBe(-154.987654321);
+    expect(energyOf(["G = -12.3 kcal/mol", "Imaginary frequencies: 0"])).toBeUndefined();
   });
 
   it("go on the page as a set of their own round them, its middle where they were asked for", () => {
     const ms = coordinateMolecules(chosen, "Pasted text");
-    const doc = placeAsSet(emptyWorkspaceDocument(), ms, { x: 100, y: 50 }, { extentOf: () => ({ x0: -2, x1: 2, y0: -2, y1: 2 }) });
+    const doc = placeAsSet(emptyWorkspaceDocument(), ms, { x: 100, y: 50 }, { extentOf: () => ({ x0: -2, x1: 2, y0: -2, y1: 2 }) }, undefined, "made-up-si.pdf, p. 2");
     expect(doc.molecules3d).toHaveLength(2);
     expect(doc.sets).toHaveLength(1);
     const set = doc.sets![0];
+    expect(set.name).toBe("made-up-si.pdf, p. 2");
     expect((set.x0 + set.x1) / 2).toBeCloseTo(100);
     expect((set.y0 + set.y1) / 2).toBeCloseTo(50);
     expect(setMembers(doc, set).molecules.sort()).toEqual(doc.molecules3d!.map((m) => m.id).sort());

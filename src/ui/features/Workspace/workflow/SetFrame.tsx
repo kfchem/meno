@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import { NAME_DOWN, SET_PAD, PX } from "./look";
 import { HAIR, Port, type PortLook } from "./StepCard";
@@ -25,6 +25,8 @@ export type SetFrameProps = {
   onGiveDown: (e: ReactPointerEvent) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
+  /** A chemist's set: its name changed - two clicks on it, Enter to keep it, Escape to leave it as it was. */
+  onRename?: (name: string) => void;
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -35,9 +37,11 @@ const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-
  * inside it - its top drags it, with all it holds; its edges and corners
  * size it - and a port half-way down its right edge that gives (and, made
  * by a step, one on its left that takes). Its frame darker while its top
- * is under the pointer, in the accent while it is chosen.
+ * is under the pointer, in the accent while it is chosen. A chemist's set
+ * is named anew with two clicks on its name.
  */
 export default function SetFrame(p: SetFrameProps) {
+  const [naming, setNaming] = useState<string | null>(null);
   const w = (p.set.x1 - p.set.x0) / PX;
   const h = (p.set.y1 - p.set.y0) / PX;
   const line = p.chosen ? "border-accel-base" : p.hovered ? "border-gh-gray" : "border-gh-line";
@@ -67,7 +71,32 @@ export default function SetFrame(p: SetFrameProps) {
         style={{ left: 0, right: 0, top: 0, height: (2 * NAME_DOWN) / PX, paddingLeft: SET_PAD / PX, paddingRight: SET_PAD / PX, pointerEvents: "auto", cursor: "default" }}
       >
         <span className={clsx("flex items-center gap-1.5 transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}>
-          <span className="font-medium text-gh-black">{p.name}</span>
+          {naming != null ? (
+            <input
+              autoFocus
+              aria-label="Set name"
+              value={naming}
+              onChange={(e) => setNaming(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") {
+                  p.onRename?.(naming);
+                  setNaming(null);
+                } else if (e.key === "Escape") setNaming(null);
+              }}
+              onBlur={() => {
+                p.onRename?.(naming);
+                setNaming(null);
+              }}
+              className="font-medium text-gh-black bg-white rounded px-0.5 -mx-0.5 outline-none ring-1 ring-gh-line"
+              style={{ width: `${Math.max(6, naming.length + 1)}ch` }}
+            />
+          ) : (
+            <span className="font-medium text-gh-black" onDoubleClick={p.onRename ? () => setNaming(p.set.name ?? p.name) : undefined}>
+              {p.name}
+            </span>
+          )}
           <span className="text-gh-gray">{p.count}</span>
         </span>
       </div>

@@ -142,7 +142,7 @@ import { savePictureFile } from "./render/savePicture";
 import TextSheets2D from "./components/TextSheets2D";
 import PdfColumn from "./components/PdfColumn";
 import { goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
-import { boxedPlaced, selectedPlaced, selectedText, selectedWords, selects } from "./utils/pdfSelection";
+import { boxedPlaced, ordered, selectedPlaced, selectedText, selectedWords, selects } from "./utils/pdfSelection";
 import { runFind } from "./components/pdfFind";
 import { setCanvasPlace } from "./components/wordsDrag";
 import { copyBox, putBox } from "./components/boxDrag";
@@ -393,8 +393,9 @@ function WorkspaceContent({
     st.present(seen ? Math.max(0, slideInView(st.slides, seen)) : 0);
   }, [store, viewBox]);
   // Structures read from coordinates - pasted, or selected in a PDF or a text (lib/io/coordinates) - shown before they are
-  // placed in 3D, where they were asked for; a paste's text may go on the page as words instead (`asText`)
-  const [coords, setCoords] = useState<{ structures: CoordinateStructure[]; at: { x: number; y: number }; source: string; asText?: () => void } | null>(null);
+  // placed in 3D, where they were asked for, as a set named for where they came from (`named`: the PDF's name and pages, the
+  // text's, or a paste's); a paste's text may go on the page as words instead (`asText`)
+  const [coords, setCoords] = useState<{ structures: CoordinateStructure[]; at: { x: number; y: number }; source: string; named: string; asText?: () => void } | null>(null);
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
@@ -710,15 +711,16 @@ function WorkspaceContent({
   const [naming, setNaming] = useState<FlowParts | null>(null);
   // Copy, cut and paste, by the keys and from the menu
   /** The structures coordinates on a PDF's pages hold - read where each word lies - shown before they are placed; none, said so. */
-  const structuresFrom = async (pages: Promise<PlacedPage[]>, source: string, at: { x: number; y: number }) => {
+  const structuresFrom = async (pages: Promise<PlacedPage[]>, source: string, from: number, to: number, at: { x: number; y: number }) => {
     const structures = readCoordinates(textOfPages(await pages));
-    if (structures.length) setCoords({ structures, at, source });
+    const named = `${source}, ${from === to ? `p. ${from + 1}` : `pp. ${from + 1}\u2013${to + 1}`}`;
+    if (structures.length) setCoords({ structures, at, source, named });
     else setChemError("There are no coordinates in what is selected.");
   };
   // (3D structures, from the menu on a text in the column: shown here, while this workspace is in front)
   useEffect(() => {
     if (!active) return;
-    useTextMenu.getState().takeStructures((structures, source) => setCoords({ structures, at: viewMiddle(), source }));
+    useTextMenu.getState().takeStructures((structures, source) => setCoords({ structures, at: viewMiddle(), source, named: source }));
     return () => useTextMenu.getState().takeStructures(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
@@ -727,6 +729,7 @@ function WorkspaceContent({
       structures,
       at,
       source: "Pasted text",
+      named: "Pasted structures",
       asText: () => {
         void readClipboard(["text"]).then((t) => t?.text && store.getState().addCaption(t.text.trim(), at.x, at.y));
       },
@@ -1516,7 +1519,7 @@ function WorkspaceContent({
             structures={coords.structures}
             onPlace={(chosen) => {
               setCoords(null);
-              store.getState().placeAsSet(coordinateMolecules(chosen, coords.source), coords.at);
+              store.getState().placeAsSet(coordinateMolecules(chosen, coords.source), coords.at, coords.named);
             }}
             onText={
               coords.asText &&
@@ -1644,7 +1647,7 @@ function WorkspaceContent({
             onCoordinates={(structures) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
-              setCoords({ structures, at, source: "Pasted text" });
+              setCoords({ structures, at, source: "Pasted text", named: "Pasted structures" });
             }}
             onChoose={(what) => {
               const st = store.getState();
@@ -1944,7 +1947,7 @@ function WorkspaceContent({
               icon: !!t.icon,
               onRead: () => store.getState().readText(t.id),
               onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
-              ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name }) } : {}),
+              ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
             };
           })()}
           pdf={(() => {
@@ -1964,9 +1967,12 @@ function WorkspaceContent({
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id
-                ? { onStructures: () => void structuresFrom(selectedPlaced(st.pdfSel!, p), p.name, pasteTarget()) }
+                ? (() => {
+                    const { from, to } = ordered(st.pdfSel!);
+                    return { onStructures: () => void structuresFrom(selectedPlaced(st.pdfSel!, p), p.name, from.page, to.page, pasteTarget()) };
+                  })()
                 : st.pdfBox?.id === p.id
-                  ? { onStructures: () => void structuresFrom(boxedPlaced(st.pdfBox!, p), p.name, pasteTarget()) }
+                  ? { onStructures: () => void structuresFrom(boxedPlaced(st.pdfBox!, p), p.name, st.pdfBox!.page, st.pdfBox!.page, pasteTarget()) }
                   : {}),
               // (a box drawn on it: put on the page, or copied, as a picture)
               ...(st.pdfBox?.id === p.id

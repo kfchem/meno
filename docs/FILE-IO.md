@@ -71,11 +71,16 @@ paper's supporting information, printed, made into 3D structures with no
 tidying by hand). Text holding atoms' coordinates becomes the structures
 it holds, shown first in a card - each its name, which can be changed, its
 atoms, its formula, its notes and what looks wrong - and those ticked
-placed in 3D as a set of their own, laid out as a step's results are, one
-step to undo (`placeAsSet`, `workflow/run.ts`). Each is bonded by distance,
-its bonds' orders unknown, as an XYZ file's; called by its name, the text
-or PDF it came from kept, and its charge, multiplicity and notes shown
-with it.
+placed in 3D as a set of their own, laid out as a step's results are, in
+free space nearest where they were asked for, one step to undo
+(`placeAsSet`, `workflow/run.ts`). The set is named for where they came
+from - the PDF's name and its page or pages (*made-up-si.pdf, p. 2*), the
+text's name, or *Pasted structures* - and can be renamed as a chemist's
+set is (docs/WORKFLOWS.md). Each molecule is bonded by distance, its bonds'
+orders unknown, as an XYZ file's; its chip says its name always, with its
+energy where a note gives one in hartrees, and a click on it opens what
+the text says of it - its charge and multiplicity and its notes (*In the
+text*).
 
 - **Where from.** Pasted on the page, where nothing else on the clipboard
   reads as a structure (the card offers *Paste as text* as well, to put

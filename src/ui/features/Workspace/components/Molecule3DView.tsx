@@ -29,6 +29,7 @@ import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } 
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
 import { commitInstanceMatrices } from "./instances";
+import { named3d } from "../workflow/selectionSet";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -1361,10 +1362,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {/* (rising out of its drawing, it shows its frames once it has risen) */}
       {/* (read from a calculation, it says what the calculation was - a
           single geometry's only when it is pointed at) */}
-      {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited) && !props.rising && (
+      {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
-          {/* (one of a stack: its stack's chip says which, not its own - StackChip3D) */}
-          {(solid.frames.length > 1 || m.calc) && !props.stacked ? (
+          {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
+          {(solid.frames.length > 1 || m.calc || named3d(m)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1385,7 +1386,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               results={m.calc?.results}
               unread={m.calc?.unread}
               made={m.made?.how}
+              said={m.said}
               area={gl.domElement}
+              {...(named3d(m) ? { title: m.title } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

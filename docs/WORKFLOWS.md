@@ -390,7 +390,12 @@ Conformers go through a workflow as any set does (decided):
   with nothing in it, *Empty*. Its name is *Input* where the chemist made
   it, else what its step made, as its kind says it - an option's value in
   it where the kind says one (*Within 3 kcal/mol*, *Populations at
-  298.15 K*).
+  298.15 K*). Structures placed from coordinates in a text make a set named
+  for where they came from - the PDF's name and its page or pages
+  (*made-up-si.pdf, p. 2*), the text's name, or *Pasted structures*
+  (docs/FILE-IO.md, *Coordinates in a text*; 2026-10-15). Two clicks on a
+  chemist's set's name change it, Enter keeping the new one and Escape the
+  old; emptied, it is *Input* again. A step's set is named for its step.
 
 ## Running
 

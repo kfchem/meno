@@ -424,6 +424,8 @@ export type Molecule3D = {
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
   made?: { how: { label: string; text: string }[] };
+  /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
+  said?: { label: string; text: string }[];
   /**
    * Its bonds are where its atoms stand close enough, as its file gives no
    * bonds - an XYZ file's, a calculation's: frame by frame, so that a bond
@@ -513,7 +515,9 @@ export type TextOf = { step: number } | { molecule: number };
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
  * Made by a step: the step, the kind of set it holds - a Render step's,
  * pictures - and the entries the step set aside, listed struck through.
- * Made by the chemist, a set is a compound set.
+ * Made by the chemist, a set is a compound set - named where it was given
+ * a name (`name`: where its structures came from, or the chemist's own),
+ * *Input* where not.
  */
 export type WorkflowSet = {
   id: number;
@@ -522,6 +526,7 @@ export type WorkflowSet = {
   x1: number;
   y1: number;
   made?: { step: number; holds: SetHolds };
+  name?: string;
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
@@ -1189,8 +1194,10 @@ export type EditorState = {
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
-  /** Molecules in 3D put on the page as a set of their own, its middle at `at`: one step. */
-  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }) => void;
+  /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */
+  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
+  /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
+  renameSet: (id: number, name: string) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
