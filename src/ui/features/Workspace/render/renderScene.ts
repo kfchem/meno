@@ -15,6 +15,7 @@ import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
 import { unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
+import { bentPieces } from "../utils/stickBend";
 import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import type { Carried3D, Molecule3D } from "../store/types";
@@ -253,7 +254,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const r = radii[i] / k;
       const node = nodes.length;
       const p0 = samples[0].places;
-      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r] });
+      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el, drawn), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r] });
       children.push(node);
       if (animated) channels.push({ node, path: "translation", values: Float32Array.from(samples.flatMap((x) => [x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]])) });
       for (const x of samples) {
@@ -266,23 +267,39 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     if (bondR > 0 && bonds.length) {
       const stick = shapeIn("stick", material(drawn.bondColor, drawn));
       // (which bond each line is of, a bond's lines side by side)
-      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
+      const lineOf = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
       const seeThrough = sticksStopped(ask);
-      const linesAt = (x: Sample) =>
+      // (a line curving in to a lone atom, as straight pieces along its curve: a plugin's sticks are straight; seen through, a line stops
+      // at the surface of the ball it leaves - the lone atom's end, with no ball of its own to speak of, runs to it)
+      const linesIn = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR).map((l, li) => {
+        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look]).map((l, li) => {
+          const pieces = bentPieces(l);
           if (seeThrough) {
-            // (seen through, a stick stops where its ball's surface is: nothing runs on inside the glass)
-            const b = bonds[lineBond[li]];
-            for (const [end, atom, sign] of [[l.a, b.a1, 1], [l.b, b.a2, -1]] as const) {
-              const R = left[atom] || radii[atom] <= 0 ? 0 : radii[atom] / k;
-              if (R > 0) end.add(stoppedAt(end, new THREE.Vector3(x.places[3 * atom], x.places[3 * atom + 1], x.places[3 * atom + 2]), R, l.r, sign === 1 ? l.b : l.a));
+            const b = bonds[lineOf[li]];
+            const ball = (atom: number) => (left[atom] || radii[atom] <= 0 ? 0 : radii[atom] / k);
+            const centre = (atom: number) => new THREE.Vector3(x.places[3 * atom], x.places[3 * atom + 1], x.places[3 * atom + 2]);
+            const first = pieces[0];
+            if (pieces.length === 1) {
+              if (ball(b.a1) > 0) first.a.add(stoppedAt(first.a, centre(b.a1), ball(b.a1), first.r, first.b));
+              if (ball(b.a2) > 0) first.b.add(stoppedAt(first.b, centre(b.a2), ball(b.a2), first.r, first.a));
+            } else {
+              // (the straight end is the atom's: a bend's `atB` says which)
+              const atom = l.bend?.atB ? b.a1 : b.a2;
+              if (ball(atom) > 0) first.a.add(stoppedAt(first.a, centre(atom), ball(atom), first.r, first.b));
             }
           }
+          return pieces;
+        });
+      const linesAt = (x: Sample) =>
+        linesIn(x).flat().map((l) => {
           const along = l.b.clone().sub(l.a);
           const len = along.length();
           return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
         });
+      // (which bond each line - each piece of a curving one - is of, a bond's lines side by side)
+      const piecesOf = linesIn(samples[0]).map((p) => p.length);
+      const lineBond = lineOf.flatMap((b, l) => Array<number>(piecesOf[l]).fill(b));
       const each = samples.map(linesAt);
       for (let l = 0; l < each[0].length; l++) {
         const at = (s: number) => {

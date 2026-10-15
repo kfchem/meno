@@ -911,11 +911,112 @@ in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
 
 - **A list of styles.** Ball and stick (the 3D viewer's look, Meno's
-  first), Glossy and Space-filling. Each is set on its own in Settings,
-  under Molecules in 3D: whether it draws balls and sticks or
-  space-filling, ball size, bond thickness and colour, the surface, and
-  whether the hydrogens on carbon are shown. Changes are kept per style,
+  first), Glossy, Outlined, Print, Pastel, Model kit, Sticks and
+  Space-filling. Each is set on its own in Settings, under Molecules in
+  3D, every setting in every style (none is hidden or fixed by a style;
+  one another setting makes moot is greyed out while it does): whether it
+  draws balls and sticks, sticks alone or space-filling, ball size, bond thickness, its sticks in one colour or
+  coloured by their atoms, its lines, the surface, whether the hydrogens
+  on carbon are shown, and its atoms' colours. Changes are kept per style,
   marked, and taken back one at a time or all at once.
+- **Lines** (the maintainer, 2026-10-15: "its mark is the lines"). A
+  style may draw a thin line round every ball and every stick - in the
+  molecule's own units (the maintainer, 2026-10-15: "the outline's
+  thickness to change with zoom"), set in ångströms and shown in Settings
+  in picometres, so that it grows and shrinks with the molecule as the
+  balls and sticks do, never thinner on the screen than half a pixel, so
+  that far out it does not shimmer away (`lineWidth`, `LINE_LEAST_PX`) -
+  and in a colour of its own - and fade
+  what lies further back in a molecule toward the page, from none to
+  strong, so that its front reads first: nothing at the front, growing
+  smoothly toward the back, at most 70% of the way to the page. The line
+  is each ball and stick drawn again, only its back, pushed out along its
+  normal by the line's width (utils/outlineMaterial): it shows round every
+  edge, and where one part passes in front of another. It shares the
+  balls' and sticks' own instances, so it costs the GPU their triangles
+  again and the CPU nothing however many there are - measured on 10 648
+  atoms and 30 492 bonds, 14.0 ms a frame with no line and 16.4 ms with
+  one, its balls drawn coarser past 2000 atoms (19.7 ms as smooth as the
+  balls). A pass over the finished picture finding its edges was set
+  aside: it would draw lines round the page's drawing as well, and needs
+  the scene drawn again for its normals.
+- **Lines on the balls** (the maintainer, 2026-10-15: "the cross lines").
+  A style may draw great circles on its balls - two or three, crossing as
+  a globe's equator and meridians do, about the molecule's own axes, so
+  that they turn with it and lie the same way on every atom - on every
+  atom's ball, every one's but hydrogen's, or carbon's alone, in the same
+  units as the outline - so the two keep their proportion at any zoom -
+  and in a colour of their own. They are worked out
+  in the ball's shader from its normal, which in the molecule's frame is
+  the ball's own (a ball is never turned on its own): no geometry, and
+  nothing on the CPU for each atom.
+- **Ball sizes** (the maintainer, 2026-10-15). Ball and stick's balls
+  are a fifth of each atom's van der Waals size, Outlined's 15%, and the
+  other balls and sticks' - Glossy, Print, Pastel and Model kit - 18%.
+- **Outlined.** Glossy balls - hydrogen's small - and thin near-black
+  sticks, each ball and stick drawn round with a near-black line 1.5 pm
+  wide, the back fading by half, in the Bright colours. Its lines on the
+  balls are None (the maintainer, 2026-10-15), to be turned on in
+  Settings: three, on every atom, 1 pm wide, as its settings keep them. At caffeine's fit in a window
+  1280 pixels wide, a picometre is about a pixel: the widths were chosen
+  to look there as they did when they were set in pixels.
+- **Print.** Matt balls in Greys, black sticks, a black line 2 pm wide
+  round each - a little bolder than Outlined's - and the back fading: for figures printed in black and white.
+- **Pastel.** Soft matt balls in the Pastel colours, light grey sticks,
+  the hollows gently shaded.
+- **Model kit.** Glossy plastic balls in the Bright colours and thick
+  sticks, each half in its atom's colour.
+- **Sticks.** Sticks alone: each atom a ball exactly as thick as its
+  sticks, so that they join smoothly, each half of a stick in its atom's
+  colour. Its ball size is moot, and shown faint. Picked, measured and
+  drawn in pictures as balls and sticks are.
+- **Bond ends** (the maintainer, 2026-10-15). Where a double or triple
+  bond ends at a lone atom - nothing else joins it - whose ball is
+  thinner than the bond's lines reach, those lines' ends would stick out
+  past it: in practice, sticks alone. Each style chooses how they end,
+  *Double bond ends* and *Triple bond ends*, each one of:
+  - *Curve* (Sticks' own): the lines run straight and side by side till
+    as far short of the atom as they stand off the bond's axis, then turn
+    round there as one tube - a half circle centred on the axis, its apex
+    on the atom - as thick throughout, with no ball; a triple bond's two
+    outer lines turn round so, its middle one running straight in, its
+    end inside the turn. Each such stick is bent in its vertex shader
+    (utils/stickBend): its rings swept round square to the curve, so that
+    it stays as thick; its shading, its colours' halves, the line round it
+    and its highlight follow the curve. Pictures draw it the same; a render
+    plugin is given it as straight pieces along it.
+  - *Joint*: the lines as they are, the atom's ball as large as takes all
+    their ends in.
+  - *Main stick*: one full stick on the axis, the others thinner beside it
+    and short of both atoms.
+  - *Fork*: each line from where it stands at the other atom straight to
+    the lone atom's centre.
+  - *Plain*: as they always were.
+
+  The setting is faint where a style's balls cover the ends. **Hidden ends
+  cost nothing** (the maintainer: "don't make it heavier for things that
+  normally can't be seen"): for a style whose ends are Plain - every
+  built-in style but Sticks - or whose balls take every such end in, no
+  end is worked out and nothing is drawn apart. The sticks that bend are drawn apart from the others, in a
+  material of their own and with rings close together toward their ends,
+  so that straight sticks never pay for the bending: measured on 12 170
+  atoms and 33 536 sticks (a 22-cube grid with 1 739 lone oxygens on double
+  bonds) in ball and stick, 12.1 ms a frame before and 12.1-12.2 ms after,
+  and the bond lines worked out in 9 ms either way.
+- **Colour sets** (the maintainer, 2026-10-15: "each style decides a
+  colour set"). A style draws its atoms in one set of element colours,
+  chosen under it in Settings: *Jmol* - Jmol's default element colours
+  (jmol.sourceforge.net, *Jmol Colors*; lib/chem/elements.ts), Meno's
+  from its first release and its own styles' - *Bright*, Outlined's:
+  carbon a mid grey, oxygen a bright red, sulfur yellow, fluorine and
+  chlorine light green, the alkali metals lavender, the others as Jmol's -
+  and *Greys*, each element a grey as light as its Jmol colour (its
+  relative luminance), for figures printed in black and white - and
+  *Pastel*, each element's Jmol colour taken two fifths of the way to
+  white. Over the
+  set, any element can be given a colour of its own, marked, and set back
+  to the set's one at a time. A style's sticks coloured by their atoms
+  take each half's colour from its atom.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says
   which it is; giving a style the other's role swaps the two, so the
@@ -937,7 +1038,24 @@ space-filling side by side is better science than either alone.
 - **No jump.** Going over, each atom's ball grows or shrinks between its
   two radii, the bonds thicken or give way, the bond colour and the
   surface's gloss go over, and the molecule rises or sinks to stand as
-  high as it now reaches - all on one 80 ms time constant.
+  high as it now reaches - all on one 80 ms time constant. So do the
+  atoms' colours, the lines' width and colour, the depth fade and the
+  sticks' colouring, as the look or a setting changes.
+- **A shader that does not compile.** Meno's own shaders - lines on the
+  balls, the line round them, sticks that bend - each name themselves
+  (utils/menoShader). One that a graphics card will not compile is said in
+  Meno's log, with its name and the card's own words for what was wrong
+  (nothing of the document), and from then on is drawn as its plain
+  three.js material: a molecule loses a line or a shade, never its atoms.
+  A test reads each of them for a word GLSL keeps back - the one that
+  once made every ball vanish was `half` - and for brackets that do not
+  close.
+- **Pictures as the canvas.** A copied or exported picture of a molecule
+  in 3D draws its style's colours, lines and depth fade as the canvas
+  does - its lines in proportion to the molecule at any size, being in
+  its units, and never thinner than half a pixel of the screen (a picture
+  at 300 dpi, 300/96 of its own) - and a render plugin is given its atoms'
+  colours.
 - **Hydrogens on carbon, hidden only past a warning** (the maintainer's
   ruling and wording, 2026-10-10). Many synthetic chemists like them out
   of the way; but a molecule without them looks smaller, flatter and more

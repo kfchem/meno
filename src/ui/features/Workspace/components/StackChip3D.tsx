@@ -2,6 +2,8 @@ import { useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import Frames3D from "./Frames3D";
+import { calcLine } from "../../../../lib/calc/output";
+import type { Result } from "../../../../lib/calc/results";
 import type { Molecule3D, Turn3D } from "../store/types";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
@@ -10,6 +12,21 @@ import { follow } from "../../../theme/motion";
 
 /** How gently the chip follows the lowest point of what its stack shows as it turns, in seconds (as a molecule's frames' chip does). */
 const CHIP_TAU = 0.12;
+
+/**
+ * What the calculation a stacked molecule was read from found of it, to say in the stack's chip: its own values, and its frames'
+ * at the frame shown - each told as the molecule's, since the chip's frames are the stack's. The molecule's and its frames'
+ * results otherwise reach no chip, where its stack's stands for its own (a result set of an xTB run, say).
+ */
+export function stackedResults(shown: Pick<Molecule3D, "calc">, frame: number): Result[] | undefined {
+  const results = shown.calc?.results;
+  if (!results?.length) return undefined;
+  return results.flatMap((r): Result[] => {
+    if (r.on === "molecule") return [r];
+    if (r.on === "frames") return [{ ...r, on: "molecule", value: r.values[frame] ?? null } as unknown as Result];
+    return [];
+  });
+}
 
 /**
  * A stack's chip, just below the molecule it shows (utils/stacks): which of
@@ -52,7 +69,18 @@ export default function StackChip3D({
   });
   return (
     <group ref={group}>
-      <Frames3D count={count} frame={index} open={open} onFrame={onShow} area={gl.domElement} title={shown.title} />
+      <Frames3D
+        count={count}
+        frame={index}
+        open={open}
+        onFrame={onShow}
+        area={gl.domElement}
+        title={shown.title}
+        about={shown.calc ? calcLine(shown.calc) : undefined}
+        results={stackedResults(shown, frame)}
+        unread={shown.calc?.unread}
+        made={shown.made?.how}
+      />
     </group>
   );
 }

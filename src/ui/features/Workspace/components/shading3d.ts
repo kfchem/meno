@@ -26,6 +26,26 @@ function uniformsOf(material: THREE.MeshStandardMaterial, kind: "atoms" | "bonds
   return u;
 }
 
+/** A material for the sticks that bend (utils/stickBend), drawn apart: taught as `like`'s twin, sharing its uniforms - so that it shades, fades and colours as they do. */
+export function teachBent(material: THREE.MeshStandardMaterial, like: THREE.MeshStandardMaterial): void {
+  if (!taught.has(material)) taught.set(material, occludedMaterial(material, "bonds", { bend: true, like: uniformsOf(like, "bonds") }));
+}
+
+/** What fades a molecule's atoms or bonds with depth (utils/occlusionMaterial `withFade`): the material's own, taught once. */
+export function fadeOf(material: THREE.MeshStandardMaterial, kind: "atoms" | "bonds") {
+  return uniformsOf(material, kind).fade;
+}
+
+/** What draws the lines on a molecule's balls (utils/occlusionMaterial): the atoms' material's own. */
+export function ballLinesOf(material: THREE.MeshStandardMaterial) {
+  return uniformsOf(material, "atoms").lines;
+}
+
+/** How far a molecule's sticks are coloured by their atoms (utils/occlusionMaterial): the bonds' material's own. */
+export function byAtomOf(material: THREE.MeshStandardMaterial) {
+  return uniformsOf(material, "bonds").byAtom;
+}
+
 /** Open all round: the terms of an atom nothing shades. */
 function openTerms(n: number): Float32Array {
   const t = new Float32Array(OCCLUSION_TERMS * n);
@@ -57,6 +77,8 @@ export function useShading3d(o: {
   style: Style3D;
   /** How far over to the secondary look it is drawn. */
   fill: RefObject<number>;
+  /** The sticks of the lines that curve in to a lone atom, drawn apart (utils/stickBend), and which lines they are: shaded as theirs. */
+  bent?: { geometry: THREE.BufferGeometry | null; lines: readonly number[] | null };
 }) {
   const { m, solid, frame, style, fill } = o;
   const { gl, invalidate } = useThree();
@@ -258,6 +280,21 @@ export function useShading3d(o: {
       if (at.ends && at.ends.count === lineCount) {
         (at.ends.array as Float32Array).set(s.bonds);
         at.ends.needsUpdate = true;
+      }
+    }
+    // (the lines drawn apart: each its own two numbers)
+    const bent = o.bent;
+    if (bent?.geometry && bent.lines && s.bonds.length >= 2 * lineCount) {
+      const has = bent.geometry.getAttribute("occlusionEnds") as THREE.InstancedBufferAttribute | undefined;
+      if (changed || !has || has.count !== bent.lines.length) {
+        const ends = has && has.count === bent.lines.length ? has : new THREE.InstancedBufferAttribute(new Float32Array(2 * bent.lines.length), 2);
+        const e = ends.array as Float32Array;
+        bent.lines.forEach((k, j) => {
+          e[2 * j] = s.bonds[2 * k];
+          e[2 * j + 1] = s.bonds[2 * k + 1];
+        });
+        if (ends !== has) bent.geometry.setAttribute("occlusionEnds", ends);
+        ends.needsUpdate = true;
       }
     }
     if (moving) invalidate();

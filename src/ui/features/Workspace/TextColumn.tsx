@@ -218,9 +218,9 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
             // (see-through: the canvas draws the text under it, in the column's pass - components/ColumnText)
             <div key={`text-${shown.id}-${markdown && !source ? "read" : "write"}`} className="absolute inset-0">
               {markdown && !source ? (
-                <MarkdownBody entry={columnText(store, shown.id, shown.text)} reader={markdownReaderOf(columnText(store, shown.id, shown.text), shown.text)} value={shown.text} />
+                <MarkdownBody entry={columnText(store, shown.id, shown.text)} reader={markdownReaderOf(columnText(store, shown.id, shown.text), shown.text)} value={shown.text} name={shown.name} />
               ) : (
-                <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} onChange={(v) => editText(shown.id, v)} write={toWrite === shown.id} onWrite={() => store.getState().wroteText()} />
+                <TextBody entry={columnText(store, shown.id, shown.text)} value={shown.text} name={shown.name} onChange={(v) => editText(shown.id, v)} write={toWrite === shown.id} onWrite={() => store.getState().wroteText()} />
               )}
             </div>
           )}

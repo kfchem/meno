@@ -412,6 +412,16 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
   when its chip is opened (the maintainer, 2026-10-07).
+- **Equivalent atoms keep their places across RDKit's conformers**
+  (2026-10-15): an embedding does not say which of a CH2's two hydrogens,
+  or of an isopropyl's two methyls, is which, so the plugin lays each
+  equivalent group - neighbours of one atom of the same graph rank, each
+  the root of a branch joined to the rest through it, and a pendant ring
+  symmetric about its bond - as it is in the lowest conformer, by whole
+  branches (handedness first, then the fit in the parent's frame), before it
+  answers. Only conformers RDKit made are touched: not a calculation's,
+  not another program's, not a single structure; no heavy atom moves but
+  as a whole equivalent branch; and no whole-molecule symmetry is searched.
 
 ## Looks
 
