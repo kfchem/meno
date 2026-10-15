@@ -35,10 +35,7 @@ import math
 import bpy
 import mathutils
 
-IDS = (
-    "gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray",
-    "terracotta", "plush", "plasticine", "pearl",
-)
+IDS = ("gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "clay")
 
 
 # --- nodes -----------------------------------------------------------------
@@ -306,6 +303,8 @@ def marble(nt, out, c, kind, o):
 
 
 def porcelain(nt, out, c, kind, o):
+    if o.get("porcelain-finish", "porcelain") == "pearl":
+        return pearl(nt, out, c, kind, o)
     ao = node(nt, "ShaderNodeAmbientOcclusion", Distance=0.3)
     pr = principled(nt, Roughness=0.12, **{"Coat Weight": 1.0, "Coat Roughness": 0.02, "Subsurface Weight": 0.1, "Subsurface Scale": 0.04})
     mix = node(nt, "ShaderNodeMix", data_type="RGBA")
@@ -317,9 +316,38 @@ def porcelain(nt, out, c, kind, o):
 
 
 def ice(nt, out, c, kind, o):
-    pr = principled(nt, Roughness=0.25, IOR=1.31, Alpha=0.6, **{"Base Color": (0.55, 0.78, 0.95, 1), "Transmission Weight": 0.5, "Coat Weight": 1.0,
-                                                               "Coat Roughness": 0.0, "Emission Color": (0.4, 0.7, 1.0, 1), "Emission Strength": 0.15})
+    """Ice: clear, refracting glass (IOR 1.31) that shows the studio through it; a faint cyan that deepens with thickness (volume absorption); cloudy cores with tiny trapped bubbles, densest at the centre (volume scatter by noise); a frosted skin in patches, crisp where smooth."""
+    tc = node(nt, "ShaderNodeTexCoord")
+    patch = node(nt, "ShaderNodeTexNoise", Scale=5.0, Detail=4.0, Distortion=0.4)
+    link(nt, tc, "Object", patch, "Vector")
+    frost = ramp_of(nt, [(0.45, (0.02, 0.02, 0.02, 1)), (0.65, (0.30, 0.30, 0.30, 1))])
+    link(nt, patch, "Fac", frost, "Fac")
+    pr = principled(nt, IOR=1.31, **{"Base Color": (0.97, 0.99, 1.0, 1), "Transmission Weight": 1.0, "Coat Weight": 0.3, "Coat Roughness": 0.02})
+    link(nt, frost, "Color", pr, "Roughness")
     link(nt, pr, "BSDF", out, "Surface")
+    # the volume: absorption (a pale cyan that deepens with the path through), and scatter where the core is cloudy
+    absorb = node(nt, "ShaderNodeVolumeAbsorption", Color=(0.45, 0.85, 0.95, 1), Density=2.5)
+    gen = node(nt, "ShaderNodeTexCoord")
+    centre = node(nt, "ShaderNodeVectorMath", operation="SUBTRACT")
+    centre.inputs[1].default_value = (0.5, 0.5, 0.5)
+    link(nt, gen, "Generated", centre, 0)
+    dist = node(nt, "ShaderNodeVectorMath", operation="LENGTH")
+    link(nt, centre, "Vector", dist, 0)
+    core = maths(nt, "SUBTRACT", 1.0, (maths(nt, "MULTIPLY", (dist, "Value"), 2.2), "Value"), True)
+    bubbles = node(nt, "ShaderNodeTexNoise", Scale=25.0, Detail=3.0)
+    link(nt, tc, "Object", bubbles, "Vector")
+    cloud = ramp_of(nt, [(0.35, (0.1, 0.1, 0.1, 1)), (0.6, (1, 1, 1, 1))])
+    link(nt, bubbles, "Fac", cloud, "Fac")
+    dens = maths(nt, "MULTIPLY", (core, "Value"), 45.0)
+    dens2 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
+    link(nt, dens, "Value", dens2, 0)
+    link(nt, cloud, "Color", dens2, 1)
+    scat = node(nt, "ShaderNodeVolumeScatter", Color=(1, 1, 1, 1), Anisotropy=0.3)
+    link(nt, dens2, "Value", scat, "Density")
+    add = node(nt, "ShaderNodeAddShader")
+    link(nt, absorb, "Volume", add, 0)
+    link(nt, scat, "Volume", add, 1)
+    link(nt, add, "Shader", out, "Volume")
 
 
 def neon(nt, out, c, kind, o):
@@ -390,32 +418,6 @@ def terracotta(nt, out, c, kind, o):
     link(nt, pr, "BSDF", out, "Surface")
 
 
-def plush(nt, out, c, kind, o):
-    """Velvet at a glance: a deep colour, a bright rim of pile all round every shape, the pile lying light and dark in patches."""
-    nz = node(nt, "ShaderNodeTexNoise", Scale=18.0, Detail=4.0, Distortion=0.6)
-    tc = node(nt, "ShaderNodeTexCoord")
-    link(nt, tc, "Object", nz, "Vector")
-    patch = ramp_of(nt, [(0.0, (0.5, 0.5, 0.5, 1)), (1.0, (1.2, 1.2, 1.2, 1))])
-    link(nt, nz, "Fac", patch, "Fac")
-    deep = node(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
-    deep.inputs[0].default_value = 0.7
-    deep.inputs[6].default_value = (c[0] * 0.28, c[1] * 0.28, c[2] * 0.28, 1)
-    link(nt, patch, "Color", deep, 7)
-    pr = principled(nt, Roughness=1.0, **{"Sheen Weight": 0.5, "Sheen Roughness": 0.4, "Sheen Tint": lighten(c, 0.3), "Specular IOR Level": 0.1})
-    link(nt, deep, "Result", pr, "Base Color")
-    grain_bump(nt, pr, 700.0, 0.7, 2.0)
-    lw = facing(nt, 0.5)
-    inv = maths(nt, "SUBTRACT", 1.0, (lw, "Facing"))
-    rim = maths(nt, "POWER", (inv, "Value"), 2.5)
-    em = node(nt, "ShaderNodeEmission", Color=lighten(c, 0.35))
-    s = maths(nt, "MULTIPLY", (rim, "Value"), 1.3)
-    link(nt, s, "Value", em, "Strength")
-    add = node(nt, "ShaderNodeAddShader")
-    link(nt, pr, "BSDF", add, 0)
-    link(nt, em, "Emission", add, 1)
-    link(nt, add, "Shader", out, "Surface")
-
-
 def plasticine(nt, out, c, kind, o):
     """Modelling clay in the element colours, pressed by hand: matte, a little subsurface, fingerprint ridges, a tool's long marks and fine grain, the tone streaked."""
     sat = tuple(min(1.0, max(0.0, 0.5 + (v - 0.5) * 1.15)) for v in c[:3])
@@ -473,30 +475,60 @@ def pearl(nt, out, c, kind, o):
     link(nt, pr, "BSDF", out, "Surface")
 
 
+def clay(nt, out, c, kind, o):
+    """Clay: one colour, unglazed terracotta, or modelling clay in the element colours, pressed by hand."""
+    if o.get("clay-colour", "terracotta") == "elements":
+        plasticine(nt, out, c, kind, o)
+    else:
+        terracotta(nt, out, c, kind, o)
+
+
 def fur(nt, out, c, kind, o):
     """The body's own material: matte in the colour; the hairs are added to the shape (hairs)."""
     pr = principled(nt, Roughness=1.0, **{"Base Color": c})
     link(nt, pr, "BSDF", out, "Surface")
 
 
-def hairs(ob, c):
-    """Short dense fur: hair particles of the element's colour, in a material of their own."""
-    hair = bpy.data.materials.new("hair")
-    hair.use_nodes = True
-    nt = hair.node_tree
-    nt.nodes.clear()
-    hb = node(nt, "ShaderNodeBsdfHairPrincipled", parametrization="COLOR", Color=c, Roughness=0.6)
-    o = node(nt, "ShaderNodeOutputMaterial")
-    link(nt, hb, "BSDF", o, "Surface")
-    ob.data.materials.append(hair)
-    st = ob.modifiers.new("fur", "PARTICLE_SYSTEM").particle_system.settings
-    st.type = "HAIR"
-    st.count = 600
-    st.hair_length = 0.1
-    st.render_type = "PATH"
-    st.child_type = "INTERPOLATED"
-    st.rendered_child_count = 20
-    st.material_slot = hair.name
+# fur: a hair's length, and how many hairs there are on a part of a surface, are the same in the scene's units on every ball and stick -
+# as a fraction of the ball's size, so they grow with the molecule - whatever a shape's own scale
+PILES = {"long": (0.1, 1.0, 20), "short": (0.03, 3.0, 12)}   # length (of a ball's radius), density against the long's, children for each
+
+
+def fur_on(objects, colours, pile):
+    length, density, children = PILES[pile]
+    balls = sorted(max(ob.dimensions.x, ob.dimensions.y) / 2 for ob in objects if shape_of(ob)[0] == "ball")
+    radius = balls[len(balls) // 2] if balls else 0.3
+    per_area = 600.0 / (4 * math.pi * radius * radius) * density
+    hairs = {}  # (a mesh's hair material, once, though shapes share the mesh)
+    for ob in objects:
+        colour = colours[ob.name]
+        hair = hairs.get(ob.data.name)
+        if hair is None:
+            hair = bpy.data.materials.new("Meno hair")
+            hair.use_nodes = True
+            nt = hair.node_tree
+            nt.nodes.clear()
+            hb = node(nt, "ShaderNodeBsdfHairPrincipled", parametrization="COLOR", Color=colour, Roughness=0.6)
+            o = node(nt, "ShaderNodeOutputMaterial")
+            link(nt, hb, "BSDF", o, "Surface")
+            ob.data.materials.append(hair)
+            hairs[ob.data.name] = hair
+        sc = ob.matrix_world.to_scale()
+        scale = min(abs(sc.x), abs(sc.y), abs(sc.z)) or 1.0
+        world_area = 0.0
+        mw = ob.matrix_world
+        for poly in ob.data.polygons:
+            vs = [mw @ ob.data.vertices[i].co for i in poly.vertices]
+            for k in range(1, len(vs) - 1):
+                world_area += 0.5 * ((vs[k] - vs[0]).cross(vs[k + 1] - vs[0])).length
+        st = ob.modifiers.new("fur", "PARTICLE_SYSTEM").particle_system.settings
+        st.type = "HAIR"
+        st.count = max(40, int(world_area * per_area))
+        st.hair_length = length * radius / scale
+        st.render_type = "PATH"
+        st.child_type = "INTERPOLATED"
+        st.rendered_child_count = children
+        st.material_slot = hair.name
 
 
 # --- the lights: panels and a world for each look ---------------------------------
@@ -510,13 +542,14 @@ STUDIO = {
     "slime": (0.5, 0.5, (0.05, 0.06, 0.08)),
     "neon": (0.0, 0.3, (0.0, 0.0, 0.0)),
     "xray": (0.0, 0.5, (0.5, 0.5, 0.5)),
+    "ice": (1.0, 0.7, (0.04, 0.05, 0.07)),
 }
 SOFT = (0.18, 0.5, (0.05, 0.06, 0.08))     # the looks that are mostly matte: dim panels, or a diffuse surface is over-exposed
 MARBLE = (0.1, 0.5, (0.05, 0.06, 0.08))
 
 BUILD = {
     "gold": gold, "silver": silver, "copper": copper, "bubble": bubble, "wood": wood, "marble": marble, "fur": fur, "porcelain": porcelain,
-    "ice": ice, "neon": neon, "slime": slime, "terracotta": terracotta, "plush": plush, "plasticine": plasticine, "pearl": pearl,
+    "ice": ice, "neon": neon, "slime": slime, "clay": clay,
 }
 
 
@@ -603,11 +636,12 @@ def apply(scene, camera, look, options, background):
     else:
         build = BUILD[look]
     made = {}
+    colours = {}
     for ob in molecules:
         kind, colour = shape_of(ob)
         if colour is None:
             colour = (0.8, 0.8, 0.8, 1.0)
-        key = (ob.data.name, kind)
+        colours[ob.name] = colour
         if ob.data.name in made:  # (shapes sharing one mesh share one material)
             continue
         m = bpy.data.materials.new(f"Meno {look}")
@@ -621,10 +655,14 @@ def apply(scene, camera, look, options, background):
         else:
             ob.data.materials.append(m)
         made[ob.data.name] = m
-        if look == "fur":
-            hairs(ob, colour)
+    if look == "fur":
+        for ob in molecules:  # (each object has hair of its own, though shapes share a mesh's material)
+            if ob.data.name in made and ob.data.materials[0] is not made[ob.data.name]:
+                ob.data.materials[0] = made[ob.data.name]
+        fur_on(molecules, colours, o.get("pile", "long"))
     c = scene.cycles
     c.max_bounces, c.glossy_bounces, c.diffuse_bounces, c.transmission_bounces, c.transparent_max_bounces = 6, 4, 2, 4, 8
+    c.volume_bounces = 6 if look == "ice" else 0
     c.use_adaptive_sampling = True
     c.adaptive_threshold = 0.02
     c.adaptive_min_samples = 8

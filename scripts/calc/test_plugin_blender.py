@@ -72,7 +72,7 @@ class Prepare(unittest.TestCase):
         looks = m["roles"][0]["looks"]
         self.assertIn("cartoon", looks)
         self.assertIn("meno", looks)
-        for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "terracotta", "plasticine", "plush", "pearl", "porcelain", "slime", "ice", "neon", "xray", "fur"):
+        for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "ice", "neon", "xray", "fur"):
             self.assertIn(own, looks)
             self.assertIn(own, worker.LOOKS)
 
@@ -142,7 +142,7 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "gpu", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
 
 
 def blender():
@@ -244,7 +244,7 @@ class Renders(unittest.TestCase):
             self.assertGreater(top, 0.8 * width)
 
     def test_a_look_with_materials_of_its_own_keeps_each_elements_colour(self):
-        # (two balls named as Meno names a shape, one red, one blue, in the plasticine look: the left reads red and the right blue - not both the one grey a shared material gives)
+        # (two balls named as Meno names a shape, one red, one blue, in the clay look with element colours: the left reads red and the right blue - not both the one grey a shared material gives)
         mesh = ball_mesh()
         scene = {**BALL, **mesh}
         scene["meshes"] = [{**mesh["meshes"][0], "name": "ball #FF0000"}, {**mesh["meshes"][0], "name": "ball #0000FF"}]
@@ -258,7 +258,7 @@ class Renders(unittest.TestCase):
         scene["scenes"] = [{"nodes": [0, 1, 2, 3], "extras": {"meno": {"ambientLight": 0.9}}}]
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[{**SCENE, "look": "plasticine"}], options={"samples": 16, "background": "white", "gpu": False})
+            said = ask("prepare", step="render", entries=[{**SCENE, "look": "clay"}], options={"clay-colour": "elements", "samples": 16, "background": "white", "gpu": False})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")

@@ -19,8 +19,11 @@
     {
       "role": "render",
       "programs": ["blender"],
-      "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart", "gold", "silver", "copper", "bubble", "wood", "marble", "terracotta", "plasticine", "plush", "pearl", "porcelain", "slime", "ice", "neon", "xray", "fur"],
+      "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart", "gold", "silver", "copper", "bubble", "wood", "marble", "porcelain", "slime", "ice", "neon", "xray", "fur"],
       "options": [
+        {"id": "pile", "when": {"id": "look", "in": ["fur"]}, "label": "Pile", "type": "choice", "choices": [{"value": "long", "label": "Long: fur"}, {"value": "short", "label": "Short and dense: velvet"}], "default": "long"},
+        {"id": "clay-colour", "when": {"id": "look", "in": ["clay"]}, "label": "Clay's colour", "type": "choice", "choices": [{"value": "terracotta", "label": "One colour (terracotta)"}, {"value": "elements", "label": "Element colours"}], "default": "terracotta"},
+        {"id": "porcelain-finish", "when": {"id": "look", "in": ["porcelain"]}, "label": "Porcelain's finish", "type": "choice", "choices": [{"value": "porcelain", "label": "Porcelain: glazed blue-white"}, {"value": "pearl", "label": "Pearl: cream white with an orient"}], "default": "porcelain"},
         {"id": "silver-finish", "when": {"id": "look", "in": ["silver"]}, "label": "Silver's finish", "type": "choice", "choices": [{"value": "mirror", "label": "Mirror"}, {"value": "satin", "label": "Satin"}], "default": "mirror"},
         {"id": "copper-finish", "when": {"id": "look", "in": ["copper"]}, "label": "Copper's finish", "type": "choice", "choices": [{"value": "brushed", "label": "Brushed"}, {"value": "tarnished", "label": "Tarnished"}], "default": "brushed"},
         {"id": "wood", "when": {"id": "look", "in": ["wood"]}, "label": "Wood", "type": "choice", "choices": [{"value": "oak", "label": "Oak"}, {"value": "walnut", "label": "Walnut"}, {"value": "cherry", "label": "Cherry"}, {"value": "maple", "label": "Maple"}, {"value": "ebony", "label": "Ebony"}, {"value": "element", "label": "By element: each its own wood"}], "default": "oak"},

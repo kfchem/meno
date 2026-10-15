@@ -237,8 +237,8 @@ uv, no package), and the script Blender runs, `render.py`.
   and size.
 - **Looks with materials and light of their own** (`looks.py`, beside
   `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
-  wood, marble, terracotta, plasticine, velvet, pearl, porcelain, slime,
-  ice, neon, X-ray and fur are not a colour and a gloss: each is a
+  wood, marble, clay, porcelain, slime, ice, neon, X-ray and fur are not a
+  colour and a gloss: each is a
   material of Blender's own shader nodes, put on the molecules by their
   shapes' names (`ball #909090`, `stick #000000`: the element's colour is
   read from the name, so each element keeps its own, a shared material
@@ -255,7 +255,12 @@ uv, no package), and the script Blender runs, `render.py`.
   adaptive sampling; the key light and the light all round are the look's,
   not the canvas's. Their choices appear only under their look: silver's
   finish (mirror or satin), copper's (brushed or tarnished), the wood's
-  species (oak, walnut, cherry, maple, ebony, or each element its own) and
+  species (oak, walnut, cherry, maple, ebony, or each element its own), clay's
+  colour (one colour, terracotta, or the element colours), porcelain's
+  finish (porcelain, or pearl: a cream white with a soft pink and green
+  orient), fur's pile (long, or short and dense as velvet - a hair's length
+  and how many hairs there are being the same in the scene's units on every
+  ball and stick, as fractions of a ball's size) and
   marble's pattern (Carrara, long veins laid in the molecule's own space so
   that they run on across atoms and sticks, or swirls on each atom). The
   metals' reflectances are the published F0 values of Hoffman's table of

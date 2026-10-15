@@ -84,16 +84,12 @@ export const LOOKS: readonly { id: string; label: string; parts: LookParts }[] =
       ["bubble", "Soap bubble: clear, with thin-film colour"],
       ["wood", "Wood: varnished, in a species"],
       ["marble", "Marble: polished white stone, veined"],
-      ["terracotta", "Terracotta: dry, unglazed clay"],
-      ["plasticine", "Plasticine: element colours, hand pressed"],
-      ["plush", "Velvet: a deep pile with a bright rim"],
-      ["pearl", "Pearl: cream white with an orient"],
       ["porcelain", "Porcelain: glazed blue-white"],
       ["slime", "Slime: see-through jelly"],
       ["ice", "Ice: cold, clear glass"],
       ["neon", "Neon: lit tubes"],
       ["xray", "X-ray: layers that add up"],
-      ["fur", "Fur: short dense hair"],
+      ["fur", "Fur: long, or short and dense as velvet"],
     ] as const
   ).map(([id, label]) => ({ id, label, parts: { ...PLAIN, molecules: "meno" as const, surfaces: "meno" as const } })),
 ];

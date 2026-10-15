@@ -57,11 +57,14 @@ OUTLINES = {"none", "thin", "outer", "mixed"}
 OUTLINE_COLOURS = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
 # the looks render.py (looks.py) makes with materials of its own
-OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "terracotta", "plush", "plasticine", "pearl"}
+OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "clay"}
 LOOKS = {"meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"} | OWN_LOOKS
 FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
 WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
 MARBLES = {"carrara", "swirl"}
+PILES = {"long", "short"}
+CLAYS = {"terracotta", "elements"}
+PORCELAINS = {"porcelain", "pearl"}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
 
@@ -135,6 +138,9 @@ def settings_of(entry, options):
         "copper_finish": one_of(options.get("copper-finish", "brushed"), "copper finish", FINISHES["copper-finish"]),
         "wood": one_of(options.get("wood", "oak"), "wood", WOODS),
         "marble": one_of(options.get("marble", "carrara"), "marble pattern", MARBLES),
+        "pile": one_of(options.get("pile", "long"), "pile", PILES),
+        "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
+        "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
     }
 
 
