@@ -85,24 +85,15 @@ fn is_sha(sha: &str) -> bool {
 /// A picture as a PNG: quick to make - a page is mostly white - and taken
 /// apart by the window off its main thread.
 fn png_of(rgba: &[u8], w: u32, h: u32) -> Result<Vec<u8>, String> {
-    // (a part of a page drawn in greys alone - most of a paper's text - as one
-    // channel, a quarter of the bytes to carry; its white sheet is opaque, so
-    // nothing of its alpha is lost)
-    let grey = rgba.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2] && p[3] == 255);
     let mut out = Vec::with_capacity(rgba.len() / 8);
     {
         let mut enc = png::Encoder::new(&mut out, w, h);
-        enc.set_color(if grey { png::ColorType::Grayscale } else { png::ColorType::Rgba });
+        enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
         enc.set_compression(png::Compression::Fast);
         enc.set_filter(png::FilterType::Sub);
         let mut writer = enc.write_header().map_err(|e| e.to_string())?;
-        if grey {
-            let g: Vec<u8> = rgba.chunks_exact(4).map(|p| p[0]).collect();
-            writer.write_image_data(&g).map_err(|e| e.to_string())?;
-        } else {
-            writer.write_image_data(rgba).map_err(|e| e.to_string())?;
-        }
+        writer.write_image_data(rgba).map_err(|e| e.to_string())?;
     }
     Ok(out)
 }
@@ -403,6 +394,24 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
     }
 }
 
+/// How many PDFs a reader keeps open: the ones last asked about - each open
+/// one holds its pages, and every reader opens what it is asked to draw.
+const OPEN_MOST: usize = 6;
+
+/// `sha` noted as the PDF last asked about, and those asked about longest
+/// ago closed, `most` kept open at most.
+fn keep_open<V>(docs: &mut HashMap<String, V>, used: &mut std::collections::VecDeque<String>, sha: &str, most: usize) {
+    used.retain(|s| s != sha);
+    used.push_back(sha.to_string());
+    while used.len() > most {
+        if let Some(old) = used.pop_front() {
+            docs.remove(&old);
+        }
+    }
+    // (none open that is not noted: one closed by asking is forgotten too)
+    docs.retain(|k, _| used.contains(k));
+}
+
 fn run_reader(cache: &Path) -> i32 {
     let started = Instant::now();
     let mut out = std::io::stdout().lock();
@@ -417,11 +426,16 @@ fn run_reader(cache: &Path) -> i32 {
     let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
     let _ = write_frame(&mut out, &json!({"id": 0, "ok": true, "bound_ms": ms(started)}), &[]);
     let mut docs: HashMap<String, PdfDocument<'static>> = HashMap::new();
+    let mut used = std::collections::VecDeque::new();
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         let Ok(ask) = serde_json::from_str::<Value>(&line) else { continue };
         let id = ask["id"].as_u64().unwrap_or(0);
-        let (head, bytes) = match answer(&mut docs, pdfium, cache, &ask) {
+        let answered = answer(&mut docs, pdfium, cache, &ask);
+        if let Some(sha) = ask["sha"].as_str().filter(|s| docs.contains_key(*s)) {
+            keep_open(&mut docs, &mut used, sha, OPEN_MOST);
+        }
+        let (head, bytes) = match answered {
             Ok((mut head, bytes)) => {
                 head["id"] = json!(id);
                 head["ok"] = json!(true);
@@ -552,12 +566,18 @@ async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), Str
     ask_on(app, 0, req).await
 }
 
-/// A part of a page drawn by the next of the readers in turn.
+/// A part of a page drawn by the next of the readers in turn - the first
+/// left for all else asked (links, words, figures) where there are others
+/// to draw, so that a hover is not kept waiting behind a page drawn large.
 async fn ask_drawn(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
     let state = app.state::<PdfState>();
     let n = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len().max(1);
-    let slot = (state.turn.fetch_add(1, Ordering::Relaxed) as usize) % n;
-    ask_on(app, slot, req).await
+    ask_on(app, drawing_slot(state.turn.fetch_add(1, Ordering::Relaxed) as usize, n), req).await
+}
+
+/// Which of `n` readers draws the `turn`th part asked for: the first alone, or the others in turn.
+fn drawing_slot(turn: usize, n: usize) -> usize {
+    if n > 1 { 1 + turn % (n - 1) } else { 0 }
 }
 
 /// `req` asked of reader `slot`: started the first time, and again where it has gone or has not answered in time.
@@ -1083,19 +1103,30 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_in_greys_alone_packs_as_one_channel_that_reads_back() {
-        let (w, h) = (64u32, 32u32);
-        let grey: Vec<u8> = (0..w * h).flat_map(|i| {
-            let g = (i % 251) as u8;
-            [g, g, g, 255]
-        }).collect();
-        let png = png_of(&grey, w, h).unwrap();
-        let mut reader = png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap();
-        let mut buf = vec![0; reader.output_buffer_size()];
-        let info = reader.next_frame(&mut buf).unwrap();
-        assert_eq!(info.color_type, png::ColorType::Grayscale);
-        let back: Vec<u8> = buf[..info.buffer_size()].iter().flat_map(|&g| [g, g, g, 255]).collect();
-        assert_eq!(back, grey);
+    fn parts_of_pages_are_drawn_by_the_readers_besides_the_first() {
+        assert_eq!((0..4).map(|t| drawing_slot(t, 1)).collect::<Vec<_>>(), [0, 0, 0, 0]);
+        assert_eq!((0..4).map(|t| drawing_slot(t, 2)).collect::<Vec<_>>(), [1, 1, 1, 1]);
+        assert_eq!((0..4).map(|t| drawing_slot(t, 3)).collect::<Vec<_>>(), [1, 2, 1, 2]);
+    }
+
+    #[test]
+    fn a_reader_keeps_the_pdfs_last_asked_about_open() {
+        let mut docs: HashMap<String, ()> = HashMap::new();
+        let mut used = std::collections::VecDeque::new();
+        for sha in ["a", "b", "c", "a", "d"] {
+            docs.insert(sha.into(), ());
+            keep_open(&mut docs, &mut used, sha, 3);
+        }
+        // (b, asked about longest ago, closed; a, asked about again, kept)
+        let mut open: Vec<_> = docs.keys().cloned().collect();
+        open.sort();
+        assert_eq!(open, ["a", "c", "d"]);
+        // (one closed by asking stays closed)
+        docs.remove("c");
+        keep_open(&mut docs, &mut used, "a", 3);
+        let mut open: Vec<_> = docs.keys().cloned().collect();
+        open.sort();
+        assert_eq!(open, ["a", "d"]);
     }
 
     #[test]

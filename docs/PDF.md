@@ -154,7 +154,10 @@ stops being part of the work.
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
 - **Only what is in view is drawn**, nearest first, then the pages next
-  in the way the view is going. A tile no longer wanted when its turn
+  in the way the view is going: once it stops, the column asks for the
+  next screen's worth the way it last scrolled, and the canvas for half a
+  screen further the way it was last moved - after all that is seen, so
+  that what it goes on to is there (the maintainer, 2026-10-15). A tile no longer wanted when its turn
   comes is dropped, never sent to PDFium; one sent is drawn to the end.
   Pages far out of view are let go, and drawn again when they come back.
 - **Sharp again soon after a zoom stops** (2026-10-15, after a report of
@@ -165,18 +168,22 @@ stops being part of the work.
     two drew up to twice them, four times the tiles - so a zoom in a
     little way stays sharp with the tiles it has.
   - What a zoom leaves stays: tiles of any level had, finer or coarser,
-    are drawn under the new level's own until those over them have come
-    and faded in, never the page's small picture between.
+    are drawn under the new level's own until those over the part seen
+    have come and faded in, never the page's small picture between -
+    however long the view stood still before. Parts out of view are not
+    waited for, and at most 24 tiles are kept under, those of the nearest
+    levels first, so that panning and zooming a long while keeps no more
+    than a few screens' worth.
   - Tiles are 1024 pixels a side, four on their way at once: a quarter as
     many requests as at 512, each carrying the page's part from PDFium
     to the window.
-  - A part drawn in greys alone - most of a paper's text - is carried as
-    one channel, a quarter of the bytes.
   - Parts of pages are drawn by up to three readers side by side, one
     fewer than the machine's cores, each a process with its own PDFium:
     PDFium draws on one thread at a time in a process, so pages are drawn
     side by side only in processes of their own. The first reader is
-    asked everything else.
+    asked everything else, and draws only where it is the only one, so
+    that a hover or a figure read never waits behind a page drawn large.
+    Each keeps the six PDFs last asked about open, closing the rest.
 
 ### Text
 
