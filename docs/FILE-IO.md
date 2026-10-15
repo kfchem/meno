@@ -496,11 +496,16 @@ As this part of step 5 was built (#155, from main beside step 3):
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
     written in V2000, or in V3000 where V2000 cannot hold them, as before.
-    The records of molecules in 3D do not follow that choice yet
-    (2026-10-13): each is V2000, or V3000 where V2000 cannot hold it.
+    In an SD file the choice holds for its records in 3D too, and is
+    offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
-    (`> <Energy (Eh)>`).
+    (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
+    isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
+    one shown, or every one - is written with the bonds it has, as the
+    page shows them: a trajectory's bonds, found from distances, form and
+    break as its frames go. A copy's MOL file, a PDB file and what a
+    plugin's writer is given are the same.
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls
@@ -819,15 +824,46 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   - every ATOM and HETATM record, all its fields kept - name, residue,
     chain, occupancy and the rest - though Meno shows only the atoms;
   - an atom's element from its element columns, or - where they are
-    blank - from how its name is aligned, as the format says;
+    blank - from how its name is aligned, as the format says; D and T,
+    deuterium and tritium, are hydrogen of mass 2 and 3, the mass number
+    kept with the atom, as Meno's table holds elements, not isotopes
+    (since 2026-10-13: before, such atoms were left out unsaid);
+  - an ATOM or HETATM record that does not read is never passed over
+    unsaid (since 2026-10-13: before, such atoms were left out without a
+    word):
+    - its coordinates no numbers: the file is damaged, and is not
+      opened, the chemist told how many such records there are and the
+      first by its line;
+    - its element none Meno knows (columns 77-78, or its name where they
+      are blank), in a residue named as water is - HOH, DOD, SOL, WAT,
+      TIP (`namedWater`, lib/chem/biopolymer) - a TIP4P or TIP5P water
+      model's massless site (MW, LP, EP, OM): no atom, and left out;
+    - its element none Meno knows, anywhere else - a wwPDB entry's
+      unknown atom (element X, residue UNX), an old file's name with
+      its element columns blank: the atom is left out and the molecule
+      says how many, *1 atom left out* (`atomsLeftOut`;
+      docs/WORKSPACE.md, *Said over it*);
   - MODELs as one molecule's frames, where each holds the same atoms;
     else each model a molecule of its own;
+  - a residue as the atoms listed one after another with the same chain,
+    sequence number, insertion code and residue name: the format lists a
+    residue's atoms together, its residues in order (ATOM, *Details*).
+    Not every atom in the file of that number: the format numbers
+    residues in four columns (ATOM, resSeq: 23-26), and a file of more
+    than 9,999 of them, or of more than 99,999 atoms - a molecular
+    dynamics frame in its water - numbers them over again, or past the
+    columns. A HELIX or SHEET record's residue is the first so numbered;
   - where an atom is given in more than one place, its residue's first
     alternate location;
   - bonds from CONECT records, and - for pairs CONECT does not speak for
     both atoms of - from distances, as an XYZ file's: a standard
     residue's own bonds are in the Chemical Component Dictionary, not in
-    the file;
+    the file. A serial number two atoms carry names neither, and a CONECT
+    record that names one is not taken: the format numbers a model's atoms
+    in five columns (ATOM, serial: 7-11) and so holds at most 99,999 of
+    them (MODEL, *Details*), and a file of more - a molecular dynamics
+    frame in its water - numbers them over again, or past the columns in
+    a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
   - HELIX and SHEET records (Secondary Structure Section, since lane L5,
     2026-10-10), every field kept, and with them each atom's name and
@@ -842,9 +878,17 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
   for it.
 - **What is written** (Export, molecules in 3D only): HETATM records, each
   molecule a residue of its own named UNL - the Chemical Component
-  Dictionary's unknown ligand - in chain A; every bond in CONECT records;
-  a MODEL for each frame where the writer's options ask; END. No HEADER,
-  CRYST1 or MASTER: a file of coordinates, not an entry of the archive.
+  Dictionary's unknown ligand - in chain A; a MODEL for each frame where
+  the writer's options ask; every bond the frame written has in CONECT
+  records - one set of them serves every model, so with a MODEL for each
+  frame, the first frame's; END. No HEADER, CRYST1 or MASTER: a file of
+  coordinates, not an entry of the archive. A coordinate that rounds to
+  nothing in its three decimals is written 0.000, never -0.000, as a MOL
+  file's never has -0.0000. One molecule is written where
+  its file had it; several, one system, as they stand on the page - each
+  turned and placed as it is seen, its ångströms kept - as a plugin's
+  writer is given them (utils/written `writtenAtoms`; *Which molecule*,
+  below), not each where its file had it, on top of one another.
 
 As step 7's writer was built - decided with the maintainer on
 2026-10-06:

@@ -28,6 +28,9 @@ import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
+import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { typedValue } from "../utils/typedValue";
+import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
 
@@ -287,6 +290,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   });
   // how far over to the secondary look it is drawn: 0 the primary, 1 the secondary
   const fill = useRef(look === "secondary" ? 1 : 0);
+  // the segments round its balls: as the style has them - or, on a canvas
+  // drawn lighter, as many as their size on the screen wants
+  // (utils/largeDrawing `ballSegmentsFor`): more at once as they grow, fewer
+  // once the zoom has settled
+  const [segments, setSegments] = useState(style.ballSegments);
+  // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
+  const biggest = useMemo(() => {
+    const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
+    return { primary: most(solid.radii.primary), secondary: most(solid.radii.secondary) };
+  }, [solid]);
+  const ballSizing = useRef({ zoom: 0, since: 0, timer: 0 });
+  useEffect(() => () => void (ballSizing.current.timer && window.clearTimeout(ballSizing.current.timer)), []);
   const atomsMat = useRef<THREE.MeshStandardMaterial>(null!);
   const bondsMat = useRef<THREE.MeshStandardMaterial>(null);
   // (the atoms either look leaves out, and whether it leaves out any)
@@ -528,6 +543,28 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
+    // (its balls' segments, by their size on the screen where the canvas is drawn lighter; as the style has them otherwise, at once)
+    {
+      const lighter = largeOn(gl).lighter;
+      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      const bs = ballSizing.current;
+      if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
+        bs.zoom = zoom;
+        bs.since = performance.now();
+      }
+      const want = lighter ? ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments) : style.ballSegments;
+      // (more at once, as balls grow on the screen - fewer only once the zoom has settled)
+      if (want !== segments) {
+        const left = lighter && want < segments ? BALLS_SETTLE_MS - (performance.now() - bs.since) : 0;
+        if (left <= 0) setSegments(want);
+        else if (!bs.timer) {
+          bs.timer = window.setTimeout(() => {
+            bs.timer = 0;
+            invalidate();
+          }, left + 5);
+        }
+      }
+    }
     // another frame: its atoms go there
     let reshaped = dirty.current;
     const p = places.current;
@@ -1111,13 +1148,17 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           renderOrder={OVER_PAGE}
           frustumCulled={false}
           receiveShadow
+          // (each atom met where its sphere is, worked out exactly, not by its triangles: components/raycast3d)
+          raycast={function (this: THREE.InstancedMesh, rc, hits) {
+            raycastSpheres(this, rc, hits);
+          }}
           onPointerMove={(e) => {
             e.stopPropagation();
             if (e.instanceId != null && e.instanceId !== hoverAtom) setHoverAtom(e.instanceId);
           }}
           onPointerOut={() => setHoverAtom(null)}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
         {lineCount > 0 && (
@@ -1127,6 +1168,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             renderOrder={OVER_PAGE}
             frustumCulled={false}
             receiveShadow
+            // (each bond met where its cylinder is, worked out exactly: components/raycast3d)
+            raycast={function (this: THREE.InstancedMesh, rc, hits) {
+              raycastCylinders(this, rc, hits);
+            }}
             // (pointed at, a bond says what a calculation found of it - where one did)
             onPointerMove={
               pairResults.length
@@ -1194,7 +1239,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           visible={false}
           raycast={() => {}}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {lineCount > 0 && (
@@ -1211,11 +1256,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           </instancedMesh>
         )}
         <mesh ref={linkedHull} renderOrder={OVER_PAGE - 1} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(LINKED_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </mesh>
         <instancedMesh ref={markedHull} args={[undefined, undefined, n]} renderOrder={OVER_PAGE - 1} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(LINKED_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {card && (
@@ -1233,7 +1278,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           visible={false}
           raycast={() => {}}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(CHOSEN_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {m.bonds.length > 0 && (
@@ -1557,7 +1602,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
     field.current?.focus();
     field.current?.select();
   }, []);
-  const read = () => Number(value.trim().replace("\u2212", "-").replace(",", "."));
+  const read = () => typedValue(value);
   return (
     <span className="inline-flex items-baseline">
       <input

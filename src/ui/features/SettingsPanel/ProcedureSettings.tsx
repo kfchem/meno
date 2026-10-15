@@ -4,12 +4,9 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { useReaders } from "../../../lib/calc/workers";
 import { ProcedureGlyph } from "../Workspace/workflow/icons";
-import { procedureLine, procedureNeeds, proceduresSaved, procedureWorkspace, removeProcedure, renameProcedure, type Procedure } from "../Workspace/workflow/procedures";
+import { procedureFileName, procedureLine, procedureNeeds, proceduresSaved, procedureWorkspace, removeProcedure, renameProcedure, type Procedure } from "../Workspace/workflow/procedures";
 
 const BUTTON = "h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50";
-
-/** A file's name for a procedure: its name, as a file may be named. */
-const fileNameOf = (name: string) => `${[...name].map((c) => (c < " " || '\\/:*?"<>|'.includes(c) ? " " : c)).join("").replace(/\s+/g, " ").trim() || "Procedure"}.meno`;
 
 /**
  * The procedures saved, in Settings, Calculations (docs/WORKFLOWS.md,
@@ -34,7 +31,7 @@ export default function ProcedureSettings() {
   const writeOut = async (p: Procedure) => {
     setProblem(undefined);
     try {
-      const picked = await saveDialog({ title: "Save procedure", defaultPath: fileNameOf(p.name), filters: [{ name: "Meno workspace", extensions: ["meno"] }] });
+      const picked = await saveDialog({ title: "Save procedure", defaultPath: procedureFileName(p.name), filters: [{ name: "Meno workspace", extensions: ["meno"] }] });
       if (!picked) return;
       await writeFile(/\.meno$/i.test(picked) ? picked : `${picked}.meno`, await procedureWorkspace(p));
     } catch (e) {

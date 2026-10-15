@@ -165,7 +165,11 @@ updates. The `uv` inside is already signed and notarized by its makers.
 - A newer version is downloaded in the background and checked against the
   public key; it is installed as Meno quits (on Windows, the NSIS
   installer, quietly; on a Mac, the app replaced where it is), or at once
-  through a restart the user asks for.
+  through a restart the user asks for. On Windows not while jobs wait or
+  run: the installer ends every process of Meno.exe, the jobs' runners
+  among them, so the update waits - the notice and Settings say for how
+  many - and goes in at a quit with none, downloaded again after the next
+  start.
 - On Windows, the installer registers Meno's class for Office again (its
   `--register-ole` hook), so structures in documents keep opening in the
   Meno installed.

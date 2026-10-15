@@ -266,12 +266,12 @@ function acceptPlugins(raw: unknown): PluginSettings {
     // (the roles Meno defines only)
     for (const [role, plugin] of Object.entries(r.roles)) if (isRole(role) && id(plugin)) roles[role] = plugin;
   }
-  // (each a place the chemist located: a full path, of some length)
+  // (each a place the chemist located: a full path, of some length - on Windows a drive's, or a share's on the network (\\server\share\...); whether a program is there is the app's to say)
   const programs: Record<string, string> = {};
   if (r.programs && typeof r.programs === "object" && !Array.isArray(r.programs)) {
     for (const [key, path] of Object.entries(r.programs)) {
       const [plugin, program] = key.split(":");
-      if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/])/.test(path)) programs[key] = path;
+      if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/]|\\\\[^\\/])/.test(path)) programs[key] = path;
     }
   }
   return { removed, roles, programs, guided };

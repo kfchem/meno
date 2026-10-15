@@ -8,7 +8,8 @@
  * that more can be made of a file later than Meno makes of it now. Each
  * record it reads has a handler of its own (`RECORDS`); a record it does
  * not read yet is counted, by name, and a handler is all it takes to read
- * it. What the rest of Meno makes of an entry - molecules in 3D - is its
+ * it; an atom's record that does not read, by its line, and what of it does
+ * not. What the rest of Meno makes of an entry - molecules in 3D - is its
  * own business (lib/io/structures).
  *
  * Writing writes the coordinate records of molecules in 3D - HETATM, MODEL
@@ -44,9 +45,19 @@ export type PdbAtom = {
   tempFactor?: number;
   /** Its element's symbol (77-78) - or, where those columns are blank, as its name's alignment says it (see `elementOf`). */
   element: string;
+  /** Its mass number, where its symbol is one of hydrogen's isotopes' own: 2 for D, 3 for T. */
+  isotope?: number;
   /** Its charge (79-80): 2+, 1-... */
   charge?: number;
 };
+
+/**
+ * An ATOM or HETATM record that does not read: its line, numbered from 1,
+ * and what of it does not - where it is (31-54), its element (77-78), or,
+ * where those columns are blank, its element as its name gives it (13-16) -
+ * and its residue's name (18-20).
+ */
+export type PdbUnreadableAtom = { line: number; what: "coordinates" | "element" | "name"; resName: string };
 
 /** A model: the coordinates between a MODEL record and its ENDMDL - or, in an entry of one, all of them. */
 export type PdbModel = {
@@ -55,6 +66,8 @@ export type PdbModel = {
   atoms: PdbAtom[];
   /** Where its chains end, by TER records: how many of its atoms come before each. */
   chainEnds: number[];
+  /** Its ATOM and HETATM records that do not read (`PdbEntry.unreadableAtoms`), in order. */
+  unreadableAtoms: PdbUnreadableAtom[];
 };
 
 /** A residue, as a secondary structure record names one: its name, its chain, its sequence number and insertion code. */
@@ -111,8 +124,10 @@ export type PdbEntry = {
   strands: PdbStrand[];
   /** The records not read, by name, and how many lines of each. */
   unread: Record<string, number>;
-  /** Lines that are no record the format names, or an atom's whose coordinates do not read. */
+  /** Lines that are no record the format names, or a record's that does not read. */
   unreadable: number;
+  /** The ATOM and HETATM records among them, in order - each its model's too: atoms the entry has, which are not among its models' atoms. */
+  unreadableAtoms: PdbUnreadableAtom[];
 };
 
 /**
@@ -156,16 +171,37 @@ function symbol(s: string): string | undefined {
 }
 
 /**
+ * Hydrogen's isotopes by symbols of their own - D, deuterium, and T,
+ * tritium, as the IUPAC allows them - and their mass numbers. Meno's table
+ * holds elements, not isotopes: such an atom is a hydrogen, of that mass.
+ */
+const HYDROGENS: ReadonlyMap<string, number> = new Map([
+  ["D", 2],
+  ["T", 3],
+]);
+
+/** An atom's element, and its mass number where its symbol is an isotope's own (D, T). */
+export type ElementRead = { element: string; isotope?: number };
+/** An element's symbol read: the element, and the mass number of an isotope with a symbol of its own; undefined where it is none. */
+function elementRead(s: string): ElementRead | undefined {
+  const isotope = HYDROGENS.get(s.trim().toUpperCase());
+  if (isotope) return { element: "H", isotope };
+  const element = symbol(s);
+  return element ? { element } : undefined;
+}
+
+/**
  * An atom's element: its element symbol (77-78) - "always present", the
  * format says - or, where those columns are blank, as its name is aligned
  * (ATOM, *Details*): a one-letter element's name starts at column 14, a
- * two-letter one's at column 13. Undefined where neither says one.
+ * two-letter one's at column 13. D and T are hydrogen, of mass 2 and 3,
+ * either way. Undefined where neither says one.
  */
-export function elementOf(line: string): string | undefined {
+export function elementOf(line: string): ElementRead | undefined {
   const given = text(line, 77, 78);
-  if (given) return symbol(given);
+  if (given) return elementRead(given);
   const c13 = cols(line, 13, 13);
-  return /[A-Za-z]/.test(c13) ? symbol(cols(line, 13, 14)) : symbol(cols(line, 14, 14));
+  return /[A-Za-z]/.test(c13) ? elementRead(cols(line, 13, 14)) : elementRead(cols(line, 14, 14));
 }
 
 /** A charge as the format writes it (79-80): a digit and a sign, "2+", "1-"; undefined where blank. */
@@ -176,8 +212,8 @@ function chargeOf(line: string): number | undefined {
   return n === 0 ? undefined : m[2] === "-" ? -n : n;
 }
 
-/** An entry as it is read, line by line. */
-type Reading = PdbEntry & { model: PdbModel | null; titleParts: string[]; bonds: Set<string> };
+/** An entry as it is read, line by line: `at`, the line being read, numbered from 1. */
+type Reading = PdbEntry & { model: PdbModel | null; titleParts: string[]; bonds: Set<string>; at: number };
 
 /** What a record's handler does with a line: "end" where the entry ends. */
 type Handler = (line: string, r: Reading) => void | "end";
@@ -185,7 +221,7 @@ type Handler = (line: string, r: Reading) => void | "end";
 /** The model atoms go into: the one a MODEL record began, or - an entry of one model - the one there is. */
 function modelOf(r: Reading): PdbModel {
   if (r.model) return r.model;
-  const m: PdbModel = { serial: r.models.length + 1, atoms: [], chainEnds: [] };
+  const m: PdbModel = { serial: r.models.length + 1, atoms: [], chainEnds: [], unreadableAtoms: [] };
   r.models.push(m);
   r.model = m;
   return m;
@@ -198,11 +234,17 @@ const atomRecord =
     const x = real(line, 31, 38);
     const y = real(line, 39, 46);
     const z = real(line, 47, 54);
-    const element = elementOf(line);
-    if (x === undefined || y === undefined || z === undefined || !element) {
+    const read = elementOf(line);
+    if (x === undefined || y === undefined || z === undefined || !read) {
+      // (counted, and its line kept - with the entry and its model: an atom of theirs that is in none of the model's atoms)
       r.unreadable++;
+      const what = x === undefined || y === undefined || z === undefined ? "coordinates" : text(line, 77, 78) ? "element" : "name";
+      const unreadable: PdbUnreadableAtom = { line: r.at, what, resName: text(line, 18, 20) };
+      r.unreadableAtoms.push(unreadable);
+      modelOf(r).unreadableAtoms.push(unreadable);
       return;
     }
+    const { element, isotope } = read;
     const occupancy = real(line, 55, 60);
     const tempFactor = real(line, 61, 66);
     const charge = chargeOf(line);
@@ -221,6 +263,7 @@ const atomRecord =
       ...(occupancy !== undefined ? { occupancy } : {}),
       ...(tempFactor !== undefined ? { tempFactor } : {}),
       element,
+      ...(isotope !== undefined ? { isotope } : {}),
       ...(charge !== undefined ? { charge } : {}),
     });
   };
@@ -237,7 +280,7 @@ const RECORDS: Record<string, Handler> = {
   TITLE: (line, r) => void r.titleParts.push(cols(line, 11, 80)),
   MODEL: (line, r) => {
     // (atoms before the first MODEL record, should there be any, are a model of their own)
-    const m: PdbModel = { serial: integer(line, 11, 14) ?? r.models.length + 1, atoms: [], chainEnds: [] };
+    const m: PdbModel = { serial: integer(line, 11, 14) ?? r.models.length + 1, atoms: [], chainEnds: [], unreadableAtoms: [] };
     r.models.push(m);
     r.model = m;
   },
@@ -311,8 +354,9 @@ function residueAt(line: string, name: number, chain: number, seq: number, code:
 
 /** A PDB file's records, as far as Meno reads them; the rest counted. */
 export function readPdb(content: string): PdbEntry {
-  const r: Reading = { models: [], conect: [], helices: [], strands: [], unread: {}, unreadable: 0, model: null, titleParts: [], bonds: new Set() };
+  const r: Reading = { models: [], conect: [], helices: [], strands: [], unread: {}, unreadable: 0, unreadableAtoms: [], model: null, titleParts: [], bonds: new Set(), at: 0 };
   for (const raw of content.split("\n")) {
+    r.at++;
     const line = raw.replace(/\r$/, "");
     if (!line.trim()) continue;
     const name = recordName(line);
@@ -334,11 +378,12 @@ export function readPdb(content: string): PdbEntry {
     strands: r.strands,
     unread: r.unread,
     unreadable: r.unreadable,
+    unreadableAtoms: r.unreadableAtoms,
   };
 }
 
-/** An atom to be written: its element, where it is in ångströms, and its charge. */
-export type PdbWriteAtom = { el: string; x: number; y: number; z: number; charge?: number };
+/** An atom to be written: its element, where it is in ångströms, its charge, and its mass number where it has one. */
+export type PdbWriteAtom = { el: string; x: number; y: number; z: number; charge?: number; isotope?: number };
 /** A molecule to be written: its atoms, and its bonds between them by index. */
 export type PdbWriteMolecule = { atoms: readonly PdbWriteAtom[]; bonds: readonly { a1: number; a2: number }[] };
 
@@ -349,9 +394,12 @@ const MOST_RESIDUES = 9_999;
 
 /** `s` right-justified in `n` columns. */
 const right = (s: string, n: number) => s.padStart(n);
-/** A Real(n.m) field, right-justified; throws where it does not fit. */
+/**
+ * A Real(n.m) field, right-justified; throws where it does not fit. A value
+ * that rounds to nothing in m decimals is written as 0, never as -0.000.
+ */
 function realField(v: number, n: number, m: number): string {
-  const s = v.toFixed(m);
+  const s = (Math.abs(v) < 0.5 * 10 ** -m ? 0 : v).toFixed(m);
   if (s.length > n || !Number.isFinite(v)) throw new Error(`${v} does not fit a PDB file's ${n}-column field.`);
   return right(s, n);
 }
@@ -400,7 +448,7 @@ export function writePdb(models: readonly (readonly PdbWriteMolecule[])[]): stri
       const seen = new Map<string, number>();
       for (const a of m.atoms) {
         serial++;
-        const sym = symbolFor(a.el);
+        const sym = symbolFor(a.el, a.isotope);
         const n = (seen.get(sym) ?? 0) + 1;
         seen.set(sym, n);
         out.push(
@@ -452,9 +500,16 @@ export function writePdb(models: readonly (readonly PdbWriteMolecule[])[]): stri
   return out.join("\n") + "\n";
 }
 
-/** An atom's element for its element columns (77-78): a label that is no element - an abbreviation, say - is refused. */
-function symbolFor(el: string): string {
+/**
+ * An atom's element for its element columns (77-78) and its name: a label
+ * that is no element - an abbreviation, say - is refused. A hydrogen of
+ * mass 2 or 3 is D or T, as neutron entries write deuterium (DOD's atoms
+ * D1, D2), and as `elementOf` reads them back; any other mass number goes
+ * unwritten - the format has no field for it.
+ */
+function symbolFor(el: string, isotope?: number): string {
   const sym = symbol(el);
   if (!sym) throw new Error(`"${el}" is no element: a PDB file holds atoms of elements only.`);
+  if (sym === "H") for (const [own, mass] of HYDROGENS) if (mass === isotope) return own;
   return sym;
 }
