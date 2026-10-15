@@ -6,6 +6,7 @@
 # Binary files, named rather than left to git's guess.
 *.png binary
 *.ico binary
+*.bmp binary
 *.icns binary
 *.ttf binary
 *.woff2 binary
