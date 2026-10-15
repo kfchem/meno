@@ -92,6 +92,14 @@ class Collect(unittest.TestCase):
             {"entry": 1, "file": "film.mp4", "media": "video/mp4"},
         ]})
 
+    def test_says_it_rendered_on_the_processor_only_where_the_graphics_processor_was_asked_for_and_not_found(self):
+        fell = "Rendering on the processor (no graphics processor Blender can use)\nprogress 100/100\n"
+        said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=fell, ended="done")
+        self.assertEqual(said["result"]["note"], "Rendered on the processor")
+        for log in ("Rendering on the graphics processor\n", "Rendering on the processor\n", ""):
+            said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="done")
+            self.assertNotIn("note", said["result"])
+
     def test_says_why_it_failed(self):
         log = "Blender 5.2.2\nRead blend\nError: Python: Traceback ...\nrender.py: the scene has no camera\nBlender quit\n"
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")

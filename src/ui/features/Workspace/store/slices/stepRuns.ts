@@ -561,6 +561,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const { theirs } = renderChoices("render", run.options);
     const made: Rendered[] = [];
     const whys: string[] = [];
+    const notes: string[] = [];
     for (const [k, j] of run.jobs.entries()) {
       const record = records[k];
       // (gone without finishing - the computer restarted, say - while others were done: said so, the others' pictures made)
@@ -573,11 +574,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         continue;
       }
       try {
-        const said = (await client.collect("render", [{ scene: SCENE, film: false }], theirs, {}, await wholeLog(j.id), record.state)) as { why?: unknown; made?: unknown };
+        const said = (await client.collect("render", [{ scene: SCENE, film: false }], theirs, {}, await wholeLog(j.id), record.state)) as { why?: unknown; made?: unknown; note?: unknown };
         if (typeof said?.why === "string") {
           whys.push(said.why.trim().slice(0, 300) || "It did not say why");
           continue;
         }
+        if (typeof said?.note === "string" && said.note.trim()) notes.push(said.note.trim().slice(0, 60));
         const m = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
         const file = typeof m?.file === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(m.file) ? m.file : null;
         if (!file || m?.media !== "image/png") {
@@ -600,7 +602,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     const total = run.jobs.length;
     const ok = !whys.length && made.length > 0;
-    const said = ok ? `${clock(ran.took ?? 0)} \u00b7 ${picturesSaid(made.length, total)}` : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
+    // (a word the plugin says of how it rendered - "Rendered on the processor", where it fell back from the graphics processor it was asked for)
+    const note = notes[0] ? ` \u00b7 ${notes[0]}` : "";
+    const said = ok ? `${clock(ran.took ?? 0)} \u00b7 ${picturesSaid(made.length, total)}${note}` : whys.length >= total ? whys[0] : `${whys.length} of ${total} failed \u00b7 ${whys[0]}`;
     const first = doc.getState().nextPictureId ?? 1;
     // (one edit: what it did before kept, its pictures - where it made any - in its set in place of those it held, and what it did)
     doc.edit("render", (x) => {

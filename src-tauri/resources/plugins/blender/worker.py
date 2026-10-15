@@ -45,6 +45,8 @@ PROGRAM = "blender"
 SCRIPT = "render.py"
 SETTINGS = "render.json"
 PICTURE = "picture.png"
+# the line render.py logs where the graphics processor was asked for and none was found
+FELL_BACK = "Rendering on the processor (no graphics processor Blender can use)"
 FILM = "film.mp4"
 
 ENGINES = {"cycles", "eevee"}
@@ -168,7 +170,11 @@ def op_collect(m):
     for i, entry in enumerate(m.get("entries") or []):
         film = isinstance(entry, dict) and entry.get("film") is True
         made.append({"entry": i, "file": FILM if film else PICTURE, "media": "video/mp4" if film else "image/png"})
-    return {"made": made}
+    result = {"made": made}
+    # (the graphics processor asked for, and Blender fell back to the processor: said once, which the card may show - nothing where it rendered on the graphics processor or was not asked to)
+    if FELL_BACK in (m.get("log") or ""):
+        result["note"] = "Rendered on the processor"
+    return result
 
 
 OPS = {"prepare": op_prepare, "collect": op_collect}

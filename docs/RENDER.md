@@ -212,6 +212,13 @@ uv, no package), and the script Blender runs, `render.py`.
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
   the shadows' softness, and a film's quality.
+- **Where it fell back** (2026-10-15): the graphics processor asked for
+  (the default) and Blender found none it can use, the render is on the
+  processor, and the step's line says so in small words, *Rendered on the
+  processor*, after its time. Nothing is said where it rendered on the
+  graphics processor, or the setting was off. The log says which in each
+  case. A render's progress comes from Blender's own render statistics
+  (samples; a film's frames), as hundredths, and never goes back.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
