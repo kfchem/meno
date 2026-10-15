@@ -1,10 +1,12 @@
 import {
+  baseOf,
   DEFAULT_STYLE_CHOICE,
-  presetById,
+  isOwnStyleId,
   STYLE_PRESETS,
   wedgeBroadEndOf,
   type DrawingStyle,
   type Length,
+  type OwnStyle2D,
   type StyleChoice,
 } from "./style";
 import { automaticBaseline } from "./layout2d";
@@ -563,11 +565,11 @@ export function withSetting<K extends keyof DrawingStyle>(
   key: K,
   value: DrawingStyle[K] | undefined,
 ): StyleChoice {
-  const preset = presetById(choice.preset).style;
+  const preset = baseOf(choice).style;
   const changes: Partial<DrawingStyle> = { ...choice.changes };
   if (value === undefined || sameValue(preset[key], value)) delete changes[key];
   else changes[key] = value;
-  return { preset: choice.preset, changes };
+  return { ...choice, changes };
 }
 
 /**
@@ -638,8 +640,10 @@ export function acceptValue(
  */
 export function acceptStyleChoice(raw: unknown): StyleChoice {
   if (typeof raw !== "object" || raw === null) return DEFAULT_STYLE_CHOICE;
-  const { preset, changes } = raw as { preset?: unknown; changes?: unknown };
-  const known = STYLE_PRESETS.find((p) => p.id === preset);
+  const { preset, changes, own } = raw as { preset?: unknown; changes?: unknown; own?: unknown };
+  // (one of the user's own: the whole of it carried, so it reads where that style is not)
+  const carried = typeof preset === "string" && isOwnStyleId(preset) ? acceptCarried(own) : null;
+  const known = carried ? { id: preset as string, style: carried.style } : STYLE_PRESETS.find((p) => p.id === preset);
   if (!known) return DEFAULT_STYLE_CHOICE;
   const out: Record<string, unknown> = {};
   if (typeof changes === "object" && changes !== null) {
@@ -657,5 +661,90 @@ export function acceptStyleChoice(raw: unknown): StyleChoice {
       if (accepted !== undefined) out[key] = accepted;
     }
   }
-  return { preset: known.id, changes: out as Partial<DrawingStyle> };
+  return { preset: known.id, changes: out as Partial<DrawingStyle>, ...(carried ? { own: carried } : {}) };
+}
+
+/** The longest an own style's name may be. */
+export const OWN_NAME_MOST = 60;
+
+/** A whole drawing style as a file holds it: each setting that reads, Meno's own where one does not. */
+export function acceptDrawingStyle(raw: unknown): DrawingStyle {
+  const base = STYLE_PRESETS[0].style;
+  if (typeof raw !== "object" || raw === null) return base;
+  const r = raw as Record<string, unknown>;
+  const bond = acceptValue(fieldOf("bondLengthPt")!, r.bondLengthPt, base.bondLengthPt);
+  const L = (bond as number | undefined) ?? base.bondLengthPt;
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(r)) {
+    const field = FIELD_BY_KEY.get(key as keyof DrawingStyle);
+    if (!field) continue;
+    const accepted = acceptValue(field, value, L);
+    if (accepted !== undefined) out[key] = accepted;
+  }
+  return out as DrawingStyle;
+}
+
+/** An own style's name as read: trimmed, at most `OWN_NAME_MOST` long; none where it is empty. */
+export function ownName(raw: unknown): string | null {
+  const n = typeof raw === "string" ? raw.trim().slice(0, OWN_NAME_MOST) : "";
+  return n || null;
+}
+
+/** An own style carried in a choice, as read. */
+function acceptCarried(raw: unknown): { name: string; style: DrawingStyle } | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { name, style } = raw as { name?: unknown; style?: unknown };
+  const n = ownName(name);
+  return n ? { name: n, style: acceptDrawingStyle(style) } : null;
+}
+
+/** The user's own styles as the settings file holds them: each with an id of its own and a name no other has, built in or own; what does not read left out. */
+export function acceptOwnStyles2d(raw: unknown): OwnStyle2D[] {
+  const out: OwnStyle2D[] = [];
+  if (!Array.isArray(raw)) return out;
+  for (const o of raw as unknown[]) {
+    if (typeof o !== "object" || o === null) continue;
+    const { id, name, style } = o as Record<string, unknown>;
+    const n = ownName(name);
+    if (typeof id !== "string" || !isOwnStyleId(id) || !n || out.some((x) => x.id === id)) continue;
+    if ([...STYLE_PRESETS, ...out].some((x) => x.name.toLowerCase() === n.toLowerCase())) continue;
+    out.push({ id, name: n, style: acceptDrawingStyle(style) });
+  }
+  return out;
+}
+
+// --- The user's own drawing styles ----------------------------------------------
+
+/** Whether `name` is a drawing style's already - built in, or one of `own` but `except` - however it is capitalised. */
+export function drawingStyleNameTaken(own: readonly OwnStyle2D[], name: string, except?: string): boolean {
+  const n = name.trim().toLowerCase();
+  return [...STYLE_PRESETS, ...own].some((s) => s.id !== except && s.name.toLowerCase() === n);
+}
+
+/** `name`, or - where a style has it already - "<name> 2", 3 and on. */
+export function freshDrawingStyleName(own: readonly OwnStyle2D[], name: string): string {
+  const base = (ownName(name) ?? "My style").slice(0, OWN_NAME_MOST);
+  if (!drawingStyleNameTaken(own, base)) return base;
+  for (let n = 2; ; n++) {
+    const tried = `${base.slice(0, OWN_NAME_MOST - String(n).length - 1)} ${n}`;
+    if (!drawingStyleNameTaken(own, tried)) return tried;
+  }
+}
+
+/** The user's own styles with one more, `style` as `name` (made fresh where it is taken), and its id: one past the highest. */
+export function withOwnStyle2d(own: readonly OwnStyle2D[], name: string, style: DrawingStyle): { own: OwnStyle2D[]; id: string } {
+  const id = `own-${Math.max(0, ...own.map((o) => Number(o.id.slice(4)) || 0)) + 1}`;
+  return { own: [...own, { id, name: freshDrawingStyleName(own, name), style }], id };
+}
+
+/** The user's own styles with one renamed - as they were, where the name is empty or another style's. */
+export function withOwnRenamed2d(own: readonly OwnStyle2D[], id: string, name: string): OwnStyle2D[] {
+  const n = ownName(name);
+  if (!n || drawingStyleNameTaken(own, n, id)) return own as OwnStyle2D[];
+  return own.map((o) => (o.id === id ? { ...o, name: n } : o));
+}
+
+/** A choice of one of the user's own styles, carrying it whole. */
+export function ownChoice(o: OwnStyle2D): StyleChoice {
+  return { preset: o.id, changes: {}, own: { name: o.name, style: o.style } };
 }

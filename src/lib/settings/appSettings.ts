@@ -8,8 +8,8 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { create } from "zustand";
-import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../chem/style";
-import { acceptStyleChoice } from "../chem/styleFields";
+import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
+import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
 import { acceptColours, DEFAULT_COLOURS, type ColourSettings } from "../chem/palette";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
@@ -24,6 +24,8 @@ import { isRole } from "../plugins/roles";
 export type AppSettings = {
   /** The drawing style a structure is drawn in unless its document has its own. */
   drawingStyle: StyleChoice;
+  /** The user's own drawing styles, offered below the built-in ones in every workspace (lib/chem/style `OwnStyle2D`). */
+  ownDrawingStyles: OwnStyle2D[];
   /** How molecules in 3D look, and how they turn. */
   style3d: Style3DChoice;
   network: NetworkSettings;
@@ -150,6 +152,7 @@ export type NetworkSettings = {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   drawingStyle: DEFAULT_STYLE_CHOICE,
+  ownDrawingStyles: [],
   style3d: DEFAULT_STYLE_3D_CHOICE,
   network: { offline: false, granted: [] },
   chemistry: { valenceWarnings: true, stereoLabels: false },
@@ -176,6 +179,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
   const r = raw as Record<string, unknown>;
   return {
     drawingStyle: acceptStyleChoice(r.drawingStyle),
+    ownDrawingStyles: acceptOwnStyles2d(r.ownDrawingStyles),
     style3d: acceptStyle3dChoice(r.style3d),
     network: acceptNetwork(r.network),
     chemistry: acceptChemistry(r.chemistry),
@@ -379,6 +383,7 @@ type SettingsState = AppSettings & {
   /** What went wrong reading or writing the file, if anything. */
   error: string | null;
   setDrawingStyle: (choice: StyleChoice) => void;
+  setOwnDrawingStyles: (own: OwnStyle2D[]) => void;
   setStyle3d: (choice: Style3DChoice) => void;
   setNetwork: (network: NetworkSettings) => void;
   setChemistry: (chemistry: ChemistrySettings) => void;
@@ -405,9 +410,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours } = get();
+      const { drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours }),
+        settingsFileText({ drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -420,6 +425,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     error: null,
     setDrawingStyle: (drawingStyle) => {
       set({ drawingStyle });
+      scheduleSave();
+    },
+    setOwnDrawingStyles: (ownDrawingStyles) => {
+      set({ ownDrawingStyles });
       scheduleSave();
     },
     setStyle3d: (style3d) => {

@@ -3,6 +3,8 @@
  * zip, laid out as EPUB and ODF lay theirs out.
  *
  *   mimetype          first, stored: what the file is, for Meno to tell it by
+ *   meno.json         stored, where there is one: what it holds (`MenoKind`) -
+ *                     a workspace where there is none, as every file was before
  *   workspace.json    stored: the workspace (Workspace/utils/workspace)
  *   files.json        stored: each file kept - its name, kind, media type, size
  *   files/<sha256>    each file kept, as it was: text deflated, the rest stored
@@ -100,6 +102,71 @@ export type MenoFile = {
 
 /** What a file not one Meno reads as a workspace is said to be. */
 export class NotMenoFile extends Error {}
+
+/** What a Meno file of a kind this Meno does not know - made by a newer one - is said to be. */
+export class NewerMenoFile extends NotMenoFile {}
+
+/**
+ * What a Meno file holds, as its `meno.json` says (docs/FILE-IO.md, *What a
+ * .meno holds*): a workspace - every file with none says so - or styles,
+ * the user's own, to be added to theirs. A template, later, will be a
+ * workspace opened as a new, untitled copy.
+ */
+export type MenoKind = "workspace" | "style";
+const KINDS: readonly string[] = ["workspace", "style"];
+
+/** The most a file's own description, or its styles, may come to. */
+const MOST_SMALL = 1024 * 1024;
+/** The most a style file's picture may come to. */
+const MOST_PICTURE = 8 * 1024 * 1024;
+
+/**
+ * What a Meno file holds: a workspace, where it does not say. Throws, as
+ * `NewerMenoFile`, where it says a kind this Meno does not know; as
+ * `NotMenoFile` where it is not a Meno file, or damaged.
+ */
+export function menoKindOf(bytes: Uint8Array): MenoKind {
+  if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno file.");
+  const entries = zipEntries(bytes);
+  if (!entries) throw new NotMenoFile("It is a Meno file cut short or damaged, and cannot be read.");
+  const head = entries.find((e) => e.name === "meno.json");
+  if (!head) return "workspace";
+  const json = head.size <= MOST_SMALL ? entryBytes(head) : null;
+  let kind: unknown;
+  try {
+    kind = json ? (JSON.parse(strFromU8(json)) as { kind?: unknown }).kind : undefined;
+  } catch {
+    kind = undefined;
+  }
+  if (typeof kind !== "string") throw new NotMenoFile("It is a Meno file that does not say what it holds.");
+  if (!KINDS.includes(kind)) throw new NewerMenoFile("It was made by a newer Meno, and holds what this Meno cannot open.");
+  return kind as MenoKind;
+}
+
+/** Styles written as a Meno file (`MenoKind` "style"): their JSON (lib/chem/styleFile) and, where there is one, a picture of them. */
+export function styleFileBytes(styles: string, picture?: Uint8Array | null): Uint8Array {
+  const json = strToU8(styles);
+  if (json.length > MOST_SMALL) throw new Error(`A style file holds styles of at most ${sized(MOST_SMALL)}; these come to ${sized(json.length)}.`);
+  const entries: Zippable = {
+    mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }],
+    "meno.json": [strToU8(JSON.stringify({ kind: "style" })), { level: 0 }],
+    "style.json": [json, { level: 0 }],
+  };
+  if (picture && picture.length <= MOST_PICTURE) entries["picture.png"] = [picture, { level: 0 }];
+  return zipSync(entries);
+}
+
+/** A style file read: its styles' JSON, and its picture where it has one. Throws, saying why, where it is no style file or does not read. */
+export function readStyleFile(bytes: Uint8Array): { styles: string; picture: Uint8Array | null } {
+  if (menoKindOf(bytes) !== "style") throw new NotMenoFile("It is not a style file.");
+  const entries = zipEntries(bytes)!;
+  const named = new Map(entries.map((e) => [e.name, e]));
+  const head = named.get("style.json");
+  const json = head && head.size <= MOST_SMALL ? entryBytes(head) : null;
+  if (!json) throw new NotMenoFile("It is a style file that holds no styles.");
+  const pic = named.get("picture.png");
+  return { styles: strFromU8(json), picture: pic && pic.size <= MOST_PICTURE ? entryBytes(pic) : null };
+}
 
 /**
  * A workspace file read: its workspace's JSON and the list of files it

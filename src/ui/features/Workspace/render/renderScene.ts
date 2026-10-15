@@ -227,7 +227,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       // (a line curving in to a lone atom, as straight pieces along its curve: a plugin's sticks are straight)
       const linesIn = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look]).map((l) => bentPieces(l));
+        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look], drawn.multipleBonds === "one").map((l) => bentPieces(l));
       const linesAt = (x: Sample) =>
         linesIn(x).flat().map((l) => {
           const along = l.b.clone().sub(l.a);
@@ -239,6 +239,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i)).flatMap((b, l) => Array<number>(pieces[l]).fill(b));
       const each = samples.map(linesAt);
       for (let l = 0; l < each[0].length; l++) {
+        // (a line of no thickness - a multiple bond drawn as one stick - is given as nothing)
+        if (each.every((x) => x[l].r === 0)) continue;
         const at = (s: number) => {
           const x = each[s][l];
           const there = samples[s].presence ? samples[s].presence![lineBond[l]] : 1;
