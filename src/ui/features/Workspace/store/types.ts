@@ -842,6 +842,14 @@ export type EditorState = {
    * value cannot be set so.
    */
   setMeasure3d: (id: number, measure: number, value: number, gesture?: string) => number | null;
+  /**
+   * The copy a value set on a result made last (`setMeasure3d`): the
+   * molecule it was made from and the copy, by id, and when - for the view
+   * to bring it into sight and light it a moment (Molecules3D); `undone`,
+   * when an undo took it away again - it goes back into the one it came
+   * from - until a redo puts it back.
+   */
+  copied3d: { from: number; copy: number; at: number; undone?: number } | null;
   /** What is chosen of a molecule measured - as the atoms were chosen - and its value opened to be typed. */
   setChosen3d: () => void;
   setHoveredMeasure3d: (h: { id: number; measure: number } | null) => void;

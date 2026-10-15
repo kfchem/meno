@@ -9,7 +9,7 @@ import ScreenShade3D from "./ScreenShade3D";
 import { LONG_PRESS_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
-import { atomAt, bondAt, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
+import { atomAt, bondAt, frameOf, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { movingFor, placesOf, valueOf } from "../utils/edit3d";
 import { kindOf, type MeasureKind } from "../utils/measure3d";
 import { movedUnderPointer, pressMovedUnder, setViewGoal } from "./viewGoal";
@@ -28,7 +28,9 @@ import { SURFACE_ISO } from "../utils/surfaceMesh";
 import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "../../../../lib/calc/asks";
 import { titled } from "../../../../lib/calc/sources";
 import type { CalcInfo } from "../../../../lib/calc/output";
-import Molecule3DView from "./Molecule3DView";
+import Molecule3DView, { type Split3D } from "./Molecule3DView";
+import { viewBack, viewShowingCopy } from "../utils/copySeen";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import StackChip3D from "./StackChip3D";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -41,6 +43,16 @@ const STILL = 0.02;
 const HELD_MS = 80;
 /** How far back the moves go that say how fast a molecule was turning when let go, in ms. */
 const RECENT_MS = 64;
+/**
+ * A copy splitting off the molecule it was made from (a value set on a
+ * result): how long it takes, in seconds - `SPLIT_LEAST` at least, and no
+ * faster than `SPLIT_SPEED` bond lengths a second where its place is far,
+ * past a set, up to `SPLIT_MOST` - and how long it is lit once there, in ms.
+ */
+const SPLIT_LEAST = 0.45;
+const SPLIT_MOST = 1.1;
+const SPLIT_SPEED = 14;
+const SPLIT_LIT_MS = 900;
 
 type Press = {
   /** The molecule pressed on, and with it the others selected with it. */
@@ -182,7 +194,13 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // a press being held on a molecule: the atom its selection spreads from, and since when
   const [hold, setHold] = useState<{ id: number; from: number; start: number } | null>(null);
   // molecules taken away, shrinking out of view: as they were, and how they were turned and shown
-  const [leaving, setLeaving] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number }[]>([]);
+  const [leaving, setLeaving] = useState<{ m: Molecule3D; turn: Turn3D | undefined; frame: number; split?: Split3D }[]>([]);
+  // copies splitting off the molecules they were made from, by id (Split3D); the one lit a moment once there;
+  // and the view a copy's split took it to, and from - to go back to as it is undone
+  const [splits, setSplits] = useState<Record<number, Split3D>>({});
+  const [freshCopy, setFreshCopy] = useState<number | null>(null);
+  const copyView = useRef<{ copy: number; before: { zoom: number; x: number; y: number }; went: { zoom: number; x: number; y: number } } | null>(null);
+  const copied = useEditor((s) => s.copied3d);
   // of each stack, the molecule it shows (utils/stacks): those out of sight not drawn; and a stack
   // going over to another, the one let go of drawn as it goes (`receding`), the next as it comes (`arriving`)
   const stacksShown = useEditor((s) => s.stacksShown);
@@ -228,10 +246,58 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     const was = before.current;
     const gone = was.molecules.filter((m) => !now.has(m.id));
     if (gone.length) {
-      setLeaving((l) => [...l, ...gone.map((m) => ({ m, turn: was.turns[m.id], frame: was.frames[m.id] ?? 0 }))]);
+      // (a copy a value set on a result made, undone: back into the one it came from, as it split off it)
+      const c = store.getState().copied3d;
+      const back = (m: Molecule3D): Split3D | undefined => {
+        const from = c?.undone != null && c.copy === m.id ? molecules.find((k) => k.id === c.from) : undefined;
+        if (!from) return undefined;
+        const solid = solidOf(from, style);
+        return { places: solid.frames[frameOf(solid, frames[from.id] ?? 0)], at: from.at, start: performance.now(), seconds: splitSeconds(from, m), back: true };
+      };
+      setLeaving((l) => [...l, ...gone.map((m) => ({ m, turn: was.turns[m.id], frame: was.frames[m.id] ?? 0, split: back(m) }))]);
+      // (and the view, where it went to show the copy, back where it was - if it is still there)
+      const v = copyView.current;
+      if (v && gone.some((m) => m.id === v.copy) && c?.undone != null) {
+        const cam = camera as THREE.OrthographicCamera;
+        const goal = viewBack(v.before, v.went, { zoom: cam.zoom, x: cam.position.x, y: cam.position.y });
+        if (goal) setViewGoal(cam, goal);
+        copyView.current = null;
+      }
     }
     before.current = { molecules, turns, frames };
-  }, [molecules, turns, frames]);
+  }, [molecules, turns, frames, store, style, camera]);
+  // A copy a value set on a result made - or its redo: it splits off the
+  // one it was made from, over it at first, out to its own place, as its
+  // value goes over to the new one; the view glides as far as shows it, as
+  // it goes; and once there, it is lit a moment, as anything just put down.
+  const splitFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!copied || copied.undone != null || splitFor.current === copied.at) return;
+    splitFor.current = copied.at;
+    const st = store.getState();
+    const from = st.molecules3d.find((k) => k.id === copied.from);
+    const copy = st.molecules3d.find((k) => k.id === copied.copy);
+    if (!from || !copy) return;
+    const solid = solidOf(from, style);
+    const seconds = splitSeconds(from, copy);
+    setSplits((x) => ({ ...x, [copy.id]: { places: solid.frames[frameOf(solid, st.frames3d[from.id] ?? 0)], at: from.at, start: performance.now(), seconds } }));
+    const cam = camera as THREE.OrthographicCamera;
+    const r = dom.getBoundingClientRect();
+    const boxOf = (k: Molecule3D) => seenBounds(poseOf(k, solidOf(k, style), lookOf(k), st.turns3d[k.id] ?? st.turns3d[from.id], st.frames3d[k.id]), eyeOf(camera));
+    const before = { zoom: cam.zoom, x: cam.position.x, y: cam.position.y };
+    const goal = viewShowingCopy(before, { width: r.width, height: r.height, cover: st.cover }, boxOf(from), boxOf(copy));
+    if (goal) {
+      setViewGoal(cam, goal);
+      copyView.current = { copy: copy.id, before, went: goal };
+    } else copyView.current = null;
+    invalidate();
+    const lit = window.setTimeout(() => setFreshCopy(copy.id), seconds * 1000);
+    const unlit = window.setTimeout(() => setFreshCopy((f) => (f === copy.id ? null : f)), seconds * 1000 + SPLIT_LIT_MS);
+    return () => {
+      window.clearTimeout(lit);
+      window.clearTimeout(unlit);
+    };
+  }, [copied, store, style, camera, dom, invalidate]);
   // (one gone or going: drawn again, so the picture shows it)
   useEffect(() => {
     invalidate();
@@ -647,7 +713,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   if (!molecules.length && !leaving.length && !receding.length) return null;
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
-    return hovered?.id === id ? 1 : 0;
+    return hovered?.id === id || freshCopy === id ? 1 : 0;
   };
   return (
     <group>
@@ -697,6 +763,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             onFrame={(f) => store.getState().setFrame3d(m.id, f)}
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
+            split={splits[m.id]}
             onRisen={() => store.getState().risen3d(m.id)}
             stereoShown={stereoLabels ? "all" : m.stereo?.chosen ? "chosen" : null}
             stereoFont={stereoFont}
@@ -792,7 +859,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           onSwapped={() => setReceding((r) => r.filter((x) => x.start !== start || x.m !== m))}
         />
       ))}
-      {leaving.map(({ m, turn, frame }) => (
+      {leaving.map(({ m, turn, frame, split }) => (
         <Molecule3DView
           key={`leaving-${m.id}`}
           m={m}
@@ -810,6 +877,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
           onFrame={() => {}}
           hoveredMeasure={null}
           leaving={() => setLeaving((l) => l.filter((x) => x.m !== m))}
+          split={split}
           stereoShown={null}
           stereoFont={stereoFont}
         />
@@ -895,4 +963,10 @@ function separateValues(host: Element) {
     b.el.dataset.parted = String(dy);
     b.el.style.translate = dy ? `0 ${dy}px` : "";
   }
+}
+
+/** How long a copy takes to split off `from` and go to its place (or back): longer the further, never faster than SPLIT_SPEED bond lengths a second, within SPLIT_LEAST and SPLIT_MOST seconds. */
+function splitSeconds(from: Molecule3D, copy: Molecule3D): number {
+  const far = Math.hypot(copy.at.x - from.at.x, copy.at.y - from.at.y) / NOMINAL_BOND_LENGTH;
+  return Math.min(SPLIT_MOST, Math.max(SPLIT_LEAST, far / SPLIT_SPEED));
 }
