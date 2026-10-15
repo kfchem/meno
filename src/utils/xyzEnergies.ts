@@ -1,39 +1,54 @@
 /**
- * Each frame's energy in an XYZ file, as programs write it on its comment
- * lines - part of reading XYZ, which Meno does itself (docs/FILE-IO.md, the
- * one exception agreed on 2026-10-05: the core knows no program's format
- * but these). The ways it is written are tried in turn; the first that
- * finds one on every frame's line gives them.
+ * Each frame's energy in an XYZ file, as the programs of the plugins added write it on its comment lines (docs/FILE-IO.md).
+ * Meno knows no program's way of writing it: each plugin whose program writes XYZ files declares, in its manifest, a pattern
+ * with the unit of the number it finds (`xyzEnergies`, docs/PLUGINS.md). With no such plugin added, an XYZ file gives its
+ * geometry alone.
  */
+import type { XyzEnergyDecl } from "../lib/plugins/manifest";
 
-const NUMBER = String.raw`(-?\d+\.\d+(?:[eE][-+]?\d+)?)`;
-/** xtb's "energy: -40.1", ORCA's "... E -40.1", and "E = -40.1". */
-const LABELLED = new RegExp(String.raw`(?:^|\s)(?:energy|E)\s*[:=]?\s*` + NUMBER, "i");
-/** CREST's: the number alone, first on the line. */
-const FIRST = new RegExp(String.raw`^\s*` + NUMBER + String.raw`(?:\s|$)`);
-
-/** A way a frame's energy is written on its comment line: what it makes of each line, or nothing where one has none. */
-export type EnergyLines = (comments: string[]) => number[] | undefined;
-
-/** The energies CREST, xtb and ORCA write on an XYZ file's comment lines, in hartrees. */
-export const CREST_XTB_ORCA: EnergyLines = (comments) => {
-  const found: number[] = [];
-  for (const c of comments) {
-    const m = c.match(LABELLED) ?? c.match(FIRST);
-    if (!m) return undefined;
-    found.push(parseFloat(m[1]));
-  }
-  return found;
+/** One unit's number in hartrees (CODATA 2018: 1 Eh = 27.211386245988 eV = 627.5094740631 kcal/mol = 2625.4996394799 kJ/mol). */
+const TO_HARTREE: Record<XyzEnergyDecl["unit"], number> = {
+  hartree: 1,
+  eV: 1 / 27.211386245988,
+  "kcal/mol": 1 / 627.5094740631,
+  "kJ/mol": 1 / 2625.4996394799,
 };
 
-const WAYS: readonly EnergyLines[] = [CREST_XTB_ORCA];
+/** A pattern of a plugin, ready: what it finds on a comment line, in hartrees, or nothing. */
+export type EnergyWay = (comment: string) => number | undefined;
 
-/** Each frame's energy, by the first way that finds one for every frame of more than one; otherwise nothing. */
-export function energiesOf(comments: string[], ways: readonly EnergyLines[] = WAYS): number[] | undefined {
-  if (comments.length < 2) return undefined;
-  for (const way of ways) {
-    const found = way(comments);
-    if (found?.length === comments.length) return found;
+/** The ways the declarations give: each a compiled pattern and its unit's factor. A pattern that will not compile is no way. */
+export function waysOf(decls: readonly XyzEnergyDecl[]): EnergyWay[] {
+  const ways: EnergyWay[] = [];
+  for (const d of decls) {
+    let re: RegExp;
+    try {
+      re = new RegExp(d.pattern, "i");
+    } catch {
+      continue;
+    }
+    const factor = TO_HARTREE[d.unit] ?? 1;
+    ways.push((comment) => {
+      const m = comment.match(re);
+      const v = m?.[1] === undefined ? NaN : parseFloat(m[1]);
+      return Number.isFinite(v) ? v * factor : undefined;
+    });
   }
-  return undefined;
+  return ways;
+}
+
+/**
+ * Each frame's energy, in hartrees, by the ways given: of more than one frame, and found on every one. Where two ways find different
+ * numbers on a line, nothing is taken, and nothing is said; nor where a frame has none.
+ */
+export function energiesOf(comments: string[], ways: readonly EnergyWay[]): number[] | undefined {
+  if (comments.length < 2 || !ways.length) return undefined;
+  const found: number[] = [];
+  for (const c of comments) {
+    const values = ways.map((w) => w(c)).filter((v): v is number => v !== undefined);
+    if (!values.length) return undefined;
+    if (values.some((v) => Math.abs(v - values[0]) > 1e-12 * Math.max(1, Math.abs(values[0])))) return undefined;
+    found.push(values[0]);
+  }
+  return found;
 }

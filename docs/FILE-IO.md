@@ -889,14 +889,23 @@ As step 3 was built:
     gives each one's molecule. The tests skip a file that is not there.
   - Psi3 is left out: cclib has no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
-- **One exception stays in Meno:** the energies on an XYZ file's comment
-  lines (`utils/xyzEnergies.ts`), as agreed on 2026-10-05 - part of
-  reading XYZ, which Meno does itself. A place is read only where it is
-  a number (2026-10-13): "1.19D-01" is not taken for 1.19, nor "nan" for
-  a place, and the file is refused, saying which line. A frame the file
-  ends in the middle of - a trajectory still being written, or cut
-  short - is left out, with its comment line's energy; a trajectory of
-  10,000 frames reads in about a tenth of a second.
+- **The one exception is closed** (the maintainer, 2026-10-15): the
+  energies on an XYZ file's comment lines are read by the patterns of the
+  plugins added, not by Meno. Each plugin whose program writes XYZ files
+  declares, in its manifest, how that program carries a frame's energy on a
+  comment line (`xyzEnergies`: a pattern with one capture group, and the
+  unit of its number, taken from the program's documentation); xtb's,
+  CREST's and ORCA's plugins declare theirs. Meno reads an XYZ file's
+  geometry always; a frame's energy only where an added plugin's pattern
+  finds one on every frame of more than one - and where two patterns find
+  different numbers on a line, none, and nothing said. With no such plugin
+  added, an XYZ file gives its geometry alone (**a change**: XYZ energies
+  now need the program's plugin added; no shim). The rest as it was: a place
+  is read only where it is a number (2026-10-13): "1.19D-01" is not taken
+  for 1.19, nor "nan" for a place, and the file is refused, saying which
+  line. A frame the file ends in the middle of - a trajectory still being
+  written, or cut short - is left out, with its comment line's energy; a
+  trajectory of 10,000 frames reads in about a tenth of a second.
 - **The cube reader became Meno's own reading.** It is the reader `meno`,
   under the same contract.
 - **A reader's late findings join every molecule read from the output,**

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { registerKinds } from "../../../../lib/io/kinds";
+import { MANIFESTS } from "../../../../lib/plugins/known";
 import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
 import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
@@ -6,6 +8,10 @@ import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
 import samplePdb from "../../../../samples/cholesterol.pdb?raw";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+
+// (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+afterAll(() => registerKinds([]));
 
 describe("processFileContent", () => {
   it("imports an SDF", async () => {

@@ -27,7 +27,7 @@
 import { create } from "zustand";
 import { CUBE_MARK } from "../calc/cube";
 import { recordName, RECORD_NAMES } from "../chem/pdb";
-import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark } from "../plugins/manifest";
+import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type XyzEnergyDecl } from "../plugins/manifest";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
@@ -188,16 +188,23 @@ export function headOf(text: string): string {
  * and those the catalogues of the plugins added name, each with the
  * plugins it suggests to read it.
  */
-export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[] }>(() => ({
+export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[]; xyzEnergies: readonly XyzEnergyDecl[] }>(() => ({
   kinds: registered([]).kinds,
   texts: [],
   catalogued: [],
+  xyzEnergies: [],
 }));
 
 /** Registers the kinds `manifests` - the plugins added - bring and name, with Meno's own, in place of those registered before. */
 export function registerKinds(manifests: readonly Manifest[]): void {
   const { kinds, texts, catalogued } = registered(manifests);
-  useKinds.setState({ kinds, texts, catalogued });
+  // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are)
+  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []) });
+}
+
+/** How the programs of the plugins added write a frame's energy on an XYZ comment line: none, where none is added. */
+export function xyzEnergies(): readonly XyzEnergyDecl[] {
+  return useKinds.getState().xyzEnergies;
 }
 
 /** The kinds only the catalogues of the plugins added name: what a file no plugin added reads is told as, to suggest a plugin that would. */
