@@ -2,6 +2,7 @@ import {
   baseOf,
   DEFAULT_STYLE_CHOICE,
   isOwnStyleId,
+  newOwnStyleId,
   STYLE_PRESETS,
   wedgeBroadEndOf,
   type DrawingStyle,
@@ -731,9 +732,9 @@ export function freshDrawingStyleName(own: readonly OwnStyle2D[], name: string):
   }
 }
 
-/** The user's own styles with one more, `style` as `name` (made fresh where it is taken), and its id: one past the highest. */
+/** The user's own styles with one more, `style` as `name` (made fresh where it is taken), and its id: a new one, never another computer's. */
 export function withOwnStyle2d(own: readonly OwnStyle2D[], name: string, style: DrawingStyle): { own: OwnStyle2D[]; id: string } {
-  const id = `own-${Math.max(0, ...own.map((o) => Number(o.id.slice(4)) || 0)) + 1}`;
+  const id = newOwnStyleId();
   return { own: [...own, { id, name: freshDrawingStyleName(own, name), style }], id };
 }
 

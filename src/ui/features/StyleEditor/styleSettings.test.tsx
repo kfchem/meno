@@ -6,7 +6,8 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import StyleEditor from "./StyleEditor";
 import StyleFileAsk from "./StyleFileAsk";
 import StylePicker3D from "./StylePicker3D";
-import { presetCards, styleMenuItems3d } from "./styleMenus";
+import { afterAnswer, withAsked } from "./styleAsks";
+import { chosenCard, presetCards, styleMenuItems3d } from "./styleMenus";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws each, and what it shows is read off that.
@@ -15,7 +16,7 @@ const none = () => {};
 const was = useAppSettings.getState().ownDrawingStyles;
 afterEach(() => useAppSettings.setState({ ownDrawingStyles: was }));
 
-const withOwn: Style3DChoice = { ...DEFAULT_STYLE_3D_CHOICE, own: [{ id: "own-1", name: "Lab figures", look: { ...BALL_AND_STICK, ballScale: 0.16 } }] };
+const withOwn: Style3DChoice = { ...DEFAULT_STYLE_3D_CHOICE, own: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Lab figures", look: { ...BALL_AND_STICK, ballScale: 0.16 } }] };
 
 describe("Settings' 3D styles", () => {
   it("show the primary and the secondary in their slots, and every other style below - the built-in ones, then the user's own", () => {
@@ -38,17 +39,35 @@ describe("Settings' 3D styles", () => {
 
 describe("the drawing styles to pick from", () => {
   it("are the built-in presets, then the user's own - and a workspace's own style this computer has not got", () => {
-    const own = [{ id: "own-1", name: "Group style", style: STYLE_PRESETS[2].style }];
+    const own = [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Group style", style: STYLE_PRESETS[2].style }];
     const cards = (choice: Parameters<typeof presetCards>[1]) => presetCards(own, choice).map((c) => `${c.name}:${c.whose}`);
     expect(cards({ preset: "meno", changes: {} })).toEqual(["Meno:built", "ACS 1996:built", "RSC:built", "Wiley:built", "Nature:built", "Group style:own"]);
-    expect(cards({ preset: "own-7", changes: {}, own: { name: "Their style", style: STYLE_PRESETS[3].style } }).slice(-1)).toEqual(["Their style:workspace"]);
+    expect(cards({ preset: "own-00000000-0000-4000-8000-000000000007", changes: {}, own: { name: "Their style", style: STYLE_PRESETS[3].style } }).slice(-1)).toEqual(["Their style:workspace"]);
     // (one the user has: listed once)
-    expect(cards({ preset: "own-1", changes: {}, own: { name: "Group style", style: STYLE_PRESETS[2].style } })).toHaveLength(6);
+    expect(cards({ preset: "own-00000000-0000-4000-8000-000000000001", changes: {}, own: { name: "Group style", style: STYLE_PRESETS[2].style } })).toHaveLength(6);
+  });
+
+  it("tell a carried own style from the user's own of the same id by what it is - each its own card, the one used chosen", () => {
+    const own = [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Group style", style: STYLE_PRESETS[2].style }];
+    // (as it is: the user's own card, chosen; no other)
+    const same = { preset: "own-00000000-0000-4000-8000-000000000001", changes: {}, own: { name: "Group style", style: STYLE_PRESETS[2].style } };
+    expect(chosenCard(own, same)).toBe("own-00000000-0000-4000-8000-000000000001");
+    expect(presetCards(own, same).filter((c) => c.whose !== "built")).toHaveLength(1);
+    // (other than it: the workspace's, a card of its own, chosen - the user's own as it is, beside it, to be picked)
+    const other = { preset: "own-00000000-0000-4000-8000-000000000001", changes: {}, own: { name: "Group style", style: { ...STYLE_PRESETS[2].style, bondLengthPt: 9 } } };
+    const cards = presetCards(own, other);
+    expect(cards.filter((c) => c.whose !== "built").map((c) => [c.key, c.whose, c.style.bondLengthPt])).toEqual([
+      ["own-00000000-0000-4000-8000-000000000001", "own", STYLE_PRESETS[2].style.bondLengthPt],
+      ["workspace:own-00000000-0000-4000-8000-000000000001", "workspace", 9],
+    ]);
+    expect(chosenCard(own, other)).toBe("workspace:own-00000000-0000-4000-8000-000000000001");
+    // (renamed here since: the workspace's, apart too)
+    expect(chosenCard(own, { ...same, own: { ...same.own, name: "Old name" } })).toBe("workspace:own-00000000-0000-4000-8000-000000000001");
   });
 
   it("show the workspace's own style - carried by it - where this computer has not got it", () => {
     useAppSettings.setState({ ownDrawingStyles: [] });
-    const choice = { preset: "own-7", changes: {}, own: { name: "Their style", style: STYLE_PRESETS[3].style } };
+    const choice = { preset: "own-00000000-0000-4000-8000-000000000007", changes: {}, own: { name: "Their style", style: STYLE_PRESETS[3].style } };
     const html = renderToString(<StyleEditor choice={choice} onChange={none} layout="narrow" />);
     expect(html).toContain("Their style");
     expect(html).toContain("In this workspace");
@@ -69,5 +88,17 @@ describe("a style file, opened", () => {
     const html = renderToString(<StyleFileAsk file={{ ...file, molecules3d: [] }} picture={null} canUse={false} onAdd={none} onCancel={none} />).replace(/<!-- -->/g, "");
     expect(html).toContain("Add the style Group figures to your styles?");
     expect(html).not.toContain("Add and use");
+  });
+});
+
+describe("style files opened together", () => {
+  it("are each asked about in turn, in the order they came - none lost", () => {
+    let waiting: string[] = [];
+    waiting = withAsked(waiting, "lab.meno");
+    waiting = withAsked(waiting, "group.meno");
+    expect(waiting[0]).toBe("lab.meno");
+    waiting = afterAnswer(waiting);
+    expect(waiting).toEqual(["group.meno"]);
+    expect(afterAnswer(waiting)).toEqual([]);
   });
 });

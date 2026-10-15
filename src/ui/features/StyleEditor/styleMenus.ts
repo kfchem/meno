@@ -17,20 +17,33 @@ export function styleMenuItems3d(
   ];
 }
 
-/** A drawing style's card: what it is called, what it is, and whose. */
-export type PresetCard = { id: string; name: string; description: string; style: DrawingStyle; whose: "built" | "own" | "workspace" };
+/** A drawing style's card: what it is known by among the cards (`key`), its preset's id, what it is called, what it is, and whose. */
+export type PresetCard = { key: string; id: string; name: string; description: string; style: DrawingStyle; whose: "built" | "own" | "workspace" };
+
+/** Whether two drawing styles are the same, setting by setting. */
+export function sameDrawingStyle(a: DrawingStyle, b: DrawingStyle): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof DrawingStyle>;
+  return [...keys].every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+}
+
+/** The card of `choice` among `presetCards`: a built-in preset's; the user's own, where the workspace carries it as it is; else the workspace's own. */
+export function chosenCard(own: readonly OwnStyle2D[], choice: StyleChoice): string {
+  if (!choice.own) return choice.preset;
+  const mine = own.find((o) => o.id === choice.preset);
+  return mine && mine.name === choice.own.name && sameDrawingStyle(mine.style, choice.own.style) ? mine.id : `workspace:${choice.preset}`;
+}
 
 /**
  * The drawing styles to pick from: the built-in presets, the user's own
- * (`own`), and - where `choice` is an own style the user has not got here -
- * that one, as the workspace carries it.
+ * (`own`), and - where `choice` carries an own style that is not one of
+ * them as it is (made on another computer, or changed here since) - that
+ * one, as the workspace carries it, a card of its own.
  */
 export function presetCards(own: readonly OwnStyle2D[], choice: StyleChoice): PresetCard[] {
+  const carried = choice.own && chosenCard(own, choice) !== choice.preset ? choice.own : null;
   return [
-    ...STYLE_PRESETS.map((p) => ({ ...p, whose: "built" as const })),
-    ...own.map((o) => ({ id: o.id, name: o.name, description: "", style: o.style, whose: "own" as const })),
-    ...(choice.own && !own.some((o) => o.id === choice.preset)
-      ? [{ id: choice.preset, name: choice.own.name, description: "", style: choice.own.style, whose: "workspace" as const }]
-      : []),
+    ...STYLE_PRESETS.map((p) => ({ ...p, key: p.id, whose: "built" as const })),
+    ...own.map((o) => ({ key: o.id, id: o.id, name: o.name, description: "", style: o.style, whose: "own" as const })),
+    ...(carried ? [{ key: `workspace:${choice.preset}`, id: choice.preset, name: carried.name, description: "", style: carried.style, whose: "workspace" as const }] : []),
   ];
 }

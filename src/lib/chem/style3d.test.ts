@@ -41,6 +41,7 @@ import {
   copyName,
   STYLE_NAME_MOST,
 } from "./style3d";
+import { isOwnStyleId } from "./style";
 
 describe("the 3D style", () => {
   it("draws balls a fifth of the van der Waals radius, as the 3D viewer did - and space-filling, each atom as large as it is", () => {
@@ -384,41 +385,42 @@ describe("the user's own 3D styles", () => {
     let choice = withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "ballLines", "three");
     const made = withDuplicate3d(choice, "balls");
     choice = made.choice;
-    expect(made.id).toBe("own-1");
-    expect(styleName3d(choice, "own-1")).toBe("Ball and stick copy");
-    expect(lookOfStyle(choice, "own-1")).toEqual(lookOfStyle(choice, "balls"));
-    expect(lookOfStyle(choice, "own-1").ballLines).toBe("three");
-    expect(styles3d(choice).map((s) => [s.id, s.own])).toEqual([...LOOK_3D_PRESETS.map((p) => [p.id, false]), ["own-1", true]]);
-    // (again: the next number, the name taken)
+    // (its id its own: "own-" and a random UUID - never another computer's)
+    expect(isOwnStyleId(made.id)).toBe(true);
+    expect(styleName3d(choice, made.id)).toBe("Ball and stick copy");
+    expect(lookOfStyle(choice, made.id)).toEqual(lookOfStyle(choice, "balls"));
+    expect(lookOfStyle(choice, made.id).ballLines).toBe("three");
+    expect(styles3d(choice).map((s) => [s.id, s.own])).toEqual([...LOOK_3D_PRESETS.map((p) => [p.id, false]), [made.id, true]]);
+    // (again: another id, the name taken)
     const again = withDuplicate3d(choice, "balls");
-    expect(again.id).toBe("own-2");
-    expect(styleName3d(again.choice, "own-2")).toBe("Ball and stick copy 2");
+    expect(again.id).not.toBe(made.id);
+    expect(styleName3d(again.choice, again.id)).toBe("Ball and stick copy 2");
     expect(copyName("x".repeat(STYLE_NAME_MOST), () => false).length).toBe(STYLE_NAME_MOST);
   });
 
   it("are set as a whole - no changes kept apart, nothing to reset - and draw as they are set", () => {
-    let { choice } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "outlined");
-    choice = withLookSetting(choice, "own-1", "ballScale", 0.12);
-    choice = withAtomColour(choice, "own-1", "N", "#00ff00");
+    let { choice, id } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "outlined");
+    choice = withLookSetting(choice, id, "ballScale", 0.12);
+    choice = withAtomColour(choice, id, "N", "#00ff00");
     expect(choice.looks).toEqual({});
     expect(choice.own[0].look.ballScale).toBe(0.12);
-    expect(atomColour("N", lookOfStyle(choice, "own-1"))).toBe("#00ff00");
+    expect(atomColour("N", lookOfStyle(choice, id))).toBe("#00ff00");
     // (its set's colour again: none of its own)
-    choice = withAtomColour(choice, "own-1", "N", colourSet3d("bright").colour("N"));
+    choice = withAtomColour(choice, id, "N", colourSet3d("bright").colour("N"));
     expect(choice.own[0].look.colours.N).toBeUndefined();
-    choice = withRole(choice, "secondary", "own-1");
+    choice = withRole(choice, "secondary", id);
     expect(style3dOf(choice).secondary.ballScale).toBe(0.12);
   });
 
   it("are renamed - never to nothing, nor to another style's name - and deleted, a role they had going to Meno's own", () => {
-    let { choice } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "glossy");
-    expect(withRenamed3d(choice, "own-1", "  ")).toBe(choice);
-    expect(withRenamed3d(choice, "own-1", "glossy")).toBe(choice);
+    let { choice, id } = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "glossy");
+    expect(withRenamed3d(choice, id, "  ")).toBe(choice);
+    expect(withRenamed3d(choice, id, "glossy")).toBe(choice);
     expect(withRenamed3d(choice, "balls", "Mine")).toBe(choice);
-    choice = withRenamed3d(choice, "own-1", " Lab figures ");
-    expect(styleName3d(choice, "own-1")).toBe("Lab figures");
-    choice = withRole(withRole(choice, "primary", "own-1"), "secondary", "balls");
-    const gone = withoutStyle3d(choice, "own-1");
+    choice = withRenamed3d(choice, id, " Lab figures ");
+    expect(styleName3d(choice, id)).toBe("Lab figures");
+    choice = withRole(withRole(choice, "primary", id), "secondary", "balls");
+    const gone = withoutStyle3d(choice, id);
     expect(gone.own).toEqual([]);
     // (ball and stick is the secondary: the primary goes to the first built-in style that is not)
     expect([gone.primary, gone.secondary]).toEqual(["glossy", "balls"]);
@@ -426,20 +428,21 @@ describe("the user's own 3D styles", () => {
   });
 
   it("are kept by the settings file, and what does not read is left out", () => {
-    const made = withRole(withDuplicate3d(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "print", "outline", 0.03), "print").choice, "primary", "own-1");
+    const dup = withDuplicate3d(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "print", "outline", 0.03), "print");
+    const made = withRole(dup.choice, "primary", dup.id);
     expect(acceptStyle3dChoice(JSON.parse(JSON.stringify(made)))).toEqual(made);
     const odd = acceptStyle3dChoice({
-      primary: "own-9",
+      primary: "own-00000000-0000-4000-8000-000000000009",
       secondary: "space",
       own: [
-        { id: "own-1", name: "Glossy", look: {} },
+        { id: "own-00000000-0000-4000-8000-000000000001", name: "Glossy", look: {} },
         { id: "mine", name: "Mine", look: {} },
-        { id: "own-2", name: "", look: {} },
-        { id: "own-3", name: "Fine", look: { ballScale: 9, colours: { O: "#123456" } } },
-        { id: "own-3", name: "Twice", look: {} },
+        { id: "own-00000000-0000-4000-8000-000000000002", name: "", look: {} },
+        { id: "own-00000000-0000-4000-8000-000000000003", name: "Fine", look: { ballScale: 9, colours: { O: "#123456" } } },
+        { id: "own-00000000-0000-4000-8000-000000000003", name: "Twice", look: {} },
       ],
     });
-    expect(odd.own).toEqual([{ id: "own-3", name: "Fine", look: { ...BALL_AND_STICK, colours: { O: "#123456" } } }]);
+    expect(odd.own).toEqual([{ id: "own-00000000-0000-4000-8000-000000000003", name: "Fine", look: { ...BALL_AND_STICK, colours: { O: "#123456" } } }]);
     expect(odd.primary).toBe("balls");
   });
 });

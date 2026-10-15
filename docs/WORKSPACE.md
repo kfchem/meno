@@ -798,7 +798,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   renames or deletes one of theirs; the built-in ones are only duplicated.
   A workspace drawn in an own style carries the whole of it
   (`StyleChoice.own`), so it opens the same where that style is not: there
-  it is offered as *In this workspace*.
+  it is offered as *In this workspace*. An own style is known by "own-"
+  and a random UUID, so that one carried from another computer is never
+  taken for one made here; and where the workspace's copy is not the
+  user's own of that id as it is now - changed or renamed since - it is a
+  card of its own too, the one chosen, and picking or renaming the user's
+  acts on theirs alone. Style files opened together are asked about in
+  turn.
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
 pull request (`agent/style-one-per-workspace`): L8 the change of style and

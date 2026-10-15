@@ -38,7 +38,7 @@ import { useTypefaces } from "../../fonts/typefaces";
 import { useAtLeastWide } from "./sideBySide";
 import CardMenu from "./CardMenu";
 import { exportStyles } from "./exportStyle";
-import { presetCards } from "./styleMenus";
+import { chosenCard, presetCards } from "./styleMenus";
 import TypefacePicker from "./TypefacePicker";
 
 /**
@@ -209,11 +209,12 @@ function PresetPicker({
   const own = useAppSettings((s) => s.ownDrawingStyles);
   const setOwn = useAppSettings((s) => s.setOwnDrawingStyles);
   const cards = presetCards(own, choice);
-  const card = (id: string) => cards.find((c) => c.id === id);
+  const chosen = chosenCard(own, choice);
+  const card = (key: string) => cards.find((c) => c.key === key);
   // (a card's choice: a built-in preset's by its id; an own style's carrying it whole)
-  const choiceOf = (id: string): StyleChoice => {
-    const c = card(id);
-    return !c || c.whose === "built" ? { preset: id, changes: {} } : { preset: id, changes: {}, own: { name: c.name, style: c.style } };
+  const choiceOf = (key: string): StyleChoice => {
+    const c = card(key);
+    return !c || c.whose === "built" ? { preset: key, changes: {} } : { preset: c.id, changes: {}, own: { name: c.name, style: c.style } };
   };
   // Picking another preset with changes made asks what to do with them.
   const [asking, setAsking] = useState<string | null>(null);
@@ -222,12 +223,12 @@ function PresetPicker({
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const changes = Object.keys(choice.changes).length;
-  const pick = (id: string) => {
-    if (id === choice.preset) return;
-    if (changes > 0) setAsking(id);
-    else onChange(choiceOf(id));
+  const pick = (key: string) => {
+    if (key === chosen) return;
+    if (changes > 0) setAsking(key);
+    else onChange(choiceOf(key));
   };
-  const nameOf = (id: string) => card(id)?.name ?? presetById(id).name;
+  const nameOf = (key: string) => card(key)?.name ?? presetById(key).name;
   const save = (name: string) => {
     const made = withOwnStyle2d(own, name, styleOf(choice));
     setOwn(made.own);
@@ -237,28 +238,28 @@ function PresetPicker({
     <div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2" role="radiogroup" aria-label="Styles">
         {cards.map((p) => {
-          const on = p.id === choice.preset;
+          const on = p.key === chosen;
           return (
             <div
-              key={p.id}
+              key={p.key}
               role="radio"
               aria-checked={on}
               tabIndex={0}
-              onClick={() => pick(p.id)}
+              onClick={() => pick(p.key)}
               onKeyDown={(e) => {
-                if (renaming === p.id) return;
+                if (renaming === p.key) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  pick(p.id);
+                  pick(p.key);
                 } else if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
                   e.preventDefault();
                   const b = e.currentTarget.getBoundingClientRect();
-                  setMenu({ id: p.id, x: b.left + 12, y: b.bottom - 8, byKey: true });
+                  setMenu({ id: p.key, x: b.left + 12, y: b.bottom - 8, byKey: true });
                 }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setMenu({ id: p.id, x: e.clientX, y: e.clientY, byKey: false });
+                setMenu({ id: p.key, x: e.clientX, y: e.clientY, byKey: false });
               }}
               title={p.description || undefined}
               className={clsx(
@@ -268,7 +269,7 @@ function PresetPicker({
                   : "border-gh-line bg-white hover:bg-gh-base",
               )}
             >
-              {renaming === p.id ? (
+              {renaming === p.key ? (
                 <NameField
                   name={p.name}
                   taken={(n) => drawingStyleNameTaken(own, n, p.id)}
@@ -277,8 +278,8 @@ function PresetPicker({
                     if (n != null) {
                       const next = withOwnRenamed2d(own, p.id, n);
                       setOwn(next);
-                      // (the workspace's carried copy takes the name too)
-                      if (choice.preset === p.id) onChange({ ...choice, own: { name: next.find((o) => o.id === p.id)!.name, style: choice.own!.style } });
+                      // (the workspace's carried copy takes the name too - where it is this card's, as it is)
+                      if (chosen === p.key && choice.own) onChange({ ...choice, own: { name: next.find((o) => o.id === p.id)!.name, style: choice.own.style } });
                     }
                   }}
                 />
@@ -300,7 +301,7 @@ function PresetPicker({
           <div className="flex items-center gap-2 text-xs text-gh-gray">
             Save as
             <NameField
-              name={freshDrawingStyleName(own, `${nameOf(choice.preset)} copy`)}
+              name={freshDrawingStyleName(own, `${nameOf(chosen)} copy`)}
               taken={(n) => drawingStyleNameTaken(own, n)}
               onDone={(n) => {
                 setSaving(false);
@@ -357,7 +358,7 @@ function PresetPicker({
         >
           <span className="flex-1 min-w-[12rem] text-gh-black">
             {changes === 1 ? "One setting is" : `${changes} settings are`}{" "}
-            changed from {nameOf(choice.preset)}. Keep{" "}
+            changed from {nameOf(chosen)}. Keep{" "}
             {changes === 1 ? "it" : "them"} on {nameOf(asking)}?
           </span>
           <button

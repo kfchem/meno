@@ -9,6 +9,7 @@
  */
 import { elementColour, elementOf, vdwRadius } from "./elements";
 import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
+import { isOwnStyleId, newOwnStyleId } from "./style";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
 export type MoleculeLook = {
@@ -536,16 +537,11 @@ export function copyName(name: string, taken: (name: string) => boolean): string
   }
 }
 
-/** The id an own style made next is given: one past the highest. */
-function nextOwnId(choice: Style3DChoice): string {
-  const most = Math.max(0, ...choice.own.map((o) => Number(o.id.slice(4)) || 0));
-  return `own-${most + 1}`;
-}
 
 /** A choice with a style duplicated as one of the user's own - as it is set, its changes with it - named "<name> copy"; and the copy's id. */
 export function withDuplicate3d(choice: Style3DChoice, id: string): { choice: Style3DChoice; id: string } {
   const copy: Own3D = {
-    id: nextOwnId(choice),
+    id: newOwnStyleId(),
     name: copyName(styleName3d(choice, id), (n) => styleNameTaken3d(choice, n)),
     look: lookOfStyle(choice, id),
   };
@@ -557,7 +553,7 @@ export function withOwn3d(choice: Style3DChoice, name: string, look: MoleculeLoo
   const base = name.trim().slice(0, STYLE_NAME_MOST) || "My style";
   let n = base;
   for (let k = 2; styleNameTaken3d(choice, n); k++) n = `${base.slice(0, STYLE_NAME_MOST - String(k).length - 1)} ${k}`;
-  const own: Own3D = { id: nextOwnId(choice), name: n, look };
+  const own: Own3D = { id: newOwnStyleId(), name: n, look };
   return { choice: { ...choice, own: [...choice.own, own] }, id: own.id };
 }
 
@@ -1080,7 +1076,7 @@ function acceptOwn3d(raw: unknown): Own3D[] {
   for (const o of raw as unknown[]) {
     if (typeof o !== "object" || o === null) continue;
     const { id, name, look } = o as Record<string, unknown>;
-    if (typeof id !== "string" || !/^own-[1-9]\d{0,8}$/.test(id) || out.some((x) => x.id === id)) continue;
+    if (typeof id !== "string" || !isOwnStyleId(id) || out.some((x) => x.id === id)) continue;
     const n = typeof name === "string" ? name.trim() : "";
     const taken = (m: string) => [...LOOK_3D_PRESETS, ...out].some((x) => x.name.toLowerCase() === m.toLowerCase());
     if (!n || n.length > STYLE_NAME_MOST || taken(n)) continue;

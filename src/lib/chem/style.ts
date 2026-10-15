@@ -442,7 +442,16 @@ export function baseOf(choice: StyleChoice): { name: string; style: DrawingStyle
 
 /** Whether a preset's id is one of the user's own styles'. */
 export function isOwnStyleId(id: string): boolean {
-  return /^own-[1-9]\d{0,8}$/.test(id);
+  return /^own-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id);
+}
+
+/**
+ * An id for a style of the user's own: "own-" and a random UUID, so that
+ * one made on another computer - carried by a workspace from there - is
+ * never taken for one made here.
+ */
+export function newOwnStyleId(): string {
+  return `own-${globalThis.crypto.randomUUID()}`;
 }
 
 export const DEFAULT_STYLE_CHOICE: StyleChoice = {
