@@ -85,15 +85,24 @@ fn is_sha(sha: &str) -> bool {
 /// A picture as a PNG: quick to make - a page is mostly white - and taken
 /// apart by the window off its main thread.
 fn png_of(rgba: &[u8], w: u32, h: u32) -> Result<Vec<u8>, String> {
+    // (a part of a page drawn in greys alone - most of a paper's text - as one
+    // channel, a quarter of the bytes to carry; its white sheet is opaque, so
+    // nothing of its alpha is lost)
+    let grey = rgba.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2] && p[3] == 255);
     let mut out = Vec::with_capacity(rgba.len() / 8);
     {
         let mut enc = png::Encoder::new(&mut out, w, h);
-        enc.set_color(png::ColorType::Rgba);
+        enc.set_color(if grey { png::ColorType::Grayscale } else { png::ColorType::Rgba });
         enc.set_depth(png::BitDepth::Eight);
         enc.set_compression(png::Compression::Fast);
         enc.set_filter(png::FilterType::Sub);
         let mut writer = enc.write_header().map_err(|e| e.to_string())?;
-        writer.write_image_data(rgba).map_err(|e| e.to_string())?;
+        if grey {
+            let g: Vec<u8> = rgba.chunks_exact(4).map(|p| p[0]).collect();
+            writer.write_image_data(&g).map_err(|e| e.to_string())?;
+        } else {
+            writer.write_image_data(rgba).map_err(|e| e.to_string())?;
+        }
     }
     Ok(out)
 }
@@ -509,10 +518,26 @@ impl Reader {
     }
 }
 
-/// The reader Meno has started, if any - held only while it is looked at,
-/// started or let go, never while it is written to.
-#[derive(Default)]
-pub struct PdfState(Mutex<Option<Arc<Reader>>>);
+/// The readers Meno has started, if any - each held only while it is looked
+/// at, started or let go, never while it is written to. The first is asked
+/// everything; parts of pages are drawn by all of them in turn (`DRAWERS`),
+/// each a process with its own PDFium - PDFium itself draws on one thread
+/// at a time, so pages are drawn side by side only in readers of their own.
+pub struct PdfState {
+    readers: Mutex<Vec<Option<Arc<Reader>>>>,
+    turn: AtomicU64,
+}
+
+impl Default for PdfState {
+    fn default() -> Self {
+        PdfState { readers: Mutex::new(vec![None; drawers()]), turn: AtomicU64::new(0) }
+    }
+}
+
+/// How many readers draw parts of pages: one fewer than the machine's cores, three at most - each holds what it has opened.
+fn drawers() -> usize {
+    std::thread::available_parallelism().map(|n| n.get().saturating_sub(1)).unwrap_or(1).clamp(1, 3)
+}
 
 fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("pdf");
@@ -524,6 +549,19 @@ fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 const REPLY_MOST: std::time::Duration = std::time::Duration::from_secs(90);
 
 async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
+    ask_on(app, 0, req).await
+}
+
+/// A part of a page drawn by the next of the readers in turn.
+async fn ask_drawn(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
+    let state = app.state::<PdfState>();
+    let n = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len().max(1);
+    let slot = (state.turn.fetch_add(1, Ordering::Relaxed) as usize) % n;
+    ask_on(app, slot, req).await
+}
+
+/// `req` asked of reader `slot`: started the first time, and again where it has gone or has not answered in time.
+async fn ask_on(app: &tauri::AppHandle, slot: usize, req: Value) -> Result<(Value, Vec<u8>), String> {
     // (started, and asked, off the commands' threads: a start waits for the
     // reader's first word, and a write for room in its pipe - held, they
     // held a command thread each, and every other PDF request with them)
@@ -532,12 +570,13 @@ async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), Str
         let rx = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
             let state = held.state::<PdfState>();
             let reader = {
-                let mut guard = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut guard = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let at = slot.min(guard.len() - 1);
                 // (started the first time, and again where it has gone)
-                if guard.as_ref().is_none_or(|r| r.gone()) {
-                    *guard = Some(Arc::new(Reader::start(&cache_dir(&held)?)?));
+                if guard[at].as_ref().is_none_or(|r| r.gone()) {
+                    guard[at] = Some(Arc::new(Reader::start(&cache_dir(&held)?)?));
                 }
-                guard.as_ref().unwrap().clone()
+                guard[at].as_ref().unwrap().clone()
             };
             // (written to with Meno's hold let go: a write waiting for room in a
             // full pipe holds the reader's input alone, and the reader can be
@@ -557,7 +596,11 @@ async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), Str
             let held = app.clone();
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 let state = held.state::<PdfState>();
-                let taken = state.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+                let taken = {
+                    let mut guard = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let at = slot.min(guard.len() - 1);
+                    guard[at].take()
+                };
                 if let Some(reader) = taken {
                     reader.stop();
                 }
@@ -676,7 +719,7 @@ pub async fn pdf_render(
     h: Option<i64>,
     packed: bool,
 ) -> Result<tauri::ipc::Response, String> {
-    let (head, bytes) = ask(&app, json!({"op": "render", "sha": sha, "page": page, "scale": scale, "x": x, "y": y, "w": w, "h": h, "packed": packed})).await?;
+    let (head, bytes) = ask_drawn(&app, json!({"op": "render", "sha": sha, "page": page, "scale": scale, "x": x, "y": y, "w": w, "h": h, "packed": packed})).await?;
     let mut out = Vec::with_capacity(16 + bytes.len());
     out.extend_from_slice(&(head["w"].as_u64().unwrap_or(0) as u32).to_le_bytes());
     out.extend_from_slice(&(head["h"].as_u64().unwrap_or(0) as u32).to_le_bytes());
@@ -1037,5 +1080,27 @@ mod tests {
         let info = reader.next_frame(&mut buf).unwrap();
         assert_eq!((info.width, info.height), (w, h));
         assert_eq!(&buf[..info.buffer_size()], &rgba[..]);
+    }
+
+    #[test]
+    fn a_picture_in_greys_alone_packs_as_one_channel_that_reads_back() {
+        let (w, h) = (64u32, 32u32);
+        let grey: Vec<u8> = (0..w * h).flat_map(|i| {
+            let g = (i % 251) as u8;
+            [g, g, g, 255]
+        }).collect();
+        let png = png_of(&grey, w, h).unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        assert_eq!(info.color_type, png::ColorType::Grayscale);
+        let back: Vec<u8> = buf[..info.buffer_size()].iter().flat_map(|&g| [g, g, g, 255]).collect();
+        assert_eq!(back, grey);
+    }
+
+    #[test]
+    fn parts_of_pages_are_drawn_by_one_reader_to_three() {
+        let n = drawers();
+        assert!((1..=3).contains(&n), "{n}");
     }
 }

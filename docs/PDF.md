@@ -157,6 +157,26 @@ stops being part of the work.
   in the way the view is going. A tile no longer wanted when its turn
   comes is dropped, never sent to PDFium; one sent is drawn to the end.
   Pages far out of view are let go, and drawn again when they come back.
+- **Sharp again soon after a zoom stops** (2026-10-15, after a report of
+  pages staying blurred a while on a Windows tablet):
+  - Pages are drawn at levels a half power of two apart (1, 1.41, 2,
+    2.83, 4... pixels a point), the first at or above what the screen
+    wants - never more than 1.41 times its pixels a side, where a power of
+    two drew up to twice them, four times the tiles - so a zoom in a
+    little way stays sharp with the tiles it has.
+  - What a zoom leaves stays: tiles of any level had, finer or coarser,
+    are drawn under the new level's own until those over them have come
+    and faded in, never the page's small picture between.
+  - Tiles are 1024 pixels a side, four on their way at once: a quarter as
+    many requests as at 512, each carrying the page's part from PDFium
+    to the window.
+  - A part drawn in greys alone - most of a paper's text - is carried as
+    one channel, a quarter of the bytes.
+  - Parts of pages are drawn by up to three readers side by side, one
+    fewer than the machine's cores, each a process with its own PDFium:
+    PDFium draws on one thread at a time in a process, so pages are drawn
+    side by side only in processes of their own. The first reader is
+    asked everything else.
 
 ### Text
 
