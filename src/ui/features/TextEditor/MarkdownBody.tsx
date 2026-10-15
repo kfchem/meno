@@ -23,9 +23,9 @@ const CLICK_PX = 4;
 const ARROW_PX = 3 * LINE;
 const PAGE_SHARE = 0.9;
 
-type Props = { entry: ColumnTextEntry; reader: MarkdownReader; value: string };
+type Props = { entry: ColumnTextEntry; reader: MarkdownReader; value: string; name?: string };
 
-export default function MarkdownBody({ entry, reader, value }: Props) {
+export default function MarkdownBody({ entry, reader, value, name = "Text" }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   // (anything drawn changed: the canvas asked to draw it again)
   useEffect(() => {
@@ -152,6 +152,7 @@ export default function MarkdownBody({ entry, reader, value }: Props) {
           hasText: () => value.length > 0,
           selectAll: () => reader.selectAll(),
           after: () => entry.redraw(),
+          text: { whole: () => value, name },
         });
       }}
       onFocus={() => {

@@ -64,6 +64,80 @@ built* below.
 | PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`) | wwPDB Format v3.3; see *As step 7 was built* |
 | KET | not read | never | Open does not offer it; one dropped says "not supported yet" |
 
+### Coordinates in a text
+
+Built 2026-10-15 (`lib/io/coordinates.ts`; the maintainer's request: a
+paper's supporting information, printed, made into 3D structures with no
+tidying by hand). Text holding atoms' coordinates becomes the structures
+it holds, shown first in a card - each its name, which can be changed, its
+atoms, its formula, its notes and what looks wrong - and those ticked
+placed in 3D as a set of their own, laid out as a step's results are, in
+free space nearest where they were asked for, one step to undo
+(`placeAsSet`, `workflow/run.ts`). The set is named for where they came
+from - the PDF's name and its page or pages (*made-up-si.pdf, p. 2*), the
+text's name, or *Pasted structures* - and can be renamed as a chemist's
+set is (docs/WORKFLOWS.md). Each molecule is bonded by distance, its bonds'
+orders unknown, as an XYZ file's; its chip says its name always, with its
+energy where a note gives one in hartrees, and a click on it opens what
+the text says of it - its charge and multiplicity and its notes (*In the
+text*).
+
+- **Where from.** Pasted on the page, where nothing else on the clipboard
+  reads as a structure (the card offers *Paste as text* as well, to put
+  the words on the page instead); pasted in Quick Add's SMILES field; *3D
+  structures* in a PDF's menu, on the words selected or in a box drawn; and
+  in the menu of a text in the column, on what is selected or the whole
+  text, and of a text's sheet. A text file opened or dropped opens as a
+  text, as ever (the maintainer, 2026-10-15).
+- **An atom** is an element - its symbol as it is written, or its atomic
+  number - and three numbers with a decimal point or an exponent, read from
+  the words in turn rather than the lines, so a line broken anywhere reads
+  whole: `C 1.2 3.4 5.6`; a label of up to four letters and digits
+  (`C1`), a freeze code between (`C 0 x y z`, `C -1 x y z`), its items
+  apart by spaces, tabs or commas, as Gaussian's manual has a molecule
+  specification's line (*Molecule Specification*); `1 C x y z`, numbered;
+  and a row of Gaussian's table of an orientation - centre, atomic number,
+  type, x, y, z. A minus printed as a typographic minus or a dash reads as
+  one.
+- **Left out**: a page's number set alone ("S12", "Page 3 of 40", "- 4 -")
+  and a line of words set again and again (a running head, a journal's
+  foot); from a PDF, besides, a line near a page's top or foot set there on
+  another page too, its numbers aside.
+- **A structure's own**: its name, the line before its atoms nearest them
+  that names something - not a note, a table's heads or numbers alone; its
+  charge and multiplicity ("0 1", "0,1"); its count of atoms, said ("52
+  atoms") or set alone as an XYZ file sets it; and its notes, lines of
+  energies, frequencies or its method ("E = -1234.5678 Hartree", "SCF
+  Done", "Imaginary frequencies: 1") - those written after a structure's
+  atoms and before the next's name are its.
+- **Where one ends**: at words between atoms, and where numbered atoms
+  begin again at 1, or a count set alone is followed by as many atoms. A
+  page's number between two atoms is passed over, unless it counts the
+  atoms after it. Two parts that words set once (a page's foot) part are one
+  where together they bond as one and no atom of either stands where one
+  of the other does: two structures each about the origin stand in each
+  other's place.
+- **Bohr**: where the text says so ("bohr", "a.u.", "atomic units",
+  "Units=Bohr"), the lengths are turned into ångströms (CODATA 2018), and
+  the card says so.
+- **Columns.** From a PDF, each word where it lies: line by line, a page's
+  two columns one after the other, where the words either side of a gap in
+  the page's middle half each make whole atoms on their lines - two at
+  least each side - so that a table's x, y and z set far apart stay one.
+  Pasted text has no places: two atoms whole on a line are two columns read
+  across, each a structure, an atom alone on its line (one column run on
+  past the other) given to the one it bonds to as an atom can (no H bonded
+  twice, no two atoms closer than any bond); atoms of two structures taken
+  in turn are parted every other one, where each part is then whole. Where
+  neither tells them apart, the card says the columns came mixed and that
+  structure cannot be ticked - nothing is guessed.
+- **What looks wrong**, said in the card: a count the text gives that is
+  not the atoms found; an atom more than 4 Å from every other; two atoms
+  closer than 0.6 Å (H2's bond, the shortest, is 0.74).
+- Tested on texts made up for the tests - water, methane, ethanol set out
+  as a supporting information's pages set them, with page ends, two
+  columns, running heads and feet and broken lines; no paper's text.
+
 ### Calculation output
 
 | Kind | Told by | Read by |
