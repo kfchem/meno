@@ -168,8 +168,10 @@ import Ask3D from "./Ask3D";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { readMarks } from "./utils/figures";
-import { blocksOf, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
+import { useNotices } from "../../notices";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
+import { putDownSmiles } from "./utils/quickAddSmiles";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -389,6 +391,11 @@ function WorkspaceContent({
   // Structures made in 3D (chem/make3d): asked first about what their
   // drawing leaves open, then their conformers made and risen out of them
   const [ask3d, setAsk3d] = useState<{ blocks: Block[]; open: Open[]; replacing?: Molecule3D } | null>(null);
+  // (the question goes with its structure: an undo taking it away shuts it,
+  // as a colour card or a panel goes with what it is for)
+  useEffect(() => {
+    if (ask3d && !blocksStill(ask3d.blocks, model)) setAsk3d(null);
+  }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
   // a molecule's bond orders sought from its shape as it comes in, where they
@@ -463,6 +470,11 @@ function WorkspaceContent({
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
           );
         }
+        // (the structure changed meanwhile - an undo took it away - nothing is added)
+        if (!blocksStill(blocks, store.getState().model)) {
+          setChemError("The drawing changed while its 3D structure was being made, so none was added.");
+          return;
+        }
         store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
         // (with no room for them in view, the view takes them in)
         if (!allInView) requestFit();
@@ -477,11 +489,18 @@ function WorkspaceContent({
   const make3d = useCallback(
     async (around: Iterable<number>, replacing?: Molecule3D) => {
       // (made again: what the drawing leaves open, as the one before has it)
-      const blocks = blocksOf(store.getState().model, around).map((b) =>
+      const model = store.getState().model;
+      const blocks = blocksOf(model, around).map((b) =>
         replacing ? { ...b, like: likeOf(b, replacing) } : b,
       );
-      if (!blocks.length) return;
+      // (a bare atom - Na+, Cl- - left out, and the chemist told: alone, that it has none; beside others made, which)
+      const bare = bareAtomsOf(model, around);
+      if (!blocks.length) {
+        if (bare.length) setChemError(bareWords(bare, false));
+        return;
+      }
       setChemError(null);
+      if (bare.length) useNotices.getState().show({ id: "bare-3d", title: "3D structure", text: bareWords(bare, true) });
       try {
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(
@@ -797,6 +816,10 @@ function WorkspaceContent({
           const next = pdf.page + (e.key === "ArrowRight" || e.key === "PageDown" ? 1 : -1);
           if (next >= 0 && next < pdf.pages.length) st.turnPdf(pdf.id, next);
         }
+      } else if (chargeStep(e) && sel.atoms.size > 0 && !busy) {
+        // (on the selection's atoms, once there is one, as the other keys act on it: one step)
+        e.preventDefault();
+        st.stepCharges(sel.atoms, chargeStep(e) as 1 | -1);
       } else if (chargeStep(e) && kind === "atom" && id != null) {
         e.preventDefault();
         chargeAtom(id, chargeStep(e) as 1 | -1);
@@ -1565,12 +1588,9 @@ function WorkspaceContent({
               shapeFrom(store, press, at, kind, clientToWorld);
             }}
             onSmiles={async (smiles) => {
-              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is)
-              const drawn = await structureFromSmiles(smiles, style);
-              const st = store.getState();
-              const { at } = quickAdd;
-              st.setQuickAdd(null);
-              st.pasteModel(centredAt(drawn, at));
+              // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is;
+              // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
+              putDownSmiles(store, quickAdd, await structureFromSmiles(smiles, style));
             }}
             onChoose={(what) => {
               const st = store.getState();
@@ -2377,6 +2397,8 @@ export default function Workspace({
                 <ArrowStylePanel arrowId={panel.arrow} onClose={() => setPanel(null)} />
               ) : (
                 <SaveAbbreviationPanel
+                  // (opened anew for another group: a panel of its own, with its own group to keep to)
+                  key={panel.abbreviation.ids.join(",")}
                   ids={panel.abbreviation.ids}
                   smiles={panel.abbreviation.smiles}
                   onClose={() => setPanel(null)}

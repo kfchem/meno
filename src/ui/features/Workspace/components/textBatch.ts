@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BatchedText, Text } from "troika-three-text";
 import { createDerivedMaterial } from "troika-three-utils";
+import { fadeLetters } from "./labelFade";
 
 /** A run of a label's letters as it is drawn: where (its baseline's start, in the page's units), how large, in what colour, leaning or thickened. */
 export type BatchRun = { text: string; x: number; y: number; size: number; color: string; italic: boolean; bold: boolean };
@@ -133,6 +134,12 @@ export class TextBatch {
   /** Every label but those in `keep` no longer drawn. */
   keepOnly(keep: ReadonlySet<string>): void {
     for (const key of [...this.held.keys()]) if (!keep.has(key)) this.drop(key);
+  }
+
+  /** The label `key` as opaque as `level`, its members' letters (a fade out, label by label). */
+  fadeKey(key: string, level: number): void {
+    const h = this.held.get(key);
+    if (h) for (const t of h.members) fadeLetters(t, level);
   }
 
   /** Every member, for a fade to go over. */

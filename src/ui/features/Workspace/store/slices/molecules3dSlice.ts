@@ -360,7 +360,7 @@ function chosenWith(
  * not as its file has it. (Changed in any way, a molecule is another; one
  * new is seen as its file has it.)
  */
-const seenAsLetGo = new WeakMap<Molecule3D, { turn?: Turn3D; frame?: number }>();
+const seenAsLetGo = new WeakMap<Molecule3D, { turn?: Turn3D; frame?: number; overlay?: true }>();
 
 /**
  * The view's hold on molecules in 3D, kept to those the document still has:
@@ -382,12 +382,16 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
   };
   let turns3d = keep(prev.turns3d);
   let frames3d = keep(prev.frames3d);
+  // (a molecule shown overlaid, undone away, is not: another made next took
+  // its id and came up overlaid, unasked - but it is again, redone)
+  let overlay3d = keep(prev.overlay3d);
   const had = new Set(prev.molecules3d.map((m) => m.id));
-  for (const m of prev.molecules3d) if (!by.has(m.id)) seenAsLetGo.set(m, { turn: prev.turns3d[m.id], frame: prev.frames3d[m.id] });
+  for (const m of prev.molecules3d) if (!by.has(m.id)) seenAsLetGo.set(m, { turn: prev.turns3d[m.id], frame: prev.frames3d[m.id], overlay: prev.overlay3d[m.id] });
   for (const m of molecules) {
     const seen = had.has(m.id) ? undefined : seenAsLetGo.get(m);
     if (seen?.turn) turns3d = { ...turns3d, [m.id]: seen.turn };
     if (seen?.frame != null) frames3d = { ...frames3d, [m.id]: seen.frame };
+    if (seen?.overlay) overlay3d = { ...overlay3d, [m.id]: true };
   }
   const sel3d = [...prev.sel3d].every((id) => by.has(id)) ? prev.sel3d : new Set([...prev.sel3d].filter((id) => by.has(id)));
   const c = prev.chosen3d;
@@ -416,6 +420,7 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     lists3d,
     turns3d,
     frames3d,
+    overlay3d,
     sel3d,
     chosen3d: chosenStays ? c : null,
     hovered3d: prev.hovered3d && !by.has(prev.hovered3d.id) ? null : prev.hovered3d,

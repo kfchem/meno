@@ -35,7 +35,7 @@ const only = process.argv
   .split(",")
   .map((s) => s.toLowerCase());
 
-type Written = { el: string; charge: number; x: number; y: number };
+type Written = { el: string; charge: number; x: number; y: number; isotope?: number };
 
 /** A V2000 MOL block: a wedge's narrow end first, as the format has it. */
 function molblock(atoms: Written[], bonds: { a: number; b: number; order: number; wedge?: "up" | "down" }[]): string {
@@ -44,6 +44,12 @@ function molblock(atoms: Written[], bonds: { a: number; b: number; order: number
   const lines = ["", "  Meno layout", "", `${i3(atoms.length)}${i3(bonds.length)}  0  0  0  0  0  0  0  0999 V2000`];
   for (const a of atoms) lines.push(`${f(a.x)}${f(a.y)}${f(0)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
   for (const b of bonds) lines.push(`${i3(b.a + 1)}${i3(b.b + 1)}${i3(b.order)}${i3(b.wedge === "up" ? 1 : b.wedge === "down" ? 6 : 0)}`);
+  // (mass numbers, as baselines.py records them: a CD centre is one only with its D)
+  const isotopes = atoms.flatMap((a, i) => (a.isotope ? [[i + 1, a.isotope]] : []));
+  for (let k = 0; k < isotopes.length; k += 8) {
+    const part = isotopes.slice(k, k + 8);
+    lines.push(`M  ISO${i3(part.length)}${part.map(([i, m]) => ` ${i3(i)} ${i3(m)}`).join("")}`);
+  }
   const charged = atoms.flatMap((a, i) => (a.charge ? [[i + 1, a.charge]] : []));
   for (let k = 0; k < charged.length; k += 8) {
     const part = charged.slice(k, k + 8);
@@ -59,7 +65,10 @@ for (const { name, graph } of graphs) {
   const smiles = listed.find((m) => m.name === name)?.smiles;
   if (!smiles) continue;
   const laid = layout2D(graph);
-  const atoms: Written[] = graph.atoms.map((a, i) => ({ el: a.el, charge: a.charge ?? 0, x: laid.x[i], y: laid.y[i] }));
+  const atoms: Written[] = graph.atoms.map((a, i) => {
+    const isotope = (a as { isotope?: number }).isotope;
+    return { el: a.el, charge: a.charge ?? 0, x: laid.x[i], y: laid.y[i], ...(isotope ? { isotope } : {}) };
+  });
   const bonds: { a: number; b: number; order: number; wedge?: "up" | "down" }[] = graph.bonds.map(({ a, b, order }) => ({ a, b, order }));
   const addH = (on: number, at: { x: number; y: number }) => {
     atoms.push({ el: "H", charge: 0, ...at });

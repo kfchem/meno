@@ -12,6 +12,7 @@ import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry } from "../chem/pdb";
 import { readRxnfile } from "../chem/ctfile";
 import { biopolymerOf, type Biopolymer } from "../chem/biopolymer";
+import { laidOutAsRead, laidOutWhereUnplaced } from "./unplaced";
 
 /** The kinds of structures' files Meno reads itself. */
 export type StructureKind = "mol" | "sdf" | "rxn" | "xyz" | "pdb";
@@ -156,7 +157,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     if (reaction.damaged) throw damaged(name, reaction.damaged);
     if (reaction.unread) throw unread(name, reaction.unread);
     // RXN format: uses pre-computed layout with arrow
-    const rxnLayout = buildEditorModelFromRXN(content);
+    // (a molecule given no coordinates laid out before the scheme is: ./unplaced)
+    const rxnLayout = buildEditorModelFromRXN(content, laidOutWhereUnplaced);
     if (!rxnLayout.model.atoms.length) throw noMolecules(name);
     return {
       model: rxnLayout.model,
@@ -202,7 +204,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     };
   }
   // MOL and SD files: their records, each a drawing or a molecule in 3D
-  const molecules = readMoleculesFromText(content, kind);
+  const read = readMoleculesFromText(content, kind);
+  // (a MOL or SD record given no coordinates: laid out, and flat whatever its header says - ./unplaced)
+  const noPlaces = read.map((m) => laidOutAsRead(m));
+  const molecules = laidOutWhereUnplaced(read);
   // (a record cut short, damaged or saying what Meno cannot read: of
   // several, left out, the others opened and those left out named - their
   // number and why - as a trajectory's frames left out are said (the
@@ -218,8 +223,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   }
   const recordsLeftOut = problems.flatMap((why, i) => (why ? [{ record: i + 1, why }] : []));
   const leftOut = recordsLeftOut.length ? { recordsLeftOut } : {};
-  const said = saysThreeD(content);
-  const inDepth = (i: number) => molecules[i].atoms.length > 0 && (said[i] || depthOf(molecules[i]) > 0.1);
+  const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
+  const inDepth = (i: number) => molecules[i].atoms.length > 0 && !noPlaces[i] && (said[i] || depthOf(molecules[i]) > 0.1);
   const molecules3d = good.filter(inDepth).map((i) => {
     const m = molecules[i];
     // (and its record's title, its first line, where it gives one)

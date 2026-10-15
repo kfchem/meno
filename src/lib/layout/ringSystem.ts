@@ -20,6 +20,7 @@ import {
   dir,
   dist,
   len,
+  mirror,
   norm,
   scale,
   segmentsCross,
@@ -190,6 +191,7 @@ export function placeRingSystem(
     const t0 = squareStart(first.length);
     first.forEach((a, i) => pos.set(a, scale(dir(t0 - (i * 2 * Math.PI) / first.length), r)));
   }
+  dentForTrans(mol, first, pos);
   placedRing.add(rings.indexOf(first));
 
   // A bridged pair of rings has three bridges between its bridgeheads: the
@@ -241,6 +243,7 @@ export function placeRingSystem(
     });
     if (next < 0) break;
     placeRing(rings[next], pos, rings, chainRules(mol, sys));
+    dentForTrans(mol, rings[next], pos);
     placedRing.add(next);
   }
   return pos;
@@ -270,6 +273,7 @@ export function extendRingSystem(mol: Molecule, sys: RingSystem, pos: Map<number
     });
     if (next < 0) break;
     placeRing(rings[next], pos, rings, chainRules(mol, sys));
+    dentForTrans(mol, rings[next], pos);
     placed.add(next);
   }
 }
@@ -402,6 +406,34 @@ function ringOfBlocks(
     for (const [a, p] of best!) if (!inMacro.has(a) || !pos.has(a)) pos.set(a, p);
   }
   return [rings.indexOf(macro), ...threads.flatMap((b) => b.rings)];
+}
+
+/**
+ * An eight-membered ring, drawn regular, with its trans double bonds drawn
+ * trans: in a regular polygon every double bond is cis, its ring neighbours
+ * both inside. Of each trans bond one end is dented in - reflected across
+ * the line between its two neighbours - and its own bond, or H, points out
+ * through the dent: the end in this ring alone (a ring fused there keeps
+ * its place), with less hanging from it, and away from another dent; never
+ * two atoms side by side, which would fold the ring over. (A ring of nine
+ * or more is a macrocycle, whose shapes have corners either way; a smaller
+ * one is never trans.)
+ */
+function dentForTrans(mol: Molecule, ring: readonly number[], pos: Map<number, Point>): void {
+  const n = ring.length;
+  if (n !== 8 || !ring.every((a) => pos.has(a))) return;
+  const dented: number[] = [];
+  const apart = (k: number) => Math.min(3, ...dented.map((d) => Math.min((k - d + n) % n, (d - k + n) % n)));
+  const outside = (k: number) => mol.neighbours[ring[k]].filter((v) => !ring.includes(v)).length;
+  for (const { i, cis } of fixedDoubles(mol, ring as number[])) {
+    if (cis) continue;
+    const ends = [i, (i + 1) % n]
+      .filter((k) => mol.ringsOf[ring[k]].length === 1 && apart(k) > 1)
+      .sort((p, q) => apart(q) - apart(p) || outside(p) - outside(q));
+    if (ends.length) dented.push(ends[0]);
+  }
+  const at = (j: number) => pos.get(ring[(j + n) % n])!;
+  for (const k of dented) pos.set(ring[k], mirror(at(k), at(k - 1), at(k + 1)));
 }
 
 /**

@@ -34,6 +34,18 @@ export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "
       (st.selInks?.size ?? 0) > 0,
   };
 }
+
+/**
+ * Whether a drag of the atom `id` moves the selection: the atom is in it,
+ * with anything else - another atom, or a picture, a shape, words, a
+ * molecule in 3D. (Until 2026-10-13 only other atoms counted: an atom
+ * selected with a picture was dragged off alone.)
+ */
+export function dragsSelection(st: Parameters<typeof selectedOf>[0], id: number): boolean {
+  if (!st.sel.atoms.has(id)) return false;
+  if (st.sel.atoms.size > 1) return true;
+  return selectedOf({ ...st, sel: { atoms: new Set(), bonds: new Set() } }).any;
+}
 const noFlow = (): SelFlow => ({ sets: new Set(), steps: new Set() });
 
 /**
@@ -96,6 +108,10 @@ export function createSelectionSlice(set: SetState) {
     /** A whole structure: every atom bonded to this one, however far along, and their bonds. */
     selectStructure: (id: number) =>
       set((prev: EditorState) => {
+        // (an atom no longer drawn - a long press's timer ending after an
+        // undo took it away - selects nothing: it held an atom unseen,
+        // which Delete and the menu then acted on)
+        if (!prev.model.atoms.some((a) => a.id === id)) return prev;
         const atoms = fragmentOf(prev.model, id);
         const bonds = new Set(prev.model.bonds.filter((b) => atoms.has(b.a)).map((b) => b.id));
         return { ...prev, sel: { atoms, bonds }, selAnchor: id };
