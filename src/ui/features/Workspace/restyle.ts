@@ -99,6 +99,8 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
  * file opened without one is given one, not converted.)
  */
 export function restyledDocument(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
+  // (the style it has: no change, and no step to undo)
+  if (doc.style && (doc.style === style || JSON.stringify(doc.style) === JSON.stringify(style))) return doc;
   const k = doc.style ? bondPtOf(doc.style) / bondPtOf(style) : 1;
   const out = restyled({ ...doc, style }, k);
   if (!doc.style || !out.captions?.length) return out;
