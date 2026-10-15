@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  FADE_MOST,
+  fadeAt,
+  lookOfStyle,
+  withAtomColour,
   acceptStyle3dChoice,
   atomColour,
   atomRadius,
@@ -187,12 +191,84 @@ describe("the 3D style as chosen", () => {
 
   it("has a field for every setting but how smooth the balls and sticks are, and every style within the fields' bounds", () => {
     const shown = new Set<string>(LOOK_3D_FIELDS.map((f) => f.key));
-    for (const key of Object.keys(BALL_AND_STICK)) expect(shown.has(key)).toBe(true);
+    // (the atoms' colours have a table of their own: withAtomColour)
+    for (const key of Object.keys(BALL_AND_STICK)) expect(shown.has(key)).toBe(key !== "colours");
     const shared = new Set<string>(SCENE_3D_FIELDS.map((f) => f.key));
     for (const key of Object.keys(SCENE_3D)) expect(shared.has(key)).toBe(key !== "ballSegments" && key !== "bondSegments");
     for (const p of LOOK_3D_PRESETS) {
       const read = acceptStyle3dChoice({ primary: p.id, secondary: p.id === "balls" ? "space" : "balls", looks: { [p.id]: p.look } });
-      expect(read.looks[p.id]).toEqual(Object.fromEntries(Object.entries(p.look).map(([k, v]) => [k, typeof v === "string" ? v.toLowerCase() : v])));
+      const { colours, ...rest } = p.look;
+      expect(read.looks[p.id]).toEqual({
+        ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, typeof v === "string" ? v.toLowerCase() : v])),
+        ...(Object.keys(colours).length ? { colours } : {}),
+      });
     }
+  });
+});
+
+describe("the outlined style, and what it is made of", () => {
+  it("draws a thin dark line round balls and sticks in one dark grey, its back fading, in its own colours", () => {
+    const look = look3dPreset("outlined").look;
+    expect(look.atoms).toBe("balls");
+    expect(look.outline).toBeGreaterThanOrEqual(1);
+    expect(look.outline).toBeLessThanOrEqual(1.5);
+    expect(look.bondColouring).toBe("single");
+    expect(look.depthFade).toBeGreaterThan(0);
+    expect(look.roughness).toBeLessThan(0.5);
+    // (hydrogen's ball smaller than carbon's, both a quarter of their size)
+    expect(atomRadius("H", look)).toBeLessThan(atomRadius("C", look));
+    expect(atomColour("H", look)).toBe("#ffffff");
+    expect(atomColour("O", look)).toMatch(/^#e/);
+    expect(atomColour("Na", look)).toBe(atomColour("K", look));
+    // (an element it does not colour: as Meno does)
+    expect(atomColour("Br", look)).toBe(atomColour("Br"));
+    // (Meno's own styles draw no line and fade nothing)
+    for (const id of ["balls", "glossy", "space"]) {
+      expect(look3dPreset(id).look.outline).toBe(0);
+      expect(look3dPreset(id).look.depthFade).toBe(0);
+    }
+  });
+
+  it("fades nothing at the front, more toward the back, smoothly, never past its most", () => {
+    expect(fadeAt(0, 1)).toBe(0);
+    expect(fadeAt(1, 1)).toBeCloseTo(FADE_MOST, 12);
+    expect(fadeAt(1, 0.5)).toBeCloseTo(FADE_MOST / 2, 12);
+    expect(fadeAt(0.5, 0)).toBe(0);
+    let last = -1;
+    for (let d = 0; d <= 1.0001; d += 0.05) {
+      const f = fadeAt(d, 0.8);
+      expect(f).toBeGreaterThanOrEqual(last);
+      last = f;
+    }
+    // (out of range, held at its ends)
+    expect(fadeAt(-1, 1)).toBe(0);
+    expect(fadeAt(3, 2)).toBeCloseTo(FADE_MOST, 12);
+  });
+
+  it("takes an element's colour of the user's own over its preset's, and gives it back", () => {
+    let choice = withAtomColour(DEFAULT_STYLE_3D_CHOICE, "outlined", "C", "#202020");
+    expect(lookOfStyle(choice, "outlined").colours.C).toBe("#202020");
+    // (the preset's others kept)
+    expect(lookOfStyle(choice, "outlined").colours.O).toBe(look3dPreset("outlined").look.colours.O);
+    choice = withAtomColour(choice, "balls", "N", "#00FF00");
+    expect(atomColour("N", lookOfStyle(choice, "balls"))).toBe("#00ff00");
+    // (reset: the preset's again, nothing left changed)
+    choice = withAtomColour(choice, "outlined", "C", null);
+    choice = withAtomColour(choice, "balls", "N", atomColour("N"));
+    expect(choice.looks).toEqual({});
+    // (a colour set beside other changes keeps them)
+    const both = withAtomColour(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "outline", 1), "balls", "O", "#ff8800");
+    expect(both.looks.balls).toEqual({ outline: 1, colours: { O: "#ff8800" } });
+  });
+
+  it("reads its settings and colours back from the settings file, and nothing that does not read", () => {
+    const read = acceptStyle3dChoice({
+      primary: "outlined",
+      secondary: "space",
+      looks: { outlined: { outline: 2, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#ABCDEF", colours: { C: "#123456", Xx: "#000000", O: "red", N: 3 } } },
+    });
+    expect(read.looks.outlined).toEqual({ outline: 2, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#abcdef", colours: { C: "#123456" } });
+    const odd = acceptStyle3dChoice({ primary: "outlined", secondary: "balls", looks: { outlined: { outline: 9, depthFade: -1, bondColouring: "rainbow", colours: [] } } });
+    expect(odd.looks.outlined).toBeUndefined();
   });
 });

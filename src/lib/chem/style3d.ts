@@ -7,7 +7,7 @@
  * drawing style is (./style), so that it can be set the same way; the
  * primary's defaults are the 3D viewer's look.
  */
-import { elementColour, vdwRadius } from "./elements";
+import { elementColour, elementOf, vdwRadius } from "./elements";
 import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
@@ -45,6 +45,21 @@ export type MoleculeLook = {
    * bound to them drawn as atoms; or every atom (docs/WORKSPACE.md, *Ribbons*).
    */
   biopolymers: "ribbons" | "atoms";
+  /**
+   * A thin line round every ball and every stick, as wide on the screen at
+   * any zoom: in pixels, none at 0; and its colour.
+   */
+  outline: number;
+  outlineColor: string;
+  /**
+   * How far what lies further back in a molecule fades toward the page,
+   * from none (0) to strong (1), so that its front reads first (`fadeAt`).
+   */
+  depthFade: number;
+  /** The sticks in one colour (`bondColor`), or each half in its atom's colour. */
+  bondColouring: "single" | "byAtom";
+  /** The atoms' colours of this style's own, by element (#rrggbb); every other element as Meno colours it (`atomColour`). */
+  colours: Readonly<Record<string, string>>;
 };
 
 /** What every style shares: the light molecules are seen in, how they turn, a surface's colours, and how smooth they are drawn. */
@@ -97,6 +112,31 @@ export const BALL_AND_STICK: MoleculeLook = {
   occlusion: 0.6,
   hydrogens: "shown",
   biopolymers: "ribbons",
+  outline: 0,
+  outlineColor: "#1c1c1c",
+  depthFade: 0,
+  bondColouring: "single",
+  colours: {},
+};
+
+/**
+ * The atoms' colours of the outlined style: carbon a mid grey, hydrogen
+ * white, oxygen red, sulfur yellow, fluorine and chlorine light green, the
+ * alkali metals lavender.
+ */
+const OUTLINED_COLOURS: Readonly<Record<string, string>> = {
+  C: "#a6a6a6",
+  H: "#ffffff",
+  N: "#3a62d8",
+  O: "#e3212b",
+  S: "#efe02a",
+  F: "#8de06a",
+  Cl: "#6cd65a",
+  Li: "#c6a8ee",
+  Na: "#c6a8ee",
+  K: "#c6a8ee",
+  Rb: "#c6a8ee",
+  Cs: "#c6a8ee",
 };
 
 /** What the styles share, as the 3D viewer had it. */
@@ -137,6 +177,24 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
     look: { ...BALL_AND_STICK, roughness: 0.25, metalness: 0.1, bondColor: "#6b7280" },
   },
   {
+    id: "outlined",
+    name: "Outlined",
+    description: "Glossy balls and sticks in one dark grey, each drawn round with a thin dark line; what lies further back fades toward the page.",
+    look: {
+      ...BALL_AND_STICK,
+      ballScale: 0.25,
+      bondRadius: 0.09,
+      bondColor: "#4a4a4a",
+      roughness: 0.3,
+      metalness: 0.05,
+      occlusion: 0.35,
+      outline: 1.25,
+      outlineColor: "#1c1c1c",
+      depthFade: 0.5,
+      colours: OUTLINED_COLOURS,
+    },
+  },
+  {
     id: "space",
     name: "Space-filling",
     description: "Each atom as large as its van der Waals radius: the molecule's surface.",
@@ -163,9 +221,11 @@ export type Style3DChoice = {
 /** Ball and stick first, space-filling a step away (the maintainer, 2026-10-10: a thin look and a thick one, side by side). */
 export const DEFAULT_STYLE_3D_CHOICE: Style3DChoice = { primary: "balls", secondary: "space", looks: {}, shared: {} };
 
-/** A style of the list, with what was changed of it. */
+/** A style of the list, with what was changed of it - its atoms' colours over its preset's. */
 export function lookOfStyle(choice: Style3DChoice, id: string): MoleculeLook {
-  return { ...look3dPreset(id).look, ...choice.looks[id] };
+  const preset = look3dPreset(id).look;
+  const changes = choice.looks[id];
+  return { ...preset, ...changes, colours: { ...preset.colours, ...changes?.colours } };
 }
 
 /** The look a choice comes to. */
@@ -218,10 +278,41 @@ export function bondRadiusOf(look: MoleculeLook): number {
   return look.atoms === "space" ? 0 : look.bondRadius;
 }
 
-/** An atom's colour, by its element (an unknown one grey). */
-export function atomColour(el: string): string {
+/** An atom's colour, by its element (an unknown one grey) - as the look colours it, where it has one of its own. */
+export function atomColour(el: string, look?: Pick<MoleculeLook, "colours">): string {
+  const own = look?.colours[el];
+  if (own) return own;
   if (!colour.has(el)) colour.set(el, elementColour(el));
   return colour.get(el)!;
+}
+
+/** The most a style's depth fade takes something at the very back toward the page (`fadeAt`). */
+export const FADE_MOST = 0.7;
+
+/**
+ * How far toward the page something is faded at `depth` - 0 at the front
+ * of its molecule, 1 at its back, as the screen sees it - by a style's
+ * `depthFade` (0 to 1): none at the front, growing toward the back, at
+ * most FADE_MOST. The GPU works the same out per pixel (Molecule3DView).
+ */
+export function fadeAt(depth: number, depthFade: number): number {
+  const d = Math.min(1, Math.max(0, depth));
+  return FADE_MOST * Math.min(1, Math.max(0, depthFade)) * d * d * (3 - 2 * d);
+}
+
+/**
+ * A choice with one element's colour in a style set - or, given none or
+ * the style's own colour for it, no longer changed: its preset's again.
+ */
+export function withAtomColour(choice: Style3DChoice, id: string, el: string, value: string | null): Style3DChoice {
+  const preset = look3dPreset(id).look.colours;
+  const was = { ...(choice.looks[id]?.colours ?? {}) };
+  delete was[el];
+  const colours = value && value.toLowerCase() !== (preset[el] ?? atomColour(el)).toLowerCase() ? { ...was, [el]: value.toLowerCase() } : was;
+  const { colours: _c, ...rest } = choice.looks[id] ?? {};
+  const changes = Object.keys(colours).length ? { ...rest, colours } : rest;
+  const { [id]: _old, ...others } = choice.looks;
+  return { ...choice, looks: Object.keys(changes).length ? { ...others, [id]: changes } : others };
 }
 
 /** A molecule as what it leaves out is worked out from: its atoms (where they stand, for a biopolymer's chains), bonds and biopolymer. */
@@ -361,7 +452,25 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     unit: "Å",
     digits: 2,
   },
-  { key: "bondColor", group: "Atoms and bonds", label: "Bond colour", description: "The sticks between the balls.", kind: "colour" },
+  {
+    key: "bondColouring",
+    group: "Atoms and bonds",
+    label: "Bonds coloured",
+    description: "Each stick in one colour, or each half in the colour of its atom.",
+    kind: "choice",
+    options: [
+      { value: "single", label: "One colour" },
+      { value: "byAtom", label: "By atom" },
+    ],
+  },
+  {
+    key: "bondColor",
+    group: "Atoms and bonds",
+    label: "Bond colour",
+    description: "The sticks between the balls.",
+    kind: "colour",
+    unless: { key: "bondColouring", is: "byAtom" },
+  },
   {
     key: "hydrogens",
     group: "Atoms and bonds",
@@ -405,6 +514,30 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     max: 1,
     step: 0.05,
     ends: ["Not at all", "Fully"],
+  },
+  {
+    key: "outline",
+    group: "Lines",
+    label: "Outline",
+    description: "A thin line round every ball and every stick, as wide at any zoom.",
+    kind: "number",
+    min: 0,
+    max: 3,
+    step: 0.25,
+    unit: "px",
+    digits: 2,
+  },
+  { key: "outlineColor", group: "Lines", label: "Outline colour", description: "The line round the balls and sticks.", kind: "colour" },
+  {
+    key: "depthFade",
+    group: "Lines",
+    label: "Depth fade",
+    description: "What lies further back fades toward the page, so that the front reads first.",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    ends: ["None", "Strong"],
   },
   {
     key: "occlusionBy",
@@ -545,6 +678,16 @@ function acceptFields(raw: unknown, fields: readonly Style3DField[]): Record<str
   return out;
 }
 
+/** A style's atoms' colours as the settings file holds them: each a known element's, #rrggbb; what does not read left out. */
+function acceptColours(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return out;
+  for (const [el, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (elementOf(el) && typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)) out[el] = value.toLowerCase();
+  }
+  return out;
+}
+
 /** A 3D style as the settings file holds it: what does not read is left as its preset has it. */
 export function acceptStyle3dChoice(raw: unknown): Style3DChoice {
   if (typeof raw !== "object" || raw === null) return DEFAULT_STYLE_3D_CHOICE;
@@ -559,6 +702,8 @@ export function acceptStyle3dChoice(raw: unknown): Style3DChoice {
     for (const [id, changes] of Object.entries(r.looks as Record<string, unknown>)) {
       if (!known(id)) continue;
       const read = acceptFields(changes, LOOK_3D_FIELDS);
+      const colours = acceptColours((changes as { colours?: unknown } | null)?.colours);
+      if (Object.keys(colours).length) read.colours = colours;
       if (Object.keys(read).length) looks[id] = read as Partial<MoleculeLook>;
     }
   }
