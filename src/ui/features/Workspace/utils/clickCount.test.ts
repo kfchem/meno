@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnEmpty } from "./clickCount";
+import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnBond, pressOnEmpty } from "./clickCount";
 
 describe("clickCount", () => {
   it("tells a double-click's second click that came after a moment", () => {
@@ -59,3 +59,16 @@ describe("presses on empty space", () => {
     expect(pressOnEmpty({ t: 0, x: 100, y: 100, count: 2 }, { t: 200, x: 100, y: 100 }, 500)).toBe(1);
   });
 });
+
+describe("a press on a bond", () => {
+  it("is the second of a double-click on the same bond soon after a first, which begins no long press; else a first", () => {
+    const first = { id: 7, t: 0, count: 1 };
+    expect(pressOnBond(null, { id: 7, t: 0 }, 500)).toBe(1);
+    expect(pressOnBond(first, { id: 7, t: 300 }, 500)).toBe(2);
+    expect(pressOnBond(first, { id: 7, t: 600 }, 500)).toBe(1);
+    expect(pressOnBond(first, { id: 8, t: 300 }, 500)).toBe(1);
+    // (a third begins anew)
+    expect(pressOnBond({ id: 7, t: 300, count: 2 }, { id: 7, t: 450 }, 500)).toBe(1);
+  });
+});
+

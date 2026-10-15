@@ -1,10 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
 import { usePresentingWindow } from "../presenting";
 import { FADE, RISE } from "../theme/motion";
+import { Leaving, QUESTION_ARRIVING_MS } from "../theme/leaving";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
-import { useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useAskedKeys } from "../layouts/asking";
 import { purposeName, useNetwork } from "../../lib/net/network";
+import { questionKey } from "./questionKey";
 
 /**
  * Asks before something first uses the network: what will be fetched, from
@@ -15,19 +17,18 @@ export default function ConsentDialog() {
   // (asked once a talk given in the window has ended: ../presenting - whatever asks waits meanwhile)
   const talking = usePresentingWindow((s) => s.on);
   const asking = useNetwork((s) => (talking ? null : s.asking));
-  const noRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   // (the keys its own while it asks: Escape fetches nothing, and nothing behind it acts on one)
   useAskedKeys(boxRef, () => asking?.answer(false), !!asking);
-  useEffect(() => {
-    if (!asking) return;
-    // Not fetching is the safe answer, so it is the one a stray Enter gives.
-    noRef.current?.focus();
-  }, [asking]);
+  // Not fetching is the safe answer, so it is the one a stray Enter gives: each question's own as it comes.
+  const focusNo = useCallback((el: HTMLButtonElement | null) => el?.focus(), []);
   return (
-    <AnimatePresence>
+    // (one question gone before the next comes: neither shown over the other)
+    <AnimatePresence mode="wait">
     {asking && (
-    <motion.div key="consent" {...FADE} className="absolute inset-0 z-[110] flex items-center justify-center bg-black/20">
+    <Leaving key={questionKey(asking)} arriving={QUESTION_ARRIVING_MS}>
+    {(held) => (
+    <motion.div {...FADE} {...held} className="absolute inset-0 z-[110] flex items-center justify-center bg-black/20">
       <motion.div
         ref={boxRef}
         {...RISE}
@@ -60,7 +61,7 @@ export default function ConsentDialog() {
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button
-            ref={noRef}
+            ref={focusNo}
             onClick={() => asking.answer(false)}
             className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100"
           >
@@ -75,6 +76,8 @@ export default function ConsentDialog() {
         </div>
       </motion.div>
     </motion.div>
+    )}
+    </Leaving>
     )}
     </AnimatePresence>
   );

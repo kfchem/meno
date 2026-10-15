@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { usePresentingWindow } from "../presenting";
 import { RISE } from "../theme/motion";
+import { Leaving } from "../theme/leaving";
 import { useState } from "react";
 import { readySaid, restartIntoUpdate, useUpdate } from "../../lib/update";
 
@@ -19,9 +20,12 @@ export default function UpdateNotice() {
   return (
     <AnimatePresence>
       {shown && (
+        // (going, it does nothing more as it fades - theme/leaving)
+        <Leaving key="update">
+        {(held) => (
         <motion.div
-          key="update"
           {...RISE}
+          {...held}
           role="status"
           className="fixed bottom-3 left-3 z-50 max-w-sm flex items-center gap-3 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
@@ -40,6 +44,8 @@ export default function UpdateNotice() {
             Later
           </button>
         </motion.div>
+        )}
+        </Leaving>
       )}
     </AnimatePresence>
   );

@@ -10,7 +10,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -98,8 +98,9 @@ function selectionExtent(
  *
  * - what is selected, shaded under the drawing;
  * - a box or a lasso being drawn to select what it holds - from empty
- *   space with Ctrl (⌘ on a Mac) held, or by a double-click there that
- *   drags; with Alt (Option) held, a lasso rather than a box;
+ *   space with Ctrl (⌘ on a Mac) held, or by a long press there and a
+ *   drag (a double-click there opens Quick Add); with Alt (Option) held,
+ *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D selected alone
  *   it turns as one body, in 3D - as a drag on a molecule turns it - about
@@ -202,6 +203,8 @@ export default function Selection2D() {
         // (and arrows standing wholly in it - each end and corner - and "+" signs, by their middles: those among the atoms it takes are carried with them, once)
         s.selectArrows(arrowsIn(s.arrows, kind, points), add);
         s.selectPluses(molecules3dIn(s.pluses.map((x) => ({ id: x.id, at: x })), kind, points), add);
+        // (and words on the page over no arrow, by where they stand)
+        s.selectCaptions(wordsIn(s.captions, kind, points), add);
         s.selectFlow(flowIn(s, kind, points), add);
         s.setSel({ atoms, bonds }, taken.length ? taken[taken.length - 1] : s.selAnchor);
         // the box's end is no double-click's, and no click on nothing

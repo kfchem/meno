@@ -286,7 +286,17 @@ moves together, in the same time and the same way.
   unmounts (menus, dialogs, notices, cards, panels, tabs); CSS
   `meno-fade-in` for what comes into view as a class goes on, and
   `meno-fade-out` with `ui/theme/presence.ts#usePresence` for what has just
-  gone; every button's colours ease (one rule in `App.css`).
+  gone; every button's colours ease (one rule in `App.css`). What goes does
+  nothing more as it fades (`ui/theme/leaving.ts`: `useLeaving`, or
+  `Leaving` under a component's own `AnimatePresence`): its presses and
+  clicks are its own and its window listeners off, so a double-click's
+  second click does not do the first's again; a question - a consent, a
+  discard - takes no click for `QUESTION_ARRIVING_MS` as it comes, or as
+  Meno's window comes back in front with it up, nor while the window is
+  not in front (`arrival`: on Windows the click that brings Meno back
+  reaches the page), and
+  each consent is a dialog of its own (`ui/network/questionKey.ts`), so a
+  click meant for the one just answered is not the next one's answer.
 - **The canvas**: each layer eases its own parts in `useFrame` - each
   part its own way in and out, so one can go while the next comes - and
   invalidates only while something moves (see *Frame loop*). The drawing

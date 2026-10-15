@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { WORDS_SIZE_RANGE, WORDS_SIZES } from "../../../lib/chem/captions";
 
 /**
@@ -31,8 +32,11 @@ export default function SizeCard({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // (going, it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   const [typed, setTyped] = useState(() => String(Math.round((now ?? label) * 10) / 10));
   useEffect(() => {
+    if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -47,7 +51,7 @@ export default function SizeCard({
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("wheel", onClose, true);
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
   const give = (pt: number | null) => {
     onSize(pt);
     onClose();
@@ -60,6 +64,7 @@ export default function SizeCard({
     <motion.div
       ref={ref}
       {...RISE}
+      {...held}
       role="dialog"
       aria-label="Size"
       tabIndex={-1}

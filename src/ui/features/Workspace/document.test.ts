@@ -183,8 +183,11 @@ describe("structure document operations", () => {
     const id = d.model.bonds[0].id;
     const double = ops.updateBond(d, id, { order: 2 });
     expect(double.model.bonds[0].order).toBe(2);
+    // (a wedge says something of a single bond's end alone: a double bond takes none, 2026-10-13)
     const wedge = ops.updateBond(double, id, { stereo: "up" });
-    expect(wedge.model.bonds[0]).toMatchObject({ order: 2, stereo: "up" });
+    expect(wedge.model.bonds[0]).toMatchObject({ order: 2, stereo: "none" });
+    const single = ops.updateBond(ops.updateBond(double, id, { order: 1 }), id, { stereo: "up" });
+    expect(single.model.bonds[0]).toMatchObject({ order: 1, stereo: "up" });
   });
 
   it("merges a dragged atom into its target, rewiring bonds", () => {

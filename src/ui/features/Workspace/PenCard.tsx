@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { RISE } from "../../theme/motion";
+import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { setInUse } from "../../../lib/chem/palette";
 import { INK_WIDTHS_PT, markerColour } from "../../../lib/chem/ink";
@@ -37,10 +38,12 @@ const TOOLS: { tool: InkMode["tool"]; name: string; icon: React.ReactNode }[] = 
 export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMode: (mode: InkMode) => void; onDone: () => void }) {
   const set = setInUse(useAppSettings((s) => s.colours));
   const palette = set.colours;
+  // (going, it does nothing more as it fades - theme/leaving)
+  const { leaving, held } = useLeaving();
   // (Escape is Done while its tab is in front: in another tab it is that tab's, the pen waiting)
   const inFront = useInFront();
   useEffect(() => {
-    if (!inFront) return;
+    if (leaving || !inFront) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -48,7 +51,7 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onDone, inFront]);
+  }, [onDone, leaving, inFront]);
   const writing = mode.tool !== "eraser";
   const marker = mode.tool === "marker";
   const own = marker ? markerColour(set) : "#141414";
@@ -57,6 +60,7 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
   return (
     <motion.div
       {...RISE}
+      {...held}
       role="toolbar"
       aria-label="Pen"
       className="absolute z-40 left-1/2 top-3 -translate-x-1/2 flex items-center gap-1 rounded-lg border border-gh-line bg-white p-1 shadow-lg"

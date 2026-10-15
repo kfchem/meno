@@ -1,5 +1,7 @@
+import type { ColourTarget } from "../ColourCard";
 import type { MenuTarget } from "../PartMenu";
 import type { EditorState } from "../store/types";
+import { ringThere } from "./rings";
 
 /** What a right-click menu's part is looked for in. */
 type Parts = Pick<
@@ -69,4 +71,24 @@ export function menuTargetGone(target: MenuTarget, s: Parts): boolean {
     case "wire":
       return !has(s.wires, id);
   }
+}
+
+/**
+ * Whether anything a colour card is for has gone - an atom, a bond, a ring
+ * (its atoms, or its closing bond), an arrow, words, a shape, writing - so
+ * that the card closes, as a menu over a part gone does: an undo with the
+ * card open left its swatches acting on what was no longer drawn.
+ */
+export function colourTargetGone(target: ColourTarget, s: Parts): boolean {
+  const all = (ids: readonly number[] | undefined, items: readonly { id: number }[]) => (ids ?? []).every((id) => has(items, id));
+  return !(
+    all(target.atoms, s.model.atoms) &&
+    all(target.bonds, s.model.bonds) &&
+    target.rings.every((k) => ringThere(s.model, k)) &&
+    all(target.pushes, s.pushes) &&
+    all(target.arrows, s.arrows) &&
+    all(target.captions, s.captions) &&
+    all(target.shapes, s.shapes) &&
+    all(target.inks, s.inks)
+  );
 }

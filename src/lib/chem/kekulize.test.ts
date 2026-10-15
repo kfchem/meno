@@ -117,6 +117,19 @@ describe("kekuleOrders", () => {
     expect(kekuleOrders(m.atoms, m.bonds)).toEqual([1, 2, 3, 1, 1, 1, 1]);
   });
 
+  it("runs a ring of aromatic bonds through query atoms, giving them a double bond where the ring needs one", () => {
+    // a query's ring: an atom list, C, any atom (A), C, any but carbon (Q), C -
+    // every carbon between two query atoms, which left them all single: a
+    // saturated ring where the file drew an aromatic one
+    const { orders, n } = doublesPerAtom(mol("L C A C Q C", ring([0, 1, 2, 3, 4, 5])));
+    expect(orders.filter((o) => o === 2)).toHaveLength(3);
+    expect(n).toEqual([1, 1, 1, 1, 1, 1]);
+    // and a pyridine with * for one carbon: the carbons first, as for its N
+    expect(doublesPerAtom(mol("* C C C C N", ring([0, 1, 2, 3, 4, 5]))).n).toEqual([1, 1, 1, 1, 1, 1]);
+    // a query atom on a ring that needs none of it stays single
+    expect(doublesPerAtom(mol("A C C C C C C", [...ring([1, 2, 3, 4, 5, 6]), [0, 1, A]])).n[0]).toBe(0);
+  });
+
   it("still gives what carbons it can their double bond when no assignment works", () => {
     // cyclopentadienide read without its charge: five carbons, two double bonds
     const { orders, n } = doublesPerAtom(mol("C C C C C", ring([0, 1, 2, 3, 4])));
