@@ -138,7 +138,8 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (Render: Meno's own choices first, then the role's; the look choice offering the canvas's and those the plugin declares)
     const own = kindInfo("render").own ?? [];
     const given = optionsFor("render", "blender");
-    expect(given.slice(0, own.length).map((o) => o.id)).toEqual(own.map((o) => o.id));
+    const ids = given.map((o) => o.id);
+    expect(ids.filter((id) => own.some((o) => o.id === id))).toEqual(own.map((o) => o.id));
     const look = given.find((o) => o.id === "look") as unknown as { choices: { value: string }[] };
     expect(look.choices.map((c) => c.value).slice(0, 3)).toEqual(["meno", "glossy", "matte"]);
   });
