@@ -161,7 +161,8 @@ class Prepare(unittest.TestCase):
         self.assertEqual(offered["solvent"] - {"none"}, worker.SOLVENTS)
         self.assertEqual(offered["method"], set(worker.METHODS) - {"gfn2//gfnff"})
         self.assertEqual(manifest["systems"], ["macos", "linux"])
-        self.assertEqual(manifest["version"], worker.VERSION)
+        # (CREST's own version is what the plugin says it uses; the manifest's `version` is the plugin's)
+        self.assertEqual({u["name"]: u["version"] for u in manifest["uses"]}["CREST"], worker.VERSION)
 
 
 class Collect(unittest.TestCase):

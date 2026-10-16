@@ -105,7 +105,7 @@ export type ArrowCorner = { along: number; across: number };
  * than half (`full`) - whether its line is dashed, how heavy it is, and
  * the corners its line turns at, from its tail.
  */
-export type ArrowForm = { kind?: ArrowKind; heads?: 2; full?: true; dash?: true; weight?: ArrowWeight; corners?: readonly ArrowCorner[] };
+export type ArrowForm = { kind?: ArrowKind; heads?: 0 | 2; full?: true; dash?: true; weight?: ArrowWeight; corners?: readonly ArrowCorner[] };
 
 /** The points an arrow's line runs through: its tail, its corners, its point. */
 export function arrowPath(from: P, to: P, corners: readonly ArrowCorner[] = []): P[] {
@@ -226,7 +226,9 @@ export function arrowPieces(from: P, to: P, form: ArrowForm, m: ArrowMeasures): 
   const h = Math.min(Math.max(0, m.headLength * grow), total / (two ? 2 : 1));
   const w = Math.max((m.headWidth * grow) / 2, t);
   const d = Math.min(Math.max(0, m.inset), MAX_INSET) * h;
-  if (!kind && !two && !form.dash && path.length === 2 && share === 1) return [arrowOutline(from, to, m)];
+  // (no head at all: a line alone - a catalytic cycle's arrow coming in, merging into its arc - lib/chem/cycle)
+  const none = form.heads === 0 && !kind;
+  if (!kind && !two && !none && !form.dash && path.length === 2 && share === 1) return [arrowOutline(from, to, m)];
   const out: P[][] = [];
   const line = (points: readonly P[]) => {
     for (const piece of form.dash ? dashesOf(points, 2 * t) : [points.slice()]) {
@@ -270,6 +272,11 @@ export function arrowPieces(from: P, to: P, form: ArrowForm, m: ArrowMeasures): 
     const corner = (c: number): P => ({ x: tip.x - u.x * h + n.x * c, y: tip.y - u.y * h + n.y * c });
     const o = strokeOutline([corner(W), tip, corner(-W)], 2 * t);
     if (o.length > 2) out.push(o);
+    return out;
+  }
+  if (none) {
+    line(path);
+    if (m.round && !form.dash && t > 0) out.push(disc(path[0], t), disc(path[path.length - 1], t));
     return out;
   }
   // one line, cut where its heads take over, with its heads

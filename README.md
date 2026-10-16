@@ -36,9 +36,10 @@ them. There is no build for Intel Macs or Linux yet.
 2. If Windows says it protected your PC, choose *More info*, then *Run anyway*.
    Windows says this because Meno's installer is not yet signed with a
    certificate it knows.
-3. Follow the installer. It installs Meno for your user account alone, so it
-   needs no administrator's password.
-4. Open Meno from the Start menu.
+3. The installer asks nothing. A small window shows while it installs Meno
+   for your user account alone, so it needs no administrator's password,
+   and Meno opens when it is done.
+4. Afterwards, open Meno from the Start menu or the desktop.
 
 ### Mac
 

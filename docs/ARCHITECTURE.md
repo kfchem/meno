@@ -236,7 +236,16 @@ it hidden, and `restore` shows it, so it never appears at the default size and
 moves (the no-abrupt-changes rule). Where the kept frame is not mostly on a
 monitor there is now - one unplugged, a resolution or scale changed - it is
 brought onto the nearest, its title bar within reach, or centred at the default
-size where there is none (`place`, with its tests). The talk's window and any
+size where there is none (`place`, with its tests). The size kept is the
+inner one - what `set_size` takes - and the place the outer one, so that a
+frameless window's larger outer frame on Windows does not grow it at every
+start. On Windows the window's own placement is kept as it is
+(`GetWindowPlacement`: the normal frame, maximized or not) and given back
+with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
+own caption is never seen), maximized hidden where it was, and then shown by
+Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
+round-trips exactly - the size set and read back is not the same measure
+there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log

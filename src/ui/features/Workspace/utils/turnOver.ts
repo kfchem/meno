@@ -11,6 +11,7 @@
 import type { EditorState } from "../store/types";
 import { shapePlace, type MarkPlaces } from "../document";
 import { isBox, middleOf as shapeMiddle, moved as shapeMoved } from "../../../../lib/chem/shapes";
+import { cycleMirrored } from "../../../../lib/chem/cycle";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { sheetOfText } from "./textSheets";
@@ -63,6 +64,7 @@ export function turnOverMiddle(st: EditorState, scheme: Scheme): Pt | null {
     const b = st.selInks.has(k.id) ? strokesBounds(k.strokes, 0) : null;
     if (b) pts.push({ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y1 });
   }
+  for (const c of st.cycles) if (st.selCycles.has(c.id)) pts.push({ x: c.x - c.r, y: c.y - c.r }, { x: c.x + c.r, y: c.y + c.r });
   return middleOfPoints(pts) ?? { x: NaN, y: NaN };
 }
 
@@ -72,9 +74,9 @@ export function turnOverMiddle(st: EditorState, scheme: Scheme): Pt | null {
  * middle - a line's and an arrow's ends each mirrored, a box's middle and
  * its tail - a picture's tilt the other way.
  */
-export function turnedOverRest(st: EditorState, axis: Axis, about: Pt): Pick<MarkPlaces, "pictures" | "texts" | "pdfs" | "slides" | "shapes" | "inks" | "molecules3d"> {
+export function turnedOverRest(st: EditorState, axis: Axis, about: Pt): Pick<MarkPlaces, "pictures" | "texts" | "pdfs" | "slides" | "shapes" | "inks" | "molecules3d" | "cycles"> {
   const m = mirroredAbout(about, axis);
-  const out: Pick<MarkPlaces, "pictures" | "texts" | "pdfs" | "slides" | "shapes" | "inks" | "molecules3d"> = {};
+  const out: Pick<MarkPlaces, "pictures" | "texts" | "pdfs" | "slides" | "shapes" | "inks" | "molecules3d" | "cycles"> = {};
   const pictures = st.pictures.filter((p) => st.selPictures.has(p.id));
   if (pictures.length) out.pictures = pictures.map((p) => ({ id: p.id, ...m(p), turn: -(p.turn ?? 0) }));
   const sheets = sheetsOf(st);
@@ -111,5 +113,8 @@ export function turnedOverRest(st: EditorState, axis: Axis, about: Pt): Pick<Mar
   if (inks.length) out.inks = inks;
   const molecules = st.molecules3d.filter((x) => st.sel3d.has(x.id));
   if (molecules.length) out.molecules3d = molecules.map((x) => ({ id: x.id, at: { ...x.at, ...m(x.at) } }));
+  // (catalytic cycles: their middles mirrored, going the other way, their arrows in and out mirrored)
+  const cycles = st.cycles.filter((c) => st.selCycles.has(c.id));
+  if (cycles.length) out.cycles = cycles.map((c) => ({ id: c.id, ccw: undefined, ...cycleMirrored(c, about, axis) }));
   return out;
 }

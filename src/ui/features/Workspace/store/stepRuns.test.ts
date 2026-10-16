@@ -955,6 +955,23 @@ describe("Render as a step", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
   });
 
+  it("says in small words that it rendered on the processor where the plugin says it fell back to it - and nothing otherwise", async () => {
+    const { st } = editor();
+    const step = st().addStep("render", "blender", 10, 0);
+    st().connect({ set: st().sets[0].id }, step);
+    rendering();
+    worker.collect.mockReset();
+    worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }], note: "Rendered on the processor" }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    madeFiles.set(`/jobs/${idOf(1)}/picture.png`, png(240, 120, 5));
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 13_000 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:12 \u00b7 1 picture \u00b7 Rendered on the processor" });
+  });
+
   it("makes the pictures of the jobs done where another went without finishing - that one said failed", async () => {
     const { st } = waters(2);
     const step = st().addStep("render", "blender", 10, 0);

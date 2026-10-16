@@ -2,7 +2,8 @@
  * Fails when the Tauri Rust crates and their npm counterparts drift apart on
  * major.minor. `tauri build` refuses to run in that case (`tauri dev` only
  * warns), so without this check a release build can be broken while every CI
- * job still passes.
+ * job still passes. It also fails when the Windows installer's template was
+ * made from another tauri-cli's default than the one installed (below).
  */
 import { readFileSync } from "node:fs";
 
@@ -68,6 +69,27 @@ if (problems.length) {
   for (const p of problems) console.error("  " + p);
   console.error(
     "\nFix in src-tauri/ with: cargo update -p <crate> --precise <version>",
+  );
+  process.exit(1);
+}
+
+/**
+ * The Windows installer's template is Tauri's default as one tauri-cli
+ * carried it, with Meno's changes, and says which. Another CLI may carry a
+ * changed default: compared with the one the template was made from, its
+ * changes are carried over, and the version in the template moved on.
+ */
+const template = readFileSync(
+  new URL("../src-tauri/windows/installer.nsi", import.meta.url),
+  "utf8",
+);
+const madeFrom = /tauri-cli (\d+\.\d+\.\d+)/.exec(template)?.[1];
+const cli = installedNpmVersion("@tauri-apps/cli");
+if (!madeFrom || !cli || madeFrom !== cli) {
+  console.error(
+    `src-tauri/windows/installer.nsi was made from tauri-cli ${madeFrom ?? "?"}'s default NSIS template, ` +
+      `and @tauri-apps/cli is ${cli ?? "not installed"}.\n` +
+      "Compare the two versions' default templates and carry the changes over (docs/RELEASING.md).",
   );
   process.exit(1);
 }

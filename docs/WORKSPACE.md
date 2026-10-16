@@ -253,6 +253,23 @@ Taken on 2026-10-03:
     Every turn by the handle is one undo step, Shift's and one molecule's
     alone too (agreed 2026-10-04), and the undo puts the turns back; a
     drag on a molecule itself turns only the view.
+  - **Turn once** (the maintainer, 2026-10-16: the one motion Meno's
+    own canvas makes of itself; every other is a renderer's - docs/RENDER.md).
+    In a molecule's right-click menu, beside *Reset orientation*: it turns
+    once round about the screen's up, through its centre - the near side
+    going right - over 4 s along the quintic smootherstep
+    (6t^5 - 15t^4 + 10t^3), so that it starts and stops with neither speed
+    nor acceleration; and it comes to rest exactly as it was turned
+    before. What goes with the molecule - its labels, its surfaces - turns
+    with it. Several selected, chosen on one of them, turn together, each
+    about its own centre. It is the view's, as a drag's turn is: no undo
+    step, and nothing to undo, since it ends where it began. No setting:
+    its length and its way round are fixed. Any press, Escape, or a turn
+    given one of them meanwhile - a drag, *Reset orientation* - stops it
+    gently: it slows to rest over 0.4 s from the speed it had, its speed
+    falling along 1 - smoothstep, so nothing jumps, and is the chemist's
+    from there (`utils/turnOnce`). In a talk, a right-press on a molecule
+    turns it once (docs/PRESENTING.md).
 - **What a 3D molecule looks like** starts from the 3D viewer's look:
   - atom size and colour, material and light, and the turn's inertia,
     near enough;

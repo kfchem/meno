@@ -1,5 +1,6 @@
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
@@ -123,6 +124,7 @@ import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
 import { recordsOf } from "./utils/stacks";
+import { startTurnOnce } from "./utils/turnOnce";
 import { useOfficeLink } from "./hooks/useOfficeLink";
 import { useDropZone } from "../../../lib/drop";
 import type { DocumentStore } from "../../../lib/doc";
@@ -166,6 +168,9 @@ import { PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
+import Cycles2D from "./components/Cycles2D";
+import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
+import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
 import { useTextMenu } from "../TextEditor/textMenu";
@@ -1000,6 +1005,11 @@ function WorkspaceContent({
         onMeasure: () => store.getState().measureChosen3d(),
         ...(chosenSettable ? { onSetChosen: () => store.getState().setChosen3d() } : {}),
         onResetTurn: () => store.getState().resetTurn3d(menuMolecule.id),
+        // (with the others selected with it, where it is among them: each about its own centre)
+        onTurnOnce: () => {
+          const { sel3d } = store.getState();
+          startTurnOnce(store, sel3d.has(menuMolecule.id) ? [...sel3d] : [menuMolecule.id]);
+        },
         // (one of a stack: laid out as a grid, or stacked again - utils/stacks)
         ...(menuMolecule.stack && molecules3d.filter((m) => m.stack?.id === menuMolecule.stack!.id).length > 1
           ? {
@@ -1228,6 +1238,18 @@ function WorkspaceContent({
     })();
     if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk) && !(selInks.has(hoveredInk) && inkWithMore)) {
       const target: MenuTarget = { kind: "ink", id: hoveredInk, selection: "none", ...place };
+      if (r?.down) r.pending = target;
+      else if (!r?.moved) setMenu(target);
+      return;
+    }
+    // likewise a catalytic cycle, on its line, unless it is selected with more (lib/chem/cycle)
+    const { hoveredCycle, cycles, selCycles } = store.getState();
+    const cycleWithMore = (() => {
+      const s = store.getState();
+      return selectedOf({ ...s, selCycles: new Set() }).any || selCycles.size > 1;
+    })();
+    if (!kind && hoveredCycle != null && cycles.some((x) => x.id === hoveredCycle) && !(selCycles.has(hoveredCycle) && cycleWithMore)) {
+      const target: MenuTarget = { kind: "cycle", id: hoveredCycle, selection: "none", ...place };
       if (r?.down) r.pending = target;
       else if (!r?.moved) setMenu(target);
       return;
@@ -1656,6 +1678,14 @@ function WorkspaceContent({
                 st.addBondedPair({ x: at.x - dx, y: at.y - dy }, { x: at.x + dx, y: at.y + dy });
               } else if (what === "text") st.setCaptionEdit({ id: null, at });
               else if (what === "arrow") st.addArrow(at.x, at.y);
+              // (a catalytic cycle, a circle with nothing on it yet, about where Quick Add was opened, selected: lib/chem/cycle)
+              else if (what === "cycle") {
+                const id = st.addCycle({ x: at.x, y: at.y, r: CYCLE_RADIUS * NOMINAL_BOND_LENGTH });
+                if (id != null) {
+                  st.clearSel();
+                  st.selectCycles([id]);
+                }
+              }
               // (from the first atom or bond pressed, then on as from a menu)
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
@@ -1740,6 +1770,7 @@ function WorkspaceContent({
             else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
             else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
             else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
+            else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
             else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
             else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
@@ -1890,6 +1921,40 @@ function WorkspaceContent({
               onSelectOn: () => st.selectOnSlide(s.id),
             };
           })()}
+          cycle={(() => {
+            const st = store.getState();
+            const cy = menu.kind === "cycle" ? st.cycles.find((x) => x.id === menu.id) : undefined;
+            if (!cy) return undefined;
+            // (where on its line it was right-clicked: an arrow put there; one there already, near it, can be taken away)
+            const at = cyclePointed.id === cy.id ? cyclePointed.angle : 0;
+            const branches = cy.branches ?? [];
+            const near = branches.findIndex((b) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < (12 * Math.PI) / 180);
+            const add = (way: "in" | "out") => {
+              st.updateCycle(cy.id, { branches: [...branches, { at, way }] });
+              // (its words written at once where its far end is: Escape, or nothing written, leaves it without)
+              const label = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH).label;
+              st.setCaptionEdit({ id: null, at: label });
+            };
+            return {
+              onIn: () => add("in"),
+              onOut: () => add("out"),
+              ...(near >= 0 ? { onRemoveArrow: () => st.updateCycle(cy.id, { branches: branches.filter((_, i) => i !== near) }) } : {}),
+              ccw: !!cy.ccw,
+              onTurn: () => turnCycle(store, cy.id),
+              gap: cy.gap ?? CYCLE_MARGIN,
+              setGap: (gap: number) => st.updateCycle(cy.id, { gap }),
+              // (ends set by hand: those of the arrow right-clicked, and all)
+              ...(() => {
+                const set = Object.keys(cy.ends ?? {});
+                if (!set.length) return {};
+                const here = endsAt(cy, cycleThings(st.model, st.captions, styleOf(st.docStyle), [cy]), at).filter((k) => cy.ends?.[k] != null);
+                return {
+                  ...(here.length ? { onResetEnd: () => st.updateCycle(cy.id, { ends: Object.fromEntries(here.map((k) => [k, null])) }) } : {}),
+                  onResetAll: () => st.updateCycle(cy.id, { ends: Object.fromEntries(set.map((k) => [k, null])) }),
+                };
+              })(),
+            };
+          })()}
           shape={(() => {
             const st = store.getState();
             const sh = menu.kind === "shape" ? st.shapes.find((x) => x.id === menu.id) : undefined;
@@ -2007,6 +2072,14 @@ function WorkspaceContent({
             if (menu.kind === "atom" && menu.id != null) radicalAtom(menu.id);
           }}
           radical={!!model.atoms.find((a) => a.id === menu.id)?.radical}
+          onChain={(() => {
+            const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
+            if (!a) return undefined;
+            const sum = model.bonds.reduce((n, b) => (b.a === a.id || b.b === a.id ? n + valenceOrder(b, a.el) : n), 0);
+            return canTakeBond(a.el, sum, a.charge ?? 0, a.radical)
+              ? () => store.getState().startExtend(a.id, "chain", true)
+              : undefined;
+          })()}
           onExpand={
             menu.kind === "atom" && menu.id != null && expandable(model.atoms.find((a) => a.id === menu.id))
               ? () => store.getState().expandAbbreviation(menu.id!)
@@ -2075,8 +2148,8 @@ function WorkspaceContent({
             const st = store.getState();
             const target: ColourTarget | null =
               menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks] }
+                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size || st.selCycles.size
+                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks], cycles: [...st.selCycles] }
                   : null
                 : menu.kind === "caption" && menu.id != null
                   ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
@@ -2092,6 +2165,8 @@ function WorkspaceContent({
                     ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
                     : menu.kind === "arrow" && menu.id != null
                     ? { atoms: [], bonds: [], rings: [], arrows: [menu.id] }
+                    : menu.kind === "cycle" && menu.id != null
+                    ? { atoms: [], bonds: [], rings: [], cycles: [menu.id] }
                     : menu.kind === "ring" && menu.ring
                       ? (() => {
                           const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
@@ -2209,6 +2284,7 @@ function WorkspaceContent({
           <HoverOverlay2D />
           {/* A reaction scheme's arrows and "+" signs */}
           <Arrows2D />
+          <Cycles2D />
           <Pluses2D />
           {/* Words on the page: a reaction's reagents and conditions, or anything else */}
           <Suspense fallback={null}>

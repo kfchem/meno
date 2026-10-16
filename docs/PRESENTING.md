@@ -98,7 +98,11 @@ page; a talk is a way through it.
   corner.
 - **In a slide**: a drag on a molecule in 3D turns it and lets it coast, as
   on the page, and two clicks show it in its other look - for the talk
-  alone, the workspace's look as it was; a film plays from
+  alone, the workspace's look as it was; a right-press on it - the talk
+  shows no menu - turns it once round and back as it was, as *Turn once*
+  does on the page (docs/WORKSPACE.md), a press stopping it gently, and
+  where it was turned once when the talk began it comes back to as the
+  talk ends; a film plays from
   its start as its slide comes, and a click on it pauses it or plays it on.
   A click elsewhere goes on. A drag elsewhere, the wheel and a pinch move
   and zoom the view freely - for a question; the veil goes meanwhile, and

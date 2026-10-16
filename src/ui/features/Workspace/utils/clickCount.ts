@@ -78,3 +78,13 @@ export type BondPress = { id: number; t: number };
 export function pressOnBond(last: (BondPress & { count: number }) | null, press: BondPress, within: number): 1 | 2 {
   return !!last && last.id === press.id && press.t - last.t <= within && last.count === 1 ? 2 : 1;
 }
+
+/**
+ * How many presses on one atom a press is, in a double-click's time: 1, or 2
+ * where it follows the first. Never more: a third click is a click like the
+ * first, and starts nothing (a chain is Quick Add's, or the atom menu's
+ * *Chain from here*: the maintainer, 2026-10-16).
+ */
+export function pressNumber(last: { id: number | null; t: number; count: number }, id: number, now: number, windowMs: number): 1 | 2 {
+  return last.id === id && now - last.t <= windowMs && last.count === 1 ? 2 : 1;
+}

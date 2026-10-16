@@ -19,6 +19,7 @@ import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
+import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
@@ -95,6 +96,9 @@ export type WorkspaceDocument = {
   /** Writing by hand on the page, each piece of it in the order written (docs/PRESENTING.md, *Handwriting*). */
   inks?: Ink[];
   nextInkId?: number;
+  /** Catalytic cycles on the page (lib/chem/cycle; docs/EDITOR-2D.md, *Catalytic cycles*). */
+  cycles?: Cycle[];
+  nextCycleId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -111,6 +115,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.slides?.length &&
     !doc.shapes?.length &&
     !doc.inks?.length &&
+    !doc.cycles?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -925,6 +930,8 @@ export type ImportedScheme = {
   pluses?: Omit<Plus, "id">[];
   /** Shapes, from the back. */
   shapes?: Omit<Shape, "id">[];
+  /** Catalytic cycles. */
+  cycles?: Omit<Cycle, "id">[];
   /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), or in a shape it brings (`shapeAt`), where it is. */
   captions?: (Omit<Caption, "id" | "arrow" | "shape"> & { arrowAt?: number; shapeAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
@@ -937,6 +944,7 @@ export function schemeOf(part: Drawn): ImportedScheme {
     arrows: (part.arrows ?? []).map(({ id: _id, ...a }) => a),
     pluses: (part.pluses ?? []).map(({ id: _id, ...p }) => p),
     shapes: (part.shapes ?? []).map(({ id: _id, ...s }) => s),
+    cycles: (part.cycles ?? []).map(({ id: _id, ...c }) => c),
     captions: (part.captions ?? []).map(({ id: _id, arrow, shape, ...c }) => {
       const at = arrow == null ? -1 : (part.arrows ?? []).findIndex((a) => a.id === arrow);
       const inside = shape == null ? -1 : (part.shapes ?? []).findIndex((x) => x.id === shape);
@@ -960,6 +968,7 @@ export function withImportedScheme(
   // (and the words in a shape it brings, in that shape)
   const firstShape = next.nextShapeId ?? 1;
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
+  for (const cy of scheme?.cycles ?? []) next = addCycle(next, cy);
   for (const { arrowAt, shapeAt, ...c } of scheme?.captions ?? [])
     next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}), ...(shapeAt != null ? { shape: firstShape + shapeAt } : {}) });
   // (the frame each shows is the canvas's to keep, not the document's; a
@@ -1551,6 +1560,8 @@ export type MarkPlaces = {
   slides?: { id: number; x: number; y: number }[];
   /** Writing by hand moved or carried round with the rest: each piece's strokes where they now are. */
   inks?: { id: number; strokes: InkStroke[] }[];
+  /** Catalytic cycles moved, sized, carried round or turned over with the rest: where each one's middle now is, and its radius, the way it goes and its arrows in and out. */
+  cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[]; ends?: Record<string, number> }[];
   /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
   shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
@@ -1573,6 +1584,19 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
     const at = new Map(places.inks.map((p) => [p.id, p.strokes]));
     const placed = { ...doc, inks: (doc.inks ?? []).map((k) => (at.has(k.id) ? { ...k, strokes: at.get(k.id)! } : k)) };
     return placeMarks(placed, { ...places, inks: [] });
+  }
+  if (places?.cycles?.length) {
+    const at = new Map(places.cycles.map((p) => [p.id, p]));
+    const put = (c: Cycle): Cycle => {
+      const p = at.get(c.id)!;
+      // (the way it goes and its arrows, where they are said: a turn-over turns them)
+      const { ccw: _w, ends: _e, ...rest } = c;
+      const ccw = "branches" in p || "ccw" in p ? p.ccw : c.ccw;
+      const ends = "ends" in p ? p.ends : c.ends;
+      return { ...rest, x: p.x, y: p.y, r: p.r ?? c.r, ...(ccw ? { ccw } : {}), ...("branches" in p ? { branches: p.branches } : {}), ...(ends ? { ends } : {}) };
+    };
+    const placed = { ...doc, cycles: (doc.cycles ?? []).map((c) => (at.has(c.id) ? put(c) : c)) };
+    return placeMarks(placed, { ...places, cycles: [] });
   }
   if (places?.shapes?.length) {
     const at = new Map(places.shapes.map((p) => [p.id, p]));
@@ -2110,6 +2134,50 @@ export function removeInks(doc: WorkspaceDocument, ids: Iterable<number>): Works
   const gone = new Set(ids);
   if (!doc.inks?.some((k) => gone.has(k.id))) return doc;
   return { ...doc, inks: doc.inks.filter((k) => !gone.has(k.id)) };
+}
+
+// --- catalytic cycles --------------------------------------------------------
+
+/** `doc` with a catalytic cycle put on the page; it is numbered `nextCycleId`. One with no radius is not. */
+export function addCycle(doc: WorkspaceDocument, cycle: Omit<Cycle, "id">): WorkspaceDocument {
+  if (!finite(cycle.x, cycle.y, cycle.r) || !(cycle.r > 0)) return doc;
+  const id = doc.nextCycleId ?? 1;
+  return { ...doc, cycles: [...(doc.cycles ?? []), { ...cycle, id }], nextCycleId: id + 1 };
+}
+
+/** A change to a cycle: which way it goes, its arrows coming in and going out, its colour (null: none of its own), its arrows' gap (null: Meno's) and the gaps set by hand at their ends (`endKey`; a null, that end's taken away). */
+export type CyclePatch = { ccw?: boolean; branches?: CycleBranch[]; color?: string | null; gap?: number | null; ends?: Record<string, number | null> };
+
+/** `doc` with the cycle `id` changed as `patch` says. */
+export function updateCycle(doc: WorkspaceDocument, id: number, patch: CyclePatch): WorkspaceDocument {
+  const at = (doc.cycles ?? []).findIndex((c) => c.id === id);
+  if (at < 0) return doc;
+  const { ccw: _w, branches: _b, color: _c, gap: _g, ends: _e, ...rest } = doc.cycles![at];
+  const was = doc.cycles![at];
+  const gap = patch.gap === undefined ? was.gap : patch.gap ?? undefined;
+  const ends = { ...(was.ends ?? {}) };
+  for (const [k, v] of Object.entries(patch.ends ?? {})) {
+    if (v == null || !Number.isFinite(v)) delete ends[k];
+    else ends[k] = Math.min(GAP_MOST, Math.max(0, v));
+  }
+  const ccw = patch.ccw === undefined ? was.ccw : patch.ccw || undefined;
+  const branches = patch.branches === undefined ? was.branches : patch.branches.length ? patch.branches : undefined;
+  const color = patch.color === undefined ? was.color : patch.color ?? undefined;
+  const next: Cycle = {
+    ...rest,
+    ...(ccw ? { ccw: true as const } : {}),
+    ...(branches ? { branches } : {}),
+    ...(color ? { color } : {}),
+    ...(gap != null && Number.isFinite(gap) ? { gap: Math.min(GAP_MOST, Math.max(0, gap)) } : {}),
+    ...(Object.keys(ends).length ? { ends } : {}),
+  };
+  return { ...doc, cycles: doc.cycles!.map((c, i) => (i === at ? next : c)) };
+}
+
+export function removeCycles(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  if (!doc.cycles?.some((c) => gone.has(c.id))) return doc;
+  return { ...doc, cycles: doc.cycles.filter((c) => !gone.has(c.id)) };
 }
 
 export function removeShapes(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {

@@ -22,7 +22,7 @@ const ORIGIN: Pt = { x: 0, y: 0 };
 
 /** The page's parts a change of style converts: a whole document's, or a copy's - those that are there. */
 export type Restylable = Partial<
-  Pick<WorkspaceDocument, "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "sets" | "steps">
+  Pick<WorkspaceDocument, "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "sets" | "steps">
 >;
 
 /** How long a style prints a bond, in pt. */
@@ -72,6 +72,7 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
     }));
   if (parts.pictures) out.pictures = parts.pictures.map((p) => ({ ...p, x: x(p.x), y: y(p.y), w: p.w * k, h: p.h * k }));
   if (parts.slides) out.slides = parts.slides.map((s) => ({ ...s, x: x(s.x), y: y(s.y), w: s.w * k, h: s.h * k }));
+  if (parts.cycles) out.cycles = parts.cycles.map((c) => ({ ...c, x: x(c.x), y: y(c.y), r: c.r * k }));
   if (parts.shapes)
     out.shapes = parts.shapes.map((s) => ({ ...s, x0: x(s.x0), y0: y(s.y0), x1: x(s.x1), y1: y(s.y1), ...(s.tail ? { tail: { x: x(s.tail.x), y: y(s.tail.y) } } : {}) }));
   if (parts.inks)

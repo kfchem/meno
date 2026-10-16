@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
@@ -12,7 +12,7 @@ import { swallowPress, togglesOn } from "./utils/press";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
@@ -93,6 +93,19 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
       <>
         <path d="M3.5 15 C3.5 6.5, 13 3.5, 15.6 11.4" />
         <path d="M12.6 10.2 L16.3 13.6 L17.6 8.8 Z" fill="currentColor" />
+      </>
+    ),
+  },
+  {
+    id: "cycle",
+    name: "Catalytic cycle",
+    // (a circle of curved arrows, as a cycle is drawn)
+    icon: (
+      <>
+        <path d="M10 3.5 A6.5 6.5 0 0 1 16.2 12" />
+        <path d="M14.4 11.2 L16.6 14.1 L17.9 10.7 Z" fill="currentColor" />
+        <path d="M14 15.6 A6.5 6.5 0 0 1 4.2 13.2" />
+        <path d="M3.8 9.4 A6.5 6.5 0 0 1 7 4.2" />
       </>
     ),
   },
@@ -236,6 +249,29 @@ export default function QuickAdd({
     }
   };
   const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
+  // (as it is laid out - not as it was reckoned: a row wider than its sum, at a display scale, reaches past the canvas - it is eased back within it)
+  const [back, setBack] = useState({ dx: 0, dy: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const parent = el?.offsetParent;
+    if (!el || !parent) return;
+    const fit = () => {
+      const a = el.getBoundingClientRect();
+      const b = parent.getBoundingClientRect();
+      const dx = a.right > b.right - 4 ? Math.min(0, b.right - 4 - a.right) : 0;
+      const dy = a.bottom > b.bottom - 4 ? Math.min(0, b.bottom - 4 - a.bottom) : 0;
+      const l = a.left + dx < b.left + 4 ? b.left + 4 - (a.left + dx) : 0;
+      const t = a.top + dy < b.top + 4 ? b.top + 4 - (a.top + dy) : 0;
+      setBack((was) => {
+        const next = { dx: was.dx + dx + l, dy: was.dy + dy + t };
+        return next.dx === was.dx && next.dy === was.dy ? was : next;
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <motion.div
       ref={ref}
@@ -245,7 +281,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: place.left, top: place.top, transformOrigin: place.origin }}
+      style={{ left: place.left + back.dx, top: place.top + back.dy, transformOrigin: place.origin, transition: "left 150ms ease-out, top 150ms ease-out" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">

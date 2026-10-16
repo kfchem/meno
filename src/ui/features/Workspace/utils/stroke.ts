@@ -6,7 +6,7 @@
  *   after a pause, goes exactly where the pointer is. It ends on an atom
  *   already there when it comes within reach of one - it closes a ring -
  *   and on the atom the pointer is on, however far away.
- * - A **chain** stroke - three clicks on an atom, or two on empty space -
+ * - A **chain** stroke - from an atom's menu or Quick Add (no click count starts one) -
  *   runs on a honeycomb laid out from where it starts (./chain): led along
  *   it, it lays a bond down a step at a time; led back, it takes them back;
  *   led round in a loop, it draws a ring as large as the loop.
