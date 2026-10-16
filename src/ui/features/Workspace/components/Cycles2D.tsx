@@ -33,7 +33,7 @@ const HANDLE_AT = -Math.PI / 4;
  * a moment there, it is taken hold of; selected, a drag moves it with all
  * that lies on it, and its handle sizes it, what lies on it kept on its line;
  * a handle at each end of its arrows sets how far that end stops short of
- * what it points at - a double-click gives it back the cycle's own.
+ * what it points at (its menu gives it back the cycle's own).
  */
 export default function Cycles2D() {
   const cycles = useEditor((s) => s.cycles);
@@ -203,21 +203,13 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
         return (["lo", "hi"] as const).map((side) => ({ key: endKey(thingKey(t), side), side, angle: m.angle, ink: t.ink!, at: m.angle + (side === "hi" ? m.hi : -m.lo) }));
       })
     : [];
-  const clicked = useRef<{ key: string; t: number } | null>(null);
-  /** An end's handle pressed: dragged, that end's gap where the pointer has taken it - back from what it points at, or nearer - as one step; pressed twice, the cycle's own gap again. */
+  /** An end's handle pressed: dragged, that end's gap where the pointer has taken it - back from what it points at, or nearer - as one step. */
   const onEnd = (e: { nativeEvent: PointerEvent; stopPropagation: () => void }, end: (typeof ends)[number]) => {
     const ev = e.nativeEvent;
     if (ev.button !== 0) return;
     e.stopPropagation();
     const st = store.getState();
     const at = performance.now();
-    if (clicked.current && clicked.current.key === end.key && at - clicked.current.t < DOUBLE_CLICK_MS) {
-      clicked.current = null;
-      st.updateCycle(c.id, { ends: { [end.key]: null } });
-      st.suppressDoubleClick(DOUBLE_CLICK_MS);
-      return;
-    }
-    clicked.current = { key: end.key, t: at };
     st.beginPanHold(ev.pointerId);
     const from = { x: ev.clientX, y: ev.clientY };
     const gesture = `cycle-end-${at}`;

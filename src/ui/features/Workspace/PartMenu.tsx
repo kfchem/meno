@@ -333,7 +333,7 @@ export default function PartMenu({
     onBack: () => void;
   };
   /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
-  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void };
+  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
   /** A rounded rectangle made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -629,6 +629,9 @@ export default function PartMenu({
           { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
           // (how far its arrows stop short of what is on it, ticked as it is)
           ...CYCLE_GAPS.map(([gap, name], i) => ({ name, keys: "", run: () => cycle.setGap(gap), checked: Math.abs(cycle.gap - gap) < 1e-6, ...(i === 0 ? { divider: true } : {}) })),
+          // (ends set by hand given back the cycle's gap: the arrow's right-clicked, or all)
+          ...(cycle.onResetEnd ? [{ name: "Reset this arrow's gap", keys: "", run: cycle.onResetEnd, divider: true }] : []),
+          ...(cycle.onResetAll ? [{ name: "Reset all arrow gaps", keys: "", run: cycle.onResetAll, ...(cycle.onResetEnd ? {} : { divider: true }) }] : []),
           del("Delete cycle"),
         ]
       : target.kind === "set"

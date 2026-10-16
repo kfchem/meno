@@ -33,6 +33,15 @@ describe("a catalytic cycle's gaps", () => {
     expect(state().cycles[0].gap).toBeUndefined();
   });
 
+  it("set by hand are all given back the cycle's own as one step", () => {
+    const { doc, state } = editor();
+    const id = state().addCycle({ x: 0, y: 0, r: 4 * B, ends: { "a1:lo": 1, "c2:hi": 2 } })!;
+    state().updateCycle(id, { ends: { "a1:lo": null, "c2:hi": null } });
+    expect(state().cycles[0].ends).toBeUndefined();
+    doc.undo();
+    expect(state().cycles[0].ends).toEqual({ "a1:lo": 1, "c2:hi": 2 });
+  });
+
   it("are kept when copied and pasted", () => {
     const { state } = editor();
     state().addCycle({ x: 0, y: 0, r: 4 * B, gap: 0.75 });

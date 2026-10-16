@@ -106,6 +106,33 @@ export function endsRenamed<C extends Pick<Cycle, "ends">>(c: C, atom: (id: numb
   return (ends.length ? { ...rest, ends: Object.fromEntries(ends) } : rest) as C;
 }
 
+/**
+ * The ends of a cycle's arrows at an angle round it (radians) - where its
+ * menu was asked for: on a stretch between two things, that arrow's two
+ * ends; in the break round one thing, the end on the side nearer it - each
+ * by its `endKey`. None, with nothing on it.
+ */
+export function endsAt(c: Cycle, things: readonly CycleThing[], angle: number): string[] {
+  const on = membersOn(c, things).sort((p, q) => p.angle - q.angle);
+  const round = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  for (let i = 0; i < on.length; i++) {
+    const m = on[i];
+    const key = (side: "lo" | "hi") => endKey(thingKey(things[m.index]), side);
+    // (in the break round it: the nearer side's end)
+    const off = Math.atan2(Math.sin(angle - m.angle), Math.cos(angle - m.angle));
+    if (off >= -m.lo && off <= m.hi) return [key(off >= 0 ? "hi" : "lo")];
+  }
+  for (let i = 0; i < on.length; i++) {
+    const m = on[i];
+    const n = on[(i + 1) % on.length];
+    // (the stretch from its anticlockwise side round to the next one's clockwise side)
+    const from = m.angle + m.hi;
+    const span = on.length === 1 ? 2 * Math.PI - m.lo - m.hi : round(n.angle - n.lo - from);
+    if (round(angle - from) <= span) return [endKey(thingKey(things[m.index]), "hi"), endKey(thingKey(things[n.index]), "lo")];
+  }
+  return [];
+}
+
 /** What is on a cycle, of `things`: each by its box's middle, the circle cut short of its ink - by the cycle's gap, or an end's set by hand. */
 export function membersOn(c: Cycle, things: readonly CycleThing[]): CycleMember[] {
   const ends = c.ends ?? {};

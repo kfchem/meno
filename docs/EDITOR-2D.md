@@ -228,7 +228,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
 | An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
-| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked) |
+| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked), reset this arrow's gap (on one set by hand), reset all arrow gaps (where any is) |
 | A measurement | Delete | set its distance, angle or torsion angle |
 | A set, a "+", a wire | Delete | save as procedure (a set) |
 
@@ -1020,8 +1020,12 @@ All hover-based, as above.
     quarters or a whole bond. Selected, each end of its arrows shows a
     handle: dragged back, that end stops further short; forward, nearer -
     kept for that end of that structure or those words however they are
-    moved, and with them when copied. A double-click on the handle gives it
-    back the cycle's own. Each change is one step, eased.
+    moved, and with them when copied. Its menu gives ends back the
+    cycle's own: *Reset this arrow's gap*, right-clicked on an arrow (or
+    on the break by an end) set by hand, and *Reset all arrow gaps* - a
+    double-click on a handle does nothing of the kind, so that a careful
+    setting is not lost by chance (the maintainer, 2026-10-16). Each change
+    is one step, eased.
     It is selected with all, copied or cut alone or with the rest, and
     carried round or turned over with what is selected: turned over, it
     goes the other way and its arrows in and out join it mirrored.

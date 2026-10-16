@@ -3,7 +3,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { branchPath, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import type { Model } from "../store/types";
-import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsRenamed, membersOn, thingKey } from "./cycles";
+import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey } from "./cycles";
 
 const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
@@ -197,5 +197,29 @@ describe("the circle round a structure on it", () => {
     const c: Cycle = { id: 1, x: 0, y: 0, r: 4, ends: { "a7:lo": 1, "c3:hi": 0.25, "a99:hi": 2 } };
     const renamed = endsRenamed(c, (id) => (id === 7 ? 107 : undefined), (id) => (id === 3 ? 13 : undefined));
     expect(renamed.ends).toEqual({ "a107:lo": 1, "c13:hi": 0.25 });
+  });
+});
+
+describe("the ends of a cycle's arrows where its menu was asked for", () => {
+  const B = NOMINAL_BOND_LENGTH;
+  const style = styleOf(DEFAULT_STYLE_CHOICE);
+  const c: Cycle = { id: 1, x: 0, y: 0, r: 4.5 * B };
+  // (words at the top and at the bottom of the circle)
+  const words = (id: number, x: number, y: number) => ({ id, x, y, text: "Pd" }) as never;
+  const things = cycleThings({ atoms: [], bonds: [] }, [words(1, 0, 4.5 * B), words(2, 0, -4.5 * B)], style, [c]);
+
+  it("are the two ends of the arrow there, on a stretch", () => {
+    // (on the right: from the bottom words' anticlockwise side up to the top words' clockwise side)
+    expect(endsAt(c, things, 0)).toEqual(["c2:hi", "c1:lo"]);
+    expect(endsAt(c, things, Math.PI)).toEqual(["c1:hi", "c2:lo"]);
+  });
+
+  it("is the nearer end, in the break round one", () => {
+    expect(endsAt(c, things, Math.PI / 2 - 0.01)).toEqual(["c1:lo"]);
+    expect(endsAt(c, things, Math.PI / 2 + 0.01)).toEqual(["c1:hi"]);
+  });
+
+  it("are none, with nothing on it", () => {
+    expect(endsAt(c, [], 0)).toEqual([]);
   });
 });

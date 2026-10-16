@@ -167,7 +167,7 @@ import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
-import { cyclePointed, turnCycle } from "./utils/cycles";
+import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
@@ -1936,6 +1936,16 @@ function WorkspaceContent({
               onTurn: () => turnCycle(store, cy.id),
               gap: cy.gap ?? CYCLE_MARGIN,
               setGap: (gap: number) => st.updateCycle(cy.id, { gap }),
+              // (ends set by hand: those of the arrow right-clicked, and all)
+              ...(() => {
+                const set = Object.keys(cy.ends ?? {});
+                if (!set.length) return {};
+                const here = endsAt(cy, cycleThings(st.model, st.captions, styleOf(st.docStyle), [cy]), at).filter((k) => cy.ends?.[k] != null);
+                return {
+                  ...(here.length ? { onResetEnd: () => st.updateCycle(cy.id, { ends: Object.fromEntries(here.map((k) => [k, null])) }) } : {}),
+                  onResetAll: () => st.updateCycle(cy.id, { ends: Object.fromEntries(set.map((k) => [k, null])) }),
+                };
+              })(),
             };
           })()}
           shape={(() => {
