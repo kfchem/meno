@@ -484,6 +484,17 @@ Taken on 2026-10-13:
   their own lengths, and no energies are given: the chip says so, and the
   conformers are not ranked or weighted. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
+- **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
+  asked about as the CTfile's multi-centre bond - a bond from the metal to a
+  star at the ring's centre, ENDPTS its atoms, ATTACH=ALL - however it is
+  drawn: a haptic bond; a label on the metal that names a ligand bound so
+  in a complex (Cp, allyl - and CO, NH3 and the rest of the ligands named
+  only in a complex, as those ligands); or a ring with a bond from the metal
+  to each of its atoms (ferrocene by hand). The plugin holds each of its
+  atoms at the covalent length plus 0.15 Å from the metal, counts a ring of
+  five or a chain of three drawn neutral as the cyclopentadienide or allyl
+  anion it is bound as (not a CH2, nor radical carbons), and gives no
+  energies; the star is no atom of the molecule in 3D.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain

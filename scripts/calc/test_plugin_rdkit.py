@@ -400,3 +400,67 @@ class Metals(unittest.TestCase):
             for sym, r in re.findall(r'symbol: "(\w+)",[^\n]*?radii: \[([^\]]*)\]', text)
         }
         self.assertEqual(self.worker.RADII, app)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class EtaBound(unittest.TestCase):
+    """A ring bound to a metal through all its atoms, written as the CTfile's multi-centre bond (a bond to a star
+    at its centre, ENDPTS its atoms, ATTACH=ALL): held over its metal, its star at its centre, its cyclopentadienide
+    counted as one - and no energies, the holds being no force field's."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    @staticmethod
+    def ferrocene(radical=False):
+        """Ferrocene as Meno writes it from a drawing: Fe 1, two Kekule rings of five carbons drawn neutral
+        (2-6, 7-11), a star at each ring's centre (12, 13) - each ring's carbon with no double bond in it a CH2,
+        or, from a Cp label, a CH with an unpaired electron."""
+        import math
+        rows, bonds = ["M  V30 1 Fe 0 0 0 0"], []
+        for k, (base, y) in enumerate(((2, 1.5), (7, -1.5))):
+            for i in range(5):
+                rad = " RAD=2" if radical and i == 4 else ""
+                rows.append(f"M  V30 {base + i} C {math.cos(2 * math.pi * i / 5):.4f} {y + 0.3 * math.sin(2 * math.pi * i / 5):.4f} 0 0{rad}")
+            for i in range(5):
+                bonds.append((2 if i in (0, 2) else 1, base + i, base + (i + 1) % 5))
+        rows += ["M  V30 12 * 0 1.5 0 0", "M  V30 13 * 0 -1.5 0 0"]
+        lines = [f"M  V30 {n + 1} {t} {a} {b}" for n, (t, a, b) in enumerate(bonds)]
+        lines += ["M  V30 11 9 1 12 ENDPTS=(5 2 3 4 5 6) ATTACH=ALL", "M  V30 12 9 1 13 ENDPTS=(5 7 8 9 10 11) ATTACH=ALL"]
+        return "\n".join(["", "  Meno", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", "M  V30 COUNTS 13 12 0 0 0",
+                          "M  V30 BEGIN ATOM", *rows, "M  V30 END ATOM", "M  V30 BEGIN BOND", *lines, "M  V30 END BOND",
+                          "M  V30 END CTAB", "M  END"])
+
+    def made(self, block):
+        return self.worker.op_conformers({"molblock": block})["isomers"][0]
+
+    def test_holds_each_ring_over_its_metal_with_its_star_at_its_centre(self):
+        import numpy as np
+        for radical in (False, True):
+            entry = self.made(self.ferrocene(radical))
+            self.assertEqual(entry["stars"], [11, 12])
+            for frame in entry["frames"]:
+                P = np.array(frame).reshape(-1, 3)
+                for star, ring in ((11, range(1, 6)), (12, range(6, 11))):
+                    centre = P[list(ring)].mean(axis=0)
+                    self.assertLess(float(np.linalg.norm(P[star] - centre)), 1e-3)
+                    for c in ring:
+                        self.assertAlmostEqual(float(np.linalg.norm(P[c] - P[0])), 2.06, delta=0.06)
+
+    def test_counts_each_ring_as_a_cyclopentadienide_not_a_ch2_nor_a_radical(self):
+        for radical in (False, True):
+            entry = self.made(self.ferrocene(radical))
+            els = [a["el"] for a in entry["atoms"]]
+            self.assertEqual(els.count("H"), 10, radical)
+            self.assertEqual(entry["atoms"][0]["charge"], 2)
+            self.assertEqual(sum(a["charge"] for a in entry["atoms"][1:11]), -2)
+
+    def test_gives_no_energies_and_says_why(self):
+        entry = self.made(self.ferrocene())
+        self.assertNotIn("energies", entry)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertEqual(rows["Optimised"], "UFF, at most 2000 steps")
+        self.assertIn("held, not modelled", rows["Energies"])
