@@ -5,7 +5,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
-import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
+import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
 import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
@@ -482,6 +482,63 @@ describe("running", () => {
       [0, 3],
       [0, 4],
     ]);
+  });
+});
+
+describe("a step's key, on structures drawn", () => {
+  type Drawn = { id: number; el: string; x: number; y: number; r: number };
+  const atom = (id: number, el: string, x: number, y: number): Drawn => ({ id, el, x, y, r: 0.9 });
+  /** (Z)-but-2-ene, its methyls above the double bond; and CHFClBr, a wedge from C to F: both drawn in one set, wired into a conformer search. */
+  function drawn(atoms: Drawn[] = [
+    atom(1, "C", -0.5, 0.87),
+    atom(2, "C", 0, 0),
+    atom(3, "C", 1, 0),
+    atom(4, "C", 1.5, 0.87),
+    atom(5, "C", 5, 0),
+    atom(6, "F", 5, 1),
+    atom(7, "Cl", 5.87, -0.5),
+    atom(8, "Br", 4.13, -0.5),
+  ]): WorkspaceDocument {
+    const bonds = [
+      { id: 1, a: 1, b: 2, order: 1 },
+      { id: 2, a: 2, b: 3, order: 2 },
+      { id: 3, a: 3, b: 4, order: 1 },
+      { id: 4, a: 5, b: 6, order: 1, stereo: "up" },
+      { id: 5, a: 5, b: 7, order: 1 },
+      { id: 6, a: 5, b: 8, order: 1 },
+    ];
+    let doc: WorkspaceDocument = { ...emptyWorkspaceDocument(), model: { atoms: atoms as never, bonds: bonds as never }, nextId: 9 };
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 8, y1: 3 });
+    doc = addStep(doc, "conformers", 12, 0);
+    return connect(doc, { set: 1 }, 2);
+  }
+  const keyOf = (doc: WorkspaceDocument) => inputKey(doc, doc.steps![0], "rdkit");
+  const moved = (doc: WorkspaceDocument, f: (a: Drawn) => Drawn) => ({ ...doc, model: { ...doc.model, atoms: (doc.model.atoms as unknown as Drawn[]).map(f) as never } });
+
+  it("changes with an atom's element", () => {
+    const doc = drawn();
+    expect(inputOf(doc, 2)!.structures).toHaveLength(2);
+    expect(keyOf(moved(doc, (a) => (a.id === 1 ? { ...a, el: "N" } : a)))).not.toBe(keyOf(doc));
+  });
+
+  it("changes with an atom moved across a double bond, or a wedged centre's neighbours mirrored - what the drawing says changed", () => {
+    const doc = drawn();
+    // (a methyl moved below the double bond: E, not Z)
+    expect(keyOf(moved(doc, (a) => (a.id === 4 ? { ...a, y: -0.87 } : a)))).not.toBe(keyOf(doc));
+    // (Cl and Br swapped round the wedged carbon: its other enantiomer)
+    expect(keyOf(moved(doc, (a) => (a.id === 7 ? { ...a, x: 4.13 } : a.id === 8 ? { ...a, x: 5.87 } : a)))).not.toBe(keyOf(doc));
+  });
+
+  it("stays the same where the drawing says the same: moved whole, turned, an atom nudged - or the page looked at anew", () => {
+    const doc = drawn();
+    const key = keyOf(doc);
+    expect(keyOf(moved(doc, (a) => ({ ...a, x: a.x + 0.4, y: a.y - 0.3 })))).toBe(key);
+    // (each turned a quarter round its own middle)
+    const turned = (a: Drawn, cx: number, cy: number) => ({ ...a, x: cx - (a.y - cy), y: cy + (a.x - cx) });
+    expect(keyOf(moved(doc, (a) => (a.id <= 4 ? turned(a, 0.5, 0.435) : turned(a, 5, 0))))).toBe(key);
+    expect(keyOf(moved(doc, (a) => (a.id === 4 ? { ...a, x: a.x + 0.2, y: a.y - 0.3 } : a)))).toBe(key);
+    // (asked again, of the same page: the same)
+    expect(keyOf({ ...doc })).toBe(key);
   });
 });
 
