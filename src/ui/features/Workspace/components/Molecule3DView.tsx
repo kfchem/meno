@@ -274,6 +274,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const bentSticks = useRef<THREE.InstancedMesh>(null);
   const bentLines3d = useRef<THREE.InstancedMesh>(null);
   const bentHull = useRef<THREE.InstancedMesh>(null);
+  // how far each look's multiple bonds have gone over to one stick (0, as lines; 1, one stick)
+  const oneLevel = useRef({ primary: style.primary.multipleBonds === "one" ? 1 : 0, secondary: style.secondary.multipleBonds === "one" ? 1 : 0 });
   const chosenHull = useRef<THREE.InstancedMesh>(null!);
   const linkedHull = useRef<THREE.Mesh>(null!);
   const markedHull = useRef<THREE.InstancedMesh>(null!);
@@ -720,6 +722,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       reshaped = moving = true;
     }
     if (refinish) finish(fill.current);
+    // (each look's multiple bonds going over to one stick, or back to lines, as its setting changes: not at a jump)
+    for (const l of ["primary", "secondary"] as const) {
+      const to = style[l].multipleBonds === "one" ? 1 : 0;
+      const at = oneLevel.current[l];
+      if (at === to) continue;
+      const next = follow(at, to, step, LOOK_TAU);
+      oneLevel.current[l] = Math.abs(next - to) < 0.002 ? to : next;
+      reshaped = moving = true;
+    }
     // (as high as it reaches - or where a turn of several put it)
     const height = m.at.z ?? solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * fill.current;
     // where it stands: put back by an undo, it goes there rather than jumps
@@ -1011,12 +1022,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     }
     const linesNow = () => {
       // (each look's ends - going over from one to the other, line by line)
-      const { primary: endsP, secondary: endsS } = solid.ends;
       const f = fill.current;
-      const all =
-        endsP === endsS || f >= 1 || f <= 0
-          ? bondLines(drawn, p, bondR, f >= 1 ? endsS : endsP)
-          : linesBetween(bondLines(drawn, p, bondR, endsP), bondLines(drawn, p, bondR, endsS), f);
+      // (a look's lines - as one stick, as lines, or going over from one to the other: the side lines going into the middle one)
+      const linesOf3d = (l: "primary" | "secondary") => {
+        const k = oneLevel.current[l];
+        const ends = solid.ends[l];
+        return k <= 0 ? bondLines(drawn, p, bondR, ends) : k >= 1 ? bondLines(drawn, p, bondR, ends, true) : linesBetween(bondLines(drawn, p, bondR, ends), bondLines(drawn, p, bondR, ends, true), k);
+      };
+      const same = solid.ends.primary === solid.ends.secondary && oneLevel.current.primary === oneLevel.current.secondary;
+      const all = same || f <= 0 ? linesOf3d("primary") : f >= 1 ? linesOf3d("secondary") : linesBetween(linesOf3d("primary"), linesOf3d("secondary"), f);
       if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]]));
       if (leaves) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
       return all;

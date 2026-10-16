@@ -9,6 +9,7 @@
  */
 import { elementColour, elementOf, vdwRadius } from "./elements";
 import { chainRuns, ribbonAtoms, type Biopolymer } from "./biopolymer";
+import { isOwnStyleId, newOwnStyleId } from "./style";
 
 /** One style of the list: how it draws a molecule's atoms and bonds, and their finish. */
 export type MoleculeLook = {
@@ -66,6 +67,8 @@ export type MoleculeLook = {
    */
   doubleEnds: BondEnds;
   tripleEnds: BondEnds;
+  /** A double or triple bond as two or three thinner lines side by side, or as one stick, as thick as a single bond's (the maintainer, 2026-10-15). */
+  multipleBonds: "lines" | "one";
   /**
    * Lines on the balls: great circles about the molecule's own axes - two
    * or three, crossing as a globe's equator and meridians do, turning with
@@ -150,6 +153,7 @@ export const BALL_AND_STICK: MoleculeLook = {
   bondColouring: "single",
   doubleEnds: "plain",
   tripleEnds: "plain",
+  multipleBonds: "lines",
   ballLines: "none",
   ballLinesOn: "all",
   ballLinesWidth: 0.01,
@@ -236,6 +240,7 @@ export const LOOK_3D_PRESETS: Look3DPreset[] = [
       ballLinesWidth: 0.01,
       ballLinesColor: "#161616",
       colourSet: "bright",
+      multipleBonds: "one",
     },
   },
   {
@@ -288,20 +293,52 @@ export function look3dPreset(id: string | undefined): Look3DPreset {
   return LOOK_3D_PRESETS.find((p) => p.id === id) ?? LOOK_3D_PRESETS[0];
 }
 
-/** The 3D style as someone chose it: which style each role is, what was changed of each style, and of what they share. */
+/** A style of the user's own: made by duplicating another, named, and set as a whole - kept in the app's settings, not in a workspace. */
+export type Own3D = { id: string; name: string; look: MoleculeLook };
+
+/**
+ * The 3D style as someone chose it: which style each role is, what was
+ * changed of each built-in style, the user's own styles, and what they all
+ * share.
+ */
 export type Style3DChoice = {
   primary: string;
   secondary: string;
-  /** Each style's changes, by its id. */
+  /** Each built-in style's changes, by its id. */
   looks: Record<string, Partial<MoleculeLook>>;
   shared: Partial<Scene3D>;
+  /** The user's own styles, in the order they were made. */
+  own: Own3D[];
 };
 
 /** Ball and stick first, space-filling a step away (the maintainer, 2026-10-10: a thin look and a thick one, side by side). */
-export const DEFAULT_STYLE_3D_CHOICE: Style3DChoice = { primary: "balls", secondary: "space", looks: {}, shared: {} };
+export const DEFAULT_STYLE_3D_CHOICE: Style3DChoice = { primary: "balls", secondary: "space", looks: {}, shared: {}, own: [] };
 
-/** A style of the list, with what was changed of it - its atoms' colours over its preset's. */
+/** One of the user's own styles, by its id; none where it is not one. */
+export function ownStyle3d(choice: Style3DChoice, id: string): Own3D | undefined {
+  return choice.own.find((o) => o.id === id);
+}
+
+/** A style of the list, the built-in ones' and the user's own: its id, name and description, and whether it is the user's. */
+export type Listed3D = { id: string; name: string; description: string; own: boolean };
+
+/** Every style, the built-in ones first, then the user's own in the order they were made. */
+export function styles3d(choice: Style3DChoice): Listed3D[] {
+  return [
+    ...LOOK_3D_PRESETS.map((p) => ({ id: p.id, name: p.name, description: p.description, own: false })),
+    ...choice.own.map((o) => ({ id: o.id, name: o.name, description: "", own: true })),
+  ];
+}
+
+/** A style's name: the user's own's, or a built-in one's (Meno's own, for an id that is neither). */
+export function styleName3d(choice: Style3DChoice, id: string): string {
+  return ownStyle3d(choice, id)?.name ?? look3dPreset(id).name;
+}
+
+/** A style of the list as it is set: a built-in one with what was changed of it - its atoms' colours over its preset's - or the user's own. */
 export function lookOfStyle(choice: Style3DChoice, id: string): MoleculeLook {
+  const own = ownStyle3d(choice, id);
+  if (own) return own.look;
   const preset = look3dPreset(id).look;
   const changes = choice.looks[id];
   return { ...preset, ...changes, colours: { ...preset.colours, ...changes?.colours } };
@@ -315,8 +352,9 @@ export function style3dOf(choice: Style3DChoice): Style3D {
 /** The 3D viewer's look, Meno's: what a molecule drawn with no settings to go by is drawn in. */
 export const STYLE_3D: Style3D = style3dOf(DEFAULT_STYLE_3D_CHOICE);
 
-/** A choice with one of a style's settings changed - or, set back to its preset's value, no longer changed. */
+/** A choice with one of a style's settings changed - a built-in one's, set back to its preset's value, no longer changed; the user's own, set. */
 export function withLookSetting<K extends keyof MoleculeLook>(choice: Style3DChoice, id: string, key: K, value: MoleculeLook[K]): Style3DChoice {
+  if (ownStyle3d(choice, id)) return withOwnLook(choice, id, (look) => ({ ...look, [key]: value }));
   const { [key]: _was, ...rest } = choice.looks[id] ?? {};
   const same = look3dPreset(id).look[key] === value;
   const changes = same ? rest : { ...rest, [key]: value };
@@ -456,6 +494,12 @@ export function fadeAt(depth: number, depthFade: number): number {
  * the style's own colour for it, no longer changed: its preset's again.
  */
 export function withAtomColour(choice: Style3DChoice, id: string, el: string, value: string | null): Style3DChoice {
+  if (ownStyle3d(choice, id))
+    return withOwnLook(choice, id, (look) => {
+      const { [el]: _was, ...rest } = look.colours;
+      const set = colourSet3d(look.colourSet).colour(el);
+      return { ...look, colours: value && value.toLowerCase() !== set.toLowerCase() ? { ...rest, [el]: value.toLowerCase() } : rest };
+    });
   const preset = look3dPreset(id).look;
   // (what it would be with no colour of the user's own: the preset's own, else the set chosen's)
   const base = atomColour(el, { colours: preset.colours, colourSet: choice.looks[id]?.colourSet ?? preset.colourSet });
@@ -466,6 +510,76 @@ export function withAtomColour(choice: Style3DChoice, id: string, el: string, va
   const changes = Object.keys(colours).length ? { ...rest, colours } : rest;
   const { [id]: _old, ...others } = choice.looks;
   return { ...choice, looks: Object.keys(changes).length ? { ...others, [id]: changes } : others };
+}
+
+// --- The user's own styles ----------------------------------------------------
+
+/** The longest a style's name may be. */
+export const STYLE_NAME_MOST = 60;
+
+/** A choice with one of the user's own styles' look made over. */
+function withOwnLook(choice: Style3DChoice, id: string, made: (look: MoleculeLook) => MoleculeLook): Style3DChoice {
+  return { ...choice, own: choice.own.map((o) => (o.id === id ? { ...o, look: made(o.look) } : o)) };
+}
+
+/** Whether `name` is another style's already - built in or the user's own, but `except` - however it is capitalised. */
+export function styleNameTaken3d(choice: Style3DChoice, name: string, except?: string): boolean {
+  const n = name.trim().toLowerCase();
+  return styles3d(choice).some((s) => s.id !== except && s.name.toLowerCase() === n);
+}
+
+/** A copy's name: "<name> copy", or "<name> copy 2", 3 and on where that is taken. */
+export function copyName(name: string, taken: (name: string) => boolean): string {
+  const base = `${name} copy`.slice(0, STYLE_NAME_MOST);
+  for (let n = 1; ; n++) {
+    const tried = n === 1 ? base : `${base.slice(0, STYLE_NAME_MOST - String(n).length - 1)} ${n}`;
+    if (!taken(tried)) return tried;
+  }
+}
+
+
+/** A choice with a style duplicated as one of the user's own - as it is set, its changes with it - named "<name> copy"; and the copy's id. */
+export function withDuplicate3d(choice: Style3DChoice, id: string): { choice: Style3DChoice; id: string } {
+  const copy: Own3D = {
+    id: newOwnStyleId(),
+    name: copyName(styleName3d(choice, id), (n) => styleNameTaken3d(choice, n)),
+    look: lookOfStyle(choice, id),
+  };
+  return { choice: { ...choice, own: [...choice.own, copy] }, id: copy.id };
+}
+
+/** A choice with a style added as one of the user's own - `name`, made fresh where another style has it - and its id: a style file's, say. */
+export function withOwn3d(choice: Style3DChoice, name: string, look: MoleculeLook): { choice: Style3DChoice; id: string } {
+  const base = name.trim().slice(0, STYLE_NAME_MOST) || "My style";
+  let n = base;
+  for (let k = 2; styleNameTaken3d(choice, n); k++) n = `${base.slice(0, STYLE_NAME_MOST - String(k).length - 1)} ${k}`;
+  const own: Own3D = { id: newOwnStyleId(), name: n, look };
+  return { choice: { ...choice, own: [...choice.own, own] }, id: own.id };
+}
+
+/** A choice with one of the user's own styles renamed - as it was, where the name is empty, too long or another style's. */
+export function withRenamed3d(choice: Style3DChoice, id: string, name: string): Style3DChoice {
+  const n = name.trim();
+  if (!ownStyle3d(choice, id) || !n || n.length > STYLE_NAME_MOST || styleNameTaken3d(choice, n, id)) return choice;
+  return { ...choice, own: choice.own.map((o) => (o.id === id ? { ...o, name: n } : o)) };
+}
+
+/**
+ * A choice with one of the user's own styles deleted. A role it had goes to
+ * Meno's own style for that role - ball and stick, space-filling - or,
+ * where the other role has that, to the first built-in style the other
+ * role does not have.
+ */
+export function withoutStyle3d(choice: Style3DChoice, id: string): Style3DChoice {
+  if (!ownStyle3d(choice, id)) return choice;
+  const next: Style3DChoice = { ...choice, own: choice.own.filter((o) => o.id !== id) };
+  for (const role of ["primary", "secondary"] as const) {
+    if (next[role] !== id) continue;
+    const other = next[role === "primary" ? "secondary" : "primary"];
+    const first = DEFAULT_STYLE_3D_CHOICE[role];
+    next[role] = first !== other ? first : LOOK_3D_PRESETS.find((p) => p.id !== other)!.id;
+  }
+  return next;
 }
 
 /** A molecule as what it leaves out is worked out from: its atoms (where they stand, for a biopolymer's chains), bonds and biopolymer. */
@@ -632,6 +746,17 @@ export const LOOK_3D_FIELDS: Style3DField<keyof MoleculeLook>[] = [
     description: "The sticks between the balls.",
     kind: "colour",
     unless: { key: "bondColouring", is: "byAtom" },
+  },
+  {
+    key: "multipleBonds",
+    group: "Atoms and bonds",
+    label: "Multiple bonds",
+    description: "A double or triple bond as two or three thinner lines side by side, or as one stick, as thick as a single bond.",
+    kind: "choice",
+    options: [
+      { value: "lines", label: "As two or three lines" },
+      { value: "one", label: "As one stick" },
+    ],
   },
   ...(["doubleEnds", "tripleEnds"] as const).map(
     (key): Style3DField<keyof MoleculeLook> => ({
@@ -918,7 +1043,9 @@ function acceptColours(raw: unknown): Record<string, string> {
 export function acceptStyle3dChoice(raw: unknown): Style3DChoice {
   if (typeof raw !== "object" || raw === null) return DEFAULT_STYLE_3D_CHOICE;
   const r = raw as Record<string, unknown>;
-  const known = (id: unknown) => LOOK_3D_PRESETS.some((p) => p.id === id);
+  const own = acceptOwn3d(r.own);
+  const builtIn = (id: unknown) => LOOK_3D_PRESETS.some((p) => p.id === id);
+  const known = (id: unknown) => builtIn(id) || own.some((o) => o.id === id);
   let primary = known(r.primary) ? (r.primary as string) : DEFAULT_STYLE_3D_CHOICE.primary;
   let secondary = known(r.secondary) ? (r.secondary as string) : DEFAULT_STYLE_3D_CHOICE.secondary;
   // (never the same style twice: the secondary would not be a second look)
@@ -926,12 +1053,34 @@ export function acceptStyle3dChoice(raw: unknown): Style3DChoice {
   const looks: Record<string, Partial<MoleculeLook>> = {};
   if (typeof r.looks === "object" && r.looks !== null) {
     for (const [id, changes] of Object.entries(r.looks as Record<string, unknown>)) {
-      if (!known(id)) continue;
+      if (!builtIn(id)) continue;
       const read = acceptFields(changes, LOOK_3D_FIELDS);
       const colours = acceptColours((changes as { colours?: unknown } | null)?.colours);
       if (Object.keys(colours).length) read.colours = colours;
       if (Object.keys(read).length) looks[id] = read as Partial<MoleculeLook>;
     }
   }
-  return { primary, secondary, looks, shared: acceptFields(r.shared, SCENE_3D_FIELDS) as Partial<Scene3D> };
+  return { primary, secondary, looks, shared: acceptFields(r.shared, SCENE_3D_FIELDS) as Partial<Scene3D>, own };
+}
+
+/** A look as a file holds it, whole: what does not read is left as Meno's own ball and stick has it. */
+export function acceptLook3d(raw: unknown): MoleculeLook {
+  const read = acceptFields(raw, LOOK_3D_FIELDS) as Partial<MoleculeLook>;
+  return { ...BALL_AND_STICK, ...read, colours: acceptColours((raw as { colours?: unknown } | null)?.colours) };
+}
+
+/** The user's own styles as the settings file holds them: each with an id of its own and a name no other style has; what does not read left out. */
+function acceptOwn3d(raw: unknown): Own3D[] {
+  const out: Own3D[] = [];
+  if (!Array.isArray(raw)) return out;
+  for (const o of raw as unknown[]) {
+    if (typeof o !== "object" || o === null) continue;
+    const { id, name, look } = o as Record<string, unknown>;
+    if (typeof id !== "string" || !isOwnStyleId(id) || out.some((x) => x.id === id)) continue;
+    const n = typeof name === "string" ? name.trim() : "";
+    const taken = (m: string) => [...LOOK_3D_PRESETS, ...out].some((x) => x.name.toLowerCase() === m.toLowerCase());
+    if (!n || n.length > STYLE_NAME_MOST || taken(n)) continue;
+    out.push({ id, name: n, look: acceptLook3d(look) });
+  }
+  return out;
 }
