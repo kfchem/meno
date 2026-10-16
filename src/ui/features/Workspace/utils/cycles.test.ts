@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { branchPath, type Cycle } from "../../../../lib/chem/cycle";
+import { branchPath, cycleMembers, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import type { Model } from "../store/types";
-import { branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings } from "./cycles";
+import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, membersOn } from "./cycles";
 
-const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, half });
+const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
   for (let i = 0; i < 200 && e.step(1 / 60); i++);
 };
@@ -14,7 +14,7 @@ describe("a cycle as it is drawn", () => {
   it("is drawn as it is the first time, with nothing on its way", () => {
     const e = new CycleEase();
     e.take([on("a1", 0)]);
-    expect(e.members()[0].half).toBeCloseTo(0.3);
+    expect(e.members()[0].lo).toBeCloseTo(0.3);
     expect(e.step(1 / 60)).toBe(false);
   });
 
@@ -22,13 +22,13 @@ describe("a cycle as it is drawn", () => {
     const e = new CycleEase();
     e.take([on("a1", 0)]);
     e.take([on("a1", 0), on("a2", 2)]);
-    expect(e.members().find((m) => m.angle === 2)!.half).toBe(0);
+    expect(e.members().find((m) => m.angle === 2)!.lo).toBe(0);
     e.step(1 / 60);
-    const half = e.members().find((m) => m.angle === 2)!.half;
+    const half = e.members().find((m) => m.angle === 2)!.lo;
     expect(half).toBeGreaterThan(0);
     expect(half).toBeLessThan(0.3);
     settle(e);
-    expect(e.members().find((m) => m.angle === 2)!.half).toBeCloseTo(0.3);
+    expect(e.members().find((m) => m.angle === 2)!.lo).toBeCloseTo(0.3);
   });
 
   it("closes after what goes off it, running on through it meanwhile, and forgets it once closed", () => {
@@ -37,7 +37,7 @@ describe("a cycle as it is drawn", () => {
     e.take([on("a1", 0)]);
     const going = e.members().find((m) => m.angle === 2)!;
     expect(going.passing).toBe(true);
-    expect(going.half).toBeCloseTo(0.3);
+    expect(going.lo).toBeCloseTo(0.3);
     settle(e);
     expect(e.members()).toHaveLength(1);
   });
@@ -141,5 +141,37 @@ describe("the words by a cycle's arrow", () => {
 
   it("are none, with none near", () => {
     expect(branchWords(c, b, cycleThings({ atoms: [], bonds: [] }, [words(3, 20 * B, 0)], style))).toBeNull();
+  });
+});
+
+describe("the circle round a structure on it", () => {
+  const B = NOMINAL_BOND_LENGTH;
+  const style = styleOf(DEFAULT_STYLE_CHOICE);
+  // (phenylboronic acid: its ring to the right, B(OH)2 to the left - HO and OH sticking out)
+  const ring = Array.from({ length: 6 }, (_, k) => ({ id: k + 1, el: "C", x: 2 * B + B * Math.cos(Math.PI - (k * Math.PI) / 3), y: B * Math.sin(Math.PI - (k * Math.PI) / 3) }));
+  const model = {
+    atoms: [...ring, { id: 7, el: "B", x: 0, y: 0 }, { id: 8, el: "O", x: -0.5 * B, y: 0.866 * B }, { id: 9, el: "O", x: -0.5 * B, y: -0.866 * B }],
+    bonds: [
+      ...ring.map((a, k) => ({ id: 10 + k, a: a.id, b: ring[(k + 1) % 6].id, order: k % 2 ? 1 : 2 })),
+      { id: 20, a: 7, b: 1, order: 1 },
+      { id: 21, a: 7, b: 8, order: 1 },
+      { id: 22, a: 7, b: 9, order: 1 },
+    ],
+  } as unknown as Model;
+
+  it("ends each stretch just short of what is drawn, not where the circle leaves its box", () => {
+    const [t] = cycleThings(model, [], style);
+    const m = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
+    // (on a cycle's line at its left, the circle running up through it)
+    const c: Cycle = { id: 1, x: m.x + 4.5 * B, y: m.y, r: 4.5 * B };
+    const [inked] = membersOn(c, [t]);
+    const [boxed] = cycleMembers(c, [t.box], B);
+    expect(inked.lo + inked.hi).toBeLessThan(boxed.lo + boxed.hi);
+    // (each end of the circle broken for it at most a margin, or the nearest it comes, from its ink)
+    const arrows = arrowsOfCycles([c], [t]);
+    expect(arrows).toHaveLength(1);
+    const a = arrows[0];
+    const ends = [-1, 1].map((k) => ({ x: a.x + (k * Math.cos(a.angle) * a.length) / 2, y: a.y + (k * Math.sin(a.angle) * a.length) / 2 }));
+    for (const e of ends) expect(inkDistance(e, t.ink!)).toBeLessThan(0.45 * B);
   });
 });

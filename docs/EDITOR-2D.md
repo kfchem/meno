@@ -987,8 +987,12 @@ All hover-based, as above.
     SMILES, is put on it, moved straight out from the middle or in. What
     is on a cycle is not kept with it: it is what lies on its line, so
     that it is moved along the circle, or off it, as anything is moved.
-  - **Its arrows**: the circle breaks round each thing on it, three
-    tenths of a bond clear of what is drawn, and each stretch between two
+  - **Its arrows**: the circle breaks round each thing on it, each side on
+    its own where it first comes within a quarter of a bond of what is
+    drawn - a bond as wide as it is drawn, a label's letters, words - or,
+    where it comes no nearer, where it comes nearest; so each stretch
+    ends just short of what it points at, however much of the box round
+    a structure is empty where the circle passes. Each stretch between two
     neighbours is a curved reaction arrow, clockwise unless turned from
     its menu. With nothing on it, it is a whole circle with no head. The
     stretches follow as a thing is dragged along the line; the circle

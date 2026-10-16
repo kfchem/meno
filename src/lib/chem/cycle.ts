@@ -41,16 +41,20 @@ export type CycleMotion = { turn?: number; branches?: readonly { b: CycleBranch;
 
 /**
  * What is on a cycle: which of the boxes given, at what angle round it, and
- * how far round either side the circle breaks for it (radians) - and, while
- * it goes off the line and the circle closes after it, `passing`: the
- * stretch to it then has no head, running on through it.
+ * how far round the circle breaks for it (radians) on its clockwise side
+ * (`lo`) and its anticlockwise side (`hi`) - and, while it goes off the
+ * line and the circle closes after it, `passing`: the stretch to it then
+ * has no head, running on through it.
  */
-export type CycleMember = { index: number; angle: number; half: number; passing?: true };
+export type CycleMember = { index: number; angle: number; lo: number; hi: number; passing?: true };
+
+/** What is drawn of a thing on a cycle, for the circle to stop short of: its lines, each with half its width, and its letters' boxes. */
+export type CycleInk = { lines: readonly { a: P; b: P; half: number }[]; boxes: readonly CycleBox[] };
 
 /** How near the line a thing's middle lies to be on it, in bonds. */
 export const ON_LINE = 0.6;
-/** How far the circle stays clear of what is on it, in bonds. */
-export const MARGIN = 0.3;
+/** How far the circle stays clear of what is on it - of its ink, where that is known; of its box, else - in bonds. */
+export const MARGIN = 0.25;
 /** How far an arrow coming in or going out runs along the circle, and out from it, in bonds. */
 export const BRANCH_ALONG = 1.6;
 export const BRANCH_OUT = 1.1;
@@ -77,31 +81,59 @@ export function ontoCycle(c: Pick<Cycle, "x" | "y" | "r">, b: CycleBox): P {
   return { x: c.x + ((m.x - c.x) / d) * c.r - m.x, y: c.y + ((m.y - c.y) / d) * c.r - m.y };
 }
 
+/** How far a point is from what is drawn: from each line's edge, each box's - none inside. */
+export function inkDistance(p: P, ink: CycleInk): number {
+  let d = Infinity;
+  for (const l of ink.lines) {
+    const vx = l.b.x - l.a.x;
+    const vy = l.b.y - l.a.y;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 > 0 ? Math.min(1, Math.max(0, ((p.x - l.a.x) * vx + (p.y - l.a.y) * vy) / len2)) : 0;
+    d = Math.min(d, Math.hypot(p.x - l.a.x - vx * t, p.y - l.a.y - vy * t) - l.half);
+  }
+  for (const b of ink.boxes) d = Math.min(d, Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.y0 - p.y, 0, p.y - b.y1)));
+  return Math.max(0, d);
+}
+
 /**
  * What lies on a cycle's line, of `boxes`: each with its angle round the
- * circle and how far round either side of it the circle stays clear of
- * it - as far as the circle runs inside its box, `MARGIN` bonds larger.
+ * circle and how far round either side of it the circle breaks for it. With
+ * its ink (`inks`, by the same index), each side is cut on its own where the
+ * circle first comes within `MARGIN` bonds of what is drawn - a line, a
+ * letter - so that each stretch ends just short of what it points at; where
+ * the circle comes no nearer than that, where it comes nearest. With none, the
+ * circle is cut where it leaves the box, `MARGIN` bonds out.
  */
-export function cycleMembers(c: Pick<Cycle, "x" | "y" | "r">, boxes: readonly CycleBox[], bond: number): CycleMember[] {
+export function cycleMembers(c: Pick<Cycle, "x" | "y" | "r">, boxes: readonly CycleBox[], bond: number, inks?: readonly (CycleInk | undefined)[]): CycleMember[] {
   const out: CycleMember[] = [];
+  const g = MARGIN * bond;
+  // (round from its middle a little at a time)
+  const fine = Math.min(STEP / 4, 0.25 / Math.max(c.r / bond, 1));
   boxes.forEach((b, index) => {
     if (!onCycle(c, b, bond)) return;
     const m = middle(b);
     const angle = Math.atan2(m.y - c.y, m.x - c.x);
-    const g = MARGIN * bond;
+    const ink = inks?.[index];
     const inside = (a: number) => {
       const p = pointOn(c, c.r, a);
       return p.x >= b.x0 - g && p.x <= b.x1 + g && p.y >= b.y0 - g && p.y <= b.y1 + g;
     };
-    // (round either way from its middle, a little at a time, to where the circle leaves its box)
-    const fine = Math.min(STEP / 4, 0.25 / Math.max(c.r / bond, 1));
-    let half = 0;
-    for (const s of [1, -1]) {
-      let a = 0;
-      while (a < Math.PI && inside(angle + s * a)) a += fine;
-      half = Math.max(half, a);
-    }
-    out.push({ index, angle, half });
+    const side = (s: 1 | -1) => {
+      // (as far as the circle runs in its box, the margin round it)
+      let reach = 0;
+      while (reach < Math.PI && inside(angle + s * reach)) reach += fine;
+      if (!ink || (!ink.lines.length && !ink.boxes.length)) return reach;
+      // (on that side: the last point the circle is still within the margin of what is drawn - or, where it comes no nearer, as near as it comes)
+      const near: number[] = [];
+      for (let a = 0; a <= reach; a += fine) near.push(inkDistance(pointOn(c, c.r, angle + s * a), ink));
+      const within = Math.max(g, Math.min(...near));
+      let last = 0;
+      near.forEach((d, i) => {
+        if (d <= within + 1e-9) last = i;
+      });
+      return Math.min(reach, (last + 1) * fine);
+    };
+    out.push({ index, angle, lo: side(-1), hi: side(1) });
   });
   return out;
 }
@@ -202,10 +234,13 @@ export function cycleArrows(c: Cycle, boxes: readonly CycleBox[], bond: number, 
     const ranked = members.map((m) => ({ m, s: round((m.angle - members[0].angle) * way) })).sort((p, q) => p.s - q.s);
     ranked.forEach(({ m }, k) => {
       const next = ranked[(k + 1) % ranked.length].m;
-      const start = m.angle + way * m.half;
+      // (from the side of it the cycle leaves by, to the side of the next it comes in by)
+      const leaving = way > 0 ? m.hi : m.lo;
+      const coming = way > 0 ? next.lo : next.hi;
+      const start = m.angle + way * leaving;
       let gap = round((next.angle - m.angle) * way);
       if (ranked.length === 1) gap = 2 * Math.PI;
-      const sweep = gap - m.half - next.half;
+      const sweep = gap - leaving - coming;
       if (sweep <= STEP / 2) return;
       const points = arcPoints(c, start, sweep * way);
       if (next.passing || turn >= 1) return push(arrowThrough(points, next.passing ? { heads: 0 } : {}, c.color));

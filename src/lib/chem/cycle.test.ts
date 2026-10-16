@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, ontoCycle, type Cycle, type CycleBox } from "./cycle";
+import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, MARGIN, ontoCycle, type Cycle, type CycleBox, type CycleInk } from "./cycle";
 import { arrowPath, arrowPieces, type ArrowMeasures } from "./reactionArrow";
 
 const BOND = 1;
@@ -20,9 +20,11 @@ describe("what is on a cycle", () => {
     const m = cycleMembers(c, boxes, BOND);
     expect(m.map((x) => x.index)).toEqual([0, 1]);
     expect((m[0].angle * 180) / Math.PI).toBeCloseTo(90);
-    // (a box 1.2 wide across the top: clear of it and of the margin, about 0.9 either side of its middle)
-    expect(m[0].half * c.r).toBeGreaterThan(0.85);
-    expect(m[0].half * c.r).toBeLessThan(1.05);
+    // (a box 1.2 wide across the top, no ink known: clear of it and of the margin, about 0.85 either side of its middle)
+    for (const side of [m[0].lo, m[0].hi]) {
+      expect(side * c.r).toBeGreaterThan(0.8);
+      expect(side * c.r).toBeLessThan(1.0);
+    }
   });
 
   it("is put on the line when let go near it: moved straight out from the middle", () => {
@@ -70,7 +72,7 @@ describe("a cycle's arrows", () => {
 
   it("run on with no head through one going off the line, the circle closing after it", () => {
     const members = cycleMembers(c, [box(0, 4), box(0, -4)], BOND);
-    const going = members.map((m, i) => (i === 1 ? { ...m, half: m.half / 2, passing: true as const } : m));
+    const going = members.map((m, i) => (i === 1 ? { ...m, lo: m.lo / 2, hi: m.hi / 2, passing: true as const } : m));
     const arrows = cycleArrows(c, [], BOND, going);
     expect(arrows).toHaveLength(2);
     // (the one to it has no head; the one from it on to the next has)
@@ -84,6 +86,59 @@ describe("a cycle's arrows", () => {
     expect(arrows).toHaveLength(1);
     const pts = ends(arrows[0]);
     expect(Math.hypot(pts[0].x - last(pts).x, pts[0].y - last(pts).y)).toBeLessThan(2.5);
+  });
+});
+
+describe("where the circle breaks for what is on it", () => {
+  const at = (a: number) => ({ x: 4 * Math.cos(a), y: 4 * Math.sin(a) });
+  /** How far each end of the stretches either side of a thing lies from its ink. */
+  const endsFrom = (members: ReturnType<typeof cycleMembers>, ink: CycleInk) => {
+    const [m] = members;
+    return [at(m.angle - m.lo), at(m.angle + m.hi)].map((p) => {
+      let d = Infinity;
+      for (const l of ink.lines) {
+        const vx = l.b.x - l.a.x, vy = l.b.y - l.a.y;
+        const t = Math.max(0, Math.min(1, ((p.x - l.a.x) * vx + (p.y - l.a.y) * vy) / (vx * vx + vy * vy)));
+        d = Math.min(d, Math.hypot(p.x - l.a.x - vx * t, p.y - l.a.y - vy * t) - l.half);
+      }
+      for (const b of ink.boxes) d = Math.min(d, Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.y0 - p.y, 0, p.y - b.y1)));
+      return d;
+    });
+  };
+
+  it("is cut at the ink on each side, not at the box: a box mostly empty where the circle passes, as round B(OH)2", () => {
+    // (a box three wide across the top, its ink a ring at its right end, the circle through it, and letters at its far left)
+    const b = box(0, 4, 3, 1.2);
+    const ink: CycleInk = { lines: [{ a: { x: 0.6, y: 3.9 }, b: { x: 1.4, y: 3.7 }, half: 0.03 }], boxes: [{ x0: -1.5, y0: 4.3, x1: -1.1, y1: 4.6 }] };
+    const boxed = cycleMembers(c, [b], BOND)[0];
+    const [m] = cycleMembers(c, [b], BOND, [ink]);
+    // (the end on the right a quarter of a bond, or a step more, from the ring it points at; on the left, where it comes nearest the letters - half a bond, it passing under them)
+    const [right, left] = endsFrom([m], ink);
+    expect(right).toBeGreaterThan(MARGIN - 0.02);
+    expect(right).toBeLessThan(MARGIN + 0.12);
+    expect(left).toBeGreaterThan(0.4);
+    expect(left).toBeLessThan(0.6);
+    // (nearer than the box allowed, on both sides)
+    expect(m.lo).toBeLessThan(boxed.lo);
+    expect(m.hi).toBeLessThan(boxed.hi);
+  });
+
+  it("runs on to the ends of a long chain lying along it", () => {
+    const pts = Array.from({ length: 9 }, (_, i) => at(Math.PI / 2 - 0.6 + (1.2 * i) / 8));
+    const ink: CycleInk = { lines: pts.slice(1).map((p, i) => ({ a: pts[i], b: p, half: 0.03 })), boxes: [] };
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const b = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+    const [m] = cycleMembers(c, [b], BOND, [ink]);
+    for (const side of [m.lo, m.hi]) {
+      expect(side).toBeGreaterThan(0.6);
+      expect(side).toBeLessThan(0.6 + (MARGIN + 0.15) / 4);
+    }
+  });
+
+  it("is cut round words a margin out from their letters", () => {
+    const b = box(0, 4, 2, 0.5);
+    const [m] = cycleMembers(c, [b], BOND, [{ lines: [], boxes: [b] }]);
+    for (const d of endsFrom([m], { lines: [], boxes: [b] })) expect(Math.abs(d - MARGIN)).toBeLessThan(0.12);
   });
 });
 

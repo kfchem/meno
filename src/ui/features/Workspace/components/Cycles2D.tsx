@@ -3,11 +3,11 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { styleOf } from "../../../../lib/chem/style";
-import { cycleArrows, cycleMembers, type Cycle } from "../../../../lib/chem/cycle";
+import { cycleArrows, type Cycle } from "../../../../lib/chem/cycle";
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
-import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, thingKey } from "../utils/cycles";
+import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, membersOn, thingKey } from "../utils/cycles";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { COLORS } from "../../../theme/colors";
 import ReactionArrow2D from "./ReactionArrow2D";
@@ -65,7 +65,7 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
   const store = useEditorStore();
   const invalidate = useThree((st) => st.invalidate);
   // (what is on it, eased: the circle opens round what comes on and closes after what goes off)
-  const now = useMemo(() => cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH).map((m) => ({ ...m, key: thingKey(things[m.index]) })), [c, things]);
+  const now = useMemo(() => membersOn(c, things).map((m) => ({ ...m, key: thingKey(things[m.index]) })), [c, things]);
   const ease = useRef(new CycleEase());
   ease.current.take(now);
   // (and the cycle's own changes: turned round, an arrow coming in or going out put there or taken away)

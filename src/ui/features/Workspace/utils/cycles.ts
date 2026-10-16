@@ -7,7 +7,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { wordsSet } from "../../../../lib/chem/captions";
-import { branchPath, cycleArrows, cycleMembers, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
+import { branchPath, cycleArrows, cycleMembers, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION, follow, TAU } from "../../../theme/motion";
@@ -17,8 +17,8 @@ import { labelBoxes, labelledPart } from "./freePlace";
 import type { Caption, Model } from "../store/types";
 import { structuresOf } from "../workflow/entries";
 
-/** What may lie on a cycle: a structure, by its atoms, or words, by their id - and the box round it. */
-export type CycleThing = { atoms?: number[]; caption?: number; box: CycleBox };
+/** What may lie on a cycle: a structure, by its atoms, or words, by their id - the box round it, and what is drawn of it (`ink`), for the circle to stop short of. */
+export type CycleThing = { atoms?: number[]; caption?: number; box: CycleBox; ink?: CycleInk };
 
 /**
  * Where a cycle was last pointed at on its line, round it (radians): where an
@@ -64,23 +64,45 @@ export function cycleThings(model: Pick<Model, "atoms" | "bonds">, captions: rea
     // (its labels' letters, as the drawing sets them)
     const these = new Set(ids);
     const part = { atoms: ids.flatMap((id) => (at.has(id) ? [at.get(id)!] : [])), bonds: model.bonds.filter((b) => these.has(b.a) && these.has(b.b)) };
-    for (const b of labelBoxes(labelledPart(part as Model), style)) take(b);
-    out.push({ atoms: ids, box });
+    const letters = labelBoxes(labelledPart(part as Model), style);
+    for (const b of letters) take(b);
+    // (its bonds as drawn: each line as wide as it is drawn - a double bond's two, a wedge's broad end, a wave's swing)
+    const line = opts.lineWidthPx / 2;
+    const lines = part.bonds.flatMap((b) => {
+      const a1 = at.get(b.a);
+      const a2 = at.get(b.b);
+      if (!a1 || !a2) return [];
+      const half =
+        b.order === 3 ? opts.tripleOffsetPx + line
+        : b.order === 2 ? opts.doubleOffsetPx + line
+        : b.stereo === "wavy" ? opts.wavyAmpPx + line
+        : b.stereo === "up" || b.stereo === "down" || (b.display && b.display !== "plain" && b.display !== "dashed") ? opts.wedgeWidthPx / 2
+        : line;
+      return [{ a: { x: a1.x, y: a1.y }, b: { x: a2.x, y: a2.y }, half }];
+    });
+    // (an atom alone, with no letters: its point)
+    const points = part.bonds.length || letters.length ? [] : part.atoms.map((a) => ({ x0: a.x - line, y0: a.y - line, x1: a.x + line, y1: a.y + line }));
+    out.push({ atoms: ids, box, ink: { lines, boxes: [...letters, ...points] } });
   }
   const set = labelSetOf(opts);
   for (const c of captions) {
     const w = wordsSet(c, opts, set);
     const box = { x0: c.x - w.halfW, y0: c.y - w.halfH, x1: c.x + w.halfW, y1: c.y + w.halfH };
     if (near && !near.some((cy) => nearLine(cy, box, reach))) continue;
-    out.push({ caption: c.id, box });
+    out.push({ caption: c.id, box, ink: { lines: [], boxes: [box] } });
   }
   return out;
+}
+
+/** What is on a cycle, of `things`: each by its box's middle, the circle cut short of its ink. */
+export function membersOn(c: Cycle, things: readonly CycleThing[]): CycleMember[] {
+  return cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH, things.map((t) => t.ink));
 }
 
 /** The arrows the cycles are drawn with, what is on each measured from `things`. */
 export function arrowsOfCycles(cycles: readonly Cycle[], things: readonly CycleThing[]): CycleArrow[] {
   const boxes = things.map((t) => t.box);
-  return cycles.flatMap((c) => cycleArrows(c, boxes, NOMINAL_BOND_LENGTH));
+  return cycles.flatMap((c) => cycleArrows(c, boxes, NOMINAL_BOND_LENGTH, membersOn(c, things)));
 }
 
 /** The words by the far end of a cycle's arrow coming in or going out, of `things`: the nearest, within `LABEL_NEAR` bonds - none, where there are none. */
@@ -97,7 +119,7 @@ export function branchWords(c: Cycle, b: CycleBranch, things: readonly CycleThin
 
 /** What goes with a cycle as it is moved or sized: what is on its line, and the words at its arrows' far ends. */
 export function carriedByCycle(c: Cycle, things: readonly CycleThing[]): { atoms: number[]; captions: number[] } {
-  const on = new Set(cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH).map((m) => m.index));
+  const on = new Set(membersOn(c, things).map((m) => m.index));
   const words = new Set((c.branches ?? []).map((b) => branchWords(c, b, things)));
   const atoms: number[] = [];
   const captions: number[] = [];
@@ -135,7 +157,7 @@ export function thingKey(t: CycleThing): string {
  * anything is still on its way.
  */
 export class CycleEase {
-  private shown = new Map<string, CycleMember & { to: number }>();
+  private shown = new Map<string, CycleMember & { toLo: number; toHi: number }>();
   private last: readonly (CycleMember & { key: string })[] | null = null;
 
   take(now: readonly (CycleMember & { key: string })[]): void {
@@ -146,27 +168,30 @@ export class CycleEase {
     const on = new Set(now.map((m) => m.key));
     for (const m of now) {
       const was = this.shown.get(m.key);
-      this.shown.set(m.key, { index: m.index, angle: m.angle, half: was ? was.half : first ? m.half : 0, to: m.half });
+      const from = (side: "lo" | "hi") => (was ? was[side] : first ? m[side] : 0);
+      this.shown.set(m.key, { index: m.index, angle: m.angle, lo: from("lo"), hi: from("hi"), toLo: m.lo, toHi: m.hi });
     }
-    for (const [k, s] of this.shown) if (!on.has(k)) this.shown.set(k, { ...s, to: 0, passing: true });
+    for (const [k, s] of this.shown) if (!on.has(k)) this.shown.set(k, { ...s, toLo: 0, toHi: 0, passing: true });
   }
 
   step(dt: number): boolean {
     let moving = false;
     for (const [k, s] of this.shown) {
-      if (Math.abs(s.half - s.to) < 1e-4) {
-        s.half = s.to;
+      if (Math.abs(s.lo - s.toLo) < 1e-4 && Math.abs(s.hi - s.toHi) < 1e-4) {
+        s.lo = s.toLo;
+        s.hi = s.toHi;
         if (s.passing) this.shown.delete(k);
         continue;
       }
-      s.half = follow(s.half, s.to, dt, TAU.move);
+      s.lo = follow(s.lo, s.toLo, dt, TAU.move);
+      s.hi = follow(s.hi, s.toHi, dt, TAU.move);
       moving = true;
     }
     return moving;
   }
 
   members(): CycleMember[] {
-    return [...this.shown.values()].map(({ index, angle, half, passing }) => ({ index, angle, half, ...(passing ? { passing } : {}) }));
+    return [...this.shown.values()].map(({ index, angle, lo, hi, passing }) => ({ index, angle, lo, hi, ...(passing ? { passing } : {}) }));
   }
 }
 
