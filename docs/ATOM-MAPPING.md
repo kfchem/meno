@@ -127,14 +127,19 @@ a map) now and then which maps are found at all. The port takes one fixed
 order there: the unmatched bonds as they are met, each atom's own first;
 the swaps sorted by their atoms' numbers.
 
-Of the corpus below, ACCeL varied between runs on 3 of the 79 reactions
-checked first (5 runs each), and Meno's result matched one of ACCeL's runs
-exactly in each.
+Over the corpus below (each reaction run through ACCeL two to five times,
+each time in a new process), ACCeL's output changed between runs for three
+reactions, in both embeddings of each: two Diels-Alder reactions
+(cyclopentadiene with maleic anhydride, furan with acrylonitrile), where the
+corrected maps came in another order, and a ring-closing metathesis, where
+other maps were found. Meno's result matched one of ACCeL's runs exactly in
+each.
 
 ### Numbers
 
 `_kabsch` takes numpy's SVD; Meno's own 3x3 SVD (one-sided Jacobi) agrees
-with it to about 1e-15 relative, not bit for bit. Two maps whose total RMSDs
+with it to a few units in the last place for most maps (about 1e-11
+relative at worst, where the RMSD is near zero), not bit for bit. Two maps whose total RMSDs
 differ by less than that - hydrogens of a methyl, or a symmetric molecule's
 equivalent atoms - may come in the other order. The rounded scores
 (`bonding_local_rmsd`, `local_rmsd`) and every other score agree exactly.
@@ -189,11 +194,17 @@ environment, nothing of it committed:
   or six waters, unbalanced ones, known pairs, ordering options, and one
   past 256 atoms - 147 reactions, two embeddings of most. Statement
   coverage of ACCeL's mapper over the corpus was measured and the corpus
-  widened toward what it missed.
-- **Results.** Every stage agrees on every reaction, but for the cases
-  above: where ACCeL's own run-to-run order varies, Meno's matches one of
-  its runs; and maps whose total RMSDs differ only in the last digits may
-  be ordered the other way. The first map agrees on every reaction.
+  widened toward what it missed: 849 of its 894 statements run (the
+  reactions beside four waters left out of that count, too slow to trace
+  line by line).
+- **Results.** Every stage agrees on all 147 reactions - each `_get_maps`
+  call (177 492 of them for an SN2 beside four waters), `_correct_maps`,
+  every map's fourteen scores, the order, and `get_maps` and `get_mapped` -
+  but for the cases above: where ACCeL's own output varies from run to run,
+  Meno's matches one of its runs; and in two reactions (a cyclopropanation
+  and a butadiene ring closure) maps whose total RMSDs differ only in their
+  last digits come in the other order. The first map agrees on every
+  reaction.
 
 The unit tests (`accelMapper.test.ts`, `reactionMap.test.ts`) hold small
 hand-made reactions (`reactionMap.fixtures.ts`: ethane moved rigidly, an
