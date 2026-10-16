@@ -25,6 +25,8 @@ export const LINE = "#d1d9e0";
 export const GRAY = "#59636e";
 export const BASE = "#f6f8fa";
 
+/** Where tiles come whole are drawn among the canvas's opaque things: before them, so that what lies behind a tile is left out. */
+const TILE_ORDER = -1;
 /** A tile's side, in pixels. */
 export const TILE = 1024;
 /** A page's first picture: this many pixels across, whatever its size. */
@@ -360,6 +362,13 @@ export function Page(props: {
   const unit = s.w / props.pt[0];
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1)), []);
   const fade = (born: number) => Math.min(1, (now - born) / FADE_MS) * opacity;
+  // A picture come and faded in is drawn opaque, and first: the graphics
+  // card then leaves out, pixel by pixel, all of the page behind it - its
+  // sheet, its small picture, tiles kept under - rather than drawing each
+  // and blending the next over it, every frame (found on Windows,
+  // 2026-10-16: a PDF scrolled kept the graphics card full).
+  const whole = (born: number) => fade(born) >= 1;
+  const previewWhole = !!preview && whole(preview.born);
   return (
     <group position={[s.x, s.y + lift * 6 * props.px, props.z]} scale={[grow, grow, 1]}>
       {lift > 0.01 && (
@@ -368,15 +377,18 @@ export function Page(props: {
           <meshBasicMaterial color="#000000" transparent opacity={0.12 * lift * opacity} depthWrite={false} toneMapped={false} />
         </mesh>
       )}
-      <mesh scale={[s.w, s.h, 1]}>
-        <planeGeometry args={[1, 1]} />
-        {/* (see-through from the first where it is to fade: a material's being so is set as it is made) */}
-        <meshBasicMaterial color="#ffffff" transparent={props.opacity != null} opacity={opacity} toneMapped={false} />
-      </mesh>
+      {/* (its white sheet: none needed under its small picture come whole, which is white where the page is) */}
+      {!previewWhole && (
+        <mesh scale={[s.w, s.h, 1]}>
+          <planeGeometry args={[1, 1]} />
+          {/* (see-through from the first where it is to fade: a material's being so is set as it is made) */}
+          <meshBasicMaterial color="#ffffff" transparent={props.opacity != null} opacity={opacity} toneMapped={false} />
+        </mesh>
+      )}
       {preview && (
         <mesh scale={[s.w, s.h, 1]} position={[0, 0, 0.001]}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial map={preview.tex} transparent opacity={fade(preview.born)} toneMapped={false} />
+          <meshBasicMaterial map={preview.tex} transparent={!previewWhole} opacity={fade(preview.born)} toneMapped={false} />
         </mesh>
       )}
       {tiles.map((t) => {
@@ -387,9 +399,9 @@ export function Page(props: {
         const y = topY - ((t.j * TILE) / t.level) * unit - th / 2;
         return (
           // (those kept under, finer over coarser, all under the level's own: below the ink, 0.00245)
-          <mesh key={t.key} position={[x, y, t.under ? 0.002 + 0.00004 * Math.min(4, Math.max(0, Math.log2(t.level) + 1)) : 0.0023]} scale={[tw, th, 1]}>
+          <mesh key={t.key} position={[x, y, t.under ? 0.002 + 0.00004 * Math.min(4, Math.max(0, Math.log2(t.level) + 1)) : 0.0023]} scale={[tw, th, 1]} renderOrder={whole(t.pic.born) ? TILE_ORDER : 0}>
             <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial map={t.pic.tex} transparent opacity={fade(t.pic.born)} toneMapped={false} />
+            <meshBasicMaterial map={t.pic.tex} transparent={!whole(t.pic.born)} opacity={fade(t.pic.born)} toneMapped={false} />
           </mesh>
         );
       })}
