@@ -202,6 +202,33 @@ class ProgressStatistics(unittest.TestCase):
         self.assertAlmostEqual(found["Time"], 0.8)
         self.assertAlmostEqual(found["Remaining"], 35.42)
 
+    def test_a_line_with_remaining_alone_gives_no_taken_and_the_class_measures_it_itself(self):
+        import re as _re
+        import time as _time
+        import threading as _threading
+        src = (FOLDER / "render.py").read_text(encoding="utf-8")
+        start = src.index("CLOCK = ")
+        end = src.index("def render(scene, s, folder):")
+        said = []
+        ns = {"re": _re, "time": _time, "threading": _threading, "say": said.append}
+        exec(src[start:end], ns)
+        progress = ns["Progress"](1)
+        # (statistics mid-render, as Blender 5.2.2 prints them on a graphics processor: Remaining, never Time)
+        self.assertEqual(progress.clocks("Remaining: 00:41.13 | Mem: 254M | Sample 1/128"), (None, 41.13))
+        progress.begin_frame()
+        _time.sleep(0.3)
+        progress.stats("Remaining: 00:41.13 | Mem: 254M | Sample 1/128")
+        self.assertIsNotNone(progress.anchor)
+        taken = progress.anchor[1]
+        self.assertGreater(taken, 0.25)
+        self.assertAlmostEqual(progress.anchor[2], taken + 41.13, places=1)
+        # (and the ticker, between the lines, goes on by the clock, never back, never to the end)
+        _time.sleep(1.2)
+        progress.end()
+        marks = [int(m.group(1)) for line in said for m in [_re.match(r"progress (\d+)/100", line)] if m]
+        self.assertEqual(marks, sorted(marks))
+        self.assertLess(max(marks or [0]), 100)
+
     def test_reads_hours(self):
         m = [m for m in self.clock.finditer("Remaining: 1:02:03.5")][0]
         self.assertEqual((m.group(2), m.group(3), m.group(4)), ("1", "02", "03.5"))

@@ -411,6 +411,8 @@ class Progress:
         self.said = -1
         # (Blender's estimate of the frame, as of the moment it was told - the bar goes on by the clock from there, up to nearly the end)
         self.anchor = None
+        # (when this frame began, by the script's own clock: Blender's statistics mid-render carry "Remaining" but not "Time")
+        self.began = None
         self.lock = threading.RLock()
         self.ended = threading.Event()
         self.ticker = None
@@ -448,8 +450,18 @@ class Progress:
             found[m.group(1)] = (int(m.group(2) or 0) * 60 + int(m.group(3))) * 60 + float(m.group(4))
         return found.get("Time"), found.get("Remaining")
 
+    def begin_frame(self, *_):
+        with self.lock:
+            self.began = time.monotonic()
+
     def stats(self, text, *_):
         taken, left = self.clocks(text)
+        if taken is None and left is not None:
+            # (only "Remaining" said: the time taken is measured from the frame's beginning here - or from the first line, if that was missed)
+            with self.lock:
+                if self.began is None:
+                    self.began = time.monotonic()
+                taken = time.monotonic() - self.began
         if taken is not None and left is not None and taken + left > 0:
             # (Blender's own estimate: the share of this frame's time that has passed - moves the bar between the samples it reports,
             # where one sample takes seconds; the sample's own share is the floor, and the bar never goes back)
@@ -474,12 +486,14 @@ class Progress:
         with self.lock:
             self.frame += 1
             self.anchor = None
+            self.began = None
             self.say_at(int((self.frame / self.frames) * self.PARTS), self.PARTS)
 
 
 def render(scene, s, folder):
     """Each frame rendered, saying how far it is: the frames' files, in order. A picture's samples move the bar; a film's, its frames' samples and its frames."""
     progress = Progress(1 if not s["film"] else s["frames"])
+    bpy.app.handlers.render_pre.append(progress.begin_frame)
     bpy.app.handlers.render_stats.append(progress.stats)
     bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
     say("progress 0/100")
