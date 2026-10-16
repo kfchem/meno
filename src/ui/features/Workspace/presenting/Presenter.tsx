@@ -42,6 +42,7 @@ import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
 import { isPinch, wheelReader } from "../../../../lib/input/wheel";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { MOV_PX } from "../constants";
+import { dropTurnsOnce, startTurnOnce, turnsBeforeOnce } from "../utils/turnOnce";
 import { TAU, follow } from "../../../theme/motion";
 
 type ViewNow = { x: number; y: number; zoom: number };
@@ -206,6 +207,15 @@ export default function Presenter() {
       let pinch: number | null = null;
       const onDown = (e: PointerEvent) => {
         showPointer(r);
+        // (a right-press on a molecule - the talk shows no menu - turns it once round, and back as it was: utils/turnOnce)
+        if (e.button === 2) {
+          const on = moleculeAt(e);
+          if (on != null) {
+            startTurnOnce(store, [on]);
+            invalidate();
+          }
+          return;
+        }
         if (e.button !== 0) return;
         e.preventDefault();
         try {
@@ -396,7 +406,8 @@ export default function Presenter() {
       const r: Run = {
         before: viewNow(),
         canvas: { w: sizeNow.current.width, h: sizeNow.current.height },
-        turns: s.turns3d,
+        // (one turning once round as the talk found it: as it comes back to)
+        turns: turnsBeforeOnce(store, s.turns3d),
         texts: { open: s.textsOpen, pdf: s.pdfShown, text: s.textShown, cover: s.textsOpen ? s.cover : 0 },
         madeFull: false,
         top: 0,
@@ -442,6 +453,8 @@ export default function Presenter() {
     // ended - at the slide `last`, if it is there still: the window as it was, the view going to that slide, the molecules turning back
     const finish = (r: Run, settle: boolean, last?: number) => {
       r.detach();
+      // (one turning once is turned back as the others are)
+      dropTurnsOnce(store);
       if (r.countTimer != null) window.clearTimeout(r.countTimer);
       if (r.pointerTimer != null) window.clearTimeout(r.pointerTimer);
       run.current = null;

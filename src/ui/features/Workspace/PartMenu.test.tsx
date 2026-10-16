@@ -159,6 +159,7 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     chosen: 3,
     onMeasure: none,
     onResetTurn: none,
+    onTurnOnce: none,
     onCut: none,
     onCopy: none,
     ...extra,
@@ -168,6 +169,11 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     expect(menu(t, { molecule3d: molecule3d({ onSetChosen: none }) }).listed).toEqual(["Measure angle", "Set angle…"]);
     // (a torsion angle about a ring's bond cannot be set: measured only)
     expect(menu(t, { molecule3d: molecule3d({ chosen: 4 }) }).listed).toEqual(["Measure torsion angle"]);
+  });
+  it("offers its other look, Reset orientation and Turn once, as icons", () => {
+    expect(menu(target({ kind: "molecule3d", id: 1 }), { molecule3d: molecule3d({ chosen: 0 }) }).icons).toEqual(
+      expect.arrayContaining(["Space-filling", "Reset orientation", "Turn once"]),
+    );
   });
   it("offers what completes a file's molecule - its bond orders, its hydrogens - together, under a line", () => {
     const t = target({ kind: "molecule3d", id: 1 });

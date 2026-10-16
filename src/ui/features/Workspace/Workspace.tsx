@@ -124,6 +124,7 @@ import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
 import { recordsOf } from "./utils/stacks";
+import { startTurnOnce } from "./utils/turnOnce";
 import { useOfficeLink } from "./hooks/useOfficeLink";
 import { useDropZone } from "../../../lib/drop";
 import type { DocumentStore } from "../../../lib/doc";
@@ -1004,6 +1005,11 @@ function WorkspaceContent({
         onMeasure: () => store.getState().measureChosen3d(),
         ...(chosenSettable ? { onSetChosen: () => store.getState().setChosen3d() } : {}),
         onResetTurn: () => store.getState().resetTurn3d(menuMolecule.id),
+        // (with the others selected with it, where it is among them: each about its own centre)
+        onTurnOnce: () => {
+          const { sel3d } = store.getState();
+          startTurnOnce(store, sel3d.has(menuMolecule.id) ? [...sel3d] : [menuMolecule.id]);
+        },
         // (one of a stack: laid out as a grid, or stacked again - utils/stacks)
         ...(menuMolecule.stack && molecules3d.filter((m) => m.stack?.id === menuMolecule.stack!.id).length > 1
           ? {

@@ -73,6 +73,14 @@ export const MENU_ICONS = {
   edit: hero(PencilIcon),
   picture: hero(PhotoIcon),
   resetTurn: hero(ArrowPathIcon),
+  // (once round about an upright axis - broken where the near side passes in front of it - the near side going right)
+  turnOnce: own(
+    <>
+      <path d="M10 2 V12.4 M10 16 V18" />
+      <path d="M7.8 7.9 A7.5 3.2 0 1 0 12.2 7.9" />
+      <path d="M14.3 10.1 L12.2 7.9 L14.7 6.3" />
+    </>,
+  ),
   colour: hero(SwatchIcon),
   // (words on the page: their size - a large letter and a small one - and their letters bold or in italics, their lines a list)
   size: own(
