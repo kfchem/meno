@@ -235,6 +235,25 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.running).toBeUndefined();
   });
 
+  it("ends on what came in when it started - its wire undone while it runs - and is changed once its results are in", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    // (its wire undone while its job runs: nothing comes into it now)
+    expect(doc.history().undoLabel).toBe("wire");
+    doc.undo();
+    expect(st().wires).toHaveLength(0);
+    end(1);
+    await st().lookAtJobs();
+    await ran;
+    const after = st().steps.find((s) => s.id === step)!;
+    expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("\u22125.070500 Eh") });
+    expect(st().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, holds: "molecules" });
+    expect(st().molecules3d[1]).toMatchObject({ energies: [-5.0703, -5.0705] });
+    expect(stateOf(doc.getState(), after, byOf(after))).toBe("changed");
+  });
+
   it("reads how far its job is, and what it says last, from whole lines - a line read in part waits for the rest", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);
